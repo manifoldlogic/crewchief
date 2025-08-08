@@ -36,6 +36,20 @@ export function registerCompetitionCommands(program: Command): void {
       logger.success(`Competition ${c.id} winner: ${c.winner ?? 'n/a'}`);
     });
 
+  comp
+    .command('finalize')
+    .argument('<competitionId>')
+    .description('Evaluate and attempt auto-merge winner based on score threshold')
+    .action(async (competitionId: string) => {
+      const cm = new CompetitionManager();
+      const result = await cm.finalize(competitionId);
+      if (result.merged) {
+        logger.success(`Competition ${result.competition.id} winner merged (score=${result.score?.toFixed(2)})`);
+      } else {
+        logger.warn(`Competition ${result.competition.id} not merged: ${result.reason ?? ''}`);
+      }
+    });
+
   program.addCommand(comp);
 }
 

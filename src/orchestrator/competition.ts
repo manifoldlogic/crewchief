@@ -5,6 +5,8 @@ import { ensureDirSync, writeJsonSync, readJsonSync } from '../utils/fs';
 import { Scheduler } from './scheduler';
 import { Task } from './task.types';
 import { runDefaultChecks } from '../evaluation/checks';
+import { RunManager } from './runManager';
+import { evaluateAndMaybeMerge } from './autoMerge';
 
 export interface CompetitionParticipant {
   agentId: string; // agent type id
@@ -108,6 +110,17 @@ export class CompetitionManager {
     comp.evaluatedAt = new Date().toISOString();
     writeJsonSync(this.competitionPath(comp.id), comp);
     return comp;
+  }
+
+  async finalize(compId: string): Promise<{ competition: Competition; merged?: boolean; score?: number; reason?: string }> {
+    const comp = this.get(compId);
+    if (!comp) throw new Error('Competition not found');
+    if (!comp.winner) return { competition: comp, merged: false, reason: 'no winner' };
+    const rm = new RunManager();
+    const winner = comp.participants.find((p) => p.agentId === comp.winner);
+    if (!winner?.runId) return { competition: comp, merged: false, reason: 'no winner run' };
+    const result = await evaluateAndMaybeMerge(winner.runId);
+    return { competition: comp, merged: result.merged, score: result.score, reason: result.reason };
   }
 }
 
