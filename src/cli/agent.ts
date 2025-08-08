@@ -37,7 +37,7 @@ export function registerAgentCommands(program: Command): void {
       const paneId = tmux.createPane('vertical');
 
       const rm = new RunManager();
-      const run = rm.createRun(typeId, task, paneId, worktreePath);
+      const run = rm.createRun(typeId, task, paneId, worktreePath, branchName);
 
       // Prepare execution command; resolve repo-relative script paths to absolute
       let execCmd = type.executionCommand;

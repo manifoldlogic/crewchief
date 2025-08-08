@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { GitMergeService, MergeStrategyType } from '../git/merge';
 import { logger } from '../utils/logger';
+import { evaluateAndMaybeMerge } from '../orchestrator/autoMerge';
 
 export function registerMergeCommands(program: Command): void {
   const merge = new Command('merge').description('Merge run branches into target');
@@ -27,6 +28,23 @@ export function registerMergeCommands(program: Command): void {
     });
 
   program.addCommand(merge);
+
+  const auto = new Command('auto').description('Evaluate run and auto-merge if passing');
+  auto
+    .argument('<runId>')
+    .action(async (runId: string) => {
+      try {
+        const { merged, score, reason } = await evaluateAndMaybeMerge(runId);
+        if (merged) logger.success(`Auto-merged (score=${score.toFixed(2)})`);
+        else {
+          logger.warn(`Not merged (score=${score.toFixed(2)}): ${reason ?? ''}`);
+        }
+      } catch (err) {
+        logger.error('Auto-merge error:', err);
+        process.exitCode = 1;
+      }
+    });
+  program.addCommand(auto);
 }
 
 
