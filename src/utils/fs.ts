@@ -12,4 +12,13 @@ export function writeJsonSync(filePath: string, data: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
+export function readJsonSync<T>(filePath: string): T {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  return JSON.parse(raw) as T;
+}
+
+export function removeFileSync(filePath: string): void {
+  if (fs.existsSync(filePath)) fs.rmSync(filePath);
+}
+
 

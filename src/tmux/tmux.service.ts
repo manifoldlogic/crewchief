@@ -26,6 +26,25 @@ export class TmuxService {
     const res = spawnSync('tmux', ['split-window', flag, '-P', '-F', '#{pane_id}', '-t', this.sessionName]);
     return res.stdout.toString().trim();
   }
+
+  hasSession(): boolean {
+    const res = spawnSync('tmux', ['has-session', '-t', this.sessionName]);
+    return res.status === 0;
+  }
+
+  ensureSession(): void {
+    if (!this.hasSession()) this.startSession();
+  }
+
+  sendKeys(paneId: string, command: string): void {
+    this.ensureTmux();
+    spawnSync('tmux', ['send-keys', '-t', paneId, command, 'C-m']);
+  }
+
+  closePane(paneId: string): void {
+    this.ensureTmux();
+    spawnSync('tmux', ['kill-pane', '-t', paneId]);
+  }
 }
 
 
