@@ -9,6 +9,7 @@ export interface PersistedRun {
   task: string;
   paneId: string;
   worktreePath: string;
+  branchName?: string;
   status: 'running' | 'closed' | 'failed';
   startedAt: string;
 }
@@ -35,13 +36,14 @@ export class RunManager {
     writeJsonSync(this.stateFile, { runs });
   }
 
-  createRun(agentTypeId: string, task: string, paneId: string, worktreePath: string): PersistedRun {
+  createRun(agentTypeId: string, task: string, paneId: string, worktreePath: string, branchName?: string): PersistedRun {
     const run: PersistedRun = {
       id: randomUUID(),
       agentTypeId,
       task,
       paneId,
       worktreePath,
+      branchName,
       status: 'running',
       startedAt: new Date().toISOString()
     };
