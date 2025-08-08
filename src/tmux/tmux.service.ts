@@ -45,6 +45,12 @@ export class TmuxService {
     this.ensureTmux();
     spawnSync('tmux', ['kill-pane', '-t', paneId]);
   }
+
+  captureOutput(paneId: string): string {
+    this.ensureTmux();
+    const res = spawnSync('tmux', ['capture-pane', '-p', '-t', paneId]);
+    return res.stdout.toString();
+  }
 }
 
 
