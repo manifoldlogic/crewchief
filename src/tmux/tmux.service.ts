@@ -51,6 +51,12 @@ export class TmuxService {
     const res = spawnSync('tmux', ['capture-pane', '-p', '-t', paneId]);
     return res.stdout.toString();
   }
+
+  pipePaneToFile(paneId: string, filePath: string, append = true): void {
+    this.ensureTmux();
+    const redirect = append ? `cat >> ${filePath}` : `cat > ${filePath}`;
+    spawnSync('tmux', ['pipe-pane', append ? '-o' : '', '-t', paneId, redirect].filter(Boolean as any));
+  }
 }
 
 

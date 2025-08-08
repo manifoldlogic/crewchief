@@ -40,6 +40,9 @@ export function registerAgentCommands(program: Command): void {
       const startCmd = `cd ${JSON.stringify(worktreePath)} && ${type.executionCommand}`;
       tmux.sendKeys(paneId, startCmd);
 
+      // Pipe pane output to a run file for later parsing
+      tmux.pipePaneToFile(paneId, `${rm.getRunDir(run.id)}/pane.log`, true);
+
       logger.success(`Spawned ${typeId} in ${worktreePath} [pane=${paneId}] [run=${run.id}]`);
     });
 
