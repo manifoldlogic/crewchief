@@ -38,7 +38,16 @@ export const TmuxSchema = z.object({
 export const EvaluationSchema = z.object({
   autoMergeThreshold: z.number().min(0).max(1).default(0.95),
   requireTestsPass: z.boolean().default(true),
-  requireReview: z.boolean().default(false)
+  requireReview: z.boolean().default(false),
+  qualityChecks: z
+    .array(
+      z.object({
+        type: z.enum(['tests', 'linting', 'build', 'custom']).default('custom'),
+        command: z.string(),
+        successCriteria: z.string().optional()
+      })
+    )
+    .optional()
 });
 
 export const ConfigSchema = z.object({

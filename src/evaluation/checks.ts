@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runCommand } from '../utils/exec';
+import { loadConfig } from '../config/loader';
 
 export interface CheckResult {
   name: string;
@@ -32,6 +33,18 @@ export async function runDefaultChecks(worktreePath: string, runDir: string): Pr
     results.push({ name: 'agent:events', passed: exists && size > 0, details: exists ? `${size} bytes` : 'missing' });
   } catch (err) {
     results.push({ name: 'agent:events', passed: false, details: String(err) });
+  }
+
+  // Config-driven quality checks
+  try {
+    const config = await loadConfig();
+    const extra = config.evaluation.qualityChecks ?? [];
+    for (const q of extra) {
+      const res = await runCommand(q.command.split(' ')[0], q.command.split(' ').slice(1), { cwd: worktreePath });
+      results.push({ name: `qc:${q.type}`, passed: res.exitCode === 0, details: q.successCriteria ?? '' });
+    }
+  } catch (err) {
+    results.push({ name: 'qc:error', passed: false, details: String(err) });
   }
 
   const passed = results.filter((r) => r.passed).length;
