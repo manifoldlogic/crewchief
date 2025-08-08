@@ -4,16 +4,17 @@
   "private": true,
   "description": "CrewChief: Multi-agent orchestration CLI for coordinating AI agents via git worktrees and tmux.",
   "license": "MIT",
+  "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
   "bin": {
-    "crewchief": "dist/cli.js"
+    "crewchief": "dist/index.js"
   },
   "scripts": {
     "dev": "tsx src/cli/index.ts --help",
-    "build": "tsup src/cli/index.ts --format cjs --dts --sourcemap --minify --out-dir dist --clean",
-    "start": "node dist/cli.js",
+    "build": "tsup src/cli/index.ts --format esm --dts --sourcemap --minify --out-dir dist --clean",
+    "start": "node dist/index.js",
     "test": "vitest",
     "lint": "eslint .",
     "format": "prettier -w ."
