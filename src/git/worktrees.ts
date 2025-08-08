@@ -48,6 +48,10 @@ export class WorktreeService {
   async pruneWorktrees(): Promise<void> {
     await this.git.raw(['worktree', 'prune']);
   }
+
+  async removeWorktree(worktreePath: string): Promise<void> {
+    await this.git.raw(['worktree', 'remove', worktreePath]);
+  }
 }
 
 
