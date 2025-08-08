@@ -8,6 +8,7 @@ import { TmuxService } from '../tmux/tmux.service';
 import { randomUUID } from 'node:crypto';
 import { LogFollower } from '../bus/logFollower';
 import { MessageBus } from '../bus/message.bus';
+import path from 'node:path';
 
 export function registerAgentCommands(program: Command): void {
   const agent = new Command('agent').description('Agent lifecycle');
@@ -38,8 +39,15 @@ export function registerAgentCommands(program: Command): void {
       const rm = new RunManager();
       const run = rm.createRun(typeId, task, paneId, worktreePath);
 
+      // Prepare execution command; resolve repo-relative script paths to absolute
+      let execCmd = type.executionCommand;
+      if (execCmd.includes('scripts/mock-agent.js')) {
+        const abs = path.join(process.cwd(), 'scripts', 'mock-agent.js');
+        execCmd = `node ${JSON.stringify(abs)}`;
+      }
+
       // Start the agent command in the pane within the new worktree path
-      const startCmd = `cd ${JSON.stringify(worktreePath)} && ${type.executionCommand}`;
+      const startCmd = `cd ${JSON.stringify(worktreePath)} && ${execCmd}`;
       tmux.sendKeys(paneId, startCmd);
 
       // Pipe pane output to a run file and start a follower to decode JSONL and push to message bus
