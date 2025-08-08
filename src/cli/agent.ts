@@ -7,7 +7,7 @@ import { loadConfig } from '../config/loader';
 import { TmuxService } from '../tmux/tmux.service';
 import { randomUUID } from 'node:crypto';
 import { LogFollower } from '../bus/logFollower';
-import { MessageBus } from '../bus/message.bus';
+import { messageBus } from '../bus/index';
 import path from 'node:path';
 
 export function registerAgentCommands(program: Command): void {
@@ -53,11 +53,18 @@ export function registerAgentCommands(program: Command): void {
       // Pipe pane output to a run file and start a follower to decode JSONL and push to message bus
       const logPath = `${rm.getRunDir(run.id)}/pane.log`;
       tmux.pipePaneToFile(paneId, logPath, true);
-      const bus = new MessageBus();
       const follower = new LogFollower(logPath);
       follower.start((env) => {
         // For now, simply log reception; future: route to orchestrator
         rm.appendLog(run.id, 'events.log', JSON.stringify(env));
+        messageBus.send({
+          type: 'status',
+          from: `${typeId}`,
+          to: 'orchestrator',
+          payload: env,
+          timestamp: new Date(),
+          worktreeContext: { branch: run.branchName ?? '', modifiedFiles: [], lastCommit: '' }
+        });
       });
 
       logger.success(`Spawned ${typeId} in ${worktreePath} [pane=${paneId}] [run=${run.id}]`);

@@ -10,6 +10,7 @@ import { registerEvalCommands } from './eval';
 import { registerTaskCommands } from './task';
 import { registerMergeCommands } from './merge';
 import { registerCompetitionCommands } from './competition';
+import { startOrchestratorEventBridge } from '../orchestrator/events';
 
 const program = new Command();
 
@@ -17,6 +18,9 @@ program
   .name('crewchief')
   .description('CrewChief: Multi-agent orchestration for AI agents via git worktrees and tmux')
   .version('0.1.0');
+
+// Start event bridge for orchestrator messages
+startOrchestratorEventBridge();
 
 registerInitCommand(program);
 registerSessionCommands(program);
