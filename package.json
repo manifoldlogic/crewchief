@@ -15,7 +15,8 @@
     "dev": "tsx src/cli/index.ts --help",
     "build": "tsup src/cli/index.ts --format esm --dts --sourcemap --minify --out-dir dist --clean",
     "start": "node dist/index.js",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier -w ."
   },
