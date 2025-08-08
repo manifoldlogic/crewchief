@@ -2,6 +2,8 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { registerInitCommand } from './init';
+import { registerWorktreeCommands } from './worktree';
+import { registerSessionCommands } from './session';
 
 const program = new Command();
 
@@ -11,44 +13,9 @@ program
   .version('0.1.0');
 
 registerInitCommand(program);
+registerSessionCommands(program);
+registerWorktreeCommands(program);
 
-program
-  .command('session')
-  .description('Tmux session operations')
-  .command('start')
-  .description('Start tmux session with orchestrator pane')
-  .action(async () => {
-    console.log(chalk.green('[session:start]'), 'Tmux session start stub');
-  });
-
-const worktree = new Command('worktree').description('Worktree operations');
-worktree
-  .command('create')
-  .argument('<name>')
-  .option('--branch <branch>', 'Base branch', 'main')
-  .description('Create named worktree from branch')
-  .action(async (name: string, options: { branch: string }) => {
-    console.log(
-      chalk.green('[worktree:create]'),
-      `Creating worktree ${name} from ${options.branch} (stub)`
-    );
-  });
-
-worktree
-  .command('list')
-  .description('List active worktrees')
-  .action(async () => {
-    console.log(chalk.green('[worktree:list]'), 'Listing worktrees (stub)');
-  });
-
-worktree
-  .command('clean')
-  .description('Clean completed/abandoned worktrees')
-  .action(async () => {
-    console.log(chalk.green('[worktree:clean]'), 'Cleaning worktrees (stub)');
-  });
-
-program.addCommand(worktree);
 
 const agent = new Command('agent').description('Agent lifecycle');
 agent

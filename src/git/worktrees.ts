@@ -44,6 +44,10 @@ export class WorktreeService {
     if (current.path) items.push(current as WorktreeListItem);
     return items;
   }
+
+  async pruneWorktrees(): Promise<void> {
+    await this.git.raw(['worktree', 'prune']);
+  }
 }
 
 
