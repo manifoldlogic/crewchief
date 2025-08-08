@@ -11,6 +11,7 @@ import { registerTaskCommands } from './task';
 import { registerMergeCommands } from './merge';
 import { registerCompetitionCommands } from './competition';
 import { startOrchestratorEventBridge } from '../orchestrator/events';
+import { registerSetupCommand } from './setup';
 
 const program = new Command();
 
@@ -31,6 +32,7 @@ registerEvalCommands(program);
 registerTaskCommands(program);
 registerMergeCommands(program);
 registerCompetitionCommands(program);
+registerSetupCommand(program);
 
 
 const agent = new Command('agent').description('Agent lifecycle');
