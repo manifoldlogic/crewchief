@@ -6,6 +6,8 @@ import { WorktreeService } from '../git/worktrees';
 import { loadConfig } from '../config/loader';
 import { TmuxService } from '../tmux/tmux.service';
 import { randomUUID } from 'node:crypto';
+import { LogFollower } from '../bus/logFollower';
+import { MessageBus } from '../bus/message.bus';
 
 export function registerAgentCommands(program: Command): void {
   const agent = new Command('agent').description('Agent lifecycle');
@@ -40,8 +42,15 @@ export function registerAgentCommands(program: Command): void {
       const startCmd = `cd ${JSON.stringify(worktreePath)} && ${type.executionCommand}`;
       tmux.sendKeys(paneId, startCmd);
 
-      // Pipe pane output to a run file for later parsing
-      tmux.pipePaneToFile(paneId, `${rm.getRunDir(run.id)}/pane.log`, true);
+      // Pipe pane output to a run file and start a follower to decode JSONL and push to message bus
+      const logPath = `${rm.getRunDir(run.id)}/pane.log`;
+      tmux.pipePaneToFile(paneId, logPath, true);
+      const bus = new MessageBus();
+      const follower = new LogFollower(logPath);
+      follower.start((env) => {
+        // For now, simply log reception; future: route to orchestrator
+        rm.appendLog(run.id, 'events.log', JSON.stringify(env));
+      });
 
       logger.success(`Spawned ${typeId} in ${worktreePath} [pane=${paneId}] [run=${run.id}]`);
     });
