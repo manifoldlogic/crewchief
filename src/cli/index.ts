@@ -5,6 +5,7 @@ import { registerInitCommand } from './init';
 import { registerWorktreeCommands } from './worktree';
 import { registerSessionCommands } from './session';
 import { registerAgentCommands } from './agent';
+import { registerRunsCommands } from './runs';
 
 const program = new Command();
 
@@ -17,6 +18,7 @@ registerInitCommand(program);
 registerSessionCommands(program);
 registerWorktreeCommands(program);
 registerAgentCommands(program);
+registerRunsCommands(program);
 
 
 const agent = new Command('agent').description('Agent lifecycle');

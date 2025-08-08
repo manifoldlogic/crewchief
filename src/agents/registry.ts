@@ -24,6 +24,14 @@ const builtin: Record<string, AgentType> = {
     capabilities: ['ui', 'components', 'styling'],
     agentDefinitionPath: '.gemini/agents/frontend-developer.txt',
     executionCommand: 'gemini-cli'
+  },
+  'mock-agent': {
+    id: 'mock-agent',
+    name: 'Mock Agent',
+    platform: 'custom',
+    capabilities: ['status', 'echo'],
+    agentDefinitionPath: 'scripts/mock-agent.js',
+    executionCommand: 'node scripts/mock-agent.js'
   }
 };
 
