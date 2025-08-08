@@ -8,6 +8,7 @@ import { registerAgentCommands } from './agent';
 import { registerRunsCommands } from './runs';
 import { registerEvalCommands } from './eval';
 import { registerTaskCommands } from './task';
+import { registerMergeCommands } from './merge';
 
 const program = new Command();
 
@@ -23,6 +24,7 @@ registerAgentCommands(program);
 registerRunsCommands(program);
 registerEvalCommands(program);
 registerTaskCommands(program);
+registerMergeCommands(program);
 
 
 const agent = new Command('agent').description('Agent lifecycle');
