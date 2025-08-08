@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { registerInitCommand } from './init';
 import { registerWorktreeCommands } from './worktree';
 import { registerSessionCommands } from './session';
+import { registerAgentCommands } from './agent';
 
 const program = new Command();
 
@@ -15,6 +16,7 @@ program
 registerInitCommand(program);
 registerSessionCommands(program);
 registerWorktreeCommands(program);
+registerAgentCommands(program);
 
 
 const agent = new Command('agent').description('Agent lifecycle');
