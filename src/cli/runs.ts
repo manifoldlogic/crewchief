@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { RunManager } from '../orchestrator/runManager';
 import { logger } from '../utils/logger';
+import { tailFileSync } from '../utils/log';
 
 export function registerRunsCommands(program: Command): void {
   const runs = new Command('runs').description('Inspect agent runs');
@@ -40,6 +41,31 @@ export function registerRunsCommands(program: Command): void {
       }
       const content = fs.readFileSync(eventsPath, 'utf8');
       process.stdout.write(content);
+    });
+
+  runs
+    .command('logs')
+    .argument('<runId>')
+    .option('--tail <n>', 'Number of lines from the end', '200')
+    .description('Show a summary of run logs (pane/events/orchestrator)')
+    .action(async (runId: string, options: { tail: string }) => {
+      const rm = new RunManager();
+      const run = rm.getRun(runId);
+      if (!run) {
+        logger.warn(`Run not found: ${runId}`);
+        return;
+      }
+      const n = Number(options.tail ?? '200');
+      const dir = rm.getRunDir(runId);
+      const pane = tailFileSync(path.join(dir, 'pane.log'), n);
+      const events = tailFileSync(path.join(dir, 'events.log'), n);
+      const orch = tailFileSync(path.join(dir, 'orchestrator.log'), n);
+      logger.info('--- pane.log ---');
+      process.stdout.write(pane + '\n');
+      logger.info('--- events.log ---');
+      process.stdout.write(events + '\n');
+      logger.info('--- orchestrator.log ---');
+      process.stdout.write(orch + '\n');
     });
 
   program.addCommand(runs);
