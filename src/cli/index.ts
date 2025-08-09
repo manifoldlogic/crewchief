@@ -12,6 +12,7 @@ import { registerMergeCommands } from './merge';
 import { registerCompetitionCommands } from './competition';
 import { startOrchestratorEventBridge } from '../orchestrator/events';
 import { registerSetupCommand } from './setup';
+import { registerDoctorCommand } from './doctor';
 
 const program = new Command();
 
@@ -33,6 +34,7 @@ registerTaskCommands(program);
 registerMergeCommands(program);
 registerCompetitionCommands(program);
 registerSetupCommand(program);
+registerDoctorCommand(program);
 
 program.parseAsync(process.argv);
 
