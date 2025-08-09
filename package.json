@@ -25,7 +25,10 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier -w .",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "release:patch": "pnpm version patch && pnpm publish",
+    "release:minor": "pnpm version minor && pnpm publish",
+    "release:major": "pnpm version major && pnpm publish"
   },
   "dependencies": {
     "@types/node": "^20.0.0",
