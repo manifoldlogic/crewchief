@@ -17,3 +17,5 @@ node_modules
 
 .crewchief/
 crewchief.config.ts
+
+.cursorrules

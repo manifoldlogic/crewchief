@@ -29,8 +29,10 @@ export function registerMergeCommands(program: Command): void {
 
   program.addCommand(merge);
 
-  const auto = new Command('auto').description('Evaluate run and auto-merge if passing');
-  auto
+  // Place the 'auto' subcommand under the 'merge' group to match README usage: `crewchief merge auto <runId>`
+  merge
+    .command('auto')
+    .description('Evaluate run and auto-merge if passing')
     .argument('<runId>')
     .action(async (runId: string) => {
       try {
@@ -44,7 +46,7 @@ export function registerMergeCommands(program: Command): void {
         process.exitCode = 1;
       }
     });
-  program.addCommand(auto);
+  program.addCommand(merge);
 }
 
 
