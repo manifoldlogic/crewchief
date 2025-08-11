@@ -1,0 +1,26 @@
+{
+  "name": "@crewchief/maproom-mcp",
+  "version": "0.1.0",
+  "description": "Maproom MCP server for CrewChief",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "pg-promise": "^11.5.4",
+    "openai": "^4.24.0",
+    "commander": "^11.1.0",
+    "tiktoken": "^1.0.12",
+    "json-rpc-2.0": "^1.7.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.10.9",
+    "@types/node": "^20.11.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0"
+  }
+}

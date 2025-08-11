@@ -1,6 +1,6 @@
 export default {
   repository: {
-    mainBranch: 'main',
+    mainBranch: "main",
     worktreeBasePath: '.crewchief/worktrees'
   },
   orchestrator: {
@@ -8,23 +8,30 @@ export default {
     maxConcurrentAgents: 5,
     defaultTimeout: 30 * 60 * 1000
   },
+  launch: {
+    autoRunDefaultAgents: false,
+    askToUpdateLlmGuides: true
+  },
   agents: {
     claude: {
-      command: 'claude-cli',
+      command: 'claude',
       defaultArgs: ['--model', 'claude-3-opus'],
       agentsDir: '.claude/agents/',
       commandsDir: '.claude/commands/'
     },
     gemini: {
-      command: 'gemini-cli',
+      command: 'gemini',
       defaultArgs: ['--model', 'gemini-pro'],
       agentsDir: '.gemini/agents/'
     }
   },
+  defaults: {
+    rootAgents: []
+  },
   tmux: {
     sessionName: 'crewchief',
     orchestratorPaneSize: 40,
-    agentPaneArrangement: 'tiled'
+    agentPaneArrangement: "tiled"
   },
   evaluation: {
     autoMergeThreshold: 0.95,
@@ -32,4 +39,3 @@ export default {
     requireReview: false
   }
 };
-
