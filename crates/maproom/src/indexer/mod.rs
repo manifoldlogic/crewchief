@@ -1,7 +1,9 @@
 use std::{fs, path::{Path, PathBuf}};
 
 use anyhow::Context;
+use humantime::parse_duration;
 use ignore::WalkBuilder;
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio_postgres::Client;
 use tracing::info;
 
@@ -57,7 +59,14 @@ pub async fn scan_worktree(
 
     let mut walk = WalkBuilder::new(&root_abs);
     walk.hidden(false).ignore(true).git_ignore(true).git_exclude(true);
-    // TODO: implement exclude globs via ignore::overrides::OverrideBuilder
+    if let Some(globs) = &exclude {
+        let mut ob = ignore::overrides::OverrideBuilder::new(&root_abs);
+        for g in globs {
+            // Treat excludes as negative overrides
+            ob.add(&format!("!{}", g))?;
+        }
+        walk.overrides(ob.build()?);
+    }
 
     let allow_langs: Option<Vec<String>> = languages.map(|v| v.into_iter().map(|s| s.to_lowercase()).collect());
 
@@ -143,8 +152,85 @@ pub async fn upsert_files(
     commit: &str,
     paths: &[PathBuf],
 ) -> anyhow::Result<()> {
-    let _ = paths; // TODO: selective
-    scan_worktree(client, repo, worktree, root, commit, 1, None, None).await
+    let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
+    let repo_id = crate::db::get_or_create_repo(client, repo, root_abs.to_string_lossy().as_ref()).await?;
+    let worktree_id = crate::db::get_or_create_worktree(client, repo_id, worktree, root_abs.to_string_lossy().as_ref()).await?;
+    let commit_id = crate::db::get_or_create_commit(client, repo_id, commit, None).await?;
+
+    for path in paths {
+        let abs = if path.is_absolute() { path.clone() } else { root_abs.join(path) };
+        if !abs.exists() { continue; }
+        if abs.is_dir() { continue; }
+        let relpath = abs.strip_prefix(&root_abs).unwrap_or(&abs).to_path_buf();
+        let language = detect_language_from_path(&abs);
+        if language.is_none() { continue; }
+        let content = match fs::read_to_string(&abs) { Ok(c) => c, Err(_) => continue };
+        let content_hash = blake3::hash(content.as_bytes()).to_hex().to_string();
+        let size_bytes = content.len().min(i32::MAX as usize) as i32;
+        let last_modified = file_modified_time(&abs);
+        let file_id = crate::db::upsert_file(
+            client,
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath.to_string_lossy().as_ref(),
+            language,
+            &content_hash,
+            size_bytes,
+            last_modified,
+        ).await?;
+        let chunks = parser::extract_chunks(&content, language.unwrap());
+        if chunks.is_empty() {
+            let preview = first_n_lines(&content, 40);
+            let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), None, None, None, &preview);
+            crate::db::insert_chunk(
+                client, file_id, None, "module", None, None, 1, content.lines().count() as i32,
+                &preview, &ts_doc, 1.0, 0.0
+            ).await?;
+        } else {
+            for ch in chunks {
+                let preview = first_n_lines(&content.split('\n').skip(ch.start_line as usize - 1).take((ch.end_line - ch.start_line + 1) as usize).collect::<Vec<&str>>().join("\n"), 40);
+                let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), ch.symbol_name.as_deref(), ch.signature.as_deref(), ch.docstring.as_deref(), &preview);
+                crate::db::insert_chunk(
+                    client, file_id, ch.symbol_name.as_deref(), &ch.kind, ch.signature.as_deref(), ch.docstring.as_deref(),
+                    ch.start_line, ch.end_line, &preview, &ts_doc, 1.0, 0.0
+                ).await?;
+            }
+        }
+    }
+
+    info!(?repo, ?worktree, ?commit, updated_files=?paths.len(), "upsert selective complete");
+    Ok(())
+}
+
+pub async fn watch_worktree(
+    client: &Client,
+    repo: &str,
+    worktree: &str,
+    root: &Path,
+    throttle: &str,
+) -> anyhow::Result<()> {
+    let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
+    let throttle_dur = parse_duration(throttle)?;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+    let mut watcher: RecommendedWatcher = RecommendedWatcher::new(
+        move |res| {
+            let _ = tx.send(res);
+        },
+        Config::default(),
+    )?;
+    watcher.watch(&root_abs, RecursiveMode::Recursive)?;
+
+    let mut last_run = std::time::Instant::now() - throttle_dur;
+    while let Some(event) = rx.recv().await {
+        let _ = event; // ignore details for now
+        if last_run.elapsed() < throttle_dur { continue; }
+        last_run = std::time::Instant::now();
+        // For simplicity, re-scan incrementally later; for now run a light scan
+        scan_worktree(client, repo, worktree, &root_abs, "WORKTREE", 1, None, None).await.ok();
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]

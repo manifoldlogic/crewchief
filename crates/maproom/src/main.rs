@@ -130,7 +130,8 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Watch { repo, worktree, path, throttle } => {
-            tracing::warn!(?repo, ?worktree, ?path, ?throttle, "watch is not yet implemented; exiting");
+            let client = db::connect().await?;
+            indexer::watch_worktree(&client, &repo, &worktree, &path, &throttle).await?;
         }
 
         Commands::Search { repo, worktree, query, k } => {

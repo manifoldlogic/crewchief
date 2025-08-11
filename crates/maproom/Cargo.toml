@@ -21,6 +21,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 base64ct = "1.6.0"
+globset = "0.4"
+notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
+humantime = "2"
 
 # Database (use tokio-postgres to avoid heavy deps)
 tokio-postgres = { version = "0.7", features = ["runtime", "with-chrono-0_4", "array-impls"] }
