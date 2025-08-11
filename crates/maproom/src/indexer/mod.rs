@@ -3,7 +3,7 @@ use std::{fs, path::{Path, PathBuf}};
 use anyhow::Context;
 use humantime::parse_duration;
 use ignore::WalkBuilder;
-use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio_postgres::Client;
 use tracing::info;
 
@@ -38,8 +38,7 @@ fn file_modified_time(path: &Path) -> Option<chrono::DateTime<chrono::Utc>> {
     use std::time::UNIX_EPOCH;
     let t = fs::metadata(path).and_then(|m| m.modified()).ok()?;
     let dur = t.duration_since(UNIX_EPOCH).ok()?;
-    let naive = chrono::NaiveDateTime::from_timestamp_opt(dur.as_secs() as i64, dur.subsec_nanos())?;
-    Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive, chrono::Utc))
+    chrono::DateTime::<chrono::Utc>::from_timestamp(dur.as_secs() as i64, dur.subsec_nanos())
 }
 
 pub async fn scan_worktree(

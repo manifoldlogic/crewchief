@@ -59,7 +59,7 @@ crewchief/
 │     ├─ package.json
 │     └─ src/                      # MCP server implementation
 ├─ context/
-│  └─ maproom-grok/
+│  └─ maproom/
 │     └─ specification.md          # This file
 ```
 
