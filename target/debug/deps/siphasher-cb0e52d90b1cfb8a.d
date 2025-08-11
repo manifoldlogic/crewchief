@@ -1,0 +1,10 @@
+/Users/danielbushman/git/manifoldlogic/crewchief/.crewchief/worktrees/maproom-cursor-gpt5/target/debug/deps/libsiphasher-cb0e52d90b1cfb8a.rmeta: /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/lib.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip128.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/../README.md
+
+/Users/danielbushman/git/manifoldlogic/crewchief/.crewchief/worktrees/maproom-cursor-gpt5/target/debug/deps/libsiphasher-cb0e52d90b1cfb8a.rlib: /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/lib.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip128.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/../README.md
+
+/Users/danielbushman/git/manifoldlogic/crewchief/.crewchief/worktrees/maproom-cursor-gpt5/target/debug/deps/siphasher-cb0e52d90b1cfb8a.d: /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/lib.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip128.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/../README.md
+
+/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/lib.rs:
+/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip.rs:
+/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/sip128.rs:
+/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/siphasher-1.0.1/src/../README.md:
