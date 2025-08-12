@@ -273,15 +273,31 @@ async function handleSearch(params: any): Promise<any> {
     const { rows } = await client.query(sql, args)
     
     const result: any = {
-      hits: rows.map((r) => ({
-        chunk_id: r.id,
-        relpath: r.relpath,
-        symbol_name: r.symbol_name,
-        kind: r.kind,
-        start_line: r.start_line,
-        end_line: r.end_line,
-        score: Number(r.score)
-      }))
+      hits: rows.map((r) => {
+        const hit: any = {
+          chunk_id: r.id,
+          relpath: r.relpath,
+          symbol_name: r.symbol_name,
+          kind: r.kind,
+          start_line: r.start_line,
+          end_line: r.end_line,
+          score: Number(r.score)
+        }
+        
+        // Add type information for better context
+        if (r.kind.startsWith('heading_')) {
+          hit.type = 'markdown'
+          hit.heading_level = parseInt(r.kind.split('_')[1])
+        } else if (r.relpath.endsWith('.md') || r.relpath.endsWith('.mdx')) {
+          hit.type = 'markdown'
+        } else if (r.relpath.endsWith('.json')) {
+          hit.type = 'config'
+        } else {
+          hit.type = 'code'
+        }
+        
+        return hit
+      })
     }
     
     // Add hints and suggestions for empty results

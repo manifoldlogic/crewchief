@@ -8,6 +8,14 @@ fn lang_tsx() -> Language { tree_sitter_typescript::language_tsx() }
 fn lang_javascript() -> Language { tree_sitter_javascript::language() }
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
+    match language {
+        "md" | "mdx" => extract_markdown_chunks(source),
+        "json" => extract_json_chunks(source),
+        _ => extract_code_chunks(source, language),
+    }
+}
+
+fn extract_code_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
     let mut parser = Parser::new();
     let lang = match language {
         "ts" => lang_typescript(),
@@ -24,6 +32,109 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
 
     walk_add_decls(source, root, &mut chunks);
     chunks
+}
+
+fn extract_markdown_chunks(source: &str) -> Vec<SymbolChunk> {
+    let mut chunks = Vec::new();
+    let lines: Vec<&str> = source.lines().collect();
+    let mut i = 0;
+    let mut in_code_block = false;
+    
+    while i < lines.len() {
+        let line = lines[i];
+        
+        // Check for code block boundaries
+        if line.trim().starts_with("```") {
+            in_code_block = !in_code_block;
+            i += 1;
+            continue;
+        }
+        
+        // Skip lines inside code blocks
+        if in_code_block {
+            i += 1;
+            continue;
+        }
+        
+        // Check if it's a heading (starts with # and has space)
+        if let Some(heading_level) = get_heading_level(line) {
+            let heading_text = line.trim_start_matches('#').trim();
+            let start_line = (i + 1) as i32;
+            
+            // Find the end of this section (next heading of same or higher level, or end of file)
+            let mut end_idx = i + 1;
+            let mut section_code_block = false;
+            while end_idx < lines.len() {
+                // Track code blocks in the section
+                if lines[end_idx].trim().starts_with("```") {
+                    section_code_block = !section_code_block;
+                }
+                // Only check for headings outside of code blocks
+                if !section_code_block {
+                    if let Some(next_level) = get_heading_level(lines[end_idx]) {
+                        if next_level <= heading_level {
+                            break;
+                        }
+                    }
+                }
+                end_idx += 1;
+            }
+            
+            let end_line = end_idx as i32;
+            
+            // Determine the kind based on heading level
+            let kind = match heading_level {
+                1 => "heading_1",
+                2 => "heading_2",
+                3 => "heading_3",
+                4 => "heading_4",
+                5 => "heading_5",
+                6 => "heading_6",
+                _ => "heading",
+            };
+            
+            chunks.push(SymbolChunk {
+                symbol_name: Some(heading_text.to_string()),
+                kind: kind.to_string(),
+                signature: None,
+                docstring: None,
+                start_line,
+                end_line,
+            });
+        }
+        
+        i += 1;
+    }
+    
+    // If no headings found, return empty to trigger module fallback
+    chunks
+}
+
+fn get_heading_level(line: &str) -> Option<usize> {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with('#') {
+        return None;
+    }
+    
+    let mut level = 0;
+    for ch in trimmed.chars() {
+        if ch == '#' {
+            level += 1;
+        } else if ch == ' ' {
+            // Valid heading must have space after #
+            return Some(level);
+        } else {
+            // Not a valid heading (e.g., "#tag" without space)
+            return None;
+        }
+    }
+    None
+}
+
+fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
+    // For now, just return empty to trigger module fallback
+    // TODO: Implement JSON parsing to chunk by top-level keys
+    Vec::new()
 }
 
 fn walk_add_decls(source: &str, node: Node, out: &mut Vec<SymbolChunk>) {
