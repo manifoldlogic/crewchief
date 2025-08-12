@@ -1,6 +1,6 @@
 import path from 'node:path';
 import simpleGit, { SimpleGit } from 'simple-git';
-import { ensureDirSync } from '../utils/fs';
+import { ensureDirSync, removeDirSync } from '../utils/fs';
 
 export interface WorktreeListItem {
   path: string;
@@ -45,7 +45,7 @@ export class WorktreeService {
     return items;
   }
 
-  async pruneWorktrees(opts?: { mode?: 'stale' | 'all' }): Promise<void> {
+  async pruneWorktrees(opts?: { mode?: 'stale' | 'all'; keepDir?: boolean }): Promise<void> {
     if (!opts || opts.mode === 'stale') {
       await this.git.raw(['worktree', 'prune']);
       return;
@@ -58,6 +58,10 @@ export class WorktreeService {
         if (p === cwdResolved) continue; // never remove current working tree
         try {
           await this.git.raw(['worktree', 'remove', p]);
+          // Delete the directory unless --keep-dir was specified
+          if (!opts.keepDir) {
+            removeDirSync(p);
+          }
         } catch {
           // ignore failures, continue best-effort
         }

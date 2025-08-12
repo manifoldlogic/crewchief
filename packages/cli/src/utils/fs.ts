@@ -21,4 +21,10 @@ export function removeFileSync(filePath: string): void {
   if (fs.existsSync(filePath)) fs.rmSync(filePath);
 }
 
+export function removeDirSync(dirPath: string): void {
+  if (fs.existsSync(dirPath)) {
+    fs.rmSync(dirPath, { recursive: true, force: true });
+  }
+}
+
 
