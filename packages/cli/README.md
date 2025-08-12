@@ -81,4 +81,17 @@ Inspect and trace all agent-to-agent communications through a clear, transparent
 * Global install: `npm i -g crewchief` (or ``pnpm add -g crewchief``), then run `crewchief ...`
 * Run without install: `npx crewchief@latest ...` or `pnpm dlx crewchief@latest ...`
 
-pnpm add -g @openai/codex
+### Maproom commands
+
+The CLI now includes Maproom subcommands that forward to the bundled Rust binary `crewchief-maproom`:
+
+```
+crewchief maproom --help
+crewchief maproom:db      # run database migrations
+crewchief maproom:scan    # scan and index files into Postgres
+crewchief maproom:upsert  # upsert files at a given commit
+crewchief maproom:watch   # watch for changes and incrementally upsert
+crewchief maproom:search  # full-text search against indexed chunks
+```
+
+On install, the package will try to copy a prebuilt `crewchief-maproom` binary (platform/arch specific) or build it via Cargo. You can override the binary path with `CREWCHIEF_MAPROOM_BIN=/abs/path/to/crewchief-maproom`.

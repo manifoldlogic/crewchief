@@ -12,6 +12,7 @@ import { registerTaskCommands } from './task';
 import { registerMergeCommands } from './merge';
 import { registerCompetitionCommands } from './competition';
 import { registerOpsdeckCommand } from './opsdeck';
+import { registerMaproomCommands } from './maproom';
 import { startOrchestratorEventBridge } from '../orchestrator/events';
 import { registerSetupCommand, runSetupWizard } from './setup';
 import { registerDoctorCommand } from './doctor';
@@ -48,6 +49,7 @@ registerTaskCommands(program);
 registerMergeCommands(program);
 registerCompetitionCommands(program);
 registerOpsdeckCommand(program);
+registerMaproomCommands(program);
 registerSetupCommand(program);
 registerDoctorCommand(program);
 

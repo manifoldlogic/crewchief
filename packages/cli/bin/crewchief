@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Bridge CJS bin to ESM entrypoint
-const { pathToFileURL } = require('node:url');
-const { resolve } = require('node:path');
-const entryUrl = pathToFileURL(resolve(__dirname, '../dist/index.js')).href;
-import(entryUrl);
+// ESM bin that forwards to built entrypoint
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, resolve } from 'node:path'
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const entryUrl = pathToFileURL(resolve(__dirname, '../dist/cli/index.js')).href
+await import(entryUrl)
 
