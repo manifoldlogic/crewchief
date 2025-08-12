@@ -57,7 +57,8 @@ export class WorktreeService {
         const p = path.resolve(item.path);
         if (p === cwdResolved) continue; // never remove current working tree
         try {
-          await this.git.raw(['worktree', 'remove', p]);
+          // Force remove to handle unmerged/untracked files in the worktree
+          await this.git.raw(['worktree', 'remove', '--force', p]);
           // Delete the directory unless --keep-dir was specified
           if (!opts.keepDir) {
             removeDirSync(p);
@@ -70,7 +71,7 @@ export class WorktreeService {
   }
 
   async removeWorktree(worktreePath: string): Promise<void> {
-    await this.git.raw(['worktree', 'remove', worktreePath]);
+    await this.git.raw(['worktree', 'remove', '--force', worktreePath]);
   }
 }
 
