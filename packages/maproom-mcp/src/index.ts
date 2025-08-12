@@ -7,7 +7,10 @@ import fs from 'node:fs'
 
 // IMPORTANT: Never write logs to stdout; MCP JSON-RPC must be the only stdout output.
 // Route pino logs to stderr to avoid corrupting the protocol stream.
-const log = pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(2))
+const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
+const log = LOG_FILE 
+  ? pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(LOG_FILE))
+  : pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(2))
 
 type JsonRpcRequest = { jsonrpc: '2.0'; id?: number | string; method: string; params?: any }
 type JsonRpcResponse = { jsonrpc: '2.0'; id: number | string | null; result?: any; error?: { code: number; message: string; data?: any } }
@@ -37,6 +40,18 @@ const serverInfoProbe = {
 // Emit a structured server-info line to stderr early to satisfy UIs that probe logs
 log.info(serverInfoProbe, 'server-info')
 
+// Log startup environment for debugging
+log.debug({
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL ? '[SET]' : '[NOT SET]',
+    PG_DATABASE_URL: process.env.PG_DATABASE_URL ? '[SET]' : '[NOT SET]',
+    LOG_LEVEL: process.env.LOG_LEVEL,
+    MAPROOM_MCP_LOG_FILE: process.env.MAPROOM_MCP_LOG_FILE,
+    NODE_ENV: process.env.NODE_ENV,
+    CLIENT: process.env.MCP_CLIENT || process.env.CLAUDE_CODE_CLIENT || 'unknown'
+  }
+}, 'maproom-mcp startup environment')
+
 // Discovery/inspect mode: if invoked with special flags or env, print server info to stdout and exit.
 // This allows clients that probe for server metadata before starting JSON-RPC to succeed.
 const probeFlags = new Set(['--server-info', '--stdio-info', '--mcp-server-info'])
@@ -59,38 +74,57 @@ if (hasProbeFlag || hasProbeEnv) {
 const toolSchemas = [
   {
     name: 'search',
-    description: 'Full-text search over Maproom chunks (ts_doc)',
+    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
-        worktree: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-        query: { type: 'string' },
-        k: { type: 'integer', minimum: 1, default: 10 }
+        repo: { type: 'string', description: 'Repository name to search in' },
+        worktree: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Optional worktree name to limit search scope' },
+        query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms' },
+        k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return' },
+        filter: { 
+          type: 'string', 
+          enum: ['all', 'code', 'docs', 'config'],
+          default: 'all',
+          description: 'Filter results by file type: all (default), code (ts/js/rs), docs (md/mdx), config (json/yaml/toml)'
+        }
       },
       required: ['repo', 'query']
     }
   },
   {
     name: 'open',
-    description: 'Open a file slice from a worktree',
+    description: 'Retrieve specific code from indexed files - USE WHEN: you know the exact file path from search results. SUPPORTS: line ranges and context lines.',
     inputSchema: {
       type: 'object',
       properties: {
-        relpath: { type: 'string' },
+        relpath: { type: 'string', description: 'Relative path to the file' },
         range: {
           type: 'object',
+          description: 'Optional line range to retrieve',
           properties: { start: { type: 'integer', minimum: 1 }, end: { type: 'integer', minimum: 1 } },
           required: []
         },
-        worktree: { type: 'string' }
+        context: { type: 'integer', minimum: 0, default: 0, description: 'Number of context lines to show before and after the range' },
+        worktree: { type: 'string', description: 'Worktree name where the file is located' }
       },
       required: ['relpath', 'worktree']
     }
   },
   {
+    name: 'status',
+    description: 'Get maproom index status - shows indexed repos, worktrees, statistics, and last update times. USE FIRST: to understand what is searchable.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: 'Optional: filter status to specific repo' }
+      },
+      required: []
+    }
+  },
+  {
     name: 'upsert',
-    description: 'Index/update specific files by spawning the Rust CLI',
+    description: 'Index/update files in maproom - USE WHEN: files have changed and need reindexing. Spawns the Rust indexer.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -106,23 +140,121 @@ const toolSchemas = [
 ]
 
 async function getPg(): Promise<Client> {
-  const client = new Client({ connectionString: process.env.DATABASE_URL })
+  const connectionString = process.env.DATABASE_URL || process.env.PG_DATABASE_URL
+  if (!connectionString) {
+    log.error('No DATABASE_URL or PG_DATABASE_URL environment variable set')
+    throw new Error('Database connection string not configured')
+  }
+  log.debug({ connectionString: connectionString.replace(/:[^@]+@/, ':***@') }, 'Connecting to database')
+  const client = new Client({ connectionString })
   await client.connect()
   return client
 }
 
+async function handleStatus(params: any): Promise<any> {
+  const { repo } = params
+  const client = await getPg()
+  try {
+    let repoFilter = ''
+    const args: any[] = []
+    
+    if (repo) {
+      repoFilter = 'WHERE r.name = $1'
+      args.push(repo)
+    }
+    
+    // Get repo and worktree statistics
+    const statsQuery = `
+      SELECT 
+        r.name as repo_name,
+        w.name as worktree_name,
+        w.abs_path,
+        COUNT(DISTINCT f.id) as file_count,
+        COUNT(DISTINCT c.id) as chunk_count,
+        NOW() as last_indexed
+      FROM maproom.repos r
+      LEFT JOIN maproom.worktrees w ON w.repo_id = r.id
+      LEFT JOIN maproom.files f ON f.worktree_id = w.id
+      LEFT JOIN maproom.chunks c ON c.file_id = f.id
+      ${repoFilter}
+      GROUP BY r.name, w.name, w.abs_path
+      ORDER BY r.name, w.name
+    `
+    
+    const { rows } = await client.query(statsQuery, args)
+    
+    // Group by repo
+    const repos: any = {}
+    for (const row of rows) {
+      if (!repos[row.repo_name]) {
+        repos[row.repo_name] = {
+          name: row.repo_name,
+          worktrees: []
+        }
+      }
+      if (row.worktree_name) {
+        repos[row.repo_name].worktrees.push({
+          name: row.worktree_name,
+          path: row.abs_path,
+          fileCount: parseInt(row.file_count),
+          chunkCount: parseInt(row.chunk_count),
+          lastIndexed: row.last_indexed
+        })
+      }
+    }
+    
+    // Get file type statistics
+    const fileTypesQuery = `
+      SELECT 
+        regexp_replace(f.relpath, '^.*\\.', '.') as extension,
+        COUNT(*) as count
+      FROM maproom.files f
+      JOIN maproom.worktrees w ON w.id = f.worktree_id
+      JOIN maproom.repos r ON r.id = w.repo_id
+      ${repoFilter}
+      GROUP BY extension
+      ORDER BY count DESC
+      LIMIT 10
+    `
+    
+    const { rows: fileTypes } = await client.query(fileTypesQuery, args)
+    
+    return {
+      repos: Object.values(repos),
+      fileTypes: fileTypes.map(ft => ({ extension: ft.extension, count: parseInt(ft.count) })),
+      totalRepos: Object.keys(repos).length,
+      hint: repos[Object.keys(repos)[0]]?.worktrees.length === 0 
+        ? 'No worktrees indexed. Use the upsert tool to index files.'
+        : 'Index is ready for searching.'
+    }
+  } finally {
+    await client.end().catch(() => {})
+  }
+}
+
 async function handleSearch(params: any): Promise<any> {
-  const { repo, worktree, query, k = 10 } = params
+  const { repo, worktree, query, k = 10, filter = 'all' } = params
   const client = await getPg()
   try {
     const { rows: repoRows } = await client.query('SELECT id FROM maproom.repos WHERE name = $1', [repo])
-    if (repoRows.length === 0) return { hits: [] }
+    if (repoRows.length === 0) {
+      return { 
+        hits: [],
+        hint: `Repository '${repo}' not found in index. Use the status tool to see available repos, or upsert to index new files.`
+      }
+    }
     const repoId = repoRows[0].id
     let worktreeId: number | null = null
+    let worktreeInfo: any = null
+    
     if (typeof worktree === 'string' && worktree.length > 0) {
-      const { rows: wt } = await client.query('SELECT id FROM maproom.worktrees WHERE repo_id=$1 AND name=$2', [repoId, worktree])
-      worktreeId = wt[0]?.id ?? null
+      const { rows: wt } = await client.query('SELECT id, name FROM maproom.worktrees WHERE repo_id=$1 AND name=$2', [repoId, worktree])
+      if (wt.length > 0) {
+        worktreeId = wt[0].id
+        worktreeInfo = wt[0]
+      }
     }
+    
     const tsParts = String(query)
       .split(/\s+/)
       .filter(Boolean)
@@ -131,7 +263,19 @@ async function handleSearch(params: any): Promise<any> {
 
     const args: any[] = [repoId]
     let sql = `
-      SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) AS score
+      SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, c.metadata,
+        CASE 
+          WHEN c.kind IN ('heading_1', 'heading_2') THEN 
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 2.0
+          WHEN c.kind = 'heading_3' THEN
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.5
+          WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.2
+          WHEN c.kind = 'json_key' THEN
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.3
+          ELSE 
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2}))
+        END AS score
       FROM maproom.chunks c
       JOIN maproom.files f ON f.id = c.file_id
       WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $${worktreeId ? 3 : 2})
@@ -140,28 +284,99 @@ async function handleSearch(params: any): Promise<any> {
       sql += ' AND f.worktree_id = $2'
       args.push(worktreeId)
     }
+    
+    // Add filter conditions
+    if (filter !== 'all') {
+      const paramNum = args.length + 1
+      if (filter === 'code') {
+        sql += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
+      } else if (filter === 'docs') {
+        sql += ` AND (f.relpath LIKE '%.md' OR f.relpath LIKE '%.mdx')`
+      } else if (filter === 'config') {
+        sql += ` AND (f.relpath LIKE '%.json' OR f.relpath LIKE '%.yaml' OR f.relpath LIKE '%.yml' OR f.relpath LIKE '%.toml')`
+      }
+    }
+    
     args.push(tsParts)
     sql += ' ORDER BY score DESC LIMIT $' + (args.length + 1)
     args.push(k)
 
     const { rows } = await client.query(sql, args)
-    return { hits: rows.map((r) => ({
-      chunk_id: r.id,
-      relpath: r.relpath,
-      symbol_name: r.symbol_name,
-      kind: r.kind,
-      start_line: r.start_line,
-      end_line: r.end_line,
-      score: Number(r.score)
-    })) }
+    
+    const result: any = {
+      hits: rows.map((r) => {
+        const hit: any = {
+          chunk_id: r.id,
+          relpath: r.relpath,
+          symbol_name: r.symbol_name,
+          kind: r.kind,
+          start_line: r.start_line,
+          end_line: r.end_line,
+          score: Number(r.score)
+        }
+        
+        // Add metadata context if available
+        if (r.metadata) {
+          if (r.metadata.parent_heading) {
+            hit.parent_context = r.metadata.parent_heading
+          }
+          if (r.metadata.language) {
+            hit.language = r.metadata.language
+          }
+        }
+        
+        // Add type information for better context
+        if (r.kind.startsWith('heading_')) {
+          hit.type = 'markdown'
+          hit.heading_level = parseInt(r.kind.split('_')[1])
+        } else if (r.relpath.endsWith('.md') || r.relpath.endsWith('.mdx')) {
+          hit.type = 'markdown'
+        } else if (r.relpath.endsWith('.json')) {
+          hit.type = 'config'
+        } else {
+          hit.type = 'code'
+        }
+        
+        return hit
+      })
+    }
+    
+    // Add hints and suggestions for empty results
+    if (rows.length === 0) {
+      const suggestions = []
+      
+      // Try simpler query
+      const terms = query.split(/\s+/)
+      if (terms.length > 1) {
+        suggestions.push(`Try searching for individual terms: "${terms[0]}" or "${terms[terms.length - 1]}"`)
+      }
+      
+      // Suggest case variations
+      if (query.toLowerCase() !== query) {
+        suggestions.push(`Try lowercase: "${query.toLowerCase()}"`)
+      }
+      if (query[0].toLowerCase() === query[0]) {
+        suggestions.push(`Try capitalized: "${query[0].toUpperCase() + query.slice(1)}"`)
+      }
+      
+      result.hint = worktreeInfo 
+        ? `No results found in worktree '${worktree}'. Consider re-indexing if files have changed recently.`
+        : 'No results found. Try different search terms or check the status tool to see what is indexed.'
+      
+      if (suggestions.length > 0) {
+        result.suggestions = suggestions
+      }
+    }
+    
+    return result
   } finally {
     await client.end().catch(() => {})
   }
 }
 
 async function handleOpen(params: any): Promise<any> {
-  const { relpath, range, worktree } = params
-  // For now, read directly from filesystem using provided worktree path via database
+  const { relpath, range, worktree, context = 0 } = params
+  // Read directly from filesystem using provided worktree path via database
   const client = await getPg()
   try {
     const { rows } = await client.query(
@@ -172,10 +387,26 @@ async function handleOpen(params: any): Promise<any> {
     const base = rows[0].abs_path as string
     const fs = await import('node:fs/promises')
     const content = await fs.readFile(`${base}/${relpath}`, 'utf8')
-    const start = range?.start ?? 1
-    const end = range?.end ?? content.split('\n').length
-    const sliced = content.split('\n').slice(start - 1, end).join('\n')
-    return { content: sliced }
+    const lines = content.split('\n')
+    
+    // Calculate line range with context
+    let start = range?.start ?? 1
+    let end = range?.end ?? lines.length
+    
+    // Add context lines if requested
+    if (context > 0) {
+      start = Math.max(1, start - context)
+      end = Math.min(lines.length, end + context)
+    }
+    
+    const sliced = lines.slice(start - 1, end).join('\n')
+    
+    return { 
+      content: sliced,
+      actualRange: { start, end },
+      requestedRange: range,
+      contextLines: context
+    }
   } finally {
     await client.end().catch(() => {})
   }
@@ -279,12 +510,18 @@ async function handleMessage(msg: JsonRpcRequest) {
     case 'tools/call': {
       const name = msg.params?.name as string
       const args = msg.params?.arguments || {}
-      if (name === 'search') {
+      if (name === 'status') {
+        const res = await handleStatus(args)
+        respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+        log.info({ id: msg.id, tool: name }, 'sent tool result')
+      } else if (name === 'search') {
         const res = await handleSearch(args)
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
+        log.info({ id: msg.id, tool: name }, 'sent tool result')
       } else if (name === 'open') {
         const res = await handleOpen(args)
         respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
+        log.info({ id: msg.id, tool: name }, 'sent tool result')
       } else if (name === 'upsert') {
         const res = await handleUpsert(args)
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })

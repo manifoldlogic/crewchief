@@ -16,9 +16,16 @@ pub async fn connect() -> anyhow::Result<Client> {
 }
 
 pub async fn migrate(client: &Client) -> anyhow::Result<()> {
-    // Minimal migration runner: read and execute 0001_init.sql
-    let sql = include_str!("./../migrations/0001_init.sql");
-    client.batch_execute(sql).await?;
+    // Minimal migration runner: execute all migrations in order
+    let migrations = vec![
+        include_str!("./../migrations/0001_init.sql"),
+        include_str!("./../migrations/0002_markdown_support.sql"),
+        include_str!("./../migrations/0003_yaml_toml_support.sql"),
+    ];
+    
+    for sql in migrations {
+        client.batch_execute(sql).await?;
+    }
     Ok(())
 }
 
@@ -171,7 +178,18 @@ pub async fn search_chunks_fts(
         client
             .query(
                 "SELECT c.start_line, c.end_line, c.symbol_name, c.kind::text, f.relpath,
-                        ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) AS score
+                        CASE 
+                            WHEN c.kind IN ('heading_1', 'heading_2') THEN 
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 2.0
+                            WHEN c.kind = 'heading_3' THEN
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 1.5
+                            WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 1.2
+                            WHEN c.kind = 'json_key' THEN
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 1.3
+                            ELSE 
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4))
+                        END AS score
                  FROM maproom.chunks c
                  JOIN maproom.files f ON f.id = c.file_id
                  WHERE f.repo_id = $1 AND f.worktree_id = $2 AND c.ts_doc @@ to_tsquery('simple', $4)
@@ -184,7 +202,18 @@ pub async fn search_chunks_fts(
         client
             .query(
                 "SELECT c.start_line, c.end_line, c.symbol_name, c.kind::text, f.relpath,
-                        ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) AS score
+                        CASE 
+                            WHEN c.kind IN ('heading_1', 'heading_2') THEN 
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 2.0
+                            WHEN c.kind = 'heading_3' THEN
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 1.5
+                            WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 1.2
+                            WHEN c.kind = 'json_key' THEN
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 1.3
+                            ELSE 
+                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3))
+                        END AS score
                  FROM maproom.chunks c
                  JOIN maproom.files f ON f.id = c.file_id
                  WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $3)

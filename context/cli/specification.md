@@ -1,10 +1,37 @@
 # CrewChief: Multi-Agent Orchestration Tool Specification
 
+> **IMPLEMENTATION STATUS**: This document describes the full vision for CrewChief. Features marked with ✅ are implemented, ⚠️ are partially implemented, and ❌ are planned but not yet built.
+
 ## Executive Summary
 
 CrewChief is a TypeScript-based orchestration tool that enables multiple AI agents to collaborate on a single repository using isolated git worktrees, with visual coordination through tmux. It streamlines complex multi-agent workflows into a single, ergonomic entrypoint: running `crewchief`.
 
 On first run, `crewchief` auto-detects project state and performs setup if needed. It then starts (or attaches to) a tmux session. When using agents, the tool transparently creates and reuses per‑agent worktrees while still exposing `worktree`commands for worktree management, regardless of agent usage. These worktree commands are general-purpose and operate on all git worktrees in the repository, regardless of whether they were created by CrewChief or manually.
+
+## Implementation Summary
+
+### Fully Implemented ✅
+- Git worktree management (create, list, clean, cd)
+- Maproom code indexing and search
+- Basic agent spawning in tmux
+- Run tracking and logging
+- Configuration management
+- Agent communication protocol (message bus)
+
+### Partially Implemented ⚠️
+- Agent management (basic spawn/message/close works, advanced features missing)
+- Competition mode (commands exist, evaluation metrics basic)
+- Task distribution (assignment works, evaluation limited)
+- Result integration (basic merge, no quality checks)
+- Observability (basic logging, no correlation IDs)
+
+### Not Implemented ❌
+- Main `crewchief` command auto-starting tmux session
+- Cross-agent input injection
+- Realm & semantic retrieval
+- Benchmarking & tournaments
+- Auto-setup on first run
+- Advanced evaluation metrics
 
 ## Core Objectives
 
@@ -40,11 +67,11 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 ## Detailed Requirements
 
-### 1. Git Worktree Management
+### 1. Git Worktree Management ✅
 
 Users should not need to think about worktrees for common workflows. CrewChief automatically creates, names, and reuses per‑agent worktrees behind the scenes when agents are spawned or when competition mode is used. In addition, the `worktree` subcommands provide general repository worktree management: they list and clean any worktrees detected in the repo, annotating agent-associated ones when applicable.
 
-#### CLI (user‑facing)
+#### CLI (user‑facing) - IMPLEMENTED ✅
 
 - `crewchief worktree create <name> [--branch <base>] [--base-path <dir>]` - Create a worktree from a base branch into a storage directory
 - `crewchief worktree list` - Show all active worktrees and the agent (if any) associated with each
@@ -71,7 +98,7 @@ interface WorktreeConfig {
 }
 ```
 
-### 2. Agent Management
+### 2. Agent Management ⚠️ (Partially Implemented)
 
 #### Agent Type Definitions
 
@@ -103,16 +130,16 @@ const agentTypes = {
 };
 ```
 
-### 3. Tmux Integration
+### 3. Tmux Integration ⚠️ (Partially Implemented)
 
-#### Primary Entry
+#### Primary Entry ❌ (NOT IMPLEMENTED)
 
 - `crewchief` - Start or attach to the CrewChief tmux session.
   - First‑run behavior: if the current directory is not configured, automatically run interactive `setup` before launching the session.
   - Launch the configured default root agent(s) automatically, or prompt the user to pick an agent if multiple are configured.
   - Present a minimal orchestrator/home pane as needed, but default to showing the active agent(s).
 
-#### Visual Layout and Agent Commands
+#### Visual Layout and Agent Commands ✅ (IMPLEMENTED)
 
 - `crewchief agent spawn <typeOrId> [--count N] [--task "..."] [--branch <base>] [--env KEY=VAL...]`
   - Creates one or more panes, provisions per‑agent worktrees, and starts the requested agent(s)
@@ -131,7 +158,7 @@ interface TmuxCommands {
 }
 ```
 
-### 4. Cross‑Agent Input Injection
+### 4. Cross‑Agent Input Injection ❌ (NOT IMPLEMENTED)
 
 Policy‑controlled keystroke routing from one agent pane to another, mediated by the orchestrator and the message bus for traceability.
 
@@ -167,7 +194,7 @@ interface InputInjectionEvent {
 
 ---
 
-### 5. Task Distribution & Evaluation
+### 5. Task Distribution & Evaluation ⚠️ (Partially Implemented)
 
 #### Task Assignment Flow
 
@@ -194,7 +221,7 @@ interface TaskAssignment {
 }
 ```
 
-### 6. Result Integration
+### 6. Result Integration ⚠️ (Partially Implemented)
 
 #### Merge Strategy
 
@@ -213,7 +240,7 @@ interface QualityCheck {
 }
 ```
 
-### 7. Configuration Management
+### 7. Configuration Management ✅ (Implemented)
 
 #### Main Configuration File (`crewchief.config.ts`)
 
@@ -263,7 +290,9 @@ export default {
 };
 ```
 
-### 8. CLI Interactive Setup
+### 8. CLI Interactive Setup ⚠️ (Partially Implemented)
+
+**STATUS**: The `crewchief setup` command exists but automatic invocation on first run of `crewchief` is NOT implemented.
 
 On first invocation of `crewchief` in an unconfigured directory, the setup wizard runs automatically. It is idempotent and can be re‑run any time via `crewchief setup`.
 
@@ -289,7 +318,7 @@ Welcome to CrewChief Setup!
 Configuration saved to crewchief.config.ts
 ```
 
-### 9. Agent Communication Protocol
+### 9. Agent Communication Protocol ✅ (Implemented)
 
 #### Bidirectional Messaging
 
@@ -315,7 +344,7 @@ class MessageBus {
 }
 ```
 
-### 10. Competition Mode
+### 10. Competition Mode ⚠️ (Partially Implemented)
 
 #### Multi-Agent Comparison
 
@@ -368,15 +397,15 @@ interface EvaluationMetric {
 
 ---
 
-### 11. Deprecations & Aliases
+### 11. Deprecations & Aliases ❌ (NOT IMPLEMENTED)
 
-- Remove `crewchief init`. Its responsibilities are covered by `setup`, which also runs automatically on first run.
-- Replace `crewchief session start` with simply `crewchief`.
-- Keep `worktree list` and `worktree clean` as advanced maintenance commands. Worktree creation is automatic and not exposed by default.
+- Remove `crewchief init`. Its responsibilities are covered by `setup`, which also runs automatically on first run. **STATUS**: `init` still exists
+- Replace `crewchief session start` with simply `crewchief`. **STATUS**: `session start` removed but `crewchief` alone doesn't start session
+- Keep `worktree list` and `worktree clean` as advanced maintenance commands. Worktree creation is automatic and not exposed by default. **STATUS**: All worktree commands are exposed
 
 ---
 
-### 12. Realm & Semantic Retrieval
+### 12. Realm & Semantic Retrieval ❌ (NOT IMPLEMENTED)
 
 Central module managing a meaning ontology, embeddings, and vector indexes for semantic search across repository artifacts and bus transcripts.
 
@@ -417,9 +446,11 @@ interface VectorIndex {
 
 ---
 
-### 13. Observability Extensions
+### 13. Observability Extensions ⚠️ (Partially Implemented)
 
 Richer JSONL envelopes and run introspection.
+
+**STATUS**: Basic run logging and events are implemented, but correlation IDs and phase tracking are not.
 
 #### Additions
 
@@ -442,7 +473,7 @@ interface BusEnvelope<TPayload = unknown> {
 
 ---
 
-### 14. Benchmarking & Tournaments
+### 14. Benchmarking & Tournaments ❌ (NOT IMPLEMENTED)
 
 Scenario‑based benchmarking to compare agents and configurations.
 

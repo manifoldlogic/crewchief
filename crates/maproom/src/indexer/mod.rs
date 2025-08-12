@@ -16,6 +16,11 @@ fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         "js" => Some("js"),
         "jsx" => Some("jsx"),
         "rs" => Some("rs"),
+        "md" => Some("md"),
+        "mdx" => Some("mdx"),
+        "json" => Some("json"),
+        "yaml" | "yml" => Some("yaml"),
+        "toml" => Some("toml"),
         _ => None,
     }
 }
