@@ -81,7 +81,13 @@ const toolSchemas = [
         repo: { type: 'string', description: 'Repository name to search in' },
         worktree: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Optional worktree name to limit search scope' },
         query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms' },
-        k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return' }
+        k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return' },
+        filter: { 
+          type: 'string', 
+          enum: ['all', 'code', 'docs', 'config'],
+          default: 'all',
+          description: 'Filter results by file type: all (default), code (ts/js/rs), docs (md/mdx), config (json/yaml/toml)'
+        }
       },
       required: ['repo', 'query']
     }
@@ -227,7 +233,7 @@ async function handleStatus(params: any): Promise<any> {
 }
 
 async function handleSearch(params: any): Promise<any> {
-  const { repo, worktree, query, k = 10 } = params
+  const { repo, worktree, query, k = 10, filter = 'all' } = params
   const client = await getPg()
   try {
     const { rows: repoRows } = await client.query('SELECT id FROM maproom.repos WHERE name = $1', [repo])
@@ -257,7 +263,19 @@ async function handleSearch(params: any): Promise<any> {
 
     const args: any[] = [repoId]
     let sql = `
-      SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) AS score
+      SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, c.metadata,
+        CASE 
+          WHEN c.kind IN ('heading_1', 'heading_2') THEN 
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 2.0
+          WHEN c.kind = 'heading_3' THEN
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.5
+          WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.2
+          WHEN c.kind = 'json_key' THEN
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.3
+          ELSE 
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2}))
+        END AS score
       FROM maproom.chunks c
       JOIN maproom.files f ON f.id = c.file_id
       WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $${worktreeId ? 3 : 2})
@@ -266,6 +284,19 @@ async function handleSearch(params: any): Promise<any> {
       sql += ' AND f.worktree_id = $2'
       args.push(worktreeId)
     }
+    
+    // Add filter conditions
+    if (filter !== 'all') {
+      const paramNum = args.length + 1
+      if (filter === 'code') {
+        sql += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
+      } else if (filter === 'docs') {
+        sql += ` AND (f.relpath LIKE '%.md' OR f.relpath LIKE '%.mdx')`
+      } else if (filter === 'config') {
+        sql += ` AND (f.relpath LIKE '%.json' OR f.relpath LIKE '%.yaml' OR f.relpath LIKE '%.yml' OR f.relpath LIKE '%.toml')`
+      }
+    }
+    
     args.push(tsParts)
     sql += ' ORDER BY score DESC LIMIT $' + (args.length + 1)
     args.push(k)
@@ -282,6 +313,16 @@ async function handleSearch(params: any): Promise<any> {
           start_line: r.start_line,
           end_line: r.end_line,
           score: Number(r.score)
+        }
+        
+        // Add metadata context if available
+        if (r.metadata) {
+          if (r.metadata.parent_heading) {
+            hit.parent_context = r.metadata.parent_heading
+          }
+          if (r.metadata.language) {
+            hit.language = r.metadata.language
+          }
         }
         
         // Add type information for better context

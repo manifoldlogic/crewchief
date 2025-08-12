@@ -1,97 +1,160 @@
-# `crewchief` — Delegate to AI agents without crossing your fingers. 🤞
+# `crewchief` — Git Worktree Management & Code Indexing CLI
 
-## 🎯 Orchestrate AI Agents. Multiply Output
+## 🎯 Manage Worktrees. Index Code. Search Semantically.
 
-`crewchief` is a CLI that turns your terminal into a **ops deck** — where multiple AI agents each work in their own `tmux` stations, collaborating, competing, and communicating through an inspectable channel, all under your direction.
+`crewchief` is a CLI tool that simplifies git worktree management and provides powerful semantic code search through the integrated Maproom indexing system.
 
-* **🤝 Coordinate or compete** — Configure agents to type into each other’s panes, hand off work, or compete in quality tournaments.
-* **📊 Benchmark & improve** — Run competition models to push quality higher, with built-in benchmarking tools.
-* **🔍 Observe everything** — A logged message bus lets you inspect and debug every inter-agent exchange.
-* **🧠 Smart context management** — Shared vector database ensures agents access the same knowledge and maintain consistency across tasks.
-* **🔀 Isolated workspaces** — Each agent operates in its own git worktree, preventing conflicts and enabling clean review, testing, and merge workflows for every task.
+### Current Features
 
----
+* **🔀 Git Worktree Management** — Create, list, clean, and navigate git worktrees with simple commands
+* **🔍 Semantic Code Search** — Index and search your codebase using PostgreSQL-backed full-text and semantic search
+* **📊 Code Intelligence** — Search for functions, classes, and concepts across TypeScript, JavaScript, Rust, Markdown, and JSON files
+* **🤖 Agent Infrastructure** — Basic support for spawning AI agents in isolated tmux panes with dedicated worktrees (experimental)
+* **📝 Run Tracking** — Track and review agent runs with detailed logging and event capture
 
-## Multi-Agent Orchestration
+### Planned Features (Not Yet Implemented)
 
-Zsh commands for orchestrating `claude`, `gemini`, `cursor-agent`, and more — all running in isolated `tmux` panes. Extend functionality through pluggable agent modules.
-
-## Agent Resource Isolation
-
-Each active agent works in its own sandbox with a dedicated `tmux` pane, `git worktree`, and `vector-index` for clean separation.
-
-## Interactive Command Hierarchies
-
-Build multi-level agent structures where senior agents delegate to juniors, while you maintain the ability to intervene in any active session at any time. Delegate without crossing your fingers.🤞
-
-## Quality Optimization Framework
-
-Run agent competitions and benchmarking tools to continuously improve output quality.
-
-## Inter-Agent Communication Bus
-
-Inspect and trace all agent-to-agent communications through a clear, transparent message bus that's logged to disk.
+* **🤝 Cross-Agent Coordination** — Agents typing into each other's panes and handing off work
+* **🏆 Competition & Benchmarking** — Run tournaments between agents to improve quality
+* **🧠 Semantic Retrieval (Realm)** — Vector database integration for shared knowledge
+* **📈 Advanced Evaluation** — Automated quality scoring and merge decisions
 
 ---
 
 ## Quick start
 
-* pnpm install
-* pnpm build
-* crewchief --help  
-  (or run without installing: `npx crewchief --help` or `pnpm dlx crewchief --help`)
+```bash
+# Install dependencies
+pnpm install
 
-## Core commands
+# Build the CLI
+pnpm build
 
-* Initialization
-  * `crewchief init` — prepare `.crewchief/`
-  * `crewchief setup` — interactive config wizard
-* Worktrees & session
-  * `crewchief session start`
-  * `crewchief worktree create <name> [--branch <branch>]`
-  * `crewchief worktree list`
-  * `crewchief worktree clean`
-* Agents
-  * `crewchief agent spawn <type> <task>`
-  * `crewchief agent message <agentId> <message>`
-  * `crewchief agent close <agentId>`
-* Runs
-  * `crewchief runs list`
-  * `crewchief runs events <runId>`
-  * `crewchief runs logs <runId> [--tail 200]`
-* Evaluation & merge
-  * `crewchief eval run <runId>`
-  * `crewchief merge run <branch> [--target main] [--strategy squash|ff|cherry-pick]`
-  * `crewchief merge auto <runId>`
-* Tasks & competition
-  * `crewchief task assign <agentTypeId> <description>`
-  * `crewchief competition start <description> <agentIds...>`
-  * `crewchief competition assign <competitionId>`
-  * `crewchief competition evaluate <competitionId>`
-  * `crewchief competition finalize <competitionId>`
-
-## Notes
-
-* ESM output, requires Node >= 18
-* Tmux must be installed and on PATH
-* Mock agent available via `mock-agent` for JSONL pipeline validation
-
-### Install options
-
-* Global install: `npm i -g crewchief` (or ``pnpm add -g crewchief``), then run `crewchief ...`
-* Run without install: `npx crewchief@latest ...` or `pnpm dlx crewchief@latest ...`
-
-### Maproom commands
-
-The CLI now includes Maproom subcommands that forward to the bundled Rust binary `crewchief-maproom`:
-
-```
-crewchief maproom --help
-crewchief maproom:db      # run database migrations
-crewchief maproom:scan    # scan and index files into Postgres
-crewchief maproom:upsert  # upsert files at a given commit
-crewchief maproom:watch   # watch for changes and incrementally upsert
-crewchief maproom:search  # full-text search against indexed chunks
+# Run the CLI
+crewchief --help
 ```
 
-On install, the package will try to copy a prebuilt `crewchief-maproom` binary (platform/arch specific) or build it via Cargo. You can override the binary path with `CREWCHIEF_MAPROOM_BIN=/abs/path/to/crewchief-maproom`.
+Or run without installing:
+```bash
+npx crewchief --help
+# or
+pnpm dlx crewchief --help
+```
+
+## Core Commands
+
+### Worktree Management
+* `crewchief worktree create <name> [--branch <branch>]` — Create a new worktree
+* `crewchief worktree list` — List all active worktrees
+* `crewchief worktree clean [--all] [--stale]` — Remove worktrees
+* `crewchief worktree cd <selector> [--print]` — Navigate to a worktree
+
+### Maproom (Semantic Search)
+* `crewchief maproom:db` — Initialize/migrate the database
+* `crewchief maproom:scan` — Index files into PostgreSQL
+* `crewchief maproom:search <query>` — Search indexed code
+* `crewchief maproom:upsert` — Update specific files in the index
+* `crewchief maproom:watch` — Watch for changes and auto-index
+
+### Agent Management (Experimental)
+* `crewchief agent spawn <type> <task>` — Spawn an agent in a tmux pane
+* `crewchief agent message <agentId> <message>` — Send message to agent
+* `crewchief agent close <agentId>` — Close an agent's pane
+
+### Run Tracking
+* `crewchief runs list` — List all agent runs
+* `crewchief runs events <runId>` — View run events
+* `crewchief runs logs <runId> [--tail N]` — View run logs
+
+### Setup & Configuration
+* `crewchief init` — Initialize `.crewchief/` directory
+* `crewchief setup` — Interactive configuration wizard
+* `crewchief doctor` — Check system dependencies
+
+### Experimental Features
+* `crewchief eval run <runId>` — Evaluate a run (limited implementation)
+* `crewchief merge run <branch>` — Merge a worktree branch
+* `crewchief competition start <description> <agentIds...>` — Start a competition
+* `crewchief task assign <agentTypeId> <description>` — Assign a task
+
+## Requirements
+
+* Node.js >= 18 (ESM modules)
+* Git (for worktree management)
+* PostgreSQL (for Maproom indexing)
+* Tmux (optional, for agent features)
+* Rust/Cargo (optional, for building Maproom from source)
+
+## Install Options
+
+* Global install: `npm i -g crewchief` (or `pnpm add -g crewchief`)
+* Run without install: `npx crewchief@latest` or `pnpm dlx crewchief@latest`
+
+## Maproom Setup
+
+### Database Configuration
+
+Maproom requires PostgreSQL. Set the connection string:
+
+```bash
+export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
+```
+
+### Initial Setup
+
+```bash
+# Initialize database
+crewchief maproom:db
+
+# Index your codebase
+crewchief maproom:scan
+
+# Search for code
+crewchief maproom:search "function that handles authentication"
+```
+
+### Supported File Types
+
+* TypeScript (.ts, .tsx)
+* JavaScript (.js, .jsx)
+* Rust (.rs)
+* Markdown (.md, .mdx) - with heading-based chunking
+* JSON (.json) - with key-based chunking
+
+The Maproom binary (`crewchief-maproom`) is bundled with the package. You can override it with `CREWCHIEF_MAPROOM_BIN=/path/to/binary`.
+
+## Current Limitations
+
+* Agent spawning requires `claude` or `gemini` CLI tools (falls back to mock-agent)
+* Competition mode evaluation metrics are basic
+* Auto-merge thresholds are not fully implemented
+* Cross-agent communication (input injection) is not implemented
+* Realm/semantic retrieval features are planned but not implemented
+* Benchmarking and tournament features are planned but not implemented
+* The main `crewchief` command without arguments does not yet launch a tmux session automatically
+
+## Development
+
+```bash
+# Run tests
+pnpm test
+
+# Run in development mode
+pnpm dev
+
+# Build TypeScript
+pnpm build
+
+# Build Maproom (Rust)
+cargo build --release --bin crewchief-maproom
+```
+
+## Architecture
+
+CrewChief consists of:
+
+1. **CLI Package** (`packages/cli/`) - TypeScript CLI for orchestration
+2. **Maproom** (`crates/maproom/`) - Rust-based code indexing and search
+3. **Maproom MCP** (`packages/maproom-mcp/`) - Model Context Protocol server for AI assistants
+
+See the [architecture documentation](../context/cli/specification.md) for planned features and design details.
