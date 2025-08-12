@@ -132,9 +132,102 @@ fn get_heading_level(line: &str) -> Option<usize> {
 }
 
 fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
-    // For now, just return empty to trigger module fallback
-    // TODO: Implement JSON parsing to chunk by top-level keys
-    Vec::new()
+    // Parse JSON and create chunks for top-level keys
+    // This provides better granularity than treating the whole file as one chunk
+    
+    // First, try to parse as valid JSON
+    let value: serde_json::Value = match serde_json::from_str(source) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(), // Invalid JSON, fall back to module chunking
+    };
+    
+    let mut chunks = Vec::new();
+    
+    // Only chunk if it's an object with reasonable number of keys
+    if let serde_json::Value::Object(map) = value {
+        // For package.json, always chunk scripts, dependencies, devDependencies
+        let important_keys = ["scripts", "dependencies", "devDependencies", "config", "exports"];
+        
+        // If it has important keys or many keys, chunk it
+        let has_important = important_keys.iter().any(|k| map.contains_key(*k));
+        if !has_important && map.len() <= 3 {
+            return Vec::new(); // Too simple, use module fallback
+        }
+        
+        // For each top-level key, create a chunk
+        let lines: Vec<&str> = source.lines().collect();
+        let mut current_line = 1;
+        
+        for (key, _value) in map.iter() {
+            // Find the line where this key appears
+            let key_pattern = format!("\"{}\"", key);
+            let mut start_line = current_line;
+            let mut end_line = current_line;
+            let mut found = false;
+            let mut brace_depth = 0;
+            let mut in_string = false;
+            let mut escape_next = false;
+            
+            for (i, line) in lines.iter().enumerate().skip(current_line - 1) {
+                let line_num = i + 1;
+                
+                // Look for the key
+                if !found && line.contains(&key_pattern) {
+                    start_line = line_num;
+                    found = true;
+                }
+                
+                if found {
+                    // Track brace depth to find the end of this value
+                    for ch in line.chars() {
+                        if escape_next {
+                            escape_next = false;
+                            continue;
+                        }
+                        
+                        match ch {
+                            '\\' if in_string => escape_next = true,
+                            '"' if !in_string => in_string = true,
+                            '"' if in_string => in_string = false,
+                            '{' | '[' if !in_string => brace_depth += 1,
+                            '}' | ']' if !in_string => {
+                                brace_depth -= 1;
+                                if brace_depth == 0 {
+                                    end_line = line_num;
+                                    current_line = line_num + 1;
+                                    break;
+                                }
+                            },
+                            ',' if !in_string && brace_depth == 0 => {
+                                // Simple value ends at comma
+                                end_line = line_num;
+                                current_line = line_num + 1;
+                                break;
+                            },
+                            _ => {}
+                        }
+                    }
+                    
+                    if end_line > start_line {
+                        break;
+                    }
+                }
+            }
+            
+            if found && end_line >= start_line {
+                chunks.push(SymbolChunk {
+                    symbol_name: Some(key.clone()),
+                    kind: "json_key".to_string(),
+                    signature: None,
+                    docstring: None,
+                    start_line: start_line as i32,
+                    end_line: end_line as i32,
+                });
+            }
+        }
+    }
+    
+    chunks
 }
 
 fn walk_add_decls(source: &str, node: Node, out: &mut Vec<SymbolChunk>) {
