@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import path from 'node:path';
 import { loadConfig } from '../config/loader';
+import fs from 'node:fs';
 import { WorktreeService } from '../git/worktrees';
 import { removeDirSync } from '../utils/fs';
 import { RunManager } from '../orchestrator/runManager';
@@ -104,8 +105,16 @@ export function registerWorktreeCommands(program: Command): void {
             return;
           }
           const targetPath = path.resolve(matches[0].path);
-          const cwdResolved = path.resolve(process.cwd());
-          if (targetPath === cwdResolved) {
+          // Resolve real paths to handle symlinks and detect if cwd is inside the target worktree
+          let targetReal = targetPath;
+          let cwdReal = process.cwd();
+          try {
+            targetReal = fs.realpathSync(targetPath);
+            cwdReal = fs.realpathSync(process.cwd());
+          } catch {}
+          const rel = path.relative(targetReal, cwdReal);
+          const isCwdInsideTarget = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+          if (isCwdInsideTarget) {
             logger.error('Refusing to remove the current working tree. Switch to another directory and try again.');
             process.exitCode = 1;
             return;

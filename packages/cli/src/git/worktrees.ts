@@ -1,6 +1,7 @@
 import path from 'node:path';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { ensureDirSync, removeDirSync } from '../utils/fs';
+import fs from 'node:fs';
 
 export interface WorktreeListItem {
   path: string;
@@ -52,10 +53,15 @@ export class WorktreeService {
     }
     if (opts.mode === 'all') {
       const list = await this.listWorktrees();
-      const cwdResolved = path.resolve(this.cwd);
+      // Use real paths so symlinks do not bypass the protection
+      const cwdReal = safeRealpath(this.cwd);
       for (const item of list) {
         const p = path.resolve(item.path);
-        if (p === cwdResolved) continue; // never remove current working tree
+        const pReal = safeRealpath(p);
+        // Skip if current working directory is the same as, or inside, this worktree
+        const rel = path.relative(pReal, cwdReal);
+        const isCwdInside = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+        if (isCwdInside) continue; // never remove current working tree
         try {
           // Force remove to handle unmerged/untracked files in the worktree
           await this.git.raw(['worktree', 'remove', '--force', p]);
@@ -71,7 +77,24 @@ export class WorktreeService {
   }
 
   async removeWorktree(worktreePath: string): Promise<void> {
-    await this.git.raw(['worktree', 'remove', '--force', worktreePath]);
+    // Guard against deleting the current worktree (or its ancestor) even if asked
+    const targetPath = path.resolve(worktreePath);
+    const targetReal = safeRealpath(targetPath);
+    const cwdReal = safeRealpath(this.cwd);
+    const rel = path.relative(targetReal, cwdReal);
+    const isCwdInsideTarget = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    if (isCwdInsideTarget) {
+      throw new Error('Refusing to remove the current worktree. Change directories and try again.');
+    }
+    await this.git.raw(['worktree', 'remove', '--force', targetPath]);
+  }
+}
+
+function safeRealpath(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
   }
 }
 

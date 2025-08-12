@@ -11,6 +11,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 ## Implementation Summary
 
 ### Fully Implemented ✅
+
 - Git worktree management (create, list, clean, cd)
 - Maproom code indexing and search
 - Basic agent spawning in tmux
@@ -19,6 +20,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 - Agent communication protocol (message bus)
 
 ### Partially Implemented ⚠️
+
 - Agent management (basic spawn/message/close works, advanced features missing)
 - Competition mode (commands exist, evaluation metrics basic)
 - Task distribution (assignment works, evaluation limited)
@@ -26,6 +28,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 - Observability (basic logging, no correlation IDs)
 
 ### Not Implemented ❌
+
 - Main `crewchief` command auto-starting tmux session
 - Cross-agent input injection
 - Realm & semantic retrieval
@@ -75,7 +78,7 @@ Users should not need to think about worktrees for common workflows. CrewChief a
 
 - `crewchief worktree create <name> [--branch <base>] [--base-path <dir>]` - Create a worktree from a base branch into a storage directory
 - `crewchief worktree list` - Show all active worktrees and the agent (if any) associated with each
-- `crewchief worktree clean [--stale | --all]` - Remove completed/abandoned worktrees
+- `crewchief worktree clean [--stale | --all]` - Remove completed/abandoned worktrees. Safety: refuses to remove the current worktree or any worktree that contains the current working directory; switch directories before cleaning.
 - `crewchief worktree cd <selector> [--print]` - Resolve a worktree by branch/name/path and start a subshell there by default; use `--print` to output the absolute path instead
 
 #### Internal (non‑user‑facing)
