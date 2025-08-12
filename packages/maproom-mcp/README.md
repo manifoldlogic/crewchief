@@ -167,7 +167,3 @@ Scripts will:
   - Run migrations: `crewchief-maproom db migrate --database-url "$DATABASE_URL"`
 - **Indexer not found**
   - Set `CREWCHIEF_MAPROOM_BIN` to an absolute path, or ensure Cargo is installed to build locally, or place a prebuilt binary in `bin/<platform>-<arch>/`
-
-### License
-
-Apache-2.0 (or project license).
