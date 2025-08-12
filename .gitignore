@@ -18,3 +18,5 @@ node_modules
 crewchief.config.ts
 
 .cursorrules
+
+.mcp.json

@@ -1,6 +1,6 @@
 {
   "name": "crewchief",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "description": "CrewChief: Multi-agent orchestration CLI for coordinating AI agents via git worktrees and tmux.",
   "license": "MIT",
@@ -26,9 +26,9 @@
     "lint": "eslint .",
     "format": "prettier -w .",
     "prepublishOnly": "pnpm build",
-    "release:patch": "pnpm version patch && pnpm publish",
-    "release:minor": "pnpm version minor && pnpm publish",
-    "release:major": "pnpm version major && pnpm publish"
+    "release:patch": "node ./scripts/release.mjs patch",
+    "release:minor": "node ./scripts/release.mjs minor",
+    "release:major": "node ./scripts/release.mjs major"
   },
   "dependencies": {
     "@types/node": "^20.0.0",
