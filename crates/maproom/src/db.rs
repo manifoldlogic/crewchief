@@ -16,9 +16,16 @@ pub async fn connect() -> anyhow::Result<Client> {
 }
 
 pub async fn migrate(client: &Client) -> anyhow::Result<()> {
-    // Minimal migration runner: read and execute 0001_init.sql
-    let sql = include_str!("./../migrations/0001_init.sql");
-    client.batch_execute(sql).await?;
+    // Minimal migration runner: execute all migrations in order
+    let migrations = vec![
+        include_str!("./../migrations/0001_init.sql"),
+        include_str!("./../migrations/0002_markdown_support.sql"),
+        include_str!("./../migrations/0003_yaml_toml_support.sql"),
+    ];
+    
+    for sql in migrations {
+        client.batch_execute(sql).await?;
+    }
     Ok(())
 }
 

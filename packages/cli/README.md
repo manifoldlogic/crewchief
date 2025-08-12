@@ -120,6 +120,8 @@ crewchief maproom:search "function that handles authentication"
 * Rust (.rs)
 * Markdown (.md, .mdx) - with heading-based chunking
 * JSON (.json) - with key-based chunking
+* YAML (.yaml, .yml) - with key-based chunking
+* TOML (.toml) - with section-based chunking
 
 The Maproom binary (`crewchief-maproom`) is bundled with the package. You can override it with `CREWCHIEF_MAPROOM_BIN=/path/to/binary`.
 

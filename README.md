@@ -5,8 +5,9 @@ A multi-tool CLI for git worktree management and semantic code search.
 ## What's Working
 
 ✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees  
-✅ **Semantic Code Search** - Index and search code using PostgreSQL and tree-sitter  
-✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)
+✅ **Semantic Code Search** - Index and search code, docs, and configs using PostgreSQL  
+✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)  
+✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML
 
 ## What's In Progress
 
