@@ -1,6 +1,7 @@
 {
   "name": "crewchief-root",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],
