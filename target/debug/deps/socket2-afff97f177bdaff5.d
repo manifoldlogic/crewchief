@@ -1,9 +1,0 @@
-/Users/danielbushman/git/manifoldlogic/crewchief/.crewchief/worktrees/maproom-cursor-gpt5/target/debug/deps/libsocket2-afff97f177bdaff5.rmeta: /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/lib.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sockaddr.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/socket.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sockref.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sys/unix.rs
-
-/Users/danielbushman/git/manifoldlogic/crewchief/.crewchief/worktrees/maproom-cursor-gpt5/target/debug/deps/socket2-afff97f177bdaff5.d: /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/lib.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sockaddr.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/socket.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sockref.rs /Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sys/unix.rs
-
-/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/lib.rs:
-/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sockaddr.rs:
-/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/socket.rs:
-/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sockref.rs:
-/Users/danielbushman/.cargo/registry/src/index.crates.io-6f17d22bba15001f/socket2-0.6.0/src/sys/unix.rs:
