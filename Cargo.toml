@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "crates/maproom",
+]
+resolver = "2"
+
+
+
