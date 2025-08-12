@@ -64,15 +64,16 @@ export function registerWorktreeCommands(program: Command): void {
     .command('clean')
     .option('--stale', 'Remove stale worktrees only')
     .option('--all', 'Remove all non-current worktrees')
-    .description('Prune worktree metadata and entries')
-    .action(async (opts: { stale?: boolean; all?: boolean }) => {
+    .option('--keep-dir', 'Keep worktree directories (only remove git metadata)')
+    .description('Prune worktree metadata and directories')
+    .action(async (opts: { stale?: boolean; all?: boolean; keepDir?: boolean }) => {
       try {
         const wt = new WorktreeService();
         if (opts.all) {
-          await wt.pruneWorktrees({ mode: 'all' });
-          logger.success('Removed all non-current worktrees');
+          await wt.pruneWorktrees({ mode: 'all', keepDir: opts.keepDir });
+          logger.success(`Removed all non-current worktrees${opts.keepDir ? ' (kept directories)' : ' and their directories'}`);
         } else if (opts.stale) {
-          await wt.pruneWorktrees({ mode: 'stale' });
+          await wt.pruneWorktrees({ mode: 'stale', keepDir: opts.keepDir });
           logger.success('Removed stale worktrees');
         } else {
           await wt.pruneWorktrees();
