@@ -2,6 +2,8 @@ import { Client } from 'pg'
 import pino from 'pino'
 import { spawn } from 'node:child_process'
 import { Readable } from 'node:stream'
+import path from 'node:path'
+import fs from 'node:fs'
 
 // IMPORTANT: Never write logs to stdout; MCP JSON-RPC must be the only stdout output.
 // Route pino logs to stderr to avoid corrupting the protocol stream.
@@ -186,6 +188,14 @@ async function handleUpsert(params: any): Promise<any> {
 
   const candidates: Array<{ cmd: string, args: string[] }> = []
   if (process.env.CREWCHIEF_MAPROOM_BIN) candidates.push({ cmd: process.env.CREWCHIEF_MAPROOM_BIN, args: maproomArgs })
+  // Packaged binary fallback (platform-arch)
+  try {
+    const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+    const packaged = path.join(__dirname, '..', 'bin', `${process.platform}-${process.arch}`, execName)
+    if (fs.existsSync(packaged)) {
+      candidates.push({ cmd: packaged, args: maproomArgs })
+    }
+  } catch {}
   candidates.push(
     { cmd: 'crewchief', args: crewchiefArgs },
     { cmd: 'crewchief-maproom', args: maproomArgs },
