@@ -1,6 +1,6 @@
 # `crewchief` — Git Worktree Management & Code Indexing CLI
 
-## 🎯 Manage Worktrees. Index Code. Search Semantically.
+## 🎯 Manage Worktrees. Index Code. Search Semantically
 
 `crewchief` is a CLI tool that simplifies git worktree management and provides powerful semantic code search through the integrated Maproom indexing system.
 
@@ -35,6 +35,7 @@ crewchief --help
 ```
 
 Or run without installing:
+
 ```bash
 npx crewchief --help
 # or
@@ -44,12 +45,14 @@ pnpm dlx crewchief --help
 ## Core Commands
 
 ### Worktree Management
-* `crewchief worktree create <name> [--branch <branch>]` — Create a new worktree
+
+* `crewchief worktree create <name> [--branch <branch>]` — Create a new worktree and cd into it by default
 * `crewchief worktree list` — List all active worktrees
 * `crewchief worktree clean [--all] [--stale]` — Remove worktrees
 * `crewchief worktree cd <selector> [--print]` — Navigate to a worktree
 
 ### Maproom (Semantic Search)
+
 * `crewchief maproom:db` — Initialize/migrate the database
 * `crewchief maproom:scan` — Index files into PostgreSQL
 * `crewchief maproom:search <query>` — Search indexed code
@@ -57,21 +60,25 @@ pnpm dlx crewchief --help
 * `crewchief maproom:watch` — Watch for changes and auto-index
 
 ### Agent Management (Experimental)
+
 * `crewchief agent spawn <type> <task>` — Spawn an agent in a tmux pane
 * `crewchief agent message <agentId> <message>` — Send message to agent
 * `crewchief agent close <agentId>` — Close an agent's pane
 
 ### Run Tracking
+
 * `crewchief runs list` — List all agent runs
 * `crewchief runs events <runId>` — View run events
 * `crewchief runs logs <runId> [--tail N]` — View run logs
 
 ### Setup & Configuration
+
 * `crewchief init` — Initialize `.crewchief/` directory
 * `crewchief setup` — Interactive configuration wizard
 * `crewchief doctor` — Check system dependencies
 
 ### Experimental Features
+
 * `crewchief eval run <runId>` — Evaluate a run (limited implementation)
 * `crewchief merge run <branch>` — Merge a worktree branch
 * `crewchief competition start <description> <agentIds...>` — Start a competition
