@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -25,14 +26,18 @@ enum Commands {
 
     /// Scan a worktree and index files into Postgres
     Scan {
+        /// Repository name (defaults to git remote origin name)
         #[arg(long)]
-        repo: String,
+        repo: Option<String>,
+        /// Worktree name (defaults to current branch name)
         #[arg(long)]
-        worktree: String,
+        worktree: Option<String>,
+        /// Path to scan (defaults to current directory)
         #[arg(long)]
-        path: PathBuf,
+        path: Option<PathBuf>,
+        /// Git commit hash (defaults to HEAD)
         #[arg(long)]
-        commit: String,
+        commit: Option<String>,
         #[arg(long, default_value_t = 4)]
         concurrency: usize,
         #[arg(long, value_delimiter = ',')]
@@ -86,6 +91,68 @@ enum DbCommand {
     Migrate,
 }
 
+/// Extract git information from a repository path
+fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
+    // Get the repository name from remote origin
+    let repo_name = Command::new("git")
+        .args(&["-C", path.to_str().unwrap_or("."), "remote", "get-url", "origin"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok()
+            } else {
+                None
+            }
+        })
+        .and_then(|url| {
+            // Extract repo name from URL (e.g., git@github.com:user/repo.git or https://github.com/user/repo)
+            let url = url.trim();
+            if let Some(repo_part) = url.rsplit('/').next() {
+                Some(repo_part.trim_end_matches(".git").to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| {
+            // Fallback: use the current directory name
+            path.canonicalize()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "unknown".to_string())
+        });
+
+    // Get the current branch name
+    let branch_name = Command::new("git")
+        .args(&["-C", path.to_str().unwrap_or("."), "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "main".to_string());
+
+    // Get the current commit hash
+    let commit_hash = Command::new("git")
+        .args(&["-C", path.to_str().unwrap_or("."), "rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "HEAD".to_string());
+
+    Ok((repo_name, branch_name, commit_hash))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -107,6 +174,18 @@ async fn main() -> anyhow::Result<()> {
         },
 
         Commands::Scan { repo, worktree, path, commit, concurrency, languages, exclude } => {
+            // Get git defaults if not provided
+            let path = path.unwrap_or_else(|| PathBuf::from("."));
+            
+            // Get git information from the path
+            let (repo_name, branch_name, commit_hash) = get_git_info(&path)?;
+            
+            let repo = repo.unwrap_or(repo_name);
+            let worktree = worktree.unwrap_or(branch_name);
+            let commit = commit.unwrap_or(commit_hash);
+            
+            tracing::info!("Scanning repo: {}, worktree: {}, commit: {}", repo, worktree, commit);
+            
             let client = db::connect().await?;
             indexer::scan_worktree(
                 &client,
