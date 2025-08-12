@@ -1,6 +1,6 @@
 {
   "name": "maproom-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -18,9 +18,9 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "postinstall": "node ./dist/postinstall.js || true",
-    "release:patch": "npm version patch --no-git-tag-version --workspaces=false && pnpm publish --access public",
-    "release:minor": "npm version minor --no-git-tag-version --workspaces=false && pnpm publish --access public",
-    "release:major": "npm version major --no-git-tag-version --workspaces=false && pnpm publish --access public"
+    "release:patch": "pnpm version patch -m 'chore(release): %s' && git push --follow-tags && pnpm publish --access public",
+    "release:minor": "pnpm version minor -m 'chore(release): %s' && git push --follow-tags && pnpm publish --access public",
+    "release:major": "pnpm version major -m 'chore(release): %s' && git push --follow-tags && pnpm publish --access public"
   },
   "dependencies": {
     "commander": "^12.1.0",
