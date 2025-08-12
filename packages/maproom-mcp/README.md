@@ -31,6 +31,7 @@ maproom-mcp
 ```
 
 On install, the package will:
+
 - Prefer a bundled binary at `bin/<platform>-<arch>/crewchief-maproom`
 - If not found, try to build `crewchief-maproom` with `cargo build --release`
 - Ensure the binary is executable
@@ -81,6 +82,7 @@ Then restart Cursor. You should see 3 tools enabled for Maproom.
 #### How the indexer binary is located
 
 Priority order:
+
 1. `CREWCHIEF_MAPROOM_BIN` (exact path)
 2. Bundled binary: `bin/<platform>-<arch>/crewchief-maproom`
 3. `crewchief` on PATH (with `maproom upsert` subcommand)
@@ -109,6 +111,7 @@ crewchief-maproom maproom upsert \
 ```
 
 Notes:
+
 - **`scan`** supports `--exclude` globs via `.gitignore` semantics and extra override patterns
 - **`watch`** provides a throttled file watcher for continuous indexing
 
@@ -146,6 +149,7 @@ pnpm release:major
 ```
 
 Scripts will:
+
 - Bump version and create a commit with message `chore(release): <version>`
 - Create a Git tag `v<version>` and push with tags
 - Publish to npm (`--access public`)
