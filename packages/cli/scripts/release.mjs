@@ -36,7 +36,7 @@ async function main() {
   // Commit and tag
   execSync('git add package.json', { stdio: 'inherit' })
   execSync(`git commit -m "chore(release): ${next}"`, { stdio: 'inherit' })
-  execSync(`git tag v${next}`, { stdio: 'inherit' })
+  execSync(`git tag ${pkg.name}@v${next}`, { stdio: 'inherit' })
   execSync('git push --follow-tags', { stdio: 'inherit' })
 
   // Publish
