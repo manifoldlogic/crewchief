@@ -64,7 +64,7 @@ const toolSchemas = [
       type: 'object',
       properties: {
         repo: { type: 'string' },
-        worktree: { type: 'string' },
+        worktree: { anyOf: [{ type: 'string' }, { type: 'null' }] },
         query: { type: 'string' },
         k: { type: 'integer', minimum: 1, default: 10 }
       },
