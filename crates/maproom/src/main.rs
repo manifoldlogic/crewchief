@@ -62,12 +62,15 @@ enum Commands {
 
     /// Watch a worktree for changes and incrementally upsert
     Watch {
+        /// Repository name (defaults to git remote origin name)
         #[arg(long)]
-        repo: String,
+        repo: Option<String>,
+        /// Worktree name (defaults to current branch name)
         #[arg(long)]
-        worktree: String,
+        worktree: Option<String>,
+        /// Path to watch (defaults to current directory)
         #[arg(long)]
-        path: PathBuf,
+        path: Option<PathBuf>,
         #[arg(long, default_value = "2s")]
         throttle: String,
     },
@@ -209,6 +212,22 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Watch { repo, worktree, path, throttle } => {
+            // Default path to current directory if not provided
+            let path = path.unwrap_or_else(|| PathBuf::from("."));
+
+            // Derive repo/worktree defaults from git if not provided
+            let (repo_name, branch_name, _commit_hash) = get_git_info(&path)?;
+            let repo = repo.unwrap_or(repo_name);
+            let worktree = worktree.unwrap_or(branch_name);
+
+            tracing::info!(
+                repo = %repo,
+                worktree = %worktree,
+                path = %path.display(),
+                throttle = %throttle,
+                "Starting watch"
+            );
+
             let client = db::connect().await?;
             indexer::watch_worktree(&client, &repo, &worktree, &path, &throttle).await?;
         }
