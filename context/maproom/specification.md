@@ -216,8 +216,8 @@ SET ivfflat.probes = 10;  -- raise for larger repos if recall dips
 ```
 crewchief maproom scan \
   --repo crewchief \
-  --worktree radar \
-  --path /repos/crewchief-radar \
+  --worktree crewchief-radar \
+  --path .crewchief/worktrees/crewchief-radar \
   --commit $(git rev-parse HEAD)
 
 crewchief maproom upsert \
