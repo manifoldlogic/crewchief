@@ -1,4 +1,4 @@
-import { AgentType } from './types';
+import { AgentType } from './types'
 
 const builtin: Record<string, AgentType> = {
   'project-manager': {
@@ -7,7 +7,7 @@ const builtin: Record<string, AgentType> = {
     platform: 'claude',
     capabilities: ['planning', 'delegation', 'review'],
     agentDefinitionPath: '.claude/agents/project-manager.md',
-    executionCommand: 'claude'
+    executionCommand: 'claude',
   },
   'backend-developer': {
     id: 'backend-developer',
@@ -15,7 +15,7 @@ const builtin: Record<string, AgentType> = {
     platform: 'claude',
     capabilities: ['api', 'database', 'testing'],
     agentDefinitionPath: '.claude/agents/backend-developer.md',
-    executionCommand: 'claude'
+    executionCommand: 'claude',
   },
   'frontend-developer': {
     id: 'frontend-developer',
@@ -23,7 +23,7 @@ const builtin: Record<string, AgentType> = {
     platform: 'gemini',
     capabilities: ['ui', 'components', 'styling'],
     agentDefinitionPath: '.gemini/agents/frontend-developer.txt',
-    executionCommand: 'gemini'
+    executionCommand: 'gemini',
   },
   'mock-agent': {
     id: 'mock-agent',
@@ -31,16 +31,14 @@ const builtin: Record<string, AgentType> = {
     platform: 'custom',
     capabilities: ['status', 'echo'],
     agentDefinitionPath: 'scripts/mock-agent.js',
-    executionCommand: 'node scripts/mock-agent.js'
-  }
-};
+    executionCommand: 'node scripts/mock-agent.js',
+  },
+}
 
 export function getAgentType(id: string): AgentType | undefined {
-  return builtin[id];
+  return builtin[id]
 }
 
 export function listAgentTypes(): AgentType[] {
-  return Object.values(builtin);
+  return Object.values(builtin)
 }
-
-

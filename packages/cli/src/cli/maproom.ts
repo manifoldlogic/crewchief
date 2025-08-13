@@ -1,11 +1,11 @@
-import { Command } from 'commander'
 import { spawnSync } from 'node:child_process'
-import path from 'node:path'
 import fs from 'node:fs'
+import path from 'node:path'
+import { Command } from 'commander'
 
 function resolvePackagedMaproomBin(): string | null {
   const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
-  
+
   // Map architecture names to match our build script convention
   const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
   const platform = `${process.platform}-${arch}`
@@ -45,7 +45,9 @@ function resolvePackagedMaproomBin(): string | null {
 function runMaproomForward(args: string[]) {
   const bin = resolvePackagedMaproomBin()
   if (!bin) {
-    console.error('crewchief-maproom not found. Ensure it is installed or built. You can set CREWCHIEF_MAPROOM_BIN to an absolute path.')
+    console.error(
+      'crewchief-maproom not found. Ensure it is installed or built. You can set CREWCHIEF_MAPROOM_BIN to an absolute path.',
+    )
     process.exitCode = 1
     return
   }
@@ -93,5 +95,3 @@ export function registerMaproomCommands(program: Command) {
     .argument('[args...]')
     .action((args: string[]) => runMaproomForward(['search', ...(args || [])]))
 }
-
-

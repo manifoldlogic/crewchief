@@ -1,0 +1,11 @@
+dist/
+node_modules/
+*.min.js
+*.map
+coverage/
+.turbo/
+pnpm-lock.yaml
+.next/
+.cache/
+build/
+bin/
