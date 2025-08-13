@@ -7,6 +7,7 @@ import { removeDirSync } from '../utils/fs';
 import { RunManager } from '../orchestrator/runManager';
 import { logger } from '../utils/logger';
 import { spawn } from 'node:child_process';
+import { copyIgnoredFiles } from '../git/copy-ignored-files';
 
 export function registerWorktreeCommands(program: Command): void {
   const worktree = new Command('worktree').description('Worktree operations');
@@ -17,15 +18,17 @@ export function registerWorktreeCommands(program: Command): void {
     .option('--branch <base>', 'Base branch to create the worktree from')
     .option('--base-path <dir>', 'Base directory for storing worktrees')
     .option('--no-cd', 'Do not start a subshell in the created worktree')
+    .option('--no-copy-ignored', 'Do not copy ignored files (override config)')
     .description('Create a git worktree from a base branch (general-purpose)')
-    .action(async (name: string, opts: { branch?: string; basePath?: string; cd?: boolean }) => {
+    .action(async (name: string, opts: { branch?: string; basePath?: string; cd?: boolean; copyIgnored?: boolean }) => {
       try {
         const config = await loadConfig();
         const baseBranch = opts.branch ?? config.repository.mainBranch;
         const basePath = opts.basePath ?? config.repository.worktreeBasePath;
         const wt = new WorktreeService();
         await wt.initRepository(basePath);
-        const createdPath = await wt.createWorktree(name, baseBranch, basePath);
+        const skipCopyIgnored = opts.copyIgnored === false;
+        const createdPath = await wt.createWorktree(name, baseBranch, basePath, skipCopyIgnored);
         logger.success(`Created worktree at ${createdPath} [${baseBranch}]`);
 
         // Default behavior: start a subshell in the created worktree unless --no-cd is passed
@@ -191,6 +194,75 @@ export function registerWorktreeCommands(program: Command): void {
         child.on('exit', (code) => process.exit(code ?? 0));
       } catch (err) {
         logger.error('Failed to resolve worktree:', err);
+        process.exitCode = 1;
+      }
+    });
+
+  worktree
+    .command('copy-ignored')
+    .argument('<selector>')
+    .option('--dry-run', 'Show what would be copied without actually copying')
+    .option('--no-copy-ignored', 'Override config and skip copying (for testing)')
+    .description('Copy ignored files to an existing worktree based on config')
+    .action(async (selector: string, opts: { dryRun?: boolean; copyIgnored?: boolean }) => {
+      try {
+        // Check if copying is disabled
+        if (opts.copyIgnored === false) {
+          logger.info('Skipping copy (--no-copy-ignored flag)');
+          return;
+        }
+
+        const config = await loadConfig();
+        if (!config.worktree?.copyIgnoredFiles?.length) {
+          logger.warn('No ignored files configured to copy. Add patterns to worktree.copyIgnoredFiles in crewchief.config.ts');
+          return;
+        }
+
+        // Find the worktree
+        const wt = new WorktreeService();
+        const list = await wt.listWorktrees();
+        const matches = list.filter((item) => {
+          const sel = selector.trim();
+          const byBranch = item.branch && item.branch === sel;
+          const byBaseName = path.basename(item.path) === sel;
+          let byPath = false;
+          try {
+            const resolvedSel = path.resolve(sel);
+            byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel);
+          } catch {}
+          return Boolean(byBranch || byBaseName || byPath);
+        });
+
+        if (matches.length === 0) {
+          logger.error(`No matching worktree for '${selector}'. Try using branch name or worktree directory name.`);
+          process.exitCode = 1;
+          return;
+        }
+        if (matches.length > 1) {
+          logger.error(`Ambiguous selector '${selector}'. Candidates:`);
+          for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`);
+          process.exitCode = 1;
+          return;
+        }
+
+        const targetPath = path.resolve(matches[0].path);
+        logger.info(`Copying ignored files to ${targetPath}...`);
+        
+        const result = await copyIgnoredFiles({
+          sourceRoot: process.cwd(),
+          worktreeRoot: targetPath,
+          config,
+          dryRun: opts.dryRun
+        });
+
+        if (result.errors.length > 0) {
+          logger.warn(`Completed with ${result.errors.length} error(s)`);
+          process.exitCode = 1;
+        } else {
+          logger.success('Ignored files copied successfully');
+        }
+      } catch (err) {
+        logger.error('Failed to copy ignored files:', err);
         process.exitCode = 1;
       }
     });

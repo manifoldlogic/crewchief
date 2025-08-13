@@ -2,6 +2,8 @@ import path from 'node:path';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { ensureDirSync, removeDirSync } from '../utils/fs';
 import fs from 'node:fs';
+import { copyIgnoredFiles } from './copy-ignored-files';
+import { loadConfig } from '../config/loader';
 
 export interface WorktreeListItem {
   path: string;
@@ -21,11 +23,30 @@ export class WorktreeService {
     ensureDirSync(path.join(this.cwd, storagePath));
   }
 
-  async createWorktree(name: string, baseBranch: string, basePath: string): Promise<string> {
+  async createWorktree(name: string, baseBranch: string, basePath: string, skipCopyIgnored?: boolean): Promise<string> {
     const wtPath = path.join(this.cwd, basePath, name);
     ensureDirSync(wtPath);
     await this.git.fetch();
     await this.git.raw(['worktree', 'add', '-B', name, wtPath, baseBranch]);
+    
+    // Copy ignored files if configured and not skipped
+    if (!skipCopyIgnored) {
+      try {
+        const config = await loadConfig();
+        if (config.worktree?.copyIgnoredFiles?.length) {
+          console.log('\n📁 Copying ignored files to worktree...');
+          await copyIgnoredFiles({
+            sourceRoot: this.cwd,
+            worktreeRoot: wtPath,
+            config
+          });
+        }
+      } catch (error) {
+        console.warn('⚠️  Failed to copy ignored files:', error instanceof Error ? error.message : error);
+        // Don't fail worktree creation if copying fails
+      }
+    }
+    
     return wtPath;
   }
 

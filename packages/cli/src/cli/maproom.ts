@@ -5,26 +5,37 @@ import fs from 'node:fs'
 
 function resolvePackagedMaproomBin(): string | null {
   const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+  
+  // Map architecture names to match our build script convention
+  const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
+  const platform = `${process.platform}-${arch}`
 
   // 1) Explicit env override
   const envBin = process.env.CREWCHIEF_MAPROOM_BIN
   if (envBin && fs.existsSync(envBin)) return envBin
 
-  // 2) Packaged inside this CLI package
+  // 2) Packaged inside this CLI package with platform subdirectory
   try {
     const here = __dirname
-    const out = path.join(here, '..', 'bin', `${process.platform}-${process.arch}`, execName)
+    const out = path.join(here, '..', 'bin', platform, execName)
     if (fs.existsSync(out)) return out
   } catch {}
 
-  // 3) Packaged in sibling maproom-mcp package (monorepo dev convenience)
+  // 3) Fallback to symlink in bin root (for backwards compatibility)
   try {
     const here = __dirname
-    const mcp = path.join(here, '..', '..', 'maproom-mcp', 'bin', `${process.platform}-${process.arch}`, execName)
+    const out = path.join(here, '..', 'bin', execName)
+    if (fs.existsSync(out)) return out
+  } catch {}
+
+  // 4) Packaged in sibling maproom-mcp package (monorepo dev convenience)
+  try {
+    const here = __dirname
+    const mcp = path.join(here, '..', '..', 'maproom-mcp', 'bin', platform, execName)
     if (fs.existsSync(mcp)) return mcp
   } catch {}
 
-  // 4) Global on PATH
+  // 5) Global on PATH
   const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
   if (which.status === 0) return 'crewchief-maproom'
 
