@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process'
-import path from 'node:path'
 import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 function ensureExecutable(p: string) {
-  try { fs.chmodSync(p, 0o755) } catch {}
+  try {
+    fs.chmodSync(p, 0o755)
+  } catch {}
 }
 
 function main() {
@@ -22,7 +24,15 @@ function main() {
 
   // Try copy from sibling maproom-mcp package bin for monorepo installs
   try {
-    const mcpPath = path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', `${process.platform}-${process.arch}`, execName)
+    const mcpPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'maproom-mcp',
+      'bin',
+      `${process.platform}-${process.arch}`,
+      execName,
+    )
     if (fs.existsSync(mcpPath)) {
       fs.mkdirSync(outDir, { recursive: true })
       fs.copyFileSync(mcpPath, outPath)
@@ -35,7 +45,7 @@ function main() {
   try {
     const res = spawnSync('cargo', ['build', '--release', '-p', 'crewchief-maproom'], {
       cwd: path.join(__dirname, '..', '..', '..'),
-      stdio: 'inherit'
+      stdio: 'inherit',
     })
     if (res.status === 0) {
       const built = path.join(__dirname, '..', '..', '..', 'target', 'release', execName)
@@ -50,5 +60,3 @@ function main() {
 }
 
 main()
-
-
