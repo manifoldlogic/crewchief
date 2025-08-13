@@ -8,6 +8,10 @@ export default {
     maxConcurrentAgents: 5,
     defaultTimeout: 30 * 60 * 1000,
   },
+  launch: {
+    autoRunDefaultAgents: false,
+    askToUpdateLlmGuides: false,
+  },
   agents: {
     claude: {
       command: 'claude-cli',
@@ -29,6 +33,20 @@ export default {
   evaluation: {
     autoMergeThreshold: 0.95,
     requireTestsPass: true,
-    requireReview: false,
+    requireReview: true
   },
-}
+  worktree: {
+    copyIgnoredFiles: [
+      '**/.claude/**/*',
+      '**/.cursor/**/*',
+      '**/.gemini/**/*',
+      '**/.codex/**/*',
+      '**/.cursorrules',
+      'crewchief.config.ts',
+      '**/.env',
+      '**/.mcp.json'
+    ],
+    copyFromPath: '.',
+    overwriteStrategy: 'skip'
+  }
+};

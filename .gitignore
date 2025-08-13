@@ -4,6 +4,7 @@ target/
 .cursor/
 .claude/
 .gemini/
+.codex/
 
 node_modules
 .env
