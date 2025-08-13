@@ -14,7 +14,7 @@ function mockFetchResolved(payload: any, ok = true, status = 200) {
     ok,
     status,
     json: async () => payload,
-    text: async () => JSON.stringify(payload)
+    text: async () => JSON.stringify(payload),
   } as any
   ;(globalThis as any).fetch = vi.fn().mockResolvedValue(res)
   return (globalThis as any).fetch as ReturnType<typeof vi.fn>
@@ -24,7 +24,7 @@ function mockFetchRejectedText(text: string, status = 400) {
   const res = {
     ok: false,
     status,
-    text: async () => text
+    text: async () => text,
   } as any
   ;(globalThis as any).fetch = vi.fn().mockResolvedValue(res)
   return (globalThis as any).fetch as ReturnType<typeof vi.fn>
@@ -90,5 +90,3 @@ describe('generateText', () => {
     await expect(generateText('hi')).rejects.toThrow(/OpenAI API error: 400/i)
   })
 })
-
-
