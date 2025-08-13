@@ -16,7 +16,7 @@
     "bin",
     "README.md",
     "LICENSE",
-    "crewchief.config.sample.ts"
+    "crewchief.config.example.ts"
   ],
   "scripts": {
     "dev": "tsx src/cli/index.ts --help",
