@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { safeClosePane, safeRemoveWorktree } from './rollback'
 import { RunManager } from './runManager'
 import { Task, TaskAssignment } from './task.types'

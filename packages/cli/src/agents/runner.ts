@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import path from 'node:path'
 import { AgentType } from './types'
 
 export interface AgentStartOptions {

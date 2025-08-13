@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import chalk from 'chalk'
 import { Command } from 'commander'
 // Removed `init` per new spec: setup covers initialization
 import inquirer from 'inquirer'
@@ -174,7 +172,9 @@ program.action(async () => {
             roots = [{ id: types[0].id }]
             logger.info(`No default root agents configured; launching '${types[0].id}' by default.`)
           }
-        } catch {}
+        } catch {
+          // ignore errors
+        }
       }
       for (const ra of roots) await ensureAgentRunning(ra.id)
     } else {

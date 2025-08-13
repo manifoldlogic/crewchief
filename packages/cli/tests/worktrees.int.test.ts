@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { describe, it, expect, beforeAll } from 'vitest'
 import { initTempRepo } from './util'
 import { WorktreeService } from '../src/git/worktrees'

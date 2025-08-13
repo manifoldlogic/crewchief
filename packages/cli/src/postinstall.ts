@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url'
 function ensureExecutable(p: string) {
   try {
     fs.chmodSync(p, 0o755)
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 }
 
 function main() {
@@ -39,7 +41,9 @@ function main() {
       ensureExecutable(outPath)
       return
     }
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 
   // Try cargo build as a fallback
   try {
@@ -56,7 +60,9 @@ function main() {
         return
       }
     }
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 }
 
 main()

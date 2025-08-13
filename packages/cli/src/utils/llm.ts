@@ -1,5 +1,3 @@
-import fs from 'node:fs'
-
 export interface LlmOptions {
   provider?: 'openai' | 'anthropic'
   model?: string
