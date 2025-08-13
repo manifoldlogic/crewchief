@@ -119,11 +119,13 @@ export async function runSetupWizard(): Promise<string> {
   if (answers.askToUpdateLlmGuides) {
     const claudeGuide = path.join(process.cwd(), 'CLAUDE.md')
     const snippet =
-      '\n\n> Tip: Use `crewchief` to spawn agents and coordinate work. Example: `crewchief agent spawn project-manager \"Plan homepage redesign\"`'
+      '\n\n> Tip: Use `crewchief` to spawn agents and coordinate work. Example: `crewchief agent spawn project-manager "Plan homepage redesign"`'
     try {
-      fs.existsSync(claudeGuide)
-        ? fs.appendFileSync(claudeGuide, snippet)
-        : fs.writeFileSync(claudeGuide, `# Claude Guide${snippet}\n`)
+      if (fs.existsSync(claudeGuide)) {
+        fs.appendFileSync(claudeGuide, snippet)
+      } else {
+        fs.writeFileSync(claudeGuide, `# Claude Guide${snippet}\n`)
+      }
     } catch {
       // best-effort, ignore
     }

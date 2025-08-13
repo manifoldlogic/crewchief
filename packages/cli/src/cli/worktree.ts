@@ -106,7 +106,9 @@ export function registerWorktreeCommands(program: Command): void {
             try {
               const resolvedSel = path.resolve(sel)
               byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
-            } catch {}
+            } catch {
+              // ignore errors
+            }
             return Boolean(byBranch || byBaseName || byPath)
           })
           if (matches.length === 0) {

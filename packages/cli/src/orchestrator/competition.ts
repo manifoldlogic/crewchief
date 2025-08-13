@@ -118,7 +118,7 @@ export class CompetitionManager {
     const comp = this.get(compId)
     if (!comp) throw new Error('Competition not found')
     if (!comp.winner) return { competition: comp, merged: false, reason: 'no winner' }
-    const rm = new RunManager()
+    const _rm = new RunManager()
     const winner = comp.participants.find((p) => p.agentId === comp.winner)
     if (!winner?.runId) return { competition: comp, merged: false, reason: 'no winner run' }
     const result = await evaluateAndMaybeMerge(winner.runId)

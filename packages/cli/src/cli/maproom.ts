@@ -19,21 +19,27 @@ function resolvePackagedMaproomBin(): string | null {
     const here = __dirname
     const out = path.join(here, '..', 'bin', platform, execName)
     if (fs.existsSync(out)) return out
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 
   // 3) Fallback to symlink in bin root (for backwards compatibility)
   try {
     const here = __dirname
     const out = path.join(here, '..', 'bin', execName)
     if (fs.existsSync(out)) return out
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 
   // 4) Packaged in sibling maproom-mcp package (monorepo dev convenience)
   try {
     const here = __dirname
     const mcp = path.join(here, '..', '..', 'maproom-mcp', 'bin', platform, execName)
     if (fs.existsSync(mcp)) return mcp
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 
   // 5) Global on PATH
   const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])

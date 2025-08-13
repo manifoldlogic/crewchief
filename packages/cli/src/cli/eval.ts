@@ -1,4 +1,3 @@
-import path from 'node:path'
 import { Command } from 'commander'
 import { runDefaultChecks } from '../evaluation/checks'
 import { RunManager } from '../orchestrator/runManager'
