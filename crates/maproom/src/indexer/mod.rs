@@ -61,6 +61,17 @@ pub async fn scan_worktree(
     let worktree_id = crate::db::get_or_create_worktree(client, repo_id, worktree, root_abs.to_string_lossy().as_ref()).await?;
     let commit_id = crate::db::get_or_create_commit(client, repo_id, commit, None).await?;
 
+    // Stats tracking
+    let mut files_processed = 0;
+    let mut files_skipped = 0;
+    let mut total_chunks = 0;
+    let mut total_bytes = 0usize;
+    let mut language_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    println!("🔍 Scanning worktree: {} @ {}", worktree, &commit[..8.min(commit.len())]);
+    println!("   Repository: {}", repo);
+    println!("   Path: {}", root_abs.display());
+
     let mut walk = WalkBuilder::new(&root_abs);
     walk.hidden(false).ignore(true).git_ignore(true).git_exclude(true);
     if let Some(globs) = &exclude {
@@ -80,15 +91,33 @@ pub async fn scan_worktree(
         let path = dent.path();
         let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
         let language = detect_language_from_path(path);
-        if language.is_none() { continue; }
+        if language.is_none() { 
+            files_skipped += 1;
+            continue; 
+        }
         if let Some(ref allow) = allow_langs {
-            if !allow.iter().any(|l| l == language.unwrap()) { continue; }
+            if !allow.iter().any(|l| l == language.unwrap()) { 
+                files_skipped += 1;
+                continue; 
+            }
         }
 
-        let content = match fs::read_to_string(path) { Ok(c) => c, Err(_) => continue };
+        let content = match fs::read_to_string(path) { 
+            Ok(c) => c, 
+            Err(_) => {
+                files_skipped += 1;
+                continue;
+            }
+        };
+        
         let content_hash = blake3::hash(content.as_bytes()).to_hex().to_string();
         let size_bytes = content.len().min(i32::MAX as usize) as i32;
         let last_modified = file_modified_time(path);
+
+        // Update stats
+        files_processed += 1;
+        total_bytes += content.len();
+        *language_counts.entry(language.unwrap().to_string()).or_insert(0) += 1;
 
         let file_id = crate::db::upsert_file(
             client,
@@ -106,6 +135,7 @@ pub async fn scan_worktree(
         let chunks = parser::extract_chunks(&content, language.unwrap());
         if chunks.is_empty() {
             // Fallback: single module chunk
+            total_chunks += 1;
             let preview = first_n_lines(&content, 40);
             let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), None, None, None, &preview);
             crate::db::insert_chunk(
@@ -123,6 +153,7 @@ pub async fn scan_worktree(
                 0.0,
             ).await?;
         } else {
+            total_chunks += chunks.len();
             for ch in chunks {
                 let preview = first_n_lines(&content.split('\n').skip(ch.start_line as usize - 1).take((ch.end_line - ch.start_line + 1) as usize).collect::<Vec<&str>>().join("\n"), 40);
                 let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), ch.symbol_name.as_deref(), ch.signature.as_deref(), ch.docstring.as_deref(), &preview);
@@ -141,6 +172,35 @@ pub async fn scan_worktree(
                     0.0,
                 ).await?;
             }
+        }
+    }
+
+    // Print summary
+    println!("\n✅ Scan completed successfully!");
+    println!("   Files processed: {}", files_processed);
+    if files_skipped > 0 {
+        println!("   Files skipped: {}", files_skipped);
+    }
+    println!("   Total chunks: {}", total_chunks);
+    println!("   Total size: {:.2} MB", total_bytes as f64 / 1_048_576.0);
+    
+    if !language_counts.is_empty() {
+        println!("\n   Languages indexed:");
+        let mut langs: Vec<_> = language_counts.iter().collect();
+        langs.sort_by(|a, b| b.1.cmp(a.1));
+        for (lang, count) in langs {
+            println!("     {} {}: {}", 
+                match lang.as_str() {
+                    "ts" | "tsx" => "📘",
+                    "js" | "jsx" => "📙",
+                    "rs" => "🦀",
+                    "md" => "📝",
+                    "json" => "📋",
+                    "yaml" | "yml" => "📄",
+                    "toml" => "⚙️",
+                    _ => "📄"
+                },
+                lang, count);
         }
     }
 

@@ -67,6 +67,12 @@ export const DefaultsSchema = z.object({
     .default([])
 });
 
+export const WorktreeSchema = z.object({
+  copyIgnoredFiles: z.array(z.string()).optional(),
+  copyFromPath: z.string().default('.'),
+  overwriteStrategy: z.enum(['skip', 'overwrite', 'backup']).default('skip')
+});
+
 export const ConfigSchema = z.object({
   repository: RepositorySchema,
   orchestrator: OrchestratorSchema,
@@ -74,7 +80,8 @@ export const ConfigSchema = z.object({
   tmux: TmuxSchema,
   evaluation: EvaluationSchema,
   launch: LaunchSchema.optional(),
-  defaults: DefaultsSchema.optional()
+  defaults: DefaultsSchema.optional(),
+  worktree: WorktreeSchema.optional()
 });
 
 export type CrewChiefConfig = z.infer<typeof ConfigSchema>;
