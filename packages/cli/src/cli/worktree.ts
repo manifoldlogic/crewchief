@@ -16,8 +16,9 @@ export function registerWorktreeCommands(program: Command): void {
     .argument('<name>')
     .option('--branch <base>', 'Base branch to create the worktree from')
     .option('--base-path <dir>', 'Base directory for storing worktrees')
+    .option('--no-cd', 'Do not start a subshell in the created worktree')
     .description('Create a git worktree from a base branch (general-purpose)')
-    .action(async (name: string, opts: { branch?: string; basePath?: string }) => {
+    .action(async (name: string, opts: { branch?: string; basePath?: string; cd?: boolean }) => {
       try {
         const config = await loadConfig();
         const baseBranch = opts.branch ?? config.repository.mainBranch;
@@ -26,6 +27,16 @@ export function registerWorktreeCommands(program: Command): void {
         await wt.initRepository(basePath);
         const createdPath = await wt.createWorktree(name, baseBranch, basePath);
         logger.success(`Created worktree at ${createdPath} [${baseBranch}]`);
+
+        // Default behavior: start a subshell in the created worktree unless --no-cd is passed
+        // Commander sets opts.cd to false when --no-cd is provided; otherwise it's true/undefined
+        const shouldCd = opts.cd !== false;
+        if (shouldCd) {
+          const shell = process.env.SHELL || '/bin/bash';
+          logger.info(`Starting subshell in ${createdPath}. Exit to return.`);
+          const child = spawn(shell, { stdio: 'inherit', cwd: createdPath, env: process.env });
+          child.on('exit', (code) => process.exit(code ?? 0));
+        }
       } catch (err) {
         logger.error('Failed to create worktree:', err);
         process.exitCode = 1;
