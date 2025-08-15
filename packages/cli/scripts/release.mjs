@@ -11,9 +11,16 @@ function bump(version, level) {
   let major = parseInt(majS || '0', 10)
   let minor = parseInt(minS || '0', 10)
   let patch = parseInt(patS || '0', 10)
-  if (level === 'major') { major += 1; minor = 0; patch = 0 }
-  else if (level === 'minor') { minor += 1; patch = 0 }
-  else { patch += 1 }
+  if (level === 'major') {
+    major += 1
+    minor = 0
+    patch = 0
+  } else if (level === 'minor') {
+    minor += 1
+    patch = 0
+  } else {
+    patch += 1
+  }
   const next = `${major}.${minor}.${patch}`
   return rest.length ? `${next}-${rest.join('-')}` : next
 }
@@ -47,5 +54,3 @@ main().catch((err) => {
   console.error(err)
   process.exit(1)
 })
-
-

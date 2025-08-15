@@ -1,9 +1,9 @@
-import { TmuxService } from '../tmux/tmux.service';
-import { WorktreeService } from '../git/worktrees';
+import { WorktreeService } from '../git/worktrees'
+import { TmuxService } from '../tmux/tmux.service'
 
 export async function safeClosePane(tmux: TmuxService, paneId: string): Promise<void> {
   try {
-    tmux.closePane(paneId);
+    tmux.closePane(paneId)
   } catch {
     // ignore
   }
@@ -11,10 +11,8 @@ export async function safeClosePane(tmux: TmuxService, paneId: string): Promise<
 
 export async function safeRemoveWorktree(wt: WorktreeService, worktreePath: string): Promise<void> {
   try {
-    await wt.removeWorktree(worktreePath);
+    await wt.removeWorktree(worktreePath)
   } catch {
     // ignore
   }
 }
-
-

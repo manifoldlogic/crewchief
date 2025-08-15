@@ -1,11 +1,11 @@
-import { Command } from 'commander';
-import { Scheduler } from '../orchestrator/scheduler';
-import { Task } from '../orchestrator/task.types';
-import { randomUUID } from 'node:crypto';
-import { logger } from '../utils/logger';
+import { randomUUID } from 'node:crypto'
+import { Command } from 'commander'
+import { Scheduler } from '../orchestrator/scheduler'
+import { Task } from '../orchestrator/task.types'
+import { logger } from '../utils/logger'
 
 export function registerTaskCommands(program: Command): void {
-  const taskCmd = new Command('task').description('Task orchestration');
+  const taskCmd = new Command('task').description('Task orchestration')
 
   taskCmd
     .command('assign')
@@ -17,14 +17,12 @@ export function registerTaskCommands(program: Command): void {
         id: randomUUID(),
         description,
         requirements: [],
-        acceptanceCriteria: []
-      };
-      const scheduler = new Scheduler();
-      const assignment = await scheduler.assignSingleAgent(task, agentTypeId);
-      logger.success(`Assigned task ${task.id} to ${agentTypeId} run=${assignment.runId}`);
-    });
+        acceptanceCriteria: [],
+      }
+      const scheduler = new Scheduler()
+      const assignment = await scheduler.assignSingleAgent(task, agentTypeId)
+      logger.success(`Assigned task ${task.id} to ${agentTypeId} run=${assignment.runId}`)
+    })
 
-  program.addCommand(taskCmd);
+  program.addCommand(taskCmd)
 }
-
-

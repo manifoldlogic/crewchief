@@ -25,8 +25,11 @@ pnpm build
 export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
 crewchief maproom:db
 
-# Index your code
+# Index your code (auto-detects git context)
 crewchief maproom:scan
+# ✅ Scan completed successfully!
+#    Files processed: 150
+#    Total chunks: 1234
 
 # Search semantically
 crewchief maproom:search "authentication flow"
@@ -35,6 +38,9 @@ crewchief maproom:search "authentication flow"
 crewchief worktree create feature-branch
 crewchief worktree list
 crewchief worktree cd feature-branch
+
+# Auto-copy .env files to new worktrees (configure in crewchief.config.ts)
+crewchief worktree copy-ignored feature-branch
 ```
 
 ## Project Structure

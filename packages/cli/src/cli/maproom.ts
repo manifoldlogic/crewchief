@@ -1,30 +1,47 @@
-import { Command } from 'commander'
 import { spawnSync } from 'node:child_process'
-import path from 'node:path'
 import fs from 'node:fs'
+import path from 'node:path'
+import { Command } from 'commander'
 
 function resolvePackagedMaproomBin(): string | null {
   const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+
+  // Map architecture names to match our build script convention
+  const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
+  const platform = `${process.platform}-${arch}`
 
   // 1) Explicit env override
   const envBin = process.env.CREWCHIEF_MAPROOM_BIN
   if (envBin && fs.existsSync(envBin)) return envBin
 
-  // 2) Packaged inside this CLI package
+  // 2) Packaged inside this CLI package with platform subdirectory
   try {
     const here = __dirname
-    const out = path.join(here, '..', 'bin', `${process.platform}-${process.arch}`, execName)
+    const out = path.join(here, '..', 'bin', platform, execName)
     if (fs.existsSync(out)) return out
-  } catch {}
+  } catch {
+    // ignore errors
+  }
 
-  // 3) Packaged in sibling maproom-mcp package (monorepo dev convenience)
+  // 3) Fallback to symlink in bin root (for backwards compatibility)
   try {
     const here = __dirname
-    const mcp = path.join(here, '..', '..', 'maproom-mcp', 'bin', `${process.platform}-${process.arch}`, execName)
-    if (fs.existsSync(mcp)) return mcp
-  } catch {}
+    const out = path.join(here, '..', 'bin', execName)
+    if (fs.existsSync(out)) return out
+  } catch {
+    // ignore errors
+  }
 
-  // 4) Global on PATH
+  // 4) Packaged in sibling maproom-mcp package (monorepo dev convenience)
+  try {
+    const here = __dirname
+    const mcp = path.join(here, '..', '..', 'maproom-mcp', 'bin', platform, execName)
+    if (fs.existsSync(mcp)) return mcp
+  } catch {
+    // ignore errors
+  }
+
+  // 5) Global on PATH
   const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
   if (which.status === 0) return 'crewchief-maproom'
 
@@ -34,7 +51,9 @@ function resolvePackagedMaproomBin(): string | null {
 function runMaproomForward(args: string[]) {
   const bin = resolvePackagedMaproomBin()
   if (!bin) {
-    console.error('crewchief-maproom not found. Ensure it is installed or built. You can set CREWCHIEF_MAPROOM_BIN to an absolute path.')
+    console.error(
+      'crewchief-maproom not found. Ensure it is installed or built. You can set CREWCHIEF_MAPROOM_BIN to an absolute path.',
+    )
     process.exitCode = 1
     return
   }
@@ -82,5 +101,3 @@ export function registerMaproomCommands(program: Command) {
     .argument('[args...]')
     .action((args: string[]) => runMaproomForward(['search', ...(args || [])]))
 }
-
-

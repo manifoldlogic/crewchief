@@ -42,8 +42,8 @@ pnpm release:major
 ```bash
 # Build Maproom binary
 cargo build --release --bin crewchief-maproom
-# or use the build script:
-./scripts/build-maproom.sh
+# or use the comprehensive build script:
+./scripts/build-and-package.sh
 
 # Run Maproom tests
 cargo test
@@ -92,8 +92,8 @@ This codebase has maproom semantic search indexed! Use the maproom MCP tools for
 
 ### Current Index Status:
 - Repository: `crewchief`
-- Worktree: `claude-code-docs` (actively indexed)
-- File types: TypeScript, JavaScript, JSON, Markdown
+- Worktree: Automatically detected from current branch
+- File types: TypeScript, JavaScript, JSON, Markdown, Rust, YAML, TOML
 
 ## Architecture Overview
 
@@ -116,6 +116,7 @@ CrewChief is a CLI tool that orchestrates multiple AI agents working in parallel
 3. **Git Worktree Isolation** (`packages/cli/src/git/`)
    - `worktrees.ts`: Manages isolated git worktrees for each agent
    - `merge.ts`: Handles merging agent work back to main branch
+   - `copy-ignored-files.ts`: Automatically copies git-ignored files (like .env) to new worktrees
    - Each agent works in `.crewchief/worktrees/<agent-id>/`
 
 4. **Orchestration** (`packages/cli/src/orchestrator/`)
@@ -167,6 +168,8 @@ When modifying the CLI:
 3. Follow existing patterns in command files for new subcommands
 4. Tests use Vitest framework
 5. Build outputs to `dist/` directory
+6. Linting enforces trailing commas everywhere (runs automatically on commit)
+7. Use `pnpm lint` and `pnpm format` to check and fix code style
 
 When working with Rust components:
 
@@ -174,3 +177,21 @@ When working with Rust components:
 2. Database migrations in `crates/maproom/migrations/`
 3. Use tokio for async runtime
 4. Follow Rust error handling with anyhow/thiserror
+
+## Recent Improvements
+
+### Maproom Enhancements
+- **Auto-detection**: `maproom:scan` and `maproom:watch` now automatically detect repo, worktree, path, and commit from git context
+- **Statistics Output**: Scan command shows detailed statistics (files processed, chunks created, language breakdown)
+- **Platform Binaries**: Pre-built binaries for multiple platforms in `packages/cli/bin/<platform>/`
+
+### Worktree Features
+- **Ignored Files Copying**: Automatically copy git-ignored files (like .env) to new worktrees based on configuration
+- **Manual Copy Command**: `worktree copy-ignored` command to copy ignored files to existing worktrees
+- **Flexible Configuration**: Configure patterns, source paths, and overwrite strategies in `crewchief.config.ts`
+
+### Development Experience
+- **ESLint + Prettier**: Automatic code formatting with trailing commas on commit
+- **Husky Pre-commit Hooks**: Ensures code quality before commits
+- **Comprehensive Build Script**: `./scripts/build-and-package.sh` builds all components for all platforms
+- **Local Development Guide**: See `context/local-development.md` for running local versions
