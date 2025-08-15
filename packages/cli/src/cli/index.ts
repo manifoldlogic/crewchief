@@ -31,10 +31,23 @@ import { logger } from '../utils/logger'
 
 const program = new Command()
 
+function resolvePackageVersion(): string {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    // Works in both src (dev) and dist (built) layouts
+    const pkgPath = path.resolve(here, '..', '..', 'package.json');
+    const raw = fs.readFileSync(pkgPath, 'utf8');
+    const pkg = JSON.parse(raw);
+    return String(pkg.version || '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
+
 program
   .name('crewchief')
   .description('CrewChief: Multi-agent orchestration for AI agents via git worktrees and tmux')
-  .version('0.1.0')
+  .version(resolvePackageVersion());
 
 // Start event bridge for orchestrator messages
 startOrchestratorEventBridge()
