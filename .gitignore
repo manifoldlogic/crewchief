@@ -19,6 +19,7 @@ node_modules
 
 .crewchief/
 crewchief.config.ts
+crewchief.config.local.js
 
 .cursorrules
 
