@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import chalk from 'chalk'
 import { Command } from 'commander'
 import { loadConfig } from '../config/loader'
 import { copyIgnoredFiles } from '../git/copy-ignored-files'
@@ -8,6 +9,7 @@ import { WorktreeService } from '../git/worktrees'
 import { RunManager } from '../orchestrator/runManager'
 import { removeDirSync } from '../utils/fs'
 import { logger } from '../utils/logger'
+import { displaySubshellMessage } from '../utils/subshell-message'
 
 export function registerWorktreeCommands(program: Command): void {
   const worktree = new Command('worktree').description('Worktree operations')
@@ -36,7 +38,17 @@ export function registerWorktreeCommands(program: Command): void {
         const shouldCd = opts.cd !== false
         if (shouldCd) {
           const shell = process.env.SHELL || '/bin/bash'
-          logger.info(`Starting subshell in ${createdPath}. Exit to return.`)
+          const currentBranch = await wt.getCurrentBranch()
+          const currentDir = process.cwd()
+          
+          displaySubshellMessage({
+            targetBranch: name,
+            targetDirectory: path.relative(currentDir, createdPath) || path.basename(createdPath),
+            sourceBranch: currentBranch,
+            sourceDirectory: path.basename(currentDir),
+            shell: path.basename(shell),
+          })
+          
           const child = spawn(shell, { stdio: 'inherit', cwd: createdPath, env: process.env })
           child.on('exit', (code) => process.exit(code ?? 0))
         }
@@ -193,7 +205,24 @@ export function registerWorktreeCommands(program: Command): void {
           return
         }
         const shell = process.env.SHELL || '/bin/bash'
-        logger.info(`Starting subshell in ${targetPath}. Exit to return.`)
+        const currentBranch = await wt.getCurrentBranch()
+        const currentDir = process.cwd()
+        const targetBranch = matches[0].branch
+        
+        if (targetBranch) {
+          displaySubshellMessage({
+            targetBranch: targetBranch,
+            targetDirectory: path.relative(currentDir, targetPath) || path.basename(targetPath),
+            sourceBranch: currentBranch,
+            sourceDirectory: path.basename(currentDir),
+            shell: path.basename(shell),
+          })
+        } else {
+          // Fallback for cases where branch is not detected
+          console.log(chalk.yellow('\nEntering worktree subshell...'))
+          console.log(chalk.gray('Type "exit" to return to your original directory\n'))
+        }
+        
         const child = spawn(shell, { stdio: 'inherit', cwd: targetPath, env: process.env })
         child.on('exit', (code) => process.exit(code ?? 0))
       } catch (err) {

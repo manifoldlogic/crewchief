@@ -141,6 +141,15 @@ export class WorktreeService {
     return items
   }
 
+  async getCurrentBranch(): Promise<string> {
+    try {
+      const branch = await this.git.revparse(['--abbrev-ref', 'HEAD'])
+      return branch.trim()
+    } catch {
+      return 'main'
+    }
+  }
+
   async pruneWorktrees(opts?: { mode?: 'stale' | 'all'; keepDir?: boolean }): Promise<void> {
     if (!opts || opts.mode === 'stale') {
       await this.git.raw(['worktree', 'prune'])
