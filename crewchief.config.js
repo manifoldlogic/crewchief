@@ -1,21 +1,34 @@
-export default {
+/**
+ * CrewChief Configuration
+ * 
+ * You can create either:
+ * - crewchief.config.js (committed to repo, shared with team)
+ * - crewchief.config.local.js (gitignored, for local overrides)
+ * 
+ * If both exist, the local version takes priority.
+ */
+
+module.exports = {
   repository: {
     mainBranch: 'main',
     worktreeBasePath: '.crewchief/worktrees',
   },
+
   orchestrator: {
     model: 'claude-opus-4-1',
     maxConcurrentAgents: 5,
-    defaultTimeout: 30 * 60 * 1000,
+    defaultTimeout: 30 * 60 * 1000, // 30 minutes
   },
+
   launch: {
     autoRunDefaultAgents: false,
     askToUpdateLlmGuides: false,
   },
+
   agents: {
     claude: {
       command: 'claude-cli',
-      defaultArgs: ['--model', 'claude-3-opus'],
+      defaultArgs: ['--model', 'claude-opus-4-1'],
       agentsDir: '.claude/agents/',
       commandsDir: '.claude/commands/',
     },
@@ -25,28 +38,34 @@ export default {
       agentsDir: '.gemini/agents/',
     },
   },
+
   tmux: {
     sessionName: 'crewchief',
     orchestratorPaneSize: 40,
-    agentPaneArrangement: 'tiled',
+    agentPaneArrangement: 'tiled', // or 'even-horizontal', 'even-vertical'
   },
+
   evaluation: {
     autoMergeThreshold: 0.95,
     requireTestsPass: true,
     requireReview: true
   },
+
   worktree: {
+    // Files to copy to new worktrees (useful for .env files, etc.)
     copyIgnoredFiles: [
       '**/.claude/**/*',
       '**/.cursor/**/*',
       '**/.gemini/**/*',
       '**/.codex/**/*',
       '**/.cursorrules',
-      'crewchief.config.ts',
+      'crewchief.config.js',
+      'crewchief.config.local.js',
       '**/.env',
+      '**/.env.local',
       '**/.mcp.json'
     ],
     copyFromPath: '.',
-    overwriteStrategy: 'skip'
+    overwriteStrategy: 'skip' // 'skip', 'overwrite', or 'backup'
   }
 };

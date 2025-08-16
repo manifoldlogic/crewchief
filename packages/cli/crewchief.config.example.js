@@ -1,8 +1,6 @@
 /**
  * CrewChief Configuration
  * 
- * This is a plain JavaScript configuration file that works without any TypeScript setup.
- * 
  * You can create either:
  * - crewchief.config.js (committed to repo, shared with team)
  * - crewchief.config.local.js (gitignored, for local overrides)
@@ -15,18 +13,18 @@ module.exports = {
     mainBranch: 'main',
     worktreeBasePath: '.crewchief/worktrees',
   },
-  
+
   orchestrator: {
     model: 'claude-opus-4-1',
     maxConcurrentAgents: 5,
     defaultTimeout: 30 * 60 * 1000, // 30 minutes
   },
-  
+
   launch: {
     autoRunDefaultAgents: false,
     askToUpdateLlmGuides: false,
   },
-  
+
   agents: {
     claude: {
       command: 'claude-cli',
@@ -40,19 +38,19 @@ module.exports = {
       agentsDir: '.gemini/agents/',
     },
   },
-  
+
   tmux: {
     sessionName: 'crewchief',
     orchestratorPaneSize: 40,
     agentPaneArrangement: 'tiled', // or 'even-horizontal', 'even-vertical'
   },
-  
+
   evaluation: {
     autoMergeThreshold: 0.95,
     requireTestsPass: true,
     requireReview: true
   },
-  
+
   worktree: {
     // Files to copy to new worktrees (useful for .env files, etc.)
     copyIgnoredFiles: [
@@ -62,7 +60,7 @@ module.exports = {
       '**/.codex/**/*',
       '**/.cursorrules',
       'crewchief.config.js',
-      'crewchief.config.local.js', // Also copy local config if it exists
+      'crewchief.config.local.js',
       '**/.env',
       '**/.env.local',
       '**/.mcp.json'
