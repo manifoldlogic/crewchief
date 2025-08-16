@@ -212,4 +212,4 @@ CrewChief consists of:
 2. **Maproom** (`crates/maproom/`) - Rust-based code indexing and search
 3. **Maproom MCP** (`packages/maproom-mcp/`) - Model Context Protocol server for AI assistants
 
-See the [architecture documentation](../context/cli/specification.md) for planned features and design details.
+See the [architecture documentation](../crewchief_context/cli/specification.md) for planned features and design details.

@@ -6,6 +6,8 @@ target/
 .gemini/
 .codex/
 
+.obsidian/
+
 node_modules
 .env
 .env.local

@@ -58,7 +58,7 @@ crewchief/
 │  └─ maproom-mcp/
 │     ├─ package.json
 │     └─ src/                      # MCP server implementation
-├─ context/
+├─ crewchief_context/
 │  └─ maproom/
 │     └─ specification.md          # This file
 ```
@@ -479,7 +479,7 @@ DB sizing notes:
     Query → expected ordered bundle (file ranges + reasons).
 
 - **E2E**:  
-    Start local PG, run migrations, index sample repo, hit MCP `search/context/open`, assert stable results.
+    Start local PG, run migrations, index sample repo, hit MCP `search/open`, assert stable results.
 
 ---
 
