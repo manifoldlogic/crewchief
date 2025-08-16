@@ -194,4 +194,4 @@ When working with Rust components:
 - **ESLint + Prettier**: Automatic code formatting with trailing commas on commit
 - **Husky Pre-commit Hooks**: Ensures code quality before commits
 - **Comprehensive Build Script**: `./scripts/build-and-package.sh` builds all components for all platforms
-- **Local Development Guide**: See `context/local-development.md` for running local versions
+- **Local Development Guide**: See `crewchief_context/local-development.md` for running local versions

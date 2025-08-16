@@ -53,13 +53,13 @@ crewchief/
 ├── crates/
 │   ├── maproom/       # Rust indexing engine
 │   └── opsdeck/       # Terminal UI (planned)
-└── context/           # Architecture docs & specifications
+└── crewchief_context/ # Architecture docs & specifications
 ```
 
 ## Documentation
 
 - [CLI README](packages/cli/README.md) - Detailed command reference
-- [Architecture Spec](context/cli/specification.md) - Full vision with implementation status
+- [Architecture Spec](crewchief_context/cli/specification.md) - Full vision with implementation status
 - [Testing Report](TESTING_REPORT.md) - Features that need verification
 
 ## Requirements
@@ -78,4 +78,4 @@ This project is actively being developed. Key areas that need work:
 3. Building the Realm semantic retrieval system
 4. Creating the main `crewchief` tmux session launcher
 
-See the [specification](context/cli/specification.md) for the full roadmap.
+See the [specification](crewchief_context/cli/specification.md) for the full roadmap.

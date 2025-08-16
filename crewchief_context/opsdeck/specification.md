@@ -29,7 +29,7 @@ crewchief/
 │        ├─ model/                 # data model & derived metrics
 │        ├─ ui/                    # input handling (filters/sorts)
 │        └─ main.rs
-├─ context/
+├─ crewchief_context/
 │  └─ opsdeck/
 │     ├─ heartbeat.md              # JSONL contract (single source of truth)
 │     └─ specification.md          # this spec

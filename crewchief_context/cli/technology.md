@@ -66,15 +66,15 @@ CrewChief is a TypeScript-based multi-agent orchestration tool that enables AI a
 
 ### Documentation
 
-- All technical documentation is in the `context/` folder
-- `context/specification.md` contains the full system specification and implementation roadmap
-- `context/project-plan.md` contains the detailed implementation plan
+- All technical documentation is in the `crewchief_context/` folder
+- `crewchief_context/cli/specification.md` contains the full system specification and implementation roadmap
+- `crewchief_context/cli/project-plan.md` contains the detailed implementation plan
 
 ## Development Guidelines
 
 ### Code Principles
 
-- Use the context folder for all documentation and diligently keep it up to date
+- Use the crewchief_context folder for all documentation and diligently keep it up to date
 - Focus on ease of use and simplicity
 - Make the terminal interface rich and delightful
 - Use colors with meaning not haphazardly

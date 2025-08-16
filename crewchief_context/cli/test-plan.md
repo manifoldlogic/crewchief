@@ -1,6 +1,6 @@
 ## CrewChief Test Plan
 
-This document defines the test strategy, scope, cases, and execution approach for CrewChief as specified in `context/specification.md` and implemented per `context/technology.md` and `context/project-plan.md`.
+This document defines the test strategy, scope, cases, and execution approach for CrewChief as specified in `crewchief_context/cli/specification.md` and implemented per `crewchief_context/cli/technology.md` and `crewchief_context/cli/project-plan.md`.
 
 ### Objectives
 
