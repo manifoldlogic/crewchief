@@ -19,7 +19,11 @@ type JsonRpcResponse = { jsonrpc: '2.0'; id: number | string | null; result?: an
 function mcpInitialize() {
   return {
     protocolVersion: '2024-11-05',
-    serverInfo: { name: 'maproom-mcp', version: '0.1.0' },
+    serverInfo: { 
+      name: 'maproom-mcp', 
+      version: '0.1.0',
+      description: 'Semantic code search for indexed repositories. Start with status tool, then search with simple terms.'
+    },
     // Advertise capabilities explicitly per MCP expectations
     capabilities: {
       tools: { listChanged: false },
@@ -70,18 +74,55 @@ if (hasProbeFlag || hasProbeEnv) {
   process.exit(0)
 }
 
+// Prompt declarations for prompts/list - provides ready-made search patterns
+const promptSchemas = [
+  {
+    name: 'find_main_entry',
+    description: 'Find the main entry point of the application',
+    arguments: [
+      { name: 'repo', description: 'Repository name', required: true }
+    ],
+    prompt: 'Search for main entry point:\nrepo: {{repo}}\nquery: "main entry index.ts"'
+  },
+  {
+    name: 'find_tests',
+    description: 'Find test files for a specific feature',
+    arguments: [
+      { name: 'repo', description: 'Repository name', required: true },
+      { name: 'feature', description: 'Feature to find tests for', required: true }
+    ],
+    prompt: 'Search for tests:\nrepo: {{repo}}\nquery: "{{feature}} test describe"\nfilter: "code"'
+  },
+  {
+    name: 'understand_architecture',
+    description: 'Get an overview of the codebase architecture',
+    arguments: [
+      { name: 'repo', description: 'Repository name', required: true }
+    ],
+    prompt: 'First run status to see structure, then search:\n1. repo: {{repo}} query: "README" filter: "docs"\n2. repo: {{repo}} query: "config" filter: "config"\n3. repo: {{repo}} query: "main class service"'
+  },
+  {
+    name: 'find_error_handling',
+    description: 'Find error handling patterns in the code',
+    arguments: [
+      { name: 'repo', description: 'Repository name', required: true }
+    ],
+    prompt: 'Search for error handling:\nrepo: {{repo}}\nquery: "error catch throw try"\nk: 20'
+  }
+]
+
 // Tool declarations for tools/list
 const toolSchemas = [
   {
     name: 'search',
-    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.',
+    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches. EXAMPLES: "authentication flow", "error handling", "database connection", "React component state". TIP: Start with simple terms, then refine. Use status tool first to see what\'s indexed.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Repository name to search in' },
+        repo: { type: 'string', description: 'Repository name to search in (use "crewchief" for this codebase)' },
         worktree: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Optional worktree name to limit search scope' },
-        query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms' },
-        k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return' },
+        query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms. Works best with 1-3 words. Examples: "maproom search", "worktree create", "message bus"' },
+        k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return (default: 10, max useful: 20)' },
         filter: { 
           type: 'string', 
           enum: ['all', 'code', 'docs', 'config'],
@@ -94,45 +135,45 @@ const toolSchemas = [
   },
   {
     name: 'open',
-    description: 'Retrieve specific code from indexed files - USE WHEN: you know the exact file path from search results. SUPPORTS: line ranges and context lines.',
+    description: 'Retrieve specific code from indexed files - USE AFTER: getting search results. REQUIRES: exact relpath and worktree from search results. SUPPORTS: line ranges (from start_line/end_line in results) and context lines. TIP: Use the exact relpath and worktree values from search results.',
     inputSchema: {
       type: 'object',
       properties: {
-        relpath: { type: 'string', description: 'Relative path to the file' },
+        relpath: { type: 'string', description: 'Relative path to the file (copy exactly from search results)' },
         range: {
           type: 'object',
-          description: 'Optional line range to retrieve',
+          description: 'Optional line range to retrieve (use start_line/end_line from search results)',
           properties: { start: { type: 'integer', minimum: 1 }, end: { type: 'integer', minimum: 1 } },
           required: []
         },
-        context: { type: 'integer', minimum: 0, default: 0, description: 'Number of context lines to show before and after the range' },
-        worktree: { type: 'string', description: 'Worktree name where the file is located' }
+        context: { type: 'integer', minimum: 0, default: 0, description: 'Number of context lines to show before and after the range (try 5-10 for more context)' },
+        worktree: { type: 'string', description: 'Worktree name where the file is located (copy exactly from search results or status)' }
       },
       required: ['relpath', 'worktree']
     }
   },
   {
     name: 'status',
-    description: 'Get maproom index status - shows indexed repos, worktrees, statistics, and last update times. USE FIRST: to understand what is searchable.',
+    description: 'Get maproom index status - ALWAYS USE THIS FIRST before searching! Shows indexed repos, worktrees, statistics, and last update times. Tells you what\'s searchable and helps diagnose why searches might fail.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Optional: filter status to specific repo' }
+        repo: { type: 'string', description: 'Optional: filter status to specific repo (e.g., "crewchief")' }
       },
       required: []
     }
   },
   {
     name: 'upsert',
-    description: 'Index/update files in maproom - USE WHEN: files have changed and need reindexing. Spawns the Rust indexer.',
+    description: 'Index/update files in maproom - USE WHEN: files have changed and need reindexing. RARELY NEEDED: maproom auto-indexes on file changes. Only use if search returns outdated results. Spawns the Rust indexer.',
     inputSchema: {
       type: 'object',
       properties: {
-        paths: { type: 'array', items: { type: 'string' } },
-        commit: { type: 'string' },
-        repo: { type: 'string' },
-        worktree: { type: 'string' },
-        root: { type: 'string' }
+        paths: { type: 'array', items: { type: 'string' }, description: 'Array of file paths to index' },
+        commit: { type: 'string', description: 'Git commit hash (use HEAD for current)' },
+        repo: { type: 'string', description: 'Repository name (e.g., "crewchief")' },
+        worktree: { type: 'string', description: 'Worktree name to index' },
+        root: { type: 'string', description: 'Root directory path of the repository' }
       },
       required: ['paths', 'commit', 'repo', 'worktree', 'root']
     }
@@ -149,6 +190,16 @@ async function getPg(): Promise<Client> {
   const client = new Client({ connectionString })
   await client.connect()
   return client
+}
+
+async function getAvailableRepos(client: Client): Promise<string[]> {
+  try {
+    const { rows } = await client.query('SELECT DISTINCT name FROM maproom.repos ORDER BY name')
+    return rows.map(r => r.name)
+  } catch (err) {
+    log.error({ err }, 'Failed to get available repos')
+    return []
+  }
 }
 
 async function handleStatus(params: any): Promise<any> {
@@ -219,13 +270,33 @@ async function handleStatus(params: any): Promise<any> {
     
     const { rows: fileTypes } = await client.query(fileTypesQuery, args)
     
+    const totalFiles = Object.values(repos).reduce((sum: number, repo: any) => 
+      sum + repo.worktrees.reduce((wsum: number, wt: any) => wsum + wt.fileCount, 0), 0)
+    const totalChunks = Object.values(repos).reduce((sum: number, repo: any) => 
+      sum + repo.worktrees.reduce((wsum: number, wt: any) => wsum + wt.chunkCount, 0), 0)
+    
+    let hint = ''
+    if (Object.keys(repos).length === 0) {
+      hint = 'No repositories indexed yet. Use the upsert tool to index files first.'
+    } else if (totalFiles === 0) {
+      hint = 'Repository exists but no files indexed. Use the upsert tool to index files.'
+    } else {
+      hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks. Common searches: "main function", "error handling", "database query"`
+    }
+    
     return {
       repos: Object.values(repos),
       fileTypes: fileTypes.map(ft => ({ extension: ft.extension, count: parseInt(ft.count) })),
       totalRepos: Object.keys(repos).length,
-      hint: repos[Object.keys(repos)[0]]?.worktrees.length === 0 
-        ? 'No worktrees indexed. Use the upsert tool to index files.'
-        : 'Index is ready for searching.'
+      totalFiles,
+      totalChunks,
+      hint,
+      searchTips: [
+        'Use simple terms: "auth" instead of "authentication_handler"',
+        'Search concepts: "message bus" or "event handling"',
+        'Filter by type: use filter:"code" or filter:"docs"',
+        'Default repo for this codebase: "crewchief"'
+      ]
     }
   } finally {
     await client.end().catch(() => {})
@@ -238,9 +309,19 @@ async function handleSearch(params: any): Promise<any> {
   try {
     const { rows: repoRows } = await client.query('SELECT id FROM maproom.repos WHERE name = $1', [repo])
     if (repoRows.length === 0) {
+      const availableRepos = await getAvailableRepos(client)
+      const suggestion = availableRepos.includes('crewchief') && repo.toLowerCase().includes('crew') 
+        ? 'Did you mean repo:"crewchief"?' 
+        : availableRepos.length > 0 
+          ? `Available repos: ${availableRepos.join(', ')}`
+          : 'No repos indexed yet. Use upsert tool to index files.'
+      
       return { 
         hits: [],
-        hint: `Repository '${repo}' not found in index. Use the status tool to see available repos, or upsert to index new files.`
+        error: 'Repository not found',
+        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. For this codebase, use repo:"crewchief"\n3. If needed, run upsert tool to index files`,
+        availableRepos,
+        suggestion
       }
     }
     const repoId = repoRows[0].id
@@ -287,7 +368,6 @@ async function handleSearch(params: any): Promise<any> {
     
     // Add filter conditions
     if (filter !== 'all') {
-      const paramNum = args.length + 1
       if (filter === 'code') {
         sql += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
       } else if (filter === 'docs') {
@@ -341,31 +421,88 @@ async function handleSearch(params: any): Promise<any> {
       })
     }
     
-    // Add hints and suggestions for empty results
+    // Add comprehensive hints and suggestions for empty results
     if (rows.length === 0) {
       const suggestions = []
+      const examples = []
       
-      // Try simpler query
+      // Analyze the query to provide better suggestions
       const terms = query.split(/\s+/)
-      if (terms.length > 1) {
-        suggestions.push(`Try searching for individual terms: "${terms[0]}" or "${terms[terms.length - 1]}"`)
+      const queryLength = query.length
+      const termCount = terms.length
+      
+      // Query too complex
+      if (termCount > 4) {
+        suggestions.push(`Your query has ${termCount} terms. Try fewer terms (2-3 work best)`)
+        suggestions.push(`Try just: "${terms.slice(0, 2).join(' ')}"`)
       }
       
-      // Suggest case variations
+      // Try individual terms for multi-word queries
+      if (termCount > 1) {
+        suggestions.push(`Try individual terms: "${terms[0]}" or "${terms[terms.length - 1]}"`)
+      }
+      
+      // Suggest variations
       if (query.toLowerCase() !== query) {
         suggestions.push(`Try lowercase: "${query.toLowerCase()}"`)
       }
-      if (query[0].toLowerCase() === query[0]) {
-        suggestions.push(`Try capitalized: "${query[0].toUpperCase() + query.slice(1)}"`)
+      
+      // Check for common patterns that might need adjustment
+      if (query.includes('_')) {
+        suggestions.push(`Try without underscores: "${query.replace(/_/g, ' ')}"`)
+      }
+      if (query.includes('-')) {
+        suggestions.push(`Try without hyphens: "${query.replace(/-/g, ' ')}"`)
+      }
+      if (query.includes('.')) {
+        suggestions.push(`Try without dots: "${query.replace(/\./g, ' ')}"`)
       }
       
+      // Suggest related conceptual searches
+      if (query.includes('function') || query.includes('method')) {
+        examples.push('Try searching for the action instead: "create", "update", "delete"')
+      }
+      if (query.includes('class') || query.includes('interface')) {
+        examples.push('Try searching for the entity name: "Service", "Manager", "Controller"')
+      }
+      if (query.includes('test')) {
+        examples.push('Try: "describe", "test(" or "spec"')
+      }
+      
+      // Provide filter suggestions
+      if (filter === 'all') {
+        suggestions.push('Try filtering by type: add filter:"code" or filter:"docs"')
+      }
+      
+      // Check index status suggestion
+      const statusHint = 'Run the status tool first to see what\'s indexed and available for search'
+      
+      // Build comprehensive hint
       result.hint = worktreeInfo 
-        ? `No results found in worktree '${worktree}'. Consider re-indexing if files have changed recently.`
-        : 'No results found. Try different search terms or check the status tool to see what is indexed.'
+        ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use upsert tool\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
+        : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine`
       
       if (suggestions.length > 0) {
         result.suggestions = suggestions
       }
+      
+      if (examples.length > 0) {
+        result.examples = examples
+      }
+      
+      // Add query analysis
+      result.queryAnalysis = {
+        termCount,
+        queryLength,
+        hasSpecialChars: /[_\-.()]/.test(query),
+        recommendation: termCount > 3 ? 'simplify' : termCount === 1 ? 'try related terms' : 'good length'
+      }
+    } else if (rows.length === 1) {
+      // Single result - suggest how to find more
+      result.hint = 'Found 1 result. To find more: try broader terms or increase k parameter'
+    } else if (rows.length === k) {
+      // Hit the limit - suggest increasing k
+      result.hint = `Showing top ${k} results. More may exist - increase k parameter to see more`
     }
     
     return result
@@ -383,7 +520,18 @@ async function handleOpen(params: any): Promise<any> {
       `SELECT w.abs_path FROM maproom.worktrees w JOIN maproom.files f ON f.worktree_id = w.id WHERE f.relpath = $1 AND w.name = $2 LIMIT 1`,
       [relpath, worktree]
     )
-    if (rows.length === 0) throw new Error('worktree or file not found')
+    if (rows.length === 0) {
+      // Provide helpful error message
+      const availableWorktrees = await client.query(
+        'SELECT DISTINCT w.name FROM maproom.worktrees w JOIN maproom.files f ON f.worktree_id = w.id WHERE f.relpath = $1',
+        [relpath]
+      )
+      if (availableWorktrees.rows.length > 0) {
+        throw new Error(`File exists in other worktrees: ${availableWorktrees.rows.map(r => r.name).join(', ')}. Check your worktree parameter.`)
+      } else {
+        throw new Error(`File '${relpath}' not found in worktree '${worktree}'. Use search tool to find the correct path.`)
+      }
+    }
     const base = rows[0].abs_path as string
     const fs = await import('node:fs/promises')
     const content = await fs.readFile(`${base}/${relpath}`, 'utf8')
@@ -498,10 +646,19 @@ async function handleMessage(msg: JsonRpcRequest) {
       log.info({ id: msg.id, count: toolSchemas.length }, 'sent tools list')
       return
     case 'prompts/list':
-      // We don't define prompts yet; return empty list
-      respond(msg.id, { prompts: [] })
-      log.info({ id: msg.id, count: 0 }, 'sent prompts list')
+      respond(msg.id, { prompts: promptSchemas })
+      log.info({ id: msg.id, count: promptSchemas.length }, 'sent prompts list')
       return
+    case 'prompts/get': {
+      const name = msg.params?.name as string
+      const prompt = promptSchemas.find(p => p.name === name)
+      if (prompt) {
+        respond(msg.id, { prompt })
+      } else {
+        respond(msg.id, undefined, new Error(`Unknown prompt: ${name}`))
+      }
+      return
+    }
     case 'resources/list':
       // We don't define resources yet; return empty list
       respond(msg.id, { resources: [] })
