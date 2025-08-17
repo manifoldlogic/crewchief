@@ -18,7 +18,7 @@ node_modules
 .DS_Store
 
 .crewchief/
-crewchief.config.ts
+crewchief.config.local.js
 
 .cursorrules
 

@@ -1,0 +1,21 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "CrewChief PostgreSQL",
+      "Group": "Development",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "postgres",
+      "Password": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": null,
+      "DBRestriction": null,
+      "Shared": true,
+      "SharedUsername": "postgres",
+      "Comment": "CrewChief development database",
+      "BGColor": "#1E88E5",
+      "FGColor": "#ffffff"
+    }
+  }
+}

@@ -1,6 +1,17 @@
 ## Maproom MCP Server
 
-Maproom is a code-aware indexing and retrieval layer for multi-agent work. This package provides the MCP (Model Context Protocol) server used by editors like Cursor to search and open code using Maproom’s Postgres-backed index. It also orchestrates indexing by locating and executing the Rust indexer binary (`crewchief-maproom`).
+Maproom is a code-aware indexing and retrieval layer for multi-agent work. This package provides the MCP (Model Context Protocol) server used by editors like Cursor to search and open code using Maproom's Postgres-backed index. It also orchestrates indexing by locating and executing the Rust indexer binary (`crewchief-maproom`).
+
+### Part of the CrewChief Ecosystem
+
+Maproom MCP works in concert with [CrewChief CLI](https://www.npmjs.com/package/crewchief), a comprehensive tool for git worktree management and code indexing. While this MCP server enables AI assistants to search your code, CrewChief provides:
+
+- **Full CLI commands** for indexing, searching, and managing your codebase
+- **Git worktree management** for isolated development environments  
+- **Agent orchestration** for multi-agent AI workflows
+- **Integrated build tools** for the Maproom indexer
+
+You can use maproom-mcp standalone with any PostgreSQL database, or as part of a complete CrewChief setup for advanced multi-agent development workflows.
 
 ### Features
 
@@ -93,6 +104,28 @@ Priority order:
 
 Before searching, migrate the DB schema and index your project.
 
+#### Using CrewChief CLI (Recommended)
+
+If you have [CrewChief](https://www.npmjs.com/package/crewchief) installed:
+
+```bash
+# 1) Initialize database
+crewchief maproom:db
+
+# 2) Index your codebase (auto-detects git context)
+crewchief maproom:scan
+
+# 3) Search from the command line
+crewchief maproom:search "authentication logic"
+
+# 4) Watch for changes and auto-index
+crewchief maproom:watch
+```
+
+#### Using Standalone Binary
+
+Alternatively, use the Rust binary directly:
+
 ```bash
 # 1) Migrate schema
 crewchief-maproom db migrate --database-url "$DATABASE_URL"
@@ -127,6 +160,8 @@ pnpm -C packages/maproom-mcp dev
 # Postinstall behavior (bundled binary or cargo build)
 # is implemented in src/postinstall.ts → dist/postinstall.js
 ```
+
+For complete development setup including the CrewChief CLI and Rust components, see the [CrewChief repository](https://github.com/danielbushman/crewchief).
 
 #### Project structure
 

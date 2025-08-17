@@ -212,4 +212,24 @@ CrewChief consists of:
 2. **Maproom** (`crates/maproom/`) - Rust-based code indexing and search
 3. **Maproom MCP** (`packages/maproom-mcp/`) - Model Context Protocol server for AI assistants
 
-See the [architecture documentation](../crewchief_context/cli/specification.md) for planned features and design details.
+## Related Packages
+
+### Maproom MCP Server
+
+The [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) package provides a Model Context Protocol (MCP) server that enables AI assistants like Claude, Cursor, and other MCP-compatible tools to search and navigate your codebase using Maproom's semantic search capabilities.
+
+#### Key Features:
+- Semantic code search across your entire codebase
+- Direct file access with line range support
+- Automatic indexing integration with the CrewChief CLI
+- Works with any MCP-compatible AI assistant
+
+#### Installation:
+```bash
+npm install -g maproom-mcp
+```
+
+#### Integration with CrewChief:
+The maproom-mcp server uses the same PostgreSQL database and indexing infrastructure as the CrewChief CLI. When you run `crewchief maproom:scan` to index your codebase, that same index becomes available to AI assistants through the MCP server.
+
+For setup instructions and MCP configuration, see the [maproom-mcp documentation](https://www.npmjs.com/package/maproom-mcp).

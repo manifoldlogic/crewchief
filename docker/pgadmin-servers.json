@@ -1,0 +1,24 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "CrewChief Development",
+      "Group": "Development",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "crewchief_dev",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "CrewChief development database server"
+    },
+    "2": {
+      "Name": "CrewChief Production",
+      "Group": "Production",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "crewchief",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "CrewChief production database server"
+    }
+  }
+}
