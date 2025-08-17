@@ -1,6 +1,6 @@
-# CrewChief DevContainer
+# CrewChief DevContainer with Claude Code Support
 
-This folder contains the development container configuration for CrewChief, providing a fully-featured, consistent development environment using VS Code Dev Containers.
+This folder contains the development container configuration for CrewChief, providing a fully-featured, consistent development environment using VS Code Dev Containers with integrated Claude Code support in dangerous mode for safe AI-assisted development.
 
 ## 🚀 Quick Start
 
@@ -33,11 +33,13 @@ This folder contains the development container configuration for CrewChief, prov
 - **Redis Commander** - Redis UI (port 8081)
 
 ### Development Tools
+- **Claude Code** - AI assistant with dangerous mode enabled (network-restricted)
 - **tmux** - Terminal multiplexer with custom config
 - **Git** - Latest version with extensions
 - **Docker-in-Docker** - Run Docker commands inside the container
 - **GitHub CLI** - GitHub integration
 - **ripgrep, fd, bat, exa** - Modern CLI tools
+- **iptables/ipset** - Network control for Claude Code dangerous mode
 
 ### VS Code Extensions
 - ESLint & Prettier
@@ -57,6 +59,9 @@ NODE_ENV=development
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
 REDIS_URL=redis://redis:6379
 CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom
+CLAUDE_CONFIG_DIR=/home/vscode/.claude
+CLAUDE_DANGEROUS_MODE=true
+ANTHROPIC_API_KEY=<set in host environment>
 ```
 
 ### Port Forwarding
@@ -72,6 +77,7 @@ These ports are automatically forwarded:
 ### Shell Aliases
 Useful aliases are configured:
 ```bash
+claude     # Run Claude Code in dangerous mode
 webui      # Start Web UI dev server
 ccdev      # Run CrewChief CLI in dev mode
 maproom    # Run Maproom commands
@@ -92,8 +98,50 @@ tn         # tmux new session
     ├── post-create.sh   # Runs after container creation
     ├── post-start.sh    # Runs when container starts
     ├── post-attach.sh   # Runs when you attach to container
-    └── init-db.sql      # Database initialization
+    ├── init-db.sql      # Database initialization
+    └── init-claude-firewall.sh # Claude Code network restrictions
 ```
+
+## 🤖 Claude Code Dangerous Mode
+
+This devcontainer includes Claude Code with dangerous mode enabled, allowing it to execute commands and modify files directly. To ensure safety:
+
+### Network Restrictions
+The container uses iptables firewall rules to restrict network access:
+- ✅ **Allowed**: GitHub, npm registry, crates.io, Anthropic API
+- ❌ **Blocked**: General internet access
+- ✅ **Local**: Full access to container services (PostgreSQL, Redis)
+
+### Usage
+1. **Set your API key** in host environment:
+   ```bash
+   export ANTHROPIC_API_KEY="your-api-key"
+   ```
+
+2. **Start Claude Code**:
+   ```bash
+   claude
+   ```
+
+3. **Verify firewall** (run in container):
+   ```bash
+   sudo /usr/local/bin/init-claude-firewall.sh
+   ```
+
+### Security Features
+- Network isolation via iptables/ipset
+- Restricted to allowed domains only
+- Runs in containerized environment
+- All changes isolated to workspace
+- Persistent configuration in volume
+
+### Dangerous Mode Capabilities
+When running in dangerous mode, Claude Code can:
+- Execute shell commands
+- Create and modify files
+- Install packages
+- Run tests and builds
+- Access local services
 
 ## 🔧 Common Tasks
 

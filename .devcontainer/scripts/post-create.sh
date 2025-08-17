@@ -205,9 +205,37 @@ EOF
     print_success "Local config created"
 fi
 
+# Initialize Claude Code dangerous mode firewall
+print_step "Initializing Claude Code dangerous mode firewall..."
+if [ -f "/usr/local/bin/init-claude-firewall.sh" ]; then
+    sudo /usr/local/bin/init-claude-firewall.sh || print_error "Firewall initialization failed (non-critical)"
+    print_success "Claude Code firewall configured for dangerous mode"
+else
+    print_error "Claude firewall script not found"
+fi
+
+# Create Claude Code configuration
+print_step "Setting up Claude Code..."
+if [ ! -f /home/vscode/.claude/config.json ]; then
+    mkdir -p /home/vscode/.claude
+    cat > /home/vscode/.claude/config.json << 'EOF'
+{
+  "dangerousMode": true,
+  "apiKey": "${ANTHROPIC_API_KEY}",
+  "model": "claude-3-opus-20240229",
+  "maxTokens": 4096,
+  "temperature": 0,
+  "autoSave": true,
+  "workspaceRoot": "/workspace"
+}
+EOF
+    print_success "Claude Code configured"
+fi
+
 print_success "🎉 CrewChief devcontainer setup complete!"
 echo ""
 echo "Quick start commands:"
+echo "  claude    - Run Claude Code in dangerous mode"
 echo "  webui     - Start the web UI development server"
 echo "  ccdev     - Run the CrewChief CLI in development mode"
 echo "  maproom   - Run Maproom commands"
@@ -217,5 +245,10 @@ echo "  PostgreSQL: postgres:5432"
 echo "  Redis:      redis:6379"
 echo "  pgAdmin:    http://localhost:5050"
 echo "  Redis Commander: http://localhost:8081"
+echo ""
+echo "⚠️  Claude Code dangerous mode is ENABLED"
+echo "   - Network access is restricted via iptables"
+echo "   - Only allowed domains can be accessed"
+echo "   - Run 'claude' to start Claude Code"
 echo ""
 echo "Happy coding! 🚀"

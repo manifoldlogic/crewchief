@@ -5,12 +5,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # Add capabilities required for Claude Code dangerous mode
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    privileged: true  # Required for iptables manipulation
     volumes:
       - ..:/workspace:cached
       - /var/run/docker.sock:/var/run/docker.sock
       - crewchief-cargo-cache:/home/vscode/.cargo
       - crewchief-pnpm-cache:/home/vscode/.pnpm-store
       - crewchief-vscode-extensions:/home/vscode/.vscode-server/extensions
+      - crewchief-claude-config:/home/vscode/.claude
+      - crewchief-claude-history:/commandhistory
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
@@ -20,6 +28,11 @@ services:
       - CREWCHIEF_DB_NAME=crewchief
       - CREWCHIEF_DB_USER=postgres
       - CREWCHIEF_DB_PASSWORD=postgres
+      # Claude Code environment
+      - CLAUDE_CONFIG_DIR=/home/vscode/.claude
+      - CLAUDE_DANGEROUS_MODE=true
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     command: sleep infinity
     networks:
       - crewchief-network
@@ -97,3 +110,5 @@ volumes:
   crewchief-cargo-cache:
   crewchief-pnpm-cache:
   crewchief-vscode-extensions:
+  crewchief-claude-config:
+  crewchief-claude-history:

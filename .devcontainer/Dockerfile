@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 
-# Install system dependencies
+# Install system dependencies including network tools for Claude Code dangerous mode
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
     build-essential \
@@ -16,11 +16,19 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     bat \
     exa \
     httpie \
+    # Network tools for Claude Code dangerous mode
+    iptables \
+    ipset \
+    iproute2 \
+    dnsutils \
+    net-tools \
+    curl \
+    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm globally
-RUN npm install -g pnpm@latest
+# Install pnpm and Claude Code globally
+RUN npm install -g pnpm@latest @anthropic-ai/claude-code@latest
 
 # Install Rust toolchain (will be overridden by devcontainer features, but good as backup)
 USER vscode
@@ -54,9 +62,21 @@ RUN pnpm setup && \
 RUN mkdir -p /home/vscode/.cargo \
     /home/vscode/.pnpm-store \
     /home/vscode/.cache \
-    /home/vscode/.local/share
+    /home/vscode/.local/share \
+    /home/vscode/.claude
+
+# Copy and set up firewall script for Claude Code dangerous mode
+COPY --chown=root:root scripts/init-claude-firewall.sh /usr/local/bin/
+USER root
+RUN chmod +x /usr/local/bin/init-claude-firewall.sh && \
+    echo "vscode ALL=(root) NOPASSWD: /usr/local/bin/init-claude-firewall.sh" > /etc/sudoers.d/vscode-firewall && \
+    chmod 0440 /etc/sudoers.d/vscode-firewall
+
+# Create Claude Code configuration directory
+RUN mkdir -p /home/vscode/.claude && chown -R vscode:vscode /home/vscode/.claude
 
 # Set working directory
+USER vscode
 WORKDIR /workspace
 
 # Keep container running
