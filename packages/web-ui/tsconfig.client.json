@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/client/*"],
+      "@components/*": ["src/client/components/*"],
+      "@pages/*": ["src/client/pages/*"],
+      "@hooks/*": ["src/client/hooks/*"],
+      "@utils/*": ["src/client/utils/*"],
+      "@types/*": ["src/client/types/*"]
+    }
+  },
+  "include": [
+    "src/client"
+  ],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

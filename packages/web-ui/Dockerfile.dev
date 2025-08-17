@@ -1,0 +1,56 @@
+# CrewChief Web UI Development Dockerfile
+# Optimized for development with hot reload and debugging
+
+FROM node:20-alpine AS development
+
+# Install development dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    libc6-compat \
+    curl \
+    git
+
+# Enable pnpm
+RUN corepack enable pnpm
+
+# Create non-root user for development
+RUN addgroup -g 1001 -S nodejs \
+    && adduser -S crewchief -u 1001 -G nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Copy package.json and workspace files
+COPY --chown=crewchief:nodejs package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --chown=crewchief:nodejs packages/web-ui/package.json ./packages/web-ui/
+
+# Install all dependencies (including dev dependencies)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY --chown=crewchief:nodejs packages/web-ui/ ./packages/web-ui/
+
+# Set working directory to web-ui package
+WORKDIR /app/packages/web-ui
+
+# Expose ports
+EXPOSE 3456  # Backend server
+EXPOSE 3000  # Frontend dev server (Vite)
+EXPOSE 9229  # Node.js debug port
+
+# Set environment variables for development
+ENV NODE_ENV=development
+ENV PORT=3456
+ENV DEBUG=*
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3456/api/health || exit 1
+
+# Switch to non-root user
+USER crewchief
+
+# Default command for development (can be overridden)
+CMD ["pnpm", "dev"]
