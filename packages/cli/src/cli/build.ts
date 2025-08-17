@@ -11,7 +11,7 @@ interface BuildOptions {
   skipTypeScript?: boolean
   skipWeb?: boolean
   verbose?: boolean
-  parallel?: boolean
+  sequential?: boolean
 }
 
 interface BuildTarget {
@@ -177,7 +177,7 @@ async function buildRustBinaries(projectRoot: string, verbose: boolean): Promise
 /**
  * Build TypeScript packages
  */
-async function buildTypeScriptPackages(projectRoot: string, verbose: boolean, parallel: boolean): Promise<void> {
+async function buildTypeScriptPackages(projectRoot: string, verbose: boolean, sequential: boolean): Promise<void> {
   console.log(chalk.cyan('\n📦 Building TypeScript packages...'))
 
   const packages = [
@@ -196,25 +196,7 @@ async function buildTypeScriptPackages(projectRoot: string, verbose: boolean, pa
   console.log(chalk.yellow('  Installing dependencies...'))
   await executeCommand('pnpm', ['install'], projectRoot, verbose)
 
-  if (parallel) {
-    // Build all packages in parallel
-    const buildPromises = packages.map(async (pkg) => {
-      const packagePath = path.join(projectRoot, pkg.path)
-      if (!fs.existsSync(packagePath)) {
-        return
-      }
-
-      console.log(chalk.yellow(`  Building ${pkg.name}...`))
-      try {
-        await executeCommand('pnpm', ['build'], packagePath, verbose)
-        console.log(chalk.green(`    ✓ ${pkg.name} built successfully`))
-      } catch (error) {
-        throw new Error(`Failed to build ${pkg.name}: ${error}`)
-      }
-    })
-
-    await Promise.all(buildPromises)
-  } else {
+  if (sequential) {
     // Build packages sequentially
     for (const pkg of packages) {
       const packagePath = path.join(projectRoot, pkg.path)
@@ -230,6 +212,24 @@ async function buildTypeScriptPackages(projectRoot: string, verbose: boolean, pa
         throw new Error(`Failed to build ${pkg.name}: ${error}`)
       }
     }
+  } else {
+    // Build all packages in parallel (default)
+    const buildPromises = packages.map(async (pkg) => {
+      const packagePath = path.join(projectRoot, pkg.path)
+      if (!fs.existsSync(packagePath)) {
+        return
+      }
+
+      console.log(chalk.yellow(`  Building ${pkg.name} (parallel)...`))
+      try {
+        await executeCommand('pnpm', ['build'], packagePath, verbose)
+        console.log(chalk.green(`    ✓ ${pkg.name} built successfully`))
+      } catch (error) {
+        throw new Error(`Failed to build ${pkg.name}: ${error}`)
+      }
+    })
+
+    await Promise.all(buildPromises)
   }
 
   console.log(chalk.green('  ✓ TypeScript packages built successfully'))
@@ -268,7 +268,7 @@ export function registerBuildCommand(program: Command): void {
     .option('--skip-typescript', 'Skip building TypeScript packages')
     .option('--skip-web', 'Skip building Web UI')
     .option('-v, --verbose', 'Show detailed build output')
-    .option('-p, --parallel', 'Build TypeScript packages in parallel')
+    .option('-s, --sequential', 'Build TypeScript packages sequentially instead of in parallel')
     .action(async (options: BuildOptions) => {
       const startTime = Date.now()
       const projectRoot = getProjectRoot()
@@ -285,7 +285,7 @@ export function registerBuildCommand(program: Command): void {
 
         // Build TypeScript packages
         if (!options.skipTypeScript) {
-          await buildTypeScriptPackages(projectRoot, options.verbose || false, options.parallel || false)
+          await buildTypeScriptPackages(projectRoot, options.verbose || false, options.sequential || false)
         }
 
         // Build Web UI
