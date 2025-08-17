@@ -1,14 +1,19 @@
 # CrewChief Web UI Project Plan
 
-## Current Status: Phase 1 Complete ✅
+## Current Status: Phase 1 In Progress ⚠️
 
-**Phase 1 Foundation**: Complete (8/8 tickets done, awaiting verification)
+**Phase 1 Foundation**: In Progress (6/9 tickets done, 2 in progress, 1 blocked)
 **Phase 1.5 Verification**: Ready to start (6 verification tickets created)
-**Phase 2 Core Features**: In Progress (1/9 tickets done)
+**Phase 2 Core Features**: Ready to start (0/9 tickets done)
 **Phase 3 Advanced Features**: Not Started
 **Phase 4 Polish & Launch**: Not Started
 
-**Note**: All Phase 1 tickets are marked "Done" and "Quality Checked" but require Verifier agent to mark as "Verified"
+**Critical Issues**: 
+- WEB-003 (GraphQL Schema) blocked by incomplete WEB-004 (Error Handling)
+- WEB-006 (Component Library) blocked by incomplete WEB-008 (Build Integration)
+- Security requirements integrated into all phases
+- Authentication (TICKET-028) should be prioritized in Phase 2
+- Security hardening (TICKET-034) elements distributed across all tickets
 
 ---
 
@@ -142,29 +147,53 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 **TICKET-003: GraphQL Schema Definition**
 - Agent: **Backend Engineer**
 - Description: Define GraphQL schema for all entities and operations
-- Dependencies: TICKET-001
+- Dependencies: TICKET-001, TICKET-004 (Error handling patterns)
+- Status: **Blocked** (waiting for TICKET-004)
+- Acceptance Criteria:
+  - [ ] All 6 entity types have complete GraphQL schemas
+  - [ ] Query resolvers handle pagination (limit/offset)
+  - [ ] Mutation resolvers include input validation
+  - [ ] Error handling follows consistent pattern from TICKET-004
+  - [ ] GraphQL playground accessible at /graphql
+  - [ ] Schema documentation auto-generated
 - Deliverables:
   - GraphQL type definitions
   - Query/Mutation/Subscription schemas
   - Apollo Server setup
   - GraphQL playground configuration
+- Security Requirements:
+  - [ ] Query depth limiting implemented
+  - [ ] Rate limiting per client
+  - [ ] Field-level authorization
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
 
 #### Track B: Frontend Setup
 
-**TICKET-004: React Application Bootstrap**
+**TICKET-004: Error Handling & React Application Bootstrap**
 - Agent: **Frontend Engineer**
-- Description: Initialize React application with Vite, TypeScript, and core dependencies
+- Description: Initialize React application with comprehensive error handling patterns
 - Dependencies: None
+- Status: **In Progress**
+- Acceptance Criteria:
+  - [ ] Vite dev server starts on port 5173
+  - [ ] React Router handles 404 errors gracefully
+  - [ ] Global error boundary catches React errors
+  - [ ] API error interceptors configured
+  - [ ] User-friendly error messages displayed
+  - [ ] Error logging to console in development
 - Deliverables:
   - Vite configuration
-  - React Router setup
+  - React Router setup with error handling
   - TailwindCSS configuration
-  - Project structure
-- [x] Done
-- [x] Quality Checked
+  - Error boundary components
+  - API error handling utilities
+- Security Requirements:
+  - [ ] Sensitive error details hidden in production
+  - [ ] XSS prevention in error messages
+- [ ] Done
+- [ ] Quality Checked
 - [ ] Verified
 
 **TICKET-005: Design System Implementation**
@@ -184,12 +213,23 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 **TICKET-006: Component Library Setup**
 - Agent: **Frontend Engineer**
 - Description: Set up Shadcn/ui and create base component library
-- Dependencies: TICKET-004, TICKET-005
+- Dependencies: TICKET-004, TICKET-005, TICKET-008 (Build system)
+- Status: **Blocked** (waiting for TICKET-008)
+- Acceptance Criteria:
+  - [ ] Shadcn/ui CLI configured and working
+  - [ ] All components import without errors
+  - [ ] Components support dark/light themes
+  - [ ] TypeScript types exported correctly
+  - [ ] Storybook displays all components
+  - [ ] Accessibility standards met (WCAG 2.1 AA)
 - Deliverables:
   - Shadcn/ui integration
   - Button, Input, Card components
   - Modal, Drawer, Toast components
-  - Form components
+  - Form components with validation
+- Security Requirements:
+  - [ ] Input sanitization in form components
+  - [ ] CSRF token support in forms
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -209,17 +249,32 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [x] Quality Checked
 - [ ] Verified
 
-**TICKET-008: Testing Framework Configuration**
+**TICKET-008: Build Integration & Testing Framework**
 - Agent: **Quality Engineer**
-- Description: Set up testing frameworks for unit, integration, and E2E tests
+- Description: Set up build system and testing frameworks
 - Dependencies: TICKET-001, TICKET-004
+- Status: **In Progress**
+- Acceptance Criteria:
+  - [ ] pnpm build creates production bundles
+  - [ ] Build output < 500KB (gzipped)
+  - [ ] Vitest runs all unit tests
+  - [ ] React Testing Library configured
+  - [ ] Playwright E2E tests executable
+  - [ ] Code coverage > 60% minimum
+  - [ ] CI pipeline runs all tests
 - Deliverables:
+  - Build configuration (tsconfig, vite.config)
   - Vitest configuration
   - React Testing Library setup
   - Playwright configuration
   - Test directory structure
-- [x] Done
-- [x] Quality Checked
+  - Example tests for each type
+- Security Requirements:
+  - [ ] Build removes console.log in production
+  - [ ] Source maps excluded from production
+  - [ ] Dependencies audited for vulnerabilities
+- [ ] Done
+- [ ] Quality Checked
 - [ ] Verified
 
 **TICKET-009: CI/CD Pipeline Foundation**
@@ -342,12 +397,31 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 **TICKET-010: REST API Implementation**
 - Agent: **Backend Engineer**
 - Description: Implement all REST endpoints for CRUD operations
-- Dependencies: TICKET-001, TICKET-002
+- Dependencies: TICKET-001, TICKET-002, TICKET-003
+- Acceptance Criteria:
+  - [ ] All 4 resource types have full CRUD endpoints
+  - [ ] Pagination implemented (limit, offset, cursor)
+  - [ ] Filtering supported on list endpoints
+  - [ ] Response times < 200ms for queries
+  - [ ] OpenAPI/Swagger documentation generated
+  - [ ] Request validation with Zod schemas
+  - [ ] 404/400/500 errors handled consistently
 - Deliverables:
-  - Worktree endpoints
-  - Agent endpoints
-  - Configuration endpoints
-  - Run management endpoints
+  - Worktree endpoints (/api/worktrees)
+  - Agent endpoints (/api/agents)
+  - Configuration endpoints (/api/config)
+  - Run management endpoints (/api/runs)
+  - OpenAPI specification
+- Security Requirements:
+  - [ ] Input validation on all endpoints
+  - [ ] SQL injection prevention
+  - [ ] Rate limiting (100 req/min)
+  - [ ] API key authentication
+- Verification Checklist:
+  - [ ] All endpoints return correct status codes
+  - [ ] Error responses follow RFC 7807
+  - [ ] Postman collection works
+  - [ ] Load test passes (100 concurrent users)
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -355,12 +429,30 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 **TICKET-011: WebSocket Server Implementation**
 - Agent: **Backend Engineer**
 - Description: Implement WebSocket server for real-time updates
-- Dependencies: TICKET-001
+- Dependencies: TICKET-001, TICKET-010
+- Acceptance Criteria:
+  - [ ] WebSocket server starts on port 3457
+  - [ ] Supports 1000+ concurrent connections
+  - [ ] Heartbeat/ping-pong implemented
+  - [ ] Auto-reconnection on disconnect
+  - [ ] Message delivery confirmation
+  - [ ] Room-based broadcasting works
 - Deliverables:
-  - Socket.io or ws setup
-  - Event emitters
-  - Room management
+  - Socket.io server setup
+  - Event emitters for all entity changes
+  - Room management (per worktree/agent)
   - Client connection handling
+  - Connection pool management
+- Security Requirements:
+  - [ ] WebSocket authentication via tokens
+  - [ ] Message size limits (1MB max)
+  - [ ] Connection rate limiting
+  - [ ] Origin validation
+- Verification Checklist:
+  - [ ] Stress test with 1000 connections
+  - [ ] Message ordering preserved
+  - [ ] Memory leaks checked
+  - [ ] Reconnection tested
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -369,12 +461,28 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Backend Engineer**
 - Description: Implement service layer for business logic
 - Dependencies: TICKET-010, TICKET-002
+- Acceptance Criteria:
+  - [ ] All 5 services implement consistent interfaces
+  - [ ] Error handling follows Result pattern
+  - [ ] Services are unit testable (mocked deps)
+  - [ ] Transaction support for data operations
+  - [ ] Caching layer integrated (Redis)
+  - [ ] Logging with correlation IDs
 - Deliverables:
-  - MaproomService
-  - WorktreeService
-  - AgentService
-  - ConfigService
-  - MonitoringService
+  - MaproomService (search, index, status)
+  - WorktreeService (create, list, delete, merge)
+  - AgentService (spawn, monitor, terminate)
+  - ConfigService (load, save, validate)
+  - MonitoringService (metrics, health, alerts)
+- Security Requirements:
+  - [ ] Service-level authorization checks
+  - [ ] Audit logging for all operations
+  - [ ] Sensitive data encryption at rest
+- Verification Checklist:
+  - [ ] Unit tests cover 80% of code
+  - [ ] Integration tests pass
+  - [ ] Performance benchmarks met
+  - [ ] No memory leaks detected
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -385,11 +493,27 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Frontend Engineer**
 - Description: Build main layout components
 - Dependencies: TICKET-006
+- Acceptance Criteria:
+  - [ ] AppShell responsive on mobile/tablet/desktop
+  - [ ] Sidebar collapsible with animation
+  - [ ] Navigation highlights active route
+  - [ ] Breadcrumbs update dynamically
+  - [ ] Split panes draggable and resizable
+  - [ ] Keyboard navigation supported
 - Deliverables:
   - AppShell with header/sidebar/footer
-  - Navigation menu
-  - Breadcrumbs
+  - Navigation menu with icons
+  - Breadcrumbs component
   - Split pane component
+  - Layout persistence in localStorage
+- Security Requirements:
+  - [ ] CSP headers configured
+  - [ ] Safe innerHTML usage
+- Verification Checklist:
+  - [ ] Renders correctly in all browsers
+  - [ ] Accessibility audit passes
+  - [ ] Performance: < 16ms render time
+  - [ ] No layout shift on load
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -397,12 +521,28 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 **TICKET-014: Dashboard Implementation**
 - Agent: **Frontend Engineer**
 - Description: Build dashboard with stats and quick actions
-- Dependencies: TICKET-013
+- Dependencies: TICKET-013, TICKET-010
+- Acceptance Criteria:
+  - [ ] Dashboard loads in < 2 seconds
+  - [ ] Stats update in real-time via WebSocket
+  - [ ] Activity feed shows last 50 events
+  - [ ] Quick actions execute in < 500ms
+  - [ ] Agent cards show live status
+  - [ ] Charts render with smooth animations
 - Deliverables:
-  - Stats grid
-  - Activity feed
-  - Quick action buttons
-  - Agent status cards
+  - Stats grid (4-6 key metrics)
+  - Activity feed with filtering
+  - Quick action buttons with tooltips
+  - Agent status cards with actions
+  - Performance monitoring widget
+- Security Requirements:
+  - [ ] No sensitive data in activity feed
+  - [ ] Action confirmation dialogs
+- Verification Checklist:
+  - [ ] Real-time updates working
+  - [ ] Mobile responsive layout
+  - [ ] Charts accessible to screen readers
+  - [ ] No memory leaks after 1hr use
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -410,12 +550,29 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 **TICKET-015: Search Interface**
 - Agent: **Frontend Engineer**
 - Description: Implement Maproom search UI
-- Dependencies: TICKET-013
+- Dependencies: TICKET-013, TICKET-016
+- Acceptance Criteria:
+  - [ ] Search returns results in < 300ms
+  - [ ] Instant search with debouncing (300ms)
+  - [ ] Filters update results without page reload
+  - [ ] Results show relevance scores
+  - [ ] Code preview with line numbers
+  - [ ] Syntax highlighting for 10+ languages
+  - [ ] Search history saved locally
 - Deliverables:
-  - Search bar with instant results
-  - Filter panel
-  - Results list with highlighting
+  - Search bar with autocomplete
+  - Filter panel (language, path, date)
+  - Results list with pagination
   - Code preview with syntax highlighting
+  - Export results functionality
+- Security Requirements:
+  - [ ] Search input sanitization
+  - [ ] XSS prevention in highlights
+- Verification Checklist:
+  - [ ] Handles 10k+ results efficiently
+  - [ ] Keyboard shortcuts work
+  - [ ] Highlights are accurate
+  - [ ] Virtual scrolling performs well
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -439,11 +596,28 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Integration Engineer**
 - Description: Implement git operations using simple-git
 - Dependencies: TICKET-012
+- Acceptance Criteria:
+  - [ ] All git operations complete in < 5 seconds
+  - [ ] Concurrent operations handled safely
+  - [ ] Merge conflicts detected and reported
+  - [ ] Large repo support (>1GB)
+  - [ ] Progress callbacks for long operations
+  - [ ] Graceful handling of network failures
 - Deliverables:
-  - Worktree management
-  - Branch operations
-  - Commit/push/pull
-  - Status checking
+  - Worktree management (create, list, remove)
+  - Branch operations (create, checkout, merge)
+  - Commit/push/pull with progress
+  - Status checking with file details
+  - Diff generation with syntax aware chunks
+- Security Requirements:
+  - [ ] No command injection vulnerabilities
+  - [ ] SSH key handling secure
+  - [ ] Credentials never logged
+- Verification Checklist:
+  - [ ] Works with GitHub, GitLab, Bitbucket
+  - [ ] Handles force push scenarios
+  - [ ] Submodules supported
+  - [ ] Performance with 100+ branches
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -452,11 +626,29 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Integration Engineer**
 - Description: Implement secure file system operations
 - Dependencies: TICKET-012
+- Acceptance Criteria:
+  - [ ] Path traversal attacks prevented
+  - [ ] File operations atomic when possible
+  - [ ] Large files handled efficiently (streaming)
+  - [ ] File watching with minimal CPU usage
+  - [ ] Symbolic links handled correctly
+  - [ ] Permissions preserved on operations
 - Deliverables:
-  - File reading/writing
-  - Directory traversal
-  - File watching
-  - Path validation
+  - File reading/writing with streaming
+  - Directory traversal with .gitignore respect
+  - File watching with debouncing
+  - Path validation and sanitization
+  - File metadata operations
+- Security Requirements:
+  - [ ] Path injection prevention
+  - [ ] File size limits enforced
+  - [ ] Restricted to project directory
+  - [ ] Temp file cleanup guaranteed
+- Verification Checklist:
+  - [ ] Handles 10k+ files efficiently
+  - [ ] No file descriptor leaks
+  - [ ] Cross-platform compatibility
+  - [ ] Unicode filenames supported
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -471,11 +663,27 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Frontend Engineer**
 - Description: Implement WebSocket client for real-time updates
 - Dependencies: TICKET-011, TICKET-014
+- Acceptance Criteria:
+  - [ ] Automatic reconnection within 5 seconds
+  - [ ] Message queue during disconnection
+  - [ ] Binary and text message support
+  - [ ] Connection state exposed to UI
+  - [ ] Exponential backoff for retries
+  - [ ] Clean disconnect on unmount
 - Deliverables:
-  - WebSocket provider
-  - Event handlers
-  - Reconnection logic
+  - WebSocket provider/context
+  - Event handlers with TypeScript types
+  - Reconnection logic with backoff
   - State synchronization
+  - Message buffering
+- Security Requirements:
+  - [ ] Token-based authentication
+  - [ ] Message origin validation
+  - [ ] Encrypted connections (wss://)
+- Verification Checklist:
+  - [ ] Handles network interruptions
+  - [ ] No duplicate messages
+  - [ ] Memory cleanup on disconnect
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -484,11 +692,23 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Frontend Engineer**
 - Description: Build real-time progress components
 - Dependencies: TICKET-019
+- Acceptance Criteria:
+  - [ ] Progress bars animate smoothly
+  - [ ] Status badges update < 100ms
+  - [ ] Log viewer handles 1000 lines/sec
+  - [ ] Toasts auto-dismiss after 5 seconds
+  - [ ] Progress persists during reconnects
+  - [ ] Accessible to screen readers
 - Deliverables:
-  - Index progress bars
-  - Agent status badges
-  - Log streaming viewer
-  - Toast notifications
+  - Index progress bars with ETA
+  - Agent status badges (online/busy/error)
+  - Log streaming viewer with search
+  - Toast notifications with actions
+  - Activity indicators
+- Verification Checklist:
+  - [ ] No UI freezing during updates
+  - [ ] Smooth 60fps animations
+  - [ ] Memory stable over time
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -512,11 +732,27 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Frontend Engineer**
 - Description: Build complete worktree management interface
 - Dependencies: TICKET-017, TICKET-015
+- Acceptance Criteria:
+  - [ ] Worktree creation < 10 seconds
+  - [ ] File tree loads incrementally
+  - [ ] Git status updates real-time
+  - [ ] Drag-drop file operations work
+  - [ ] Context menus on right-click
+  - [ ] Keyboard navigation supported
 - Deliverables:
-  - Worktree list with status
-  - Create worktree modal
-  - File explorer
-  - Git status display
+  - Worktree list with live status
+  - Create worktree modal with validation
+  - File explorer with lazy loading
+  - Git status display with diff preview
+  - Branch switching interface
+- Security Requirements:
+  - [ ] Path traversal prevention
+  - [ ] File operation confirmation
+  - [ ] Restricted to project scope
+- Verification Checklist:
+  - [ ] Handles 10k+ files efficiently
+  - [ ] Responsive on all devices
+  - [ ] Undo/redo operations work
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -553,11 +789,27 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Integration Engineer**
 - Description: Implement tmux session management
 - Dependencies: TICKET-012
+- Acceptance Criteria:
+  - [ ] Sessions persist across server restarts
+  - [ ] Pane layout restoration works
+  - [ ] Commands execute < 100ms
+  - [ ] Output buffering handles 10MB
+  - [ ] Concurrent session support
+  - [ ] Clean session teardown
 - Deliverables:
   - Session creation/destruction
-  - Pane management
-  - Command execution
-  - Output capture
+  - Pane management with layouts
+  - Command execution queue
+  - Output capture with ANSI support
+  - Session state persistence
+- Security Requirements:
+  - [ ] Command injection prevention
+  - [ ] Session isolation enforced
+  - [ ] Resource limits applied
+- Verification Checklist:
+  - [ ] 50+ sessions manageable
+  - [ ] No zombie processes
+  - [ ] Output streaming works
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -598,11 +850,31 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Backend Engineer**
 - Description: Implement authentication and authorization
 - Dependencies: TICKET-010
+- Priority: **HIGH** - Should be moved to Phase 2
+- Acceptance Criteria:
+  - [ ] JWT tokens expire after 24 hours
+  - [ ] Refresh tokens implemented
+  - [ ] OAuth2 with GitHub/Google
+  - [ ] RBAC with 3 roles minimum
+  - [ ] Session management secure
+  - [ ] Password complexity enforced
 - Deliverables:
   - Basic auth support
   - OAuth integration
   - JWT token management
   - Role-based access control
+  - Session store with Redis
+- Security Requirements:
+  - [ ] Passwords hashed with bcrypt
+  - [ ] Rate limiting on auth endpoints
+  - [ ] CSRF protection enabled
+  - [ ] Secure cookie configuration
+  - [ ] Account lockout after failures
+- Verification Checklist:
+  - [ ] Penetration test passed
+  - [ ] Token rotation works
+  - [ ] OAuth flow tested
+  - [ ] Authorization middleware tested
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -676,12 +948,32 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Agent: **Backend Engineer**
 - Description: Implement security best practices
 - Dependencies: TICKET-028
+- Priority: **CRITICAL** - Elements should be in each phase
+- Acceptance Criteria:
+  - [ ] OWASP Top 10 vulnerabilities addressed
+  - [ ] Security headers score A+ on securityheaders.com
+  - [ ] All inputs validated and sanitized
+  - [ ] Rate limiting on all endpoints
+  - [ ] CSP policy implemented
+  - [ ] Dependency vulnerabilities < 5 low severity
 - Deliverables:
-  - Input validation
-  - XSS prevention
-  - CSRF protection
-  - Rate limiting
-  - Security headers
+  - Input validation middleware
+  - XSS prevention filters
+  - CSRF token implementation
+  - Rate limiting (per IP and user)
+  - Security headers (HSTS, CSP, etc.)
+  - Content Security Policy
+- Security Requirements:
+  - [ ] Regular security audits scheduled
+  - [ ] Vulnerability scanning automated
+  - [ ] Security logging implemented
+  - [ ] Incident response plan created
+  - [ ] Secrets management system used
+- Verification Checklist:
+  - [ ] Penetration test passed
+  - [ ] OWASP ZAP scan clean
+  - [ ] npm audit shows 0 high/critical
+  - [ ] Security review completed
 - [ ] Done
 - [ ] Quality Checked
 - [ ] Verified
@@ -745,25 +1037,36 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 ## Success Criteria
 
 ### Phase 1 Success Metrics
-- [x] All foundation components building successfully
+- [ ] All foundation components building successfully (6/9 complete)
 - [x] Docker environment operational
-- [x] Basic tests passing
+- [ ] Basic tests passing (awaiting TICKET-008 completion)
+- [ ] Error handling patterns established
+- [ ] Build system producing optimized bundles
+- [ ] Security baseline implemented
 
 ### Phase 2 Success Metrics
-- [ ] All REST endpoints functional
-- [x] Core UI components rendering
-- [x] Maproom integration working
+- [ ] All REST endpoints functional with <200ms response time
+- [ ] Core UI components rendering with accessibility compliance
+- [ ] Maproom integration working with <300ms search response
+- [ ] WebSocket handling 1000+ concurrent connections
+- [ ] Service layer with 80% test coverage
+- [ ] Security requirements met for all components
 
 ### Phase 3 Success Metrics
-- [ ] Real-time updates operational
-- [ ] Complex UI features complete
-- [ ] Agent management functional
+- [ ] Real-time updates operational with < 100ms latency
+- [ ] WebSocket handling 1000+ concurrent connections
+- [ ] Complex UI features complete with accessibility
+- [ ] Agent management functional with resource monitoring
+- [ ] Tmux integration stable across 50+ sessions
+- [ ] Security requirements met for all real-time features
 
 ### Phase 4 Success Metrics
 - [ ] All tests passing (>80% coverage)
-- [ ] Performance targets met (<2s load time)
-- [ ] Security audit passed
-- [ ] Production deployment successful
+- [ ] Performance targets met (<2s load time, <200ms API response)
+- [ ] Security audit passed (OWASP Top 10 addressed)
+- [ ] Production deployment successful with monitoring
+- [ ] Documentation complete for all features
+- [ ] Load testing verified (1000+ concurrent users)
 
 ## Resource Allocation
 
@@ -795,10 +1098,16 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 ### Technical Risks
 1. **Maproom binary compatibility**
    - Mitigation: Early integration testing, fallback mechanisms
+   - Contingency: REST API fallback if binary fails
 2. **WebSocket scalability**
    - Mitigation: Connection pooling, Redis adapter for scaling
+   - Contingency: Long-polling fallback for real-time features
 3. **Performance with large datasets**
    - Mitigation: Pagination, virtual scrolling, caching
+   - Contingency: Progressive loading, data sampling
+4. **Security vulnerabilities**
+   - Mitigation: Security-first development, regular audits
+   - Contingency: Rapid patch deployment process
 
 ### Schedule Risks
 1. **Integration delays**
@@ -814,8 +1123,16 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 2. ~~Assign agents to roles~~ ✅
 3. ~~Set up project tracking board~~ ✅
 4. ~~Initialize repositories and environments~~ ✅
-5. ~~Begin Phase 1 implementation~~ ✅
-6. **Continue with Phase 2: Core Features**
+5. **Complete Phase 1 Implementation**
+   - Fix WEB-004 (Error Handling) - In Progress
+   - Fix WEB-008 (Build Integration) - In Progress
+   - Unblock WEB-003 (GraphQL Schema) - Blocked
+   - Unblock WEB-006 (Component Library) - Blocked
+6. **Run Phase 1.5 Verification**
+   - Execute all verification tickets (V001-V006)
+   - Address any issues found
+7. **Begin Phase 2: Core Features**
+   - Prioritize TICKET-028 (Authentication) - Move from Phase 4
    - REST API implementation (TICKET-010)
    - WebSocket server setup (TICKET-011)
    - Service layer development (TICKET-012)
@@ -825,3 +1142,11 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 ---
 
 *This project plan is designed for maximum parallelization with specialized agents working simultaneously on different aspects of the system. Regular synchronization points ensure integration success.*
+
+## Quality Assurance Notes
+
+- All tickets now include acceptance criteria, security requirements, and verification checklists
+- Dependencies have been updated to reflect proper flow
+- Security has been integrated throughout all phases instead of being deferred
+- Success metrics are measurable and specific
+- Risk mitigation includes contingency plans
