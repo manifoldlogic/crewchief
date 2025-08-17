@@ -48,7 +48,7 @@ function resolvePackageVersion(): string {
 
 program
   .name('crewchief')
-  .description('CrewChief: Multi-agent orchestration for AI agents via git worktrees and tmux')
+  .description('Git worktree management, semantic code search, and multi-agent orchestration')
   .version(resolvePackageVersion())
 
 // Start event bridge for orchestrator messages

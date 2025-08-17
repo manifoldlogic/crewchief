@@ -41,6 +41,9 @@ crewchief worktree cd feature-branch
 
 # Auto-copy .env files to new worktrees (configure in crewchief.config.ts)
 crewchief worktree copy-ignored feature-branch
+
+# Merge worktree changes back to source branch
+crewchief worktree merge feature-branch
 ```
 
 ## Project Structure
@@ -79,5 +82,3 @@ This project is actively being developed. Key areas that need work:
 4. Creating the main `crewchief` tmux session launcher
 
 See the [specification](crewchief_context/cli/specification.md) for the full roadmap.
-
-TEST MERGE

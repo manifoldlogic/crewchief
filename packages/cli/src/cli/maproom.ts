@@ -64,40 +64,45 @@ function runMaproomForward(args: string[]) {
 export function registerMaproomCommands(program: Command) {
   program
     .command('maproom')
-    .description('Forward maproom subcommands to the bundled Rust binary')
+    .description('Semantic code indexing and search (forwards to Rust binary)')
     .allowUnknownOption(true)
     .argument('[args...]', 'Arguments forwarded to crewchief-maproom')
+    .addHelpText('after', '\nExamples:\n  $ crewchief maproom --help        # Show all maproom commands\n  $ crewchief maproom:scan           # Index current repository\n  $ crewchief maproom:search "auth"  # Search for authentication code')
     .action((args: string[]) => runMaproomForward(args || []))
 
   // Convenience shims for common subcommands
-  const sub = program.command('maproom:db').description('Run database migrations').allowUnknownOption(true)
+  const sub = program.command('maproom:db').description('Initialize/migrate PostgreSQL database for code indexing').allowUnknownOption(true)
   sub.argument('[args...]').action((args: string[]) => runMaproomForward(['db', ...(args || [])]))
 
   program
     .command('maproom:scan')
-    .description('Scan and index files into Postgres')
+    .description('Scan and index repository files into PostgreSQL (auto-detects git context)')
     .allowUnknownOption(true)
     .argument('[args...]')
+    .addHelpText('after', '\nAuto-detects: repo name, worktree, file path, and commit from git context\nSupports: TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML')
     .action((args: string[]) => runMaproomForward(['scan', ...(args || [])]))
 
   program
     .command('maproom:upsert')
-    .description('Upsert files at a given commit')
+    .description('Update specific files in the index at a given commit')
     .allowUnknownOption(true)
     .argument('[args...]')
+    .addHelpText('after', '\nExample: crewchief maproom:upsert src/index.ts src/utils.ts')
     .action((args: string[]) => runMaproomForward(['upsert', ...(args || [])]))
 
   program
     .command('maproom:watch')
-    .description('Watch a worktree for changes and incrementally upsert')
+    .description('Watch repository for changes and auto-index modified files')
     .allowUnknownOption(true)
     .argument('[args...]')
+    .addHelpText('after', '\nAuto-detects git context and watches for file changes\nPress Ctrl-C to stop watching')
     .action((args: string[]) => runMaproomForward(['watch', ...(args || [])]))
 
   program
     .command('maproom:search')
-    .description('Full-text search against indexed chunks')
+    .description('Semantic search across indexed code, docs, and configs')
     .allowUnknownOption(true)
     .argument('[args...]')
+    .addHelpText('after', '\nExamples:\n  $ crewchief maproom:search "authentication flow"\n  $ crewchief maproom:search "database queries" --limit 10')
     .action((args: string[]) => runMaproomForward(['search', ...(args || [])]))
 }
