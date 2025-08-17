@@ -210,3 +210,116 @@ export async function copyIgnoredFiles(options: CopyIgnoredFilesOptions): Promis
 
   return result
 }
+
+/**
+ * Copies ignored files back from worktree to source based on config
+ */
+export async function copyIgnoredFilesBack(options: {
+  worktreeRoot: string
+  sourceRoot: string
+  config: CrewChiefConfig
+  dryRun?: boolean
+}): Promise<CopyResult> {
+  const { worktreeRoot, sourceRoot, config, dryRun = false } = options
+  const result: CopyResult = {
+    copied: [],
+    skipped: [],
+    errors: [],
+  }
+
+  // Check if copying is configured
+  const patterns = config.worktree?.copyIgnoredFiles
+  if (!patterns || patterns.length === 0) {
+    return result
+  }
+
+  const copyFromPath = path.join(sourceRoot, config.worktree?.copyFromPath || '.')
+  const overwriteStrategy = config.worktree?.overwriteStrategy || 'skip'
+
+  console.log('🔍 Finding ignored files to copy back...')
+
+  // Get list of files that were originally copied (based on patterns)
+  const files = await getIgnoredFilesToCopy(copyFromPath, patterns)
+
+  if (files.length === 0) {
+    console.log('No ignored files found matching patterns.')
+    return result
+  }
+
+  console.log(`Found ${files.length} file(s) to copy back`)
+
+  for (const file of files) {
+    const sourcePath = path.join(worktreeRoot, file)
+    const destPath = path.join(copyFromPath, file)
+
+    try {
+      // Check if source exists in worktree
+      try {
+        await fs.access(sourcePath)
+      } catch {
+        // File doesn't exist in worktree, skip it
+        continue
+      }
+
+      // Check if destination exists
+      let destExists = false
+      try {
+        await fs.access(destPath)
+        destExists = true
+      } catch {
+        // Destination doesn't exist, which is fine
+      }
+
+      if (destExists) {
+        switch (overwriteStrategy) {
+          case 'skip':
+            console.log(`⏭️  Skipping existing file: ${file}`)
+            result.skipped.push(file)
+            continue
+          case 'backup':
+            if (!dryRun) {
+              const backupPath = `${destPath}.backup.${Date.now()}`
+              await fs.rename(destPath, backupPath)
+              console.log(`💾 Backed up: ${file} -> ${path.basename(backupPath)}`)
+            } else {
+              console.log(`[DRY RUN] Would backup: ${file}`)
+            }
+            break
+          case 'overwrite':
+            console.log(`🔄 Overwriting: ${file}`)
+            break
+        }
+      }
+
+      if (!dryRun) {
+        // Ensure destination directory exists
+        const destDir = path.dirname(destPath)
+        await fs.mkdir(destDir, { recursive: true })
+
+        // Copy the file back
+        await fs.copyFile(sourcePath, destPath)
+        console.log(`✅ Copied back: ${file}`)
+      } else {
+        console.log(`[DRY RUN] Would copy back: ${file}`)
+      }
+
+      result.copied.push(file)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error(`❌ Failed to copy back ${file}: ${errorMsg}`)
+      result.errors.push({ file, error: errorMsg })
+    }
+  }
+
+  // Print summary
+  console.log('\n📋 Copy Back Summary:')
+  console.log(`   Copied: ${result.copied.length} file(s)`)
+  if (result.skipped.length > 0) {
+    console.log(`   Skipped: ${result.skipped.length} file(s)`)
+  }
+  if (result.errors.length > 0) {
+    console.log(`   Errors: ${result.errors.length} file(s)`)
+  }
+
+  return result
+}

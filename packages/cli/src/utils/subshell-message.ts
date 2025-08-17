@@ -9,19 +9,20 @@ interface SubshellMessageOptions {
 }
 
 export function displaySubshellMessage(options: SubshellMessageOptions): void {
-  const { targetBranch, targetDirectory, sourceBranch, sourceDirectory, shell } = options
-  
+  const { targetBranch, targetDirectory, sourceBranch, sourceDirectory } = options
+
   const boxWidth = 70
   const borderColor = chalk.cyan
-  
+
   // Helper to create a padded line
   const makeLine = (content: string): string => {
     // Remove ANSI codes to get actual string length
+    // eslint-disable-next-line no-control-regex
     const visibleLength = content.replace(/\x1b\[[0-9;]*m/g, '').length
     const padding = boxWidth - 2 - visibleLength
     return borderColor('║') + ' ' + content + ' '.repeat(Math.max(0, padding)) + ' ' + borderColor('║')
   }
-  
+
   console.log()
   console.log(borderColor('╔' + '═'.repeat(boxWidth) + '╗'))
   console.log(makeLine(chalk.bold.white('ENTERING WORKTREE SUBSHELL')))
@@ -32,7 +33,7 @@ export function displaySubshellMessage(options: SubshellMessageOptions): void {
   console.log(makeLine(chalk.yellow('Type ') + chalk.bold.yellow('"exit"') + chalk.yellow(' to return to:')))
   console.log(makeLine(chalk.gray(`  • Original directory: ${sourceDirectory}`)))
   console.log(makeLine(chalk.gray(`  • Original branch: ${sourceBranch}`)))
-  console.log(makeLine(chalk.gray(`  • Parent shell session`)))
+  console.log(makeLine(chalk.gray('  • Parent shell session')))
   console.log(borderColor('╚' + '═'.repeat(boxWidth) + '╝'))
   console.log()
 }
