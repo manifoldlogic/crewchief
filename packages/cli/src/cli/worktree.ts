@@ -500,18 +500,18 @@ export function registerWorktreeCommands(program: Command): void {
         if (opts.delete !== false) {
           console.log(chalk.cyan('\n🧹 Cleaning up worktree...'))
 
-          // Delete the worktree branch
+          // Remove the worktree first (before deleting the branch)
+          await wt.removeWorktree(worktreePath)
+          removeDirSync(worktreePath)
+          logger.success(`Removed worktree at ${worktreePath}`)
+
+          // Now delete the worktree branch
           try {
             await mergeService.deleteBranch(worktreeBranch)
             logger.success(`Deleted branch ${worktreeBranch}`)
           } catch (error) {
             logger.warn(`Could not delete branch ${worktreeBranch}: ${error}`)
           }
-
-          // Remove the worktree
-          await wt.removeWorktree(worktreePath)
-          removeDirSync(worktreePath)
-          logger.success(`Removed worktree at ${worktreePath}`)
 
           // Run git worktree prune
           await wt.pruneWorktrees({ mode: 'stale' })
