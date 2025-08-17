@@ -14,6 +14,7 @@ import { registerEvalCommands } from './eval'
 import { registerMaproomCommands } from './maproom'
 import { registerMergeCommands } from './merge'
 import { registerOpsdeckCommand } from './opsdeck'
+import { registerReleaseCommand } from './release'
 import { registerRunsCommands } from './runs'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerTaskCommands } from './task'
@@ -65,6 +66,7 @@ registerMaproomCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
 registerBuildCommand(program)
+registerReleaseCommand(program)
 
 // Default behavior: `crewchief` with no subcommand starts/attaches session.
 program.action(async () => {
