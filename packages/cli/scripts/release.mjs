@@ -46,8 +46,16 @@ async function main() {
   execSync(`git tag ${pkg.name}@v${next}`, { stdio: 'inherit' })
   execSync('git push --follow-tags', { stdio: 'inherit' })
 
-  // Publish
-  execSync('pnpm publish --access public', { stdio: 'inherit' })
+  // Publish (suppress npm warnings about env configs)
+  execSync('pnpm publish --access public --no-git-checks', { 
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      // Filter out npm env configs that cause warnings
+      npm_config_verify_deps_before_run: undefined,
+      npm_config__jsr_registry: undefined,
+    }
+  })
 }
 
 main().catch((err) => {
