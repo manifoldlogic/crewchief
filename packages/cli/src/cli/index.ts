@@ -7,12 +7,14 @@ import { Command } from 'commander'
 // Removed `init` per new spec: setup covers initialization
 import inquirer from 'inquirer'
 import { registerAgentCommands } from './agent'
+import { registerBuildCommand } from './build'
 import { registerCompetitionCommands } from './competition'
 import { registerDoctorCommand } from './doctor'
 import { registerEvalCommands } from './eval'
 import { registerMaproomCommands } from './maproom'
 import { registerMergeCommands } from './merge'
 import { registerOpsdeckCommand } from './opsdeck'
+import { registerReleaseCommand } from './release'
 import { registerRunsCommands } from './runs'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerTaskCommands } from './task'
@@ -33,21 +35,21 @@ const program = new Command()
 
 function resolvePackageVersion(): string {
   try {
-    const here = path.dirname(fileURLToPath(import.meta.url));
+    const here = path.dirname(fileURLToPath(import.meta.url))
     // Works in both src (dev) and dist (built) layouts
-    const pkgPath = path.resolve(here, '..', '..', 'package.json');
-    const raw = fs.readFileSync(pkgPath, 'utf8');
-    const pkg = JSON.parse(raw);
-    return String(pkg.version || '0.0.0');
+    const pkgPath = path.resolve(here, '..', '..', 'package.json')
+    const raw = fs.readFileSync(pkgPath, 'utf8')
+    const pkg = JSON.parse(raw)
+    return String(pkg.version || '0.0.0')
   } catch {
-    return '0.0.0';
+    return '0.0.0'
   }
 }
 
 program
   .name('crewchief')
   .description('CrewChief: Multi-agent orchestration for AI agents via git worktrees and tmux')
-  .version(resolvePackageVersion());
+  .version(resolvePackageVersion())
 
 // Start event bridge for orchestrator messages
 startOrchestratorEventBridge()
@@ -63,6 +65,8 @@ registerOpsdeckCommand(program)
 registerMaproomCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
+registerBuildCommand(program)
+registerReleaseCommand(program)
 
 // Default behavior: `crewchief` with no subcommand starts/attaches session.
 program.action(async () => {

@@ -6,6 +6,7 @@ import simpleGit, { SimpleGit } from 'simple-git'
 import { copyIgnoredFiles } from './copy-ignored-files'
 import { loadConfig } from '../config/loader'
 import { ensureDirSync, removeDirSync } from '../utils/fs'
+import { WorktreeMetadataService } from '../utils/worktree-metadata'
 
 export interface WorktreeListItem {
   path: string
@@ -65,7 +66,7 @@ export class WorktreeService {
       }
 
       console.log('🔍 Running maproom scan for new worktree...')
-      
+
       // Run maproom scan with automatic detection (it will detect repo, worktree, and commit from the worktree path)
       const result = spawnSync(maproomBin, ['scan'], {
         cwd: worktreePath,
@@ -94,18 +95,31 @@ export class WorktreeService {
     ensureDirSync(path.join(this.cwd, storagePath))
   }
 
-  async createWorktree(name: string, baseBranch: string, basePath: string, skipCopyIgnored?: boolean): Promise<string> {
+  async createWorktree(name: string, baseBranch: string, basePath: string, skipCopyIgnored?: boolean, purpose: 'agent' | 'manual' = 'manual'): Promise<string> {
     const wtPath = path.join(this.cwd, basePath, name)
     ensureDirSync(wtPath)
-    
+
+    // Get current branch before creating worktree
+    const currentBranch = await this.getCurrentBranch()
+
     // Try to fetch, but don't fail if we can't (e.g., in devcontainer without credentials)
     try {
       await this.git.fetch()
-    } catch (error) {
+    } catch {
       console.warn('⚠️  Could not fetch from remote (this is normal in devcontainers or offline mode)')
     }
-    
+
     await this.git.raw(['worktree', 'add', '-B', name, wtPath, baseBranch])
+
+    // Save worktree metadata
+    const metadataService = new WorktreeMetadataService()
+    await metadataService.save(wtPath, {
+      sourceBranch: currentBranch,
+      createdAt: new Date().toISOString(),
+      createdFrom: this.cwd,
+      baseBranch,
+      purpose,
+    })
 
     // Copy ignored files if configured and not skipped
     if (!skipCopyIgnored) {

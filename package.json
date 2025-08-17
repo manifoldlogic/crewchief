@@ -7,6 +7,12 @@
   ],
   "packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac",
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "build": "node packages/cli/dist/cli/index.js build",
+    "release": "node packages/cli/dist/cli/index.js release",
+    "release:patch": "node packages/cli/dist/cli/index.js release --type patch",
+    "release:minor": "node packages/cli/dist/cli/index.js release --type minor",
+    "release:major": "node packages/cli/dist/cli/index.js release --type major",
+    "release:dry": "node packages/cli/dist/cli/index.js release --dry-run"
   }
 }
