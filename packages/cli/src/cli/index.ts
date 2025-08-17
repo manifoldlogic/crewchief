@@ -7,6 +7,7 @@ import { Command } from 'commander'
 // Removed `init` per new spec: setup covers initialization
 import inquirer from 'inquirer'
 import { registerAgentCommands } from './agent'
+import { registerBuildCommand } from './build'
 import { registerCompetitionCommands } from './competition'
 import { registerDoctorCommand } from './doctor'
 import { registerEvalCommands } from './eval'
@@ -63,6 +64,7 @@ registerOpsdeckCommand(program)
 registerMaproomCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
+registerBuildCommand(program)
 
 // Default behavior: `crewchief` with no subcommand starts/attaches session.
 program.action(async () => {
