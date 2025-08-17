@@ -17,6 +17,7 @@ GRANT ALL ON SCHEMA public TO postgres;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For similarity searches
+CREATE EXTENSION IF NOT EXISTS "vector";    -- For vector embeddings
 
 -- Set default search path
 ALTER DATABASE crewchief SET search_path TO public, maproom;

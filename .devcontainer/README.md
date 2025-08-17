@@ -36,7 +36,7 @@ This folder contains the development container configuration for CrewChief, prov
 - **Python 3** (for scripting)
 
 ### Databases & Services
-- **PostgreSQL 15** - Main database
+- **PostgreSQL 15 with pgvector** - Main database with vector embedding support
 - **Redis 7** - Caching and sessions
 - **pgAdmin** - Database management UI (port 5050)
 - **Redis Commander** - Redis UI (port 8081)

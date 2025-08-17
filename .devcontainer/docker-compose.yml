@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data
