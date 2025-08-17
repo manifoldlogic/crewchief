@@ -31,19 +31,11 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm and Claude Code globally
-RUN npm install -g pnpm@latest @anthropic-ai/claude-code@latest
+# Install pnpm globally (Claude Code will be installed later if needed)
+RUN npm install -g pnpm@latest
 
-# Install Rust toolchain (will be overridden by devcontainer features, but good as backup)
-USER vscode
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-ENV PATH="/home/vscode/.cargo/bin:${PATH}"
-
-# Install useful Rust tools
-RUN cargo install cargo-watch cargo-edit cargo-expand cargo-nextest
-
-# Switch back to root for remaining setup
-USER root
+# Rust will be installed by devcontainer features
+# Skip manual Rust installation to speed up builds
 
 # Create workspace directory and set as default for shells
 RUN mkdir -p /workspace && chown -R vscode:vscode /workspace && \
@@ -58,7 +50,7 @@ RUN git clone https://github.com/tmux-plugins/tpm /home/vscode/.tmux/plugins/tpm
 COPY --chown=vscode:vscode tmux.conf /home/vscode/.tmux.conf
 
 # Set up pnpm and workspace defaults
-RUN pnpm setup && \
+RUN SHELL=/bin/bash pnpm setup && \
     echo 'export PNPM_HOME="/home/vscode/.local/share/pnpm"' >> /home/vscode/.bashrc && \
     echo 'export PATH="$PNPM_HOME:$PATH"' >> /home/vscode/.bashrc && \
     echo 'export WORKSPACE_DIR="/workspace"' >> /home/vscode/.bashrc && \

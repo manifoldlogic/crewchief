@@ -22,6 +22,16 @@ print_success() {
     echo -e "${GREEN}✓${NC} $1"
 }
 
+# Install Claude Code if not already installed
+print_step "Checking for Claude Code..."
+if ! command -v claude &> /dev/null; then
+    print_step "Installing Claude Code..."
+    npm install -g @anthropic-ai/claude-code@latest || print_error "Failed to install Claude Code"
+    print_success "Claude Code installed"
+else
+    print_success "Claude Code already installed"
+fi
+
 # Install pnpm dependencies
 print_step "Installing Node.js dependencies..."
 pnpm install
