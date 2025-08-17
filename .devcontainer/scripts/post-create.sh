@@ -84,10 +84,11 @@ print_step "Setting up shell aliases..."
 cat >> ~/.bashrc << 'EOF'
 
 # CrewChief aliases
-alias cc='node packages/cli/dist/cli/index.js'
-alias ccdev='tsx packages/cli/src/cli/index.ts'
-alias webui='cd packages/web-ui && pnpm dev'
+alias cc='node /workspace/packages/cli/dist/cli/index.js'
+alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
+alias webui='cd /workspace/packages/web-ui && pnpm dev'
 alias maproom='crewchief-maproom'
+alias claude='claude --dangerous-mode'
 alias ll='ls -la'
 alias gs='git status'
 alias gd='git diff'
@@ -109,6 +110,14 @@ alias tn='tmux new -s'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+
+# Ensure we start in workspace (for Cursor compatibility)
+if [ -z "$IN_WORKSPACE_CHECK" ]; then
+    export IN_WORKSPACE_CHECK=1
+    if [ "$(pwd)" != "/workspace" ] && [ -d "/workspace" ]; then
+        cd /workspace
+    fi
+fi
 
 EOF
 
@@ -117,10 +126,11 @@ if [ -f ~/.zshrc ]; then
     cat >> ~/.zshrc << 'EOF'
 
 # CrewChief aliases
-alias cc='node packages/cli/dist/cli/index.js'
-alias ccdev='tsx packages/cli/src/cli/index.ts'
-alias webui='cd packages/web-ui && pnpm dev'
+alias cc='node /workspace/packages/cli/dist/cli/index.js'
+alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
+alias webui='cd /workspace/packages/web-ui && pnpm dev'
 alias maproom='crewchief-maproom'
+alias claude='claude --dangerous-mode'
 alias ll='ls -la'
 alias gs='git status'
 alias gd='git diff'
@@ -142,6 +152,14 @@ alias tn='tmux new -s'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+
+# Ensure we start in workspace (for Cursor compatibility)
+if [ -z "$IN_WORKSPACE_CHECK" ]; then
+    export IN_WORKSPACE_CHECK=1
+    if [ "$(pwd)" != "/workspace" ] && [ -d "/workspace" ]; then
+        cd /workspace
+    fi
+fi
 
 EOF
 fi

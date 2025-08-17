@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+# Fix for Cursor IDE: Ensure we're in the workspace directory
+if [ "$TERM_PROGRAM" = "Cursor" ] || [ -n "$CURSOR_IDE" ] || [ "$REMOTE_CONTAINERS_IPC" = "cursor" ]; then
+    echo "🖱️ Detected Cursor IDE - ensuring workspace directory"
+    cd /workspace 2>/dev/null || true
+    export WORKSPACE_DIR=/workspace
+fi
+
+# Always ensure we start in workspace for consistency
+cd /workspace 2>/dev/null || true
+
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -12,6 +22,10 @@ clear
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║${NC}          ${GREEN}Welcome to CrewChief Development Container${NC}          ${BLUE}║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Show current working directory (helpful for debugging Cursor issues)
+echo -e "${YELLOW}Current Directory:${NC} $(pwd)"
 echo ""
 
 # Show service status
@@ -39,6 +53,7 @@ echo -e "${YELLOW}Quick Commands:${NC}"
 echo "  ${GREEN}webui${NC}      - Start Web UI development server"
 echo "  ${GREEN}ccdev${NC}      - Run CrewChief CLI in dev mode"
 echo "  ${GREEN}maproom${NC}    - Run Maproom commands"
+echo "  ${GREEN}claude${NC}     - Run Claude Code in dangerous mode"
 echo "  ${GREEN}pnpm test${NC}  - Run tests"
 echo ""
 
@@ -70,9 +85,26 @@ echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# If no tmux session exists, offer to create one
+# If no tmux session exists, offer to create one (with workspace dir)
 if ! tmux has-session -t crewchief 2>/dev/null; then
     echo -e "${YELLOW}Tip:${NC} Start a tmux session for better workflow:"
-    echo "  ${GREEN}tn crewchief${NC}"
+    echo "  ${GREEN}tmux new -s crewchief -c /workspace${NC}"
     echo ""
+fi
+
+# For Cursor: Ensure shell prompt starts in workspace
+if [ "$TERM_PROGRAM" = "Cursor" ] || [ -n "$CURSOR_IDE" ]; then
+    # Force the shell to use workspace as default directory
+    echo "cd /workspace" >> ~/.bashrc.tmp
+    echo "export WORKSPACE_DIR=/workspace" >> ~/.bashrc.tmp
+    cat ~/.bashrc >> ~/.bashrc.tmp 2>/dev/null || true
+    mv ~/.bashrc.tmp ~/.bashrc
+    
+    # Same for zsh if it exists
+    if [ -f ~/.zshrc ]; then
+        echo "cd /workspace" >> ~/.zshrc.tmp
+        echo "export WORKSPACE_DIR=/workspace" >> ~/.zshrc.tmp
+        cat ~/.zshrc >> ~/.zshrc.tmp 2>/dev/null || true
+        mv ~/.zshrc.tmp ~/.zshrc
+    fi
 fi

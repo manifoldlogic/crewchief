@@ -41,8 +41,10 @@ RUN cargo install cargo-watch cargo-edit cargo-expand cargo-nextest
 # Switch back to root for remaining setup
 USER root
 
-# Create workspace directory
-RUN mkdir -p /workspace && chown -R vscode:vscode /workspace
+# Create workspace directory and set as default for shells
+RUN mkdir -p /workspace && chown -R vscode:vscode /workspace && \
+    echo 'cd /workspace 2>/dev/null || true' >> /etc/bash.bashrc && \
+    echo 'cd /workspace 2>/dev/null || true' >> /etc/zsh/zshrc
 
 # Install tmux plugins (TPM)
 USER vscode
@@ -51,19 +53,23 @@ RUN git clone https://github.com/tmux-plugins/tpm /home/vscode/.tmux/plugins/tpm
 # Copy tmux configuration
 COPY --chown=vscode:vscode tmux.conf /home/vscode/.tmux.conf
 
-# Set up pnpm
+# Set up pnpm and workspace defaults
 RUN pnpm setup && \
     echo 'export PNPM_HOME="/home/vscode/.local/share/pnpm"' >> /home/vscode/.bashrc && \
     echo 'export PATH="$PNPM_HOME:$PATH"' >> /home/vscode/.bashrc && \
+    echo 'export WORKSPACE_DIR="/workspace"' >> /home/vscode/.bashrc && \
     echo 'export PNPM_HOME="/home/vscode/.local/share/pnpm"' >> /home/vscode/.zshrc && \
-    echo 'export PATH="$PNPM_HOME:$PATH"' >> /home/vscode/.zshrc
+    echo 'export PATH="$PNPM_HOME:$PATH"' >> /home/vscode/.zshrc && \
+    echo 'export WORKSPACE_DIR="/workspace"' >> /home/vscode/.zshrc
 
-# Pre-create directories for better caching
+# Pre-create directories for better caching (including Cursor support)
 RUN mkdir -p /home/vscode/.cargo \
     /home/vscode/.pnpm-store \
     /home/vscode/.cache \
     /home/vscode/.local/share \
-    /home/vscode/.claude
+    /home/vscode/.claude \
+    /home/vscode/.cursor-server \
+    /home/vscode/.vscode-server
 
 # Copy and set up firewall script for Claude Code dangerous mode
 COPY --chown=root:root scripts/init-claude-firewall.sh /usr/local/bin/

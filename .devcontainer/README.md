@@ -6,13 +6,22 @@ This folder contains the development container configuration for CrewChief, prov
 
 1. **Prerequisites**:
    - [Docker Desktop](https://www.docker.com/products/docker-desktop)
-   - [Visual Studio Code](https://code.visualstudio.com/)
-   - [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+   - [Visual Studio Code](https://code.visualstudio.com/) OR [Cursor](https://cursor.sh/)
+   - [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) (for VS Code)
+   - For Cursor: Remote development support is built-in
 
 2. **Open in DevContainer**:
+   
+   **VS Code:**
    - Open this repository in VS Code
    - Press `F1` and select "Dev Containers: Reopen in Container"
    - Or click the green button in the bottom-left corner and select "Reopen in Container"
+   
+   **Cursor:**
+   - Open this repository in Cursor
+   - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+   - Select "Remote-Containers: Reopen in Container"
+   - See [CURSOR_SETUP.md](./.devcontainer/CURSOR_SETUP.md) for Cursor-specific help
 
 3. **Wait for Setup**:
    - The container will build and run post-create scripts
@@ -106,11 +115,12 @@ tn         # tmux new session
 
 This devcontainer includes Claude Code with dangerous mode enabled, allowing it to execute commands and modify files directly. To ensure safety:
 
-### Network Restrictions
-The container uses iptables firewall rules to restrict network access:
-- ✅ **Allowed**: GitHub, npm registry, crates.io, Anthropic API
-- ❌ **Blocked**: General internet access
-- ✅ **Local**: Full access to container services (PostgreSQL, Redis)
+### Network Configuration
+The container uses iptables firewall rules for security:
+- ✅ **Internet Access**: Full internet access enabled
+- ❌ **Host Access**: Blocked for security (except DNS)
+- ✅ **Container Network**: Full access to services (PostgreSQL, Redis)
+- ✅ **Domain Approval**: Claude Code's built-in approval system handles domain access
 
 ### Usage
 1. **Set your API key** in host environment:

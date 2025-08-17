@@ -37,6 +37,7 @@
 
   // Tool-specific settings
   "customizations": {
+    // VS Code settings
     "vscode": {
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
@@ -88,6 +89,57 @@
         "gruntfuggly.todo-tree",
         "eamodio.gitlens",
         "mhutchie.git-graph"
+      ]
+    },
+    // Cursor IDE settings
+    "cursor": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.cwd": "/workspace",
+        "terminal.integrated.shell.linux": "/bin/zsh",
+        "terminal.integrated.env.linux": {
+          "WORKSPACE_FOLDER": "/workspace",
+          "IN_DEVCONTAINER": "true"
+        },
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": true
+        },
+        "typescript.updateImportsOnFileMove.enabled": "always",
+        "typescript.preferences.importModuleSpecifier": "relative",
+        "eslint.validate": [
+          "javascript",
+          "javascriptreact",
+          "typescript",
+          "typescriptreact"
+        ],
+        "tailwindCSS.includeLanguages": {
+          "typescript": "javascript",
+          "typescriptreact": "javascript"
+        },
+        "files.watcherExclude": {
+          "**/target/**": true,
+          "**/node_modules/**": true,
+          "**/dist/**": true,
+          "**/.crewchief/worktrees/**": true
+        },
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/dist": true,
+          "**/target": true,
+          "**/.crewchief/worktrees": true,
+          "pnpm-lock.yaml": true
+        }
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "usernamehw.errorlens",
+        "yzhang.markdown-all-in-one",
+        "gruntfuggly.todo-tree"
       ]
     }
   },
@@ -141,6 +193,9 @@
   "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
   "postStartCommand": "bash .devcontainer/scripts/post-start.sh",
   "postAttachCommand": "bash .devcontainer/scripts/post-attach.sh",
+  
+  // Cursor-specific: ensure terminal starts in workspace
+  "updateRemoteUserUID": true,
 
   // Container user
   "remoteUser": "vscode",
