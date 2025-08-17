@@ -195,3 +195,26 @@ When working with Rust components:
 - **Husky Pre-commit Hooks**: Ensures code quality before commits
 - **Comprehensive Build Script**: `./scripts/build-and-package.sh` builds all components for all platforms
 - **Local Development Guide**: See `crewchief_context/local-development.md` for running local versions
+
+- CRITICAL SAFETY RULE: File modifications must be strictly confined to the current git worktree or repository working directory.
+
+PROHIBITED: Never modify, create, or delete files in:
+- System directories (e.g., /usr/, /etc/, /System/)
+- User home directory files outside the current worktree (e.g., ~/.bashrc, ~/.zshrc, ~/.gitconfig)
+- Parent directories above the current worktree root
+- Other git repositories, projects, or other worktrees of the same repository
+- Package manager global directories (e.g., /usr/local/, node_modules outside the project)
+- The .git directory itself (whether in .git/ or in a separate worktree location)
+- Any absolute paths that lead outside the current worktree
+
+REQUIRED: Before ANY file operation:
+1. Verify the target path is within the current worktree using `git rev-parse --show-toplevel`
+   (This correctly returns the worktree root, whether in main repo or linked worktree)
+2. Use relative paths from the worktree root whenever possible
+3. If you believe there's a legitimate need to modify external files, STOP immediately and:
+   - Explain WHAT file you want to modify and its full path
+   - Explain WHY this seems necessary
+   - Suggest alternative approaches that stay within the current worktree
+   - Wait for explicit user approval before proceeding
+
+RATIONALE: Modifying files outside the worktree can damage system configurations, break other projects (including other worktrees of the same repo), create security vulnerabilities, or cause data loss. The worktree boundary is a critical safety barrier.
