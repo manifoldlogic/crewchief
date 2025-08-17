@@ -1,5 +1,9 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 
+# Install Node.js first (required for npm commands)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
 # Install system dependencies including network tools for Claude Code dangerous mode
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
