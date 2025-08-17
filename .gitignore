@@ -8,6 +8,9 @@ target/
 
 .obsidian/
 
+.pnpm-store/
+.last-package-json-hash
+
 node_modules
 .env
 .env.local
