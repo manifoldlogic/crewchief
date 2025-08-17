@@ -22,6 +22,7 @@ node_modules
 
 .crewchief/
 crewchief.config.local.js
+.crewchief-meta.json
 
 .cursorrules
 
