@@ -16,10 +16,10 @@ crewchief worktree merge <name> [options]
 ### Options
 - `--no-copy-ignored`: Skip copying ignored files back to source
 - `--dry-run`: Show what would be done without making changes
-- `--strategy <type>`: Merge strategy (default: 'squash')
-  - `squash`: Squash all commits into one (default)
+- `--strategy <type>`: Merge strategy (default: 'ff')
+  - `ff`: Fast-forward merge if possible (default) - preserves all commits
+  - `squash`: Squash all commits into one
   - `cherry-pick`: Cherry-pick individual commits
-  - `ff`: Fast-forward merge if possible
 - `--message <msg>`: Custom commit message (auto-generated if not provided)
 - `--no-delete`: Keep the worktree after merging (for inspection)
 
@@ -176,8 +176,11 @@ Store worktree metadata in `.crewchief/worktrees/<name>/.crewchief-meta.json`:
 ### 7. Usage Examples
 
 ```bash
-# Basic merge with squash (default)
+# Basic merge with fast-forward (default) - preserves all commits
 crewchief worktree merge feature-branch
+
+# Squash all commits into one
+crewchief worktree merge feature-branch --strategy squash
 
 # Merge without copying ignored files back
 crewchief worktree merge feature-branch --no-copy-ignored
@@ -228,7 +231,7 @@ crewchief worktree merge feature-branch --no-delete
 
 1. **Phase 1** (Core Functionality)
    - Basic merge command
-   - Squash strategy only
+   - Fast-forward strategy (default)
    - Manual ignored files copy
 
 2. **Phase 2** (Enhanced Features)

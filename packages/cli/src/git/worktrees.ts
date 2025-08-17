@@ -97,7 +97,14 @@ export class WorktreeService {
   async createWorktree(name: string, baseBranch: string, basePath: string, skipCopyIgnored?: boolean): Promise<string> {
     const wtPath = path.join(this.cwd, basePath, name)
     ensureDirSync(wtPath)
-    await this.git.fetch()
+    
+    // Try to fetch, but don't fail if we can't (e.g., in devcontainer without credentials)
+    try {
+      await this.git.fetch()
+    } catch (error) {
+      console.warn('⚠️  Could not fetch from remote (this is normal in devcontainers or offline mode)')
+    }
+    
     await this.git.raw(['worktree', 'add', '-B', name, wtPath, baseBranch])
 
     // Copy ignored files if configured and not skipped
