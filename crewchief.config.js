@@ -8,7 +8,7 @@
  * If both exist, the local version takes priority.
  */
 
-module.exports = {
+export default {
   repository: {
     mainBranch: 'main',
     worktreeBasePath: '.crewchief/worktrees',
@@ -54,6 +54,7 @@ module.exports = {
   worktree: {
     // Files to copy to new worktrees (useful for .env files, etc.)
     copyIgnoredFiles: [
+      '!**/.crewchief/worktrees/**/*',  // Exclude anything in worktrees
       '**/.claude/**/*',
       '**/.cursor/**/*',
       '**/.gemini/**/*',
