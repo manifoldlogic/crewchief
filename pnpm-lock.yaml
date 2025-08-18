@@ -150,9 +150,6 @@ importers:
       express-validator:
         specifier: ^7.2.1
         version: 7.2.1
-      graphql:
-        specifier: ^16.11.0
-        version: 16.11.0
       helmet:
         specifier: ^7.1.0
         version: 7.2.0
