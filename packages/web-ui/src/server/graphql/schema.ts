@@ -20,6 +20,9 @@ import { configurationResolvers } from './resolvers/configuration.js';
 import { eventResolvers } from './resolvers/event.js';
 import { agentMessageResolvers } from './resolvers/agent-message.js';
 
+// Import subscription resolvers
+import { subscriptionResolvers } from './subscriptions/resolvers.js';
+
 // Root type definitions (required for schema extension)
 const rootTypeDefs = `
   type Query {
@@ -89,6 +92,7 @@ export const resolvers = {
   
   Subscription: {
     _empty: () => null,
+    ...subscriptionResolvers,
     ...baseResolvers.Subscription,
     ...worktreeResolvers.Subscription,
     ...agentResolvers.Subscription,
