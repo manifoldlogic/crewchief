@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .connected { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .disconnected { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .messages { height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        button { margin: 5px; padding: 10px 15px; }
+        input[type="text"] { width: 300px; padding: 5px; margin: 5px; }
+        .controls { margin: 10px 0; }
+        .stats { background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Test Client</h1>
+        
+        <div id="status" class="status disconnected">
+            Status: Disconnected
+        </div>
+        
+        <div class="controls">
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+            <button onclick="sendPing()">Send Ping</button>
+            <button onclick="clearMessages()">Clear Messages</button>
+        </div>
+        
+        <div class="controls">
+            <h3>Room Management</h3>
+            <input type="text" id="roomName" placeholder="Enter room name" value="test-room">
+            <button onclick="joinRoom()">Join Room</button>
+            <button onclick="leaveRoom()">Leave Room</button>
+        </div>
+        
+        <div class="controls">
+            <h3>Send Messages</h3>
+            <input type="text" id="messageText" placeholder="Enter message" value="Hello from web client!">
+            <button onclick="sendEcho()">Send Echo</button>
+            <button onclick="sendRoomMessage()">Send Room Message</button>
+            <button onclick="sendBroadcast()">Send Broadcast</button>
+        </div>
+        
+        <div class="controls">
+            <h3>Subscriptions</h3>
+            <button onclick="subscribeToSystemUpdates()">Subscribe to System Updates</button>
+            <button onclick="subscribeToWorktreeUpdates()">Subscribe to Worktree Updates</button>
+            <button onclick="subscribeToAgentUpdates()">Subscribe to Agent Updates</button>
+        </div>
+        
+        <div class="stats" id="stats">
+            <strong>Stats:</strong> Not connected
+        </div>
+        
+        <div class="messages" id="messages">
+            <p><em>Messages will appear here...</em></p>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = null;
+        let stats = {
+            connected: false,
+            messagesReceived: 0,
+            messagesSent: 0,
+            errors: 0,
+            rooms: new Set(),
+            subscriptions: new Set()
+        };
+
+        function updateStatus(message, isConnected) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = `Status: ${message}`;
+            statusEl.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
+            stats.connected = isConnected;
+            updateStats();
+        }
+
+        function addMessage(message, type = 'info') {
+            const messagesEl = document.getElementById('messages');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            div.style.padding = '5px';
+            div.style.borderLeft = `3px solid ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#007bff'}`;
+            div.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function updateStats() {
+            const statsEl = document.getElementById('stats');
+            statsEl.innerHTML = `
+                <strong>Stats:</strong>
+                Connected: ${stats.connected} |
+                Messages Sent: ${stats.messagesSent} |
+                Messages Received: ${stats.messagesReceived} |
+                Errors: ${stats.errors} |
+                Rooms: ${Array.from(stats.rooms).join(', ') || 'None'} |
+                Subscriptions: ${Array.from(stats.subscriptions).join(', ') || 'None'}
+            `;
+        }
+
+        function connect() {
+            if (socket && socket.connected) {
+                addMessage('Already connected', 'info');
+                return;
+            }
+
+            addMessage('Connecting to WebSocket server...', 'info');
+            
+            socket = io('http://localhost:3456', {
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                updateStatus('Connected', true);
+                addMessage('✅ Connected to WebSocket server', 'success');
+            });
+
+            socket.on('disconnect', (reason) => {
+                updateStatus(`Disconnected (${reason})`, false);
+                addMessage(`🔌 Disconnected: ${reason}`, 'error');
+                stats.rooms.clear();
+                stats.subscriptions.clear();
+                updateStats();
+            });
+
+            socket.on('connect_error', (error) => {
+                updateStatus(`Connection Error: ${error.message}`, false);
+                addMessage(`❌ Connection error: ${error.message}`, 'error');
+                stats.errors++;
+                updateStats();
+            });
+
+            // Server event handlers
+            socket.on('connected', (data) => {
+                addMessage(`🎉 Connection acknowledged: ${JSON.stringify(data)}`, 'success');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('heartbeat', (data) => {
+                addMessage('💗 Heartbeat received', 'info');
+            });
+
+            socket.on('pong', (data) => {
+                addMessage(`🏓 Pong received: ${data.timestamp}`, 'success');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('room-joined', (data) => {
+                addMessage(`📺 Joined room: ${data.room} (${data.memberCount} members)`, 'success');
+                stats.rooms.add(data.room);
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('room-left', (data) => {
+                addMessage(`📺 Left room: ${data.room} (${data.memberCount} members)`, 'info');
+                stats.rooms.delete(data.room);
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('subscription-confirmed', (data) => {
+                addMessage(`📡 Subscribed to: ${data.type}`, 'success');
+                stats.subscriptions.add(data.type);
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('echo-response', (data) => {
+                addMessage(`🔄 Echo response: ${JSON.stringify(data)}`, 'success');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('broadcast-message', (data) => {
+                addMessage(`📢 Broadcast: ${JSON.stringify(data)}`, 'info');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('room-message', (data) => {
+                addMessage(`📺 Room message in ${data.room}: ${data.message}`, 'info');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('message-sent', (data) => {
+                addMessage(`✅ Message sent confirmation: ${data.type}`, 'success');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            // Real-time update events
+            socket.on('worktree-update', (data) => {
+                addMessage(`🌳 Worktree update: ${JSON.stringify(data)}`, 'info');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('agent-status-change', (data) => {
+                addMessage(`🤖 Agent status change: ${JSON.stringify(data)}`, 'info');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('global-update', (data) => {
+                addMessage(`🌐 Global update: ${data.type}`, 'info');
+                stats.messagesReceived++;
+                updateStats();
+            });
+
+            socket.on('error', (error) => {
+                addMessage(`❌ Socket error: ${JSON.stringify(error)}`, 'error');
+                stats.errors++;
+                updateStats();
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                updateStatus('Disconnected', false);
+                addMessage('Disconnected from server', 'info');
+                stats.rooms.clear();
+                stats.subscriptions.clear();
+                updateStats();
+            }
+        }
+
+        function sendPing() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            socket.emit('ping');
+            addMessage('🏓 Ping sent', 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function joinRoom() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            const roomName = document.getElementById('roomName').value;
+            if (!roomName) {
+                addMessage('Please enter a room name', 'error');
+                return;
+            }
+            socket.emit('join-room', { room: roomName, type: 'test' });
+            addMessage(`Attempting to join room: ${roomName}`, 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function leaveRoom() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            const roomName = document.getElementById('roomName').value;
+            if (!roomName) {
+                addMessage('Please enter a room name', 'error');
+                return;
+            }
+            socket.emit('leave-room', { room: roomName });
+            addMessage(`Attempting to leave room: ${roomName}`, 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function sendEcho() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            const message = document.getElementById('messageText').value;
+            socket.emit('message', {
+                type: 'echo',
+                message: message,
+                timestamp: new Date().toISOString()
+            });
+            addMessage(`Echo message sent: ${message}`, 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function sendRoomMessage() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            const roomName = document.getElementById('roomName').value;
+            const message = document.getElementById('messageText').value;
+            if (!roomName) {
+                addMessage('Please enter a room name', 'error');
+                return;
+            }
+            socket.emit('message', {
+                type: 'room-message',
+                room: roomName,
+                message: message
+            });
+            addMessage(`Room message sent to ${roomName}: ${message}`, 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function sendBroadcast() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            const message = document.getElementById('messageText').value;
+            socket.emit('message', {
+                type: 'broadcast',
+                payload: {
+                    message: message
+                }
+            });
+            addMessage(`Broadcast sent: ${message}`, 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function subscribeToSystemUpdates() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            socket.emit('subscribe', { type: 'system-updates' });
+            addMessage('Subscribing to system updates...', 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function subscribeToWorktreeUpdates() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            socket.emit('subscribe', { type: 'worktree-updates', filters: { worktreeId: 'test-worktree' } });
+            addMessage('Subscribing to worktree updates...', 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function subscribeToAgentUpdates() {
+            if (!socket || !socket.connected) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+            socket.emit('subscribe', { type: 'agent-updates', filters: { agentId: 'test-agent' } });
+            addMessage('Subscribing to agent updates...', 'info');
+            stats.messagesSent++;
+            updateStats();
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '<p><em>Messages cleared...</em></p>';
+        }
+
+        // Initialize stats display
+        updateStats();
+    </script>
+</body>
+</html>
