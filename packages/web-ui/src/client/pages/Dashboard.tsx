@@ -3,6 +3,8 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useToast } from '../components/ui/use-toast';
 import { usePerformanceMonitoring, measureDashboardLoad } from '../utils/performanceMonitor';
+import { useDashboardSubscriptions } from '../hooks/useSubscriptions';
+import { handleSubscriptionError } from '../contexts/apollo/provider';
 import {
   StatsGrid,
   ActivityFeed,
@@ -60,6 +62,25 @@ const Dashboard: React.FC = () => {
 
   const { toast } = useToast();
   const { measureQuickAction, getReport } = usePerformanceMonitoring();
+
+  // GraphQL subscriptions for real-time updates
+  const {
+    worktreeSubscription,
+    agentSubscription,
+    runSubscription,
+    systemSubscription,
+    allData: subscriptionData,
+  } = useDashboardSubscriptions({
+    onSubscriptionData: (data) => {
+      console.log('📡 Dashboard subscription data received:', data);
+      
+      // Refresh dashboard data when updates arrive
+      if (data.worktrees || data.agents || data.runs) {
+        refreshData();
+      }
+    },
+    onError: handleSubscriptionError,
+  });
 
   // Initial data fetch with performance monitoring
   useEffect(() => {

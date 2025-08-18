@@ -8,6 +8,7 @@ import Worktrees from './pages/Worktrees';
 import Agents from './pages/Agents';
 import Settings from './pages/Settings';
 import LayoutDemo from './pages/LayoutDemo';
+import ProgressDemo from './pages/ProgressDemo';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
             <Route path="/agents/performance" element={<Agents />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/layout-demo" element={<LayoutDemo />} />
+            <Route path="/progress-demo" element={<ProgressDemo />} />
             {/* Catch-all route for 404 errors */}
             <Route path="*" element={<NotFound />} />
           </Routes>

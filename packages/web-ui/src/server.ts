@@ -9,7 +9,7 @@ import { dirname, join } from 'path';
 import { createServer } from 'http';
 import maproomRoutes from './routes/maproom.js';
 import { initializeDatabase } from './db/connection.js';
-// import { setupGraphQLEndpoint } from './server/graphql/apollo.js';
+import { setupGraphQLEndpoint } from './server/graphql/apollo.js';
 import { createSimpleApiRouter } from './server/api/simple-index.js';
 import { createAuthRouter } from './server/auth/routes/auth.js';
 import { secureHeaders, secureCookies } from './server/auth/middleware/csrf.js';
@@ -216,16 +216,22 @@ export async function startServer() {
     }
   }
 
-  // Temporarily disabled GraphQL to focus on REST API
-  // if (db) {
-  //   try {
-  //     await setupGraphQLEndpoint(app, httpServer, db, '/graphql');
-  //     console.log('✅ GraphQL endpoint initialized successfully');
-  //   } catch (error) {
-  //     console.error('❌ Failed to initialize GraphQL endpoint:', error);
-  //     console.warn('⚠️  Server will start without GraphQL endpoint');
-  //   }
-  // }
+  // Setup GraphQL endpoint with subscriptions
+  let graphqlCleanup: (() => Promise<void>) | undefined;
+  if (db) {
+    try {
+      const graphqlResult = await setupGraphQLEndpoint(app, httpServer, db, '/graphql', true);
+      graphqlCleanup = graphqlResult.wsCleanup;
+      
+      // Store GraphQL cleanup in app locals for shutdown
+      app.locals.graphqlCleanup = graphqlCleanup;
+      
+      console.log('✅ GraphQL endpoint with subscriptions initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize GraphQL endpoint:', error);
+      console.warn('⚠️  Server will start without GraphQL endpoint');
+    }
+  }
 
   const server = httpServer.listen(PORT, () => {
     console.log(`🚀 CrewChief Web UI server running on port ${PORT}`);
@@ -236,7 +242,11 @@ export async function startServer() {
       console.log(`🔐 Authentication: http://localhost:${PORT}/auth`);
       console.log(`🛠️  REST API: http://localhost:${PORT}/api`);
       console.log(`📖 API Docs: http://localhost:${PORT}/api/docs`);
-      // console.log(`📈 GraphQL API: http://localhost:${PORT}/graphql`);
+      
+      if (graphqlCleanup) {
+        console.log(`📈 GraphQL API: http://localhost:${PORT}/graphql`);
+        console.log(`🔌 GraphQL Subscriptions: ws://localhost:${PORT}/graphql`);
+      }
     }
     
     if (wsServer) {
@@ -272,7 +282,17 @@ export async function startServer() {
   const shutdown = async () => {
     console.log('Shutting down gracefully...');
     
-    // Close WebSocket server first
+    // Close GraphQL WebSocket server first
+    if (graphqlCleanup) {
+      try {
+        await graphqlCleanup();
+        console.log('✅ GraphQL WebSocket server closed');
+      } catch (error) {
+        console.error('❌ Error closing GraphQL WebSocket server:', error);
+      }
+    }
+    
+    // Close WebSocket server
     if (wsServer) {
       try {
         await wsServer.shutdown();

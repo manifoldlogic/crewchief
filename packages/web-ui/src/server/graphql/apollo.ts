@@ -3,6 +3,9 @@ import { expressMiddleware } from '@apollo/server/express4';
 import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { makeExecutableSchema } from '@graphql-tools/schema';
+import { useServer } from 'graphql-ws/lib/use/ws';
+import { WebSocketServer } from 'ws';
+import jwt from 'jsonwebtoken';
 import type { Express } from 'express';
 import type { Server } from 'http';
 import cors from 'cors';
@@ -12,13 +15,14 @@ import type { DatabaseConnection } from '../../db/connection.js';
 // Import schema and resolvers
 import { typeDefs, resolvers } from './schema.js';
 import { initializeDatabaseService } from './services/database.js';
+import { createPubSub } from './subscriptions/pubsub.js';
 
 // Security plugins
 import { createDepthLimitPlugin } from './middleware/depth-limit.js';
 import { createRateLimitPlugin } from './middleware/rate-limit.js';
 import { createAuthPlugin } from './middleware/auth.js';
 
-// Context type
+// Context type for HTTP requests
 export interface GraphQLContext {
   req: any;
   res: any;
@@ -32,19 +36,117 @@ export interface GraphQLContext {
   };
 }
 
+// Context type for WebSocket connections
+export interface WebSocketContext {
+  connectionParams: any;
+  user?: {
+    id: string;
+    sessionId: string;
+    permissions: string[];
+  };
+  dataSources: {
+    db: DatabaseConnection;
+  };
+}
+
+// WebSocket authentication helper
+async function authenticateWebSocket(connectionParams: any): Promise<any> {
+  try {
+    const token = connectionParams.authorization?.replace('Bearer ', '') || connectionParams.token;
+    
+    if (!token) {
+      return { user: null };
+    }
+
+    const jwtSecret = process.env.JWT_SECRET || 'development-secret-key';
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    
+    return {
+      user: {
+        id: decoded.userId || decoded.id,
+        sessionId: decoded.sessionId,
+        permissions: decoded.permissions || ['read:basic'],
+      },
+    };
+  } catch (error) {
+    console.error('WebSocket authentication failed:', error);
+    return { user: null };
+  }
+}
+
+// Create WebSocket server for GraphQL subscriptions
+export function createWebSocketServer(
+  httpServer: Server,
+  schema: any,
+  db: DatabaseConnection
+) {
+  const wsServer = new WebSocketServer({
+    server: httpServer,
+    path: '/graphql',
+  });
+
+  const serverCleanup = useServer(
+    {
+      schema,
+      context: async (ctx, msg, args) => {
+        // Authenticate connection
+        const auth = await authenticateWebSocket(ctx.connectionParams);
+        
+        return {
+          ...auth,
+          connectionParams: ctx.connectionParams,
+          dataSources: {
+            db,
+          },
+        } as WebSocketContext;
+      },
+      onConnect: async (ctx) => {
+        console.log('🔌 WebSocket client connected for GraphQL subscriptions');
+        return true;
+      },
+      onDisconnect(ctx) {
+        console.log('🔌 WebSocket client disconnected from GraphQL subscriptions');
+      },
+      onError(ctx, msg, errors) {
+        console.error('WebSocket GraphQL error:', errors);
+      },
+    },
+    wsServer
+  );
+
+  return {
+    wsServer,
+    serverCleanup,
+  };
+}
+
 // Create and configure Apollo Server
 export async function createApolloServer(
   httpServer: Server,
-  db: DatabaseConnection
-): Promise<ApolloServer<GraphQLContext>> {
+  db: DatabaseConnection,
+  enableSubscriptions: boolean = true
+): Promise<{
+  server: ApolloServer<GraphQLContext>;
+  wsCleanup?: () => Promise<void>;
+}> {
   // Initialize database service
   initializeDatabaseService(db);
+
+  // Initialize PubSub system
+  createPubSub();
 
   // Create executable schema
   const schema = makeExecutableSchema({
     typeDefs,
     resolvers,
   });
+
+  // Setup WebSocket server for subscriptions if enabled
+  let wsCleanup: (() => Promise<void>) | undefined;
+  if (enableSubscriptions) {
+    const { serverCleanup } = createWebSocketServer(httpServer, schema, db);
+    wsCleanup = serverCleanup;
+  }
 
   // Create Apollo Server
   const server = new ApolloServer<GraphQLContext>({
@@ -88,7 +190,10 @@ export async function createApolloServer(
     introspection: process.env.NODE_ENV === 'development',
   });
 
-  return server;
+  return {
+    server,
+    wsCleanup,
+  };
 }
 
 // Context function for Apollo Server middleware
@@ -113,11 +218,12 @@ export async function setupGraphQLEndpoint(
   app: Express,
   httpServer: Server,
   db: DatabaseConnection,
-  path = '/graphql'
+  path = '/graphql',
+  enableSubscriptions = true
 ) {
   try {
     // Create Apollo Server
-    const server = await createApolloServer(httpServer, db);
+    const { server, wsCleanup } = await createApolloServer(httpServer, db, enableSubscriptions);
     
     // Start the server
     await server.start();
@@ -135,7 +241,14 @@ export async function setupGraphQLEndpoint(
     console.log(`🚀 GraphQL server ready at http://localhost:${process.env.PORT || 3456}${path}`);
     console.log(`📊 GraphQL Playground available in development mode`);
     
-    return server;
+    if (enableSubscriptions) {
+      console.log(`🔌 GraphQL subscriptions ready via WebSocket`);
+    }
+    
+    return {
+      server,
+      wsCleanup,
+    };
   } catch (error) {
     console.error('Failed to setup GraphQL endpoint:', error);
     throw error;
