@@ -6,7 +6,7 @@ INSERT INTO web_sessions (session_id, user_id, auth_token, expires_at, last_acce
   (
     '550e8400-e29b-41d4-a716-446655440001',
     'dev_user_1',
-    'dev_token_1_' || encode(gen_random_bytes(16), 'hex'),
+    'dev_token_1_a1b2c3d4e5f6789012345678',
     NOW() + INTERVAL '24 hours',
     NOW() - INTERVAL '5 minutes',
     '127.0.0.1',
@@ -16,7 +16,7 @@ INSERT INTO web_sessions (session_id, user_id, auth_token, expires_at, last_acce
   (
     '550e8400-e29b-41d4-a716-446655440002',
     'dev_user_2',
-    'dev_token_2_' || encode(gen_random_bytes(16), 'hex'),
+    'dev_token_2_b2c3d4e5f6789012345678a1',
     NOW() + INTERVAL '12 hours',
     NOW() - INTERVAL '30 minutes',
     '127.0.0.1',
@@ -26,7 +26,7 @@ INSERT INTO web_sessions (session_id, user_id, auth_token, expires_at, last_acce
   (
     '550e8400-e29b-41d4-a716-446655440003',
     NULL, -- Anonymous session
-    'dev_token_anon_' || encode(gen_random_bytes(16), 'hex'),
+    'dev_token_anon_c3d4e5f6789012345678a1b2',
     NOW() + INTERVAL '8 hours',
     NOW() - INTERVAL '2 hours',
     '127.0.0.1',
@@ -39,7 +39,7 @@ INSERT INTO web_sessions (session_id, user_id, auth_token, expires_at, last_acce
   (
     '550e8400-e29b-41d4-a716-446655440004',
     'dev_user_1',
-    'expired_token_' || encode(gen_random_bytes(16), 'hex'),
+    'expired_token_d4e5f6789012345678a1b2c3',
     NOW() - INTERVAL '1 hour',
     NOW() - INTERVAL '2 hours',
     '127.0.0.1',

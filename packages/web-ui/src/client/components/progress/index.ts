@@ -65,7 +65,7 @@ export {
   type ProgressItem,
   type PerformanceMetrics,
   type OperationHistoryItem,
-} from '../hooks/useProgress';
+} from '../../hooks/useProgress';
 
 // Demo and Test Components
 export { ProgressDemo } from './ProgressDemo';

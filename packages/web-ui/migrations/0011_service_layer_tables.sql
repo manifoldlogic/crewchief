@@ -144,9 +144,8 @@ SELECT
     service,
     operation,
     COUNT(*) as total_operations,
-    AVG(EXTRACT(EPOCH FROM (timestamp - LAG(timestamp) OVER (PARTITION BY service, operation ORDER BY timestamp)))) as avg_response_time,
     COUNT(*) FILTER (WHERE success = false) as error_count,
-    ROUND((COUNT(*) FILTER (WHERE success = false)::decimal / COUNT(*)) * 100, 2) as error_rate,
+    ROUND((COUNT(*) FILTER (WHERE success = false)::decimal / NULLIF(COUNT(*), 0)) * 100, 2) as error_rate,
     DATE_TRUNC('hour', timestamp) as time_bucket
 FROM audit_log
 WHERE timestamp > NOW() - INTERVAL '24 hours'
