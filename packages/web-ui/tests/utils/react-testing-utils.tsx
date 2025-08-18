@@ -46,12 +46,15 @@ export function customRender(
  * Mock fetch with common response patterns
  */
 export const mockFetch = {
-  success: (data: any, status = 200) => {
+  success: (data: any, status = 200, contentType = 'application/json') => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': contentType }),
       json: async () => data,
-      text: async () => JSON.stringify(data),
+      text: async () => typeof data === 'string' ? data : JSON.stringify(data),
+      blob: async () => new Blob([typeof data === 'string' ? data : JSON.stringify(data)]),
     });
   },
   
@@ -59,8 +62,11 @@ export const mockFetch = {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status,
+      statusText: status === 404 ? 'Not Found' : 'Internal Server Error',
+      headers: new Headers({ 'content-type': 'application/json' }),
       json: async () => ({ error: message }),
       text: async () => JSON.stringify({ error: message }),
+      blob: async () => new Blob([JSON.stringify({ error: message })]),
     });
   },
   

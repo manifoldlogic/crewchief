@@ -204,6 +204,13 @@ export class DatabaseConnection {
   get connected(): boolean {
     return this.isConnected;
   }
+
+  /**
+   * Get the underlying connection pool
+   */
+  getPool(): Pool {
+    return this.pool;
+  }
 }
 
 /**

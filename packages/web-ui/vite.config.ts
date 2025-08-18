@@ -13,17 +13,31 @@ export default defineConfig({
   build: {
     outDir: 'dist/client',
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: process.env.NODE_ENV !== 'production',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
       },
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+        },
+      },
     },
+    chunkSizeWarningLimit: 600,
   },
   
   // Development server configuration
   server: {
-    port: 3000,
+    port: 5173,
     proxy: {
       // Proxy API requests to the backend server
       '/api': {

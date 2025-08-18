@@ -49,7 +49,7 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
-// Mock fetch
+// Mock fetch with proper Response interface
 global.fetch = vi.fn();
 
 // Mock window.matchMedia

@@ -126,7 +126,7 @@ function validateIndexRequest(req: Request, res: Response, next: NextFunction): 
   next();
 }
 
-const router = Router();
+const router: Router = Router();
 
 // Apply session middleware to all routes
 router.use(extractSession);
