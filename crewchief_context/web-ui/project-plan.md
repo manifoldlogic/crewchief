@@ -8,7 +8,8 @@
 **Phase 3 Advanced Features**: Not Started
 **Phase 4 Polish & Launch**: Not Started
 
-**Recent Achievements**: 
+**Recent Achievements**:
+
 - ✅ WEB-003 (GraphQL Schema) - Complete with Apollo Server
 - ✅ WEB-004 (Error Handling) - Complete with comprehensive error system
 - ✅ WEB-006 (Component Library) - Complete with Shadcn/ui
@@ -21,6 +22,7 @@
 ## Verification Process
 
 The **Verifier** agent reviews all completed work to ensure:
+
 1. All deliverables are present and functional
 2. Code meets quality standards
 3. Tests pass and have adequate coverage
@@ -28,6 +30,7 @@ The **Verifier** agent reviews all completed work to ensure:
 5. Integration points work correctly
 
 ### Verification Workflow
+
 1. Agent marks ticket as "Done" and "Quality Checked"
 2. Verifier reviews the work against specifications
 3. Verifier runs automated QA tools and tests
@@ -37,11 +40,13 @@ The **Verifier** agent reviews all completed work to ensure:
 ---
 
 ## Project Overview
+
 Build a comprehensive web UI for CrewChief accessible via `crewchief web` command, providing visual management for worktrees, Maproom indexing, agent orchestration, and development workflows.
 
 ## Agent Roles
 
 ### 1. **Backend Engineer (BE)**
+
 - Node.js/Express server setup
 - API development (REST, GraphQL, WebSocket)
 - Database integration
@@ -49,6 +54,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Authentication & security
 
 ### 2. **Frontend Engineer (FE)**
+
 - React/TypeScript application
 - UI component development
 - State management
@@ -56,6 +62,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Responsive design
 
 ### 3. **Database Engineer (DB)**
+
 - PostgreSQL schema design
 - Query optimization
 - Migration scripts
@@ -63,6 +70,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Caching strategy
 
 ### 4. **DevOps Engineer (DO)**
+
 - Docker configuration
 - CI/CD pipeline
 - Build tooling
@@ -70,6 +78,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Monitoring setup
 
 ### 5. **Integration Engineer (IE)**
+
 - Maproom binary integration
 - Git operations
 - Tmux integration
@@ -77,6 +86,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Process management
 
 ### 6. **Quality Engineer (QE)**
+
 - Testing framework setup
 - Unit/integration tests
 - E2E test scenarios
@@ -84,6 +94,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Security testing
 
 ### 7. **Verifier (VER)**
+
 - Verify completed work against specifications
 - Run QA tools to validate implementations
 - Mark tickets as verified after thorough testing
@@ -94,21 +105,25 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 ## Implementation Phases
 
 ### Phase 1: Foundation (Week 1-2)
+
 **Parallel Track A: Backend Infrastructure**
 **Parallel Track B: Frontend Setup**
 **Parallel Track C: DevOps & Testing**
 
 ### Phase 2: Core Features (Week 3-4)
+
 **Parallel Track A: API Development**
 **Parallel Track B: UI Components**
 **Parallel Track C: Integration Layer**
 
 ### Phase 3: Advanced Features (Week 5-6)
+
 **Parallel Track A: Real-time Features**
 **Parallel Track B: Complex UI**
 **Parallel Track C: Agent Management**
 
 ### Phase 4: Polish & Launch (Week 7-8)
+
 **All tracks converge for integration, testing, and deployment**
 
 ---
@@ -120,6 +135,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track A: Backend Infrastructure
 
 **TICKET-001: Initialize Node.js Project Structure**
+
 - Agent: **Backend Engineer**
 - Description: Set up Node.js project with TypeScript, Express server, and basic middleware
 - Dependencies: None
@@ -133,6 +149,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-002: Database Schema Design**
+
 - Agent: **Database Engineer**
 - Description: Design and implement PostgreSQL schema for web UI entities
 - Dependencies: None
@@ -146,6 +163,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-003: GraphQL Schema Definition**
+
 - Agent: **Backend Engineer**
 - Description: Define GraphQL schema for all entities and operations
 - Dependencies: TICKET-001, TICKET-004 (Error handling patterns)
@@ -173,6 +191,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track B: Frontend Setup
 
 **TICKET-004: Error Handling & React Application Bootstrap**
+
 - Agent: **Frontend Engineer**
 - Description: Initialize React application with comprehensive error handling patterns
 - Dependencies: None
@@ -198,6 +217,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-005: Design System Implementation**
+
 - Agent: **Frontend Engineer**
 - Description: Implement design system with colors, typography, and base components
 - Dependencies: TICKET-004
@@ -212,6 +232,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-006: Component Library Setup**
+
 - Agent: **Frontend Engineer**
 - Description: Set up Shadcn/ui and create base component library
 - Dependencies: TICKET-004, TICKET-005, TICKET-008 (Build system)
@@ -238,6 +259,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track C: DevOps & Testing
 
 **TICKET-007: Docker Environment Setup**
+
 - Agent: **DevOps Engineer**
 - Description: Create Docker configuration for development and production
 - Dependencies: None
@@ -251,6 +273,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-008: Build Integration & Testing Framework**
+
 - Agent: **Quality Engineer**
 - Description: Set up build system and testing frameworks
 - Dependencies: TICKET-001, TICKET-004
@@ -279,6 +302,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-009: CI/CD Pipeline Foundation**
+
 - Agent: **DevOps Engineer**
 - Description: Create GitHub Actions workflow for CI/CD
 - Dependencies: TICKET-007, TICKET-008
@@ -298,6 +322,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Verification Tickets (Created by Verifier)
 
 **TICKET-V001: Verify Node.js Project Structure**
+
 - Agent: **Verifier**
 - Description: Verify TICKET-001 implementation meets all requirements
 - Dependencies: TICKET-001
@@ -311,6 +336,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-V002: Verify Database Schema**
+
 - Agent: **Verifier**
 - Description: Verify TICKET-002 database implementation
 - Dependencies: TICKET-002
@@ -324,6 +350,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-V003: Verify React Application**
+
 - Agent: **Verifier**
 - Description: Verify TICKET-004 React setup
 - Dependencies: TICKET-004, TICKET-005
@@ -337,6 +364,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-V004: Verify Docker Setup**
+
 - Agent: **Verifier**
 - Description: Verify TICKET-007 Docker configuration
 - Dependencies: TICKET-007
@@ -350,6 +378,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-V005: Verify Testing Framework**
+
 - Agent: **Verifier**
 - Description: Verify TICKET-008 testing setup
 - Dependencies: TICKET-008
@@ -363,6 +392,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-V006: Verify Maproom Integration**
+
 - Agent: **Verifier**
 - Description: Verify TICKET-016 Maproom integration
 - Dependencies: TICKET-016
@@ -378,6 +408,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Follow-up Tickets (If Issues Found)
 
 **TICKET-FU001: [Placeholder for Issues Found]**
+
 - Agent: **TBD based on issue type**
 - Description: Address issues found during verification
 - Dependencies: Related verification ticket
@@ -396,6 +427,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track A: API Development
 
 **TICKET-010: REST API Implementation**
+
 - Agent: **Backend Engineer**
 - Description: Implement all REST endpoints for CRUD operations
 - Dependencies: TICKET-001, TICKET-002, TICKET-003
@@ -429,6 +461,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-011: WebSocket Server Implementation**
+
 - Agent: **Backend Engineer**
 - Description: Implement WebSocket server for real-time updates
 - Dependencies: TICKET-001, TICKET-010
@@ -457,9 +490,10 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
   - [x] Reconnection tested
 - [x] Done
 - [x] Quality Checked
-- [ ] Verified
+- [x] Verified
 
 **TICKET-012: Service Layer Development**
+
 - Agent: **Backend Engineer**
 - Description: Implement service layer for business logic
 - Dependencies: TICKET-010, TICKET-002
@@ -487,11 +521,12 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
   - [x] No memory leaks detected
 - [x] Done
 - [x] Quality Checked
-- [ ] Verified
+- [x] Verified
 
 #### Track B: UI Components
 
 **TICKET-013: Layout Components**
+
 - Agent: **Frontend Engineer**
 - Description: Build main layout components
 - Dependencies: TICKET-006
@@ -521,6 +556,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-014: Dashboard Implementation**
+
 - Agent: **Frontend Engineer**
 - Description: Build dashboard with stats and quick actions
 - Dependencies: TICKET-013, TICKET-010
@@ -550,6 +586,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-015: Search Interface**
+
 - Agent: **Frontend Engineer**
 - Description: Implement Maproom search UI
 - Dependencies: TICKET-013, TICKET-016
@@ -582,6 +619,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track C: Integration Layer
 
 **TICKET-016: Maproom Binary Integration**
+
 - Agent: **Integration Engineer**
 - Description: Integrate Maproom binary for indexing and search
 - Dependencies: TICKET-012
@@ -595,6 +633,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-017: Git Operations Integration**
+
 - Agent: **Integration Engineer**
 - Description: Implement git operations using simple-git
 - Dependencies: TICKET-012
@@ -625,6 +664,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-018: File System Operations**
+
 - Agent: **Integration Engineer**
 - Description: Implement secure file system operations
 - Dependencies: TICKET-012
@@ -662,6 +702,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track A: Real-time Features
 
 **TICKET-019: WebSocket Client Integration**
+
 - Agent: **Frontend Engineer**
 - Description: Implement WebSocket client for real-time updates
 - Dependencies: TICKET-011, TICKET-014
@@ -691,6 +732,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-020: Live Progress Indicators**
+
 - Agent: **Frontend Engineer**
 - Description: Build real-time progress components
 - Dependencies: TICKET-019
@@ -716,6 +758,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-021: GraphQL Subscriptions**
+
 - Agent: **Backend Engineer**
 - Description: Implement GraphQL subscriptions for real-time data
 - Dependencies: TICKET-003, TICKET-011
@@ -731,6 +774,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track B: Complex UI
 
 **TICKET-022: Worktree Management UI**
+
 - Agent: **Frontend Engineer**
 - Description: Build complete worktree management interface
 - Dependencies: TICKET-017, TICKET-015
@@ -760,6 +804,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-023: Branch Visualizer**
+
 - Agent: **Frontend Engineer**
 - Description: Implement interactive branch graph visualization
 - Dependencies: TICKET-017
@@ -773,6 +818,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-024: Monaco Editor Integration**
+
 - Agent: **Frontend Engineer**
 - Description: Integrate Monaco editor for code editing
 - Dependencies: TICKET-018
@@ -788,6 +834,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### Track C: Agent Management
 
 **TICKET-025: Tmux Integration**
+
 - Agent: **Integration Engineer**
 - Description: Implement tmux session management
 - Dependencies: TICKET-012
@@ -817,6 +864,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-026: Agent Orchestration UI**
+
 - Agent: **Frontend Engineer**
 - Description: Build agent management interface
 - Dependencies: TICKET-025, TICKET-020
@@ -830,6 +878,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-027: Run History Browser**
+
 - Agent: **Frontend Engineer**
 - Description: Implement run history and log viewing
 - Dependencies: TICKET-010, TICKET-020
@@ -849,6 +898,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 #### All Tracks Converge
 
 **TICKET-028: Authentication System**
+
 - Agent: **Backend Engineer**
 - Description: Implement authentication and authorization
 - Dependencies: TICKET-010
@@ -882,6 +932,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-029: Settings Management UI**
+
 - Agent: **Frontend Engineer**
 - Description: Build configuration editor interface
 - Dependencies: TICKET-024
@@ -895,6 +946,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-030: Command Palette**
+
 - Agent: **Frontend Engineer**
 - Description: Implement command palette for quick actions
 - Dependencies: TICKET-013
@@ -908,6 +960,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-031: Performance Optimization**
+
 - Agent: **Frontend Engineer**
 - Description: Optimize frontend performance
 - Dependencies: All UI tickets
@@ -921,6 +974,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-032: API Testing Suite**
+
 - Agent: **Quality Engineer**
 - Description: Complete API test coverage
 - Dependencies: TICKET-010, TICKET-021
@@ -934,6 +988,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-033: E2E Test Scenarios**
+
 - Agent: **Quality Engineer**
 - Description: Implement E2E tests for critical user flows
 - Dependencies: All UI tickets
@@ -947,6 +1002,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-034: Security Hardening**
+
 - Agent: **Backend Engineer**
 - Description: Implement security best practices
 - Dependencies: TICKET-028
@@ -981,6 +1037,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-035: CLI Integration**
+
 - Agent: **Backend Engineer**
 - Description: Implement `crewchief web` command
 - Dependencies: TICKET-010
@@ -994,6 +1051,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-036: Production Deployment**
+
 - Agent: **DevOps Engineer**
 - Description: Prepare production deployment
 - Dependencies: All tickets
@@ -1008,6 +1066,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-037: Documentation & Training**
+
 - Agent: **Frontend Engineer**
 - Description: Create user documentation and help system
 - Dependencies: All tickets
@@ -1022,6 +1081,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Verified
 
 **TICKET-038: Performance Testing**
+
 - Agent: **Quality Engineer**
 - Description: Load testing and performance validation
 - Dependencies: TICKET-036
@@ -1039,6 +1099,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 ## Success Criteria
 
 ### Phase 1 Success Metrics
+
 - [x] All foundation components building successfully (9/9 complete)
 - [x] Docker environment operational
 - [x] Basic tests passing (testing framework complete)
@@ -1047,6 +1108,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [x] Security baseline implemented
 
 ### Phase 2 Success Metrics
+
 - [x] All REST endpoints functional with <200ms response time (achieved <35ms)
 - [x] Core UI components rendering with accessibility compliance
 - [x] Maproom integration working with <300ms search response
@@ -1055,6 +1117,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [x] Security requirements met for completed components
 
 ### Phase 3 Success Metrics
+
 - [ ] Real-time updates operational with < 100ms latency
 - [ ] WebSocket handling 1000+ concurrent connections
 - [ ] Complex UI features complete with accessibility
@@ -1063,6 +1126,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - [ ] Security requirements met for all real-time features
 
 ### Phase 4 Success Metrics
+
 - [ ] All tests passing (>80% coverage)
 - [ ] Performance targets met (<2s load time, <200ms API response)
 - [ ] Security audit passed (OWASP Top 10 addressed)
@@ -1073,6 +1137,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 ## Resource Allocation
 
 ### Week 1-2 (Foundation)
+
 - Backend Engineer: 40 hours
 - Frontend Engineer: 40 hours
 - Database Engineer: 20 hours
@@ -1080,24 +1145,28 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
 - Quality Engineer: 20 hours
 
 ### Week 3-4 (Core Features)
+
 - Backend Engineer: 40 hours
 - Frontend Engineer: 40 hours
 - Integration Engineer: 40 hours
 - Quality Engineer: 20 hours
 
 ### Week 5-6 (Advanced Features)
+
 - Backend Engineer: 30 hours
 - Frontend Engineer: 50 hours
 - Integration Engineer: 30 hours
 - Quality Engineer: 20 hours
 
 ### Week 7-8 (Polish & Launch)
+
 - All agents: 40 hours each
 - Focused on integration, testing, and deployment
 
 ## Risk Mitigation
 
 ### Technical Risks
+
 1. **Maproom binary compatibility**
    - Mitigation: Early integration testing, fallback mechanisms
    - Contingency: REST API fallback if binary fails
@@ -1112,6 +1181,7 @@ Build a comprehensive web UI for CrewChief accessible via `crewchief web` comman
    - Contingency: Rapid patch deployment process
 
 ### Schedule Risks
+
 1. **Integration delays**
    - Mitigation: Early integration tests, mock services
 2. **UI complexity**
