@@ -3,3 +3,8 @@ packages:
 
 ignoredBuiltDependencies:
   - esbuild
+
+onlyBuiltDependencies:
+  - bcrypt
+  - msw
+  - unrs-resolver

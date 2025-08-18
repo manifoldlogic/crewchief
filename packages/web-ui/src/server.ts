@@ -15,6 +15,7 @@ import { createAuthRouter } from './server/auth/routes/auth.js';
 import { secureHeaders, secureCookies } from './server/auth/middleware/csrf.js';
 import { apiRateLimit } from './server/auth/middleware/rate-limit.js';
 import type { DatabaseConnection } from './db/connection.js';
+import { WebSocketServer } from './server/websocket/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -186,6 +187,35 @@ export async function startServer() {
   // Create HTTP server
   const httpServer = createServer(app);
 
+  // Initialize WebSocket server
+  let wsServer: WebSocketServer | undefined;
+  if (db) {
+    try {
+      wsServer = new WebSocketServer(httpServer, db.getPool(), {
+        cors: {
+          origin: isDevelopment 
+            ? ['http://localhost:3000', 'http://localhost:3456', 'http://localhost:5173']
+            : process.env.ALLOWED_ORIGINS?.split(',') || false,
+          credentials: true,
+        },
+        maxConnections: 1000,
+        heartbeatInterval: 15000,
+        connectionTimeout: 30000,
+        maxMessageSize: 1024 * 1024, // 1MB
+        rateLimitWindow: 60000,
+        rateLimitMaxRequests: 100,
+      });
+      
+      // Store WebSocket server in app locals for API access
+      app.locals.wsServer = wsServer;
+      
+      console.log('✅ WebSocket server initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize WebSocket server:', error);
+      console.warn('⚠️  Server will start without WebSocket support');
+    }
+  }
+
   // Temporarily disabled GraphQL to focus on REST API
   // if (db) {
   //   try {
@@ -209,6 +239,13 @@ export async function startServer() {
       // console.log(`📈 GraphQL API: http://localhost:${PORT}/graphql`);
     }
     
+    if (wsServer) {
+      console.log(`🔌 WebSocket server: ws://localhost:${PORT}`);
+      console.log(`   • Max connections: 1000`);
+      console.log(`   • Heartbeat interval: 15s`);
+      console.log(`   • Message size limit: 1MB`);
+    }
+    
     console.log(`🔧 Environment: ${NODE_ENV}`);
     
     if (isDevelopment) {
@@ -222,25 +259,49 @@ export async function startServer() {
       console.log(`     - Agents: /api/agents`);
       console.log(`     - Runs: /api/runs`);
       console.log(`     - Config: /api/config`);
+      if (wsServer) {
+        console.log(`   • WebSocket: ws://localhost:${PORT}`);
+        console.log(`     - Real-time updates for all entities`);
+        console.log(`     - Room-based broadcasting`);
+        console.log(`     - Authentication via JWT tokens`);
+      }
     }
   });
 
   // Graceful shutdown
-  process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
+  const shutdown = async () => {
+    console.log('Shutting down gracefully...');
+    
+    // Close WebSocket server first
+    if (wsServer) {
+      try {
+        await wsServer.shutdown();
+        console.log('✅ WebSocket server closed');
+      } catch (error) {
+        console.error('❌ Error closing WebSocket server:', error);
+      }
+    }
+    
+    // Close HTTP server
     server.close(() => {
-      console.log('Server closed');
+      console.log('✅ HTTP server closed');
+      
+      // Close database connection
+      if (db) {
+        try {
+          db.close();
+          console.log('✅ Database connection closed');
+        } catch (error) {
+          console.error('❌ Error closing database:', error);
+        }
+      }
+      
       process.exit(0);
     });
-  });
+  };
 
-  process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    server.close(() => {
-      console.log('Server closed');
-      process.exit(0);
-    });
-  });
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 
   return server;
 }

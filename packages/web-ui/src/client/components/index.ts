@@ -1,6 +1,12 @@
 // UI Components
 export * from "./ui";
 
+// Layout Components
+export * from "./layout";
+
+// Search Components
+export * from "./search";
+
 // Theme Provider
 export { ThemeProvider, useTheme } from "./theme-provider";
 

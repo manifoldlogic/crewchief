@@ -1,442 +1,306 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MaproomService, type MaproomConfig, type SearchFilters } from '../../../src/services/maproom.js';
-import { spawn, spawnSync } from 'node:child_process';
-import fs from 'node:fs';
+/**
+ * Maproom Service Tests
+ * 
+ * Unit tests for the MaproomService demonstrating mocked dependencies.
+ */
 
-// Mock dependencies
-vi.mock('node:child_process');
-vi.mock('node:fs');
-vi.mock('../../../src/db/connection.js', () => ({
-  getDatabase: vi.fn(() => ({
-    query: vi.fn(),
-  })),
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { MaproomService } from '../../../src/server/services/maproom.js';
+import type { CacheProvider, AuditLogger } from '../../../src/server/services/base.js';
+
+// Mock implementations
+class MockCacheProvider implements CacheProvider {
+  private storage = new Map<string, any>();
+
+  async get<T>(key: string): Promise<T | null> {
+    return this.storage.get(key) || null;
+  }
+
+  async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    this.storage.set(key, value);
+  }
+
+  async del(key: string): Promise<void> {
+    this.storage.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    this.storage.clear();
+  }
+
+  isAvailable(): boolean {
+    return true;
+  }
+}
+
+class MockAuditLogger implements AuditLogger {
+  public logs: any[] = [];
+
+  async log(event: any): Promise<void> {
+    this.logs.push(event);
+  }
+}
+
+// Mock child_process
+const mockSpawn = vi.fn();
+const mockSpawnSync = vi.fn();
+
+vi.mock('node:child_process', () => ({
+  spawn: mockSpawn,
+  spawnSync: mockSpawnSync,
 }));
 
-const mockSpawn = vi.mocked(spawn);
-const mockSpawnSync = vi.mocked(spawnSync);
-const mockFs = vi.mocked(fs);
+// Mock fs
+const mockExistsSync = vi.fn();
+vi.mock('node:fs', () => ({
+  existsSync: mockExistsSync,
+}));
+
+// Mock database
+vi.mock('../../../src/db/connection.js', () => ({
+  getDatabase: () => ({
+    query: vi.fn().mockResolvedValue({ rows: [] }),
+  }),
+}));
 
 describe('MaproomService', () => {
+  let mockCache: MockCacheProvider;
+  let mockAuditLogger: MockAuditLogger;
   let service: MaproomService;
-  let mockChildProcess: any;
+  let mockProcess: any;
 
   beforeEach(() => {
-    // Reset all mocks
-    vi.clearAllMocks();
+    mockCache = new MockCacheProvider();
+    mockAuditLogger = new MockAuditLogger();
     
-    // Mock fs.existsSync to return true for binary path
-    mockFs.existsSync = vi.fn().mockReturnValue(true);
-    
-    // Mock spawnSync for binary resolution
-    mockSpawnSync.mockReturnValue({
-      status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
-      stderr: Buffer.from(''),
-    } as any);
-
-    // Create mock child process
-    mockChildProcess = {
-      stdout: {
-        on: vi.fn((event, callback) => {
-          if (event === 'data') {
-            // Store callback for later use
-            mockChildProcess.stdoutCallback = callback;
-          }
-        }),
-      },
-      stderr: {
-        on: vi.fn((event, callback) => {
-          if (event === 'data') {
-            mockChildProcess.stderrCallback = callback;
-          }
-        }),
-      },
-      on: vi.fn((event, callback) => {
-        if (event === 'close') {
-          mockChildProcess.closeCallback = callback;
-        } else if (event === 'error') {
-          mockChildProcess.errorCallback = callback;
-        }
-      }),
+    // Mock process object
+    mockProcess = {
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
       kill: vi.fn(),
     };
 
-    mockSpawn.mockReturnValue(mockChildProcess);
+    // Setup default mocks
+    mockExistsSync.mockReturnValue(true);
+    mockSpawnSync.mockReturnValue({ status: 0 });
+    mockSpawn.mockReturnValue(mockProcess);
 
-    // Create service instance
-    const config: Partial<MaproomConfig> = {
-      binaryPath: '/usr/local/bin/crewchief-maproom',
-      timeout: 5000,
-      retries: 1,
-      retryDelay: 100,
-      cacheEnabled: true,
-      cacheTtl: 10000,
-    };
-    
-    service = new MaproomService(config);
+    // Create service with mocked binary path
+    service = new MaproomService(
+      { binaryPath: '/mock/path/to/maproom' },
+      mockCache,
+      mockAuditLogger,
+    );
   });
 
   afterEach(() => {
-    vi.clearAllTimers();
+    vi.clearAllMocks();
   });
 
-  describe('constructor', () => {
-    it('should initialize with default config', () => {
-      expect(service).toBeInstanceOf(MaproomService);
+  describe('Construction', () => {
+    it('should initialize with provided config', () => {
+      const config = {
+        binaryPath: '/custom/path',
+        timeout: 5000,
+        retries: 3,
+      };
+
+      const customService = new MaproomService(config, mockCache, mockAuditLogger);
+      expect(customService).toBeInstanceOf(MaproomService);
     });
 
     it('should throw error if binary not found', () => {
-      mockFs.existsSync = vi.fn().mockReturnValue(false);
-      mockSpawnSync.mockReturnValue({
-        status: 1,
-        stdout: Buffer.from(''),
-        stderr: Buffer.from('command not found'),
-      } as any);
+      mockExistsSync.mockReturnValue(false);
+      mockSpawnSync.mockReturnValue({ status: 1 });
 
-      expect(() => new MaproomService()).toThrow('Maproom binary not found');
+      expect(() => {
+        new MaproomService({}, mockCache, mockAuditLogger);
+      }).toThrow('Maproom binary not found');
+    });
+
+    it('should resolve binary from environment variable', () => {
+      process.env.CREWCHIEF_MAPROOM_BIN = '/env/path/to/maproom';
+      mockExistsSync.mockImplementation((path) => path === '/env/path/to/maproom');
+
+      const service = new MaproomService({}, mockCache, mockAuditLogger);
+      expect(service).toBeInstanceOf(MaproomService);
+
+      delete process.env.CREWCHIEF_MAPROOM_BIN;
     });
   });
 
-  describe('search', () => {
-    it('should perform a successful search', async () => {
-      const mockSearchResult = {
+  describe('Search Operations', () => {
+    it('should perform search with valid query', async () => {
+      // Mock successful command execution
+      const mockResults = {
         hits: [
           {
             chunk_id: 'test-chunk-1',
-            file_path: '/path/to/file.ts',
+            file_path: '/test/file.ts',
             line_start: 1,
-            line_end: 10,
-            content: 'function test() { return true; }',
-            score: 0.95,
+            line_end: 5,
+            content: 'test content',
+            score: 0.8,
             language: 'typescript',
-            chunk_type: 'function',
-            context: {
-              before: 'import { test } from "test";',
-              after: 'export default test;',
-            },
           },
         ],
       };
 
-      // Set up the spawn mock to simulate successful command execution
-      const searchPromise = service.search('test query');
-      
-      // Simulate stdout data
-      mockChildProcess.stdoutCallback(JSON.stringify(mockSearchResult));
-      
-      // Simulate process close with success
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 10);
-
-      const result = await searchPromise;
-
-      expect(result).toEqual({
-        query: 'test query',
-        results: [
-          {
-            id: 'test-chunk-1',
-            file_path: '/path/to/file.ts',
-            line_start: 1,
-            line_end: 10,
-            content: 'function test() { return true; }',
-            relevance_score: 0.95,
-            language: 'typescript',
-            chunk_type: 'function',
-            context: {
-              before: 'import { test } from "test";',
-              after: 'export default test;',
-            },
-          },
-        ],
-        totalCount: 1,
-        executionTimeMs: expect.any(Number),
-        filters: {},
-        cached: false,
+      mockProcess.stdout.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(JSON.stringify(mockResults)), 0);
+        }
+      });
+      mockProcess.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
       });
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        '/usr/local/bin/crewchief-maproom',
-        ['search', 'test query', '--format', 'json'],
-        { stdio: ['pipe', 'pipe', 'pipe'] }
-      );
+      const result = await service.search('test query', {}, 'test-user');
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.query).toBe('test query');
+        expect(result.data.results).toHaveLength(1);
+        expect(result.data.results[0].id).toBe('test-chunk-1');
+        expect(result.data.cached).toBe(false);
+      }
     });
 
-    it('should apply search filters correctly', async () => {
-      const filters: SearchFilters = {
-        worktree: 'test-worktree',
-        language: 'typescript',
-        maxResults: 10,
-        relevanceThreshold: 0.5,
+    it('should use cached results when available', async () => {
+      const cachedResponse = {
+        query: 'cached query',
+        results: [],
+        totalCount: 0,
+        executionTimeMs: 100,
+        filters: {},
+        cached: false,
+        correlationId: 'test-correlation',
       };
 
-      const searchPromise = service.search('test query', filters);
-      
-      // Simulate empty results
-      mockChildProcess.stdoutCallback('{"hits": []}');
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 10);
+      await mockCache.set('maproom:search:{"query":"cached query","filters":{}}', cachedResponse);
 
-      await searchPromise;
+      const result = await service.search('cached query', {}, 'test-user');
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        '/usr/local/bin/crewchief-maproom',
-        [
-          'search',
-          'test query',
-          '--worktree',
-          'test-worktree',
-          '--language',
-          'typescript',
-          '--limit',
-          '10',
-          '--threshold',
-          '0.5',
-          '--format',
-          'json',
-        ],
-        { stdio: ['pipe', 'pipe', 'pipe'] }
-      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.cached).toBe(true);
+        expect(result.data.query).toBe('cached query');
+      }
+
+      // Should not have spawned a process
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
-    it('should return cached results when available', async () => {
-      // First search
-      const searchPromise1 = service.search('cached query');
-      mockChildProcess.stdoutCallback('{"hits": [{"chunk_id": "test"}]}');
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 10);
-      
-      const result1 = await searchPromise1;
-      expect(result1.cached).toBe(false);
+    it('should handle authorization errors', async () => {
+      const result = await service.search('test query', {}, undefined);
 
-      // Second search should return cached result
-      const result2 = await service.search('cached query');
-      expect(result2.cached).toBe(true);
-      expect(result2.results).toEqual(result1.results);
-    });
-
-    it('should handle search errors', async () => {
-      const searchPromise = service.search('failing query');
-      
-      // Simulate process close with error
-      setTimeout(() => {
-        mockChildProcess.closeCallback(1);
-      }, 10);
-
-      await expect(searchPromise).rejects.toThrow('Search operation failed');
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe('AUTHORIZATION_ERROR');
+      }
     });
 
     it('should handle command timeout', async () => {
-      vi.useFakeTimers();
-      
-      const searchPromise = service.search('slow query');
-      
-      // Fast-forward time to trigger timeout
-      vi.advanceTimersByTime(6000);
-
-      await expect(searchPromise).rejects.toThrow('Command timed out');
-      
-      vi.useRealTimers();
-    });
-  });
-
-  describe('getStatus', () => {
-    it('should return index status', async () => {
-      const mockStatus = {
-        repos: [
-          {
-            id: 1,
-            name: 'test-repo',
-            path: '/path/to/repo',
-            worktrees: [
-              {
-                id: 1,
-                name: 'main',
-                path: '/path/to/worktree',
-                lastIndexed: '2024-01-01T00:00:00Z',
-                fileCount: 100,
-                chunkCount: 500,
-              },
-            ],
-          },
-        ],
-        total_files: 100,
-        total_chunks: 500,
-        last_updated: '2024-01-01T00:00:00Z',
-      };
-
-      const statusPromise = service.getStatus();
-      
-      mockChildProcess.stdoutCallback(JSON.stringify(mockStatus));
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 10);
-
-      const result = await statusPromise;
-
-      expect(result).toEqual({
-        repos: mockStatus.repos,
-        totalFiles: 100,
-        totalChunks: 500,
-        lastUpdated: '2024-01-01T00:00:00Z',
+      mockProcess.on.mockImplementation((event, callback) => {
+        // Don't call the callback to simulate timeout
       });
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        '/usr/local/bin/crewchief-maproom',
-        ['status', '--format', 'json'],
-        { stdio: ['pipe', 'pipe', 'pipe'] }
+      const timeoutService = new MaproomService(
+        { binaryPath: '/mock/path/to/maproom', timeout: 100 },
+        mockCache,
+        mockAuditLogger,
       );
+
+      const result = await timeoutService.search('test query', {}, 'test-user');
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe('MAPROOM_TIMEOUT');
+      }
     });
   });
 
-  describe('index', () => {
-    it('should start indexing operation', async () => {
-      const mockIndexResult = {
-        files_processed: 50,
-        total_files: 100,
-      };
-
-      const indexPromise = service.index(['/path/to/index'], {
-        repo: 'test-repo',
-        worktree: 'test-worktree',
-        incremental: true,
-      });
-
-      // Simulate successful indexing
-      mockChildProcess.stdoutCallback(JSON.stringify(mockIndexResult));
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 200); // Longer delay to allow initial promise resolution
-
-      const result = await indexPromise;
-
-      expect(result).toEqual({
-        processId: expect.any(String),
-        status: 'running',
-        filesProcessed: 0,
-        totalFiles: 0,
-        startTime: expect.any(String),
-      });
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        '/usr/local/bin/crewchief-maproom',
-        [
-          'scan',
-          '--repo',
-          'test-repo',
-          '--worktree',
-          'test-worktree',
-          '--incremental',
-          '/path/to/index',
-          '--format',
-          'json',
-        ],
-        { stdio: ['pipe', 'pipe', 'pipe'] }
-      );
-    });
-  });
-
-  describe('upsert', () => {
-    it('should update specific files', async () => {
-      const upsertPromise = service.upsert(['/path/to/file.ts'], {
-        repo: 'test-repo',
-        worktree: 'test-worktree',
-        commit: 'abc123',
-      });
-
-      // Simulate successful upsert
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 10);
-
-      await upsertPromise;
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        '/usr/local/bin/crewchief-maproom',
-        [
-          'upsert',
-          '--repo',
-          'test-repo',
-          '--worktree',
-          'test-worktree',
-          '--commit',
-          'abc123',
-          '/path/to/file.ts',
-        ],
-        { stdio: ['pipe', 'pipe', 'pipe'] }
-      );
-    });
-  });
-
-  describe('healthCheck', () => {
+  describe('Health Check', () => {
     it('should return healthy status', async () => {
-      const healthPromise = service.healthCheck();
-      
-      mockChildProcess.stdoutCallback('crewchief-maproom 1.0.0\n');
-      setTimeout(() => {
-        mockChildProcess.closeCallback(0);
-      }, 10);
-
-      const result = await healthPromise;
-
-      expect(result).toEqual({
-        healthy: true,
-        version: 'crewchief-maproom 1.0.0',
+      mockProcess.stdout.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback('maproom v1.0.0'), 0);
+        }
       });
+      mockProcess.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      const health = await service.healthCheck();
+
+      expect(health.healthy).toBe(true);
+      expect(health.details.version).toBe('maproom v1.0.0');
+      expect(health.details.cacheAvailable).toBe(true);
     });
 
     it('should return unhealthy status on error', async () => {
-      const healthPromise = service.healthCheck();
-      
-      setTimeout(() => {
-        mockChildProcess.closeCallback(1);
-      }, 10);
-
-      const result = await healthPromise;
-
-      expect(result).toEqual({
-        healthy: false,
-        error: expect.any(String),
+      mockProcess.on.mockImplementation((event, callback) => {
+        if (event === 'error') {
+          setTimeout(() => callback(new Error('Binary not found')), 0);
+        }
       });
+
+      const health = await service.healthCheck();
+
+      expect(health.healthy).toBe(false);
+      expect(health.details.error).toContain('Binary not found');
     });
   });
 
-  describe('cache management', () => {
-    it('should clear cache', () => {
-      // First, populate cache
-      service.search('test query').catch(() => {}); // Ignore promise
-      
-      service.clearCache();
-      
-      const stats = service.getCacheStats();
-      expect(stats.size).toBe(0);
+  describe('Audit Logging', () => {
+    it('should log search operations', async () => {
+      mockProcess.stdout.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback('{"hits":[]}'), 0);
+        }
+      });
+      mockProcess.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      await service.search('test query', {}, 'test-user');
+
+      expect(mockAuditLogger.logs).toContainEqual(
+        expect.objectContaining({
+          service: 'MaproomService',
+          operation: 'search',
+          action: 'search_code',
+          success: true,
+          userId: 'test-user',
+        }),
+      );
     });
 
-    it('should return cache statistics', () => {
-      const stats = service.getCacheStats();
-      expect(stats).toHaveProperty('size');
-      expect(typeof stats.size).toBe('number');
-    });
-  });
+    it('should log failed operations', async () => {
+      mockProcess.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0); // Exit code 1
+        }
+      });
 
-  describe('process management', () => {
-    it('should cancel running index operation', async () => {
-      const indexPromise = service.index(['/path/to/index']);
-      
-      // Get the process ID from the initial promise resolution
-      const initialResult = await indexPromise;
-      const processId = initialResult.processId;
-      
-      const cancelled = service.cancelIndex(processId);
-      expect(cancelled).toBe(true);
-      expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGTERM');
-    });
+      await service.search('test query', {}, 'test-user');
 
-    it('should return false when cancelling non-existent process', () => {
-      const cancelled = service.cancelIndex('non-existent-id');
-      expect(cancelled).toBe(false);
+      expect(mockAuditLogger.logs).toContainEqual(
+        expect.objectContaining({
+          service: 'MaproomService',
+          operation: 'search',
+          action: 'search_code',
+          success: false,
+          userId: 'test-user',
+        }),
+      );
     });
   });
 });

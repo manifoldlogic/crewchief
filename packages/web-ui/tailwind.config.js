@@ -90,5 +90,7 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    // require("tailwindcss-animate"), // Temporarily commented out
+  ],
 };
