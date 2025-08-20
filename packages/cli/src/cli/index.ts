@@ -18,6 +18,7 @@ import { registerReleaseCommand } from './release'
 import { registerRunsCommands } from './runs'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerTaskCommands } from './task'
+import web from './web'
 import { registerWorktreeCommands } from './worktree'
 // Backwards-compat session subcommand removed; `crewchief` is the entrypoint
 // registerSessionCommands(program);
@@ -67,6 +68,7 @@ registerSetupCommand(program)
 registerDoctorCommand(program)
 registerBuildCommand(program)
 registerReleaseCommand(program)
+program.addCommand(web)
 
 // Default behavior: `crewchief` with no subcommand starts/attaches session.
 program.action(async () => {
