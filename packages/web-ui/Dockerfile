@@ -24,7 +24,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/web-ui/package.json ./packages/web-ui/
 
 # Install dependencies with frozen lockfile
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy source code
 COPY packages/web-ui/ ./packages/web-ui/
@@ -62,7 +62,7 @@ COPY --chown=crewchief:nodejs package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY --chown=crewchief:nodejs packages/web-ui/package.json ./packages/web-ui/
 
 # Install only production dependencies
-RUN pnpm install --frozen-lockfile --prod \
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
     && pnpm store prune \
     && rm -rf /root/.cache /tmp/*
 

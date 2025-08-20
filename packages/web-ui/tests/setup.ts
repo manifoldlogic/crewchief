@@ -50,7 +50,7 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 }));
 
 // Mock fetch
-global.fetch = vi.fn();
+global.fetch = vi.fn(() => Promise.resolve({ json: () => Promise.resolve({}) }));
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
