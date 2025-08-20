@@ -5,11 +5,14 @@ target/
 .claude/
 .gemini/
 .codex/
+<<<<<<< Updated upstream
 
 .obsidian/
 
 .pnpm-store/
 .last-package-json-hash
+=======
+>>>>>>> Stashed changes
 
 node_modules
 .env
