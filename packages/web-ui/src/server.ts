@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import maproomRoutes from './routes/maproom.js';
 import { initializeDatabase } from './db/connection.js';
+import promClient from 'prom-client';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,6 +16,35 @@ const __dirname = dirname(__filename);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3456;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isDevelopment = NODE_ENV === 'development';
+
+// Enable metrics collection
+const collectDefaultMetrics = promClient.collectDefaultMetrics;
+const Registry = promClient.Registry;
+const register = new Registry();
+collectDefaultMetrics({ register });
+
+// Custom metrics
+const httpRequestDuration = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'code'],
+  buckets: [0.1, 0.3, 0.5, 1, 3, 5, 10], // For P50/P95/P99
+  registers: [register],
+});
+
+const apiUsageCounter = new promClient.Counter({
+  name: 'api_requests_total',
+  help: 'Total number of API requests',
+  labelNames: ['endpoint'],
+  registers: [register],
+});
+
+const errorRateCounter = new promClient.Counter({
+  name: 'api_errors_total',
+  help: 'Total number of API errors',
+  labelNames: ['endpoint', 'status'],
+  registers: [register],
+});
 
 // Create Express app
 const app: Express = express();
@@ -40,6 +70,29 @@ app.use(morgan(isDevelopment ? 'dev' : 'combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Metrics middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route ? req.route.path : req.path;
+    
+    httpRequestDuration.labels(req.method, route, res.statusCode.toString()).observe(duration);
+    apiUsageCounter.labels(route).inc();
+    
+    if (res.statusCode >= 400) {
+      errorRateCounter.labels(route, res.statusCode.toString()).inc();
+    }
+  });
+  next();
+});
+
+// Metrics endpoint
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -48,6 +101,10 @@ app.get('/api/health', (req, res) => {
     uptime: process.uptime(),
     version: process.env.npm_package_version || '0.1.0',
     environment: NODE_ENV,
+    metrics: {
+      status: 'enabled',
+      endpoint: '/metrics',
+    },
   });
 });
 
