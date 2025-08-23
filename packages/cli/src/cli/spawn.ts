@@ -99,7 +99,10 @@ export function registerSpawnCommand(program: Command): void {
             process.exit(1)
           }
 
-          const spawnScript = join(scriptsDir, 'spawn_agent.py')
+          // Use smart spawning with intelligent pane management
+          const spawnScript = existsSync(join(scriptsDir, 'spawn_agent_smart.py'))
+            ? join(scriptsDir, 'spawn_agent_smart.py')
+            : join(scriptsDir, 'spawn_agent.py')
 
           // Generate agent name in format: {name}__{agent}
           let baseName: string
@@ -131,12 +134,7 @@ export function registerSpawnCommand(program: Command): void {
           }
 
           // Build spawn command arguments
-          const args = [
-            spawnScript,
-            agent,
-            '--name', agentName,
-            '--project-dir', projectDir,
-          ]
+          const args = [spawnScript, agent, '--name', agentName, '--project-dir', projectDir]
 
           if (options.vertical) {
             args.push('--vertical')
@@ -171,7 +169,7 @@ export function registerSpawnCommand(program: Command): void {
           }
 
           console.log(chalk.green('✅ Agent spawned successfully'))
-          console.log(chalk.dim('   Use \'crewchief agent list\' to see all agents'))
+          console.log(chalk.dim("   Use 'crewchief agent list' to see all agents"))
           console.log(chalk.dim(`   Use 'crewchief agent message ${agentName} <text>' to send commands`))
         }
       } catch (error) {
@@ -179,7 +177,9 @@ export function registerSpawnCommand(program: Command): void {
         process.exit(1)
       }
     })
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   $ crewchief spawn claude                    # Spawn Claude with auto-generated name
   $ crewchief spawn claude "auth-feature"     # Include task in name
@@ -198,5 +198,6 @@ Supported agents:
 The agent will be spawned in:
   1. A new iTerm2 pane (split from current)
   2. Its own git worktree (.crewchief/worktrees/<name>)
-  3. With a visual badge and label for identification`)
+  3. With a visual badge and label for identification`,
+    )
 }
