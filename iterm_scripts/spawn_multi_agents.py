@@ -4,7 +4,7 @@ Spawn multiple agents simultaneously with intelligent pane splitting.
 
 Usage:
     python3 spawn_multi_agents.py claude,gemini implement-auth
-    python3 spawn_multi_agents.py claude+gemini+gpt code-review
+    python3 spawn_multi_agents.py claude,gemini,gpt code-review
     python3 spawn_multi_agents.py "claude, gemini" "fix-bug"
 """
 
@@ -24,11 +24,9 @@ from pane_manager import PaneManager
 def parse_agent_spec(spec: str) -> list:
     """
     Parse agent specification into list of agent types.
-    Supports: comma-separated, plus-separated, or mixed.
-    Examples: "claude,gemini" or "claude+gemini" or "claude, gemini"
+    Supports comma-separated format.
+    Examples: "claude,gemini" or "claude, gemini"
     """
-    # Replace plus with comma for uniform processing
-    spec = spec.replace('+', ',')
     
     # Split and clean up
     agents = [a.strip() for a in spec.split(',') if a.strip()]
@@ -123,8 +121,9 @@ async def spawn_single_agent(
     agent_commands = {
         'claude': 'claude',
         'gemini': 'gemini',
-        'gpt': 'gpt',
-        'openai': 'openai',
+        'gpt': 'codex',
+        'openai': 'codex',
+        'codex': 'codex',
         'cursor': 'cursor',
         'aider': 'aider',
     }
@@ -177,10 +176,10 @@ async def main(connection):
         description='Spawn multiple CLI agents with smart splitting',
         epilog='Examples:\n'
                '  python3 spawn_multi_agents.py claude,gemini implement-auth\n'
-               '  python3 spawn_multi_agents.py "claude+gemini+gpt" code-review\n'
+               '  python3 spawn_multi_agents.py "claude,gemini,gpt" code-review\n'
                '  python3 spawn_multi_agents.py claude,gemini --args "--model gpt-4"'
     )
-    parser.add_argument('agents', help='Agent types (comma or plus separated: claude,gemini or claude+gemini)')
+    parser.add_argument('agents', help='Agent types (comma-separated: claude,gemini)')
     parser.add_argument('task', nargs='?', help='Task name for all agents')
     parser.add_argument('--args', help='Additional arguments for all agents')
     parser.add_argument('--project-dir', help='Project directory (defaults to current)')

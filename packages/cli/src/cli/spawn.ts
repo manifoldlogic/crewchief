@@ -63,7 +63,7 @@ export function registerSpawnCommand(program: Command): void {
   program
     .command('spawn')
     .description('Spawn AI agent(s) in dedicated terminal pane(s) with their own worktrees')
-    .argument('<agents>', 'Agent type(s) - single or multiple (e.g., claude or claude,gemini or claude+gemini)')
+    .argument('<agents>', 'Agent type(s) - single or comma-separated (e.g., claude or claude,gemini)')
     .argument('[task]', 'Optional task description to include in agent name(s)')
     .option('-n, --name <name>', 'Custom name for the agent')
     .option('-v, --vertical', 'Split pane vertically instead of horizontally')
@@ -99,8 +99,8 @@ export function registerSpawnCommand(program: Command): void {
             process.exit(1)
           }
 
-          // Check if spawning multiple agents
-          const isMultiAgent = agent.includes(',') || agent.includes('+')
+          // Check if spawning multiple agents (comma-separated)
+          const isMultiAgent = agent.includes(',')
 
           let spawnScript: string
           if (isMultiAgent && existsSync(join(scriptsDir, 'spawn_multi_agents.py'))) {
@@ -124,9 +124,8 @@ export function registerSpawnCommand(program: Command): void {
             // Multi-agent spawning
             console.log(chalk.blue('🤖 Spawning multiple agents...'))
 
-            // Parse agent types
+            // Parse agent types (comma-separated)
             const agentTypes = agent
-              .replace(/\+/g, ',')
               .split(',')
               .map((a) => a.trim())
               .filter(Boolean)
@@ -237,7 +236,7 @@ Examples:
   
   Multiple agents:
   $ crewchief spawn claude,gemini implement-auth     # Spawn both Claude and Gemini
-  $ crewchief spawn claude+gemini+gpt code-review    # Using + separator
+  $ crewchief spawn claude,gemini,gpt code-review    # Spawn three agents
   $ crewchief spawn "claude, gemini" fix-bug         # With spaces (quoted)
   
   With options:
@@ -247,7 +246,8 @@ Examples:
 Supported agents:
   - claude    Anthropic's Claude
   - gemini    Google's Gemini  
-  - gpt       OpenAI GPT
+  - gpt       OpenAI (uses 'codex' command)
+  - openai    OpenAI (alias for 'gpt')
   - cursor    Cursor AI
   - aider     Aider coding assistant
   - custom    Any custom command

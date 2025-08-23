@@ -59,8 +59,9 @@ async def main(connection):
     agent_commands = {
         'claude': 'claude',
         'gemini': 'gemini',
-        'gpt': 'gpt',
-        'openai': 'openai',
+        'gpt': 'codex',
+        'openai': 'codex',
+        'codex': 'codex',
         'cursor': 'cursor',
         'aider': 'aider',
     }
