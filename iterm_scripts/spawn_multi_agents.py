@@ -4,7 +4,7 @@ Spawn multiple agents simultaneously with intelligent pane splitting.
 
 Usage:
     python3 spawn_multi_agents.py claude,gemini implement-auth
-    python3 spawn_multi_agents.py claude,gemini,gpt code-review
+    python3 spawn_multi_agents.py claude,gemini,codex code-review
     python3 spawn_multi_agents.py "claude, gemini" "fix-bug"
 """
 
@@ -121,8 +121,6 @@ async def spawn_single_agent(
     agent_commands = {
         'claude': 'claude',
         'gemini': 'gemini',
-        'gpt': 'codex',
-        'openai': 'codex',
         'codex': 'codex',
         'cursor': 'cursor',
         'aider': 'aider',
@@ -150,8 +148,7 @@ async def spawn_single_agent(
     agent_icons = {
         'claude': '🧠',
         'gemini': '✨',
-        'gpt': '🤖',
-        'openai': '🔮',
+        'codex': '🤖',
         'cursor': '🖱️',
         'aider': '🛠️',
     }
@@ -176,7 +173,7 @@ async def main(connection):
         description='Spawn multiple CLI agents with smart splitting',
         epilog='Examples:\n'
                '  python3 spawn_multi_agents.py claude,gemini implement-auth\n'
-               '  python3 spawn_multi_agents.py "claude,gemini,gpt" code-review\n'
+               '  python3 spawn_multi_agents.py "claude,gemini,codex" code-review\n'
                '  python3 spawn_multi_agents.py claude,gemini --args "--model gpt-4"'
     )
     parser.add_argument('agents', help='Agent types (comma-separated: claude,gemini)')

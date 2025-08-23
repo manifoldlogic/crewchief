@@ -78,7 +78,7 @@ pnpm dlx crewchief --help
 **Multi-Agent Spawning:** You can spawn multiple agents at once:
 
 - `crewchief spawn claude,gemini implement-auth` — Spawns both Claude and Gemini agents
-- `crewchief spawn claude,gemini,gpt code-review` — Spawn three agents
+- `crewchief spawn claude,gemini,codex code-review` — Spawn three agents
 - Creates hierarchical pane layout: first agent splits vertically, additional agents split horizontally
 
 **Note:** Agent names follow the format `{task-name}__{agent-type}`. When you have multiple agents of the same type (e.g., multiple Claude agents), you must use the full name to send messages to a specific one. Use `crewchief agent list` to see all running agents with their names.

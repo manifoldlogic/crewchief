@@ -63,7 +63,7 @@ export function registerSpawnCommand(program: Command): void {
   program
     .command('spawn')
     .description('Spawn AI agent(s) in dedicated terminal pane(s) with their own worktrees')
-    .argument('<agents>', 'Agent type(s) - single or comma-separated (e.g., claude or claude,gemini)')
+    .argument('<agents>', 'Agent type(s) - single or comma-separated (e.g., claude or claude,gemini,codex)')
     .argument('[task]', 'Optional task description to include in agent name(s)')
     .option('-n, --name <name>', 'Custom name for the agent')
     .option('-v, --vertical', 'Split pane vertically instead of horizontally')
@@ -236,7 +236,7 @@ Examples:
   
   Multiple agents:
   $ crewchief spawn claude,gemini implement-auth     # Spawn both Claude and Gemini
-  $ crewchief spawn claude,gemini,gpt code-review    # Spawn three agents
+  $ crewchief spawn claude,gemini,codex code-review  # Spawn three agents
   $ crewchief spawn "claude, gemini" fix-bug         # With spaces (quoted)
   
   With options:
@@ -246,8 +246,7 @@ Examples:
 Supported agents:
   - claude    Anthropic's Claude
   - gemini    Google's Gemini  
-  - gpt       OpenAI (uses 'codex' command)
-  - openai    OpenAI (alias for 'gpt')
+  - codex     OpenAI Codex
   - cursor    Cursor AI
   - aider     Aider coding assistant
   - custom    Any custom command

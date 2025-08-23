@@ -18,8 +18,7 @@ AGENT_ENTER_KEYS = {
     # Set all others to same as Claude initially
     # Update these as we discover what works for each
     "gemini": chr(13),
-    "gpt": chr(13),
-    "openai": chr(13),
+    "codex": chr(13),
     "cursor": chr(13),
     "aider": chr(13),
     "custom": chr(13),
