@@ -1,15 +1,21 @@
 # `crewchief` — Git Worktree Management & Code Indexing CLI
 
-## 🎯 Manage Worktrees. Index Code. Search Semantically
+## 🎯 Manage Worktrees. Index Code. Orchestrate AI Agents.
 
-`crewchief` is a CLI tool that simplifies git worktree management and provides powerful semantic code search through the integrated Maproom indexing system.
+`crewchief` is a CLI tool that simplifies git worktree management, provides powerful semantic code search, and orchestrates AI agents in iTerm2.
+
+### Requirements
+
+**macOS with [iTerm2](https://iterm2.com/downloads.html)**  
+> ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
 
 ### Current Features
 
 - **🔀 Git Worktree Management** — Create, list, clean, and navigate git worktrees with simple commands
 - **🔍 Semantic Code Search** — Index and search your codebase using PostgreSQL-backed full-text and semantic search
 - **📊 Code Intelligence** — Search for functions, classes, and concepts across TypeScript, JavaScript, Rust, Markdown, and JSON files
-- **🤖 Agent Infrastructure** — Basic support for spawning AI agents in isolated tmux panes with dedicated worktrees (experimental)
+- **🤖 Agent Orchestration** — Spawn AI agents in isolated iTerm2 panes with dedicated worktrees
+- **💬 Agent Communication** — Send messages to agents with proper text submission (chr(13) for Claude)
 - **📝 Run Tracking** — Track and review agent runs with detailed logging and event capture
 
 ### Planned Features (Not Yet Implemented)
@@ -61,10 +67,11 @@ pnpm dlx crewchief --help
 - `crewchief maproom:upsert [files...]` — Update specific files in the index
 - `crewchief maproom:watch` — Watch for changes and auto-index (auto-detects context)
 
-### Agent Management (Experimental)
+### Agent Management (iTerm2 Required)
 
-- `crewchief agent spawn <type> <task>` — Spawn an agent in a tmux pane
-- `crewchief agent message <agentId> <message>` — Send message to agent
+- `crewchief spawn <agent> [task]` — Spawn an agent in an iTerm2 pane with its own worktree
+- `crewchief agent message <agentId> <message>` — Send message to agent (uses chr(13) for Claude)
+- `crewchief agent list` — List running agents
 - `crewchief agent close <agentId>` — Close an agent's pane
 
 ### Run Tracking
@@ -92,7 +99,7 @@ CrewChief uses a `crewchief.config.ts` file for configuration. Key settings incl
 
 - **Worktree Settings**: Configure automatic copying of git-ignored files to new worktrees
 - **Agent Defaults**: Set default agent types and platforms
-- **Tmux Layout**: Configure pane arrangements and session names
+- **Terminal Backend**: iTerm2 is required (tmux is deprecated)
 - **Evaluation Thresholds**: Set auto-merge thresholds and quality checks
 
 ### Example: Auto-copy .env files to worktrees
