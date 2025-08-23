@@ -244,11 +244,11 @@ Examples:
   $ crewchief spawn claude,gemini --args "--model gpt-4"  # Pass args to all agents
 
 Supported agents:
-  - claude    Anthropic's Claude
-  - gemini    Google's Gemini  
-  - codex     OpenAI Codex
-  - cursor    Cursor AI
-  - aider     Aider coding assistant
+  - claude    Anthropic's Claude (uses 'claude' command)
+  - gemini    Google's Gemini (uses 'gemini' command)
+  - codex     OpenAI Codex (uses 'codex' command)
+  - cursor    Cursor AI (uses 'cursor-agent' command)
+  - aider     Aider coding assistant (uses 'aider' command)
   - custom    Any custom command
 
 Spawning behavior:

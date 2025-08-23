@@ -122,7 +122,7 @@ async def spawn_single_agent(
         'claude': 'claude',
         'gemini': 'gemini',
         'codex': 'codex',
-        'cursor': 'cursor',
+        'cursor': 'cursor-agent',
         'aider': 'aider',
     }
     
@@ -144,15 +144,8 @@ async def spawn_single_agent(
     await new_session.async_set_variable("user.agent_command", agent_command)
     await new_session.async_set_variable("user.project_dir", project_dir)
     
-    # Set badge with agent icon
-    agent_icons = {
-        'claude': '🧠',
-        'gemini': '✨',
-        'codex': '🤖',
-        'cursor': '🖱️',
-        'aider': '🛠️',
-    }
-    icon = agent_icons.get(agent_type, '🤖')
+    # Set badge with universal agent icon
+    icon = '🤖'
     
     change = iterm2.LocalWriteOnlyProfile()
     badge_text = f"{icon} {agent_name}\n[{agent_index + 1}/{total_agents}]"

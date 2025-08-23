@@ -60,7 +60,7 @@ async def main(connection):
         'claude': 'claude',
         'gemini': 'gemini',
         'codex': 'codex',
-        'cursor': 'cursor',
+        'cursor': 'cursor-agent',
         'aider': 'aider',
     }
     
