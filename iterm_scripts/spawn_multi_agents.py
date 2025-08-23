@@ -237,7 +237,7 @@ async def main(connection):
         await current_session.async_set_variable("user.spawn_count", "0")
         
         change = iterm2.LocalWriteOnlyProfile()
-        change.set_badge_text(f"🎯 Orchestrator\nSpawning {len(agent_types)} agents")
+        change.set_badge_text("🎯 Orchestrator")
         await current_session.async_set_profile_properties(change)
     
     # Spawn agents

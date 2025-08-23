@@ -189,7 +189,6 @@ export function registerSpawnCommand(program: Command): void {
           console.log(chalk.cyan('🚀 Spawning agent via iTerm2...'))
           console.log(chalk.dim(`   Script: ${spawnScript}`))
           console.log(chalk.dim(`   Agent: ${agent}`))
-          console.log(chalk.dim(`   Name: ${agentName}`))
           console.log(chalk.dim(`   Project: ${projectDir}`))
 
           // Execute the spawn script
