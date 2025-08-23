@@ -42,11 +42,7 @@ export class ITermSimpleService {
 
     const scriptPath = join(this.scriptsDir, 'send_to_pane.py')
 
-    const args = [
-      scriptPath,
-      '--to', targetLabel,
-      '--text', text,
-    ]
+    const args = [scriptPath, '--to', targetLabel, '--text', text]
 
     // Add agent type for proper Enter key handling (chr(13) for Claude, etc.)
     if (agentType) {
@@ -92,12 +88,12 @@ export class ITermSimpleService {
     const lines = result.stdout.trim().split('\n')
 
     for (const line of lines) {
-      // Parse output like: "1. [agent-name] (session_id)"
-      const match = line.match(/^(\d+)\.\s+\[(.*?)\]\s+\((.*?)\)/)
+      // Parse output like: " 1. [label]     Window:1 Tab:1 ID:3C31E1FF..."
+      const match = line.match(/^\s*(\d+)\.\s+\[(.*?)\]\s+.*ID:([A-F0-9]+)/)
       if (match) {
         panes.push({
           index: parseInt(match[1], 10),
-          label: match[2],
+          label: match[2] === 'unlabeled' ? '' : match[2],
           sessionId: match[3],
         })
       }
@@ -111,7 +107,7 @@ export class ITermSimpleService {
    */
   findPaneByLabel(label: string): string | null {
     const panes = this.listPanes()
-    const pane = panes.find(p => p.label === label)
+    const pane = panes.find((p) => p.label === label)
     return pane ? pane.sessionId : null
   }
 

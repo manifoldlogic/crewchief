@@ -164,6 +164,8 @@ async def main(connection):
     if not agent_type:
         try:
             agent_type = await target_session.async_get_variable("user.agent_type")
+            if agent_type:
+                print(f"🤖 Auto-detected agent type: {agent_type}")
         except:
             agent_type = None
     

@@ -6,7 +6,8 @@
 
 ### Requirements
 
-**macOS with [iTerm2](https://iterm2.com/downloads.html)**  
+**macOS with [iTerm2](https://iterm2.com/downloads.html)**
+
 > ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
 
 ### Current Features
@@ -70,9 +71,11 @@ pnpm dlx crewchief --help
 ### Agent Management (iTerm2 Required)
 
 - `crewchief spawn <agent> [task]` — Spawn an agent in an iTerm2 pane with its own worktree
-- `crewchief agent message <agentId> <message>` — Send message to agent (uses chr(13) for Claude)
-- `crewchief agent list` — List running agents
+- `crewchief agent list` — List all running agents with their full names
+- `crewchief agent message <agentName> <message>` — Send message to a specific agent by its full name (e.g., `fix-bug__claude`)
 - `crewchief agent close <agentId>` — Close an agent's pane
+
+**Note:** Agent names follow the format `{task-name}__{agent-type}`. When you have multiple agents of the same type (e.g., multiple Claude agents), you must use the full name to send messages to a specific one. Use `crewchief agent list` to see all running agents with their names.
 
 ### Run Tracking
 
@@ -227,17 +230,20 @@ CrewChief consists of:
 The [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) package provides a Model Context Protocol (MCP) server that enables AI assistants like Claude, Cursor, and other MCP-compatible tools to search and navigate your codebase using Maproom's semantic search capabilities.
 
 #### Key Features:
+
 - Semantic code search across your entire codebase
 - Direct file access with line range support
 - Automatic indexing integration with the CrewChief CLI
 - Works with any MCP-compatible AI assistant
 
 #### Installation:
+
 ```bash
 npm install -g maproom-mcp
 ```
 
 #### Integration with CrewChief:
+
 The maproom-mcp server uses the same PostgreSQL database and indexing infrastructure as the CrewChief CLI. When you run `crewchief maproom:scan` to index your codebase, that same index becomes available to AI assistants through the MCP server.
 
 For setup instructions and MCP configuration, see the [maproom-mcp documentation](https://www.npmjs.com/package/maproom-mcp).

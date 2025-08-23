@@ -95,28 +95,28 @@ export function registerAgentCommands(program: Command): void {
 
   agent
     .command('message')
-    .argument('<agentId>')
+    .argument('<agentName>')
     .argument('<message>')
-    .description('Send a message to an agent')
-    .action(async (agentId: string, message: string) => {
-      const rm = new RunManager()
-      const run = rm.getRunByAgentType(agentId)
-      if (!run) {
-        logger.warn(`Agent ${agentId} not running`)
-        return
-      }
+    .description('Send a message to an agent by name (e.g., fix-bug__claude)')
+    .action(async (agentName: string, message: string) => {
       const config = await loadConfig()
 
       // Detect backend and use appropriate service
       const iterm = new ITermSimpleService()
       if (iterm.isAvailable()) {
+        // Parse agent type from name (format: name__type)
+        let agentType: string | undefined
+        if (agentName.includes('__')) {
+          const parts = agentName.split('__')
+          agentType = parts[parts.length - 1]
+        }
+
         // Use iTerm2 with agent-specific Enter key (chr(13) for Claude, etc.)
-        const success = iterm.sendKeys(agentId, message, agentId)
+        const success = iterm.sendKeys(agentName, message, agentType)
         if (success) {
-          rm.appendLog(run.id, 'messages.log', `[in] ${message}`)
-          logger.info(`[${agentId}] <= ${message} [iTerm2] [run=${run.id}]`)
+          logger.info(`[${agentName}] <= ${message} [iTerm2]`)
         } else {
-          logger.error(`Failed to send message to ${agentId}`)
+          logger.error(`Failed to send message to ${agentName}`)
         }
       } else {
         // DEPRECATED: tmux implementation is incomplete and no longer under development
@@ -128,6 +128,46 @@ export function registerAgentCommands(program: Command): void {
         tmux.sendKeys(run.paneId, message)
         rm.appendLog(run.id, 'messages.log', `[in] ${message}`)
         logger.info(`[${agentId}] <= ${message} [tmux:${run.paneId}] [run=${run.id}]`)
+      }
+    })
+
+  agent
+    .command('list')
+    .description('List running agents in iTerm2')
+    .action(async () => {
+      const iterm = new ITermSimpleService()
+      if (iterm.isAvailable()) {
+        const panes = iterm.listPanes()
+
+        if (panes.length === 0) {
+          logger.info('No panes found')
+          return
+        }
+
+        // Filter for agent panes (those with __ in the label)
+        const agentPanes = panes.filter((p) => p.label && p.label.includes('__'))
+
+        if (agentPanes.length === 0) {
+          logger.info('No agent panes found')
+          logger.info('(Agent panes have names like: task-name__claude)')
+          return
+        }
+
+        logger.info('Running agents:')
+        agentPanes.forEach((pane, idx) => {
+          const parts = pane.label.split('__')
+          const agentType = parts[parts.length - 1]
+          const taskName = parts.slice(0, -1).join('__')
+          logger.info(`  ${idx + 1}. ${pane.label}`)
+          logger.info(`     Type: ${agentType}, Task: ${taskName}`)
+          logger.info(`     Session: ${pane.sessionId.substring(0, 8)}...`)
+        })
+
+        logger.info('')
+        logger.info('Send messages with: crewchief agent message <name> <message>')
+        logger.info('Example: crewchief agent message fix-login-bug5__claude "your message"')
+      } else {
+        logger.error('iTerm2 is required for agent listing')
       }
     })
 

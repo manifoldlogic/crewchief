@@ -52,10 +52,10 @@ crewchief worktree copy-ignored feature-branch
 crewchief worktree merge feature-branch
 
 # Spawn AI agents in iTerm2 (REQUIRES iTerm2)
-crewchief spawn claude "implement-auth"      # Creates worktree and launches Claude
-crewchief spawn gemini "code-review"         # Creates worktree and launches Gemini
-crewchief agent message claude "Add OAuth support"  # Send task to Claude
-crewchief agent list                          # List running agents
+crewchief spawn claude "implement-auth"      # Creates worktree 'implement-auth__claude' and launches Claude
+crewchief spawn gemini "code-review"         # Creates worktree 'code-review__gemini' and launches Gemini
+crewchief agent list                          # List all running agents with their full names
+crewchief agent message implement-auth__claude "Add OAuth support"  # Send task to specific Claude agent
 ```
 
 ## Project Structure
