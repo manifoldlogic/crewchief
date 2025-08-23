@@ -8,7 +8,8 @@ import { LogFollower } from '../bus/logFollower'
 import { loadConfig } from '../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
 import { RunManager } from '../orchestrator/runManager'
-import { TmuxService } from '../tmux/tmux.service'
+import { TmuxService } from '../tmux/tmux.service' // DEPRECATED: tmux implementation is incomplete and no longer under development
+import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { logger } from '../utils/logger'
 
 export function registerAgentCommands(program: Command): void {
@@ -39,6 +40,7 @@ export function registerAgentCommands(program: Command): void {
           if (k && rest.length) envVars[k] = rest.join('=')
         }
 
+        // DEPRECATED: tmux implementation is incomplete - iTerm2 is required
         const tmux = new TmuxService(config.tmux.sessionName)
         tmux.ensureSession()
         const rm = new RunManager()
@@ -95,7 +97,7 @@ export function registerAgentCommands(program: Command): void {
     .command('message')
     .argument('<agentId>')
     .argument('<message>')
-    .description('Send a message to an agent (mock)')
+    .description('Send a message to an agent')
     .action(async (agentId: string, message: string) => {
       const rm = new RunManager()
       const run = rm.getRunByAgentType(agentId)
@@ -104,10 +106,29 @@ export function registerAgentCommands(program: Command): void {
         return
       }
       const config = await loadConfig()
-      const tmux = new TmuxService(config.tmux.sessionName)
-      tmux.sendKeys(run.paneId, message)
-      rm.appendLog(run.id, 'messages.log', `[in] ${message}`)
-      logger.info(`[${agentId}] <= ${message} [pane=${run.paneId}] [run=${run.id}]`)
+      
+      // Detect backend and use appropriate service
+      const iterm = new ITermSimpleService()
+      if (iterm.isAvailable()) {
+        // Use iTerm2 with agent-specific Enter key (chr(13) for Claude, etc.)
+        const success = iterm.sendKeys(agentId, message, agentId)
+        if (success) {
+          rm.appendLog(run.id, 'messages.log', `[in] ${message}`)
+          logger.info(`[${agentId}] <= ${message} [iTerm2] [run=${run.id}]`)
+        } else {
+          logger.error(`Failed to send message to ${agentId}`)
+        }
+      } else {
+        // DEPRECATED: tmux implementation is incomplete and no longer under development
+        // Users should install iTerm2 for proper agent communication
+        logger.error('iTerm2 is required for agent messaging. Please install iTerm2.')
+        logger.error('Visit: https://iterm2.com/downloads.html')
+        logger.warn('Attempting tmux fallback (incomplete implementation)...')
+        const tmux = new TmuxService(config.tmux?.sessionName || 'crewchief')
+        tmux.sendKeys(run.paneId, message)
+        rm.appendLog(run.id, 'messages.log', `[in] ${message}`)
+        logger.info(`[${agentId}] <= ${message} [tmux:${run.paneId}] [run=${run.id}]`)
+      }
     })
 
   agent
