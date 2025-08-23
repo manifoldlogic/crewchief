@@ -62,9 +62,9 @@ function detectTerminalBackend(): 'iterm' | 'tmux' | null {
 export function registerSpawnCommand(program: Command): void {
   program
     .command('spawn')
-    .description('Spawn a new AI agent in a dedicated terminal pane with its own worktree')
-    .argument('<agent>', 'Agent type (claude, gemini, gpt, cursor, aider, or custom command)')
-    .argument('[task]', 'Optional task description to include in agent name')
+    .description('Spawn AI agent(s) in dedicated terminal pane(s) with their own worktrees')
+    .argument('<agents>', 'Agent type(s) - single or multiple (e.g., claude or claude,gemini or claude+gemini)')
+    .argument('[task]', 'Optional task description to include in agent name(s)')
     .option('-n, --name <name>', 'Custom name for the agent')
     .option('-v, --vertical', 'Split pane vertically instead of horizontally')
     .option('-a, --args <args>', 'Additional arguments to pass to the agent command')
@@ -99,49 +99,88 @@ export function registerSpawnCommand(program: Command): void {
             process.exit(1)
           }
 
-          // Use smart spawning with intelligent pane management
-          const spawnScript = existsSync(join(scriptsDir, 'spawn_agent_smart.py'))
-            ? join(scriptsDir, 'spawn_agent_smart.py')
-            : join(scriptsDir, 'spawn_agent.py')
+          // Check if spawning multiple agents
+          const isMultiAgent = agent.includes(',') || agent.includes('+')
 
-          // Generate agent name in format: {name}__{agent}
-          let baseName: string
-          if (options.name) {
-            // Use provided name
-            baseName = options.name
-          } else if (task) {
-            // Use task as the name
-            baseName = task.replace(/\s+/g, '-').toLowerCase()
+          let spawnScript: string
+          if (isMultiAgent && existsSync(join(scriptsDir, 'spawn_multi_agents.py'))) {
+            // Use multi-agent spawning script
+            spawnScript = join(scriptsDir, 'spawn_multi_agents.py')
+          } else if (!isMultiAgent && existsSync(join(scriptsDir, 'spawn_agent_smart.py'))) {
+            // Use smart spawning with intelligent pane management
+            spawnScript = join(scriptsDir, 'spawn_agent_smart.py')
           } else {
-            // Generate a simple name with timestamp
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-            baseName = `${agent}-${timestamp}`
+            // Fallback to basic spawn
+            spawnScript = join(scriptsDir, 'spawn_agent.py')
           }
-
-          // Create the base worktree name
-          let agentName = `${baseName}__${agent}`
 
           // Get current working directory (project directory)
           const projectDir = process.cwd()
 
-          // Check if worktree already exists
-          const worktreePath = join(projectDir, '.crewchief', 'worktrees', agentName)
-          if (existsSync(worktreePath)) {
-            // Append timestamp if worktree exists
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-            agentName = `${baseName}__${agent}_${timestamp}`
-            console.log(chalk.yellow(`⚠️  Worktree ${baseName}__${agent} exists, using ${agentName}`))
-          }
-
           // Build spawn command arguments
-          const args = [spawnScript, agent, '--name', agentName, '--project-dir', projectDir]
+          let args: string[]
 
-          if (options.vertical) {
-            args.push('--vertical')
-          }
+          if (isMultiAgent) {
+            // Multi-agent spawning
+            console.log(chalk.blue('🤖 Spawning multiple agents...'))
 
-          if (options.args) {
-            args.push('--args', options.args)
+            // Parse agent types
+            const agentTypes = agent
+              .replace(/\+/g, ',')
+              .split(',')
+              .map((a) => a.trim())
+              .filter(Boolean)
+            console.log(chalk.dim(`   Agents: ${agentTypes.join(', ')}`))
+
+            // For multi-agent, pass agents and task directly
+            args = [spawnScript, agent]
+
+            if (task) {
+              args.push(task)
+            }
+
+            args.push('--project-dir', projectDir)
+
+            if (options.args) {
+              args.push('--args', options.args)
+            }
+          } else {
+            // Single agent spawning
+            // Generate agent name in format: {name}__{agent}
+            let baseName: string
+            if (options.name) {
+              // Use provided name
+              baseName = options.name
+            } else if (task) {
+              // Use task as the name
+              baseName = task.replace(/\s+/g, '-').toLowerCase()
+            } else {
+              // Generate a simple name with timestamp
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+              baseName = `${agent}-${timestamp}`
+            }
+
+            // Create the base worktree name
+            let agentName = `${baseName}__${agent}`
+
+            // Check if worktree already exists
+            const worktreePath = join(projectDir, '.crewchief', 'worktrees', agentName)
+            if (existsSync(worktreePath)) {
+              // Append timestamp if worktree exists
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+              agentName = `${baseName}__${agent}_${timestamp}`
+              console.log(chalk.yellow(`⚠️  Worktree ${baseName}__${agent} exists, using ${agentName}`))
+            }
+
+            args = [spawnScript, agent, '--name', agentName, '--project-dir', projectDir]
+
+            if (options.vertical) {
+              args.push('--vertical')
+            }
+
+            if (options.args) {
+              args.push('--args', options.args)
+            }
           }
 
           if (options.noLabel) {
@@ -168,9 +207,19 @@ export function registerSpawnCommand(program: Command): void {
             process.exit(1)
           }
 
-          console.log(chalk.green('✅ Agent spawned successfully'))
-          console.log(chalk.dim("   Use 'crewchief agent list' to see all agents"))
-          console.log(chalk.dim(`   Use 'crewchief agent message ${agentName} <text>' to send commands`))
+          if (isMultiAgent) {
+            console.log(chalk.green('✅ Agents spawned successfully'))
+            console.log(chalk.dim("   Use 'crewchief agent list' to see all agents"))
+            console.log(chalk.dim("   Use 'crewchief agent message <agent-name> <text>' to send commands"))
+          } else {
+            console.log(chalk.green('✅ Agent spawned successfully'))
+            console.log(chalk.dim("   Use 'crewchief agent list' to see all agents"))
+            // Only show specific agent name for single spawn
+            const agentName = args.find((a, i) => args[i - 1] === '--name')
+            if (agentName) {
+              console.log(chalk.dim(`   Use 'crewchief agent message ${agentName} <text>' to send commands`))
+            }
+          }
         }
       } catch (error) {
         console.error(chalk.red('❌ Error spawning agent:'), error)
@@ -181,11 +230,19 @@ export function registerSpawnCommand(program: Command): void {
       'after',
       `
 Examples:
+  Single agent:
   $ crewchief spawn claude                    # Spawn Claude with auto-generated name
   $ crewchief spawn claude "auth-feature"     # Include task in name
   $ crewchief spawn claude --name my-agent    # Use custom name
-  $ crewchief spawn gemini --vertical         # Split vertically
-  $ crewchief spawn claude --args "--model claude-3-opus"  # Pass args to agent
+  
+  Multiple agents:
+  $ crewchief spawn claude,gemini implement-auth     # Spawn both Claude and Gemini
+  $ crewchief spawn claude+gemini+gpt code-review    # Using + separator
+  $ crewchief spawn "claude, gemini" fix-bug         # With spaces (quoted)
+  
+  With options:
+  $ crewchief spawn claude --vertical         # Split vertically (single agent only)
+  $ crewchief spawn claude,gemini --args "--model gpt-4"  # Pass args to all agents
 
 Supported agents:
   - claude    Anthropic's Claude
@@ -195,9 +252,15 @@ Supported agents:
   - aider     Aider coding assistant
   - custom    Any custom command
 
-The agent will be spawned in:
-  1. A new iTerm2 pane (split from current)
-  2. Its own git worktree (.crewchief/worktrees/<name>)
-  3. With a visual badge and label for identification`,
+Spawning behavior:
+  Single agent:
+    - Creates one new pane with intelligent splitting
+    - One git worktree: .crewchief/worktrees/<task>__<agent>
+  
+  Multiple agents:
+    - Creates multiple panes with hierarchical layout
+    - Separate worktrees for each: <task>__<agent1>, <task>__<agent2>, etc.
+    - First agent: vertical split (left/right)
+    - Additional agents: horizontal splits of right pane`,
     )
 }

@@ -70,10 +70,16 @@ pnpm dlx crewchief --help
 
 ### Agent Management (iTerm2 Required)
 
-- `crewchief spawn <agent> [task]` — Spawn an agent in an iTerm2 pane with its own worktree
+- `crewchief spawn <agents> [task]` — Spawn one or more agents in iTerm2 panes with their own worktrees
 - `crewchief agent list` — List all running agents with their full names
 - `crewchief agent message <agentName> <message>` — Send message to a specific agent by its full name (e.g., `fix-bug__claude`)
 - `crewchief agent close <agentId>` — Close an agent's pane
+
+**Multi-Agent Spawning:** You can spawn multiple agents at once:
+
+- `crewchief spawn claude,gemini implement-auth` — Spawns both Claude and Gemini agents
+- `crewchief spawn claude+gemini+gpt code-review` — Alternative syntax using +
+- Creates hierarchical pane layout: first agent splits vertically, additional agents split horizontally
 
 **Note:** Agent names follow the format `{task-name}__{agent-type}`. When you have multiple agents of the same type (e.g., multiple Claude agents), you must use the full name to send messages to a specific one. Use `crewchief agent list` to see all running agents with their names.
 
