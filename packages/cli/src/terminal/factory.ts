@@ -3,9 +3,9 @@
  */
 
 import { platform } from 'node:os'
-import { TmuxAdapter } from './tmux.adapter.js'
 import { ITermAdapter } from './iterm.adapter.js'
 import type { ITerminalService, IAgentTerminalService } from './terminal.interface.js'
+import { TmuxAdapter } from './tmux.adapter.js'
 
 export type TerminalBackend = 'tmux' | 'iterm' | 'auto'
 

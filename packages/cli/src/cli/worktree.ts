@@ -251,7 +251,7 @@ export function registerWorktreeCommands(program: Command): void {
         const config = await loadConfig()
         if (!config.worktree?.copyIgnoredFiles?.length) {
           logger.warn(
-            'No ignored files configured to copy. Add patterns to worktree.copyIgnoredFiles in crewchief.config.ts',
+            'No ignored files configured to copy. Add patterns to worktree.copyIgnoredFiles in crewchief.config.js',
           )
           return
         }

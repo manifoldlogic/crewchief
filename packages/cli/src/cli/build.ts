@@ -14,7 +14,7 @@ interface BuildOptions {
   sequential?: boolean
 }
 
-interface BuildTarget {
+interface _BuildTarget {
   name: string
   type: 'rust' | 'typescript' | 'web'
   path: string
@@ -132,7 +132,7 @@ async function buildRustBinaries(projectRoot: string, verbose: boolean): Promise
 
       for (const destDir of target.destinations) {
         const destPath = path.join(projectRoot, destDir, platform)
-        
+
         // Check if destination package exists
         const packagePath = path.join(projectRoot, destDir, '..')
         if (!fs.existsSync(packagePath)) {
@@ -145,7 +145,7 @@ async function buildRustBinaries(projectRoot: string, verbose: boolean): Promise
         // Copy the binary
         const destFile = path.join(destPath, binaryName)
         fs.copyFileSync(sourcePath + binaryExt, destFile)
-        
+
         // Make it executable on Unix-like systems
         if (process.platform !== 'win32') {
           fs.chmodSync(destFile, 0o755)
@@ -156,7 +156,7 @@ async function buildRustBinaries(projectRoot: string, verbose: boolean): Promise
         if (fs.existsSync(linkPath)) {
           fs.unlinkSync(linkPath)
         }
-        
+
         // On Windows, copy instead of symlink for simplicity
         if (process.platform === 'win32') {
           fs.copyFileSync(destFile, linkPath)

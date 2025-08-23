@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,19 +16,13 @@ import { registerOpsdeckCommand } from './opsdeck'
 import { registerReleaseCommand } from './release'
 import { registerRunsCommands } from './runs'
 import { registerSetupCommand, runSetupWizard } from './setup'
+import { registerSpawnCommand } from './spawn'
 import { registerTaskCommands } from './task'
 import { registerWorktreeCommands } from './worktree'
-import { registerSpawnCommand } from './spawn'
 // Backwards-compat session subcommand removed; `crewchief` is the entrypoint
 // registerSessionCommands(program);
-import { getAgentType } from '../agents/registry'
-import { messageBus } from '../bus/index'
-import { LogFollower } from '../bus/logFollower'
 import { loadConfig } from '../config/loader'
-import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
 import { startOrchestratorEventBridge } from '../orchestrator/events'
-import { RunManager } from '../orchestrator/runManager'
-import { TmuxService } from '../tmux/tmux.service' // DEPRECATED: tmux implementation is incomplete - iTerm2 is required
 import { logger } from '../utils/logger'
 
 const program = new Command()
@@ -78,7 +71,7 @@ program.action(async () => {
     try {
       config = await loadConfig()
     } catch (e: any) {
-      if (String(e?.message || '').includes('Missing crewchief.config.ts')) {
+      if (String(e?.message || '').includes('Missing configuration file')) {
         logger.info('No configuration found. Running setup...')
         await runSetupWizard()
         config = await loadConfig()
@@ -95,13 +88,13 @@ program.action(async () => {
       logger.error('   Then run CrewChief from within iTerm2.')
       process.exit(1)
     }
-    
+
     logger.success('✅ Running in iTerm2')
-    
+
     // Auto-launch default root agents if configured
     const defaults = (config as any).defaults
     const launch = (config as any).launch
-    
+
     // DEPRECATED: Opsdeck auto-launch requires tmux which is no longer supported
     if (launch?.autoStartOpsdeck) {
       logger.warn('autoStartOpsdeck is not supported with iTerm2. Use `crewchief spawn` instead.')

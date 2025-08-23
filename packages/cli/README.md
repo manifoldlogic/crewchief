@@ -95,7 +95,7 @@ pnpm dlx crewchief --help
 
 ## Configuration
 
-CrewChief uses a `crewchief.config.ts` file for configuration. Key settings include:
+CrewChief uses a `crewchief.config.js` file for configuration. Key settings include:
 
 - **Worktree Settings**: Configure automatic copying of git-ignored files to new worktrees
 - **Agent Defaults**: Set default agent types and platforms
@@ -104,8 +104,8 @@ CrewChief uses a `crewchief.config.ts` file for configuration. Key settings incl
 
 ### Example: Auto-copy .env files to worktrees
 
-```typescript
-// crewchief.config.ts
+```javascript
+// crewchief.config.js
 export default {
   worktree: {
     copyIgnoredFiles: ['.env', '.env.local', 'config/*.secret'],

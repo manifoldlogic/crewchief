@@ -2,8 +2,8 @@
  * Tmux adapter for the terminal interface
  */
 
-import { TmuxService } from '../tmux/tmux.service.js'
 import type { ITerminalService, TerminalLayout } from './terminal.interface.js'
+import { TmuxService } from '../tmux/tmux.service.js'
 
 export class TmuxAdapter implements ITerminalService {
   private tmux: TmuxService

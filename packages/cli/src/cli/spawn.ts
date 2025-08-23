@@ -3,13 +3,13 @@
  * Spawn command for creating new agents in iTerm2
  */
 
-import { Command } from 'commander'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadConfig } from '../config/loader.js'
 import chalk from 'chalk'
+import { Command } from 'commander'
+import { loadConfig } from '../config/loader.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -49,13 +49,13 @@ function detectTerminalBackend(): 'iterm' | 'tmux' | null {
   if (process.env.TERM_PROGRAM === 'iTerm.app') {
     return 'iterm'
   }
-  
+
   // Check if tmux is available
   const tmuxCheck = spawnSync('which', ['tmux'], { encoding: 'utf-8' })
   if (tmuxCheck.status === 0) {
     return 'tmux'
   }
-  
+
   return null
 }
 
@@ -73,23 +73,23 @@ export function registerSpawnCommand(program: Command): void {
     .action(async (agent: string, task: string | undefined, options: SpawnOptions) => {
       try {
         const config = await loadConfig()
-        
+
         // Detect or use specified backend
         const backend = options.backend || config.terminal?.backend || 'auto'
         const detectedBackend = backend === 'auto' ? detectTerminalBackend() : backend
-        
+
         if (!detectedBackend) {
           console.error(chalk.red('❌ No suitable terminal backend found'))
           console.error(chalk.yellow('   Please install iTerm2 (macOS) or tmux'))
           process.exit(1)
         }
-        
+
         if (detectedBackend === 'tmux') {
           console.error(chalk.yellow('⚠️  Tmux backend not yet implemented for spawn command'))
           console.error(chalk.dim('   Please use iTerm2 or implement tmux support'))
           process.exit(1)
         }
-        
+
         if (detectedBackend === 'iterm') {
           // Find iterm_scripts directory
           const scriptsDir = findITermScriptsDir()
@@ -98,9 +98,9 @@ export function registerSpawnCommand(program: Command): void {
             console.error(chalk.yellow('   Make sure iTerm2 scripts are installed'))
             process.exit(1)
           }
-          
+
           const spawnScript = join(scriptsDir, 'spawn_agent.py')
-          
+
           // Generate agent name in format: {name}__{agent}
           let baseName: string
           if (options.name) {
@@ -114,13 +114,13 @@ export function registerSpawnCommand(program: Command): void {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
             baseName = `${agent}-${timestamp}`
           }
-          
+
           // Create the base worktree name
           let agentName = `${baseName}__${agent}`
-          
+
           // Get current working directory (project directory)
           const projectDir = process.cwd()
-          
+
           // Check if worktree already exists
           const worktreePath = join(projectDir, '.crewchief', 'worktrees', agentName)
           if (existsSync(worktreePath)) {
@@ -129,7 +129,7 @@ export function registerSpawnCommand(program: Command): void {
             agentName = `${baseName}__${agent}_${timestamp}`
             console.log(chalk.yellow(`⚠️  Worktree ${baseName}__${agent} exists, using ${agentName}`))
           }
-          
+
           // Build spawn command arguments
           const args = [
             spawnScript,
@@ -137,31 +137,31 @@ export function registerSpawnCommand(program: Command): void {
             '--name', agentName,
             '--project-dir', projectDir,
           ]
-          
+
           if (options.vertical) {
             args.push('--vertical')
           }
-          
+
           if (options.args) {
             args.push('--args', options.args)
           }
-          
+
           if (options.noLabel) {
             args.push('--no-label')
           }
-          
+
           console.log(chalk.cyan('🚀 Spawning agent via iTerm2...'))
           console.log(chalk.dim(`   Script: ${spawnScript}`))
           console.log(chalk.dim(`   Agent: ${agent}`))
           console.log(chalk.dim(`   Name: ${agentName}`))
           console.log(chalk.dim(`   Project: ${projectDir}`))
-          
+
           // Execute the spawn script
           const result = spawnSync('python3', args, {
             stdio: 'inherit',
             encoding: 'utf-8',
           })
-          
+
           if (result.status !== 0) {
             console.error(chalk.red('❌ Failed to spawn agent'))
             if (result.error) {
@@ -169,9 +169,9 @@ export function registerSpawnCommand(program: Command): void {
             }
             process.exit(1)
           }
-          
+
           console.log(chalk.green('✅ Agent spawned successfully'))
-          console.log(chalk.dim(`   Use 'crewchief agent list' to see all agents`))
+          console.log(chalk.dim('   Use \'crewchief agent list\' to see all agents'))
           console.log(chalk.dim(`   Use 'crewchief agent message ${agentName} <text>' to send commands`))
         }
       } catch (error) {

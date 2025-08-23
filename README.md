@@ -45,7 +45,7 @@ crewchief worktree create feature-branch
 crewchief worktree list
 crewchief worktree cd feature-branch
 
-# Auto-copy .env files to new worktrees (configure in crewchief.config.ts)
+# Auto-copy .env files to new worktrees (configure in crewchief.config.js)
 crewchief worktree copy-ignored feature-branch
 
 # Merge worktree changes back to source branch

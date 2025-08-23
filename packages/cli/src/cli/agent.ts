@@ -7,9 +7,9 @@ import { messageBus } from '../bus/index'
 import { LogFollower } from '../bus/logFollower'
 import { loadConfig } from '../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
+import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { RunManager } from '../orchestrator/runManager'
 import { TmuxService } from '../tmux/tmux.service' // DEPRECATED: tmux implementation is incomplete and no longer under development
-import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { logger } from '../utils/logger'
 
 export function registerAgentCommands(program: Command): void {
@@ -106,7 +106,7 @@ export function registerAgentCommands(program: Command): void {
         return
       }
       const config = await loadConfig()
-      
+
       // Detect backend and use appropriate service
       const iterm = new ITermSimpleService()
       if (iterm.isAvailable()) {

@@ -2,7 +2,6 @@ import { spawnSync, spawn, ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import fetch from 'node-fetch'
 import type {
-  ITermSessionInfo,
   ITermAgentInfo,
   ITermRpcRequest,
   ITermRpcResponse,
@@ -98,7 +97,7 @@ export class ITermService {
             return
           }
         }
-      } catch (e) {
+      } catch {
         // Bridge not ready yet
       }
       await new Promise((resolve) => setTimeout(resolve, 1000))

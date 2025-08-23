@@ -1,12 +1,12 @@
-import type { CrewChiefConfig } from './packages/cli/src/config/schema.js'
-
 /**
  * Example CrewChief configuration
  * 
  * IMPORTANT: iTerm2 is required for agent orchestration.
  * The tmux implementation is incomplete and no longer under development.
+ * 
+ * @type {import('./packages/cli/src/config/schema.js').CrewChiefConfig}
  */
-const config: CrewChiefConfig = {
+const config = {
   repository: {
     mainBranch: 'main',
     worktreeBasePath: '.crewchief/worktrees',

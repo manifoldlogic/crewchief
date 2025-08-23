@@ -41,7 +41,7 @@ export class ITermSimpleService {
     }
 
     const scriptPath = join(this.scriptsDir, 'send_to_pane.py')
-    
+
     const args = [
       scriptPath,
       '--to', targetLabel,
@@ -77,7 +77,7 @@ export class ITermSimpleService {
     }
 
     const scriptPath = join(this.scriptsDir, 'list_panes.py')
-    
+
     const result = spawnSync('python3', [scriptPath], {
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -90,7 +90,7 @@ export class ITermSimpleService {
 
     const panes: Array<{ index: number; label: string; sessionId: string }> = []
     const lines = result.stdout.trim().split('\n')
-    
+
     for (const line of lines) {
       // Parse output like: "1. [agent-name] (session_id)"
       const match = line.match(/^(\d+)\.\s+\[(.*?)\]\s+\((.*?)\)/)
@@ -118,7 +118,7 @@ export class ITermSimpleService {
   /**
    * Compatibility methods for drop-in replacement of TmuxService
    */
-  
+
   hasSession(): boolean {
     // In iTerm2, we always have a session if iTerm is running
     return this.isAvailable()
@@ -136,25 +136,25 @@ export class ITermSimpleService {
     spawnSync('osascript', ['-e', 'tell application "iTerm2" to activate'])
   }
 
-  captureOutput(paneId: string): string {
+  captureOutput(_paneId: string): string {
     // This would require more complex iTerm2 API usage
     // For now, return empty string
     logger.warn('captureOutput not fully implemented for iTerm2')
     return ''
   }
 
-  createWindowWithCommand(command: string): string {
+  createWindowWithCommand(_command: string): string {
     // Use spawn_agent.py for this functionality
     logger.warn('createWindowWithCommand not fully implemented for iTerm2 - use spawn command instead')
     return 'iterm-pane-' + Date.now()
   }
 
-  getWindowIdForPane(paneId: string): string | null {
+  getWindowIdForPane(_paneId: string): string | null {
     // iTerm2 doesn't expose window IDs the same way
     return null
   }
 
-  pipePaneToFile(paneId: string, filePath: string, append: boolean): void {
+  pipePaneToFile(_paneId: string, _filePath: string, _append: boolean): void {
     // This would require iTerm2 Python API
     logger.warn('pipePaneToFile not implemented for iTerm2')
   }

@@ -2,12 +2,12 @@
  * iTerm2 adapter for the terminal interface
  */
 
-import { ITermService } from '../iterm/iterm.service.js'
 import type {
   IAgentTerminalService,
   TerminalLayout,
   TerminalAgentInfo,
 } from './terminal.interface.js'
+import { ITermService } from '../iterm/iterm.service.js'
 
 export class ITermAdapter implements IAgentTerminalService {
   private iterm: ITermService
