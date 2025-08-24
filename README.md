@@ -43,7 +43,7 @@ crewchief maproom:search "authentication flow"
 # Manage worktrees
 crewchief worktree create feature-branch
 crewchief worktree list
-crewchief worktree cd feature-branch
+crewchief worktree use feature-branch
 
 # Auto-copy .env files to new worktrees (configure in crewchief.config.js)
 crewchief worktree copy-ignored feature-branch

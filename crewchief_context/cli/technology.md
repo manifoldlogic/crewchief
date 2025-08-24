@@ -25,7 +25,7 @@ CrewChief is a TypeScript-based multi-agent orchestration tool that enables AI a
   - `node dist/index.js worktree create <name> [--branch <branch>] [--base-path <dir>]` — create a worktree from a base branch
   - `node dist/index.js worktree list` — list all repo worktrees and annotate known agent-owned ones
   - `node dist/index.js worktree clean` — prune stale or remove all non-current worktrees
-  - `node dist/index.js worktree cd <selector> [--print]` — start a subshell in the matched worktree by default, or print its path with `--print`
+  - `node dist/index.js worktree use <name> [--print]` — use a worktree (creates if needed) by starting a subshell in it, or print its path with `--print`
 - Agents
   - `node dist/index.js agent spawn <type> <task>`
   - `node dist/index.js agent message <agentId> <message>`

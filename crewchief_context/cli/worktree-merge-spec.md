@@ -42,7 +42,7 @@ interface MergeWorktreeOptions {
 
 #### Phase 1: Validation and Preparation
 1. **Resolve Worktree**
-   - Use existing worktree resolution logic from `worktree cd` command
+   - Use existing worktree resolution logic from `worktree use` command
    - Ensure worktree exists and is valid
    - Get worktree path and branch name
 

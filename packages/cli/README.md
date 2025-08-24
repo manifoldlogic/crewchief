@@ -56,7 +56,7 @@ pnpm dlx crewchief --help
 - `crewchief worktree create <name> [--branch <branch>]` — Create a new worktree and cd into it by default
 - `crewchief worktree list` — List all active worktrees
 - `crewchief worktree clean [selector] [--all] [--stale]` — Remove specific worktree or clean up stale/all worktrees
-- `crewchief worktree cd <selector> [--print]` — Navigate to a worktree or print its path
+- `crewchief worktree use <name> [--print]` — Use a worktree (creates if needed) or print its path
 - `crewchief worktree copy-ignored <selector> [--dry-run]` — Copy git-ignored files to an existing worktree
 - `crewchief worktree merge <name> [--no-delete]` — Merge changes from a worktree back to its source branch and optionally clean up
 

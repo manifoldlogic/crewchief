@@ -170,69 +170,91 @@ export function registerWorktreeCommands(program: Command): void {
     })
 
   worktree
-    .command('cd')
-    .argument('<selector>')
+    .command('use')
+    .argument('<name>')
     .option('-p, --print', 'Print the absolute path instead of starting a subshell')
+    .option('--branch <base>', 'Base branch to create from if worktree does not exist')
+    .option('--base-path <dir>', 'Base directory for storing worktrees')
+    .option('--no-copy-ignored', 'Do not copy ignored files (override config) when creating')
     .description(
-      'Resolve a worktree by branch/name/path and start a subshell there by default. Use --print to output the absolute path for command substitution.',
+      'Use a worktree: switches to it if it exists, creates it first if not. Starts a subshell by default. Use --print to output the absolute path for command substitution.',
     )
-    .action(async (selector: string, opts: { print?: boolean }) => {
-      try {
-        const wt = new WorktreeService()
-        const list = await wt.listWorktrees()
-        const matches = list.filter((item) => {
-          const sel = selector.trim()
-          const byBranch = item.branch && item.branch === sel
-          const byBaseName = path.basename(item.path) === sel
-          let byPath = false
-          try {
-            const resolvedSel = path.resolve(sel)
-            byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
-          } catch {}
-          return Boolean(byBranch || byBaseName || byPath)
-        })
-        if (matches.length === 0) {
-          logger.error(`No matching worktree for '${selector}'. Try using branch name or worktree directory name.`)
-          process.exitCode = 1
-          return
-        }
-        if (matches.length > 1) {
-          logger.error(`Ambiguous selector '${selector}'. Candidates:`)
-          for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
-          process.exitCode = 1
-          return
-        }
-        const targetPath = path.resolve(matches[0].path)
-        if (opts.print) {
-          process.stdout.write(targetPath + '\n')
-          return
-        }
-        const shell = process.env.SHELL || '/bin/bash'
-        const currentBranch = await wt.getCurrentBranch()
-        const currentDir = process.cwd()
-        const targetBranch = matches[0].branch
+    .action(
+      async (name: string, opts: { print?: boolean; branch?: string; basePath?: string; copyIgnored?: boolean }) => {
+        try {
+          const config = await loadConfig()
+          const wt = new WorktreeService()
+          const list = await wt.listWorktrees()
 
-        if (targetBranch) {
-          displaySubshellMessage({
-            targetBranch: targetBranch,
-            targetDirectory: path.relative(currentDir, targetPath) || path.basename(targetPath),
-            sourceBranch: currentBranch,
-            sourceDirectory: path.basename(currentDir),
-            shell: path.basename(shell),
+          // Try to find existing worktree
+          const matches = list.filter((item) => {
+            const sel = name.trim()
+            const byBranch = item.branch && item.branch === sel
+            const byBaseName = path.basename(item.path) === sel
+            let byPath = false
+            try {
+              const resolvedSel = path.resolve(sel)
+              byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
+            } catch {}
+            return Boolean(byBranch || byBaseName || byPath)
           })
-        } else {
-          // Fallback for cases where branch is not detected
-          console.log(chalk.yellow('\nEntering worktree subshell...'))
-          console.log(chalk.gray('Type "exit" to return to your original directory\n'))
-        }
 
-        const child = spawn(shell, { stdio: 'inherit', cwd: targetPath, env: process.env })
-        child.on('exit', (code) => process.exit(code ?? 0))
-      } catch (err) {
-        logger.error('Failed to resolve worktree:', err)
-        process.exitCode = 1
-      }
-    })
+          let targetPath: string
+          let targetBranch: string | undefined
+
+          if (matches.length === 0) {
+            // Worktree doesn't exist - create it
+            logger.info(`Worktree '${name}' not found. Creating it...`)
+
+            const baseBranch = opts.branch ?? config.repository.mainBranch
+            const basePath = opts.basePath ?? config.repository.worktreeBasePath
+            await wt.initRepository(basePath)
+            const skipCopyIgnored = opts.copyIgnored === false
+            targetPath = await wt.createWorktree(name, baseBranch, basePath, skipCopyIgnored)
+            targetBranch = name
+            logger.success(`Created worktree at ${targetPath} [${baseBranch}]`)
+          } else if (matches.length > 1) {
+            logger.error(`Ambiguous selector '${name}'. Candidates:`)
+            for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
+            process.exitCode = 1
+            return
+          } else {
+            // Worktree exists - use it
+            targetPath = path.resolve(matches[0].path)
+            targetBranch = matches[0].branch
+          }
+
+          if (opts.print) {
+            process.stdout.write(targetPath + '\n')
+            return
+          }
+
+          const shell = process.env.SHELL || '/bin/bash'
+          const currentBranch = await wt.getCurrentBranch()
+          const currentDir = process.cwd()
+
+          if (targetBranch) {
+            displaySubshellMessage({
+              targetBranch: targetBranch,
+              targetDirectory: path.relative(currentDir, targetPath) || path.basename(targetPath),
+              sourceBranch: currentBranch,
+              sourceDirectory: path.basename(currentDir),
+              shell: path.basename(shell),
+            })
+          } else {
+            // Fallback for cases where branch is not detected
+            console.log(chalk.yellow('\nEntering worktree subshell...'))
+            console.log(chalk.gray('Type "exit" to return to your original directory\n'))
+          }
+
+          const child = spawn(shell, { stdio: 'inherit', cwd: targetPath, env: process.env })
+          child.on('exit', (code) => process.exit(code ?? 0))
+        } catch (err) {
+          logger.error('Failed to use worktree:', err)
+          process.exitCode = 1
+        }
+      },
+    )
 
   worktree
     .command('copy-ignored')
@@ -315,217 +337,227 @@ export function registerWorktreeCommands(program: Command): void {
     .option('--no-delete', 'Keep the worktree after merging')
     .option('-y, --yes', 'Skip confirmation prompts')
     .description('Merge changes from a worktree back to its source branch and clean up')
-    .action(async (name: string, opts: {
-      copyIgnored?: boolean
-      dryRun?: boolean
-      strategy?: string
-      message?: string
-      delete?: boolean
-      yes?: boolean
-    }) => {
-      try {
-        const config = await loadConfig()
-        const wt = new WorktreeService()
-        const metadataService = new WorktreeMetadataService()
-
-        // Resolve worktree
-        const list = await wt.listWorktrees()
-        const matches = list.filter((item) => {
-          const sel = name.trim()
-          const byBranch = item.branch && item.branch === sel
-          const byBaseName = path.basename(item.path) === sel
-          let byPath = false
-          try {
-            const resolvedSel = path.resolve(sel)
-            byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
-          } catch {}
-          return Boolean(byBranch || byBaseName || byPath)
-        })
-
-        if (matches.length === 0) {
-          logger.error(`No matching worktree for '${name}'. Try using branch name or worktree directory name.`)
-          process.exitCode = 1
-          return
-        }
-        if (matches.length > 1) {
-          logger.error(`Ambiguous selector '${name}'. Candidates:`)
-          for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
-          process.exitCode = 1
-          return
-        }
-
-        const worktree = matches[0]
-        const worktreePath = path.resolve(worktree.path)
-        const worktreeBranch = worktree.branch
-
-        if (!worktreeBranch) {
-          logger.error('Cannot determine worktree branch')
-          process.exitCode = 1
-          return
-        }
-
-        // Check if we're inside the worktree being merged
-        const cwdReal = fs.realpathSync(process.cwd())
-        const worktreeReal = fs.realpathSync(worktreePath)
-        const rel = path.relative(worktreeReal, cwdReal)
-        const isInsideWorktree = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
-
-        if (isInsideWorktree) {
-          logger.error('Cannot merge a worktree while inside it. Please switch to the main repository first.')
-          process.exitCode = 1
-          return
-        }
-
-        // Read metadata to find source branch
-        const metadata = await metadataService.read(worktreePath)
-        const sourceBranch = metadata?.sourceBranch || config.repository.mainBranch
-
-        // Initialize merge service
-        const mergeService = new GitMergeService()
-
-        // Check for uncommitted changes
+    .action(
+      async (
+        name: string,
+        opts: {
+          copyIgnored?: boolean
+          dryRun?: boolean
+          strategy?: string
+          message?: string
+          delete?: boolean
+          yes?: boolean
+        },
+      ) => {
         try {
-          await mergeService.ensureClean()
-        } catch {
-          logger.error('Working tree has uncommitted changes. Commit or stash them before merging.')
-          process.exitCode = 1
-          return
-        }
+          const config = await loadConfig()
+          const wt = new WorktreeService()
+          const metadataService = new WorktreeMetadataService()
 
-        // Check if there are commits to merge
-        const hasCommits = await mergeService.hasCommitsToMerge(worktreeBranch, sourceBranch)
-        if (!hasCommits) {
-          logger.warn('No commits to merge from this worktree')
+          // Resolve worktree
+          const list = await wt.listWorktrees()
+          const matches = list.filter((item) => {
+            const sel = name.trim()
+            const byBranch = item.branch && item.branch === sel
+            const byBaseName = path.basename(item.path) === sel
+            let byPath = false
+            try {
+              const resolvedSel = path.resolve(sel)
+              byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
+            } catch {}
+            return Boolean(byBranch || byBaseName || byPath)
+          })
 
-          // Still offer to clean up the worktree
-          if (!opts.yes) {
-            const { cleanup } = await inquirer.prompt([{
-              type: 'confirm',
-              name: 'cleanup',
-              message: 'Do you want to remove this worktree anyway?',
-              default: false,
-            }])
-
-            if (cleanup && opts.delete !== false) {
-              await wt.removeWorktree(worktreePath)
-              removeDirSync(worktreePath)
-              logger.success(`Removed worktree ${worktreePath}`)
-            }
-          }
-          return
-        }
-
-        // Get changes statistics
-        const stats = await mergeService.getChangesStats(worktreeBranch, sourceBranch)
-
-        // Display what will be done
-        console.log(chalk.cyan('\n📊 Merge Summary:'))
-        console.log(`   Source branch: ${chalk.green(sourceBranch)}`)
-        console.log(`   Worktree branch: ${chalk.yellow(worktreeBranch)}`)
-        console.log(`   Strategy: ${chalk.blue(opts.strategy || 'ff')}`)
-        console.log(`   Commits: ${stats.commitCount}`)
-        console.log(`   Files changed: ${stats.filesChanged}`)
-        console.log(`   Insertions: ${chalk.green(`+${stats.insertions}`)}`)
-        console.log(`   Deletions: ${chalk.red(`-${stats.deletions}`)}`)
-
-        if (opts.dryRun) {
-          console.log(chalk.yellow('\n🔍 DRY RUN - No changes will be made'))
-        }
-
-        // Confirm merge
-        if (!opts.yes && !opts.dryRun) {
-          const { proceed } = await inquirer.prompt([{
-            type: 'confirm',
-            name: 'proceed',
-            message: `Merge ${worktreeBranch} into ${sourceBranch}?`,
-            default: true,
-          }])
-
-          if (!proceed) {
-            logger.info('Merge cancelled')
+          if (matches.length === 0) {
+            logger.error(`No matching worktree for '${name}'. Try using branch name or worktree directory name.`)
+            process.exitCode = 1
             return
           }
-        }
-
-        // Copy ignored files back (if configured)
-        let ignoredFilesCopied: string[] = []
-        if (opts.copyIgnored !== false && config.worktree?.copyIgnoredFiles?.length) {
-          console.log(chalk.cyan('\n📁 Copying ignored files back...'))
-          const copyResult = await copyIgnoredFilesBack({
-            worktreeRoot: worktreePath,
-            sourceRoot: process.cwd(),
-            config,
-            dryRun: opts.dryRun,
-          })
-          ignoredFilesCopied = copyResult.copied
-
-          if (copyResult.errors.length > 0) {
-            logger.warn(`Some files could not be copied: ${copyResult.errors.length} error(s)`)
+          if (matches.length > 1) {
+            logger.error(`Ambiguous selector '${name}'. Candidates:`)
+            for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
+            process.exitCode = 1
+            return
           }
-        }
 
-        if (opts.dryRun) {
-          console.log(chalk.yellow('\n✅ DRY RUN completed - no actual changes made'))
-          return
-        }
+          const worktree = matches[0]
+          const worktreePath = path.resolve(worktree.path)
+          const worktreeBranch = worktree.branch
 
-        // Perform the merge
-        console.log(chalk.cyan('\n🔀 Performing merge...'))
+          if (!worktreeBranch) {
+            logger.error('Cannot determine worktree branch')
+            process.exitCode = 1
+            return
+          }
 
-        const strategy = (opts.strategy as MergeStrategyType) || 'ff'
-        const commitMessage = opts.message || await mergeService.generateMergeCommitMessage({
-          worktreePath,
-          sourceBranch: worktreeBranch,
-          targetBranch: sourceBranch,
-          strategy,
-          ignoredFilesCopied,
-        })
+          // Check if we're inside the worktree being merged
+          const cwdReal = fs.realpathSync(process.cwd())
+          const worktreeReal = fs.realpathSync(worktreePath)
+          const rel = path.relative(worktreeReal, cwdReal)
+          const isInsideWorktree = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
 
-        const mergeResult = await mergeService.merge({
-          sourceBranch: worktreeBranch,
-          targetBranch: sourceBranch,
-          strategy,
-          commitMessage,
-        })
+          if (isInsideWorktree) {
+            logger.error('Cannot merge a worktree while inside it. Please switch to the main repository first.')
+            process.exitCode = 1
+            return
+          }
 
-        if (!mergeResult.success) {
-          logger.error(`Merge failed: ${mergeResult.message}`)
-          process.exitCode = 1
-          return
-        }
+          // Read metadata to find source branch
+          const metadata = await metadataService.read(worktreePath)
+          const sourceBranch = metadata?.sourceBranch || config.repository.mainBranch
 
-        logger.success(`Successfully merged ${worktreeBranch} into ${sourceBranch}`)
+          // Initialize merge service
+          const mergeService = new GitMergeService()
 
-        // Clean up worktree (unless --no-delete)
-        if (opts.delete !== false) {
-          console.log(chalk.cyan('\n🧹 Cleaning up worktree...'))
-
-          // Remove the worktree first (before deleting the branch)
-          await wt.removeWorktree(worktreePath)
-          removeDirSync(worktreePath)
-          logger.success(`Removed worktree at ${worktreePath}`)
-
-          // Now delete the worktree branch
+          // Check for uncommitted changes
           try {
-            await mergeService.deleteBranch(worktreeBranch)
-            logger.success(`Deleted branch ${worktreeBranch}`)
-          } catch (error) {
-            logger.warn(`Could not delete branch ${worktreeBranch}: ${error}`)
+            await mergeService.ensureClean()
+          } catch {
+            logger.error('Working tree has uncommitted changes. Commit or stash them before merging.')
+            process.exitCode = 1
+            return
           }
 
-          // Run git worktree prune
-          await wt.pruneWorktrees({ mode: 'stale' })
-        } else {
-          logger.info(`Worktree kept at ${worktreePath} (use 'worktree clean' to remove later)`)
+          // Check if there are commits to merge
+          const hasCommits = await mergeService.hasCommitsToMerge(worktreeBranch, sourceBranch)
+          if (!hasCommits) {
+            logger.warn('No commits to merge from this worktree')
+
+            // Still offer to clean up the worktree
+            if (!opts.yes) {
+              const { cleanup } = await inquirer.prompt([
+                {
+                  type: 'confirm',
+                  name: 'cleanup',
+                  message: 'Do you want to remove this worktree anyway?',
+                  default: false,
+                },
+              ])
+
+              if (cleanup && opts.delete !== false) {
+                await wt.removeWorktree(worktreePath)
+                removeDirSync(worktreePath)
+                logger.success(`Removed worktree ${worktreePath}`)
+              }
+            }
+            return
+          }
+
+          // Get changes statistics
+          const stats = await mergeService.getChangesStats(worktreeBranch, sourceBranch)
+
+          // Display what will be done
+          console.log(chalk.cyan('\n📊 Merge Summary:'))
+          console.log(`   Source branch: ${chalk.green(sourceBranch)}`)
+          console.log(`   Worktree branch: ${chalk.yellow(worktreeBranch)}`)
+          console.log(`   Strategy: ${chalk.blue(opts.strategy || 'ff')}`)
+          console.log(`   Commits: ${stats.commitCount}`)
+          console.log(`   Files changed: ${stats.filesChanged}`)
+          console.log(`   Insertions: ${chalk.green(`+${stats.insertions}`)}`)
+          console.log(`   Deletions: ${chalk.red(`-${stats.deletions}`)}`)
+
+          if (opts.dryRun) {
+            console.log(chalk.yellow('\n🔍 DRY RUN - No changes will be made'))
+          }
+
+          // Confirm merge
+          if (!opts.yes && !opts.dryRun) {
+            const { proceed } = await inquirer.prompt([
+              {
+                type: 'confirm',
+                name: 'proceed',
+                message: `Merge ${worktreeBranch} into ${sourceBranch}?`,
+                default: true,
+              },
+            ])
+
+            if (!proceed) {
+              logger.info('Merge cancelled')
+              return
+            }
+          }
+
+          // Copy ignored files back (if configured)
+          let ignoredFilesCopied: string[] = []
+          if (opts.copyIgnored !== false && config.worktree?.copyIgnoredFiles?.length) {
+            console.log(chalk.cyan('\n📁 Copying ignored files back...'))
+            const copyResult = await copyIgnoredFilesBack({
+              worktreeRoot: worktreePath,
+              sourceRoot: process.cwd(),
+              config,
+              dryRun: opts.dryRun,
+            })
+            ignoredFilesCopied = copyResult.copied
+
+            if (copyResult.errors.length > 0) {
+              logger.warn(`Some files could not be copied: ${copyResult.errors.length} error(s)`)
+            }
+          }
+
+          if (opts.dryRun) {
+            console.log(chalk.yellow('\n✅ DRY RUN completed - no actual changes made'))
+            return
+          }
+
+          // Perform the merge
+          console.log(chalk.cyan('\n🔀 Performing merge...'))
+
+          const strategy = (opts.strategy as MergeStrategyType) || 'ff'
+          const commitMessage =
+            opts.message ||
+            (await mergeService.generateMergeCommitMessage({
+              worktreePath,
+              sourceBranch: worktreeBranch,
+              targetBranch: sourceBranch,
+              strategy,
+              ignoredFilesCopied,
+            }))
+
+          const mergeResult = await mergeService.merge({
+            sourceBranch: worktreeBranch,
+            targetBranch: sourceBranch,
+            strategy,
+            commitMessage,
+          })
+
+          if (!mergeResult.success) {
+            logger.error(`Merge failed: ${mergeResult.message}`)
+            process.exitCode = 1
+            return
+          }
+
+          logger.success(`Successfully merged ${worktreeBranch} into ${sourceBranch}`)
+
+          // Clean up worktree (unless --no-delete)
+          if (opts.delete !== false) {
+            console.log(chalk.cyan('\n🧹 Cleaning up worktree...'))
+
+            // Remove the worktree first (before deleting the branch)
+            await wt.removeWorktree(worktreePath)
+            removeDirSync(worktreePath)
+            logger.success(`Removed worktree at ${worktreePath}`)
+
+            // Now delete the worktree branch
+            try {
+              await mergeService.deleteBranch(worktreeBranch)
+              logger.success(`Deleted branch ${worktreeBranch}`)
+            } catch (error) {
+              logger.warn(`Could not delete branch ${worktreeBranch}: ${error}`)
+            }
+
+            // Run git worktree prune
+            await wt.pruneWorktrees({ mode: 'stale' })
+          } else {
+            logger.info(`Worktree kept at ${worktreePath} (use 'worktree clean' to remove later)`)
+          }
+
+          console.log(chalk.green('\n✅ Merge completed successfully!'))
+        } catch (err) {
+          logger.error('Failed to merge worktree:', err)
+          process.exitCode = 1
         }
-
-        console.log(chalk.green('\n✅ Merge completed successfully!'))
-
-      } catch (err) {
-        logger.error('Failed to merge worktree:', err)
-        process.exitCode = 1
-      }
-    })
+      },
+    )
 
   program.addCommand(worktree)
 }
