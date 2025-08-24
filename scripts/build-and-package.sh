@@ -65,15 +65,6 @@ if [ -d "packages/maproom-mcp" ]; then
     build_and_package "maproom" "crewchief-maproom" "packages/maproom-mcp/bin"
 fi
 
-# Build opsdeck if it has a proper Cargo.toml
-if [ -f "crates/opsdeck/Cargo.toml" ] && [ -s "crates/opsdeck/Cargo.toml" ]; then
-    # Check if it's actually a binary crate
-    if grep -q 'name = "crewchief-opsdeck"' "crates/opsdeck/Cargo.toml" 2>/dev/null; then
-        build_and_package "opsdeck" "crewchief-opsdeck" "packages/cli/bin"
-    else
-        echo -e "${YELLOW}Skipping opsdeck - not configured as a binary crate${NC}"
-    fi
-fi
 
 # Create symlinks for the current platform in bin root (for backwards compatibility)
 echo -e "${YELLOW}Creating platform symlinks...${NC}"

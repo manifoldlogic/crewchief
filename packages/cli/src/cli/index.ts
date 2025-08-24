@@ -81,8 +81,7 @@ program.action(async () => {
     const defaults = (config as any).defaults
     const launch = (config as any).launch
 
-    // Opsdeck auto-launch removed; use `crewchief spawn` to start agents
-    // DEPRECATED: Auto-launching agents requires tmux which is no longer supported
+    // DEPRECATED: Auto-launching agents is no longer supported
     // Users should use `crewchief spawn <agent>` command instead
     const ensureAgentRunning = async (typeId: string) => {
       logger.warn(`Auto-launching agents is deprecated. Please use: crewchief spawn ${typeId}`)

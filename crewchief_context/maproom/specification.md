@@ -390,10 +390,10 @@ Returns a cached symbol card (generated at index time, invalidated on change).
 
 To integrate the maproom subcommand:
 
-- Create `packages/cli/src/cli/maproom.ts` modeled after `opsdeck.ts`.
+- Create `packages/cli/src/cli/maproom.ts` for the maproom command.
 - Register a `Command('maproom')` that parses subcommands (scan, upsert, etc.) and spawns `crewchief-maproom <subcmd> <args>`.
 - In `packages/cli/src/cli/index.ts`, import and call `registerMaproomCommand(program)`.
-- Add build script `scripts/build-maproom.sh` similar to `build-opsdeck.sh`.
+- Add build script `scripts/build-maproom.sh` for building the Rust binary.
 
 ---
 
