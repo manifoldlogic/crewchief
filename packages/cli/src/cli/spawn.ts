@@ -256,7 +256,6 @@ Examples:
   
   With options:
   $ crewchief spawn claude --vertical         # Split vertically (single agent only)
-  $ crewchief spawn claude,gemini --args "--model gpt-4"  # Pass args to all agents
 
 Supported agents:
   - claude    Anthropic's Claude (uses 'claude' command)
