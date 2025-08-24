@@ -22,11 +22,6 @@ async def main(connection):
     await current_session.async_set_variable("user.children_pane_ids", json.dumps([]))
     await current_session.async_set_variable("user.spawn_count", "0")
     
-    # Set badge
-    change = iterm2.LocalWriteOnlyProfile()
-    change.set_badge_text("🎯 Primary Orchestrator")
-    await current_session.async_set_profile_properties(change)
-    
     # Set session name
     await current_session.async_set_name("[Orchestrator] Primary")
     

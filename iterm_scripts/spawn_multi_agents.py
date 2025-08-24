@@ -235,10 +235,6 @@ async def main(connection):
         await current_session.async_set_variable("user.agent_type", "orchestrator")
         await current_session.async_set_variable("user.children_pane_ids", "[]")
         await current_session.async_set_variable("user.spawn_count", "0")
-        
-        change = iterm2.LocalWriteOnlyProfile()
-        change.set_badge_text("🎯 Orchestrator")
-        await current_session.async_set_profile_properties(change)
     
     # Spawn agents
     spawned_sessions = []
