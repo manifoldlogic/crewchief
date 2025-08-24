@@ -58,6 +58,8 @@ crewchief spawn claude,gemini "fix-bug"      # Spawn BOTH agents at once with sm
 crewchief agent list                          # List all running agents with their full names
 crewchief agent message implement-auth__claude "Add OAuth support"  # Send task to specific Claude agent
 crewchief agent message fix-bug__claude --file prompt.md  # Send file contents as prompt to agent
+crewchief agent message fix-bug --all "Update approach"  # Send to ALL agents working on fix-bug
+crewchief agent message "*" --all "Status update"  # Broadcast to ALL running agents
 ```
 
 ## Project Structure
