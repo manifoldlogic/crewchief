@@ -1,6 +1,6 @@
 # Project Overview
 
-CrewChief is a TypeScript-based multi-agent orchestration tool that enables AI agents to collaborate on repositories using isolated git worktrees with visual coordination through tmux.
+CrewChief is a TypeScript-based multi-agent orchestration tool that enables AI agents to collaborate on repositories using isolated git worktrees with visual coordination through iTerm2 on macOS.
 
 ## Commands
 

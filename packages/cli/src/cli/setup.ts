@@ -71,7 +71,7 @@ export async function runSetupWizard(): Promise<string> {
     .filter(Boolean)
     .map((id) => ({ id }))
 
-  const configPath = path.join(process.cwd(), 'crewchief.config.ts')
+  const configPath = path.join(process.cwd(), 'crewchief.config.js')
   const content = `export default {
   repository: {
     mainBranch: ${JSON.stringify(answers.mainBranch)},
@@ -102,10 +102,13 @@ export async function runSetupWizard(): Promise<string> {
   defaults: {
     rootAgents: ${JSON.stringify(rootAgents)}
   },
-  tmux: {
-    sessionName: 'crewchief',
-    orchestratorPaneSize: ${Number(answers.orchestratorPaneSize)},
-    agentPaneArrangement: ${JSON.stringify(answers.agentPaneArrangement)}
+  terminal: {
+    backend: 'iterm',
+    iterm: {
+      sessionName: 'crewchief',
+      bridgePort: 8765,
+      agentBadges: true
+    }
   },
   evaluation: {
     autoMergeThreshold: 0.95,

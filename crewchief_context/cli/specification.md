@@ -4,9 +4,9 @@
 
 ## Executive Summary
 
-CrewChief is a TypeScript-based orchestration tool that enables multiple AI agents to collaborate on a single repository using isolated git worktrees, with visual coordination through tmux. It streamlines complex multi-agent workflows into a single, ergonomic entrypoint: running `crewchief`.
+CrewChief is a TypeScript-based orchestration tool that enables multiple AI agents to collaborate on a single repository using isolated git worktrees, with visual coordination through iTerm2 on macOS. It streamlines complex multi-agent workflows into a single, ergonomic entrypoint: running `crewchief`.
 
-On first run, `crewchief` auto-detects project state and performs setup if needed. It then starts (or attaches to) a tmux session. When using agents, the tool transparently creates and reuses per‑agent worktrees while still exposing `worktree`commands for worktree management, regardless of agent usage. These worktree commands are general-purpose and operate on all git worktrees in the repository, regardless of whether they were created by CrewChief or manually.
+On first run, `crewchief` auto-detects project state and performs setup if needed. It then creates (or connects to) an iTerm2 session with dedicated tabs and panes for each agent. When using agents, the tool transparently creates and reuses per‑agent worktrees while still exposing `worktree`commands for worktree management, regardless of agent usage. These worktree commands are general-purpose and operate on all git worktrees in the repository, regardless of whether they were created by CrewChief or manually.
 
 ## Implementation Summary
 
@@ -14,7 +14,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 - Git worktree management (create, list, clean, cd)
 - Maproom code indexing and search
-- Basic agent spawning in tmux
+- Basic agent spawning in iTerm2
 - Run tracking and logging
 - Configuration management
 - Agent communication protocol (message bus)
@@ -29,7 +29,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 ### Not Implemented ❌
 
-- Main `crewchief` command auto-starting tmux session
+- Main `crewchief` command auto-starting iTerm2 session
 - Cross-agent input injection
 - Realm & semantic retrieval
 - Benchmarking & tournaments
@@ -42,7 +42,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 1. **Simplify git worktree management** - Abstract complex worktree commands into intuitive operations
 2. **Enable parallel AI agent collaboration** - Multiple agents working simultaneously in isolated environments
-3. **Provide visual orchestration** - Real-time visibility of all agents through tmux panes
+3. **Provide visual orchestration** - Real-time visibility of all agents through iTerm2 tabs and panes
 4. **Support competitive agent evaluation** - Compare different agents/configurations on identical tasks
 5. **Minimize command complexity** - Single commands for multi-step workflows
 
@@ -137,7 +137,7 @@ const agentTypes = {
 
 #### Primary Entry ❌ (NOT IMPLEMENTED)
 
-- `crewchief` - Start or attach to the CrewChief tmux session.
+- `crewchief` - Start or connect to the CrewChief iTerm2 session.
   - First‑run behavior: if the current directory is not configured, automatically run interactive `setup` before launching the session.
   - Launch the configured default root agent(s) automatically, or prompt the user to pick an agent if multiple are configured.
   - Present a minimal orchestrator/home pane as needed, but default to showing the active agent(s).
@@ -146,7 +146,7 @@ const agentTypes = {
 
 - `crewchief agent spawn <typeOrId> [--count N] [--task "..."] [--branch <base>] [--env KEY=VAL...]`
   - Creates one or more panes, provisions per‑agent worktrees, and starts the requested agent(s)
-- `crewchief agent message <agentId> <message>` - Send instructions to a specific agent (via tmux send + message bus)
+- `crewchief agent message <agentId> <message>` - Send instructions to a specific agent (via iTerm2 API + message bus)
 - `crewchief agent close <agentId> [--merge auto|manual|skip]` - Close pane and optionally merge work
 
 #### Tmux Automation Functions
@@ -280,7 +280,7 @@ export default {
       // e.g. { id: 'project-manager', platform: 'claude' }
     ]
   },
-  tmux: {
+  iterm: {
     sessionName: 'crewchief',
     orchestratorPaneSize: 40, // percentage
     agentPaneArrangement: 'tiled'
@@ -312,7 +312,7 @@ Welcome to CrewChief Setup!
 ? Default agent platform: (claude/gemini/both)
 ? Configure default root agent(s) to launch on start? (multi‑select)
 ? Enable competition mode by default? (y/n)
-? Configure tmux layout? (y/n)
+? Configure iTerm2 layout? (y/n)
   ? Orchestrator pane size: (40%)
   ? Agent arrangement: (tiled/vertical/horizontal)
 ? Set up agent definitions now? (y/n)
@@ -378,7 +378,7 @@ interface EvaluationMetric {
 ### Phase 1: Core Foundation (Week 1)
 
 1. Git worktree wrapper functions (automatic provisioning; user‑facing list/clean only)
-2. Basic tmux session management with `crewchief` as the primary entrypoint
+2. Basic iTerm2 session management with `crewchief` as the primary entrypoint
 3. Configuration file structure including `launch` and `defaults.rootAgents`
 4. Simple agent spawning and auto‑worktree creation
 

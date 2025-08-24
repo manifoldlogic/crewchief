@@ -33,10 +33,29 @@ export const AgentsSchema = z.object({
   gemini: GeminiSchema,
 })
 
+// DEPRECATED: tmux implementation is incomplete and no longer under development
+// iTerm2 is required for agent orchestration
 export const TmuxSchema = z.object({
+  sessionName: z.string().default('crewchief').describe('DEPRECATED - use iTerm2 instead'),
+  orchestratorPaneSize: z.number().int().min(10).max(90).default(40).describe('DEPRECATED'),
+  agentPaneArrangement: z.enum(['tiled', 'vertical', 'horizontal']).default('tiled').describe('DEPRECATED'),
+})
+
+export const ITermSchema = z.object({
   sessionName: z.string().default('crewchief'),
-  orchestratorPaneSize: z.number().int().min(10).max(90).default(40),
-  agentPaneArrangement: z.enum(['tiled', 'vertical', 'horizontal']).default('tiled'),
+  bridgePort: z.number().int().min(1024).max(65535).default(8765),
+  gridLayout: z.object({
+    rows: z.number().int().min(1).max(10).default(2),
+    cols: z.number().int().min(1).max(10).default(2),
+  }).optional(),
+  agentBadges: z.boolean().default(true),
+  profile: z.string().optional(),
+})
+
+export const TerminalSchema = z.object({
+  backend: z.enum(['tmux', 'iterm', 'auto']).default('iterm').describe('iTerm2 is required, tmux is deprecated'),
+  tmux: TmuxSchema.optional().describe('DEPRECATED - tmux implementation is incomplete'),
+  iterm: ITermSchema.optional(),
 })
 
 export const EvaluationSchema = z.object({
@@ -81,7 +100,8 @@ export const ConfigSchema = z.object({
   repository: RepositorySchema,
   orchestrator: OrchestratorSchema,
   agents: AgentsSchema,
-  tmux: TmuxSchema,
+  tmux: TmuxSchema.optional().describe('DEPRECATED - tmux implementation is incomplete, use iTerm2'),
+  terminal: TerminalSchema.optional(),
   evaluation: EvaluationSchema,
   launch: LaunchSchema.optional(),
   defaults: DefaultsSchema.optional(),

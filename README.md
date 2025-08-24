@@ -1,17 +1,23 @@
 # CrewChief
 
-A multi-tool CLI for git worktree management and semantic code search.
+A multi-tool CLI for git worktree management, semantic code search, and AI agent orchestration.
+
+## Requirements
+
+**macOS with [iTerm2](https://iterm2.com/downloads.html)**  
+> ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
 
 ## What's Working
 
 ✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees  
 ✅ **Semantic Code Search** - Index and search code, docs, and configs using PostgreSQL  
 ✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)  
-✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML
+✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML  
+✅ **Agent Orchestration** - Spawn AI agents in iTerm2 panes with isolated worktrees  
+✅ **Agent Communication** - Send messages to agents with proper text submission (chr(13) for Claude)
 
 ## What's In Progress
 
-⚠️ **Agent Orchestration** - Spawn AI agents in tmux panes with isolated worktrees  
 ⚠️ **Competition Mode** - Run multiple agents on the same task and compare results
 
 ## Quick Start
@@ -39,11 +45,21 @@ crewchief worktree create feature-branch
 crewchief worktree list
 crewchief worktree cd feature-branch
 
-# Auto-copy .env files to new worktrees (configure in crewchief.config.ts)
+# Auto-copy .env files to new worktrees (configure in crewchief.config.js)
 crewchief worktree copy-ignored feature-branch
 
 # Merge worktree changes back to source branch
 crewchief worktree merge feature-branch
+
+# Spawn AI agents in iTerm2 (REQUIRES iTerm2)
+crewchief spawn claude "implement-auth"      # Creates worktree 'implement-auth__claude' and launches Claude
+crewchief spawn gemini "code-review"         # Creates worktree 'code-review__gemini' and launches Gemini
+crewchief spawn claude,gemini "fix-bug"      # Spawn BOTH agents at once with smart splitting
+crewchief agent list                          # List all running agents with their full names
+crewchief agent message implement-auth__claude "Add OAuth support"  # Send task to specific Claude agent
+crewchief agent message fix-bug__claude --file prompt.md  # Send file contents as prompt to agent
+crewchief agent message fix-bug --all "Update approach"  # Send to ALL agents working on fix-bug
+crewchief agent message "*" --all "Status update"  # Broadcast to ALL running agents
 ```
 
 ## Project Structure

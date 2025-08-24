@@ -1,15 +1,22 @@
 # `crewchief` — Git Worktree Management & Code Indexing CLI
 
-## 🎯 Manage Worktrees. Index Code. Search Semantically
+## 🎯 Manage Worktrees. Index Code. Orchestrate AI Agents.
 
-`crewchief` is a CLI tool that simplifies git worktree management and provides powerful semantic code search through the integrated Maproom indexing system.
+`crewchief` is a CLI tool that simplifies git worktree management, provides powerful semantic code search, and orchestrates AI agents in iTerm2.
+
+### Requirements
+
+**macOS with [iTerm2](https://iterm2.com/downloads.html)**
+
+> ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
 
 ### Current Features
 
 - **🔀 Git Worktree Management** — Create, list, clean, and navigate git worktrees with simple commands
 - **🔍 Semantic Code Search** — Index and search your codebase using PostgreSQL-backed full-text and semantic search
 - **📊 Code Intelligence** — Search for functions, classes, and concepts across TypeScript, JavaScript, Rust, Markdown, and JSON files
-- **🤖 Agent Infrastructure** — Basic support for spawning AI agents in isolated tmux panes with dedicated worktrees (experimental)
+- **🤖 Agent Orchestration** — Spawn AI agents in isolated iTerm2 panes with dedicated worktrees
+- **💬 Agent Communication** — Send messages to agents with proper text submission (chr(13) for Claude)
 - **📝 Run Tracking** — Track and review agent runs with detailed logging and event capture
 
 ### Planned Features (Not Yet Implemented)
@@ -61,11 +68,20 @@ pnpm dlx crewchief --help
 - `crewchief maproom:upsert [files...]` — Update specific files in the index
 - `crewchief maproom:watch` — Watch for changes and auto-index (auto-detects context)
 
-### Agent Management (Experimental)
+### Agent Management (iTerm2 Required)
 
-- `crewchief agent spawn <type> <task>` — Spawn an agent in a tmux pane
-- `crewchief agent message <agentId> <message>` — Send message to agent
+- `crewchief spawn <agents> [task]` — Spawn one or more agents in iTerm2 panes with their own worktrees
+- `crewchief agent list` — List all running agents with their full names
+- `crewchief agent message <agentName> <message>` — Send message to a specific agent by its full name (e.g., `fix-bug__claude`)
 - `crewchief agent close <agentId>` — Close an agent's pane
+
+**Multi-Agent Spawning:** You can spawn multiple agents at once:
+
+- `crewchief spawn claude,gemini implement-auth` — Spawns both Claude and Gemini agents
+- `crewchief spawn claude,gemini,codex code-review` — Spawn three agents
+- Creates hierarchical pane layout: first agent splits vertically, additional agents split horizontally
+
+**Note:** Agent names follow the format `{task-name}__{agent-type}`. When you have multiple agents of the same type (e.g., multiple Claude agents), you must use the full name to send messages to a specific one. Use `crewchief agent list` to see all running agents with their names.
 
 ### Run Tracking
 
@@ -88,17 +104,17 @@ pnpm dlx crewchief --help
 
 ## Configuration
 
-CrewChief uses a `crewchief.config.ts` file for configuration. Key settings include:
+CrewChief uses a `crewchief.config.js` file for configuration. Key settings include:
 
 - **Worktree Settings**: Configure automatic copying of git-ignored files to new worktrees
 - **Agent Defaults**: Set default agent types and platforms
-- **Tmux Layout**: Configure pane arrangements and session names
+- **Terminal Backend**: iTerm2 is required (tmux is deprecated)
 - **Evaluation Thresholds**: Set auto-merge thresholds and quality checks
 
 ### Example: Auto-copy .env files to worktrees
 
-```typescript
-// crewchief.config.ts
+```javascript
+// crewchief.config.js
 export default {
   worktree: {
     copyIgnoredFiles: ['.env', '.env.local', 'config/*.secret'],
@@ -220,17 +236,20 @@ CrewChief consists of:
 The [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) package provides a Model Context Protocol (MCP) server that enables AI assistants like Claude, Cursor, and other MCP-compatible tools to search and navigate your codebase using Maproom's semantic search capabilities.
 
 #### Key Features:
+
 - Semantic code search across your entire codebase
 - Direct file access with line range support
 - Automatic indexing integration with the CrewChief CLI
 - Works with any MCP-compatible AI assistant
 
 #### Installation:
+
 ```bash
 npm install -g maproom-mcp
 ```
 
 #### Integration with CrewChief:
+
 The maproom-mcp server uses the same PostgreSQL database and indexing infrastructure as the CrewChief CLI. When you run `crewchief maproom:scan` to index your codebase, that same index becomes available to AI assistants through the MCP server.
 
 For setup instructions and MCP configuration, see the [maproom-mcp documentation](https://www.npmjs.com/package/maproom-mcp).
