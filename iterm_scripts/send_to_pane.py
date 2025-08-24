@@ -177,15 +177,16 @@ async def main(connection):
         # Agent mode: use agent-specific Enter key
         enter_key = get_enter_key(agent_type)
         await target_session.async_send_text(text_to_send)
-        await asyncio.sleep(0.05)  # Small delay to ensure text is received
+        await asyncio.sleep(0.1)  # Increased delay to ensure text is received
         await target_session.async_send_text(enter_key)
+        print(f"🔑 Used {agent_type} Enter key: {repr(enter_key)}")
     elif text_to_send.endswith('\n'):
         # Text already has newline, send as is
         await target_session.async_send_text(text_to_send)
     else:
         # Regular command: use standard newline
         await target_session.async_send_text(text_to_send)
-        await asyncio.sleep(0.05)  # Small delay to ensure text is received
+        await asyncio.sleep(0.1)  # Increased delay to ensure text is received
         await target_session.async_send_text('\n')
     
     # Get label for confirmation message

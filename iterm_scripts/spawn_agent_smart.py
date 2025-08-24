@@ -179,6 +179,9 @@ async def main(connection):
         # Update the pane label with new name
         await new_session.async_set_variable("user.pane_label", agent_name)
     
+    # Set agent type for proper Enter key handling
+    await new_session.async_set_variable("user.agent_type", agent_type)
+    
     # Change new pane to project directory
     await new_session.async_send_text(f"cd {project_dir}")
     await new_session.async_send_text("\n")
