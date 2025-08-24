@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Status
+
+CrewChief is a multi-tool CLI that combines:
+- **Git worktree management** - Simplify creating, listing, and managing git worktrees
+- **Semantic code search** (Maproom) - Index and search code using PostgreSQL and tree-sitter
+- **AI agent orchestration** - Spawn and coordinate AI agents in isolated environments
+
+**Important:** Agent orchestration features require **macOS with iTerm2**. The tmux backend is legacy code that is no longer under active development.
+
 ## Development Commands
 
 ### TypeScript/Node CLI Package
@@ -97,15 +106,15 @@ This codebase has maproom semantic search indexed! Use the maproom MCP tools for
 
 ## Architecture Overview
 
-### Multi-Agent Orchestration System
+### Multi-Tool CLI System
 
-CrewChief is a CLI tool that orchestrates multiple AI agents working in parallel. Key architectural components:
+CrewChief is a multi-tool CLI for git worktree management, semantic code search, and AI agent orchestration. Key architectural components:
 
 1. **Agent Management** (`packages/cli/src/agents/`)
    - `registry.ts`: Central registry for agent types and capabilities
    - `runner.ts`: Handles agent lifecycle and execution
    - `discovery.ts`: Discovers available agents on the system
-   - Each agent runs in its own tmux pane and git worktree
+   - Each agent runs in its own terminal pane (iTerm2) and git worktree
 
 2. **Message Bus** (`packages/cli/src/bus/`)
    - `message.bus.ts`: Core inter-agent communication infrastructure
@@ -122,22 +131,24 @@ CrewChief is a CLI tool that orchestrates multiple AI agents working in parallel
 4. **Orchestration** (`packages/cli/src/orchestrator/`)
    - `runManager.ts`: Manages agent runs and their lifecycle
    - `scheduler.ts`: Schedules and coordinates agent tasks
-   - `competition.ts`: Runs quality competitions between agents
+   - `competition.ts`: Runs quality competitions between agents (in progress)
    - `autoMerge.ts`: Automatic merge based on evaluation scores
 
 5. **CLI Commands** (`packages/cli/src/cli/`)
-   - Each command file (`agent.ts`, `worktree.ts`, etc.) registers subcommands
+   - Each command file (`agent.ts`, `worktree.ts`, `spawn.ts`, etc.) registers subcommands
    - Main entry point is `index.ts` which sets up all commands
    - Uses Commander.js for CLI structure
 
-6. **Tmux Integration** (`packages/cli/src/tmux/`)
-   - `tmux.service.ts`: Manages tmux sessions and panes
-   - Each agent gets its own tmux pane for isolation
+6. **Terminal Integration** (`packages/cli/src/terminal/` and `packages/cli/src/iterm/`)
+   - `factory.ts`: Creates appropriate terminal adapter (iTerm2 preferred, tmux fallback)
+   - `iterm.adapter.ts`: iTerm2 integration for macOS
+   - `tmux.adapter.ts`: Legacy tmux support (no longer under development)
+   - Each agent gets its own terminal pane for isolation
 
 7. **Configuration** (`packages/cli/src/config/`)
    - `loader.ts`: Loads `crewchief.config.ts` from project root
    - `schema.ts`: Zod schema for config validation
-   - Configuration controls agent defaults, tmux layout, evaluation thresholds
+   - Configuration controls agent defaults, terminal backend, evaluation thresholds
 
 ### Rust Components
 
@@ -146,18 +157,16 @@ CrewChief is a CLI tool that orchestrates multiple AI agents working in parallel
    - Uses PostgreSQL for storage
    - Tree-sitter for parsing TypeScript/JavaScript
    - Provides semantic search capabilities
-
-2. **Opsdeck** (`crates/opsdeck/`)
-   - Terminal UI for monitoring agent operations
-   - Real-time visualization of agent activities
+   - MCP server integration for AI assistants
 
 ### Key Design Patterns
 
-- **Agent Isolation**: Each agent operates in its own sandbox (tmux pane + git worktree)
+- **Agent Isolation**: Each agent operates in its own sandbox (terminal pane + git worktree)
 - **Message-Based Communication**: Agents communicate via logged message bus
-- **Competition Framework**: Multiple agents can compete on the same task
+- **Competition Framework**: Multiple agents can compete on the same task (in progress)
 - **Evaluation Pipeline**: Automated evaluation of agent outputs before merging
 - **Plugin Architecture**: Extensible agent types through registry pattern
+- **Terminal Backend Abstraction**: Support for multiple terminal backends (iTerm2 preferred)
 
 ## Working with CrewChief Code
 
@@ -171,30 +180,40 @@ When modifying the CLI:
 6. Linting enforces trailing commas everywhere (runs automatically on commit)
 7. Use `pnpm lint` and `pnpm format` to check and fix code style
 
-When working with Rust components:
+When working with the Maproom component:
 
 1. Maproom code is in `crates/maproom/`
 2. Database migrations in `crates/maproom/migrations/`
-3. Use tokio for async runtime
+3. Uses tokio for async runtime
 4. Follow Rust error handling with anyhow/thiserror
+5. Binary is built and packaged for multiple platforms in `packages/cli/bin/<platform>/`
 
-## Recent Improvements
+## Key Features
 
-### Maproom Enhancements
-- **Auto-detection**: `maproom:scan` and `maproom:watch` now automatically detect repo, worktree, path, and commit from git context
-- **Statistics Output**: Scan command shows detailed statistics (files processed, chunks created, language breakdown)
+### Maproom (Semantic Search)
+- **Auto-detection**: Commands automatically detect repo, worktree, path, and commit from git context
+- **MCP Integration**: Works as an MCP server for AI assistants (Claude, Cursor)
+- **Multi-language Support**: TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML
+- **Statistics Output**: Detailed indexing statistics (files processed, chunks created, language breakdown)
 - **Platform Binaries**: Pre-built binaries for multiple platforms in `packages/cli/bin/<platform>/`
 
-### Worktree Features
-- **Ignored Files Copying**: Automatically copy git-ignored files (like .env) to new worktrees based on configuration
-- **Manual Copy Command**: `worktree copy-ignored` command to copy ignored files to existing worktrees
+### Worktree Management
+- **Quick Commands**: Create, list, use, and merge worktrees with simple commands
+- **Ignored Files Copying**: Automatically copy git-ignored files (like .env) to new worktrees
+- **Agent Integration**: Each AI agent gets its own isolated worktree
 - **Flexible Configuration**: Configure patterns, source paths, and overwrite strategies in `crewchief.config.ts`
+
+### Agent Orchestration (macOS + iTerm2)
+- **Multi-agent Spawning**: Launch multiple AI agents simultaneously with smart window splitting
+- **Isolated Environments**: Each agent works in its own worktree and terminal pane
+- **Message Bus**: Inter-agent communication via logged message bus
+- **Competition Mode** (in progress): Run multiple agents on the same task and compare results
 
 ### Development Experience
 - **ESLint + Prettier**: Automatic code formatting with trailing commas on commit
 - **Husky Pre-commit Hooks**: Ensures code quality before commits
 - **Comprehensive Build Script**: `./scripts/build-and-package.sh` builds all components for all platforms
-- **Local Development Guide**: See `crewchief_context/local-development.md` for running local versions
+- **TypeScript + Vitest**: Modern development stack with fast testing
 
 - CRITICAL SAFETY RULE: File modifications must be strictly confined to the current git worktree or repository working directory.
 
