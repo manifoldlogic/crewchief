@@ -199,13 +199,8 @@ async def main(connection):
     await new_session.async_send_text(cd_cmd)
     await new_session.async_send_text("\n")
     
-    # Verify we're in the right directory
-    await asyncio.sleep(0.5)
-    await new_session.async_send_text("pwd")
-    await new_session.async_send_text("\n")
-    
-    # Small delay before launching agent
-    await asyncio.sleep(0.5)
+    # Wait for directory change to complete
+    await asyncio.sleep(1)
     
     # Step 7: Launch the agent
     print(f"   7️⃣ Launching {agent_type} agent...")
@@ -230,9 +225,7 @@ async def main(connection):
         
         # Set badge
         change = iterm2.LocalWriteOnlyProfile()
-        parent_info = await PaneManager.get_pane_info(current_session)
-        parent_label = parent_info['label'] or 'primary'
-        badge_text = f"🤖 {agent_name}\n📍 From: {parent_label}"
+        badge_text = f"🤖 {agent_name}"
         change.set_badge_text(badge_text)
         await new_session.async_set_profile_properties(change)
         

@@ -57,6 +57,7 @@ crewchief spawn gemini "code-review"         # Creates worktree 'code-review__ge
 crewchief spawn claude,gemini "fix-bug"      # Spawn BOTH agents at once with smart splitting
 crewchief agent list                          # List all running agents with their full names
 crewchief agent message implement-auth__claude "Add OAuth support"  # Send task to specific Claude agent
+crewchief agent message fix-bug__claude --file prompt.md  # Send file contents as prompt to agent
 ```
 
 ## Project Structure

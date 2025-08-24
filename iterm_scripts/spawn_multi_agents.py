@@ -112,7 +112,7 @@ async def spawn_single_agent(
     
     # Step 7: Change to worktree
     await new_session.async_send_text(f"cd {worktree_path}\n")
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(1)  # Give more time for directory change
     
     # Step 8: Launch the agent
     print(f"   🚀 Launching {agent_type}...")
@@ -148,7 +148,7 @@ async def spawn_single_agent(
     icon = '🤖'
     
     change = iterm2.LocalWriteOnlyProfile()
-    badge_text = f"{icon} {agent_name}\n[{agent_index + 1}/{total_agents}]"
+    badge_text = f"{icon} {agent_name}"
     change.set_badge_text(badge_text)
     await new_session.async_set_profile_properties(change)
     

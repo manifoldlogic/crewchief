@@ -160,13 +160,8 @@ async def main(connection):
     await new_session.async_send_text(cd_cmd)
     await new_session.async_send_text("\n")
     
-    # Verify we're in the right directory
-    await asyncio.sleep(0.5)
-    await new_session.async_send_text("pwd")
-    await new_session.async_send_text("\n")
-    
-    # Small delay before launching agent
-    await asyncio.sleep(0.5)
+    # Wait for directory change to complete
+    await asyncio.sleep(1)
     
     # Step 5: Launch the agent
     print(f"   5️⃣ Launching {agent_type} agent...")

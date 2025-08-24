@@ -96,10 +96,34 @@ export function registerAgentCommands(program: Command): void {
   agent
     .command('message')
     .argument('<agentName>')
-    .argument('<message>')
+    .argument('[message]')
+    .option('-f, --file <path>', 'Read message from a file')
     .description('Send a message to an agent by name (e.g., fix-bug__claude)')
-    .action(async (agentName: string, message: string) => {
+    .action(async (agentName: string, message: string | undefined, options: { file?: string }) => {
       const config = await loadConfig()
+
+      // Determine the message to send
+      let textToSend: string
+      if (options.file) {
+        // Read message from file
+        try {
+          const filePath = path.resolve(options.file)
+          if (!fs.existsSync(filePath)) {
+            logger.error(`File not found: ${filePath}`)
+            process.exit(1)
+          }
+          textToSend = fs.readFileSync(filePath, 'utf-8')
+          logger.info(`Reading message from file: ${filePath}`)
+        } catch (error) {
+          logger.error(`Error reading file: ${error}`)
+          process.exit(1)
+        }
+      } else if (message) {
+        textToSend = message
+      } else {
+        logger.error('Either provide a message or use --file option')
+        process.exit(1)
+      }
 
       // Detect backend and use appropriate service
       const iterm = new ITermSimpleService()
@@ -112,9 +136,13 @@ export function registerAgentCommands(program: Command): void {
         }
 
         // Use iTerm2 with agent-specific Enter key (chr(13) for Claude, etc.)
-        const success = iterm.sendKeys(agentName, message, agentType)
+        const success = iterm.sendKeys(agentName, textToSend, agentType)
         if (success) {
-          logger.info(`[${agentName}] <= ${message} [iTerm2]`)
+          if (options.file) {
+            logger.info(`[${agentName}] <= <contents of ${options.file}> [iTerm2]`)
+          } else {
+            logger.info(`[${agentName}] <= ${textToSend} [iTerm2]`)
+          }
         } else {
           logger.error(`Failed to send message to ${agentName}`)
         }
@@ -125,9 +153,9 @@ export function registerAgentCommands(program: Command): void {
         logger.error('Visit: https://iterm2.com/downloads.html')
         logger.warn('Attempting tmux fallback (incomplete implementation)...')
         const tmux = new TmuxService(config.tmux?.sessionName || 'crewchief')
-        tmux.sendKeys(run.paneId, message)
-        rm.appendLog(run.id, 'messages.log', `[in] ${message}`)
-        logger.info(`[${agentId}] <= ${message} [tmux:${run.paneId}] [run=${run.id}]`)
+        tmux.sendKeys(run.paneId, textToSend)
+        rm.appendLog(run.id, 'messages.log', `[in] ${textToSend}`)
+        logger.info(`[${agentId}] <= ${textToSend} [tmux:${run.paneId}] [run=${run.id}]`)
       }
     })
 
