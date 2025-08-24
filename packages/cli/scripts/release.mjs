@@ -47,7 +47,7 @@ async function main() {
   execSync('git push --follow-tags', { stdio: 'inherit' })
 
   // Publish (suppress npm warnings about env configs)
-  execSync('pnpm publish --access public --no-git-checks', { 
+  execSync('pnpm publish --access public', { 
     stdio: 'inherit',
     env: {
       ...process.env,
