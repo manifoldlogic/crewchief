@@ -152,9 +152,9 @@ async def main(connection):
     # Wait for worktree creation to complete
     await asyncio.sleep(2)
     
-    # Step 4: Change to worktree directory using absolute path
+    # Step 4: Change to worktree directory using absolute path (repo root)
     print(f"   4️⃣ Changing to worktree directory...")
-    # Build absolute path to worktree
+    # Always use repository root for worktrees
     worktree_path = os.path.join(project_dir, ".crewchief", "worktrees", agent_name)
     cd_cmd = f"cd {worktree_path}"
     await new_session.async_send_text(cd_cmd)

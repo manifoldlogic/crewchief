@@ -187,7 +187,7 @@ async def main(connection):
     await new_session.async_send_text("\n")
     await asyncio.sleep(0.5)
     
-    # Step 5: Create worktree
+    # Step 5: Create worktree at repo root
     print(f"   5️⃣ Creating worktree: {agent_name}")
     worktree_cmd = f"crewchief worktree create {agent_name} --no-cd"
     await new_session.async_send_text(worktree_cmd)
@@ -196,7 +196,7 @@ async def main(connection):
     # Wait for worktree creation to complete
     await asyncio.sleep(2)
     
-    # Step 6: Change to worktree directory
+    # Step 6: Change to worktree directory at repo root
     print(f"   6️⃣ Changing to worktree directory...")
     cd_cmd = f"cd {worktree_path}"
     await new_session.async_send_text(cd_cmd)

@@ -5,7 +5,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import chalk from 'chalk'
 import { Command } from 'commander'
@@ -57,6 +57,22 @@ function detectTerminalBackend(): 'iterm' | 'tmux' | null {
   }
 
   return null
+}
+
+function resolveRepoRoot(startDir: string): string {
+  try {
+    const res = spawnSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd: startDir,
+      encoding: 'utf-8',
+    })
+    if (res.status === 0) {
+      const commonDir = res.stdout.trim()
+      const commonAbs = resolve(startDir, commonDir)
+      // repo root is parent of the common .git directory
+      return dirname(commonAbs)
+    }
+  } catch {}
+  return startDir
 }
 
 export function registerSpawnCommand(program: Command): void {
@@ -114,8 +130,8 @@ export function registerSpawnCommand(program: Command): void {
             spawnScript = join(scriptsDir, 'spawn_agent.py')
           }
 
-          // Get current working directory (project directory)
-          const projectDir = process.cwd()
+          // Resolve repository root to ensure worktrees are under repo-level .crewchief/worktrees
+          const projectDir = resolveRepoRoot(process.cwd())
 
           // Build spawn command arguments
           let args: string[]
@@ -162,7 +178,7 @@ export function registerSpawnCommand(program: Command): void {
             // Create the base worktree name
             let agentName = `${baseName}__${agent}`
 
-            // Check if worktree already exists
+            // Check if worktree already exists at repo root
             const worktreePath = join(projectDir, '.crewchief', 'worktrees', agentName)
             if (existsSync(worktreePath)) {
               // Append timestamp if worktree exists

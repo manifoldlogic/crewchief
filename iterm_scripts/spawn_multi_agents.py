@@ -104,13 +104,13 @@ async def spawn_single_agent(
     await new_session.async_send_text(f"cd {project_dir}\n")
     await asyncio.sleep(0.5)
     
-    # Step 6: Create worktree
+    # Step 6: Create worktree at repository root
     print(f"   🌳 Creating worktree: {agent_name}")
     worktree_cmd = f"crewchief worktree create {agent_name} --no-cd"
     await new_session.async_send_text(f"{worktree_cmd}\n")
     await asyncio.sleep(2)
     
-    # Step 7: Change to worktree
+    # Step 7: Change to worktree at repository root
     await new_session.async_send_text(f"cd {worktree_path}\n")
     await asyncio.sleep(1)  # Give more time for directory change
     
