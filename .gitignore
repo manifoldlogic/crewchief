@@ -27,3 +27,6 @@ crewchief.config.local.js
 .cursorrules
 
 .mcp.json
+
+# python
+*.pyc
