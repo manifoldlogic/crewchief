@@ -4,7 +4,7 @@
  * IMPORTANT: iTerm2 is required for agent orchestration.
  * The tmux implementation is incomplete and no longer under development.
  * 
- * @type {import('./packages/cli/src/config/schema.js').CrewChiefConfig}
+ * @type {import('./packages/cli/src/config/schema').CrewChiefConfig}
  */
 const config = {
   repository: {
@@ -12,51 +12,14 @@ const config = {
     worktreeBasePath: '.crewchief/worktrees',
   },
 
-  orchestrator: {
-    model: 'claude-opus-4-1',
-    maxConcurrentAgents: 5,
-    defaultTimeout: 30 * 60 * 1000, // 30 minutes
-  },
+  // orchestrator and agents sections removed (unused)
 
-  agents: {
-    claude: {
-      command: 'claude',
-      defaultArgs: ['--model', 'claude-3-opus'],
-      agentsDir: '.claude/agents/',
-      commandsDir: '.claude/commands/',
-    },
-    gemini: {
-      command: 'gemini',
-      defaultArgs: ['--model', 'gemini-pro'],
-      agentsDir: '.gemini/agents/',
-    },
-  },
-
-  // Terminal configuration
+  // Terminal configuration (iTerm2)
   terminal: {
-    // Backend: 'iterm' is required, 'tmux' is deprecated
     backend: 'iterm',
-
-    // iTerm2 settings (REQUIRED for agent orchestration)
     iterm: {
       sessionName: 'crewchief',
-      bridgePort: 8765,
-      gridLayout: {
-        rows: 2,
-        cols: 2,
-      },
-      agentBadges: true,
-      // Optional: specify an iTerm2 profile for agent sessions
-      // profile: 'CrewChief Agent',
     },
-
-    // DEPRECATED: tmux settings are no longer supported
-    // The tmux implementation is incomplete and should not be used
-    // tmux: {
-    //   sessionName: 'crewchief',
-    //   orchestratorPaneSize: 40,
-    //   agentPaneArrangement: 'tiled',
-    // },
   },
 
   evaluation: {
@@ -82,7 +45,6 @@ const config = {
   launch: {
     autoRunDefaultAgents: false,
     askToUpdateLlmGuides: true,
-    autoStartOpsdeck: false,
   },
 
   defaults: {

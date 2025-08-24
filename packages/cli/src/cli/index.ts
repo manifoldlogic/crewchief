@@ -95,10 +95,7 @@ program.action(async () => {
     const defaults = (config as any).defaults
     const launch = (config as any).launch
 
-    // DEPRECATED: Opsdeck auto-launch requires tmux which is no longer supported
-    if (launch?.autoStartOpsdeck) {
-      logger.warn('autoStartOpsdeck is not supported with iTerm2. Use `crewchief spawn` instead.')
-    }
+    // Opsdeck auto-launch removed; use `crewchief spawn` to start agents
     // DEPRECATED: Auto-launching agents requires tmux which is no longer supported
     // Users should use `crewchief spawn <agent>` command instead
     const ensureAgentRunning = async (typeId: string) => {

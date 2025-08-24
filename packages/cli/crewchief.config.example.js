@@ -1,10 +1,10 @@
 /**
  * CrewChief Configuration
- * 
+ *
  * You can create either:
  * - crewchief.config.js (committed to repo, shared with team)
  * - crewchief.config.local.js (gitignored, for local overrides)
- * 
+ *
  * If both exist, the local version takes priority.
  */
 
@@ -14,46 +14,31 @@ module.exports = {
     worktreeBasePath: '.crewchief/worktrees',
   },
 
-  orchestrator: {
-    model: 'claude-opus-4-1',
-    maxConcurrentAgents: 5,
-    defaultTimeout: 30 * 60 * 1000, // 30 minutes
-  },
-
+  // Launch behavior for initial CLI UX
   launch: {
     autoRunDefaultAgents: false,
-    askToUpdateLlmGuides: false,
+    askToUpdateLlmGuides: true,
   },
 
-  agents: {
-    claude: {
-      command: 'claude-cli',
-      defaultArgs: ['--model', 'claude-3-opus'],
-      agentsDir: '.claude/agents/',
-      commandsDir: '.claude/commands/',
+  // Terminal configuration (iTerm2)
+  terminal: {
+    backend: 'iterm',
+    iterm: {
+      sessionName: 'crewchief',
     },
-    gemini: {
-      command: 'gemini-cli',
-      defaultArgs: ['--model', 'gemini-pro'],
-      agentsDir: '.gemini/agents/',
-    },
-  },
-
-  tmux: {
-    sessionName: 'crewchief',
-    orchestratorPaneSize: 40,
-    agentPaneArrangement: 'tiled', // or 'even-horizontal', 'even-vertical'
   },
 
   evaluation: {
     autoMergeThreshold: 0.95,
     requireTestsPass: true,
-    requireReview: true
+    requireReview: false,
+    qualityChecks: ['pnpm test', 'pnpm lint', 'pnpm build'].map((cmd) => ({ type: 'custom', command: cmd })),
   },
 
   worktree: {
     // Files to copy to new worktrees (useful for .env files, etc.)
     copyIgnoredFiles: [
+      '!**/.crewchief/worktrees/**/*',
       '**/.claude/**/*',
       '**/.cursor/**/*',
       '**/.gemini/**/*',
@@ -63,9 +48,9 @@ module.exports = {
       'crewchief.config.local.js',
       '**/.env',
       '**/.env.local',
-      '**/.mcp.json'
+      '**/.mcp.json',
     ],
     copyFromPath: '.',
-    overwriteStrategy: 'skip' // 'skip', 'overwrite', or 'backup'
-  }
-};
+    overwriteStrategy: 'skip',
+  },
+}

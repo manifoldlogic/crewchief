@@ -20,12 +20,6 @@ export async function runSetupWizard(): Promise<string> {
       default: 'main',
     },
     {
-      name: 'maxConcurrentAgents',
-      type: 'number',
-      message: 'Maximum concurrent agents',
-      default: 5,
-    },
-    {
       name: 'defaultPlatform',
       type: 'list',
       message: 'Default agent platform',
@@ -37,19 +31,6 @@ export async function runSetupWizard(): Promise<string> {
       type: 'confirm',
       message: 'Enable competition mode by default?',
       default: true,
-    },
-    {
-      name: 'orchestratorPaneSize',
-      type: 'number',
-      message: 'Orchestrator pane size (%)',
-      default: 40,
-    },
-    {
-      name: 'agentPaneArrangement',
-      type: 'list',
-      message: 'Agent pane arrangement',
-      choices: ['tiled', 'vertical', 'horizontal'],
-      default: 'tiled',
     },
     {
       name: 'rootAgentsCsv',
@@ -77,37 +58,19 @@ export async function runSetupWizard(): Promise<string> {
     mainBranch: ${JSON.stringify(answers.mainBranch)},
     worktreeBasePath: '.crewchief/worktrees'
   },
-  orchestrator: {
-    model: 'claude-opus-4-1',
-    maxConcurrentAgents: ${Number(answers.maxConcurrentAgents)},
-    defaultTimeout: 30 * 60 * 1000
-  },
+  // orchestrator section removed (unused)
   launch: {
     autoRunDefaultAgents: ${rootAgents.length > 0 ? 'true' : 'false'},
     askToUpdateLlmGuides: ${answers.askToUpdateLlmGuides ? 'true' : 'false'}
   },
-  agents: {
-    claude: {
-      command: 'claude',
-      defaultArgs: ['--model', 'claude-3-opus'],
-      agentsDir: '.claude/agents/',
-      commandsDir: '.claude/commands/'
-    },
-    gemini: {
-      command: 'gemini',
-      defaultArgs: ['--model', 'gemini-pro'],
-      agentsDir: '.gemini/agents/'
-    }
-  },
+  // agents section removed (unused)
   defaults: {
     rootAgents: ${JSON.stringify(rootAgents)}
   },
   terminal: {
     backend: 'iterm',
     iterm: {
-      sessionName: 'crewchief',
-      bridgePort: 8765,
-      agentBadges: true
+      sessionName: 'crewchief'
     }
   },
   evaluation: {
