@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 import { Command } from 'commander'
+import { spawnSync } from 'node:child_process'
 import { runCommand } from '../utils/exec'
 
 type CheckResult = {
@@ -37,6 +38,44 @@ async function checkBinary(cmd: string, args: string[] = ['--version']): Promise
   }
 }
 
+async function checkITerm(): Promise<CheckResult> {
+  try {
+    // Check if on macOS
+    if (process.platform !== 'darwin') {
+      return {
+        name: 'iTerm2',
+        ok: false,
+        message: 'iTerm2 requires macOS (optional, needed for agent features)',
+        optional: true,
+      }
+    }
+
+    // Check if iTerm2 is installed
+    const res = spawnSync('osascript', [
+      '-e',
+      'tell application "System Events" to name of every application process',
+    ])
+    const apps = res.stdout.toString()
+    const hasITerm = apps.includes('iTerm')
+    
+    return {
+      name: 'iTerm2',
+      ok: hasITerm,
+      message: hasITerm 
+        ? 'iTerm2 found (optional, needed for agent features)' 
+        : 'iTerm2 not found (optional, needed for agent features)',
+      optional: true,
+    }
+  } catch {
+    return {
+      name: 'iTerm2',
+      ok: false,
+      message: 'Could not check for iTerm2 (optional, needed for agent features)',
+      optional: true,
+    }
+  }
+}
+
 async function runChecks(): Promise<CheckResult[]> {
   const results: CheckResult[] = []
 
@@ -51,8 +90,8 @@ async function runChecks(): Promise<CheckResult[]> {
   // Git
   results.push(await checkBinary('git', ['--version']))
 
-  // tmux (required)
-  results.push(await checkBinary('tmux', ['-V']))
+  // iTerm2 (optional but needed for agent features)
+  results.push(await checkITerm())
 
   // pnpm (optional but recommended)
   const pnpm = await checkBinary('pnpm', ['--version'])
@@ -78,14 +117,14 @@ function printResults(results: CheckResult[]): { hasErrors: boolean } {
   if (hasErrors) {
     console.log()
     console.log(chalk.red('One or more required prerequisites are missing.'))
-    console.log('Required: Node >= 18, git, tmux')
-    console.log('Optional: pnpm (recommended)')
+    console.log('Required: Node >= 18, git')
+    console.log('Optional: iTerm2 (for agent features), pnpm (recommended)')
     console.log()
     console.log('Install hints (macOS):')
-    console.log('  - Node:  https://nodejs.org/ (or brew install node)')
-    console.log('  - git:   brew install git')
-    console.log('  - tmux:  brew install tmux')
-    console.log('  - pnpm:  corepack enable && corepack prepare pnpm@latest --activate')
+    console.log('  - Node:   https://nodejs.org/ (or brew install node)')
+    console.log('  - git:    brew install git')
+    console.log('  - iTerm2: https://iterm2.com/downloads.html')
+    console.log('  - pnpm:   corepack enable && corepack prepare pnpm@latest --activate')
   }
 
   return { hasErrors }
@@ -95,7 +134,7 @@ export function registerDoctorCommand(program: Command): void {
   program
     .command('doctor')
     .alias('prereq')
-    .description('Check environment prerequisites (Node, git, tmux, pnpm)')
+    .description('Check environment prerequisites (Node, git, iTerm2, pnpm)')
     .option('--json', 'Output JSON')
     .action(async (opts: { json?: boolean }) => {
       const results = await runChecks()

@@ -20,14 +20,57 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 
 ⚠️ **Competition Mode** - Run multiple agents on the same task and compare results
 
+## Installation
+
+### Option 1: Run Without Installing
+
+```bash
+# Run directly with npx (downloads and runs temporarily)
+npx crewchief --help
+
+# Or with pnpm dlx
+pnpm dlx crewchief --help
+
+# Or with yarn dlx
+yarn dlx crewchief --help
+```
+
+### Option 2: Install in Your Project
+
+```bash
+# Install as a project dependency
+npm install crewchief
+# or
+pnpm add crewchief
+# or
+yarn add crewchief
+
+# Run with npx/pnpm/yarn
+npx crewchief --help
+pnpm crewchief --help
+yarn crewchief --help
+```
+
+### Option 3: Install Globally
+
+```bash
+# Install globally via npm
+npm install -g crewchief
+
+# Or with pnpm
+pnpm add -g crewchief
+
+# Or with yarn
+yarn global add crewchief
+
+# Now use directly
+crewchief --help
+```
+
 ## Quick Start
 
 ```bash
-# Install and build
-pnpm install
-pnpm build
-
-# Set up database
+# Set up database (required for maproom features)
 export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
 crewchief maproom:db
 
@@ -70,8 +113,7 @@ crewchief/
 │   ├── cli/           # Main TypeScript CLI
 │   └── maproom-mcp/   # MCP server for AI assistants
 ├── crates/
-│   ├── maproom/       # Rust indexing engine
-│   └── opsdeck/       # Terminal UI (planned)
+│   └── maproom/       # Rust indexing engine
 └── crewchief_context/ # Architecture docs & specifications
 ```
 

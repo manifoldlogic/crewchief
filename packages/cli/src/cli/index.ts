@@ -6,18 +6,11 @@ import { Command } from 'commander'
 // Removed `init` per new spec: setup covers initialization
 import inquirer from 'inquirer'
 import { registerAgentCommands } from './agent'
-import { registerBuildCommand } from './build'
 import { registerCompetitionCommands } from './competition'
 import { registerDoctorCommand } from './doctor'
-import { registerEvalCommands } from './eval'
 import { registerMaproomCommands } from './maproom'
-import { registerMergeCommands } from './merge'
-import { registerOpsdeckCommand } from './opsdeck'
-import { registerReleaseCommand } from './release'
-import { registerRunsCommands } from './runs'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerSpawnCommand } from './spawn'
-import { registerTaskCommands } from './task'
 import { registerWorktreeCommands } from './worktree'
 // Backwards-compat session subcommand removed; `crewchief` is the entrypoint
 // registerSessionCommands(program);
@@ -51,17 +44,10 @@ startOrchestratorEventBridge()
 registerWorktreeCommands(program)
 registerSpawnCommand(program)
 registerAgentCommands(program)
-registerRunsCommands(program)
-registerEvalCommands(program)
-registerTaskCommands(program)
-registerMergeCommands(program)
 registerCompetitionCommands(program)
-registerOpsdeckCommand(program)
 registerMaproomCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
-registerBuildCommand(program)
-registerReleaseCommand(program)
 
 // Default behavior: `crewchief` with no subcommand starts/attaches session.
 program.action(async () => {

@@ -1,255 +1,266 @@
-# `crewchief` — Git Worktree Management & Code Indexing CLI
+# CrewChief CLI
 
-## 🎯 Manage Worktrees. Index Code. Orchestrate AI Agents.
+A powerful command-line tool for git worktree management, semantic code search, and AI agent orchestration.
 
-`crewchief` is a CLI tool that simplifies git worktree management, provides powerful semantic code search, and orchestrates AI agents in iTerm2.
-
-### Requirements
-
-**macOS with [iTerm2](https://iterm2.com/downloads.html)**
-
-> ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
-
-### Current Features
-
-- **🔀 Git Worktree Management** — Create, list, clean, and navigate git worktrees with simple commands
-- **🔍 Semantic Code Search** — Index and search your codebase using PostgreSQL-backed full-text and semantic search
-- **📊 Code Intelligence** — Search for functions, classes, and concepts across TypeScript, JavaScript, Rust, Markdown, and JSON files
-- **🤖 Agent Orchestration** — Spawn AI agents in isolated iTerm2 panes with dedicated worktrees
-- **💬 Agent Communication** — Send messages to agents with proper text submission (chr(13) for Claude)
-- **📝 Run Tracking** — Track and review agent runs with detailed logging and event capture
-
-### Planned Features (Not Yet Implemented)
-
-- **🤝 Cross-Agent Coordination** — Agents typing into each other's panes and handing off work
-- **🏆 Competition & Benchmarking** — Run tournaments between agents to improve quality
-- **🧠 Semantic Retrieval (Realm)** — Vector database integration for shared knowledge
-- **📈 Advanced Evaluation** — Automated quality scoring and merge decisions
-
----
-
-## Quick start
+## Installation
 
 ```bash
-# Install dependencies
-pnpm install
+# Check compatibility before installing
+npx crewchief doctor
 
-# Build the CLI
-pnpm build
+# Install globally
+npm install -g crewchief
 
-# Run the CLI
+# Now use directly
 crewchief --help
 ```
 
-Or run without installing:
-
-```bash
-npx crewchief --help
-# or
-pnpm dlx crewchief --help
-```
-
-## Core Commands
-
-### Worktree Management
-
-- `crewchief worktree create <name> [--branch <branch>]` — Create a new worktree and cd into it by default
-- `crewchief worktree list` — List all active worktrees
-- `crewchief worktree clean [selector] [--all] [--stale]` — Remove specific worktree or clean up stale/all worktrees
-- `crewchief worktree use <name> [--print]` — Use a worktree (creates if needed) or print its path
-- `crewchief worktree copy-ignored <selector> [--dry-run]` — Copy git-ignored files to an existing worktree
-- `crewchief worktree merge <name> [--no-delete]` — Merge changes from a worktree back to its source branch and optionally clean up
-
-### Maproom (Semantic Search)
-
-- `crewchief maproom:db` — Initialize/migrate the database
-- `crewchief maproom:scan` — Index files into PostgreSQL (auto-detects repo, worktree, path, and commit)
-- `crewchief maproom:search <query>` — Search indexed code semantically
-- `crewchief maproom:upsert [files...]` — Update specific files in the index
-- `crewchief maproom:watch` — Watch for changes and auto-index (auto-detects context)
-
-### Agent Management (iTerm2 Required)
-
-- `crewchief spawn <agents> [task]` — Spawn one or more agents in iTerm2 panes with their own worktrees
-- `crewchief agent list` — List all running agents with their full names
-- `crewchief agent message <agentName> <message>` — Send message to a specific agent by its full name (e.g., `fix-bug__claude`)
-- `crewchief agent close <agentId>` — Close an agent's pane
-
-**Multi-Agent Spawning:** You can spawn multiple agents at once:
-
-- `crewchief spawn claude,gemini implement-auth` — Spawns both Claude and Gemini agents
-- `crewchief spawn claude,gemini,codex code-review` — Spawn three agents
-- Creates hierarchical pane layout: first agent splits vertically, additional agents split horizontally
-
-**Note:** Agent names follow the format `{task-name}__{agent-type}`. When you have multiple agents of the same type (e.g., multiple Claude agents), you must use the full name to send messages to a specific one. Use `crewchief agent list` to see all running agents with their names.
-
-### Run Tracking
-
-- `crewchief runs list` — List all agent runs
-- `crewchief runs events <runId>` — View run events
-- `crewchief runs logs <runId> [--tail N]` — View run logs
-
-### Setup & Configuration
-
-- `crewchief init` — Initialize `.crewchief/` directory
-- `crewchief setup` — Interactive configuration wizard
-- `crewchief doctor` — Check system dependencies
-
-### Experimental Features
-
-- `crewchief eval run <runId>` — Evaluate a run (limited implementation)
-- `crewchief merge run <branch>` — Merge a worktree branch
-- `crewchief competition start <description> <agentIds...>` — Start a competition
-- `crewchief task assign <agentTypeId> <description>` — Assign a task
-
-## Configuration
-
-CrewChief uses a `crewchief.config.js` file for configuration. Key settings include:
-
-- **Worktree Settings**: Configure automatic copying of git-ignored files to new worktrees
-- **Agent Defaults**: Set default agent types and platforms
-- **Terminal Backend**: iTerm2 is required (tmux is deprecated)
-- **Evaluation Thresholds**: Set auto-merge thresholds and quality checks
-
-### Example: Auto-copy .env files to worktrees
-
-```javascript
-// crewchief.config.js
-export default {
-  worktree: {
-    copyIgnoredFiles: ['.env', '.env.local', 'config/*.secret'],
-    copyFromPath: '.',
-    overwriteStrategy: 'skip', // 'skip', 'overwrite', or 'backup'
-  },
-}
-```
+(Also works with yarn, pnpm, bun, and other npm-compatible package managers)
 
 ## Requirements
 
-- Node.js >= 18 (ESM modules)
-- Git (for worktree management)
-- PostgreSQL (for Maproom indexing)
-- Tmux (optional, for agent features)
-- Rust/Cargo (optional, for building Maproom from source)
+- **Node.js >= 18**
+- **Git** (for worktree management)
+- **PostgreSQL** (for semantic search features - see setup below)
+- **macOS with [iTerm2](https://iterm2.com/downloads.html)** (for agent orchestration features)
+- **CLI agent tools** (`claude`, `gemini`, etc.) must be installed for agent orchestration
 
-## Install Options
+## Quick Start
 
-- Global install: `npm i -g crewchief` (or `pnpm add -g crewchief`)
-- Run without install: `npx crewchief@latest` or `pnpm dlx crewchief@latest`
+### Basic Worktree Management
 
-## Maproom Setup
+```bash
+# Create and switch to a new worktree
+crewchief worktree create feature-branch
 
-### Database Configuration
+# List all worktrees
+crewchief worktree list
 
-Maproom requires PostgreSQL. Set the connection string:
+# Switch to an existing worktree (creates if needed)
+crewchief worktree use feature-branch
+
+# Merge worktree changes back to source branch
+crewchief worktree merge feature-branch
+
+# Clean up worktrees
+crewchief worktree clean --all
+```
+
+### Semantic Code Search
+
+#### Recommended: Using Maproom MCP
+
+For the best experience with AI assistants like Claude and Cursor, use the Maproom MCP server. This allows AI assistants to search your indexed codebase directly.
+
+See the [maproom-mcp package](https://www.npmjs.com/package/maproom-mcp) for installation and setup instructions.
+
+#### Direct CLI Usage (Requires PostgreSQL)
+
+First, set up your database connection:
 
 ```bash
 export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
-# or
-export DATABASE_URL="postgres://user:password@localhost:5432/maproom"
 ```
 
-### Initial Setup
+Then initialize and use semantic search:
 
 ```bash
 # Initialize database
 crewchief maproom:db
 
-# Index your codebase (auto-detects git context)
+# Index your codebase
 crewchief maproom:scan
-# Scan completes with statistics:
-# ✅ Scan completed successfully!
-#    Files processed: 150
-#    Total chunks: 1234
-#    Total size: 2.5 MB
 
-# Search for code semantically
-crewchief maproom:search "function that handles authentication"
+# Search semantically
+crewchief maproom:search "authentication flow"
 
 # Watch for changes and auto-index
 crewchief maproom:watch
 ```
 
-### Supported File Types
+### AI Agent Orchestration (Requires iTerm2)
+
+```bash
+# Spawn AI agents with dedicated worktrees
+crewchief spawn claude "implement-auth"
+crewchief spawn gemini "code-review"
+
+# Spawn multiple agents at once
+crewchief spawn claude,gemini "fix-bug"
+
+# List running agents
+crewchief agent list
+
+# Send messages to agents
+crewchief agent message implement-auth__claude "Add OAuth support"
+
+# Send message to all agents on a task
+crewchief agent message implement-auth --all "Update approach"
+```
+
+## Configuration
+
+Run the interactive setup wizard on first use:
+
+```bash
+crewchief setup
+```
+
+This will guide you through:
+- Repository type (standard or monorepo)
+- Main branch name
+- Files to copy to new worktrees (.env files, etc.)
+- Whether to update LLM guide files (CLAUDE.md, etc.)
+
+The wizard creates a `crewchief.config.js` file in your project root with your preferences.
+
+**Tip:** Add `.crewchief` to your `.gitignore` file to avoid committing worktree data.
+
+### Manual Configuration
+
+You can also manually create `crewchief.config.js`:
+
+```javascript
+export default {
+  repository: {
+    mainBranch: 'main',
+    worktreeBasePath: '.crewchief/worktrees'
+  },
+  worktree: {
+    // Auto-copy .env files to new worktrees
+    copyIgnoredFiles: ['.env', '.env.local'],
+    copyFromPath: '.',
+    overwriteStrategy: 'skip', // 'skip', 'overwrite', or 'backup'
+  },
+  terminal: {
+    backend: 'iterm',
+    iterm: {
+      sessionName: 'crewchief'
+    }
+  },
+  evaluation: {
+    autoMergeThreshold: 0.95,
+    requireTestsPass: true,
+    requireReview: false
+  }
+}
+```
+
+## Command Reference
+
+All commands below should be prefixed with `crewchief`. For example: `crewchief worktree create feature-branch`
+
+### Worktree Commands
+
+| Command | Description |
+|---------|-------------|
+| `worktree create <name>` | Create a new worktree |
+| `worktree list` | List all worktrees |
+| `worktree use <name>` | Switch to worktree (creates if needed) |
+| `worktree merge <name>` | Merge worktree changes back |
+| `worktree clean` | Remove worktrees |
+| `worktree copy-ignored <name>` | Copy .env files to worktree |
+
+### Maproom Commands (Semantic Search)
+
+| Command | Description |
+|---------|-------------|
+| `maproom:db` | Initialize PostgreSQL database |
+| `maproom:scan` | Index your codebase |
+| `maproom:search <query>` | Search code semantically |
+| `maproom:watch` | Auto-index on file changes |
+| `maproom:upsert [files...]` | Update specific files |
+
+**Note:** For AI assistant integration, install [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) instead of using these commands directly.
+
+### Agent Commands (iTerm2 Required)
+
+| Command | Description |
+|---------|-------------|
+| `spawn <agents> [task]` | Spawn AI agents |
+| `agent list` | List running agents |
+| `agent message <name> <msg>` | Send message to agent |
+| `agent close <id>` | Close agent pane |
+
+### System Commands
+
+| Command | Description |
+|---------|-------------|
+| `setup` | Interactive configuration wizard |
+| `doctor` | Check dependencies |
+
+## PostgreSQL Setup for Semantic Search
+
+The semantic search features require PostgreSQL. Here's a quick setup:
+
+### Option 1: Local PostgreSQL
+
+```bash
+# macOS with Homebrew
+brew install postgresql@14
+brew services start postgresql@14
+
+# Create database
+createdb maproom
+
+# Set connection string
+export PG_DATABASE_URL="postgres://localhost:5432/maproom"
+```
+
+### Option 2: Docker
+
+```bash
+docker run -d \
+  --name maproom-postgres \
+  -e POSTGRES_DB=maproom \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  postgres:14
+
+export PG_DATABASE_URL="postgres://postgres:password@localhost:5432/maproom"
+```
+
+### Option 3: Cloud Database
+
+Use any PostgreSQL provider (Supabase, Neon, etc.) and set the connection string they provide.
+
+## Supported File Types for Indexing
 
 - TypeScript (.ts, .tsx)
 - JavaScript (.js, .jsx)
+- Markdown (.md, .mdx)
+- JSON (.json)
+- YAML (.yaml, .yml)
+- TOML (.toml)
 - Rust (.rs)
-- Markdown (.md, .mdx) - with heading-based chunking
-- JSON (.json) - with key-based chunking
-- YAML (.yaml, .yml) - with key-based chunking
-- TOML (.toml) - with section-based chunking
 
-The Maproom binary (`crewchief-maproom`) is bundled with the package. You can override it with `CREWCHIEF_MAPROOM_BIN=/path/to/binary`.
+## Alternative Installation Methods
 
-## Current Limitations
-
-- Agent spawning requires `claude` or `gemini` CLI tools (falls back to mock-agent)
-- Competition mode evaluation metrics are basic
-- Auto-merge thresholds are not fully implemented
-- Cross-agent communication (input injection) is not implemented
-- Realm/semantic retrieval features are planned but not implemented
-- Benchmarking and tournament features are planned but not implemented
-- The main `crewchief` command without arguments launches a tmux session but agent coordination is experimental
-
-## Development
+### Run without installing
 
 ```bash
-# Run tests
-pnpm test
-pnpm test:watch  # Watch mode
-
-# Run in development mode (no build required)
-pnpm dev <command> [options]
-# or directly:
-tsx src/cli/index.ts <command> [options]
-
-# Build TypeScript
-pnpm build
-
-# Build everything (TypeScript + Rust binaries)
-pnpm build:all
-
-# Build Maproom (Rust) manually
-cargo build --release --bin crewchief-maproom
-# or use the build script:
-./scripts/build-and-package.sh
-
-# Linting and formatting
-pnpm lint       # Run ESLint
-pnpm lint --fix # Auto-fix issues
-pnpm format     # Run Prettier
+npx crewchief --help
 ```
 
-## Architecture
-
-CrewChief consists of:
-
-1. **CLI Package** (`packages/cli/`) - TypeScript CLI for orchestration
-2. **Maproom** (`crates/maproom/`) - Rust-based code indexing and search
-3. **Maproom MCP** (`packages/maproom-mcp/`) - Model Context Protocol server for AI assistants
-
-## Related Packages
-
-### Maproom MCP Server
-
-The [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) package provides a Model Context Protocol (MCP) server that enables AI assistants like Claude, Cursor, and other MCP-compatible tools to search and navigate your codebase using Maproom's semantic search capabilities.
-
-#### Key Features:
-
-- Semantic code search across your entire codebase
-- Direct file access with line range support
-- Automatic indexing integration with the CrewChief CLI
-- Works with any MCP-compatible AI assistant
-
-#### Installation:
+### Install in a project
 
 ```bash
-npm install -g maproom-mcp
+npm install crewchief
+# Then run with:
+npx crewchief --help
 ```
 
-#### Integration with CrewChief:
+## Troubleshooting
 
-The maproom-mcp server uses the same PostgreSQL database and indexing infrastructure as the CrewChief CLI. When you run `crewchief maproom:scan` to index your codebase, that same index becomes available to AI assistants through the MCP server.
+### Check system dependencies
+```bash
+crewchief doctor
+```
 
-For setup instructions and MCP configuration, see the [maproom-mcp documentation](https://www.npmjs.com/package/maproom-mcp).
+### Common Issues
+
+**PostgreSQL connection failed**: Ensure PostgreSQL is running and `PG_DATABASE_URL` is set correctly.
+
+**iTerm2 not found**: Agent features require iTerm2 on macOS. Install from [iterm2.com](https://iterm2.com).
+
+**Worktree creation failed**: Ensure you're in a git repository with at least one commit.

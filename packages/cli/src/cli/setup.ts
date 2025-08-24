@@ -20,23 +20,10 @@ export async function runSetupWizard(): Promise<string> {
       default: 'main',
     },
     {
-      name: 'defaultPlatform',
-      type: 'list',
-      message: 'Default agent platform',
-      choices: ['claude', 'gemini', 'both'],
-      default: 'both',
-    },
-    {
-      name: 'enableCompetitionDefault',
-      type: 'confirm',
-      message: 'Enable competition mode by default?',
-      default: true,
-    },
-    {
-      name: 'rootAgentsCsv',
+      name: 'copyIgnoredFiles',
       type: 'input',
-      message: 'Default root agent id(s) to auto-launch on start (comma-separated, leave blank to choose on launch)',
-      default: '',
+      message: 'Files to copy to new worktrees (comma-separated, e.g., .env, .env.local)',
+      default: '.env, .env.local',
     },
     {
       name: 'askToUpdateLlmGuides',
@@ -46,11 +33,11 @@ export async function runSetupWizard(): Promise<string> {
     },
   ])
 
-  const rootAgents = String(answers.rootAgentsCsv || '')
+  // Parse the comma-separated list of files to copy
+  const copyIgnoredFilesList = String(answers.copyIgnoredFiles || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((id) => ({ id }))
 
   const configPath = path.join(process.cwd(), 'crewchief.config.js')
   const content = `export default {
@@ -58,14 +45,13 @@ export async function runSetupWizard(): Promise<string> {
     mainBranch: ${JSON.stringify(answers.mainBranch)},
     worktreeBasePath: '.crewchief/worktrees'
   },
-  // orchestrator section removed (unused)
-  launch: {
-    autoRunDefaultAgents: ${rootAgents.length > 0 ? 'true' : 'false'},
-    askToUpdateLlmGuides: ${answers.askToUpdateLlmGuides ? 'true' : 'false'}
+  worktree: {
+    copyIgnoredFiles: ${JSON.stringify(copyIgnoredFilesList)},
+    copyFromPath: '.',
+    overwriteStrategy: 'skip'
   },
-  // agents section removed (unused)
-  defaults: {
-    rootAgents: ${JSON.stringify(rootAgents)}
+  launch: {
+    askToUpdateLlmGuides: ${answers.askToUpdateLlmGuides ? 'true' : 'false'}
   },
   terminal: {
     backend: 'iterm',
