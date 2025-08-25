@@ -9,7 +9,7 @@ CrewChief is a multi-tool CLI that combines:
 - **Semantic code search** (Maproom) - Index and search code using PostgreSQL and tree-sitter
 - **AI agent orchestration** - Spawn and coordinate AI agents in isolated environments
 
-**Important:** Agent orchestration features require **macOS with iTerm2**. The tmux backend is legacy code that is no longer under active development.
+**Important:** Agent orchestration features require **macOS with iTerm2**.
 
 ## Development Commands
 
@@ -140,9 +140,8 @@ CrewChief is a multi-tool CLI for git worktree management, semantic code search,
    - Uses Commander.js for CLI structure
 
 6. **Terminal Integration** (`packages/cli/src/terminal/` and `packages/cli/src/iterm/`)
-   - `factory.ts`: Creates appropriate terminal adapter (iTerm2 preferred, tmux fallback)
+   - `factory.ts`: Creates terminal adapter (iTerm2 only)
    - `iterm.adapter.ts`: iTerm2 integration for macOS
-   - `tmux.adapter.ts`: Legacy tmux support (no longer under development)
    - Each agent gets its own terminal pane for isolation
 
 7. **Configuration** (`packages/cli/src/config/`)

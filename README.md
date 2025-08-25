@@ -5,7 +5,7 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 ## Requirements
 
 **macOS with [iTerm2](https://iterm2.com/downloads.html)**  
-> ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
+> ⚠️ iTerm2 is required for agent orchestration features.
 
 ## What's Working
 
@@ -128,7 +128,7 @@ crewchief/
 - Node.js >= 18
 - PostgreSQL (for Maproom)
 - Git
-- Tmux (optional, for agent features)
+- iTerm2 (required for agent features, on macOS)
 
 ## Contributing
 
@@ -137,6 +137,5 @@ This project is actively being developed. Key areas that need work:
 1. Completing the agent orchestration features
 2. Implementing evaluation metrics for competition mode
 3. Building the Realm semantic retrieval system
-4. Creating the main `crewchief` tmux session launcher
 
 See the [specification](crewchief_context/cli/specification.md) for the full roadmap.
