@@ -23,18 +23,8 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 - Agent management (basic spawn/message/close works, advanced features missing)
 - Competition mode (commands exist, evaluation metrics basic)
-- Task distribution (assignment works, evaluation limited)
 - Result integration (basic merge, no quality checks)
 - Observability (basic logging, no correlation IDs)
-
-### Not Implemented ❌
-
-- Main `crewchief` command auto-starting iTerm2 session
-- Cross-agent input injection
-- Realm & semantic retrieval
-- Benchmarking & tournaments
-- Auto-setup on first run
-- Advanced evaluation metrics
 
 ## Core Objectives
 
@@ -42,7 +32,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 1. **Simplify git worktree management** - Abstract complex worktree commands into intuitive operations
 2. **Enable parallel AI agent collaboration** - Multiple agents working simultaneously in isolated environments
-3. **Provide visual orchestration** - Real-time visibility of all agents through iTerm2 tabs and panes
+3. **Provide visual orchestration** - Real-time visibility of all agents through iTerm2 panes
 4. **Support competitive agent evaluation** - Compare different agents/configurations on identical tasks
 5. **Minimize command complexity** - Single commands for multi-step workflows
 
@@ -70,7 +60,7 @@ On first run, `crewchief` auto-detects project state and performs setup if neede
 
 ## Detailed Requirements
 
-### 1. Git Worktree Management ✅
+### Git Worktree Management ✅
 
 Users should not need to think about worktrees for common workflows. CrewChief automatically creates, names, and reuses per‑agent worktrees behind the scenes when agents are spawned or when competition mode is used. In addition, the `worktree` subcommands provide general repository worktree management: they list and clean any worktrees detected in the repo, annotating agent-associated ones when applicable.
 
@@ -87,163 +77,17 @@ Users should not need to think about worktrees for common workflows. CrewChief a
 - Best‑effort deterministic naming derived from agent identity, task, and timestamp
 - Base branch detection from config with safe fallbacks
 
-#### Worktree Configuration Schema
-
-```typescript
-interface WorktreeConfig {
-  name: string;
-  baseBranch: string;
-  path: string;
-  agent?: AgentAssignment;
-  status: 'active' | 'completed' | 'failed' | 'pending';
-  createdAt: Date;
-  metadata: Record<string, any>;
-}
-```
-
-### 2. Agent Management ⚠️ (Partially Implemented)
-
-#### Agent Type Definitions
-
-```typescript
-interface AgentType {
-  id: string;
-  name: string;
-  platform: 'claude' | 'gemini' | 'custom';
-  capabilities: string[];
-  agentDefinitionPath: string;  // Path to .claude/agents/*.md or .gemini/agents/*
-  executionCommand: string;
-  environmentVars?: Record<string, string>;
-}
-
-// Example predefined types using native agent mechanisms
-const agentTypes = {
-  'project-manager': {
-    capabilities: ['planning', 'delegation', 'review'],
-    agentDefinitionPath: '.claude/agents/project-manager.md'  // Uses Claude's native agent format
-  },
-  'backend-developer': {
-    capabilities: ['api', 'database', 'testing'],
-    agentDefinitionPath: '.claude/agents/backend-developer.md'
-  },
-  'frontend-developer': {
-    capabilities: ['ui', 'components', 'styling'],
-    agentDefinitionPath: '.gemini/agents/frontend-developer.txt'  // Uses @file references for Gemini
-  }
-};
-```
-
-### 3. Tmux Integration ⚠️ (Partially Implemented)
-
-#### Primary Entry ❌ (NOT IMPLEMENTED)
-
-- `crewchief` - Start or connect to the CrewChief iTerm2 session.
-  - First‑run behavior: if the current directory is not configured, automatically run interactive `setup` before launching the session.
-  - Launch the configured default root agent(s) automatically, or prompt the user to pick an agent if multiple are configured.
-  - Present a minimal orchestrator/home pane as needed, but default to showing the active agent(s).
+### iTerm2 Integration ⚠️ (Partially Implemented)
 
 #### Visual Layout and Agent Commands ✅ (IMPLEMENTED)
 
 - `crewchief agent spawn <typeOrId> [--count N] [--task "..."] [--branch <base>] [--env KEY=VAL...]`
   - Creates one or more panes, provisions per‑agent worktrees, and starts the requested agent(s)
 - `crewchief agent message <agentId> <message>` - Send instructions to a specific agent (via iTerm2 API + message bus)
-- `crewchief agent close <agentId> [--merge auto|manual|skip]` - Close pane and optionally merge work
-
-#### Tmux Automation Functions
-
-```typescript
-interface TmuxCommands {
-  createPane(layout: 'horizontal' | 'vertical'): string;
-  sendKeys(paneId: string, command: string): void;
-  captureOutput(paneId: string): string;
-  closePane(paneId: string): void;
-  resizePane(paneId: string, size: number): void;
-}
-```
-
-### 4. Cross‑Agent Input Injection ❌ (NOT IMPLEMENTED)
-
-Policy‑controlled keystroke routing from one agent pane to another, mediated by the orchestrator and the message bus for traceability.
-
-#### Requirements
-
-- Explicit command to inject input from source to destination pane
-- Policy checks: allow/deny by agent type, whitelist of commands, rate limits
-- Audit trail: every injection emits a bus event with correlation id
-
-#### Realm CLI
-
-- `crewchief agent inject <fromAgentId> <toAgentId> "<keys>" [--enter] [--dry-run]`
-
-#### Realm Types
-
-```typescript
-interface InputInjectionPolicy {
-  allowList?: string[];        // commands or regexes
-  denyList?: string[];
-  maxPerMinute?: number;
-}
-
-interface InputInjectionEvent {
-  id: string;
-  fromAgentId: string;
-  toAgentId: string;
-  keys: string;
-  pressedEnter: boolean;
-  timestamp: Date;
-  correlationId: string;
-}
-```
 
 ---
 
-### 5. Task Distribution & Evaluation ⚠️ (Partially Implemented)
-
-#### Task Assignment Flow
-
-```typescript
-interface Task {
-  id: string;
-  description: string;
-  requirements: string[];
-  acceptanceCriteria: AcceptanceCriteria[];
-  competitionMode?: {
-    enabled: boolean;
-    agentCount: number;
-    evaluationStrategy: 'automatic' | 'manual' | 'hybrid';
-  };
-}
-
-interface TaskAssignment {
-  taskId: string;
-  agentId: string;
-  worktreeId: string;
-  startTime: Date;
-  deadline?: Date;
-  status: 'assigned' | 'in-progress' | 'complete' | 'failed';
-}
-```
-
-### 6. Result Integration ⚠️ (Partially Implemented)
-
-#### Merge Strategy
-
-```typescript
-interface MergeStrategy {
-  type: 'automatic' | 'manual' | 'cherry-pick';
-  conflictResolution: 'orchestrator' | 'manual' | 'ai-assisted';
-  qualityChecks: QualityCheck[];
-  rollbackOnFailure: boolean;
-}
-
-interface QualityCheck {
-  type: 'tests' | 'linting' | 'build' | 'custom';
-  command: string;
-  successCriteria: string;
-}
-```
-
-### 7. Configuration Management ✅ (Implemented)
+### Configuration Management ✅ (Implemented)
 
 #### Main Configuration File (`crewchief.config.ts`)
 
@@ -282,8 +126,6 @@ export default {
   },
   iterm: {
     sessionName: 'crewchief',
-    orchestratorPaneSize: 40, // percentage
-    agentPaneArrangement: 'tiled'
   },
   evaluation: {
     autoMergeThreshold: 0.95,
@@ -293,7 +135,7 @@ export default {
 };
 ```
 
-### 8. CLI Interactive Setup ⚠️ (Partially Implemented)
+### CLI Interactive Setup ⚠️ (Partially Implemented)
 
 **STATUS**: The `crewchief setup` command exists but automatic invocation on first run of `crewchief` is NOT implemented.
 
@@ -321,33 +163,7 @@ Welcome to CrewChief Setup!
 Configuration saved to crewchief.config.ts
 ```
 
-### 9. Agent Communication Protocol ✅ (Implemented)
-
-#### Bidirectional Messaging
-
-```typescript
-interface AgentMessage {
-  type: 'instruction' | 'result' | 'status' | 'error';
-  from: 'orchestrator' | string; // agent-id
-  to: 'orchestrator' | string;    // agent-id
-  payload: any;
-  timestamp: Date;
-  worktreeContext?: {
-    branch: string;
-    modifiedFiles: string[];
-    lastCommit: string;
-  };
-}
-
-// Communication channels
-class MessageBus {
-  send(message: AgentMessage): void;
-  onMessage(handler: (msg: AgentMessage) => void): void;
-  waitForResponse(messageId: string, timeout?: number): Promise<AgentMessage>;
-}
-```
-
-### 10. Competition Mode ⚠️ (Partially Implemented)
+### Competition Mode ⚠️ (Partially Implemented)
 
 #### Multi-Agent Comparison
 
@@ -373,149 +189,7 @@ interface EvaluationMetric {
 }
 ```
 
-## Implementation Priorities
-
-### Phase 1: Core Foundation (Week 1)
-
-1. Git worktree wrapper functions (automatic provisioning; user‑facing list/clean only)
-2. Basic iTerm2 session management with `crewchief` as the primary entrypoint
-3. Configuration file structure including `launch` and `defaults.rootAgents`
-4. Simple agent spawning and auto‑worktree creation
-
-### Phase 2: Agent Integration (Week 2)
-
-1. Claude CLI integration patterns
-2. Gemini CLI integration patterns
-3. Message passing system
-4. Result capture mechanisms
-
-### Phase 3: Orchestration (Week 3)
-
-1. Task distribution logic
-2. Quality evaluation framework
-3. Automatic merging strategies
-4. Competition mode basics
-
-### Phase 4: Polish & Optimization (Week 4)
-
 ---
-
-### 11. Deprecations & Aliases ❌ (NOT IMPLEMENTED)
-
-- Remove `crewchief init`. Its responsibilities are covered by `setup`, which also runs automatically on first run. **STATUS**: `init` still exists
-- Replace `crewchief session start` with simply `crewchief`. **STATUS**: `session start` removed but `crewchief` alone doesn't start session
-- Keep `worktree list` and `worktree clean` as advanced maintenance commands. Worktree creation is automatic and not exposed by default. **STATUS**: All worktree commands are exposed
-
----
-
-### 12. Realm & Semantic Retrieval ❌ (NOT IMPLEMENTED)
-
-Central module managing a meaning ontology, embeddings, and vector indexes for semantic search across repository artifacts and bus transcripts.
-
-#### Features
-
-- Ontology: typed graph of entities (Tasks, Runs, Agents, Files, Artifacts)
-- Embedding provider abstraction: `openai`, `vertex`, `local` (pluggable)
-- Indexing: per‑agent and global vector indexes; incremental updates
-- Sources: repo files, commit messages, bus transcripts, evaluation summaries
-- Query API: lexical + semantic hybrid with reranking hooks
-
-#### Benchmarking CLI
-
-- `crewchief realm build [--full | --incremental] [--agent <id>]`
-- `crewchief realm query "<question>" [--agent <id>] [--topK 8]`
-
-#### Benchmarking Types
-
-```typescript
-interface OntologyNode {
-  id: string;
-  type: 'Task' | 'Run' | 'Agent' | 'File' | 'Artifact' | 'Message';
-  properties: Record<string, unknown>;
-  relations: { type: string; to: string }[];
-}
-
-interface EmbeddingProvider {
-  embed(texts: string[], options?: Record<string, unknown>): Promise<number[][]>;
-  dim: number;
-  model: string;
-}
-
-interface VectorIndex {
-  upsert(items: { id: string; vector: number[]; metadata: Record<string, unknown> }[]): Promise<void>;
-  query(vector: number[], topK: number): Promise<{ id: string; score: number }[]>;
-}
-```
-
----
-
-### 13. Observability Extensions ⚠️ (Partially Implemented)
-
-Richer JSONL envelopes and run introspection.
-
-**STATUS**: Basic run logging and events are implemented, but correlation IDs and phase tracking are not.
-
-#### Additions
-
-- Correlation ids on all events; parent/child relationships
-- Work phases: `setup`, `assignment`, `execution`, `evaluation`, `merge`
-- Context snapshots: worktree metadata, modified files, last commit
-- Tailored `runs logs --tail` and `runs events` formatting
-
-```typescript
-interface BusEnvelope<TPayload = unknown> {
-  id: string;
-  correlationId?: string;
-  parentId?: string;
-  phase?: 'setup' | 'assignment' | 'execution' | 'evaluation' | 'merge';
-  payload: TPayload;
-  createdAt: Date;
-  worktree?: { branch: string; lastCommit: string; changedFiles: string[] };
-}
-```
-
----
-
-### 14. Benchmarking & Tournaments ❌ (NOT IMPLEMENTED)
-
-Scenario‑based benchmarking to compare agents and configurations.
-
-#### Concepts
-
-- Scenario: named task with fixtures, constraints, and expected artifacts
-- Batch: execution of a scenario across an agent set
-- Leaderboard: persisted scores with metric weights and time windows
-
-#### CLI
-
-- `crewchief eval benchmark <scenarioId> [--agents a,b,c] [--repeat 3]`
-
-#### Types
-
-```typescript
-interface BenchmarkScenario {
-  id: string;
-  name: string;
-  description: string;
-  task: Task;
-  fixturesDir?: string;
-  metrics: EvaluationMetric[];
-}
-
-interface BenchmarkResult {
-  scenarioId: string;
-  agentId: string;
-  runId: string;
-  scores: Record<string, number>; // metric -> score
-  weightedTotal: number;
-  createdAt: Date;
-}
-```
-
-1. Interactive CLI setup wizard (auto‑invoked on first run)
-2. Advanced competition features
-3. Performance optimizations
-4. Error recovery mechanisms
 
 ## Success Metrics
 
@@ -526,22 +200,6 @@ interface BenchmarkResult {
 - **Developer Satisfaction**: Intuitive enough for non-experts
 
 ## Technical Considerations
-
-### Dependencies
-
-```json
-{
-  "dependencies": {
-    "@types/node": "^20.0.0",
-    "commander": "^11.0.0",
-    "simple-git": "^3.0.0",
-    "node-pty": "^1.0.0",
-    "chalk": "^5.0.0",
-    "inquirer": "^9.0.0",
-    "zod": "^3.0.0"
-  }
-}
-```
 
 ### Error Handling
 
