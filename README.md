@@ -128,7 +128,7 @@ crewchief/
 - Node.js >= 18
 - PostgreSQL (for Maproom)
 - Git
-- Tmux (optional, for agent features)
+- iTerm2 (for agent features)
 
 ## Contributing
 
@@ -136,7 +136,5 @@ This project is actively being developed. Key areas that need work:
 
 1. Completing the agent orchestration features
 2. Implementing evaluation metrics for competition mode
-3. Building the Realm semantic retrieval system
-4. Creating the main `crewchief` tmux session launcher
 
 See the [specification](crewchief_context/cli/specification.md) for the full roadmap.

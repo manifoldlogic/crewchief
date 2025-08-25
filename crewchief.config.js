@@ -55,6 +55,6 @@ export default {
       '**/.mcp.json'
     ],
     copyFromPath: '.',
-    overwriteStrategy: 'skip'
+    overwriteStrategy: 'overwrite'
   }
 };
