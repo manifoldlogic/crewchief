@@ -258,7 +258,7 @@ The setup wizard creates a minimal configuration focused on essential settings. 
 - **Rust**: Maproom binary for performance-critical indexing/search
 - **PostgreSQL**: Database for code index storage
 - **Tree-sitter**: Code parsing for semantic understanding
-- **iTerm2 AppleScript**: Terminal automation on macOS
+- **iTerm2 Python API**: Terminal automation on macOS
 - **Commander.js**: CLI framework
 - **Zod**: Configuration schema validation
 
