@@ -1,97 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
-import { getAgentType } from '../agents/registry'
-import { messageBus } from '../bus/index'
-import { LogFollower } from '../bus/logFollower'
-import { loadConfig } from '../config/loader'
-import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
 import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { RunManager } from '../orchestrator/runManager'
-import { TmuxService } from '../tmux/tmux.service' // DEPRECATED: tmux implementation is incomplete and no longer under development
 import { logger } from '../utils/logger'
 
 export function registerAgentCommands(program: Command): void {
-  const agent = new Command('agent').description('Agent lifecycle')
-
-  agent
-    .command('spawn')
-    .argument('<type>')
-    .argument('[task]')
-    .option('--count <n>', 'Number of agents to spawn', '1')
-    .option('--branch <base>', 'Base branch name to derive worktrees from')
-    .option('--env <kv...>', 'Environment variables KEY=VAL to pass to the agent')
-    .description('Spawn one or more agents of <type> (optionally provide a task)')
-    .action(
-      async (typeId: string, task: string | undefined, options: { count: string; branch?: string; env?: string[] }) => {
-        const type = getAgentType(typeId)
-        if (!type) {
-          logger.error(`Unknown agent type: ${typeId}`)
-          process.exitCode = 1
-          return
-        }
-        const config = await loadConfig()
-        const count = Math.max(1, parseInt(options.count, 10))
-        const baseBranch = options.branch ?? config.repository.mainBranch
-        const envVars: Record<string, string> = {}
-        for (const kv of options.env ?? []) {
-          const [k, ...rest] = kv.split('=')
-          if (k && rest.length) envVars[k] = rest.join('=')
-        }
-
-        // DEPRECATED: tmux implementation is incomplete - iTerm2 is required
-        const tmux = new TmuxService(config.tmux.sessionName)
-        tmux.ensureSession()
-        const rm = new RunManager()
-        const wt = new WorktreeService()
-
-        for (let i = 0; i < count; i++) {
-          const branchName = buildDeterministicBranchName({ agentTypeId: typeId, taskDescription: task })
-          const worktreePath = await wt.createWorktree(branchName, baseBranch, config.repository.worktreeBasePath)
-
-          // Determine execution command (support mock-agent replacement)
-          let execCmd = type.executionCommand
-          if (execCmd.includes('scripts/mock-agent.js')) {
-            const here = path.dirname(fileURLToPath(import.meta.url))
-            const pkgDir = path.resolve(here, '..')
-            const cand = path.join(pkgDir, 'scripts', 'mock-agent.js')
-            const fallback = path.join(process.cwd(), 'scripts', 'mock-agent.js')
-            const abs = fs.existsSync(cand) ? cand : fallback
-            // Preserve uniqueness even with deterministic branch naming by using branchName in mock id
-            execCmd = `MOCK_AGENT_ID=${typeId}-${branchName.slice(-8)} node ${JSON.stringify(abs)}`
-          }
-
-          // Merge in provided env vars
-          const envArgs = Object.entries(envVars)
-            .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-            .join(' ')
-          const fullCmd = `${envArgs} ${execCmd}`.trim()
-
-          // Launch command directly in a new tmux window; embed cd into the command
-          const cmd = `cd ${JSON.stringify(worktreePath)} && ${fullCmd}`
-          const paneId = tmux.createWindowWithCommand(cmd)
-          const run = rm.createRun(typeId, task ?? '', paneId, worktreePath, branchName)
-
-          const logPath = `${rm.getRunDir(run.id)}/pane.log`
-          tmux.pipePaneToFile(paneId, logPath, true)
-          const follower = new LogFollower(logPath)
-          follower.start((env) => {
-            rm.appendLog(run.id, 'events.log', JSON.stringify(env))
-            messageBus.send({
-              type: 'status',
-              from: `${typeId}`,
-              to: 'orchestrator',
-              payload: env,
-              timestamp: new Date(),
-              worktreeContext: { branch: run.branchName ?? '', modifiedFiles: [], lastCommit: '' },
-            })
-          })
-
-          logger.success(`Spawned ${typeId} in ${worktreePath} [pane=${paneId}] [run=${run.id}]`)
-        }
-      },
-    )
+  const agent = new Command('agent').description('Agent communication and management')
 
   agent
     .command('message')
@@ -117,8 +32,6 @@ Examples:
     crewchief agent message implement-auth --all --file prompt.md`,
     )
     .action(async (pattern: string, message: string | undefined, options: { file?: string; all?: boolean }) => {
-      const config = await loadConfig()
-
       // Determine the message to send
       let textToSend: string
       if (options.file) {
@@ -213,15 +126,9 @@ Examples:
           logger.info(`Successfully sent to ${successCount}/${targetAgents.length} agents`)
         }
       } else {
-        // DEPRECATED: tmux implementation is incomplete and no longer under development
-        // Users should install iTerm2 for proper agent communication
         logger.error('iTerm2 is required for agent messaging. Please install iTerm2.')
         logger.error('Visit: https://iterm2.com/downloads.html')
-        logger.warn('Attempting tmux fallback (incomplete implementation)...')
-        const tmux = new TmuxService(config.tmux?.sessionName || 'crewchief')
-        tmux.sendKeys(run.paneId, textToSend)
-        rm.appendLog(run.id, 'messages.log', `[in] ${textToSend}`)
-        logger.info(`[${pattern}] <= ${textToSend} [tmux:${run.paneId}] [run=${run.id}]`)
+        process.exit(1)
       }
     })
 
@@ -268,7 +175,7 @@ Examples:
   agent
     .command('close')
     .argument('<agentId>')
-    .description('Close an agent and optionally merge work (mock)')
+    .description('Close an agent (requires manual pane closure)')
     .action(async (agentId: string) => {
       const rm = new RunManager()
       const run = rm.getRunByAgentType(agentId)
@@ -276,11 +183,9 @@ Examples:
         logger.warn(`Agent ${agentId} not running`)
         return
       }
-      const config = await loadConfig()
-      const tmux = new TmuxService(config.tmux.sessionName)
-      tmux.closePane(run.paneId)
       rm.updateRun(run.id, { status: 'closed' })
-      logger.success(`Closed agent ${agentId} [pane=${run.paneId}] [run=${run.id}]`)
+      logger.success(`Marked agent ${agentId} as closed [run=${run.id}]`)
+      logger.info('Please manually close the terminal pane')
     })
 
   program.addCommand(agent)

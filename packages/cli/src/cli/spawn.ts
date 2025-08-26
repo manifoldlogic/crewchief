@@ -44,16 +44,10 @@ function findITermScriptsDir(): string | null {
   return null
 }
 
-function detectTerminalBackend(): 'iterm' | 'tmux' | null {
+function detectTerminalBackend(): 'iterm' | null {
   // Check if we're in iTerm2
   if (process.env.TERM_PROGRAM === 'iTerm.app') {
     return 'iterm'
-  }
-
-  // Check if tmux is available
-  const tmuxCheck = spawnSync('which', ['tmux'], { encoding: 'utf-8' })
-  if (tmuxCheck.status === 0) {
-    return 'tmux'
   }
 
   return null
@@ -85,7 +79,7 @@ export function registerSpawnCommand(program: Command): void {
     .option('-v, --vertical', 'Split pane vertically instead of horizontally')
     .option('-a, --args <args>', 'Additional arguments to pass to the agent command')
     .option('--no-label', 'Skip labeling the pane')
-    .option('--backend <backend>', 'Force specific backend (iterm or tmux)')
+    .option('--backend <backend>', 'Force specific backend (iterm only)')
     .action(async (agent: string, task: string | undefined, options: SpawnOptions) => {
       try {
         const config = await loadConfig()
@@ -96,13 +90,8 @@ export function registerSpawnCommand(program: Command): void {
 
         if (!detectedBackend) {
           console.error(chalk.red('❌ No suitable terminal backend found'))
-          console.error(chalk.yellow('   Please install iTerm2 (macOS) or tmux'))
-          process.exit(1)
-        }
-
-        if (detectedBackend === 'tmux') {
-          console.error(chalk.yellow('⚠️  Tmux backend not yet implemented for spawn command'))
-          console.error(chalk.dim('   Please use iTerm2 or implement tmux support'))
+          console.error(chalk.yellow('   Please install iTerm2 (macOS)'))
+          console.error(chalk.dim('   Download from: https://iterm2.com/downloads.html'))
           process.exit(1)
         }
 

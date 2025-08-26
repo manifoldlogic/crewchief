@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { evaluateAndMaybeMerge } from './autoMerge'
 import { RunManager } from './runManager'
-import { Scheduler } from './scheduler'
 import { Task } from './task.types'
 import { runDefaultChecks } from '../evaluation/checks'
 import { ensureDirSync, writeJsonSync, readJsonSync } from '../utils/fs'
@@ -76,21 +75,6 @@ export class CompetitionManager {
     const all = this.loadAll()
     all.push(comp)
     this.saveAll(all)
-    writeJsonSync(this.competitionPath(comp.id), comp)
-    return comp
-  }
-
-  async assign(compId: string): Promise<Competition> {
-    const comp = this.get(compId)
-    if (!comp) throw new Error('Competition not found')
-    const scheduler = new Scheduler()
-    for (const p of comp.participants) {
-      if (!p.runId) {
-        const assignment = await scheduler.assignSingleAgent(comp.task, p.agentId)
-        p.runId = assignment.runId
-        p.worktreePath = assignment.worktreeId
-      }
-    }
     writeJsonSync(this.competitionPath(comp.id), comp)
     return comp
   }

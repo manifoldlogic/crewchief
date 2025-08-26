@@ -5,9 +5,8 @@
 import { platform } from 'node:os'
 import { ITermAdapter } from './iterm.adapter.js'
 import type { ITerminalService, IAgentTerminalService } from './terminal.interface.js'
-import { TmuxAdapter } from './tmux.adapter.js'
 
-export type TerminalBackend = 'tmux' | 'iterm' | 'auto'
+export type TerminalBackend = 'iterm' | 'auto'
 
 export interface TerminalConfig {
   backend?: TerminalBackend
@@ -31,7 +30,7 @@ export class TerminalFactory {
       if (platform() === 'darwin' && process.env.TERM_PROGRAM === 'iTerm.app') {
         selectedBackend = 'iterm'
       } else {
-        selectedBackend = 'tmux'
+        throw new Error('iTerm2 is required. Please install iTerm2: https://iterm2.com/downloads.html')
       }
     }
 
@@ -39,14 +38,12 @@ export class TerminalFactory {
     switch (selectedBackend) {
       case 'iterm':
         if (platform() !== 'darwin') {
-          console.warn('iTerm2 backend requested but not on macOS, falling back to tmux')
-          return new TmuxAdapter(sessionName)
+          throw new Error('iTerm2 backend requires macOS')
         }
         return new ITermAdapter(sessionName)
 
-      case 'tmux':
       default:
-        return new TmuxAdapter(sessionName)
+        throw new Error('Only iTerm2 backend is supported')
     }
   }
 
@@ -64,6 +61,6 @@ export class TerminalFactory {
     if (this.isITermAvailable()) {
       return 'iterm'
     }
-    return 'tmux'
+    throw new Error('iTerm2 is required but not available')
   }
 }

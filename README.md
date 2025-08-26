@@ -5,7 +5,7 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 ## Requirements
 
 **macOS with [iTerm2](https://iterm2.com/downloads.html)**  
-> ⚠️ The tmux implementation is incomplete and no longer under development. iTerm2 is required for agent orchestration features.
+> ⚠️ iTerm2 is required for agent orchestration features.
 
 ## What's Working
 
@@ -128,7 +128,7 @@ crewchief/
 - Node.js >= 18
 - PostgreSQL (for Maproom)
 - Git
-- iTerm2 (for agent features)
+- iTerm2 (required for agent features, on macOS)
 
 ## Contributing
 

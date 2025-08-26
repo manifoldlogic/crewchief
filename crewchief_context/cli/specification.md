@@ -8,7 +8,7 @@
 
 CrewChief is a multi-tool CLI that combines git worktree management, semantic code search (Maproom), and AI agent orchestration. Written in TypeScript with Rust components for performance-critical operations, it enables multiple AI agents to collaborate on a single repository using isolated git worktrees, with visual coordination through iTerm2 on macOS.
 
-**Note**: Agent orchestration features require macOS with iTerm2. The tmux backend exists but is no longer under active development.
+**Note**: Agent orchestration features require macOS with iTerm2.
 
 The tool provides three main functionalities:
 
@@ -96,7 +96,6 @@ Users should not need to think about worktrees for common workflows. CrewChief a
   - Supports single agent: `crewchief spawn claude "fix bug"`
   - Supports multiple agents: `crewchief spawn claude,gemini "review code"`
   - Options: `--name`, `--vertical`, `--args`, `--no-label`
-- `crewchief agent spawn <type> [task]` - Alternative syntax for spawning
 - `crewchief agent message <pattern> [message]` - Send message to agent(s)
 - `crewchief agent list` - List running agents in iTerm2
 - `crewchief agent close <agentId>` - Close an agent (currently mock implementation)
@@ -232,7 +231,6 @@ The setup wizard creates a minimal configuration focused on essential settings. 
 ### Platform Requirements
 
 - **macOS with iTerm2** required for agent orchestration
-- tmux backend exists but is deprecated and incomplete
 - Maproom requires PostgreSQL database
 
 ### Known Issues
@@ -267,7 +265,7 @@ The setup wizard creates a minimal configuration focused on essential settings. 
 - Graceful worktree cleanup on failure ✅
 - Comprehensive logging for debugging ✅
 - Configuration validation with helpful errors ✅
-- Fallback to tmux when iTerm2 unavailable ⚠️
+- iTerm2 required for agent features ✅
 
 ### Security Considerations
 
