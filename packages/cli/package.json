@@ -1,6 +1,6 @@
 {
   "name": "crewchief",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "private": false,
   "description": "CrewChief: Multi-agent orchestration CLI for coordinating AI agents via git worktrees and tmux.",
   "license": "MIT",
