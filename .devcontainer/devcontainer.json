@@ -94,6 +94,8 @@
     // Cursor IDE settings
     "cursor": {
       "settings": {
+        "git.enabled": true,
+        "scm.alwaysShowProviders": true,
         "terminal.integrated.defaultProfile.linux": "zsh",
         "terminal.integrated.cwd": "/workspace",
         "terminal.integrated.shell.linux": "/bin/zsh",
