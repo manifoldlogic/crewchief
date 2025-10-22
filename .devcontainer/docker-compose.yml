@@ -22,7 +22,6 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-      - REDIS_URL=redis://redis:6379
       - CREWCHIEF_DB_HOST=postgres
       - CREWCHIEF_DB_PORT=5432
       - CREWCHIEF_DB_NAME=crewchief
@@ -60,53 +59,12 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis-data:/data
-    networks:
-      - crewchief-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    restart: unless-stopped
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@crewchief.local
-      - PGADMIN_DEFAULT_PASSWORD=admin
-      - PGADMIN_CONFIG_SERVER_MODE=False
-      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-      - ./pgadmin-servers.json:/pgadmin4/servers.json
-    networks:
-      - crewchief-network
-    depends_on:
-      - postgres
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    restart: unless-stopped
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-    networks:
-      - crewchief-network
-    depends_on:
-      - redis
-
 networks:
   crewchief-network:
     driver: bridge
 
 volumes:
   postgres-data:
-  redis-data:
-  pgadmin-data:
   crewchief-cargo-cache:
   crewchief-pnpm-cache:
   crewchief-vscode-extensions:

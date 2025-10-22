@@ -37,60 +37,6 @@
 
   // Tool-specific settings
   "customizations": {
-    // VS Code settings
-    "vscode": {
-      "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh",
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.fixAll.eslint": true
-        },
-        "typescript.updateImportsOnFileMove.enabled": "always",
-        "typescript.preferences.importModuleSpecifier": "relative",
-        "eslint.validate": [
-          "javascript",
-          "javascriptreact",
-          "typescript",
-          "typescriptreact"
-        ],
-        "tailwindCSS.includeLanguages": {
-          "typescript": "javascript",
-          "typescriptreact": "javascript"
-        },
-        "files.watcherExclude": {
-          "**/target/**": true,
-          "**/node_modules/**": true,
-          "**/dist/**": true,
-          "**/.crewchief/worktrees/**": true
-        },
-        "search.exclude": {
-          "**/node_modules": true,
-          "**/dist": true,
-          "**/target": true,
-          "**/.crewchief/worktrees": true,
-          "pnpm-lock.yaml": true
-        }
-      },
-      "extensions": [
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
-        "bradlc.vscode-tailwindcss",
-        "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml",
-        "ms-vscode.vscode-typescript-next",
-        "vitest.explorer",
-        "ms-playwright.playwright",
-        "ms-azuretools.vscode-docker",
-        "github.vscode-github-actions",
-        "streetsidesoftware.code-spell-checker",
-        "usernamehw.errorlens",
-        "yzhang.markdown-all-in-one",
-        "bierner.markdown-mermaid",
-        "gruntfuggly.todo-tree",
-        "eamodio.gitlens",
-        "mhutchie.git-graph"
-      ]
-    },
     // Cursor IDE settings
     "cursor": {
       "settings": {
@@ -149,19 +95,12 @@
   // Port forwarding
   "forwardPorts": [
     3000,    // Frontend dev server
-    3456,    // Default web UI port
     3500,    // Backend dev server
-    5432,    // PostgreSQL
-    6379,    // Redis
-    5050     // pgAdmin
+    5432     // PostgreSQL
   ],
   "portsAttributes": {
     "3000": {
       "label": "Frontend Dev",
-      "onAutoForward": "notify"
-    },
-    "3456": {
-      "label": "Web UI",
       "onAutoForward": "notify"
     },
     "3500": {
@@ -171,14 +110,6 @@
     "5432": {
       "label": "PostgreSQL",
       "onAutoForward": "silent"
-    },
-    "6379": {
-      "label": "Redis",
-      "onAutoForward": "silent"
-    },
-    "5050": {
-      "label": "pgAdmin",
-      "onAutoForward": "notify"
     }
   },
 
@@ -187,7 +118,6 @@
     "NODE_ENV": "development",
     "CREWCHIEF_DEV": "true",
     "DATABASE_URL": "postgresql://postgres:postgres@postgres:5432/crewchief",
-    "REDIS_URL": "redis://redis:6379",
     "CREWCHIEF_MAPROOM_BIN": "/usr/local/bin/crewchief-maproom"
   },
 
