@@ -36,12 +36,6 @@ else
     echo -e "  PostgreSQL: ❌ Not running"
 fi
 
-if redis-cli -h redis ping &>/dev/null; then
-    echo -e "  Redis:      ${GREEN}✓ Running${NC}"
-else
-    echo -e "  Redis:      ❌ Not running"
-fi
-
 if [ -f "/usr/local/bin/crewchief-maproom" ]; then
     echo -e "  Maproom:    ${GREEN}✓ Installed${NC}"
 else
@@ -50,7 +44,6 @@ fi
 
 echo ""
 echo -e "${YELLOW}Quick Commands:${NC}"
-echo "  ${GREEN}webui${NC}      - Start Web UI development server"
 echo "  ${GREEN}ccdev${NC}      - Run CrewChief CLI in dev mode"
 echo "  ${GREEN}maproom${NC}    - Run Maproom commands"
 echo "  ${GREEN}claude${NC}     - Run Claude Code in dangerous mode"

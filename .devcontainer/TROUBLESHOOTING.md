@@ -106,14 +106,12 @@ docker system prune -a --volumes
 2. Check logs:
    ```bash
    docker compose logs postgres
-   docker compose logs redis
    ```
 
 3. Test connectivity from within container:
    ```bash
    # Inside container
    pg_isready -h postgres -p 5432
-   redis-cli -h redis ping
    ```
 
 ### Claude Code Network Restrictions
@@ -138,13 +136,9 @@ sudo /usr/local/bin/init-claude-firewall.sh
 
 ### Migrations Fail
 ```bash
-# Manually run migrations
-cd packages/web-ui
-pnpm run db:migrate
-
 # For Maproom
-DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief" \
-/usr/local/bin/crewchief-maproom db migrate
+PG_DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief" \
+crewchief-maproom db
 ```
 
 ## Performance Issues

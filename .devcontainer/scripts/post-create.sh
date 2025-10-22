@@ -69,20 +69,6 @@ else
     print_error "Maproom binary not found, skipping migrations"
 fi
 
-# Run web UI database migrations
-print_step "Running Web UI database migrations..."
-cd packages/web-ui
-pnpm run db:migrate || true
-cd ../..
-print_success "Web UI database migrations complete"
-
-# Build the web UI
-print_step "Building Web UI..."
-cd packages/web-ui
-pnpm run build
-cd ../..
-print_success "Web UI built successfully"
-
 # Set up git configuration
 print_step "Configuring Git..."
 git config --global --add safe.directory /workspace
@@ -96,7 +82,6 @@ cat >> ~/.bashrc << 'EOF'
 # CrewChief aliases
 alias cc='node /workspace/packages/cli/dist/cli/index.js'
 alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
-alias webui='cd /workspace/packages/web-ui && pnpm dev'
 alias maproom='crewchief-maproom'
 alias claude='claude --dangerous-mode'
 alias ll='ls -la'
@@ -138,7 +123,6 @@ if [ -f ~/.zshrc ]; then
 # CrewChief aliases
 alias cc='node /workspace/packages/cli/dist/cli/index.js'
 alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
-alias webui='cd /workspace/packages/web-ui && pnpm dev'
 alias maproom='crewchief-maproom'
 alias claude='claude --dangerous-mode'
 alias ll='ls -la'
@@ -186,15 +170,8 @@ if [ ! -f .env ]; then
     cp .env.example .env 2>/dev/null || cat > .env << EOF
 # CrewChief Environment Variables
 NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-REDIS_URL=redis://redis:6379
-CREWCHIEF_DB_HOST=postgres
-CREWCHIEF_DB_PORT=5432
-CREWCHIEF_DB_NAME=crewchief
-CREWCHIEF_DB_USER=postgres
-CREWCHIEF_DB_PASSWORD=postgres
+PG_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
 CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom
-PORT=3456
 EOF
     print_success ".env file created"
 fi
@@ -264,15 +241,11 @@ print_success "🎉 CrewChief devcontainer setup complete!"
 echo ""
 echo "Quick start commands:"
 echo "  claude    - Run Claude Code in dangerous mode"
-echo "  webui     - Start the web UI development server"
 echo "  ccdev     - Run the CrewChief CLI in development mode"
 echo "  maproom   - Run Maproom commands"
 echo ""
 echo "Services available:"
 echo "  PostgreSQL: postgres:5432"
-echo "  Redis:      redis:6379"
-echo "  pgAdmin:    http://localhost:5050"
-echo "  Redis Commander: http://localhost:8081"
 echo ""
 echo "⚠️  Claude Code dangerous mode is ENABLED"
 echo "   - Network access is restricted via iptables"

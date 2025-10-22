@@ -9,7 +9,6 @@ import { logger } from '../utils/logger'
 interface BuildOptions {
   skipRust?: boolean
   skipTypeScript?: boolean
-  skipWeb?: boolean
   verbose?: boolean
   sequential?: boolean
 }
@@ -235,38 +234,12 @@ async function buildTypeScriptPackages(projectRoot: string, verbose: boolean, se
   console.log(chalk.green('  ✓ TypeScript packages built successfully'))
 }
 
-/**
- * Build web UI
- */
-async function buildWebUI(projectRoot: string, verbose: boolean): Promise<void> {
-  console.log(chalk.cyan('\n🌐 Building Web UI...'))
-
-  const webPath = path.join(projectRoot, 'packages', 'web-ui')
-  if (!fs.existsSync(webPath)) {
-    console.log(chalk.yellow('  Web UI package not found, skipping...'))
-    return
-  }
-
-  try {
-    console.log(chalk.yellow('  Installing dependencies...'))
-    await executeCommand('pnpm', ['install'], webPath, verbose)
-
-    console.log(chalk.yellow('  Building production bundle...'))
-    await executeCommand('pnpm', ['build'], webPath, verbose)
-
-    console.log(chalk.green('  ✓ Web UI built successfully'))
-  } catch (error) {
-    throw new Error(`Failed to build Web UI: ${error}`)
-  }
-}
-
 export function registerBuildCommand(program: Command): void {
   program
     .command('build')
     .description('Build all projects in the repository')
     .option('--skip-rust', 'Skip building Rust binaries')
     .option('--skip-typescript', 'Skip building TypeScript packages')
-    .option('--skip-web', 'Skip building Web UI')
     .option('-v, --verbose', 'Show detailed build output')
     .option('-s, --sequential', 'Build TypeScript packages sequentially instead of in parallel')
     .action(async (options: BuildOptions) => {
@@ -288,11 +261,6 @@ export function registerBuildCommand(program: Command): void {
           await buildTypeScriptPackages(projectRoot, options.verbose || false, options.sequential || false)
         }
 
-        // Build Web UI
-        if (!options.skipWeb) {
-          await buildWebUI(projectRoot, options.verbose || false)
-        }
-
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
         console.log(chalk.bold.green(`\n✨ Build completed successfully in ${elapsed}s\n`))
 
@@ -302,7 +270,6 @@ export function registerBuildCommand(program: Command): void {
         console.log(chalk.gray('  • CLI binary: packages/cli/bin/'))
         console.log(chalk.gray('  • CLI dist: packages/cli/dist/'))
         console.log(chalk.gray('  • MCP dist: packages/maproom-mcp/dist/'))
-        console.log(chalk.gray('  • Web UI: packages/web-ui/dist/'))
         console.log()
         console.log(chalk.yellow('To publish the CLI package, run: cd packages/cli && pnpm publish'))
       } catch (error) {

@@ -94,19 +94,9 @@
 
   // Port forwarding
   "forwardPorts": [
-    3000,    // Frontend dev server
-    3500,    // Backend dev server
     5432     // PostgreSQL
   ],
   "portsAttributes": {
-    "3000": {
-      "label": "Frontend Dev",
-      "onAutoForward": "notify"
-    },
-    "3500": {
-      "label": "Backend API",
-      "onAutoForward": "notify"
-    },
     "5432": {
       "label": "PostgreSQL",
       "onAutoForward": "silent"

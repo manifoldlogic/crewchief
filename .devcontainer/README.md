@@ -36,10 +36,7 @@ This folder contains the development container configuration for CrewChief, prov
 - **Python 3** (for scripting)
 
 ### Databases & Services
-- **PostgreSQL 15 with pgvector** - Main database with vector embedding support
-- **Redis 7** - Caching and sessions
-- **pgAdmin** - Database management UI (port 5050)
-- **Redis Commander** - Redis UI (port 8081)
+- **PostgreSQL 15 with pgvector** - Main database for Maproom semantic search
 
 ### Development Tools
 - **Claude Code** - AI assistant with dangerous mode enabled (network-restricted)
@@ -65,8 +62,7 @@ This folder contains the development container configuration for CrewChief, prov
 The container sets up these environment variables automatically:
 ```bash
 NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-REDIS_URL=redis://redis:6379
+PG_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
 CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom
 CLAUDE_CONFIG_DIR=/home/vscode/.claude
 CLAUDE_DANGEROUS_MODE=true
@@ -75,19 +71,12 @@ ANTHROPIC_API_KEY=<set in host environment>
 
 ### Port Forwarding
 These ports are automatically forwarded:
-- `3000` - Frontend development server
-- `3456` - Web UI default port
-- `3500` - Backend API server
-- `5432` - PostgreSQL (internal)
-- `6379` - Redis (internal)
-- `5050` - pgAdmin web interface
-- `8081` - Redis Commander
+- `5432` - PostgreSQL (for Maproom)
 
 ### Shell Aliases
 Useful aliases are configured:
 ```bash
 claude     # Run Claude Code in dangerous mode
-webui      # Start Web UI dev server
 ccdev      # Run CrewChief CLI in dev mode
 maproom    # Run Maproom commands
 ta         # tmux attach
@@ -102,7 +91,6 @@ tn         # tmux new session
 ├── docker-compose.yml   # Services definition
 ├── Dockerfile           # Container image
 ├── tmux.conf           # tmux configuration
-├── pgadmin-servers.json # pgAdmin pre-configured servers
 └── scripts/
     ├── post-create.sh   # Runs after container creation
     ├── post-start.sh    # Runs when container starts
@@ -119,7 +107,7 @@ This devcontainer includes Claude Code with dangerous mode enabled, allowing it 
 The container uses iptables firewall rules for security:
 - ✅ **Internet Access**: Full internet access enabled
 - ❌ **Host Access**: Blocked for security (except DNS)
-- ✅ **Container Network**: Full access to services (PostgreSQL, Redis)
+- ✅ **Container Network**: Full access to services (PostgreSQL)
 - ✅ **Domain Approval**: Claude Code's built-in approval system handles domain access
 
 ### Usage
@@ -155,14 +143,6 @@ When running in dangerous mode, Claude Code can:
 
 ## 🔧 Common Tasks
 
-### Running the Web UI
-```bash
-cd packages/web-ui
-pnpm dev
-# or use the alias:
-webui
-```
-
 ### Running the CLI
 ```bash
 # Development mode with hot reload
@@ -177,13 +157,11 @@ ccdev --help
 # Access PostgreSQL
 psql -h postgres -U postgres -d crewchief
 
-# Run migrations
-cd packages/web-ui
-pnpm run db:migrate
+# Initialize Maproom database
+maproom db
 
-# Access pgAdmin
-# Open http://localhost:5050
-# Login: admin@crewchief.local / admin
+# Run Maproom scan
+maproom scan
 ```
 
 ### Running Tests
