@@ -30,3 +30,6 @@ crewchief.config.local.js
 
 # python
 *.pyc
+
+.aim/
+.logs/

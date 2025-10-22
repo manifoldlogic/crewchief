@@ -92,12 +92,7 @@ if [ "$TERM_PROGRAM" = "Cursor" ] || [ -n "$CURSOR_IDE" ]; then
     echo "export WORKSPACE_DIR=/workspace" >> ~/.bashrc.tmp
     cat ~/.bashrc >> ~/.bashrc.tmp 2>/dev/null || true
     mv ~/.bashrc.tmp ~/.bashrc
-    
-    # Same for zsh if it exists
-    if [ -f ~/.zshrc ]; then
-        echo "cd /workspace" >> ~/.zshrc.tmp
-        echo "export WORKSPACE_DIR=/workspace" >> ~/.zshrc.tmp
-        cat ~/.zshrc >> ~/.zshrc.tmp 2>/dev/null || true
-        mv ~/.zshrc.tmp ~/.zshrc
-    fi
+
+    # Note: .zshrc is mounted from host, so not modifying it here
+    # Add 'cd /workspace' to your host .zshrc if needed for Cursor compatibility
 fi
