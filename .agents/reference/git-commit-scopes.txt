@@ -1,0 +1,15 @@
+# Git Commit Scopes
+# One scope per line - use in commit messages like: feat(db): add new feature
+
+maproom
+db
+api
+cache
+tools
+deploy
+tests
+docs
+build
+ci
+deps
+ui

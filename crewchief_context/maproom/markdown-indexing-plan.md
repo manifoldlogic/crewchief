@@ -3,6 +3,29 @@
 ## Overview
 Enhance maproom to provide semantic-aware indexing of markdown documentation, making it as searchable and useful as code files for AI assistants and developers.
 
+## Implementation Status Summary
+
+**Current State (as of 2025-10-23):**
+- ✅ **Week 1 (MVP Markdown Support):** COMPLETE - Markdown files are indexed using regex-based heading chunking
+- ⚠️ **Week 2 (Tree-Sitter Integration):** SKIPPED - Team decided to use simpler regex approach instead
+- ✅ **Week 3 (Search Enhancements):** COMPLETE - Weighted scoring, filters, and context fields all working
+- ✅ **Week 4 (Additional File Types):** COMPLETE - JSON, YAML, and TOML files fully supported
+
+**What Works:**
+- 18 markdown files indexed (107 total files, 579 chunks)
+- Heading-based chunking (heading_1 through heading_6)
+- Filter parameter: `all`, `code`, `docs`, `config`
+- Weighted relevance: heading_1/2 (2.0x), heading_3 (1.5x), heading_4-6 (1.2x)
+- Config file support: JSON (9 files), YAML (8 files), TOML (2 files)
+
+**What's Missing (from Week 2):**
+- Tree-sitter-markdown integration (using regex instead)
+- Parent heading hierarchy tracking
+- Code block extraction with language detection
+- More sophisticated markdown structure parsing
+
+**Recommendation:** The regex-based approach is working well for current needs. Week 2 features could be implemented later if needed for more complex documentation parsing.
+
 ## Goals
 1. Index markdown files with awareness of document structure
 2. Preserve heading hierarchy and context in search results
@@ -217,29 +240,29 @@ pub enum ParserType {
 
 ## Implementation Roadmap
 
-### Week 1: MVP Markdown Support
-- [ ] Add .md file recognition to scanner
-- [ ] Implement basic regex-based heading chunking
-- [ ] Update database schema for markdown chunks
-- [ ] Test with README files
+### Week 1: MVP Markdown Support ✅ COMPLETE
+- [x] Add .md file recognition to scanner
+- [x] Implement basic regex-based heading chunking
+- [x] Update database schema for markdown chunks
+- [x] Test with README files
 
-### Week 2: Tree-Sitter Integration
+### Week 2: Tree-Sitter Integration ⚠️ SKIPPED (Using regex-based approach instead)
 - [ ] Integrate tree-sitter-markdown
 - [ ] Implement proper markdown parser
 - [ ] Add heading hierarchy tracking
 - [ ] Handle code blocks with language detection
 
-### Week 3: Search Enhancements
-- [ ] Implement weighted relevance scoring
-- [ ] Add context fields to search results
-- [ ] Add filter parameter to search tool
-- [ ] Update MCP tool descriptions
+### Week 3: Search Enhancements ✅ COMPLETE
+- [x] Implement weighted relevance scoring
+- [x] Add context fields to search results
+- [x] Add filter parameter to search tool
+- [x] Update MCP tool descriptions
 
-### Week 4: Additional File Types
-- [ ] Add JSON/YAML/TOML recognition
-- [ ] Implement basic chunking for config files
-- [ ] Test across various project types
-- [ ] Update documentation
+### Week 4: Additional File Types ✅ COMPLETE
+- [x] Add JSON/YAML/TOML recognition
+- [x] Implement basic chunking for config files
+- [x] Test across various project types
+- [x] Update documentation
 
 ## Success Metrics
 
