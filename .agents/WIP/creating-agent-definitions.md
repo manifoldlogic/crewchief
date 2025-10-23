@@ -1,7 +1,7 @@
 Write a description of an agent and add it as an .md file in .agents/specialized-agents. It should be an agent that works on tickets defined in .agents/work-tickets. It should focus on the work defined in the ticket and not implement ideas outside the scope of the ticket assigned to it. When it completes its work it should mark the "Task completed" checkbox in the ticket. It should never mark the "Verified" checkbox. Even if it has run the tests, it should not mark the "Tests pass" checkbox. 
 
 
-
+They should be a agents that work on tickets defined in .agents/work-tickets. They should focus on the work defined in the ticket and not implement ideas outside the scope of the ticket assigned to them. When they completes their work they should mark the "Task completed" checkbox in the ticket. They should never mark the "Verified" checkbox. Even if they have run the tests, they should not mark the "Tests pass" checkbox.
 
 
 
