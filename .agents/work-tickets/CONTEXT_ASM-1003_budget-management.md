@@ -1,9 +1,9 @@
 # Ticket: CONTEXT_ASM-1003: Token Budget Management
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - mcp-context-engineer
@@ -26,13 +26,13 @@ The Context Assembly system must operate within strict token budgets (typically 
 This is a critical component of Phase 1 (Week 2, Task 1) from the CONTEXT_ASM planning document.
 
 ## Acceptance Criteria
-- [ ] Budget never exceeded - total assembled context always stays within specified token limit
-- [ ] Intelligent truncation working - content is truncated preserving signatures and docstrings
-- [ ] Priority queue implemented - chunks are selected and ordered by relevance/importance
-- [ ] Overflow handled gracefully - when budget is tight, lowest priority items are skipped without errors
-- [ ] Budget allocation matches architecture spec - 40% primary, 20% tests, 15% callers, 15% callees, 10% config
-- [ ] Token reservation system functional - components can reserve tokens before adding content
-- [ ] Unit tests pass with 100% coverage for budget manager, truncation, and priority queue
+- [x] Budget never exceeded - total assembled context always stays within specified token limit
+- [x] Intelligent truncation working - content is truncated preserving signatures and docstrings
+- [x] Priority queue implemented - chunks are selected and ordered by relevance/importance
+- [x] Overflow handled gracefully - when budget is tight, lowest priority items are skipped without errors
+- [x] Budget allocation matches architecture spec - 40% primary, 20% tests, 15% callers, 15% callees, 10% config
+- [x] Token reservation system functional - components can reserve tokens before adding content
+- [x] Unit tests pass with 100% coverage for budget manager, truncation, and priority queue
 
 ## Technical Requirements
 - Implement `TokenBudgetManager` with reserve() and allocate() methods as specified in architecture

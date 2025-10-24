@@ -126,6 +126,7 @@ async fn create_edge(client: &Client, src: i64, dst: i64, edge_type: &str) -> Re
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn create_test_link(client: &Client, test_chunk_id: i64, target_chunk_id: i64) -> Result<()> {
     client
         .execute(
