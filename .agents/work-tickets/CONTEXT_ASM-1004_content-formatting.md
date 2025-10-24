@@ -1,9 +1,9 @@
 # Ticket: CONTEXT_ASM-1004: Content Formatting
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - mcp-context-engineer
@@ -20,13 +20,13 @@ This ticket implements Phase 1, Week 2, Task 2 from the CONTEXT_ASM project plan
 The ContentFormatter is a critical component in the context assembly pipeline, transforming raw database chunks into semantically annotated context items that provide clear value to LLM consumers.
 
 ## Acceptance Criteria
-- [ ] Chunks are formatted with complete ContextItem metadata (relpath, range, role, reason, content, tokens)
-- [ ] Clear role labels are assigned based on chunk relationship type ('primary', 'test', 'caller', 'callee', 'config', 'hook', 'route')
-- [ ] Reason explanations are generated that clearly explain why each chunk is included in the context
-- [ ] Useful summaries are generated for chunks exceeding the token budget
-- [ ] Signatures and docstrings are preserved during truncation
-- [ ] Token counting is accurate for formatted content
-- [ ] All formatter logic has comprehensive unit tests
+- [x] Chunks are formatted with complete ContextItem metadata (relpath, range, role, reason, content, tokens)
+- [x] Clear role labels are assigned based on chunk relationship type ('primary', 'test', 'caller', 'callee', 'config', 'hook', 'route')
+- [x] Reason explanations are generated that clearly explain why each chunk is included in the context
+- [x] Useful summaries are generated for chunks exceeding the token budget
+- [x] Signatures and docstrings are preserved during truncation
+- [x] Token counting is accurate for formatted content
+- [x] All formatter logic has comprehensive unit tests
 
 ## Technical Requirements
 - Implement `ContentFormatter` struct in Rust with the following methods:
