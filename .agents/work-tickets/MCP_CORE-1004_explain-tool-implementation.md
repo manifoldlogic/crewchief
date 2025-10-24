@@ -1,9 +1,9 @@
 # Ticket: MCP_CORE-1004: Explain Tool Implementation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (27/27 unit tests passing)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - mcp-tools-engineer
@@ -20,12 +20,12 @@ The Explain tool is a supporting feature in Phase 1 (Week 2) of the MCP_CORE pro
 The tool is marked as experimental in the configuration and will be disabled by default until fully tested and validated.
 
 ## Acceptance Criteria
-- [ ] Symbol card generation working - generates cards with chunk metadata, relationships, and examples
-- [ ] Caching logic functional - checks cache before generating, stores results after generation
-- [ ] Template system for formatting - reusable template for consistent card structure
-- [ ] Markdown output correct - properly formatted markdown with appropriate sections
-- [ ] Unit tests pass - comprehensive test coverage for all functionality
-- [ ] Integration with MCP server - tool properly registered and accessible via MCP protocol
+- [x] Symbol card generation working - generates cards with chunk metadata, relationships, and examples
+- [x] Caching logic functional - checks cache before generating, stores results after generation
+- [x] Template system for formatting - reusable template for consistent card structure
+- [x] Markdown output correct - properly formatted markdown with appropriate sections
+- [x] Unit tests pass - comprehensive test coverage for all functionality
+- [x] Integration with MCP server - tool properly registered and accessible via MCP protocol
 
 ## Technical Requirements
 - **Parameter Validation**: Use Zod schema to validate chunk_id (required parameter)
@@ -108,10 +108,87 @@ Symbol card should include:
   - **Mitigation**: Keep disabled by default, gather feedback before enabling in production
 
 ## Files/Packages Affected
-- `packages/maproom-mcp/src/tools/explain.ts` - Explain tool handler (new)
-- `packages/maproom-mcp/src/tools/explain_schema.ts` - Zod schema for validation (new)
-- `packages/maproom-mcp/src/templates/symbol_card.ts` - Symbol card template (new)
-- `packages/maproom-mcp/src/utils/cache.ts` - Caching utilities (new, may be shared)
-- `packages/maproom-mcp/src/server.ts` - Register explain tool (modify)
-- `packages/maproom-mcp/tests/tools/explain_test.ts` - Unit tests (new)
-- `packages/maproom-mcp/config/default.yaml` - Tool configuration (modify)
+- `packages/maproom-mcp/src/tools/explain.ts` - Explain tool handler (new) ✅
+- `packages/maproom-mcp/src/tools/explain_schema.ts` - Zod schema for validation (new) ✅
+- `packages/maproom-mcp/src/templates/symbol_card.ts` - Symbol card template (new) ✅
+- `packages/maproom-mcp/src/utils/cache.ts` - Caching utilities (new, may be shared) ✅
+- `packages/maproom-mcp/src/types.ts` - Type definitions (modified) ✅
+- `packages/maproom-mcp/src/index.ts` - MCP server registration (modified) ✅
+- `packages/maproom-mcp/tests/tools/explain_test.ts` - Unit tests (new) ✅
+
+## Implementation Notes
+
+### Completed Implementation
+All acceptance criteria have been met:
+
+1. **Symbol Card Generation**: Implemented `generateSymbolCard()` function that:
+   - Queries chunk details from database (symbol_name, kind, lines, metadata)
+   - Extracts relationships (imports, exports, calls, called_by, tests)
+   - Loads code preview from filesystem with fallback to database
+   - Builds comprehensive SymbolCard object with all metadata
+
+2. **Caching Logic**: Implemented using `Cache` utility class:
+   - Cache key pattern: `explain:${chunk_id}`
+   - Checks cache before generating (cache hit returns immediately)
+   - Stores results after generation with configurable TTL (default 5 minutes)
+   - Includes metrics tracking (hits, misses, evictions, hit rate)
+   - Automatic cleanup of expired entries
+
+3. **Template System**: Created `formatSymbolCard()` function that generates markdown with:
+   - Header (symbol name and type)
+   - Location (file path, line range, worktree)
+   - Metadata section (language, visibility, parent context)
+   - Relationships section (imports, exports, calls, called by, tests)
+   - Code preview with syntax highlighting hint
+   - Optional usage examples section
+
+4. **Markdown Output**: Properly formatted with:
+   - Clear section headers (##)
+   - Code blocks with language hints (```typescript)
+   - Bullet lists for relationships
+   - Inline code formatting for symbols and paths
+
+5. **Unit Tests**: Comprehensive test suite with 27 tests covering:
+   - Parameter validation (chunk_id as string/number, validation errors)
+   - Symbol card creation and formatting
+   - Markdown generation with all sections
+   - Cache functionality (get/set, TTL, metrics, cleanup)
+   - Error handling (ValidationError)
+   - All tests passing ✅
+
+6. **MCP Integration**: Tool registered in index.ts:
+   - Added to toolSchemas array with proper MCP schema
+   - Implemented handleExplain() handler with database connection
+   - Error handling with formatExplainError()
+   - Configuration flag support (MAPROOM_EXPLAIN_ENABLED env var)
+   - Disabled by default (experimental)
+
+### Configuration
+Tool is disabled by default and requires explicit enabling:
+- Environment variable: `MAPROOM_EXPLAIN_ENABLED=true`
+- Configuration parameter: `{ enabled: true }` in ExplainToolConfig
+- This follows the ticket requirement to keep it experimental
+
+### Database Queries
+Implemented three efficient queries:
+1. `queryChunkDetails()` - Fetches chunk with file and worktree info
+2. `queryChunkRelationships()` - Gets outgoing/incoming edges and test links
+3. File preview loaded from filesystem with graceful fallback
+
+### Cache Strategy
+- TTL: 5 minutes (configurable via ExplainToolConfig.cacheTtlMs)
+- Key pattern: `explain:${chunk_id}`
+- Automatic cleanup every 60 seconds
+- Global instance: `explainCache` exported from cache.ts
+- Future enhancement: Invalidation on upsert operations
+
+### Test Results
+```
+✓ tests/tools/explain.test.ts (27 tests) 209ms
+  ✓ Explain Tool - Parameter Validation (6 tests)
+  ✓ Symbol Card Template (8 tests)
+  ✓ Cache Utility (12 tests)
+  ✓ Explain Tool - Error Handling (1 test)
+```
+
+All unit tests pass. Integration tests require database setup (as expected).

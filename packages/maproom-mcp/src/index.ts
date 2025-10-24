@@ -228,6 +228,20 @@ const toolSchemas = [
       },
       required: ['chunk_id']
     }
+  },
+  {
+    name: 'explain',
+    description: 'Generate a detailed symbol card for a code chunk. Provides markdown-formatted explanation with metadata, relationships, code preview, and usage examples. USE AFTER: getting chunk_id from search results. EXPERIMENTAL: Must be enabled in configuration. Uses intelligent caching for performance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chunk_id: {
+          anyOf: [{ type: 'string' }, { type: 'integer' }],
+          description: 'Chunk ID to explain (from search results). Can be string or number.'
+        }
+      },
+      required: ['chunk_id']
+    }
   }
 ]
 
@@ -763,6 +777,20 @@ async function handleUpsert(params: any): Promise<any> {
   }
 }
 
+async function handleExplain(params: any): Promise<any> {
+  // Check if explain tool is enabled via environment variable
+  const explainEnabled = process.env.MAPROOM_EXPLAIN_ENABLED === 'true'
+
+  const client = await getPg()
+  try {
+    const { handleExplainTool } = await import('./tools/explain.js')
+    const result = await handleExplainTool(params, client, { enabled: explainEnabled })
+    return result
+  } finally {
+    await client.end().catch(() => {})
+  }
+}
+
 /**
  * handleContext - Retrieve contextually relevant code sections around a target chunk
  *
@@ -1006,6 +1034,17 @@ async function handleMessage(msg: JsonRpcRequest) {
         const res = await handleContext(args)
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
         log.info({ id: msg.id, tool: name }, 'sent tool result')
+      } else if (name === 'explain') {
+        try {
+          const res = await handleExplain(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: res }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatExplainError } = await import('./tools/explain.js')
+          const errorResponse = formatExplainError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else {
         respond(msg.id ?? null, undefined, new Error(`unknown tool: ${name}`))
       }
