@@ -1,0 +1,107 @@
+{
+  "description": "Test fixture data for embedding infrastructure tests",
+  "chunks": [
+    {
+      "id": "chunk_001",
+      "type": "function",
+      "language": "typescript",
+      "content": "export function calculateEmbedding(text: string): Vector {\n  const normalized = normalizeText(text);\n  return embeddingModel.encode(normalized);\n}",
+      "symbol_name": "calculateEmbedding",
+      "docstring": "Calculates embedding vector for given text input"
+    },
+    {
+      "id": "chunk_002",
+      "type": "class",
+      "language": "typescript",
+      "content": "class EmbeddingCache {\n  private cache: Map<string, Vector>;\n  \n  constructor(maxSize: number) {\n    this.cache = new LRUCache(maxSize);\n  }\n  \n  get(key: string): Vector | null {\n    return this.cache.get(key) || null;\n  }\n  \n  set(key: string, value: Vector): void {\n    this.cache.set(key, value);\n  }\n}",
+      "symbol_name": "EmbeddingCache",
+      "docstring": "LRU cache for embedding vectors"
+    },
+    {
+      "id": "chunk_003",
+      "type": "function",
+      "language": "rust",
+      "content": "pub async fn embed_text(text: &str) -> Result<Vector, Error> {\n    let cached = cache.get(text).await;\n    if let Some(embedding) = cached {\n        return Ok(embedding);\n    }\n    \n    let embedding = client.embed(text).await?;\n    cache.put(text, embedding.clone()).await?;\n    Ok(embedding)\n}",
+      "symbol_name": "embed_text",
+      "docstring": "Embeds text with caching support"
+    },
+    {
+      "id": "chunk_004",
+      "type": "documentation",
+      "language": "markdown",
+      "content": "# Embedding Service\n\nThe embedding service provides efficient vector embedding generation using OpenAI's text-embedding-3-small model.\n\n## Features\n\n- LRU caching for performance\n- Batch processing for efficiency\n- Retry logic with exponential backoff\n- Cost tracking and monitoring\n\n## Usage\n\n```typescript\nconst service = new EmbeddingService(config);\nconst embedding = await service.embedText('Hello world');\n```",
+      "symbol_name": null,
+      "docstring": null
+    },
+    {
+      "id": "chunk_005",
+      "type": "function",
+      "language": "typescript",
+      "content": "async function batchEmbed(texts: string[]): Promise<Vector[]> {\n  const batchSize = 100;\n  const results: Vector[] = [];\n  \n  for (let i = 0; i < texts.length; i += batchSize) {\n    const batch = texts.slice(i, i + batchSize);\n    const embeddings = await client.embedBatch(batch);\n    results.push(...embeddings);\n  }\n  \n  return results;\n}",
+      "symbol_name": "batchEmbed",
+      "docstring": "Processes large batches of text by chunking into smaller batches"
+    },
+    {
+      "id": "chunk_006",
+      "type": "function",
+      "language": "typescript",
+      "content": "function calculateCosineDistance(a: Vector, b: Vector): number {\n  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);\n  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));\n  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));\n  return 1 - (dotProduct / (magnitudeA * magnitudeB));\n}",
+      "symbol_name": "calculateCosineDistance",
+      "docstring": "Calculates cosine distance between two vectors"
+    },
+    {
+      "id": "chunk_007",
+      "type": "class",
+      "language": "rust",
+      "content": "pub struct CostTracker {\n    total_tokens: AtomicU64,\n    total_requests: AtomicU64,\n}\n\nimpl CostTracker {\n    pub fn record_usage(&self, tokens: u64) {\n        self.total_tokens.fetch_add(tokens, Ordering::Relaxed);\n        self.total_requests.fetch_add(1, Ordering::Relaxed);\n    }\n    \n    pub fn estimated_cost_usd(&self) -> f64 {\n        let tokens = self.total_tokens.load(Ordering::Relaxed);\n        (tokens as f64 / 1_000_000.0) * 0.02\n    }\n}",
+      "symbol_name": "CostTracker",
+      "docstring": "Tracks API usage and costs"
+    },
+    {
+      "id": "chunk_008",
+      "type": "function",
+      "language": "typescript",
+      "content": "export async function retryWithBackoff<T>(\n  fn: () => Promise<T>,\n  maxAttempts: number = 3\n): Promise<T> {\n  let lastError: Error;\n  \n  for (let attempt = 0; attempt < maxAttempts; attempt++) {\n    try {\n      return await fn();\n    } catch (error) {\n      lastError = error as Error;\n      if (attempt < maxAttempts - 1) {\n        const delay = Math.pow(2, attempt) * 1000;\n        await sleep(delay);\n      }\n    }\n  }\n  \n  throw lastError!;\n}",
+      "symbol_name": "retryWithBackoff",
+      "docstring": "Retries a function with exponential backoff"
+    },
+    {
+      "id": "chunk_009",
+      "type": "function",
+      "language": "rust",
+      "content": "pub async fn generate_embeddings_batch(\n    texts: Vec<String>,\n    batch_size: usize,\n) -> Result<Vec<Vector>, Error> {\n    let mut all_embeddings = Vec::new();\n    \n    for chunk in texts.chunks(batch_size) {\n        let embeddings = client.embed_batch(chunk.to_vec()).await?;\n        all_embeddings.extend(embeddings);\n        tokio::time::sleep(Duration::from_millis(100)).await;\n    }\n    \n    Ok(all_embeddings)\n}",
+      "symbol_name": "generate_embeddings_batch",
+      "docstring": "Generates embeddings for large batches with rate limiting"
+    },
+    {
+      "id": "chunk_010",
+      "type": "documentation",
+      "language": "markdown",
+      "content": "## Performance Considerations\n\n### Caching Strategy\n\nThe LRU cache maintains the 10,000 most recently used embeddings, providing:\n- Hit rate > 80% for typical workloads\n- Sub-millisecond cache lookups\n- Automatic expiration after 1 hour\n\n### Batch Processing\n\nBatch requests to the API for optimal throughput:\n- Use batch size of 100 texts per request\n- Implement delays between batches to avoid rate limits\n- Track costs to stay within budget\n\n### Cost Optimization\n\nWith text-embedding-3-small model:\n- Cost: $0.02 per 1M tokens\n- Average token count: ~50 tokens per code chunk\n- Target monthly cost: < $100",
+      "symbol_name": null,
+      "docstring": null
+    }
+  ],
+  "test_scenarios": {
+    "simple_code": [
+      "fn main() { println!(\"Hello\"); }",
+      "const x = 42;",
+      "return true;"
+    ],
+    "complex_code": [
+      "class DataProcessor {\n  async process(data: any[]) {\n    return data.map(item => transform(item));\n  }\n}",
+      "impl<T> Iterator for MyIterator<T> {\n  type Item = T;\n  fn next(&mut self) -> Option<Self::Item> {\n    self.data.pop()\n  }\n}"
+    ],
+    "documentation": [
+      "This function processes user authentication",
+      "API endpoint for retrieving user profile data",
+      "Configuration options for the embedding service"
+    ]
+  },
+  "performance_benchmarks": {
+    "target_cache_hit_rate": 0.80,
+    "target_p95_latency_ms": 100,
+    "max_cost_per_1k_embeddings_usd": 0.01,
+    "batch_processing_target_chunks_per_second": 100
+  }
+}
