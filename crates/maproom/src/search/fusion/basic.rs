@@ -15,25 +15,36 @@ use tracing::{debug, instrument};
 /// These weights determine how much each search strategy contributes to
 /// the final combined score. All weights should sum to 1.0 for proper
 /// normalization, but this is not enforced to allow experimentation.
+///
+/// # Default Weights Rationale
+/// - **FTS (0.4)**: Highest weight for keyword/exact matches
+/// - **Vector (0.35)**: Strong semantic similarity signal
+/// - **Graph (0.1)**: Moderate boost for important/central code
+/// - **Recency (0.1)**: Moderate boost for recently changed code
+/// - **Churn (0.05)**: Slight penalty for high-churn (unstable) code
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FusionWeights {
     /// Weight for full-text search scores (default: 0.4)
     pub fts: f32,
-    /// Weight for vector similarity scores (default: 0.4)
+    /// Weight for vector similarity scores (default: 0.35)
     pub vector: f32,
-    /// Weight for graph importance scores (default: 0.2)
+    /// Weight for graph importance scores (default: 0.1)
     pub graph: f32,
-    /// Weight for temporal signal scores (default: 0.0 for basic fusion)
-    pub signals: f32,
+    /// Weight for recency signal scores (default: 0.1)
+    pub recency: f32,
+    /// Weight for churn signal scores (default: 0.05)
+    /// Note: Churn is inverted during fusion: churn_contrib = weight * (1.0 / (1.0 + churn_score))
+    pub churn: f32,
 }
 
 impl Default for FusionWeights {
     fn default() -> Self {
         Self {
             fts: 0.4,
-            vector: 0.4,
-            graph: 0.2,
-            signals: 0.0, // Signals are used within other searches, not as separate weight
+            vector: 0.35,
+            graph: 0.1,
+            recency: 0.1,
+            churn: 0.05,
         }
     }
 }
@@ -44,23 +55,76 @@ impl FusionWeights {
     /// # Validation
     /// Weights should ideally sum to 1.0, but this is not enforced to allow
     /// experimentation with different scaling approaches.
-    pub fn new(fts: f32, vector: f32, graph: f32, signals: f32) -> Self {
+    pub fn new(fts: f32, vector: f32, graph: f32, recency: f32, churn: f32) -> Self {
         Self {
             fts,
             vector,
             graph,
-            signals,
+            recency,
+            churn,
         }
     }
 
     /// Get the total sum of all weights.
     pub fn sum(&self) -> f32 {
-        self.fts + self.vector + self.graph + self.signals
+        self.fts + self.vector + self.graph + self.recency + self.churn
     }
 
     /// Check if weights are normalized (sum to 1.0 within tolerance).
     pub fn is_normalized(&self) -> bool {
         (self.sum() - 1.0).abs() < 0.001
+    }
+
+    /// Validate weights to ensure all are non-negative.
+    ///
+    /// # Errors
+    /// Returns an error if any weight is negative.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.fts < 0.0 {
+            anyhow::bail!("FTS weight must be non-negative, got: {}", self.fts);
+        }
+        if self.vector < 0.0 {
+            anyhow::bail!("Vector weight must be non-negative, got: {}", self.vector);
+        }
+        if self.graph < 0.0 {
+            anyhow::bail!("Graph weight must be non-negative, got: {}", self.graph);
+        }
+        if self.recency < 0.0 {
+            anyhow::bail!("Recency weight must be non-negative, got: {}", self.recency);
+        }
+        if self.churn < 0.0 {
+            anyhow::bail!("Churn weight must be non-negative, got: {}", self.churn);
+        }
+        Ok(())
+    }
+
+    /// Normalize weights to sum to 1.0.
+    ///
+    /// If the sum is zero or very close to zero, all weights are set to equal values.
+    pub fn normalize(&mut self) {
+        let sum = self.sum();
+        if sum < 0.0001 {
+            // If sum is effectively zero, set to equal weights
+            let equal_weight = 1.0 / 5.0; // 5 signals
+            self.fts = equal_weight;
+            self.vector = equal_weight;
+            self.graph = equal_weight;
+            self.recency = equal_weight;
+            self.churn = equal_weight;
+        } else {
+            self.fts /= sum;
+            self.vector /= sum;
+            self.graph /= sum;
+            self.recency /= sum;
+            self.churn /= sum;
+        }
+    }
+
+    /// Create a normalized copy of these weights.
+    pub fn normalized(&self) -> Self {
+        let mut weights = self.clone();
+        weights.normalize();
+        weights
     }
 }
 
@@ -124,20 +188,31 @@ impl ScoreFusion for BasicWeightedFusion {
             .into_iter()
             .map(|(chunk_id, source_scores)| {
                 // Calculate weighted sum based on which sources found this chunk
-                let mut weighted_sum = 0.0;
+                let fts_contrib = source_scores
+                    .get(&SearchSource::FTS)
+                    .map(|&score| weights.fts * score)
+                    .unwrap_or(0.0);
 
-                if let Some(&fts_score) = source_scores.get(&SearchSource::FTS) {
-                    weighted_sum += weights.fts * fts_score;
-                }
-                if let Some(&vector_score) = source_scores.get(&SearchSource::Vector) {
-                    weighted_sum += weights.vector * vector_score;
-                }
-                if let Some(&graph_score) = source_scores.get(&SearchSource::Graph) {
-                    weighted_sum += weights.graph * graph_score;
-                }
-                if let Some(&signal_score) = source_scores.get(&SearchSource::Signals) {
-                    weighted_sum += weights.signals * signal_score;
-                }
+                let vector_contrib = source_scores
+                    .get(&SearchSource::Vector)
+                    .map(|&score| weights.vector * score)
+                    .unwrap_or(0.0);
+
+                let graph_contrib = source_scores
+                    .get(&SearchSource::Graph)
+                    .map(|&score| weights.graph * score)
+                    .unwrap_or(0.0);
+
+                // For now, SearchSource::Signals combines recency and churn
+                // We use the combined (recency + churn) weight for the Signals source
+                // In Phase 3, signals will be decomposed into separate sources
+                let signals_weight = weights.recency + weights.churn;
+                let signals_contrib = source_scores
+                    .get(&SearchSource::Signals)
+                    .map(|&score| signals_weight * score)
+                    .unwrap_or(0.0);
+
+                let weighted_sum = fts_contrib + vector_contrib + graph_contrib + signals_contrib;
 
                 FusedResult::new(chunk_id, weighted_sum, source_scores)
             })
@@ -172,23 +247,51 @@ mod tests {
     fn test_fusion_weights_default() {
         let weights = FusionWeights::default();
         assert_eq!(weights.fts, 0.4);
-        assert_eq!(weights.vector, 0.4);
-        assert_eq!(weights.graph, 0.2);
-        assert_eq!(weights.signals, 0.0);
+        assert_eq!(weights.vector, 0.35);
+        assert_eq!(weights.graph, 0.1);
+        assert_eq!(weights.recency, 0.1);
+        assert_eq!(weights.churn, 0.05);
         assert!(weights.is_normalized());
     }
 
     #[test]
     fn test_fusion_weights_custom() {
-        let weights = FusionWeights::new(0.5, 0.3, 0.15, 0.05);
+        let weights = FusionWeights::new(0.5, 0.3, 0.1, 0.08, 0.02);
         assert_eq!(weights.sum(), 1.0);
         assert!(weights.is_normalized());
     }
 
     #[test]
     fn test_fusion_weights_not_normalized() {
-        let weights = FusionWeights::new(0.6, 0.6, 0.3, 0.0);
-        assert_eq!(weights.sum(), 1.5);
+        let weights = FusionWeights::new(0.6, 0.6, 0.3, 0.2, 0.1);
+        // Use approximate comparison for floating point
+        assert!((weights.sum() - 1.8).abs() < 0.001);
+        assert!(!weights.is_normalized());
+    }
+
+    #[test]
+    fn test_fusion_weights_validate() {
+        let valid_weights = FusionWeights::new(0.4, 0.35, 0.1, 0.1, 0.05);
+        assert!(valid_weights.validate().is_ok());
+
+        let invalid_weights = FusionWeights::new(-0.1, 0.35, 0.1, 0.1, 0.05);
+        assert!(invalid_weights.validate().is_err());
+    }
+
+    #[test]
+    fn test_fusion_weights_normalize() {
+        let mut weights = FusionWeights::new(0.8, 0.7, 0.3, 0.2, 0.0);
+        weights.normalize();
+        assert!(weights.is_normalized());
+        assert!((weights.sum() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_fusion_weights_normalized_copy() {
+        let weights = FusionWeights::new(2.0, 2.0, 1.0, 0.5, 0.5);
+        let normalized = weights.normalized();
+        assert!(normalized.is_normalized());
+        // Original unchanged
         assert!(!weights.is_normalized());
     }
 
@@ -236,8 +339,8 @@ mod tests {
 
         // Chunk 1 appears in both FTS and Vector
         assert_eq!(fused[0].chunk_id, 1);
-        // Score = 0.4 * 0.9 + 0.4 * 0.8 = 0.36 + 0.32 = 0.68
-        assert!((fused[0].score - 0.68).abs() < 0.01);
+        // Score = 0.4 * 0.9 + 0.35 * 0.8 = 0.36 + 0.28 = 0.64
+        assert!((fused[0].score - 0.64).abs() < 0.01);
         assert_eq!(fused[0].source_scores.len(), 2);
 
         // Chunk 2 only in FTS
@@ -247,7 +350,7 @@ mod tests {
 
         // Chunk 3 only in Vector
         let chunk_3 = fused.iter().find(|r| r.chunk_id == 3).unwrap();
-        assert!((chunk_3.score - 0.24).abs() < 0.01); // 0.4 * 0.6
+        assert!((chunk_3.score - 0.21).abs() < 0.01); // 0.35 * 0.6
         assert_eq!(chunk_3.source_scores.len(), 1);
     }
 
@@ -288,7 +391,8 @@ mod tests {
     #[test]
     fn test_basic_weighted_fusion_all_sources() {
         let fusion = BasicWeightedFusion::new();
-        let weights = FusionWeights::new(0.3, 0.3, 0.3, 0.1);
+        // recency=0.08, churn=0.02, combined signals weight = 0.1
+        let weights = FusionWeights::new(0.3, 0.3, 0.3, 0.08, 0.02);
 
         let fts_results = RankedResults::new(
             vec![RankedResult::new(1, 0.8, 1)],
@@ -318,7 +422,8 @@ mod tests {
 
         assert_eq!(fused.len(), 1);
         assert_eq!(fused[0].chunk_id, 1);
-        // Score = 0.3*0.8 + 0.3*0.9 + 0.3*0.7 + 0.1*0.6 = 0.24 + 0.27 + 0.21 + 0.06 = 0.78
+        // Score = 0.3*0.8 + 0.3*0.9 + 0.3*0.7 + (0.08+0.02)*0.6
+        // = 0.24 + 0.27 + 0.21 + 0.06 = 0.78
         assert!((fused[0].score - 0.78).abs() < 0.01);
         assert_eq!(fused[0].source_scores.len(), 4);
     }

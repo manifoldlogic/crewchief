@@ -46,6 +46,60 @@ pub trait ScoreFusion: Send + Sync {
     ) -> Vec<FusedResult>;
 }
 
+/// Detailed breakdown of score contributions from each signal.
+///
+/// This is used in debug mode to understand how each signal contributed
+/// to the final fused score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoreBreakdown {
+    /// Contribution from full-text search (weighted)
+    pub fts: f32,
+    /// Contribution from vector similarity (weighted)
+    pub vector: f32,
+    /// Contribution from graph importance (weighted)
+    pub graph: f32,
+    /// Contribution from recency signal (weighted)
+    pub recency: f32,
+    /// Contribution from churn signal (weighted and inverted)
+    pub churn: f32,
+}
+
+impl ScoreBreakdown {
+    /// Create a breakdown with all zero contributions.
+    pub fn zero() -> Self {
+        Self {
+            fts: 0.0,
+            vector: 0.0,
+            graph: 0.0,
+            recency: 0.0,
+            churn: 0.0,
+        }
+    }
+
+    /// Format the breakdown as a human-readable string for debug output.
+    pub fn format_debug(&self) -> String {
+        format!(
+            "FTS:{:.3} Vec:{:.3} Graph:{:.3} Recency:{:.3} Churn:{:.3}",
+            self.fts, self.vector, self.graph, self.recency, self.churn
+        )
+    }
+
+    /// Calculate what percentage each signal contributed to the total score.
+    pub fn as_percentages(&self) -> Vec<(String, f32)> {
+        let total = self.fts + self.vector + self.graph + self.recency + self.churn;
+        if total < 0.0001 {
+            return vec![];
+        }
+        vec![
+            ("FTS".to_string(), (self.fts / total) * 100.0),
+            ("Vector".to_string(), (self.vector / total) * 100.0),
+            ("Graph".to_string(), (self.graph / total) * 100.0),
+            ("Recency".to_string(), (self.recency / total) * 100.0),
+            ("Churn".to_string(), (self.churn / total) * 100.0),
+        ]
+    }
+}
+
 /// A single search result with fused score from multiple sources.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FusedResult {
@@ -57,15 +111,35 @@ pub struct FusedResult {
 
     /// Individual scores from each search source that found this chunk
     pub source_scores: HashMap<SearchSource, f32>,
+
+    /// Optional detailed breakdown of score contributions (for debug mode)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub breakdown: Option<ScoreBreakdown>,
 }
 
 impl FusedResult {
-    /// Create a new FusedResult.
+    /// Create a new FusedResult without breakdown.
     pub fn new(chunk_id: i64, score: f32, source_scores: HashMap<SearchSource, f32>) -> Self {
         Self {
             chunk_id,
             score,
             source_scores,
+            breakdown: None,
+        }
+    }
+
+    /// Create a new FusedResult with score breakdown.
+    pub fn with_breakdown(
+        chunk_id: i64,
+        score: f32,
+        source_scores: HashMap<SearchSource, f32>,
+        breakdown: ScoreBreakdown,
+    ) -> Self {
+        Self {
+            chunk_id,
+            score,
+            source_scores,
+            breakdown: Some(breakdown),
         }
     }
 }

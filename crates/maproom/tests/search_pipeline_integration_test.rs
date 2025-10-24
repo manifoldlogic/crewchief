@@ -122,7 +122,7 @@ async fn test_search_pipeline_with_custom_weights() -> Result<(), Box<dyn std::e
         .expect("No repos found in database");
 
     // Custom weights: heavily favor FTS
-    let custom_weights = FusionWeights::new(0.7, 0.2, 0.1, 0.0);
+    let custom_weights = FusionWeights::new(0.7, 0.2, 0.1, 0.0, 0.0);
 
     let options = SearchOptions::new(repo_id, None, 5).with_fusion_weights(custom_weights);
 

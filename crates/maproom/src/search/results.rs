@@ -452,7 +452,9 @@ mod tests {
         let weights = options.get_fusion_weights();
 
         assert_eq!(weights.fts, 0.4);
-        assert_eq!(weights.vector, 0.4);
-        assert_eq!(weights.graph, 0.2);
+        assert_eq!(weights.vector, 0.35);
+        assert_eq!(weights.graph, 0.1);
+        assert_eq!(weights.recency, 0.1);
+        assert_eq!(weights.churn, 0.05);
     }
 }

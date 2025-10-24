@@ -298,7 +298,7 @@ async fn test_rrf_with_custom_weights_ignored() -> Result<(), Box<dyn std::error
         .expect("No repos found in database. Please index some data first.");
 
     // Execute search with custom weights (should be ignored by RRF)
-    let custom_weights = FusionWeights::new(0.5, 0.5, 0.0, 0.0);
+    let custom_weights = FusionWeights::new(0.5, 0.5, 0.0, 0.0, 0.0);
     let options = SearchOptions::new(repo_id, None, 10).with_fusion_weights(custom_weights);
     let results = pipeline.search("function", options).await?;
 
