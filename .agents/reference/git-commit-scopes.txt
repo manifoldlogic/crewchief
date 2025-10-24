@@ -2,16 +2,17 @@
 # One scope per line - use in commit messages like: feat(db): add new feature
 
 maproom
-db
+ab-testing
 api
-cache
-search
-tools
-deploy
-tests
-docs
 build
+cache
 ci
+db
+deploy
+docs
 deps
-ui
 perf
+search
+tests
+tools
+ui
