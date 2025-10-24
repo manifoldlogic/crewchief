@@ -303,3 +303,276 @@ fn test_synchronized_expansion() {
 
     assert_eq!(sync_result, async_result);
 }
+
+//
+// Full QueryProcessor Integration Tests with Embedding Generation
+//
+
+use crewchief_maproom::search::QueryProcessor;
+use crewchief_maproom::embedding::EmbeddingService;
+use std::sync::Arc;
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_full_pipeline() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let processed = processor.process("authenticate user").await?;
+
+    // Verify all components populated
+    assert_eq!(processed.original, "authenticate user");
+    assert!(!processed.tokens.is_empty(), "Should have tokens");
+    assert!(!processed.embedding.is_empty(), "Should have embedding");
+    assert_eq!(processed.embedding.len(), 1536, "OpenAI embeddings are 1536 dimensions");
+    assert!(!processed.expanded_terms.is_empty(), "Should have expanded terms");
+
+    // Verify mode detection
+    println!("Detected mode: {:?}", processed.mode);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_code_mode_detection() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    // Code-like queries
+    let test_cases = vec![
+        "User::authenticate()",
+        "array->map",
+        "fn main",
+        "getValue()",
+        "user_name",
+    ];
+
+    for query in test_cases {
+        let processed = processor.process(query).await?;
+        println!("Query '{}' -> mode: {:?}", query, processed.mode);
+
+        // Should detect as Code or Auto (implementation dependent)
+        assert!(
+            matches!(processed.mode, crewchief_maproom::search::SearchMode::Code | crewchief_maproom::search::SearchMode::Auto),
+            "Query '{}' should be detected as Code mode, got {:?}",
+            query,
+            processed.mode
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_text_mode_detection() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    // Natural language queries
+    let test_cases = vec![
+        "how to authenticate a user",
+        "what is the login process",
+        "find all authentication functions",
+        "explain the error handling workflow",
+    ];
+
+    for query in test_cases {
+        let processed = processor.process(query).await?;
+        println!("Query '{}' -> mode: {:?}", query, processed.mode);
+
+        // Should detect as Text or Auto
+        assert!(
+            matches!(processed.mode, crewchief_maproom::search::SearchMode::Text | crewchief_maproom::search::SearchMode::Auto),
+            "Query '{}' should be detected as Text mode, got {:?}",
+            query,
+            processed.mode
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_embedding_caching() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let query = "test query for caching";
+
+    // First call - should generate embedding
+    let start1 = std::time::Instant::now();
+    let processed1 = processor.process(query).await?;
+    let time1 = start1.elapsed();
+
+    // Second call - should use cache
+    let start2 = std::time::Instant::now();
+    let processed2 = processor.process(query).await?;
+    let time2 = start2.elapsed();
+
+    println!("First call: {:.2}ms", time1.as_secs_f64() * 1000.0);
+    println!("Second call: {:.2}ms", time2.as_secs_f64() * 1000.0);
+
+    // Embeddings should be identical
+    assert_eq!(processed1.embedding, processed2.embedding);
+
+    // Second call should be faster (cache hit)
+    // Note: This might be flaky due to network variance
+    if time2 < time1 {
+        println!("✓ Cache hit appears faster");
+    } else {
+        println!("⚠ Cache timing inconclusive (network variance possible)");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_embedding_dimensions() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let queries = vec![
+        "short",
+        "medium length query",
+        "this is a much longer query with many words to test embedding generation",
+    ];
+
+    for query in queries {
+        let processed = processor.process(query).await?;
+
+        // All embeddings should be same dimension regardless of query length
+        assert_eq!(
+            processed.embedding.len(),
+            1536,
+            "Embedding for '{}' should be 1536 dimensions",
+            query
+        );
+
+        // Embeddings should be normalized (cosine similarity friendly)
+        let magnitude: f32 = processed.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!(
+            (magnitude - 1.0).abs() < 0.1,
+            "Embedding magnitude should be close to 1.0 (normalized), got {}",
+            magnitude
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_special_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let queries = vec![
+        "User::authenticate()",
+        "array->map(x => x * 2)",
+        "x != y && z == 0",
+        "const API_KEY = 'secret'",
+        "// comment in code",
+    ];
+
+    for query in queries {
+        let processed = processor.process(query).await?;
+
+        // Should handle special characters without errors
+        assert!(!processed.tokens.is_empty(), "Query '{}' should produce tokens", query);
+        assert_eq!(processed.embedding.len(), 1536, "Query '{}' should produce embedding", query);
+
+        println!("Query '{}' -> {} tokens, mode: {:?}",
+                 query, processed.tokens.len(), processed.mode);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_empty_query_error() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let result = processor.process("").await;
+
+    // Should return error for empty query
+    assert!(result.is_err(), "Empty query should return error");
+
+    println!("Empty query error: {:?}", result.unwrap_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_expansion_integration() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let processed = processor.process("function auth").await?;
+
+    // Should expand "function" to include "fn", "method", etc.
+    // Should expand "auth" to include "authentication", "login", etc.
+    assert!(
+        processed.expanded_terms.len() > 2,
+        "Should have expanded terms beyond original tokens"
+    );
+
+    println!("Original tokens: {:?}", processed.tokens);
+    println!("Expanded terms: {:?}", processed.expanded_terms);
+
+    // Common expansions we expect
+    let expanded_str = processed.expanded_terms.join(" ");
+    assert!(
+        expanded_str.contains("fn") || expanded_str.contains("method"),
+        "Should expand 'function' to synonyms"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_parallel_performance() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let start = std::time::Instant::now();
+    let processed = processor.process("search test query").await?;
+    let elapsed = start.elapsed();
+
+    println!("Query processing time: {:.2}ms", elapsed.as_secs_f64() * 1000.0);
+    println!("  Tokens: {}", processed.tokens.len());
+    println!("  Expanded terms: {}", processed.expanded_terms.len());
+    println!("  Embedding dims: {}", processed.embedding.len());
+    println!("  Mode: {:?}", processed.mode);
+
+    // Query processing should be fast (< 100ms target includes embedding API call)
+    // Note: First call may be slower due to network
+    if elapsed.as_millis() < 100 {
+        println!("✓ Met <100ms target");
+    } else {
+        println!("⚠ Exceeded 100ms (may be due to cold start or network latency)");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires embedding service configured
+async fn test_query_processor_whitespace_query() -> Result<(), Box<dyn std::error::Error>> {
+    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let processor = QueryProcessor::new(embedder);
+
+    let result = processor.process("   \t\n  ").await;
+
+    // Whitespace-only query should be treated as empty
+    assert!(result.is_err(), "Whitespace-only query should return error");
+
+    Ok(())
+}

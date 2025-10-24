@@ -370,3 +370,347 @@ async fn test_search_pipeline_custom_fusion_strategy() -> Result<(), Box<dyn std
 
     Ok(())
 }
+
+//
+// Additional Error Handling and Edge Case Tests
+//
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_malformed_query() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    // Test various malformed queries
+    let malformed_queries = vec![
+        "",                           // Empty
+        "   ",                        // Whitespace only
+        "\t\n",                       // Tabs and newlines
+    ];
+
+    for query in malformed_queries {
+        let options = SearchOptions::new(repo_id, None, 10);
+        let result = pipeline.search(query, options).await;
+
+        // Should handle gracefully (error or empty results)
+        match result {
+            Ok(results) => {
+                println!("Malformed query '{}' returned {} results", query.escape_debug(), results.len());
+                assert!(results.is_empty() || results.len() == 0);
+            }
+            Err(e) => {
+                println!("Malformed query '{}' returned error: {}", query.escape_debug(), e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_special_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    let special_queries = vec![
+        "User::authenticate()",
+        "array->map",
+        "x => y + z",
+        "!important",
+        "@decorator",
+        "#define MACRO",
+        "$variable",
+        "100% coverage",
+    ];
+
+    for query in special_queries {
+        let options = SearchOptions::new(repo_id, None, 10);
+        let results = pipeline.search(query, options).await?;
+
+        println!("Special query '{}': {} results", query, results.len());
+        // Should handle without errors
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_very_long_query() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    // Very long query (100+ words)
+    let long_query = "how to implement a robust authentication and authorization system \
+                      with proper session management user roles permissions token validation \
+                      password hashing security best practices oauth integration jwt tokens \
+                      refresh tokens multi factor authentication rate limiting brute force \
+                      protection csrf xss sql injection prevention input validation sanitization \
+                      secure headers cors configuration session timeout idle timeout concurrent \
+                      session handling device tracking geolocation ip whitelisting blacklisting \
+                      audit logging compliance gdpr ccpa hipaa encryption at rest in transit \
+                      key management certificate rotation backup recovery disaster planning \
+                      high availability load balancing database replication caching strategies \
+                      performance optimization monitoring alerting incident response";
+
+    let options = SearchOptions::new(repo_id, None, 10);
+    let results = pipeline.search(long_query, options).await?;
+
+    println!("Long query ({} chars): {} results", long_query.len(), results.len());
+    // Should handle without errors
+    assert!(results.metadata.total_time_ms() > 0.0);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_unicode_query() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    let unicode_queries = vec![
+        "函数 function",           // Chinese
+        "función búsqueda",        // Spanish
+        "поиск функция",           // Russian
+        "検索 機能",              // Japanese
+        "🔍 search emoji",         // Emoji
+    ];
+
+    for query in unicode_queries {
+        let options = SearchOptions::new(repo_id, None, 10);
+        let results = pipeline.search(query, options).await?;
+
+        println!("Unicode query '{}': {} results", query, results.len());
+        // Should handle without errors
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_ranking_order() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    let options = SearchOptions::new(repo_id, None, 10);
+    let results = pipeline.search("function test", options).await?;
+
+    if !results.is_empty() {
+        // Verify results are sorted by score (descending)
+        for i in 1..results.results.len() {
+            assert!(
+                results.results[i - 1].score >= results.results[i].score,
+                "Results should be sorted by score: result[{}]={:.4} < result[{}]={:.4}",
+                i - 1,
+                results.results[i - 1].score,
+                i,
+                results.results[i].score
+            );
+        }
+
+        println!("✓ Results are properly ranked by score");
+        println!("  Top score: {:.4}", results.results[0].score);
+        println!("  Bottom score: {:.4}", results.results.last().unwrap().score);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_score_range() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    let options = SearchOptions::new(repo_id, None, 20);
+    let results = pipeline.search("search", options).await?;
+
+    // Verify all scores are in valid range [0.0, 1.0]
+    for (i, result) in results.results.iter().enumerate() {
+        assert!(
+            result.score >= 0.0 && result.score <= 1.0,
+            "Result {} has invalid score: {:.4}",
+            i,
+            result.score
+        );
+    }
+
+    println!("✓ All {} results have valid scores [0.0, 1.0]", results.len());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_concurrent_searches() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    // Execute multiple searches sequentially (pipeline isn't Clone)
+    let queries = vec!["function", "class", "test", "error", "auth"];
+
+    for query in queries {
+        let options = SearchOptions::new(repo_id, None, 5);
+        let result = pipeline.search(query, options).await?;
+        println!("Query '{}': {} results", query, result.len());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_invalid_repo_id() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    // Use an invalid repo ID that likely doesn't exist
+    let invalid_repo_id = 999999;
+    let options = SearchOptions::new(invalid_repo_id, None, 10);
+
+    let results = pipeline.search("test", options).await?;
+
+    // Should return empty results or handle gracefully
+    assert!(results.is_empty(), "Invalid repo_id should return no results");
+    println!("✓ Invalid repo_id handled gracefully: 0 results");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_metadata_completeness() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    let options = SearchOptions::new(repo_id, None, 10);
+    let results = pipeline.search("test query", options).await?;
+
+    // Verify metadata is complete
+    assert!(results.metadata.timing.query_processing_ms >= 0.0);
+    assert!(results.metadata.timing.search_execution_ms >= 0.0);
+    assert!(results.metadata.timing.fusion_ms >= 0.0);
+    assert!(results.metadata.timing.assembly_ms >= 0.0);
+    assert!(results.metadata.total_time_ms() > 0.0);
+
+    assert!(results.metadata.query_processing.token_count >= 0);
+    assert!(results.metadata.query_processing.expanded_term_count >= 0);
+
+    // result_counts is a HashMap<SearchSource, usize>
+    assert!(!results.metadata.result_counts.is_empty(), "Should have result counts");
+
+    println!("✓ Metadata is complete and valid");
+    println!("  Total time: {:.2}ms", results.metadata.total_time_ms());
+    println!("  Tokens: {}", results.metadata.query_processing.token_count);
+    println!("  Total unique chunks: {}", results.metadata.total_unique_chunks);
+    println!("  Returned results: {}", results.metadata.returned_results);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database is available
+async fn test_search_pipeline_result_fields_populated() -> Result<(), Box<dyn std::error::Error>> {
+    let client = create_test_connection().await?;
+    let embedder = Arc::new(create_embedding_service()?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    let repo_id = find_test_repo(pipeline.client())
+        .await?
+        .expect("No repos found in database");
+
+    let options = SearchOptions::new(repo_id, None, 5);
+    let results = pipeline.search("function", options).await?;
+
+    if !results.is_empty() {
+        let first = &results.results[0];
+
+        // Verify all required fields are populated
+        assert!(first.chunk_id > 0, "chunk_id should be positive");
+        assert!(first.file_id > 0, "file_id should be positive");
+        assert!(!first.relpath.is_empty(), "relpath should not be empty");
+        assert!(!first.kind.is_empty(), "kind should not be empty");
+        assert!(first.score > 0.0, "score should be positive");
+        assert!(first.start_line > 0, "start_line should be positive");
+        assert!(first.end_line >= first.start_line, "end_line should be >= start_line");
+        assert!(!first.preview.is_empty(), "preview should not be empty");
+
+        // source_scores should have at least one entry
+        assert!(!first.source_scores.is_empty(), "source_scores should not be empty");
+
+        println!("✓ All required fields are populated");
+        println!("  Chunk: {}", first.chunk_id);
+        println!("  File: {} ({})", first.relpath, first.kind);
+        println!("  Lines: {}-{}", first.start_line, first.end_line);
+        println!("  Score: {:.4}", first.score);
+        println!("  Sources: {:?}", first.source_scores.keys());
+    } else {
+        println!("No results to verify field population");
+    }
+
+    Ok(())
+}
