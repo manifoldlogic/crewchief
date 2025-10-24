@@ -27,6 +27,8 @@ humantime = "2"
 
 # Database (use tokio-postgres to avoid heavy deps)
 tokio-postgres = { version = "0.7", features = ["runtime", "with-chrono-0_4", "array-impls"] }
+deadpool-postgres = "0.14"
+deadpool = "0.12"
 
 # Parsing (Tree-sitter)
 tree-sitter = "0.22"

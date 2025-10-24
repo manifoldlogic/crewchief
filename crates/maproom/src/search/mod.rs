@@ -163,6 +163,9 @@ pub mod fusion;
 pub mod pipeline;
 pub mod results;
 
+// Performance optimization modules (Phase 4)
+pub mod cache;
+
 // Re-export main types for convenience
 pub use expander::QueryExpander;
 pub use query_processor::{QueryProcessor, QueryProcessorError};
@@ -184,3 +187,6 @@ pub use results::{
     ChunkSearchResult, FinalSearchResults, QueryProcessingDetails, SearchMetadata, SearchOptions,
     SearchTiming,
 };
+
+// Re-export performance optimization types (Phase 4)
+pub use cache::{CacheKey, CacheStats, SearchCache};

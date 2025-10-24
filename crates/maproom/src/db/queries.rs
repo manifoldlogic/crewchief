@@ -24,10 +24,11 @@ pub async fn connect() -> anyhow::Result<Client> {
 pub async fn migrate(client: &Client) -> anyhow::Result<()> {
     // Minimal migration runner: execute all migrations in order
     let migrations = vec![
-        include_str!("./../migrations/0001_init.sql"),
-        include_str!("./../migrations/0002_markdown_support.sql"),
-        include_str!("./../migrations/0003_yaml_toml_support.sql"),
-        include_str!("./../migrations/0004_optimize_vector_indices.sql"),
+        include_str!("./../../migrations/0001_init.sql"),
+        include_str!("./../../migrations/0002_markdown_support.sql"),
+        include_str!("./../../migrations/0003_yaml_toml_support.sql"),
+        include_str!("./../../migrations/0004_optimize_vector_indices.sql"),
+        include_str!("./../../migrations/0005_create_materialized_views.sql"),
     ];
 
     for sql in migrations {

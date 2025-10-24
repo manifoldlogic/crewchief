@@ -1,0 +1,12 @@
+//! Database access layer for Maproom.
+//!
+//! This module provides database connectivity, connection pooling, and query utilities.
+
+pub mod pool;
+pub mod queries;
+
+// Re-export pool types for convenience
+pub use pool::{create_pool, pool_stats, PgPool, PoolStats};
+
+// Re-export query functions for convenience
+pub use queries::*;
