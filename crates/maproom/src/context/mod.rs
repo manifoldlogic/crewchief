@@ -6,6 +6,8 @@
 
 pub mod assembler;
 pub mod budget;
+pub mod cache;
+pub mod cache_stats;
 pub mod detectors;
 pub mod file_loader;
 pub mod formatter;
@@ -24,6 +26,10 @@ pub mod types;
 // Re-export core types for convenience
 pub use assembler::{BasicContextAssembler, ContextAssembler};
 pub use budget::{BudgetAllocation, TokenBudgetManager, UsageStats};
+pub use cache::{
+    CacheConfig, CacheKey, CacheStats, ContextCache, DbCacheStats, hash_options,
+};
+pub use cache_stats::{CacheMetrics, CacheStatistics, CacheStatsMonitor, MemoryStats};
 pub use file_loader::FileLoader;
 pub use formatter::ContentFormatter;
 pub use graph::{EdgeType, RelatedChunk, find_related_chunks, find_related_chunks_directional};

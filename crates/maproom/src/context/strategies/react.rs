@@ -92,7 +92,7 @@ impl ReactAssemblyStrategy {
     /// Create a new React assembly strategy with custom configuration.
     pub fn with_config(pool: PgPool, config: ReactConfig) -> Self {
         Self {
-            base_assembler: BasicContextAssembler::new(pool.clone()),
+            base_assembler: BasicContextAssembler::new_without_cache(pool.clone()),
             pool,
             config,
             component_detector: ComponentDetector::new(),

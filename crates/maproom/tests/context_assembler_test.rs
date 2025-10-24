@@ -135,7 +135,7 @@ async fn test_assemble_primary_chunk() -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    let assembler = BasicContextAssembler::new(pool);
+    let assembler = BasicContextAssembler::new_without_cache(pool);
 
     // Assemble context for the test function
     let bundle = assembler
@@ -189,7 +189,7 @@ async fn test_assemble_exceeds_budget() -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    let assembler = BasicContextAssembler::new(pool);
+    let assembler = BasicContextAssembler::new_without_cache(pool);
 
     // Assemble with very small budget
     let bundle = assembler
@@ -222,7 +222,7 @@ async fn test_assemble_missing_chunk() -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    let assembler = BasicContextAssembler::new(pool);
+    let assembler = BasicContextAssembler::new_without_cache(pool);
 
     // Try to assemble non-existent chunk
     let result = assembler
@@ -264,7 +264,7 @@ async fn test_token_counting_accuracy() -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    let assembler = BasicContextAssembler::new(pool);
+    let assembler = BasicContextAssembler::new_without_cache(pool);
 
     let bundle = assembler
         .assemble(
@@ -328,7 +328,7 @@ async fn test_file_content_extraction() -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    let assembler = BasicContextAssembler::new(pool);
+    let assembler = BasicContextAssembler::new_without_cache(pool);
 
     let bundle = assembler
         .assemble(

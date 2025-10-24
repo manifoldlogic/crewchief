@@ -1,8 +1,10 @@
 //! Context assembler implementation for building intelligent code context bundles.
 
 use anyhow::{Context as AnyhowContext, Result};
-use tracing::{debug, warn};
+use std::sync::Arc;
+use tracing::{debug, info, warn};
 
+use super::cache::{CacheConfig, ContextCache};
 use super::file_loader::FileLoader;
 use super::token_counter::TokenCounter;
 use super::types::{ContextBundle, ContextItem, ExpandOptions, LineRange};
@@ -67,6 +69,7 @@ pub trait ContextAssembler: Send + Sync {
 /// - Extracts the specified line range
 /// - Counts tokens accurately
 /// - Returns a simple ContextBundle with just the primary chunk
+/// - Caches assembled bundles for improved performance
 ///
 /// Future implementations will add:
 /// - Relationship traversal (callers, callees, tests)
@@ -78,12 +81,14 @@ pub trait ContextAssembler: Send + Sync {
 ///
 /// ```no_run
 /// use crewchief_maproom::context::{BasicContextAssembler, ContextAssembler, ExpandOptions};
+/// use crewchief_maproom::context::cache::CacheConfig;
 /// use crewchief_maproom::db::create_pool;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let pool = create_pool().await?;
-///     let assembler = BasicContextAssembler::new(pool);
+///     let cache_config = CacheConfig::default();
+///     let assembler = BasicContextAssembler::new(pool, cache_config);
 ///
 ///     let bundle = assembler.assemble(
 ///         12345,
@@ -98,15 +103,32 @@ pub trait ContextAssembler: Send + Sync {
 pub struct BasicContextAssembler {
     pool: PgPool,
     token_counter: TokenCounter,
+    cache: Arc<ContextCache>,
 }
 
 impl BasicContextAssembler {
-    /// Create a new basic context assembler.
-    pub fn new(pool: PgPool) -> Self {
+    /// Create a new basic context assembler with the specified cache configuration.
+    pub fn new(pool: PgPool, cache_config: CacheConfig) -> Self {
+        let cache = Arc::new(ContextCache::new(pool.clone(), cache_config));
         Self {
             pool,
             token_counter: TokenCounter::new(),
+            cache,
         }
+    }
+
+    /// Create a new basic context assembler with caching disabled.
+    pub fn new_without_cache(pool: PgPool) -> Self {
+        let cache_config = CacheConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        Self::new(pool, cache_config)
+    }
+
+    /// Get a reference to the cache for statistics and management.
+    pub fn cache(&self) -> &Arc<ContextCache> {
+        &self.cache
     }
 
     /// Retrieve chunk metadata from the database by ID.
@@ -205,12 +227,21 @@ impl ContextAssembler for BasicContextAssembler {
         &self,
         chunk_id: i64,
         budget: usize,
-        _options: ExpandOptions,
+        options: ExpandOptions,
     ) -> Result<ContextBundle> {
         debug!(
             "Assembling context for chunk {} with budget {} tokens",
             chunk_id, budget
         );
+
+        // Try to get from cache first
+        if let Some(cached_bundle) = self.cache.get(chunk_id, &options).await? {
+            debug!("Returning cached bundle for chunk {}", chunk_id);
+            return Ok(cached_bundle);
+        }
+
+        // Cache miss - assemble the bundle
+        debug!("Cache miss for chunk {}, assembling...", chunk_id);
 
         // Retrieve chunk metadata
         let metadata = self
@@ -250,6 +281,12 @@ impl ContextAssembler for BasicContextAssembler {
             bundle.total_tokens,
             bundle.truncated
         );
+
+        // Store in cache for future use
+        if let Err(e) = self.cache.put(chunk_id, &options, &bundle).await {
+            // Log cache error but don't fail the request
+            warn!("Failed to cache bundle for chunk {}: {}", chunk_id, e);
+        }
 
         Ok(bundle)
     }

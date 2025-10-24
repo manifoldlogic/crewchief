@@ -52,6 +52,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tiktoken-rs = "0.5"
 async-trait = "0.1"
 
+# Cache key hashing
+sha2 = "0.10"
+
 [build-dependencies]
 
 [[bin]]
@@ -70,6 +73,7 @@ futures = "0.3"
 criterion = { version = "0.5", features = ["async_tokio"] }
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
+serial_test = "3"
 
 [[bench]]
 name = "fusion_benchmark"
