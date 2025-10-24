@@ -44,12 +44,16 @@
 pub mod cache;
 pub mod client;
 pub mod config;
+pub mod cost_tracker;
 pub mod error;
+pub mod pipeline;
 pub mod service;
 
 // Re-export main types for convenience
 pub use cache::{CacheMetrics, EmbeddingCache, Vector};
 pub use client::{CostMetrics, OpenAIClient};
 pub use config::{CacheConfig, EmbeddingConfig, Provider, RetryConfig};
+pub use cost_tracker::{CostEstimate, CostEstimator, CostSnapshot, CostTracker};
 pub use error::{ApiError, CacheError, ConfigError, EmbeddingError};
+pub use pipeline::{EmbeddingPipeline, PipelineConfig, PipelineStats};
 pub use service::{BatchResult, EmbeddingService};

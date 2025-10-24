@@ -1,9 +1,9 @@
 # Ticket: HYBRID_SEARCH-1003: Embedding Generation Pipeline
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - embeddings-engineer
@@ -21,15 +21,15 @@ As part of Phase 1 (Embedding Infrastructure) of the Hybrid Search project, we n
 This is Task 3 of Phase 1, Week 1, building upon the Embedding Service (HYBRID_SEARCH-1001) and Database Schema updates (HYBRID_SEARCH-1002).
 
 ## Acceptance Criteria
-- [ ] Successfully generate embeddings for all existing chunks in the database
-- [ ] Embedding cache achieves >80% hit rate during batch processing
-- [ ] Cost tracking implemented and reports total API costs for embedding generation
-- [ ] Incremental updates working - only new/changed chunks generate new embeddings
-- [ ] Pipeline tested with 1000 sample chunks before full rollout
-- [ ] Batch processing reduces API calls through efficient grouping
-- [ ] CLI command for generating embeddings is functional and well-documented
-- [ ] Error handling and retry logic for API failures is implemented
-- [ ] Progress reporting shows chunks processed, embeddings generated, and estimated completion time
+- [x] Successfully generate embeddings for all existing chunks in the database
+- [x] Embedding cache achieves >80% hit rate during batch processing
+- [x] Cost tracking implemented and reports total API costs for embedding generation
+- [x] Incremental updates working - only new/changed chunks generate new embeddings
+- [x] Pipeline tested with 1000 sample chunks before full rollout
+- [x] Batch processing reduces API calls through efficient grouping
+- [x] CLI command for generating embeddings is functional and well-documented
+- [x] Error handling and retry logic for API failures is implemented
+- [x] Progress reporting shows chunks processed, embeddings generated, and estimated completion time
 
 ## Technical Requirements
 - Generate both `code_embedding` (1536-dim) and `text_embedding` (1536-dim) for each chunk

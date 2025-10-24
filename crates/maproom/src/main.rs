@@ -85,6 +85,37 @@ enum Commands {
         #[arg(long, default_value_t = 10)]
         k: i64,
     },
+
+    /// Generate embeddings for indexed chunks
+    GenerateEmbeddings {
+        /// Only process chunks where embeddings are NULL (default: true)
+        #[arg(long, default_value_t = true)]
+        incremental: bool,
+
+        /// Batch size for processing (default: 100)
+        #[arg(long, default_value_t = 100)]
+        batch_size: usize,
+
+        /// Dry run mode - don't write to database
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+
+        /// Process only a sample of N chunks
+        #[arg(long)]
+        sample: Option<usize>,
+
+        /// Delay between batches in milliseconds (default: 100)
+        #[arg(long, default_value_t = 100)]
+        batch_delay: u64,
+
+        /// Maximum cost ceiling in USD
+        #[arg(long)]
+        max_cost: Option<f64>,
+
+        /// Force regeneration of all embeddings (overrides --incremental)
+        #[arg(long, default_value_t = false)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -235,6 +266,83 @@ async fn main() -> anyhow::Result<()> {
             let client = db::connect().await?;
             let hits = db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k).await?;
             println!("{}", serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?);
+        }
+
+        Commands::GenerateEmbeddings {
+            incremental,
+            batch_size,
+            dry_run,
+            sample,
+            batch_delay,
+            max_cost,
+            force,
+        } => {
+            use crewchief_maproom::embedding::{
+                EmbeddingService, EmbeddingPipeline, PipelineConfig, CostEstimator,
+            };
+
+            tracing::info!("Initializing embedding generation pipeline");
+
+            // Create embedding service from environment
+            let service = EmbeddingService::from_env()
+                .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
+
+            // Configure pipeline
+            let config = PipelineConfig {
+                batch_size,
+                incremental: if force { false } else { incremental },
+                dry_run,
+                sample_size: sample,
+                batch_delay_ms: batch_delay,
+                max_cost_usd: max_cost,
+            };
+
+            tracing::info!(
+                "Pipeline config: batch_size={}, incremental={}, dry_run={}, sample={:?}",
+                config.batch_size,
+                config.incremental,
+                config.dry_run,
+                config.sample_size
+            );
+
+            // Connect to database
+            let client = db::connect().await?;
+
+            // Get chunk count for cost estimation
+            let count_query = if config.incremental {
+                "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NULL OR text_embedding IS NULL"
+            } else {
+                "SELECT COUNT(*) FROM maproom.chunks"
+            };
+
+            let count_row = client.query_one(count_query, &[]).await?;
+            let chunk_count: i64 = count_row.get(0);
+
+            tracing::info!("Found {} chunks needing embeddings", chunk_count);
+
+            // Provide cost estimate
+            let estimator = CostEstimator::default();
+            let estimate = estimator.estimate_cost(chunk_count as usize);
+            println!("\n{}\n", estimate.format());
+
+            // Warn if cost is high
+            if estimate.estimated_cost_usd > 10.0 {
+                tracing::warn!(
+                    "Estimated cost is high: ${:.2}. Consider using --sample or --max-cost to limit spending.",
+                    estimate.estimated_cost_usd
+                );
+            }
+
+            // Run pipeline
+            let pipeline = EmbeddingPipeline::new(service, config);
+            let stats = pipeline.run(&client).await?;
+
+            // Display results
+            println!("\n{}\n", "=".repeat(60));
+            println!("Embedding Generation Complete");
+            println!("{}\n", "=".repeat(60));
+            println!("{}", stats.summary());
+            println!("{}", "=".repeat(60));
         }
     }
 
