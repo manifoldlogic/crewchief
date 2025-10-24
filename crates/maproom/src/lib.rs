@@ -4,6 +4,7 @@
 //! for the Maproom semantic code search system.
 
 pub mod ab_testing;
+pub mod config;
 pub mod db;
 pub mod embedding;
 pub mod evaluation;

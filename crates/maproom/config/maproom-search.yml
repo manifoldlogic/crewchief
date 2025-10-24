@@ -1,0 +1,99 @@
+# Maproom Search Configuration
+#
+# This file configures the hybrid search system for Maproom.
+# Environment variables can override any setting using the pattern:
+# MAPROOM_SEARCH_<SECTION>_<KEY>=<value>
+#
+# Example: MAPROOM_SEARCH_FUSION_WEIGHTS_FTS=0.5
+
+# Embedding Configuration
+# Controls vector embedding generation for semantic search
+embedding:
+  # Provider: openai, cohere, or local
+  provider: openai
+
+  # Model name (provider-specific)
+  # - OpenAI: text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002
+  # - Cohere: embed-english-v3.0, embed-multilingual-v3.0
+  # - Local: all-MiniLM-L6-v2, etc.
+  model_name: text-embedding-3-small
+
+  # Embedding dimension (must match model output)
+  dimension: 1536
+
+  # Cache configuration
+  cache_size: 10000  # Number of embeddings to cache
+  cache_ttl_seconds: 3600  # Time-to-live for cached embeddings (1 hour)
+
+# Fusion Configuration
+# Controls how different search signals are combined
+fusion:
+  # Fusion method: rrf (Reciprocal Rank Fusion), weighted (simple weighted average), or learned (ML-based)
+  method: rrf
+
+  # RRF k parameter (controls rank decay, higher = slower decay)
+  # Only used when method=rrf
+  rrf_k: 60
+
+  # Individual signal weights (used for weighted fusion method)
+  # These weights determine the contribution of each search signal
+  # Recommended: sum should equal 1.0 for proper normalization
+  weights:
+    fts: 0.40      # Full-text search weight
+    vector: 0.35   # Vector similarity weight
+    graph: 0.10    # Graph importance weight
+    recency: 0.10  # Recency signal weight
+    churn: 0.05    # Code churn weight (inverted - higher churn = lower score)
+
+# Performance Configuration
+# Controls search execution performance and limits
+performance:
+  # Maximum number of candidates to retrieve per search method
+  # Higher values = better recall but slower queries
+  max_candidates_per_method: 100
+
+  # Final result limit (after fusion)
+  final_result_limit: 20
+
+  # Query timeout in milliseconds
+  timeout_ms: 1000
+
+  # Enable parallel query execution
+  # When true, FTS, vector, graph, and signal queries run concurrently
+  parallel_execution: true
+
+# Index Configuration
+# Controls vector index parameters and maintenance
+index:
+  # IVFFlat index parameters (PostgreSQL pgvector)
+  ivfflat_lists: 100     # Number of clusters for IVF index
+  ivfflat_probes: 10     # Number of clusters to search (higher = better recall, slower)
+
+  # Index refresh interval in seconds
+  # Controls how often statistics are updated
+  refresh_interval_seconds: 3600  # 1 hour
+
+# Feature Flags
+# Enable/disable specific search features
+feature_flags:
+  # Enable vector similarity search
+  enable_vector_search: true
+
+  # Enable hybrid fusion (combine multiple signals)
+  # When false, only FTS is used
+  enable_hybrid_fusion: true
+
+  # Enable graph-based ranking signals
+  # Requires chunk_edges table to be populated
+  enable_graph_signals: true
+
+  # Enable temporal signals (recency and churn)
+  # Requires git metadata in chunks table
+  enable_temporal_signals: true
+
+  # Enable query result caching
+  enable_query_cache: true
+
+  # Enable hot reload of fusion weights
+  # When true, changes to fusion weights are applied without restart
+  enable_hot_reload: true
