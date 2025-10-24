@@ -8,7 +8,7 @@
 ## Agents
 - search-quality-engineer
 - integration-tester
-- test-runner
+- test-runner (e.g. unit-test-runner)
 - verify-ticket
 - commit-ticket
 

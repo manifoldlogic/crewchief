@@ -8,7 +8,7 @@
 ## Agents
 - integration-tester
 - parser-engineer
-- test-runner
+- test-runner (e.g. unit-test-runner)
 - verify-ticket
 - commit-ticket
 
