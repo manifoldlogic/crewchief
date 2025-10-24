@@ -753,40 +753,14 @@ async function handleOpen(params: any): Promise<any> {
 }
 
 async function handleUpsert(params: any): Promise<any> {
-  const { paths = [], commit, repo, worktree, root } = params
-  const crewchiefArgs = ['maproom', 'upsert', '--paths', paths.join(','), '--commit', commit, '--repo', repo, '--worktree', worktree, '--root', root]
-  const maproomArgs = ['upsert', '--paths', paths.join(','), '--commit', commit, '--repo', repo, '--worktree', worktree, '--root', root]
-
-  const candidates: Array<{ cmd: string, args: string[] }> = []
-  if (process.env.CREWCHIEF_MAPROOM_BIN) candidates.push({ cmd: process.env.CREWCHIEF_MAPROOM_BIN, args: maproomArgs })
-  // Packaged binary fallback (platform-arch)
   try {
-    const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
-    const packaged = path.join(__dirname, '..', 'bin', `${process.platform}-${process.arch}`, execName)
-    if (fs.existsSync(packaged)) {
-      candidates.push({ cmd: packaged, args: maproomArgs })
-    }
-  } catch {}
-  candidates.push(
-    { cmd: 'crewchief', args: crewchiefArgs },
-    { cmd: 'crewchief-maproom', args: maproomArgs },
-    { cmd: './target/debug/crewchief-maproom', args: maproomArgs },
-  )
-
-  let lastErr = ''
-  for (const c of candidates) {
-    try {
-      const child = spawn(c.cmd, c.args, { stdio: ['ignore', 'pipe', 'pipe'] })
-      const out = await streamToString(child.stdout as Readable)
-      const err = await streamToString(child.stderr as Readable)
-      const code: number = await new Promise((res) => child.on('close', res))
-      if (code === 0) return { ok: true, cmd: c.cmd, out }
-      lastErr = `cmd ${c.cmd} exited ${code}: ${err}`
-    } catch (e: any) {
-      lastErr = `spawn ${c.cmd} failed: ${e?.message || e}`
-    }
+    const { handleUpsertTool, formatUpsertError } = await import('./tools/upsert.js')
+    const result = await handleUpsertTool(params)
+    return result
+  } catch (error) {
+    const { formatUpsertError } = await import('./tools/upsert.js')
+    throw formatUpsertError(error)
   }
-  throw new Error(`upsert failed: ${lastErr}`)
 }
 
 /**
@@ -1018,9 +992,16 @@ async function handleMessage(msg: JsonRpcRequest) {
           log.error({ id: msg.id, tool: name, error }, 'tool error')
         }
       } else if (name === 'upsert') {
-        const res = await handleUpsert(args)
-        respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
-        log.info({ id: msg.id, tool: name }, 'sent tool result')
+        try {
+          const res = await handleUpsert(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatUpsertError } = await import('./tools/upsert.js')
+          const errorResponse = formatUpsertError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else if (name === 'context') {
         const res = await handleContext(args)
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })

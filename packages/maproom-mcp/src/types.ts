@@ -51,3 +51,48 @@ export interface OpenToolConfig {
   /** Default worktree to use if not specified */
   defaultWorktree?: string
 }
+
+/**
+ * Parameters for the Upsert tool
+ */
+export interface UpsertParams {
+  /** Array of file or directory paths to re-index */
+  paths: string[]
+
+  /** Git commit hash for context */
+  commit: string
+
+  /** Repository name */
+  repo: string
+
+  /** Worktree identifier for isolation */
+  worktree: string
+
+  /** Root directory path of the repository */
+  root: string
+}
+
+/**
+ * Return type for the Upsert tool
+ */
+export interface UpsertResult {
+  /** Number of files updated in index */
+  updated_files: number
+
+  /** Number of chunks updated in index */
+  updated_chunks: number
+
+  /** Duration of indexing operation in milliseconds */
+  duration_ms: number
+}
+
+/**
+ * Configuration options for the Upsert tool
+ */
+export interface UpsertToolConfig {
+  /** Timeout for indexing operation in milliseconds (default 120000 = 2 minutes) */
+  timeout?: number
+
+  /** Environment variables to pass to indexer process */
+  env?: Record<string, string>
+}
