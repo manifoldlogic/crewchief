@@ -12,8 +12,10 @@ pub mod formatter;
 pub mod graph;
 pub mod heuristics;
 pub mod importance;
+pub mod language_detector;
 pub mod priority_queue;
 pub mod relationships;
+pub mod strategy;
 pub mod strategies;
 pub mod token_counter;
 pub mod truncation;
@@ -27,10 +29,16 @@ pub use formatter::ContentFormatter;
 pub use graph::{EdgeType, RelatedChunk, find_related_chunks, find_related_chunks_directional};
 pub use heuristics::{FileType, HeuristicScorer, HeuristicsConfig};
 pub use importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
+pub use language_detector::{Language, LanguageDetector};
 pub use priority_queue::{Category, PriorityItem, PriorityQueue};
 pub use relationships::{
     find_all_relationships, find_callees, find_callers, find_exports, find_imports,
     find_routes, find_test_files,
+};
+pub use strategy::AssemblyStrategy;
+pub use strategies::{
+    DefaultAssemblyStrategy, PythonAssemblyStrategy, PythonConfig, ReactAssemblyStrategy,
+    RustAssemblyStrategy, RustConfig,
 };
 pub use token_counter::TokenCounter;
 pub use truncation::{CodeTruncator, TruncationResult, TruncationStrategy};

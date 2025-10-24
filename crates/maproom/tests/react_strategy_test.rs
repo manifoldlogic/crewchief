@@ -427,8 +427,6 @@ mod expand_options_tests {
 // Database integration tests (require database connection)
 #[cfg(test)]
 mod integration_tests {
-    use super::*;
-
     #[tokio::test]
     #[ignore] // Requires database setup
     async fn test_react_strategy_basic() {
