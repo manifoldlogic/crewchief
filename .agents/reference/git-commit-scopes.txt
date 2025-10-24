@@ -7,6 +7,7 @@ api
 build
 cache
 ci
+config
 db
 deploy
 docs
