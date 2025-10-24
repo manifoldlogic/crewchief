@@ -361,7 +361,6 @@ impl CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::search::executor_types::SearchSource;
     use crate::search::results::{QueryProcessingDetails, SearchMetadata, SearchTiming};
     use crate::search::types::SearchMode;
     use std::collections::HashMap;

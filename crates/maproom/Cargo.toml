@@ -60,3 +60,7 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 name = "fusion_benchmark"
 harness = false
 
+[[bench]]
+name = "index_tuning_benchmark"
+harness = false
+
