@@ -165,6 +165,8 @@ pub mod results;
 
 // Performance optimization modules (Phase 4)
 pub mod cache;
+pub mod memory;
+pub mod warming;
 
 // Re-export main types for convenience
 pub use expander::QueryExpander;
@@ -190,3 +192,5 @@ pub use results::{
 
 // Re-export performance optimization types (Phase 4)
 pub use cache::{CacheKey, CacheStats, SearchCache};
+pub use memory::{CacheMemoryStats, MemoryMonitor, MemoryStats};
+pub use warming::{CacheWarmer, WarmingError, WarmingStats};

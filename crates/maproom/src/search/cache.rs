@@ -64,6 +64,7 @@ use std::hash::Hash;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, info};
 
 /// Default cache size (number of entries).
@@ -74,7 +75,49 @@ use tracing::{debug, info};
 /// - Reasonable eviction rate under high query diversity
 const DEFAULT_CACHE_SIZE: usize = 1000;
 
-/// Thread-safe LRU cache for search results.
+/// Default TTL (time-to-live) for cache entries in seconds.
+///
+/// 3600 seconds (1 hour) provides good balance:
+/// - Fresh enough for active development
+/// - Long enough to benefit repeated queries
+/// - Reasonable memory overhead for timestamps
+const DEFAULT_TTL_SECONDS: u64 = 3600;
+
+/// Cache entry with TTL support.
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    /// The cached search results
+    results: FinalSearchResults,
+    /// Timestamp when the entry was created (Unix timestamp)
+    created_at: u64,
+}
+
+impl CacheEntry {
+    fn new(results: FinalSearchResults) -> Self {
+        let created_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        Self {
+            results,
+            created_at,
+        }
+    }
+
+    fn is_expired(&self, ttl_seconds: u64) -> bool {
+        if ttl_seconds == 0 {
+            return false; // TTL of 0 means never expire
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        now - self.created_at >= ttl_seconds
+    }
+}
+
+/// Thread-safe LRU cache for search results with TTL support.
 ///
 /// Uses Arc<RwLock<>> for concurrent access with read-write semantics:
 /// - Multiple readers can access cache simultaneously
@@ -82,7 +125,10 @@ const DEFAULT_CACHE_SIZE: usize = 1000;
 /// - Atomic counters track hits/misses without locking
 pub struct SearchCache {
     /// LRU cache storage
-    cache: Arc<RwLock<LruCache<CacheKey, FinalSearchResults>>>,
+    cache: Arc<RwLock<LruCache<CacheKey, CacheEntry>>>,
+
+    /// Time-to-live for cache entries (seconds, 0 = never expire)
+    ttl_seconds: u64,
 
     /// Cache hit counter (atomic for lock-free updates)
     hits: Arc<AtomicU64>,
@@ -92,10 +138,45 @@ pub struct SearchCache {
 
     /// Cache eviction counter (atomic for lock-free updates)
     evictions: Arc<AtomicU64>,
+
+    /// Cache expiration counter (atomic for lock-free updates)
+    expirations: Arc<AtomicU64>,
 }
 
 impl SearchCache {
-    /// Create a new SearchCache with specified capacity.
+    /// Create a new SearchCache with specified capacity and TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Maximum number of entries to store
+    /// * `ttl_seconds` - Time-to-live in seconds (0 = never expire)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use crewchief_maproom::search::cache::SearchCache;
+    ///
+    /// let cache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
+    /// ```
+    pub fn with_ttl(capacity: usize, ttl_seconds: u64) -> Self {
+        info!(
+            "Creating search result cache (capacity: {}, ttl: {}s)",
+            capacity, ttl_seconds
+        );
+
+        Self {
+            cache: Arc::new(RwLock::new(LruCache::new(
+                NonZeroUsize::new(capacity).expect("Cache capacity must be > 0"),
+            ))),
+            ttl_seconds,
+            hits: Arc::new(AtomicU64::new(0)),
+            misses: Arc::new(AtomicU64::new(0)),
+            evictions: Arc::new(AtomicU64::new(0)),
+            expirations: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    /// Create a new SearchCache with specified capacity and default TTL.
     ///
     /// # Arguments
     ///
@@ -109,28 +190,19 @@ impl SearchCache {
     /// let cache = SearchCache::new(1000);
     /// ```
     pub fn new(capacity: usize) -> Self {
-        info!("Creating search result cache (capacity: {})", capacity);
-
-        Self {
-            cache: Arc::new(RwLock::new(LruCache::new(
-                NonZeroUsize::new(capacity).expect("Cache capacity must be > 0"),
-            ))),
-            hits: Arc::new(AtomicU64::new(0)),
-            misses: Arc::new(AtomicU64::new(0)),
-            evictions: Arc::new(AtomicU64::new(0)),
-        }
+        Self::with_ttl(capacity, DEFAULT_TTL_SECONDS)
     }
 
-    /// Create a new SearchCache with default capacity.
+    /// Create a new SearchCache with default capacity and TTL.
     ///
-    /// Uses DEFAULT_CACHE_SIZE (1000 entries).
+    /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
     pub fn default() -> Self {
         Self::new(DEFAULT_CACHE_SIZE)
     }
 
     /// Get a cached result by key.
     ///
-    /// Returns None if key is not in cache (cache miss).
+    /// Returns None if key is not in cache or if entry is expired (cache miss).
     /// Updates LRU ordering on cache hit.
     ///
     /// # Arguments
@@ -153,10 +225,19 @@ impl SearchCache {
         let mut cache = self.cache.write().unwrap();
 
         match cache.get(key) {
-            Some(results) => {
-                self.hits.fetch_add(1, Ordering::Relaxed);
-                debug!("Cache HIT: {:?}", key);
-                Some(results.clone())
+            Some(entry) => {
+                // Check if entry is expired
+                if entry.is_expired(self.ttl_seconds) {
+                    cache.pop(key);
+                    self.expirations.fetch_add(1, Ordering::Relaxed);
+                    self.misses.fetch_add(1, Ordering::Relaxed);
+                    debug!("Cache EXPIRED: {:?}", key);
+                    None
+                } else {
+                    self.hits.fetch_add(1, Ordering::Relaxed);
+                    debug!("Cache HIT: {:?}", key);
+                    Some(entry.results.clone())
+                }
             }
             None => {
                 self.misses.fetch_add(1, Ordering::Relaxed);
@@ -196,7 +277,8 @@ impl SearchCache {
             debug!("Cache EVICTION (capacity: {})", cache.cap());
         }
 
-        cache.put(key, results);
+        let entry = CacheEntry::new(results);
+        cache.put(key, entry);
         debug!("Cache PUT: entry added");
     }
 
@@ -224,6 +306,8 @@ impl SearchCache {
             hits: self.hits.load(Ordering::Relaxed),
             misses: self.misses.load(Ordering::Relaxed),
             evictions: self.evictions.load(Ordering::Relaxed),
+            expirations: self.expirations.load(Ordering::Relaxed),
+            ttl_seconds: self.ttl_seconds,
         }
     }
 
@@ -243,7 +327,96 @@ impl SearchCache {
         self.hits.store(0, Ordering::Relaxed);
         self.misses.store(0, Ordering::Relaxed);
         self.evictions.store(0, Ordering::Relaxed);
+        self.expirations.store(0, Ordering::Relaxed);
         info!("Cache statistics reset");
+    }
+
+    /// Remove expired entries from the cache.
+    ///
+    /// Returns the number of entries removed.
+    pub fn cleanup_expired(&self) -> usize {
+        let mut cache = self.cache.write().unwrap();
+        let mut expired_keys = Vec::new();
+
+        // Collect expired keys
+        for (key, entry) in cache.iter() {
+            if entry.is_expired(self.ttl_seconds) {
+                expired_keys.push(key.clone());
+            }
+        }
+
+        // Remove expired entries
+        let count = expired_keys.len();
+        for key in expired_keys {
+            cache.pop(&key);
+        }
+
+        if count > 0 {
+            self.expirations.fetch_add(count as u64, Ordering::Relaxed);
+            debug!("Cache cleanup: removed {} expired entries", count);
+        }
+
+        count
+    }
+
+    /// Invalidate cache entries by repository ID.
+    ///
+    /// Used when files are updated in a repository.
+    pub fn invalidate_by_repo(&self, repo_id: i64) -> usize {
+        let mut cache = self.cache.write().unwrap();
+        let mut keys_to_remove = Vec::new();
+
+        // Collect keys matching the repo_id
+        for (key, _) in cache.iter() {
+            if key.repo_id == repo_id {
+                keys_to_remove.push(key.clone());
+            }
+        }
+
+        // Remove matching entries
+        let count = keys_to_remove.len();
+        for key in keys_to_remove {
+            cache.pop(&key);
+        }
+
+        if count > 0 {
+            info!(
+                "Cache invalidation: removed {} entries for repo {}",
+                count, repo_id
+            );
+        }
+
+        count
+    }
+
+    /// Invalidate cache entries by worktree ID.
+    ///
+    /// Used when files are updated in a specific worktree.
+    pub fn invalidate_by_worktree(&self, worktree_id: i64) -> usize {
+        let mut cache = self.cache.write().unwrap();
+        let mut keys_to_remove = Vec::new();
+
+        // Collect keys matching the worktree_id
+        for (key, _) in cache.iter() {
+            if key.worktree_id == Some(worktree_id) {
+                keys_to_remove.push(key.clone());
+            }
+        }
+
+        // Remove matching entries
+        let count = keys_to_remove.len();
+        for key in keys_to_remove {
+            cache.pop(&key);
+        }
+
+        if count > 0 {
+            info!(
+                "Cache invalidation: removed {} entries for worktree {}",
+                count, worktree_id
+            );
+        }
+
+        count
     }
 }
 
@@ -251,9 +424,11 @@ impl Clone for SearchCache {
     fn clone(&self) -> Self {
         Self {
             cache: Arc::clone(&self.cache),
+            ttl_seconds: self.ttl_seconds,
             hits: Arc::clone(&self.hits),
             misses: Arc::clone(&self.misses),
             evictions: Arc::clone(&self.evictions),
+            expirations: Arc::clone(&self.expirations),
         }
     }
 }
@@ -322,6 +497,10 @@ pub struct CacheStats {
     pub misses: u64,
     /// Total evictions
     pub evictions: u64,
+    /// Total expirations
+    pub expirations: u64,
+    /// TTL in seconds
+    pub ttl_seconds: u64,
 }
 
 impl CacheStats {
@@ -466,12 +645,87 @@ mod tests {
             hits: 70,
             misses: 30,
             evictions: 10,
+            expirations: 5,
+            ttl_seconds: 3600,
         };
 
         assert_eq!(stats.hit_rate(), 0.7);
         assert_eq!(stats.utilization_percent(), 80.0);
         assert_eq!(stats.total_queries(), 100);
         assert!(stats.is_effective());
+    }
+
+    #[test]
+    fn test_cache_ttl_expiration() {
+        // Cache with 0 second TTL (never expire)
+        let cache = SearchCache::with_ttl(100, 0);
+        let key = CacheKey::new("test", 1, None, 10);
+        let results = FinalSearchResults::new(
+            "test".to_string(),
+            vec![],
+            create_test_metadata(),
+        );
+
+        cache.put(key.clone(), results);
+
+        // Entry should never expire with TTL=0
+        assert!(cache.get(&key).is_some());
+        let stats = cache.stats();
+        assert_eq!(stats.expirations, 0);
+    }
+
+    #[test]
+    fn test_cache_invalidation_by_repo() {
+        let cache = SearchCache::new(100);
+
+        let key1 = CacheKey::new("test1", 1, None, 10);
+        let key2 = CacheKey::new("test2", 2, None, 10);
+        let key3 = CacheKey::new("test3", 1, None, 10);
+        let results = FinalSearchResults::new(
+            "test".to_string(),
+            vec![],
+            create_test_metadata(),
+        );
+
+        cache.put(key1.clone(), results.clone());
+        cache.put(key2.clone(), results.clone());
+        cache.put(key3.clone(), results.clone());
+
+        // Invalidate repo 1
+        let count = cache.invalidate_by_repo(1);
+        assert_eq!(count, 2); // key1 and key3
+
+        // Only key2 should remain
+        assert!(cache.get(&key1).is_none());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_none());
+    }
+
+    #[test]
+    fn test_cache_invalidation_by_worktree() {
+        let cache = SearchCache::new(100);
+
+        let key1 = CacheKey::new("test1", 1, Some(1), 10);
+        let key2 = CacheKey::new("test2", 1, Some(2), 10);
+        let key3 = CacheKey::new("test3", 1, None, 10);
+        let results = FinalSearchResults::new(
+            "test".to_string(),
+            vec![],
+            create_test_metadata(),
+        );
+
+        cache.put(key1.clone(), results.clone());
+        cache.put(key2.clone(), results.clone());
+        cache.put(key3.clone(), results.clone());
+
+        // Invalidate worktree 1
+        let count = cache.invalidate_by_worktree(1);
+        assert_eq!(count, 1); // only key1
+
+        // key2 and key3 should remain
+        assert!(cache.get(&key1).is_none());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
     }
 
     #[test]
