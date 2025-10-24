@@ -9,6 +9,7 @@ pub mod budget;
 pub mod file_loader;
 pub mod formatter;
 pub mod graph;
+pub mod heuristics;
 pub mod importance;
 pub mod priority_queue;
 pub mod relationships;
@@ -22,6 +23,7 @@ pub use budget::{BudgetAllocation, TokenBudgetManager, UsageStats};
 pub use file_loader::FileLoader;
 pub use formatter::ContentFormatter;
 pub use graph::{EdgeType, RelatedChunk, find_related_chunks, find_related_chunks_directional};
+pub use heuristics::{FileType, HeuristicScorer, HeuristicsConfig};
 pub use importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 pub use priority_queue::{Category, PriorityItem, PriorityQueue};
 pub use relationships::{

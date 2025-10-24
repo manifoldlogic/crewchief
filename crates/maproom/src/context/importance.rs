@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::graph::EdgeType;
+use super::heuristics::HeuristicScorer;
 
 /// Configuration for importance scoring.
 #[derive(Debug, Clone)]
@@ -124,6 +125,7 @@ pub struct Relationship {
 /// Importance scorer that calculates relevance scores for chunks.
 pub struct ImportanceScorer {
     config: ScoringConfig,
+    heuristic_scorer: Option<HeuristicScorer>,
 }
 
 impl ImportanceScorer {
@@ -131,12 +133,32 @@ impl ImportanceScorer {
     pub fn new() -> Self {
         Self {
             config: ScoringConfig::default(),
+            heuristic_scorer: Some(HeuristicScorer::new()),
         }
     }
 
     /// Create a new importance scorer with custom configuration.
     pub fn with_config(config: ScoringConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            heuristic_scorer: Some(HeuristicScorer::new()),
+        }
+    }
+
+    /// Create a new importance scorer without heuristics.
+    pub fn without_heuristics(config: ScoringConfig) -> Self {
+        Self {
+            config,
+            heuristic_scorer: None,
+        }
+    }
+
+    /// Create a new importance scorer with custom heuristics.
+    pub fn with_heuristics(config: ScoringConfig, heuristic_scorer: HeuristicScorer) -> Self {
+        Self {
+            config,
+            heuristic_scorer: Some(heuristic_scorer),
+        }
     }
 
     /// Calculate importance score for a chunk given its relationship to a target.
@@ -157,7 +179,8 @@ impl ImportanceScorer {
     /// 5. Multiply by recency score (if enabled)
     /// 6. Multiply by inverse churn (if enabled)
     /// 7. Apply directory bonus (if same directory)
-    /// 8. Clamp to reasonable range
+    /// 8. Apply heuristic weights (test/config file detection)
+    /// 9. Clamp to reasonable range
     pub fn score(
         &self,
         chunk: &ChunkMetadata,
@@ -177,6 +200,9 @@ impl ImportanceScorer {
 
         // Apply directory bonus
         score = self.apply_directory_bonus(score, chunk, target);
+
+        // Apply heuristic weights (test/config file detection)
+        score = self.apply_heuristic_weights(score, chunk);
 
         // Clamp to reasonable range (prevent negative or infinite scores)
         score.max(0.0).min(100.0)
@@ -267,9 +293,28 @@ impl ImportanceScorer {
         }
     }
 
+    /// Apply heuristic-based weight multipliers (test/config file detection).
+    ///
+    /// Uses HeuristicScorer to detect file types and apply appropriate weights:
+    /// - Test files: 1.5x multiplier (configurable)
+    /// - Config files: 1.1x multiplier (configurable)
+    /// - Regular files: no change
+    fn apply_heuristic_weights(&self, score: f64, chunk: &ChunkMetadata) -> f64 {
+        if let Some(ref heuristic_scorer) = self.heuristic_scorer {
+            heuristic_scorer.apply_heuristic_weight(score, &chunk.relpath)
+        } else {
+            score
+        }
+    }
+
     /// Get the scoring configuration.
     pub fn config(&self) -> &ScoringConfig {
         &self.config
+    }
+
+    /// Get the heuristic scorer if enabled.
+    pub fn heuristic_scorer(&self) -> Option<&HeuristicScorer> {
+        self.heuristic_scorer.as_ref()
     }
 }
 
