@@ -1,0 +1,100 @@
+{"id": 1, "query": "useState", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 2, "query": "useEffect", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 3, "query": "createConnection", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 4, "query": "handleError", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 5, "query": "AuthManager", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 6, "query": "HttpClient", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 7, "query": "QueryBuilder", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 8, "query": "Connection", "category": "simple_symbol", "expected_language": null}
+{"id": 9, "query": "Router", "category": "simple_symbol", "expected_language": "typescript"}
+{"id": 10, "query": "config", "category": "simple_symbol", "expected_language": null}
+{"id": 11, "query": "logger", "category": "simple_symbol", "expected_language": null}
+{"id": 12, "query": "middleware", "category": "simple_symbol", "expected_language": null}
+{"id": 13, "query": "Database", "category": "simple_symbol", "expected_language": null}
+{"id": 14, "query": "Cache", "category": "simple_symbol", "expected_language": null}
+{"id": 15, "query": "Parser", "category": "simple_symbol", "expected_language": null}
+{"id": 16, "query": "Validator", "category": "simple_symbol", "expected_language": null}
+{"id": 17, "query": "Builder", "category": "simple_symbol", "expected_language": null}
+{"id": 18, "query": "Factory", "category": "simple_symbol", "expected_language": null}
+{"id": 19, "query": "Context", "category": "simple_symbol", "expected_language": null}
+{"id": 20, "query": "Service", "category": "simple_symbol", "expected_language": null}
+{"id": 21, "query": "authentication flow", "category": "semantic", "expected_language": null}
+{"id": 22, "query": "error handling", "category": "semantic", "expected_language": null}
+{"id": 23, "query": "state management", "category": "semantic", "expected_language": null}
+{"id": 24, "query": "database connection pooling", "category": "semantic", "expected_language": null}
+{"id": 25, "query": "retry logic", "category": "semantic", "expected_language": null}
+{"id": 26, "query": "caching layer", "category": "semantic", "expected_language": null}
+{"id": 27, "query": "request validation", "category": "semantic", "expected_language": null}
+{"id": 28, "query": "response transformation", "category": "semantic", "expected_language": null}
+{"id": 29, "query": "logging infrastructure", "category": "semantic", "expected_language": null}
+{"id": 30, "query": "configuration management", "category": "semantic", "expected_language": null}
+{"id": 31, "query": "dependency injection", "category": "semantic", "expected_language": null}
+{"id": 32, "query": "event handling", "category": "semantic", "expected_language": null}
+{"id": 33, "query": "session management", "category": "semantic", "expected_language": null}
+{"id": 34, "query": "data validation", "category": "semantic", "expected_language": null}
+{"id": 35, "query": "async operations", "category": "semantic", "expected_language": null}
+{"id": 36, "query": "rate limiting", "category": "semantic", "expected_language": null}
+{"id": 37, "query": "circuit breaker pattern", "category": "semantic", "expected_language": null}
+{"id": 38, "query": "message queue processing", "category": "semantic", "expected_language": null}
+{"id": 39, "query": "file upload handling", "category": "semantic", "expected_language": null}
+{"id": 40, "query": "API versioning", "category": "semantic", "expected_language": null}
+{"id": 41, "query": "CORS configuration", "category": "semantic", "expected_language": null}
+{"id": 42, "query": "health check endpoints", "category": "semantic", "expected_language": null}
+{"id": 43, "query": "metrics collection", "category": "semantic", "expected_language": null}
+{"id": 44, "query": "token refresh mechanism", "category": "semantic", "expected_language": null}
+{"id": 45, "query": "background job scheduling", "category": "semantic", "expected_language": null}
+{"id": 46, "query": "async error handling", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 47, "query": "React hooks with effects", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 48, "query": "REST endpoint definitions", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 49, "query": "GraphQL resolvers", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 50, "query": "Promise.all pattern", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 51, "query": "try-catch blocks", "category": "code_pattern", "expected_language": null}
+{"id": 52, "query": "async/await usage", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 53, "query": "callback functions", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 54, "query": "arrow functions", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 55, "query": "destructuring assignments", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 56, "query": "spread operator usage", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 57, "query": "template literals", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 58, "query": "optional chaining", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 59, "query": "nullish coalescing", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 60, "query": "class constructors", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 61, "query": "interface definitions", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 62, "query": "type guards", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 63, "query": "generics usage", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 64, "query": "enum declarations", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 65, "query": "decorator patterns", "category": "code_pattern", "expected_language": "typescript"}
+{"id": 66, "query": "React component with state", "category": "multi_word", "expected_language": "typescript"}
+{"id": 67, "query": "PostgreSQL query builder", "category": "multi_word", "expected_language": "typescript"}
+{"id": 68, "query": "user authentication middleware", "category": "multi_word", "expected_language": "typescript"}
+{"id": 69, "query": "file upload handler", "category": "multi_word", "expected_language": "typescript"}
+{"id": 70, "query": "JWT token validation", "category": "multi_word", "expected_language": "typescript"}
+{"id": 71, "query": "email notification service", "category": "multi_word", "expected_language": "typescript"}
+{"id": 72, "query": "Redis cache implementation", "category": "multi_word", "expected_language": "typescript"}
+{"id": 73, "query": "WebSocket connection manager", "category": "multi_word", "expected_language": "typescript"}
+{"id": 74, "query": "OAuth provider integration", "category": "multi_word", "expected_language": "typescript"}
+{"id": 75, "query": "payment processing service", "category": "multi_word", "expected_language": "typescript"}
+{"id": 76, "query": "image transformation utility", "category": "multi_word", "expected_language": "typescript"}
+{"id": 77, "query": "CSV export functionality", "category": "multi_word", "expected_language": "typescript"}
+{"id": 78, "query": "search indexing service", "category": "multi_word", "expected_language": "typescript"}
+{"id": 79, "query": "database migration tool", "category": "multi_word", "expected_language": "typescript"}
+{"id": 80, "query": "API rate limiter", "category": "multi_word", "expected_language": "typescript"}
+{"id": 81, "query": "user session store", "category": "multi_word", "expected_language": "typescript"}
+{"id": 82, "query": "request logging middleware", "category": "multi_word", "expected_language": "typescript"}
+{"id": 83, "query": "environment configuration loader", "category": "multi_word", "expected_language": "typescript"}
+{"id": 84, "query": "error reporting service", "category": "multi_word", "expected_language": "typescript"}
+{"id": 85, "query": "queue worker process", "category": "multi_word", "expected_language": "typescript"}
+{"id": 86, "query": "x", "category": "edge_case", "expected_language": null}
+{"id": 87, "query": "i", "category": "edge_case", "expected_language": null}
+{"id": 88, "query": "a", "category": "edge_case", "expected_language": null}
+{"id": 89, "query": "how to implement a secure authentication flow with JWT tokens and refresh token rotation mechanism", "category": "edge_case", "expected_language": null}
+{"id": 90, "query": "what is the best way to handle errors in asynchronous functions using promises and async await syntax", "category": "edge_case", "expected_language": null}
+{"id": 91, "query": "get", "category": "edge_case", "expected_language": null}
+{"id": 92, "query": "handle", "category": "edge_case", "expected_language": null}
+{"id": 93, "query": "process", "category": "edge_case", "expected_language": null}
+{"id": 94, "query": "create", "category": "edge_case", "expected_language": null}
+{"id": 95, "query": "update", "category": "edge_case", "expected_language": null}
+{"id": 96, "query": "delete", "category": "edge_case", "expected_language": null}
+{"id": 97, "query": "fetch", "category": "edge_case", "expected_language": null}
+{"id": 98, "query": "send", "category": "edge_case", "expected_language": null}
+{"id": 99, "query": "validate", "category": "edge_case", "expected_language": null}
+{"id": 100, "query": "transform", "category": "edge_case", "expected_language": null}

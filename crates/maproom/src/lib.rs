@@ -5,5 +5,6 @@
 
 pub mod db;
 pub mod embedding;
+pub mod evaluation;
 pub mod indexer;
 pub mod search;
