@@ -28,6 +28,7 @@ fn is_skip_error(e: &anyhow::Error) -> bool {
 /// Test fixture for assembler integration tests.
 struct AssemblerTestFixture {
     _temp_dir: TempDir,
+    #[allow(dead_code)]
     worktree_path: String,
     chunk_id: i64,
 }

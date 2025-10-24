@@ -6,11 +6,18 @@
 
 pub mod assembler;
 pub mod file_loader;
+pub mod graph;
+pub mod relationships;
 pub mod token_counter;
 pub mod types;
 
 // Re-export core types for convenience
 pub use assembler::{BasicContextAssembler, ContextAssembler};
 pub use file_loader::FileLoader;
+pub use graph::{EdgeType, RelatedChunk, find_related_chunks, find_related_chunks_directional};
+pub use relationships::{
+    find_all_relationships, find_callees, find_callers, find_exports, find_imports,
+    find_routes, find_test_files,
+};
 pub use token_counter::TokenCounter;
 pub use types::{ContextBundle, ContextItem, ExpandOptions, LineRange};
