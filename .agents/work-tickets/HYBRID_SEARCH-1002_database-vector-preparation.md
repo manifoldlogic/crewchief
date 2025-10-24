@@ -1,9 +1,9 @@
 # Ticket: HYBRID_SEARCH-1002: Database Vector Preparation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer
@@ -28,13 +28,13 @@ This ticket ensures these configurations are production-ready and optimized acco
 - Plan: `/workspace/crewchief_context/maproom/HYBRID_SEARCH/HYBRID_SEARCH_PLAN.md` (Phase 1, Week 1, Task 2)
 
 ## Acceptance Criteria
-- [ ] Vector columns verified to exist on chunks table with correct dimensions (1536)
-- [ ] ivfflat indices created with optimal parameters (lists=200, probes=10)
-- [ ] Index configuration verified using `EXPLAIN ANALYZE` on sample queries
-- [ ] ANALYZE run on chunks table to update query planner statistics
-- [ ] Partial indices created for performance optimization (high recency_score, high churn_score)
-- [ ] Database configuration documented with recommended settings
-- [ ] Performance baseline established for vector similarity queries
+- [x] Vector columns verified to exist on chunks table with correct dimensions (1536)
+- [x] ivfflat indices created with optimal parameters (lists=200, probes=10)
+- [x] Index configuration verified using `EXPLAIN ANALYZE` on sample queries
+- [x] ANALYZE run on chunks table to update query planner statistics
+- [x] Partial indices created for performance optimization (high recency_score, high churn_score)
+- [x] Database configuration documented with recommended settings
+- [x] Performance baseline established for vector similarity queries
 
 ## Technical Requirements
 - PostgreSQL with pgvector extension installed and enabled
