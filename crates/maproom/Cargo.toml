@@ -64,3 +64,7 @@ harness = false
 name = "index_tuning_benchmark"
 harness = false
 
+[[bench]]
+name = "search_benchmark"
+harness = false
+
