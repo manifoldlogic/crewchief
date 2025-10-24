@@ -48,6 +48,10 @@ lru = "0.12"
 # A/B Testing dependencies
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Token counting for context assembly
+tiktoken-rs = "0.5"
+async-trait = "0.1"
+
 [build-dependencies]
 
 [[bin]]

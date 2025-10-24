@@ -1,9 +1,9 @@
 # Ticket: CONTEXT_ASM-1001: Basic Assembly Pipeline
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - mcp-context-engineer
@@ -20,14 +20,14 @@ The Context Assembly Engine needs a core pipeline to retrieve code chunks from t
 This ticket implements Phase 1, Week 1, Task 1 from the CONTEXT_ASM_PLAN.md, establishing the basic assembly structure before adding complexity like graph traversal and token budget allocation.
 
 ## Acceptance Criteria
-- [ ] Retrieve and format primary chunk by ID from database
-- [ ] Load file content for chunks from filesystem
-- [ ] Count tokens accurately using tiktoken or similar library
-- [ ] Return basic ContextBundle structure with ContextItems
-- [ ] Handle missing chunks gracefully with appropriate errors
-- [ ] Handle file read errors with graceful degradation
-- [ ] Unit tests verify core functionality
-- [ ] Integration test assembles actual chunk from database
+- [x] Retrieve and format primary chunk by ID from database
+- [x] Load file content for chunks from filesystem
+- [x] Count tokens accurately using tiktoken or similar library
+- [x] Return basic ContextBundle structure with ContextItems
+- [x] Handle missing chunks gracefully with appropriate errors
+- [x] Handle file read errors with graceful degradation
+- [x] Unit tests verify core functionality
+- [x] Integration test assembles actual chunk from database
 
 ## Technical Requirements
 

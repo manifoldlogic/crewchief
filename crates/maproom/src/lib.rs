@@ -5,6 +5,7 @@
 
 pub mod ab_testing;
 pub mod config;
+pub mod context;
 pub mod db;
 pub mod embedding;
 pub mod evaluation;
