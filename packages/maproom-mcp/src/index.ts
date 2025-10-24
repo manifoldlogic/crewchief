@@ -742,49 +742,11 @@ async function handleSearch(params: any): Promise<any> {
 }
 
 async function handleOpen(params: any): Promise<any> {
-  const { relpath, range, worktree, context = 0 } = params
-  // Read directly from filesystem using provided worktree path via database
   const client = await getPg()
   try {
-    const { rows } = await client.query(
-      `SELECT w.abs_path FROM maproom.worktrees w JOIN maproom.files f ON f.worktree_id = w.id WHERE f.relpath = $1 AND w.name = $2 LIMIT 1`,
-      [relpath, worktree]
-    )
-    if (rows.length === 0) {
-      // Provide helpful error message
-      const availableWorktrees = await client.query(
-        'SELECT DISTINCT w.name FROM maproom.worktrees w JOIN maproom.files f ON f.worktree_id = w.id WHERE f.relpath = $1',
-        [relpath]
-      )
-      if (availableWorktrees.rows.length > 0) {
-        throw new Error(`File exists in other worktrees: ${availableWorktrees.rows.map(r => r.name).join(', ')}. Check your worktree parameter.`)
-      } else {
-        throw new Error(`File '${relpath}' not found in worktree '${worktree}'. Use search tool to find the correct path.`)
-      }
-    }
-    const base = rows[0].abs_path as string
-    const fs = await import('node:fs/promises')
-    const content = await fs.readFile(`${base}/${relpath}`, 'utf8')
-    const lines = content.split('\n')
-    
-    // Calculate line range with context
-    let start = range?.start ?? 1
-    let end = range?.end ?? lines.length
-    
-    // Add context lines if requested
-    if (context > 0) {
-      start = Math.max(1, start - context)
-      end = Math.min(lines.length, end + context)
-    }
-    
-    const sliced = lines.slice(start - 1, end).join('\n')
-    
-    return { 
-      content: sliced,
-      actualRange: { start, end },
-      requestedRange: range,
-      contextLines: context
-    }
+    const { handleOpenTool } = await import('./tools/open.js')
+    const result = await handleOpenTool(params, client)
+    return result
   } finally {
     await client.end().catch(() => {})
   }
@@ -1045,9 +1007,16 @@ async function handleMessage(msg: JsonRpcRequest) {
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
         log.info({ id: msg.id, tool: name }, 'sent tool result')
       } else if (name === 'open') {
-        const res = await handleOpen(args)
-        respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
-        log.info({ id: msg.id, tool: name }, 'sent tool result')
+        try {
+          const res = await handleOpen(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatOpenError } = await import('./tools/open.js')
+          const errorResponse = formatOpenError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else if (name === 'upsert') {
         const res = await handleUpsert(args)
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
