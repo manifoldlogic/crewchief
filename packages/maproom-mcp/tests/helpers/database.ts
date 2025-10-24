@@ -83,6 +83,24 @@ export async function setupTestSchema(client: Client): Promise<void> {
 }
 
 /**
+ * Setup test database (creates client and ensures schema exists)
+ */
+export async function setupTestDatabase(): Promise<Client> {
+  const client = await createClient()
+  await setupTestSchema(client)
+  await cleanTestData(client)
+  return client
+}
+
+/**
+ * Teardown test database (cleans data and closes connection)
+ */
+export async function teardownTestDatabase(client: Client): Promise<void> {
+  await cleanTestData(client)
+  await client.end()
+}
+
+/**
  * Clean all test data from database
  */
 export async function cleanTestData(client: Client): Promise<void> {
@@ -98,12 +116,12 @@ export async function cleanTestData(client: Client): Promise<void> {
 export async function createTestRepo(
   client: Client,
   name: string
-): Promise<TestRepo> {
+): Promise<number> {
   const { rows } = await client.query(
-    'INSERT INTO maproom.repos (name) VALUES ($1) RETURNING id, name',
+    'INSERT INTO maproom.repos (name) VALUES ($1) RETURNING id',
     [name]
   )
-  return rows[0] as TestRepo
+  return rows[0].id as number
 }
 
 /**
@@ -114,12 +132,12 @@ export async function createTestWorktree(
   repoId: number,
   name: string,
   absPath: string
-): Promise<TestWorktree> {
+): Promise<number> {
   const { rows } = await client.query(
-    'INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3) RETURNING id, name, abs_path, repo_id',
+    'INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3) RETURNING id',
     [repoId, name, absPath]
   )
-  return rows[0] as TestWorktree
+  return rows[0].id as number
 }
 
 /**
@@ -130,12 +148,12 @@ export async function createTestFile(
   worktreeId: number,
   relpath: string,
   lastModified: Date = new Date()
-): Promise<TestFile> {
+): Promise<number> {
   const { rows } = await client.query(
-    'INSERT INTO maproom.files (worktree_id, relpath, last_modified) VALUES ($1, $2, $3) RETURNING id, relpath, worktree_id',
+    'INSERT INTO maproom.files (worktree_id, relpath, last_modified) VALUES ($1, $2, $3) RETURNING id',
     [worktreeId, relpath, lastModified]
   )
-  return rows[0] as TestFile
+  return rows[0].id as number
 }
 
 /**
@@ -145,18 +163,18 @@ export async function createTestChunk(
   client: Client,
   fileId: number,
   options: {
-    symbolName?: string
+    symbol_name?: string
     kind: string
-    startLine: number
-    endLine: number
-    content: string
+    start_line: number
+    end_line: number
+    content?: string
     metadata?: any
   }
-): Promise<TestChunk> {
-  const { symbolName, kind, startLine, endLine, content, metadata } = options
+): Promise<number> {
+  const { symbol_name, kind, start_line, end_line, content, metadata } = options
 
   // Create ts_doc for full-text search
-  const tsDoc = content
+  const tsDoc = (content || symbol_name || kind)
     .split(/\s+/)
     .map((t) => t.replace(/[^\w]/g, ''))
     .filter(Boolean)
@@ -167,10 +185,10 @@ export async function createTestChunk(
       file_id, symbol_name, kind, start_line, end_line,
       ts_doc, metadata, recency_score, churn_score
     ) VALUES ($1, $2, $3::maproom.chunk_kind, $4, $5, to_tsvector('simple', $6), $7, 1.0, 0.0)
-    RETURNING id, file_id, symbol_name, kind::text, start_line, end_line`,
-    [fileId, symbolName || null, kind, startLine, endLine, tsDoc, metadata || {}]
+    RETURNING id`,
+    [fileId, symbol_name || null, kind, start_line, end_line, tsDoc, metadata || {}]
   )
-  return rows[0] as TestChunk
+  return rows[0].id as number
 }
 
 /**

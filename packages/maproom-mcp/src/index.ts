@@ -208,10 +208,10 @@ const toolSchemas = [
         chunk_id: { type: 'string', description: 'UUID of the target chunk to retrieve context for (from search results)' },
         budget_tokens: {
           type: 'integer',
-          minimum: 100,
-          maximum: 100000,
+          minimum: 1000,
+          maximum: 20000,
           default: 6000,
-          description: 'Maximum number of tokens to include in the context bundle (default: 6000)'
+          description: 'Maximum number of tokens to include in the context bundle (default: 6000, range: 1000-20000)'
         },
         expand: {
           type: 'object',
@@ -794,137 +794,15 @@ async function handleExplain(params: any): Promise<any> {
 /**
  * handleContext - Retrieve contextually relevant code sections around a target chunk
  *
- * NOTE: This is a stub implementation. The full ContextAssembler from the CONTEXT_ASM
- * project is not yet implemented. This handler provides basic chunk retrieval and
- * will be enhanced with relationship traversal, budget management, and intelligent
- * context assembly when CONTEXT_ASM-1001 is completed.
- *
- * TODO: Integrate with ContextAssembler once CONTEXT_ASM-1001 is complete
+ * Integrates with the context assembler to provide intelligent context gathering
+ * with relationship traversal, budget management, and multi-chunk assembly.
  */
 async function handleContext(params: any): Promise<any> {
-  const { chunk_id, budget_tokens = 6000, expand = {} } = params
-
-  // Validate chunk_id format (should be numeric for now, based on database schema)
-  const chunkIdNum = parseInt(chunk_id, 10)
-  if (isNaN(chunkIdNum) || chunkIdNum <= 0) {
-    return {
-      error: 'Invalid chunk_id',
-      message: 'chunk_id must be a valid positive integer',
-      hint: 'Get chunk_id from search results (hit.chunk_id field)'
-    }
-  }
-
-  // Validate budget_tokens
-  if (budget_tokens < 100) {
-    return {
-      error: 'Budget too low',
-      message: 'budget_tokens must be at least 100',
-      hint: 'Minimum budget of 100 tokens required for meaningful context'
-    }
-  }
-
-  if (budget_tokens > 100000) {
-    return {
-      error: 'Budget too high',
-      message: 'budget_tokens must not exceed 100000',
-      hint: 'Maximum budget is 100000 tokens to prevent excessive resource usage'
-    }
-  }
-
   const client = await getPg()
   try {
-    // Query the chunk from the database
-    const { rows } = await client.query(`
-      SELECT
-        c.id,
-        c.symbol_name,
-        c.kind::text,
-        c.start_line,
-        c.end_line,
-        c.metadata,
-        f.relpath,
-        w.name as worktree_name,
-        w.abs_path as worktree_path
-      FROM maproom.chunks c
-      JOIN maproom.files f ON f.id = c.file_id
-      JOIN maproom.worktrees w ON w.id = f.worktree_id
-      WHERE c.id = $1
-    `, [chunkIdNum])
-
-    if (rows.length === 0) {
-      return {
-        error: 'Chunk not found',
-        message: `No chunk found with id ${chunkIdNum}`,
-        hint: 'Verify the chunk_id from search results. Use the search tool to find valid chunks.'
-      }
-    }
-
-    const chunk = rows[0]
-
-    // Load the file content
-    const fs = await import('node:fs/promises')
-    const filePath = `${chunk.worktree_path}/${chunk.relpath}`
-
-    let fileContent: string
-    try {
-      fileContent = await fs.readFile(filePath, 'utf8')
-    } catch (err: any) {
-      return {
-        error: 'File read error',
-        message: `Failed to read file: ${chunk.relpath}`,
-        hint: 'File may have been moved or deleted since indexing. Try re-indexing with the upsert tool.',
-        details: err.message
-      }
-    }
-
-    const lines = fileContent.split('\n')
-    const chunkContent = lines.slice(chunk.start_line - 1, chunk.end_line).join('\n')
-
-    // Simple token estimation (rough approximation: ~4 chars per token for code)
-    const estimateTokens = (text: string) => Math.ceil(text.length / 4)
-    const chunkTokens = estimateTokens(chunkContent)
-
-    // Build basic ContextBundle (stub implementation)
-    // TODO: Replace with full ContextAssembler implementation from CONTEXT_ASM-1001
-    const contextBundle = {
-      items: [
-        {
-          relpath: chunk.relpath,
-          range: {
-            start: chunk.start_line,
-            end: chunk.end_line
-          },
-          role: 'primary',
-          reason: 'Target chunk requested by user',
-          content: chunkContent,
-          tokens: chunkTokens,
-          symbol_name: chunk.symbol_name,
-          kind: chunk.kind
-        }
-      ],
-      total_tokens: chunkTokens,
-      budget_tokens: budget_tokens,
-      budget_remaining: budget_tokens - chunkTokens,
-      truncated: false,
-      metadata: {
-        chunk_id: chunk.id,
-        worktree: chunk.worktree_name,
-        expand_options: expand
-      },
-      warnings: [
-        'STUB IMPLEMENTATION: Full context assembly not yet available.',
-        'This response includes only the primary chunk. Related context (callers, callees, tests) will be added when CONTEXT_ASM-1001 is completed.',
-        'For now, use the search tool to find related chunks manually.'
-      ]
-    }
-
-    // Check if budget was exceeded (only primary chunk for now)
-    if (chunkTokens > budget_tokens) {
-      contextBundle.truncated = true
-      contextBundle.warnings.push(`Primary chunk (${chunkTokens} tokens) exceeds budget (${budget_tokens} tokens). Content may be truncated in full implementation.`)
-    }
-
-    return contextBundle
+    const { handleContextTool } = await import('./tools/context.js')
+    const result = await handleContextTool(params, client)
+    return result
   } finally {
     await client.end().catch(() => {})
   }
@@ -1031,9 +909,16 @@ async function handleMessage(msg: JsonRpcRequest) {
           log.error({ id: msg.id, tool: name, error }, 'tool error')
         }
       } else if (name === 'context') {
-        const res = await handleContext(args)
-        respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
-        log.info({ id: msg.id, tool: name }, 'sent tool result')
+        try {
+          const res = await handleContext(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatContextError } = await import('./tools/context.js')
+          const errorResponse = formatContextError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else if (name === 'explain') {
         try {
           const res = await handleExplain(args)
