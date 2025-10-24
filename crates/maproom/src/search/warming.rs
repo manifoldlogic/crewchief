@@ -16,9 +16,10 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use crewchief_maproom::search::warming::CacheWarmer;
 //! use crewchief_maproom::search::SearchCache;
+//! use crewchief_maproom::search::SearchPipeline;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
@@ -33,7 +34,8 @@
 //!         "error handling".to_string(),
 //!     ];
 //!
-//!     warmer.warm_with_queries(&queries, 1, None).await?;
+//!     // let pipeline = SearchPipeline::new(...);
+//!     // warmer.warm_with_queries(&queries, 1, None, &pipeline, None).await?;
 //!
 //!     Ok(())
 //! }

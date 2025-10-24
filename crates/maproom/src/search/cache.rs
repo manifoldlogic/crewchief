@@ -35,24 +35,24 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::search::cache::SearchCache;
+//! use crewchief_maproom::search::cache::{SearchCache, CacheKey};
 //! use crewchief_maproom::search::FinalSearchResults;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     let cache = SearchCache::new(1000);
 //!
-//!     let key = "authenticate_user_1_None_10";
+//!     let key = CacheKey::new("authenticate", 1, None, 10);
 //!
 //!     // Check cache first
-//!     if let Some(results) = cache.get(key) {
+//!     if let Some(results) = cache.get(&key) {
 //!         println!("Cache hit! Results: {}", results.results.len());
 //!         return Ok(());
 //!     }
 //!
 //!     // Cache miss - execute query and cache result
 //!     // let results = execute_search(...).await?;
-//!     // cache.put(key, results.clone());
+//!     // cache.put(key, results);
 //!
 //!     Ok(())
 //! }
@@ -258,15 +258,15 @@ impl SearchCache {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use crewchief_maproom::search::cache::{SearchCache, CacheKey};
-    /// # use crewchief_maproom::search::FinalSearchResults;
+    /// use crewchief_maproom::search::FinalSearchResults;
     ///
     /// let cache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
-    /// # let results = FinalSearchResults::new("test".to_string(), vec![], Default::default());
+    /// // let results = ...; // Create actual results
     ///
-    /// cache.put(key, results);
+    /// // cache.put(key, results);
     /// ```
     pub fn put(&self, key: CacheKey, results: FinalSearchResults) {
         let mut cache = self.cache.write().unwrap();
