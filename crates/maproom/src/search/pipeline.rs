@@ -24,6 +24,7 @@
 //! - Fusion: ~2-5ms
 //! - Assembly: ~5-10ms
 
+use crate::metrics::get_metrics;
 use crate::search::executor_types::SearchSource;
 use crate::search::executors::SearchExecutors;
 use crate::search::fusion::{BasicWeightedFusion, FusedResult, ScoreFusion};
@@ -36,7 +37,7 @@ use crate::search::types::ProcessedQuery;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 /// Main search pipeline coordinator.
 ///
@@ -107,6 +108,7 @@ impl SearchPipeline {
         options: SearchOptions,
     ) -> Result<FinalSearchResults, PipelineError> {
         let total_start = Instant::now();
+        let metrics = get_metrics();
 
         info!(
             "Starting search pipeline: '{}' (repo: {}, limit: {})",
@@ -115,8 +117,17 @@ impl SearchPipeline {
 
         // Stage 1: Process query
         let process_start = Instant::now();
-        let processed = self.processor.process(query).await?;
+        let processed = match self.processor.process(query).await {
+            Ok(p) => p,
+            Err(e) => {
+                metrics.record_error("query_processing");
+                metrics.increment_queries("unknown", false);
+                return Err(e.into());
+            }
+        };
         let processing_time = process_start.elapsed().as_secs_f64() * 1000.0;
+
+        let mode_str = format!("{:?}", processed.mode).to_lowercase();
 
         debug!(
             "Query processed in {:.2}ms: {} tokens, mode={:?}",
@@ -125,9 +136,16 @@ impl SearchPipeline {
             processed.mode
         );
 
+        trace!(
+            "Processed query details: tokens={:?}, expanded_terms={:?}, fts_query={}",
+            processed.tokens,
+            processed.expanded_terms,
+            processed.fts_query_string()
+        );
+
         // Stage 2: Execute parallel searches
         let search_start = Instant::now();
-        let search_results = self
+        let search_results = match self
             .executors
             .execute_all(
                 &processed,
@@ -135,13 +153,31 @@ impl SearchPipeline {
                 options.worktree_id,
                 options.limit * 3, // Fetch more for better fusion
             )
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                metrics.record_error("search_execution");
+                metrics.increment_queries(&mode_str, false);
+                let total_time = total_start.elapsed().as_secs_f64();
+                metrics.record_query_latency(total_time, &mode_str, false);
+                return Err(e.into());
+            }
+        };
         let search_time = search_start.elapsed().as_secs_f64() * 1000.0;
 
         debug!(
             "Parallel search completed in {:.2}ms: {}",
             search_time,
             search_results.summary()
+        );
+
+        trace!(
+            "Search results breakdown: FTS={}, Vector={}, Graph={}, Signals={}",
+            search_results.fts.len(),
+            search_results.vector.len(),
+            search_results.graph.len(),
+            search_results.signals.len()
         );
 
         // Stage 3: Fuse scores
@@ -168,10 +204,22 @@ impl SearchPipeline {
         );
         let fusion_time = fusion_start.elapsed().as_secs_f64() * 1000.0;
 
+        // Record fusion time metric
+        metrics.record_fusion_time(fusion_time / 1000.0, "basic_weighted");
+
         debug!(
             "Score fusion completed in {:.2}ms: {} results",
             fusion_time,
             fused_results.len()
+        );
+
+        trace!(
+            "Top 3 fused results: {:?}",
+            fused_results
+                .iter()
+                .take(3)
+                .map(|r| (r.chunk_id, r.score))
+                .collect::<Vec<_>>()
         );
 
         // Stage 4: Assemble final results with chunk details
@@ -200,9 +248,15 @@ impl SearchPipeline {
 
         let total_time = total_start.elapsed().as_secs_f64() * 1000.0;
 
+        // Record comprehensive metrics
+        metrics.record_query_latency(total_time / 1000.0, &mode_str, true);
+        metrics.record_result_count(final_results.results.len(), &mode_str);
+        metrics.increment_queries(&mode_str, true);
+
         info!(
-            "Search pipeline completed in {:.2}ms (target: <50ms)",
-            total_time
+            "Search pipeline completed in {:.2}ms (target: <50ms), returned {} results",
+            total_time,
+            final_results.results.len()
         );
 
         if total_time > 50.0 {
@@ -211,6 +265,11 @@ impl SearchPipeline {
                 total_time, processing_time, search_time, fusion_time, assembly_time
             );
         }
+
+        trace!(
+            "Pipeline timing breakdown: total={:.2}ms, processing={:.2}ms, search={:.2}ms, fusion={:.2}ms, assembly={:.2}ms",
+            total_time, processing_time, search_time, fusion_time, assembly_time
+        );
 
         Ok(final_results)
     }
