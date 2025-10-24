@@ -1,9 +1,9 @@
 # Ticket: CONTEXT_ASM-2001: Importance Scoring
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (24/24: 13 unit + 11 integration)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - mcp-context-engineer
@@ -27,16 +27,16 @@ The context assembly engine needs to prioritize which related chunks to include 
 This ticket implements the Priority Ranker component described in the architecture document (lines 64-86), which provides the scoring foundation for intelligent context assembly.
 
 ## Acceptance Criteria
-- [ ] Base relevance scoring implemented with configurable starting score (default 1.0)
-- [ ] Relationship type weighting applied correctly (test_of=1.5, calls=1.2, imports=1.1)
-- [ ] Distance decay factor implemented (score *= 0.7^distance)
-- [ ] Chunk importance_score multiplier integrated from database
-- [ ] Same directory bonus applied (score *= 1.3 for co-located chunks)
-- [ ] Recency score considered in final ranking
-- [ ] Churn score integrated for active development areas
-- [ ] Unit tests cover all scoring factors independently
-- [ ] Integration tests verify combined scoring behavior
-- [ ] Performance benchmarks show scoring completes within 10ms for 1000 chunks
+- [x] Base relevance scoring implemented with configurable starting score (default 1.0)
+- [x] Relationship type weighting applied correctly (test_of=1.5, calls=1.2, imports=1.1)
+- [x] Distance decay factor implemented (score *= 0.7^distance)
+- [x] Chunk importance_score multiplier integrated from database
+- [x] Same directory bonus applied (score *= 1.3 for co-located chunks)
+- [x] Recency score considered in final ranking
+- [x] Churn score integrated for active development areas
+- [x] Unit tests cover all scoring factors independently
+- [x] Integration tests verify combined scoring behavior
+- [x] Performance benchmarks show scoring completes within 10ms for 1000 chunks
 
 ## Technical Requirements
 

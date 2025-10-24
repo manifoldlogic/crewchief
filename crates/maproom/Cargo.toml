@@ -83,3 +83,7 @@ harness = false
 name = "search_benchmark"
 harness = false
 
+[[bench]]
+name = "importance_scoring"
+harness = false
+

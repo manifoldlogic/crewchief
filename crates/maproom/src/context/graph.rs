@@ -34,7 +34,7 @@ pub struct RelatedChunk {
 }
 
 /// Edge types for filtering graph traversal
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EdgeType {
     /// Module imports
     Imports,
