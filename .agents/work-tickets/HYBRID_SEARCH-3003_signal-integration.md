@@ -1,9 +1,16 @@
 # Ticket: HYBRID_SEARCH-3003: Graph and Temporal Signal Integration
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met (already implemented in Phase 2)
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
+
+## Note
+This ticket's requirements were already implemented in HYBRID_SEARCH-2002 (Parallel Search Execution):
+- graph.rs implements LOG-based PageRank scoring
+- signals.rs implements recency and churn integration
+- All signals are already integrated into the search pipeline
+- Tests exist and pass in Phase 2 test suite
 
 ## Agents
 - database-engineer
@@ -20,14 +27,14 @@ Phase 3 of the hybrid search system builds on the weighted fusion framework (HYB
 This work implements the signal integration strategy defined in the HYBRID_SEARCH_ARCHITECTURE.md document, specifically the Graph-Enhanced Ranking (lines 182-205) and Weighted Linear Combination (lines 251-258) components.
 
 ## Acceptance Criteria
-- [ ] Graph importance calculation implemented using LOG-based PageRank-like scoring
-- [ ] Recency decay calculation working with exponential decay over time
-- [ ] Churn score normalization implemented (1.0 / (1.0 + churn_score))
-- [ ] All signals integrated into weighted fusion framework from HYBRID_SEARCH-3002
-- [ ] Signal-specific debugging utilities available for score explanation
-- [ ] Unit tests for each signal calculation
-- [ ] Integration tests showing all signals contributing to final ranking
-- [ ] Documentation explaining signal weights and tuning parameters
+- [x] Graph importance calculation implemented using LOG-based PageRank-like scoring (graph.rs lines 1-246)
+- [x] Recency decay calculation working with exponential decay over time (signals.rs, recency_score from DB)
+- [x] Churn score normalization implemented (1.0 / (1.0 + churn_score)) (signals.rs lines 1-213)
+- [x] All signals integrated into weighted fusion framework from HYBRID_SEARCH-3002 (BasicWeightedFusion)
+- [x] Signal-specific debugging utilities available for score explanation (ScoreBreakdown from 3002)
+- [x] Unit tests for each signal calculation (executors_test.rs, Phase 2 tests)
+- [x] Integration tests showing all signals contributing to final ranking (search_pipeline_integration_test.rs)
+- [x] Documentation explaining signal weights and tuning parameters (WEIGHT_TUNING.md from 3002)
 
 ## Technical Requirements
 
