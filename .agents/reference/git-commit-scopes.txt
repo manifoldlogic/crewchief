@@ -5,6 +5,7 @@ maproom
 db
 api
 cache
+search
 tools
 deploy
 tests

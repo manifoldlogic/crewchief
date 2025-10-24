@@ -1,9 +1,9 @@
 # Ticket: HYBRID_SEARCH-2001: Query Processing Pipeline
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer
@@ -21,13 +21,13 @@ This is Phase 2, Week 2, Task 1 of the Hybrid Search implementation plan. The qu
 The query processor must handle diverse query types (code symbols, natural language questions, mixed queries) and prepare them for parallel execution across multiple search subsystems. It uses heuristics to detect query intent and applies appropriate preprocessing strategies.
 
 ## Acceptance Criteria
-- [ ] Query tokenizer working - produces tokens compatible with FTS indexing
-- [ ] Query expansion logic implemented - expands terms with synonyms/related concepts
-- [ ] Embedding generation for queries - integrates with EmbeddingService to generate query vectors
-- [ ] Search mode detection functional - accurately classifies queries as Code, Text, or Auto
-- [ ] Parallel processing implemented - uses tokio::join! for concurrent tokenization, embedding, expansion
-- [ ] Unit tests pass for all query processor components
-- [ ] Integration tests validate query processing with real search pipeline
+- [x] Query tokenizer working - produces tokens compatible with FTS indexing
+- [x] Query expansion logic implemented - expands terms with synonyms/related concepts
+- [x] Embedding generation for queries - integrates with EmbeddingService to generate query vectors
+- [x] Search mode detection functional - accurately classifies queries as Code, Text, or Auto
+- [x] Parallel processing implemented - uses tokio::join! for concurrent tokenization, embedding, expansion
+- [x] Unit tests pass for all query processor components
+- [x] Integration tests validate query processing with real search pipeline
 
 ## Technical Requirements
 - Create `QueryProcessor` struct with fields for tokenizer, embedder, and expander
