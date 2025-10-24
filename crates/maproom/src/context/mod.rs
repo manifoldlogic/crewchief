@@ -6,6 +6,7 @@
 
 pub mod assembler;
 pub mod budget;
+pub mod detectors;
 pub mod file_loader;
 pub mod formatter;
 pub mod graph;
@@ -13,6 +14,7 @@ pub mod heuristics;
 pub mod importance;
 pub mod priority_queue;
 pub mod relationships;
+pub mod strategies;
 pub mod token_counter;
 pub mod truncation;
 pub mod types;

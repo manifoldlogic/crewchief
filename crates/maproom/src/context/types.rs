@@ -98,6 +98,14 @@ pub struct ExpandOptions {
     pub config: bool,
     /// Maximum depth for relationship traversal
     pub max_depth: i32,
+    /// React-specific: Include route definitions
+    pub routes: bool,
+    /// React-specific: Include hooks used by components
+    pub hooks: bool,
+    /// React-specific: Include JSX parent components
+    pub jsx_parents: bool,
+    /// React-specific: Include JSX child components
+    pub jsx_children: bool,
 }
 
 impl Default for ExpandOptions {
@@ -109,6 +117,10 @@ impl Default for ExpandOptions {
             docs: false,
             config: false,
             max_depth: 1,
+            routes: false,
+            hooks: false,
+            jsx_parents: false,
+            jsx_children: false,
         }
     }
 }
@@ -128,6 +140,10 @@ impl ExpandOptions {
             docs: false,
             config: false,
             max_depth: 1,
+            routes: false,
+            hooks: false,
+            jsx_parents: false,
+            jsx_children: false,
         }
     }
 
@@ -140,6 +156,26 @@ impl ExpandOptions {
             docs: true,
             config: true,
             max_depth: 2,
+            routes: true,
+            hooks: true,
+            jsx_parents: true,
+            jsx_children: true,
+        }
+    }
+
+    /// Create options optimized for React components.
+    pub fn for_react_component() -> Self {
+        Self {
+            callers: false,
+            callees: false,
+            tests: true,
+            docs: false,
+            config: false,
+            max_depth: 1,
+            routes: true,
+            hooks: true,
+            jsx_parents: true,
+            jsx_children: true,
         }
     }
 }
@@ -194,6 +230,8 @@ mod tests {
         assert!(!primary.callers);
         assert!(!primary.callees);
         assert!(!primary.tests);
+        assert!(!primary.routes);
+        assert!(!primary.hooks);
 
         let common = ExpandOptions::with_common();
         assert!(common.callers);
@@ -201,6 +239,8 @@ mod tests {
         assert!(common.tests);
         assert!(!common.docs);
         assert!(!common.config);
+        assert!(!common.routes);
+        assert!(!common.hooks);
 
         let all = ExpandOptions::with_all();
         assert!(all.callers);
@@ -208,5 +248,22 @@ mod tests {
         assert!(all.tests);
         assert!(all.docs);
         assert!(all.config);
+        assert!(all.routes);
+        assert!(all.hooks);
+        assert!(all.jsx_parents);
+        assert!(all.jsx_children);
+    }
+
+    #[test]
+    fn test_expand_options_for_react_component() {
+        let react = ExpandOptions::for_react_component();
+        assert!(!react.callers);
+        assert!(!react.callees);
+        assert!(react.tests);
+        assert!(react.routes);
+        assert!(react.hooks);
+        assert!(react.jsx_parents);
+        assert!(react.jsx_children);
+        assert_eq!(react.max_depth, 1);
     }
 }
