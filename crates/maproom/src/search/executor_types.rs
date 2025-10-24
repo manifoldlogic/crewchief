@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Source of a ranked result set, indicating which search strategy produced it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchSource {
     /// Full-text search using PostgreSQL ts_rank_cd

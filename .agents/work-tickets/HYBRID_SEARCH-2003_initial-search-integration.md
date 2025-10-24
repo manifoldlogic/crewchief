@@ -1,9 +1,9 @@
 # Ticket: HYBRID_SEARCH-2003: Initial Search Integration
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer
@@ -21,14 +21,14 @@ This is the third ticket in Phase 2 (Week 2, Task 3) of the Hybrid Search implem
 The initial implementation uses simple weighted score combination as a placeholder for the sophisticated fusion algorithms to be implemented in Phase 3.
 
 ## Acceptance Criteria
-- [ ] SearchPipeline struct created that orchestrates query processing, search execution, and result fusion
-- [ ] Basic score fusion implemented using simple weighted average combination (placeholder for Phase 3 improvements)
-- [ ] Result deduplication logic implemented to handle the same chunk appearing in multiple search results (deduplicate by chunk_id)
-- [ ] SearchResults assembly implemented with complete metadata (query details, timing, result counts)
-- [ ] Simple ranking pipeline functional - results ordered by combined score
-- [ ] API endpoint created and accessible (HTTP endpoint or MCP tool handler)
-- [ ] End-to-end search flow works: query input → processing → execution → fusion → ranked results
-- [ ] Basic integration tests verify pipeline with sample queries
+- [x] SearchPipeline struct created that orchestrates query processing, search execution, and result fusion
+- [x] Basic score fusion implemented using simple weighted average combination (placeholder for Phase 3 improvements)
+- [x] Result deduplication logic implemented to handle the same chunk appearing in multiple search results (deduplicate by chunk_id)
+- [x] SearchResults assembly implemented with complete metadata (query details, timing, result counts)
+- [x] Simple ranking pipeline functional - results ordered by combined score
+- [x] API endpoint created and accessible (HTTP endpoint or MCP tool handler)
+- [x] End-to-end search flow works: query input → processing → execution → fusion → ranked results
+- [x] Basic integration tests verify pipeline with sample queries
 
 ## Technical Requirements
 - Create `SearchPipeline` struct integrating:

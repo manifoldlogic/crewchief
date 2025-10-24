@@ -158,6 +158,11 @@ pub mod graph;
 pub mod signals;
 pub mod vector;
 
+// Search pipeline modules (Phase 2)
+pub mod fusion;
+pub mod pipeline;
+pub mod results;
+
 // Re-export main types for convenience
 pub use expander::QueryExpander;
 pub use query_processor::{QueryProcessor, QueryProcessorError};
@@ -171,3 +176,11 @@ pub use fts::{FTSError, FTSExecutor};
 pub use graph::{GraphError, GraphExecutor};
 pub use signals::{SignalError, SignalExecutor, SignalWeights};
 pub use vector::{VectorError, VectorExecutor};
+
+// Re-export pipeline types (Phase 2)
+pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, ScoreFusion};
+pub use pipeline::{PipelineError, SearchPipeline};
+pub use results::{
+    ChunkSearchResult, FinalSearchResults, QueryProcessingDetails, SearchMetadata, SearchOptions,
+    SearchTiming,
+};
