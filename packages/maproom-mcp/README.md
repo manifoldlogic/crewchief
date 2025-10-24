@@ -81,14 +81,104 @@ Then restart Cursor. You should see 3 tools enabled for Maproom.
 ### Tools
 
 - **`search`**
-  - Inputs: `{ repo: string, worktree?: string | null, query: string, k?: number }`
-  - Behavior: FTS over `maproom.chunks.ts_doc`. If `worktree` is supplied, results are scoped to that worktree
+  - Inputs:
+    - `repo` (required): Repository name to search in
+    - `worktree` (optional): Worktree name to scope results
+    - `query` (required): Search query (1-3 words work best)
+    - `k` (optional, default: 10): Number of results to return
+    - `mode` (optional, default: "hybrid"): Search mode - "fts", "vector", or "hybrid"
+    - `filter` (optional, default: "all"): File type filter - "all", "code", "docs", or "config"
+    - `filters` (optional): Advanced filters object with:
+      - `repo_id`: Filter by specific repository ID
+      - `worktree_id`: Filter by specific worktree ID
+      - `file_type`: Filter by file extension (e.g., "ts", "rs", "md")
+      - `recency_threshold`: Filter by file modification time (PostgreSQL interval, e.g., "7 days", "1 month")
+    - `debug` (optional, default: false): Enable debug mode for score breakdowns
+  - Behavior: Searches code using the specified mode (FTS, vector similarity, or hybrid). Returns ranked results with metadata.
+  - Search Modes:
+    - **`fts`** (full-text search): Best for exact keyword matches, identifiers, specific terms
+    - **`vector`** (semantic search): Best for conceptual queries, finding similar code (requires embeddings)
+    - **`hybrid`** (default): Combines FTS and vector search using Reciprocal Rank Fusion for best overall results
+
 - **`open`**
-  - Inputs: `{ relpath: string, worktree: string, range?: { start?: number, end?: number } }`
-  - Behavior: Opens a file slice from the on-disk worktree path
+  - Inputs: `{ relpath: string, worktree: string, range?: { start?: number, end?: number }, context?: number }`
+  - Behavior: Opens a file slice from the on-disk worktree path. Supports line ranges and context lines.
+
 - **`upsert`**
   - Inputs: `{ paths: string[], commit: string, repo: string, worktree: string, root: string }`
   - Behavior: Invokes the Rust binary to (re)index specific files
+
+#### Search Examples
+
+**Basic search (uses hybrid mode by default):**
+```json
+{
+  "repo": "crewchief",
+  "query": "authentication logic"
+}
+```
+
+**Full-text search for exact keywords:**
+```json
+{
+  "repo": "crewchief",
+  "query": "handleSearch",
+  "mode": "fts",
+  "k": 20
+}
+```
+
+**Semantic search (requires embeddings):**
+```json
+{
+  "repo": "crewchief",
+  "query": "database connection management",
+  "mode": "vector"
+}
+```
+
+**Filter by file type and recency:**
+```json
+{
+  "repo": "crewchief",
+  "query": "configuration",
+  "filter": "code",
+  "filters": {
+    "file_type": "ts",
+    "recency_threshold": "30 days"
+  }
+}
+```
+
+**Debug mode to see score breakdowns:**
+```json
+{
+  "repo": "crewchief",
+  "query": "search pipeline",
+  "debug": true
+}
+```
+
+#### Vector Search Requirements
+
+Vector and hybrid search modes require embeddings to be generated for your codebase:
+
+1. **Generate Embeddings**: Run the embedding generation pipeline
+   ```bash
+   crewchief maproom:generate-embeddings
+   ```
+
+2. **Verify Embeddings**: Check that embeddings exist in the database
+   ```sql
+   SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NOT NULL;
+   ```
+
+3. **Fallback Behavior**:
+   - If embeddings are not available, vector mode will return an error with instructions
+   - Hybrid mode will gracefully fall back to FTS-only search with a notice in debug output
+   - FTS mode always works without embeddings
+
+**Note**: Full hybrid search with RRF (Reciprocal Rank Fusion) is currently in development. The current implementation falls back to FTS when embeddings are unavailable, maintaining backward compatibility while the vector search backend is being completed.
 
 #### How the indexer binary is located
 

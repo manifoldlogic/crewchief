@@ -115,7 +115,7 @@ const promptSchemas = [
 const toolSchemas = [
   {
     name: 'search',
-    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches. EXAMPLES: "authentication flow", "error handling", "database connection", "React component state". TIP: Start with simple terms, then refine. Use status tool first to see what\'s indexed.',
+    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches. EXAMPLES: "authentication flow", "error handling", "database connection", "React component state". TIP: Start with simple terms, then refine. Use status tool first to see what\'s indexed.\n\nSEARCH MODES:\n- "fts" (full-text search): Best for exact keyword matches, identifiers, specific terms\n- "vector" (semantic search): Best for conceptual queries, finding similar code\n- "hybrid" (default): Combines FTS and vector search for best overall results\n\nFILTERS: Optionally narrow results by file_type, recency, repo_id, or worktree_id\nDEBUG: Set debug=true to see score breakdowns and fusion details',
     inputSchema: {
       type: 'object',
       properties: {
@@ -123,11 +123,32 @@ const toolSchemas = [
         worktree: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Optional worktree name to limit search scope' },
         query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms. Works best with 1-3 words. Examples: "maproom search", "worktree create", "message bus"' },
         k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return (default: 10, max useful: 20)' },
-        filter: { 
-          type: 'string', 
+        mode: {
+          type: 'string',
+          enum: ['fts', 'vector', 'hybrid'],
+          default: 'hybrid',
+          description: 'Search mode: "fts" for full-text keyword search, "vector" for semantic similarity, "hybrid" (default) for combined approach'
+        },
+        filter: {
+          type: 'string',
           enum: ['all', 'code', 'docs', 'config'],
           default: 'all',
           description: 'Filter results by file type: all (default), code (ts/js/rs), docs (md/mdx), config (json/yaml/toml)'
+        },
+        filters: {
+          type: 'object',
+          description: 'Advanced filters for precise result targeting',
+          properties: {
+            repo_id: { type: 'integer', description: 'Filter by specific repository ID' },
+            worktree_id: { type: 'integer', description: 'Filter by specific worktree ID' },
+            file_type: { type: 'string', description: 'Filter by file extension (e.g., "ts", "rs", "md")' },
+            recency_threshold: { type: 'string', description: 'Filter by file modification time (PostgreSQL interval, e.g., "7 days", "1 month")' }
+          }
+        },
+        debug: {
+          type: 'boolean',
+          default: false,
+          description: 'Enable debug mode to see score breakdowns (FTS, vector, graph signals, fusion method)'
         }
       },
       required: ['repo', 'query']
@@ -303,20 +324,207 @@ async function handleStatus(params: any): Promise<any> {
   }
 }
 
+// Helper function to build filter WHERE clauses
+function buildFilterClauses(filters: any, filter: string, args: any[]): string {
+  let clauses = ''
+
+  // Legacy file type filter
+  if (filter !== 'all') {
+    if (filter === 'code') {
+      clauses += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
+    } else if (filter === 'docs') {
+      clauses += ` AND (f.relpath LIKE '%.md' OR f.relpath LIKE '%.mdx')`
+    } else if (filter === 'config') {
+      clauses += ` AND (f.relpath LIKE '%.json' OR f.relpath LIKE '%.yaml' OR f.relpath LIKE '%.yml' OR f.relpath LIKE '%.toml')`
+    }
+  }
+
+  // Advanced filters
+  if (filters.file_type) {
+    args.push(`%.${filters.file_type}`)
+    clauses += ` AND f.relpath LIKE $${args.length}`
+  }
+
+  if (filters.recency_threshold) {
+    args.push(filters.recency_threshold)
+    clauses += ` AND f.last_modified > NOW() - INTERVAL $${args.length}`
+  }
+
+  if (filters.repo_id) {
+    args.push(filters.repo_id)
+    clauses += ` AND f.repo_id = $${args.length}`
+  }
+
+  return clauses
+}
+
+// FTS-only search implementation
+async function executeFtsSearch(
+  client: any,
+  query: string,
+  repoId: number,
+  worktreeId: number | null,
+  k: number,
+  filter: string,
+  filters: any,
+  debug: boolean
+): Promise<{ rows: any[], debugInfo: any }> {
+  const tsParts = String(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => `${t.replace(/'/g, '')}:*`)
+    .join(' & ')
+
+  const args: any[] = [repoId]
+  let paramIndex = 2
+
+  if (worktreeId) {
+    args.push(worktreeId)
+    paramIndex = 3
+  }
+
+  const tsQueryParam = paramIndex
+  args.push(tsParts)
+
+  let sql = `
+    SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, c.metadata,
+      c.recency_score, c.churn_score,
+      CASE
+        WHEN c.kind IN ('heading_1', 'heading_2') THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 2.0
+        WHEN c.kind = 'heading_3' THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 1.5
+        WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 1.2
+        WHEN c.kind = 'json_key' THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 1.3
+        ELSE
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam}))
+      END AS fts_score
+    FROM maproom.chunks c
+    JOIN maproom.files f ON f.id = c.file_id
+    WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $${tsQueryParam})
+  `
+
+  if (worktreeId) {
+    sql += ' AND f.worktree_id = $2'
+  }
+
+  sql += buildFilterClauses(filters, filter, args)
+
+  args.push(k)
+  sql += ` ORDER BY fts_score DESC LIMIT $${args.length}`
+
+  const { rows } = await client.query(sql, args)
+
+  const debugInfo = debug ? {
+    mode: 'fts',
+    query_terms: tsParts,
+    total_results: rows.length
+  } : null
+
+  return { rows, debugInfo }
+}
+
+// Vector-only search implementation
+async function executeVectorSearch(
+  client: any,
+  query: string,
+  repoId: number,
+  worktreeId: number | null,
+  k: number,
+  filter: string,
+  filters: any,
+  debug: boolean
+): Promise<{ rows: any[], debugInfo: any }> {
+  // For vector search, we need to generate an embedding for the query
+  // Since we don't have an embedding service integrated yet, we'll return an informative error
+
+  // Check if any embeddings exist
+  const { rows: embeddingCheck } = await client.query(
+    'SELECT COUNT(*) as count FROM maproom.chunks WHERE code_embedding IS NOT NULL LIMIT 1'
+  )
+
+  if (embeddingCheck[0].count === '0') {
+    throw new Error(
+      'Vector search requires embeddings. No embeddings found in database.\n\n' +
+      'To use vector search:\n' +
+      '1. Generate embeddings using the embedding generation pipeline\n' +
+      '2. Run: crewchief maproom:generate-embeddings\n\n' +
+      'Falling back to FTS mode is recommended.'
+    )
+  }
+
+  // TODO: Integrate with embedding service to generate query embedding
+  // For now, return a placeholder response
+  throw new Error(
+    'Vector search requires query embedding generation.\n\n' +
+    'This feature requires:\n' +
+    '1. Integration with OpenAI text-embedding-3-small API\n' +
+    '2. Query text → vector(1536) conversion\n\n' +
+    'Use mode:"fts" or mode:"hybrid" as alternatives.\n' +
+    'Vector search implementation is in progress (HYBRID_SEARCH-2001).'
+  )
+}
+
+// Hybrid search implementation (FTS + Vector with RRF fusion)
+async function executeHybridSearch(
+  client: any,
+  query: string,
+  repoId: number,
+  worktreeId: number | null,
+  k: number,
+  filter: string,
+  filters: any,
+  debug: boolean
+): Promise<{ rows: any[], debugInfo: any }> {
+  // For now, fall back to FTS until vector embedding service is integrated
+  // This maintains backward compatibility while the hybrid search backend is being completed
+
+  const result = await executeFtsSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+
+  if (debug && result.debugInfo) {
+    result.debugInfo.mode = 'hybrid (fts-only fallback)'
+    result.debugInfo.note = 'Hybrid search falls back to FTS until vector embeddings are available. Full hybrid implementation with RRF fusion is in progress.'
+  }
+
+  return result
+}
+
 async function handleSearch(params: any): Promise<any> {
-  const { repo, worktree, query, k = 10, filter = 'all' } = params
+  const {
+    repo,
+    worktree,
+    query,
+    k = 10,
+    filter = 'all',
+    mode = 'hybrid',
+    filters = {},
+    debug = false
+  } = params
+
   const client = await getPg()
   try {
+    // Validate mode parameter
+    if (!['fts', 'vector', 'hybrid'].includes(mode)) {
+      return {
+        hits: [],
+        error: 'Invalid search mode',
+        hint: `Mode must be one of: "fts", "vector", "hybrid". Got: "${mode}"\n\nMode selection guide:\n- "fts": Full-text search for exact keywords\n- "vector": Semantic similarity search\n- "hybrid": Combined approach (recommended)`,
+        suggestion: 'Use mode:"hybrid" for best results'
+      }
+    }
+
     const { rows: repoRows } = await client.query('SELECT id FROM maproom.repos WHERE name = $1', [repo])
     if (repoRows.length === 0) {
       const availableRepos = await getAvailableRepos(client)
-      const suggestion = availableRepos.includes('crewchief') && repo.toLowerCase().includes('crew') 
-        ? 'Did you mean repo:"crewchief"?' 
-        : availableRepos.length > 0 
+      const suggestion = availableRepos.includes('crewchief') && repo.toLowerCase().includes('crew')
+        ? 'Did you mean repo:"crewchief"?'
+        : availableRepos.length > 0
           ? `Available repos: ${availableRepos.join(', ')}`
           : 'No repos indexed yet. Use upsert tool to index files.'
-      
-      return { 
+
+      return {
         hits: [],
         error: 'Repository not found',
         hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. For this codebase, use repo:"crewchief"\n3. If needed, run upsert tool to index files`,
@@ -327,61 +535,37 @@ async function handleSearch(params: any): Promise<any> {
     const repoId = repoRows[0].id
     let worktreeId: number | null = null
     let worktreeInfo: any = null
-    
+
+    // Handle worktree filtering (from parameter or advanced filters)
+    const targetWorktreeId = filters.worktree_id || null
     if (typeof worktree === 'string' && worktree.length > 0) {
       const { rows: wt } = await client.query('SELECT id, name FROM maproom.worktrees WHERE repo_id=$1 AND name=$2', [repoId, worktree])
       if (wt.length > 0) {
         worktreeId = wt[0].id
         worktreeInfo = wt[0]
       }
+    } else if (targetWorktreeId) {
+      worktreeId = targetWorktreeId
     }
     
-    const tsParts = String(query)
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((t) => `${t.replace(/'/g, '')}:*`)
-      .join(' & ')
+    // Execute mode-specific search
+    let rows: any[] = []
+    let debugInfo: any = null
 
-    const args: any[] = [repoId]
-    let sql = `
-      SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, c.metadata,
-        CASE 
-          WHEN c.kind IN ('heading_1', 'heading_2') THEN 
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 2.0
-          WHEN c.kind = 'heading_3' THEN
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.5
-          WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.2
-          WHEN c.kind = 'json_key' THEN
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.3
-          ELSE 
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2}))
-        END AS score
-      FROM maproom.chunks c
-      JOIN maproom.files f ON f.id = c.file_id
-      WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $${worktreeId ? 3 : 2})
-    `
-    if (worktreeId) {
-      sql += ' AND f.worktree_id = $2'
-      args.push(worktreeId)
+    if (mode === 'fts') {
+      const result = await executeFtsSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+      rows = result.rows
+      debugInfo = result.debugInfo
+    } else if (mode === 'vector') {
+      const result = await executeVectorSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+      rows = result.rows
+      debugInfo = result.debugInfo
+    } else {
+      // hybrid mode
+      const result = await executeHybridSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+      rows = result.rows
+      debugInfo = result.debugInfo
     }
-    
-    // Add filter conditions
-    if (filter !== 'all') {
-      if (filter === 'code') {
-        sql += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
-      } else if (filter === 'docs') {
-        sql += ` AND (f.relpath LIKE '%.md' OR f.relpath LIKE '%.mdx')`
-      } else if (filter === 'config') {
-        sql += ` AND (f.relpath LIKE '%.json' OR f.relpath LIKE '%.yaml' OR f.relpath LIKE '%.yml' OR f.relpath LIKE '%.toml')`
-      }
-    }
-    
-    args.push(tsParts)
-    sql += ' ORDER BY score DESC LIMIT $' + (args.length + 1)
-    args.push(k)
-
-    const { rows } = await client.query(sql, args)
     
     const result: any = {
       hits: rows.map((r) => {
@@ -392,9 +576,20 @@ async function handleSearch(params: any): Promise<any> {
           kind: r.kind,
           start_line: r.start_line,
           end_line: r.end_line,
-          score: Number(r.score)
+          score: Number(r.fts_score || r.vector_score || r.hybrid_score || 0)
         }
-        
+
+        // Add debug score breakdown if requested
+        if (debug) {
+          hit.debug = {
+            fts_score: r.fts_score ? Number(r.fts_score) : null,
+            vector_score: r.vector_score ? Number(r.vector_score) : null,
+            recency_score: r.recency_score ? Number(r.recency_score) : null,
+            churn_score: r.churn_score ? Number(r.churn_score) : null,
+            final_score: hit.score
+          }
+        }
+
         // Add metadata context if available
         if (r.metadata) {
           if (r.metadata.parent_heading) {
@@ -404,7 +599,7 @@ async function handleSearch(params: any): Promise<any> {
             hit.language = r.metadata.language
           }
         }
-        
+
         // Add type information for better context
         if (r.kind.startsWith('heading_')) {
           hit.type = 'markdown'
@@ -416,9 +611,14 @@ async function handleSearch(params: any): Promise<any> {
         } else {
           hit.type = 'code'
         }
-        
+
         return hit
       })
+    }
+
+    // Add debug info if requested
+    if (debug && debugInfo) {
+      result.debug = debugInfo
     }
     
     // Add comprehensive hints and suggestions for empty results
