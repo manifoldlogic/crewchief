@@ -52,5 +52,9 @@ migrate = true
 
 [dev-dependencies]
 futures = "0.3"
+criterion = { version = "0.5", features = ["async_tokio"] }
 
+[[bench]]
+name = "fusion_benchmark"
+harness = false
 

@@ -1,21 +1,11 @@
-//! Score fusion for hybrid search results.
+//! Basic weighted fusion implementation.
 //!
-//! This module implements score fusion strategies that combine results from
-//! multiple search strategies (FTS, vector, graph, signals) into a single
-//! ranked result set.
-//!
-//! # Phase 2 Implementation
-//!
-//! The current implementation uses a simple weighted average approach as a
-//! baseline. More sophisticated fusion algorithms (RRF, learned weights,
-//! cross-encoder reranking) will be implemented in Phase 3.
-//!
-//! # Score Normalization
-//!
-//! All scores are normalized to the 0.0-1.0 range before fusion to ensure
-//! fair combination across different search types with different score ranges.
+//! This module implements simple weighted average fusion as a baseline approach
+//! from Phase 2. More sophisticated fusion algorithms (RRF) are available in
+//! other modules for Phase 3.
 
 use crate::search::executor_types::{RankedResults, SearchSource};
+use crate::search::fusion::{FusedResult, ScoreFusion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{debug, instrument};
@@ -71,52 +61,6 @@ impl FusionWeights {
     /// Check if weights are normalized (sum to 1.0 within tolerance).
     pub fn is_normalized(&self) -> bool {
         (self.sum() - 1.0).abs() < 0.001
-    }
-}
-
-/// Trait for score fusion strategies.
-///
-/// Implementations combine results from multiple search strategies into
-/// a single ranked result set with fused scores.
-pub trait ScoreFusion: Send + Sync {
-    /// Fuse multiple result sets into a single ranked list.
-    ///
-    /// # Parameters
-    /// - `results`: Vector of RankedResults from different search strategies
-    /// - `weights`: Weights for each search type
-    /// - `limit`: Maximum number of results to return
-    ///
-    /// # Returns
-    /// Vector of FusedResult with combined scores, sorted by score descending
-    fn fuse(
-        &self,
-        results: Vec<RankedResults>,
-        weights: &FusionWeights,
-        limit: usize,
-    ) -> Vec<FusedResult>;
-}
-
-/// A single search result with fused score from multiple sources.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FusedResult {
-    /// Chunk ID from maproom.chunks table
-    pub chunk_id: i64,
-
-    /// Combined score after fusion (0.0-1.0)
-    pub score: f32,
-
-    /// Individual scores from each search source that found this chunk
-    pub source_scores: HashMap<SearchSource, f32>,
-}
-
-impl FusedResult {
-    /// Create a new FusedResult.
-    pub fn new(chunk_id: i64, score: f32, source_scores: HashMap<SearchSource, f32>) -> Self {
-        Self {
-            chunk_id,
-            score,
-            source_scores,
-        }
     }
 }
 

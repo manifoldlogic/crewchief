@@ -177,8 +177,8 @@ pub use graph::{GraphError, GraphExecutor};
 pub use signals::{SignalError, SignalExecutor, SignalWeights};
 pub use vector::{VectorError, VectorExecutor};
 
-// Re-export pipeline types (Phase 2)
-pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, ScoreFusion};
+// Re-export pipeline types (Phase 2 + Phase 3)
+pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, RRFFusion, ScoreFusion};
 pub use pipeline::{PipelineError, SearchPipeline};
 pub use results::{
     ChunkSearchResult, FinalSearchResults, QueryProcessingDetails, SearchMetadata, SearchOptions,
