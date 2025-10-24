@@ -1,9 +1,9 @@
 # Ticket: HYBRID_SEARCH-1001: Embedding Service Setup
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - embeddings-engineer
@@ -26,14 +26,14 @@ Key requirements:
 This is Phase 1, Week 1, Task 1 from the HYBRID_SEARCH plan and is a prerequisite for all subsequent phases.
 
 ## Acceptance Criteria
-- [ ] Embedding service successfully generates embeddings using text-embedding-3-small model
-- [ ] Retry logic handles API failures gracefully with exponential backoff
-- [ ] LRU cache implemented with target >80% hit rate on typical workloads
-- [ ] Batch processing pipeline supports efficient bulk embedding generation
-- [ ] Configuration system allows switching between providers (OpenAI, local, future)
-- [ ] Cost tracking metrics implemented to monitor API usage
-- [ ] Unit tests cover cache behavior, retry logic, and error handling
-- [ ] Integration test validates end-to-end embedding generation
+- [x] Embedding service successfully generates embeddings using text-embedding-3-small model
+- [x] Retry logic handles API failures gracefully with exponential backoff
+- [x] LRU cache implemented with target >80% hit rate on typical workloads
+- [x] Batch processing pipeline supports efficient bulk embedding generation
+- [x] Configuration system allows switching between providers (OpenAI, local, future)
+- [x] Cost tracking metrics implemented to monitor API usage
+- [x] Unit tests cover cache behavior, retry logic, and error handling
+- [x] Integration test validates end-to-end embedding generation
 
 ## Technical Requirements
 

@@ -236,3 +236,30 @@ REQUIRED: Before ANY file operation:
    - Wait for explicit user approval before proceeding
 
 RATIONALE: Modifying files outside the worktree can damage system configurations, break other projects (including other worktrees of the same repo), create security vulnerabilities, or cause data loss. The worktree boundary is a critical safety barrier.
+
+## Maproom Ticket Workflow
+
+When working on Maproom tickets via /work-on-maproom-tickets command:
+
+### Core Objectives
+1. **Sequential Execution**: Work through tickets one by one from INDEX_BY_PROJECT.md
+2. **Agent Workflow**: Each ticket follows this sequence:
+   - Implementing agent completes work and marks "Task completed" checkbox
+   - test-runner agent runs relevant tests
+   - If tests pass: verify-ticket agent verifies acceptance criteria
+   - If tests fail: return to implementing agent to fix
+   - If verification passes: commit-ticket agent commits changes
+   - If verification fails: return to implementing agent to fix
+3. **Keep Working**: Use /keep-working command to continue until all tickets complete
+
+### Ticket Order (from INDEX_BY_PROJECT.md)
+- **Current Project**: HYBRID_SEARCH (22 tickets)
+- **Phase 1**: Embedding Infrastructure (Week 1) - 4 tickets
+  - HYBRID_SEARCH-1001, 1002, 1003, 1901
+- Continue through all phases sequentially
+
+### Quality Gates
+- All acceptance criteria must be met before verification
+- All related tests must pass before verification
+- Verification must pass before commit
+- Each ticket completion must be tracked in the ticket markdown file

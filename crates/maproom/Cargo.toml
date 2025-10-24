@@ -33,7 +33,19 @@ tree-sitter = "0.22"
 tree-sitter-typescript = "0.21"
 tree-sitter-javascript = "0.21"
 
+# Embedding service dependencies
+reqwest = { version = "0.12", features = ["json"] }
+lru = "0.12"
+
 [build-dependencies]
+
+[[bin]]
+name = "crewchief-maproom"
+path = "src/main.rs"
+
+[lib]
+name = "crewchief_maproom"
+path = "src/lib.rs"
 
 [package.metadata.sqlx]
 migrate = true

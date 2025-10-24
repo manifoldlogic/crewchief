@@ -6,8 +6,7 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
-mod db;
-mod indexer;
+use crewchief_maproom::{db, indexer};
 
 #[derive(Parser, Debug)]
 #[command(name = "crewchief-maproom", version, about = "Maproom indexer & CLI")] 
