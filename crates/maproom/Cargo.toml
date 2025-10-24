@@ -91,3 +91,7 @@ harness = false
 name = "importance_scoring"
 harness = false
 
+[[bench]]
+name = "context_assembly_bench"
+harness = false
+

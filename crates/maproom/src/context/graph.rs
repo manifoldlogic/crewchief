@@ -322,6 +322,78 @@ pub async fn find_related_chunks_directional(
     Ok(chunks)
 }
 
+/// Load callers, callees, and tests in parallel for a given chunk.
+///
+/// This function uses tokio::join! to load all three relationship types
+/// concurrently, significantly reducing latency compared to sequential loading.
+///
+/// # Arguments
+/// * `client` - PostgreSQL client
+/// * `chunk_id` - Starting chunk ID
+/// * `max_depth` - Maximum traversal depth for each relationship type
+///
+/// # Returns
+/// Tuple of (callers, callees, tests) where each is a vector of RelatedChunk.
+/// If any query fails, that vector will be empty (graceful degradation).
+///
+/// # Example
+/// ```ignore
+/// let (callers, callees, tests) = load_relationships_parallel(&client, 1234, 2).await;
+/// println!("Found {} callers, {} callees, {} tests",
+///          callers.len(), callees.len(), tests.len());
+/// ```
+pub async fn load_relationships_parallel(
+    client: &Client,
+    chunk_id: i64,
+    max_depth: i32,
+) -> (Vec<RelatedChunk>, Vec<RelatedChunk>, Vec<RelatedChunk>) {
+    // Load all three relationship types concurrently
+    let (callers_result, callees_result, tests_result) = tokio::join!(
+        // Callers: chunks that call this chunk (backward traversal)
+        find_related_chunks_directional(
+            client,
+            chunk_id,
+            max_depth,
+            Some(vec![EdgeType::CalledBy, EdgeType::Calls]),
+            false // backward
+        ),
+        // Callees: chunks that this chunk calls (forward traversal)
+        find_related_chunks_directional(
+            client,
+            chunk_id,
+            max_depth,
+            Some(vec![EdgeType::Calls]),
+            true // forward
+        ),
+        // Tests: test chunks for this chunk
+        find_related_chunks_directional(
+            client,
+            chunk_id,
+            max_depth,
+            Some(vec![EdgeType::TestOf]),
+            false // backward - tests point to implementation
+        ),
+    );
+
+    // Graceful error handling - return empty vec if a query fails
+    let callers = callers_result.unwrap_or_else(|e| {
+        tracing::warn!("Failed to load callers for chunk {}: {}", chunk_id, e);
+        Vec::new()
+    });
+
+    let callees = callees_result.unwrap_or_else(|e| {
+        tracing::warn!("Failed to load callees for chunk {}: {}", chunk_id, e);
+        Vec::new()
+    });
+
+    let tests = tests_result.unwrap_or_else(|e| {
+        tracing::warn!("Failed to load tests for chunk {}: {}", chunk_id, e);
+        Vec::new()
+    });
+
+    (callers, callees, tests)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

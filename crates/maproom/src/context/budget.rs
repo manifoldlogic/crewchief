@@ -3,8 +3,12 @@
 //! This module provides the core budget management infrastructure that ensures
 //! assembled context never exceeds specified token limits while maximizing
 //! the value of included content through intelligent allocation and tracking.
+//!
+//! The budget manager is thread-safe and can be shared across async tasks using
+//! Arc<Mutex<TokenBudgetManager>> for parallel context assembly operations.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Budget allocation across different context categories.
 ///
@@ -282,6 +286,124 @@ impl TokenBudgetManager {
     }
 }
 
+/// Thread-safe budget manager for concurrent context assembly.
+///
+/// This is a wrapper around TokenBudgetManager that provides atomic operations
+/// for parallel loading operations using Arc<Mutex<>>. Use this when you need
+/// to share a budget across multiple async tasks.
+///
+/// # Example
+///
+/// ```
+/// use crewchief_maproom::context::budget::SharedBudgetManager;
+/// use std::sync::Arc;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let budget = SharedBudgetManager::new(8000);
+///     let budget_clone = budget.clone();
+///
+///     // Use in parallel tasks
+///     tokio::spawn(async move {
+///         budget_clone.try_reserve("primary", 2000);
+///     });
+///
+///     budget.try_reserve("tests", 1000);
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub struct SharedBudgetManager {
+    inner: Arc<Mutex<TokenBudgetManager>>,
+}
+
+impl SharedBudgetManager {
+    /// Create a new shared budget manager with the specified token budget.
+    pub fn new(budget: usize) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(TokenBudgetManager::new(budget))),
+        }
+    }
+
+    /// Create from an existing TokenBudgetManager.
+    pub fn from_manager(manager: TokenBudgetManager) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(manager)),
+        }
+    }
+
+    /// Atomically try to reserve tokens for a category.
+    ///
+    /// Returns `true` if the reservation succeeds, `false` otherwise.
+    /// This operation is thread-safe and can be called from multiple tasks.
+    pub fn try_reserve(&self, category: &str, tokens: usize) -> bool {
+        self.inner
+            .lock()
+            .map(|mut mgr| mgr.reserve(category, tokens))
+            .unwrap_or(false)
+    }
+
+    /// Atomically release a category's reservation.
+    pub fn release(&self, category: &str) {
+        if let Ok(mut mgr) = self.inner.lock() {
+            mgr.release(category);
+        }
+    }
+
+    /// Get the remaining token budget atomically.
+    pub fn remaining(&self) -> usize {
+        self.inner
+            .lock()
+            .map(|mgr| mgr.remaining())
+            .unwrap_or(0)
+    }
+
+    /// Get the total budget.
+    pub fn budget(&self) -> usize {
+        self.inner
+            .lock()
+            .map(|mgr| mgr.budget())
+            .unwrap_or(0)
+    }
+
+    /// Get the currently used token count.
+    pub fn used(&self) -> usize {
+        self.inner
+            .lock()
+            .map(|mgr| mgr.used())
+            .unwrap_or(0)
+    }
+
+    /// Get budget allocation atomically.
+    pub fn allocate(&self) -> Option<BudgetAllocation> {
+        self.inner
+            .lock()
+            .ok()
+            .map(|mgr| mgr.allocate())
+    }
+
+    /// Get detailed usage statistics atomically.
+    pub fn usage_stats(&self) -> Option<UsageStats> {
+        self.inner
+            .lock()
+            .ok()
+            .map(|mgr| mgr.usage_stats())
+    }
+
+    /// Execute a function with exclusive access to the budget manager.
+    ///
+    /// This is useful for complex operations that need atomicity across
+    /// multiple budget operations.
+    pub fn with_manager<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut TokenBudgetManager) -> R,
+    {
+        self.inner
+            .lock()
+            .ok()
+            .map(|mut mgr| f(&mut mgr))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -476,5 +598,86 @@ mod tests {
         // Saturating sub prevents underflow
         let remaining = manager.remaining();
         assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn test_shared_budget_manager() {
+        let shared = SharedBudgetManager::new(1000);
+
+        assert_eq!(shared.budget(), 1000);
+        assert_eq!(shared.remaining(), 1000);
+
+        assert!(shared.try_reserve("primary", 400));
+        assert_eq!(shared.remaining(), 600);
+
+        assert!(shared.try_reserve("tests", 300));
+        assert_eq!(shared.remaining(), 300);
+
+        shared.release("primary");
+        assert_eq!(shared.remaining(), 700);
+    }
+
+    #[test]
+    fn test_shared_budget_manager_clone() {
+        let shared = SharedBudgetManager::new(1000);
+        let clone = shared.clone();
+
+        // Both refer to same budget
+        assert!(shared.try_reserve("primary", 500));
+        assert_eq!(clone.remaining(), 500);
+
+        assert!(clone.try_reserve("tests", 300));
+        assert_eq!(shared.remaining(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_shared_budget_manager_concurrent() {
+        let shared = SharedBudgetManager::new(1000);
+        let clone1 = shared.clone();
+        let clone2 = shared.clone();
+
+        // Spawn concurrent tasks
+        let handle1 = tokio::spawn(async move {
+            clone1.try_reserve("task1", 300)
+        });
+
+        let handle2 = tokio::spawn(async move {
+            clone2.try_reserve("task2", 400)
+        });
+
+        let (r1, r2) = tokio::join!(handle1, handle2);
+
+        // Both should succeed
+        assert!(r1.unwrap());
+        assert!(r2.unwrap());
+
+        // Should have allocated 700 tokens total
+        assert_eq!(shared.used(), 700);
+        assert_eq!(shared.remaining(), 300);
+    }
+
+    #[test]
+    fn test_shared_budget_manager_with_manager() {
+        let shared = SharedBudgetManager::new(1000);
+
+        let result = shared.with_manager(|mgr| {
+            mgr.reserve("primary", 400);
+            mgr.reserve("tests", 200);
+            mgr.remaining()
+        });
+
+        assert_eq!(result, Some(400));
+    }
+
+    #[test]
+    fn test_shared_budget_allocation() {
+        let shared = SharedBudgetManager::new(10000);
+        let allocation = shared.allocate().unwrap();
+
+        assert_eq!(allocation.primary, 4000);
+        assert_eq!(allocation.tests, 2000);
+        assert_eq!(allocation.callers, 1500);
+        assert_eq!(allocation.callees, 1500);
+        assert_eq!(allocation.config, 1000);
     }
 }

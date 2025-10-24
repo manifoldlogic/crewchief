@@ -24,15 +24,15 @@ pub mod truncation;
 pub mod types;
 
 // Re-export core types for convenience
-pub use assembler::{BasicContextAssembler, ContextAssembler};
-pub use budget::{BudgetAllocation, TokenBudgetManager, UsageStats};
+pub use assembler::{BasicContextAssembler, ContextAssembler, ParallelContextAssembler};
+pub use budget::{BudgetAllocation, SharedBudgetManager, TokenBudgetManager, UsageStats};
 pub use cache::{
     CacheConfig, CacheKey, CacheStats, ContextCache, DbCacheStats, hash_options,
 };
 pub use cache_stats::{CacheMetrics, CacheStatistics, CacheStatsMonitor, MemoryStats};
 pub use file_loader::FileLoader;
 pub use formatter::ContentFormatter;
-pub use graph::{EdgeType, RelatedChunk, find_related_chunks, find_related_chunks_directional};
+pub use graph::{EdgeType, RelatedChunk, find_related_chunks, find_related_chunks_directional, load_relationships_parallel};
 pub use heuristics::{FileType, HeuristicScorer, HeuristicsConfig};
 pub use importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 pub use language_detector::{Language, LanguageDetector};
