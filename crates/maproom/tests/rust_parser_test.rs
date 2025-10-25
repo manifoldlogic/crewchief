@@ -369,3 +369,322 @@ fn main() {
     // Should extract the main function
     assert!(chunks.iter().any(|c| c.kind == "func" && c.symbol_name == Some("main".to_string())));
 }
+
+#[test]
+fn test_rust_function_with_generics() {
+    let source = r#"
+/// A generic function with type bounds
+pub fn process<T: Clone + Send>(value: T) -> T {
+    value.clone()
+}
+
+/// Function with multiple type parameters
+fn combine<T, U>(a: T, b: U) -> (T, U) {
+    (a, b)
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract 2 functions
+    assert_eq!(chunks.len(), 2);
+
+    // Check first function with generic bounds
+    let process_fn = chunks.iter()
+        .find(|c| c.symbol_name == Some("process".to_string()))
+        .unwrap();
+    assert_eq!(process_fn.kind, "func");
+    assert!(process_fn.signature.as_ref().unwrap().contains("<T: Clone + Send>"));
+
+    let metadata = process_fn.metadata.as_ref().unwrap();
+    assert_eq!(metadata["generics"].as_str(), Some("<T: Clone + Send>"));
+
+    // Check second function with multiple type parameters
+    let combine_fn = chunks.iter()
+        .find(|c| c.symbol_name == Some("combine".to_string()))
+        .unwrap();
+    assert_eq!(combine_fn.kind, "func");
+    assert!(combine_fn.signature.as_ref().unwrap().contains("<T, U>"));
+
+    let combine_metadata = combine_fn.metadata.as_ref().unwrap();
+    assert_eq!(combine_metadata["generics"].as_str(), Some("<T, U>"));
+}
+
+#[test]
+fn test_rust_function_with_where_clause() {
+    let source = r#"
+/// Function with where clause
+pub fn compare<T>(a: T, b: T) -> bool
+where
+    T: PartialEq + Clone,
+{
+    a == b
+}
+
+/// Complex where clause
+fn process_data<T, U>(data: T, processor: U) -> String
+where
+    T: Display,
+    U: Fn(T) -> String,
+{
+    processor(data)
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract 2 functions
+    assert_eq!(chunks.len(), 2);
+
+    // Check first function with where clause
+    let compare_fn = chunks.iter()
+        .find(|c| c.symbol_name == Some("compare".to_string()))
+        .unwrap();
+    assert_eq!(compare_fn.kind, "func");
+
+    let metadata = compare_fn.metadata.as_ref().unwrap();
+    assert!(metadata.get("where_clause").is_some());
+    let where_clause = metadata["where_clause"].as_str().unwrap();
+    assert!(where_clause.contains("T: PartialEq + Clone"));
+
+    // Check second function with complex where clause
+    let process_fn = chunks.iter()
+        .find(|c| c.symbol_name == Some("process_data".to_string()))
+        .unwrap();
+    assert_eq!(process_fn.kind, "func");
+
+    let process_metadata = process_fn.metadata.as_ref().unwrap();
+    assert!(process_metadata.get("where_clause").is_some());
+    let process_where = process_metadata["where_clause"].as_str().unwrap();
+    assert!(process_where.contains("T: Display"));
+    assert!(process_where.contains("U: Fn(T) -> String"));
+}
+
+#[test]
+fn test_rust_struct_with_where_clause() {
+    let source = r#"
+/// A struct with where clause
+pub struct Container<T>
+where
+    T: Clone + Send,
+{
+    value: T,
+}
+
+/// Generic struct with multiple constraints
+struct Pair<T, U>
+where
+    T: Display,
+    U: Clone,
+{
+    first: T,
+    second: U,
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract 2 structs
+    assert_eq!(chunks.len(), 2);
+
+    // Check first struct with where clause
+    let container = chunks.iter()
+        .find(|c| c.symbol_name == Some("Container".to_string()))
+        .unwrap();
+    assert_eq!(container.kind, "struct");
+
+    let metadata = container.metadata.as_ref().unwrap();
+    assert_eq!(metadata["generics"].as_str(), Some("<T>"));
+    assert!(metadata.get("where_clause").is_some());
+
+    // Check second struct with multiple constraints
+    let pair = chunks.iter()
+        .find(|c| c.symbol_name == Some("Pair".to_string()))
+        .unwrap();
+    assert_eq!(pair.kind, "struct");
+
+    let pair_metadata = pair.metadata.as_ref().unwrap();
+    assert_eq!(pair_metadata["generics"].as_str(), Some("<T, U>"));
+    assert!(pair_metadata.get("where_clause").is_some());
+}
+
+#[test]
+fn test_rust_use_statements() {
+    let source = r#"
+use std::collections::HashMap;
+use std::io::{Read, Write};
+pub use super::*;
+use crate::config::Config;
+
+fn test_function() {}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract 4 use statements + 1 function
+    let use_statements: Vec<_> = chunks.iter().filter(|c| c.kind == "use").collect();
+    assert_eq!(use_statements.len(), 4);
+
+    // Check simple use statement
+    let hashmap_use = use_statements.iter()
+        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("HashMap")).unwrap_or(false))
+        .unwrap();
+    assert_eq!(hashmap_use.kind, "use");
+    assert!(hashmap_use.signature.as_ref().unwrap().contains("std::collections::HashMap"));
+
+    // Check use with braces
+    let io_use = use_statements.iter()
+        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("{Read, Write}")).unwrap_or(false))
+        .unwrap();
+    assert_eq!(io_use.kind, "use");
+
+    // Check pub use
+    let pub_use = use_statements.iter()
+        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("super::*")).unwrap_or(false))
+        .unwrap();
+    assert_eq!(pub_use.kind, "use");
+    let pub_use_metadata = pub_use.metadata.as_ref().unwrap();
+    assert_eq!(pub_use_metadata["visibility"].as_str(), Some("pub"));
+
+    // Check crate use
+    let config_use = use_statements.iter()
+        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("config::Config")).unwrap_or(false))
+        .unwrap();
+    assert_eq!(config_use.kind, "use");
+}
+
+#[test]
+fn test_rust_enum_with_generics_and_where() {
+    let source = r#"
+/// A result type with where clause
+pub enum Result<T, E>
+where
+    T: Clone,
+    E: std::error::Error,
+{
+    Ok(T),
+    Err(E),
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract 1 enum
+    assert_eq!(chunks.len(), 1);
+
+    let result_enum = &chunks[0];
+    assert_eq!(result_enum.kind, "enum");
+    assert_eq!(result_enum.symbol_name, Some("Result".to_string()));
+
+    let metadata = result_enum.metadata.as_ref().unwrap();
+    assert_eq!(metadata["generics"].as_str(), Some("<T, E>"));
+    assert!(metadata.get("where_clause").is_some());
+}
+
+#[test]
+fn test_rust_trait_with_generics() {
+    let source = r#"
+/// A trait with associated types and where clause
+pub trait Iterator<Item>
+where
+    Item: Clone,
+{
+    fn next(&mut self) -> Option<Item>;
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract 1 trait
+    assert_eq!(chunks.len(), 1);
+
+    let iterator_trait = &chunks[0];
+    assert_eq!(iterator_trait.kind, "trait");
+    assert_eq!(iterator_trait.symbol_name, Some("Iterator".to_string()));
+
+    let metadata = iterator_trait.metadata.as_ref().unwrap();
+    assert_eq!(metadata["generics"].as_str(), Some("<Item>"));
+    assert!(metadata.get("where_clause").is_some());
+}
+
+#[test]
+fn test_rust_comprehensive_extraction() {
+    // Test a comprehensive Rust file with all features combined
+    let source = r#"
+use std::collections::HashMap;
+use std::fmt::Display;
+
+/// A comprehensive test structure
+pub struct Container<T, U>
+where
+    T: Clone + Send,
+    U: Display,
+{
+    items: Vec<T>,
+    metadata: HashMap<String, U>,
+}
+
+impl<T, U> Container<T, U>
+where
+    T: Clone + Send,
+    U: Display,
+{
+    /// Creates a new container
+    pub fn new() -> Self {
+        Container {
+            items: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Processes items with a generic function
+    pub fn process<F>(items: Vec<T>, processor: F) -> Vec<T>
+    where
+        F: Fn(T) -> T,
+        T: Clone,
+    {
+        items.into_iter().map(processor).collect()
+    }
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "rs");
+
+    // Should extract: 2 use statements + 1 struct + 1 impl + 2 functions (new + process)
+    assert!(chunks.len() >= 5);
+
+    // Verify use statements
+    let use_statements: Vec<_> = chunks.iter().filter(|c| c.kind == "use").collect();
+    assert_eq!(use_statements.len(), 2);
+
+    // Verify struct with generics and where clause
+    let struct_chunk = chunks.iter()
+        .find(|c| c.kind == "struct" && c.symbol_name == Some("Container".to_string()))
+        .unwrap();
+    let struct_metadata = struct_chunk.metadata.as_ref().unwrap();
+    assert_eq!(struct_metadata["generics"].as_str(), Some("<T, U>"));
+    assert!(struct_metadata.get("where_clause").is_some());
+    let struct_where = struct_metadata["where_clause"].as_str().unwrap();
+    assert!(struct_where.contains("T: Clone + Send"));
+    assert!(struct_where.contains("U: Display"));
+
+    // Verify impl block
+    let impl_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "impl").collect();
+    assert_eq!(impl_chunks.len(), 1);
+
+    // Verify function with where clause inside impl
+    let process_fn = chunks.iter()
+        .find(|c| c.symbol_name == Some("process".to_string()))
+        .unwrap();
+    assert_eq!(process_fn.kind, "func");
+    let process_metadata = process_fn.metadata.as_ref().unwrap();
+    assert_eq!(process_metadata["generics"].as_str(), Some("<F>"));
+    assert!(process_metadata.get("where_clause").is_some());
+
+    // Verify new function
+    let new_fn = chunks.iter()
+        .find(|c| c.symbol_name == Some("new".to_string()))
+        .unwrap();
+    assert_eq!(new_fn.kind, "func");
+    assert!(new_fn.signature.as_ref().unwrap().contains("pub"));
+}

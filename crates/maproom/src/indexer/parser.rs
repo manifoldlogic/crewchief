@@ -1613,6 +1613,9 @@ fn walk_rust_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         "macro_definition" => {
             extract_rust_macro(source, node, chunks);
         }
+        "use_declaration" => {
+            extract_rust_use_statement(source, node, chunks);
+        }
         _ => {}
     }
 
@@ -1639,6 +1642,14 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     let is_const = modifiers.contains(&"const");
     let is_unsafe = modifiers.contains(&"unsafe");
 
+    // Extract generic type parameters
+    let type_params = node.child_by_field_name("type_parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract where clause
+    let where_clause = extract_rust_where_clause(source, node);
+
     // Extract parameters for signature
     let params = node.child_by_field_name("parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
@@ -1650,7 +1661,16 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
         .map(|s| s.trim_start_matches("->").trim().to_string());
 
     // Build signature
-    let signature = build_rust_function_signature(visibility.as_deref(), is_async, is_const, is_unsafe, params.as_deref(), return_type.as_deref());
+    let signature = build_rust_function_signature(
+        visibility.as_deref(),
+        is_async,
+        is_const,
+        is_unsafe,
+        type_params.as_deref(),
+        params.as_deref(),
+        return_type.as_deref(),
+        where_clause.as_deref(),
+    );
 
     // Extract doc comment (lines starting with /// or //! before the function)
     let docstring = extract_rust_doc_comment(source, node);
@@ -1661,6 +1681,16 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     metadata_obj.insert("is_async".to_string(), serde_json::Value::Bool(is_async));
     metadata_obj.insert("is_const".to_string(), serde_json::Value::Bool(is_const));
     metadata_obj.insert("is_unsafe".to_string(), serde_json::Value::Bool(is_unsafe));
+
+    // Add generic parameters to metadata if present
+    if let Some(ref generics) = type_params {
+        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+    }
+
+    // Add where clause to metadata if present
+    if let Some(ref wc) = where_clause {
+        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+    }
 
     let start = node.start_position();
     let end = node.end_position();
@@ -1690,11 +1720,15 @@ fn extract_rust_struct(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
+    // Extract where clause
+    let where_clause = extract_rust_where_clause(source, node);
+
     // Build signature
-    let signature = if let Some(params) = type_params {
-        Some(format!("{}", params))
-    } else {
-        None
+    let signature = match (&type_params, &where_clause) {
+        (Some(params), Some(wc)) => Some(format!("{} {}", params, wc)),
+        (Some(params), None) => Some(params.clone()),
+        (None, Some(wc)) => Some(wc.clone()),
+        (None, None) => None,
     };
 
     // Extract doc comment
@@ -1703,6 +1737,16 @@ fn extract_rust_struct(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
     metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+
+    // Add generic parameters to metadata if present
+    if let Some(ref generics) = type_params {
+        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+    }
+
+    // Add where clause to metadata if present
+    if let Some(ref wc) = where_clause {
+        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+    }
 
     let start = node.start_position();
     let end = node.end_position();
@@ -1732,11 +1776,15 @@ fn extract_rust_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
+    // Extract where clause
+    let where_clause = extract_rust_where_clause(source, node);
+
     // Build signature
-    let signature = if let Some(params) = type_params {
-        Some(format!("{}", params))
-    } else {
-        None
+    let signature = match (&type_params, &where_clause) {
+        (Some(params), Some(wc)) => Some(format!("{} {}", params, wc)),
+        (Some(params), None) => Some(params.clone()),
+        (None, Some(wc)) => Some(wc.clone()),
+        (None, None) => None,
     };
 
     // Extract doc comment
@@ -1745,6 +1793,16 @@ fn extract_rust_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
     metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+
+    // Add generic parameters to metadata if present
+    if let Some(ref generics) = type_params {
+        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+    }
+
+    // Add where clause to metadata if present
+    if let Some(ref wc) = where_clause {
+        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+    }
 
     let start = node.start_position();
     let end = node.end_position();
@@ -1774,11 +1832,15 @@ fn extract_rust_trait(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
+    // Extract where clause
+    let where_clause = extract_rust_where_clause(source, node);
+
     // Build signature
-    let signature = if let Some(params) = type_params {
-        Some(format!("{}", params))
-    } else {
-        None
+    let signature = match (&type_params, &where_clause) {
+        (Some(params), Some(wc)) => Some(format!("{} {}", params, wc)),
+        (Some(params), None) => Some(params.clone()),
+        (None, Some(wc)) => Some(wc.clone()),
+        (None, None) => None,
     };
 
     // Extract doc comment
@@ -1787,6 +1849,16 @@ fn extract_rust_trait(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
     metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+
+    // Add generic parameters to metadata if present
+    if let Some(ref generics) = type_params {
+        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+    }
+
+    // Add where clause to metadata if present
+    if let Some(ref wc) = where_clause {
+        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+    }
 
     let start = node.start_position();
     let end = node.end_position();
@@ -2002,8 +2074,10 @@ fn build_rust_function_signature(
     is_async: bool,
     is_const: bool,
     is_unsafe: bool,
+    type_params: Option<&str>,
     params: Option<&str>,
     return_type: Option<&str>,
+    where_clause: Option<&str>,
 ) -> Option<String> {
     let mut parts = Vec::new();
 
@@ -2025,6 +2099,10 @@ fn build_rust_function_signature(
 
     parts.push("fn".to_string());
 
+    if let Some(tp) = type_params {
+        parts.push(tp.to_string());
+    }
+
     if let Some(p) = params {
         parts.push(p.to_string());
     }
@@ -2033,11 +2111,72 @@ fn build_rust_function_signature(
         parts.push(format!("-> {}", ret));
     }
 
+    if let Some(wc) = where_clause {
+        parts.push(wc.to_string());
+    }
+
     if parts.is_empty() {
         None
     } else {
         Some(parts.join(" "))
     }
+}
+
+fn extract_rust_where_clause(source: &str, node: Node) -> Option<String> {
+    // Look for where_clause child node
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            if child.kind() == "where_clause" {
+                return child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_rust_use_statement(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract the full use statement text
+    let use_text = node.utf8_text(source.as_bytes()).ok()
+        .map(|s| s.to_string());
+
+    // Try to extract a meaningful name for the use statement
+    // For simple cases like "use std::collections::HashMap;", extract "HashMap"
+    // For complex cases like "use std::io::{Read, Write};", extract the whole path
+    let name = if let Some(ref text) = use_text {
+        // Remove "use " prefix and ";" suffix
+        let trimmed = text.trim_start_matches("use").trim().trim_end_matches(";").trim();
+
+        // Handle different use statement patterns:
+        // - use foo::bar; -> "foo::bar"
+        // - use foo::bar as baz; -> "foo::bar as baz"
+        // - use foo::{bar, baz}; -> "foo::{bar, baz}"
+        // - use super::*; -> "super::*"
+        Some(trimmed.to_string())
+    } else {
+        None
+    };
+
+    // Extract visibility
+    let visibility = extract_rust_visibility(source, node);
+
+    // Build metadata
+    let mut metadata_obj = serde_json::Map::new();
+    if let Some(vis) = visibility {
+        metadata_obj.insert("visibility".to_string(), serde_json::Value::String(vis));
+    }
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "use".to_string(),
+        signature: use_text,
+        docstring: None,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(serde_json::Value::Object(metadata_obj)),
+    });
 }
 
 fn extract_rust_doc_comment(source: &str, node: Node) -> Option<String> {
