@@ -43,6 +43,15 @@ enum Commands {
         languages: Option<Vec<String>>, // e.g. ts,tsx,js,jsx
         #[arg(long, value_delimiter = ',')]
         exclude: Option<Vec<String>>,   // glob patterns
+        /// Enable parallel batch processing for improved performance (PERF_OPT-3001)
+        #[arg(long, default_value_t = false)]
+        parallel: bool,
+        /// Number of parallel database workers (only with --parallel)
+        #[arg(long, default_value_t = 4)]
+        parallel_workers: usize,
+        /// Batch size for database inserts (only with --parallel)
+        #[arg(long, default_value_t = 50)]
+        batch_size: usize,
     },
 
     /// Upsert a set of files at a given commit
@@ -206,32 +215,74 @@ async fn main() -> anyhow::Result<()> {
             }
         },
 
-        Commands::Scan { repo, worktree, path, commit, concurrency, languages, exclude } => {
+        Commands::Scan {
+            repo,
+            worktree,
+            path,
+            commit,
+            concurrency,
+            languages,
+            exclude,
+            parallel,
+            parallel_workers,
+            batch_size,
+        } => {
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
-            
+
             // Get git information from the path
             let (repo_name, branch_name, commit_hash) = get_git_info(&path)?;
-            
+
             let repo = repo.unwrap_or(repo_name);
             let worktree = worktree.unwrap_or(branch_name);
             let commit = commit.unwrap_or(commit_hash);
-            
-            tracing::info!("Scanning repo: {}, worktree: {}, commit: {}", repo, worktree, commit);
-            
-            let client = db::connect().await?;
-            indexer::scan_worktree(
-                &client,
-                &repo,
-                &worktree,
-                &path,
-                &commit,
-                concurrency,
-                languages,
-                exclude,
-            )
-            .await
-            .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;
+
+            tracing::info!(
+                "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}",
+                repo, worktree, commit, parallel
+            );
+
+            if parallel {
+                // Use parallel batch processing pipeline (PERF_OPT-3001)
+                use crewchief_maproom::indexer::parallel::ParallelConfig;
+
+                let pool = db::create_pool().await?;
+                let config = ParallelConfig {
+                    batch_size,
+                    parallel_workers,
+                    max_file_size: 10 * 1024 * 1024, // 10MB
+                    file_queue_capacity: 1000,
+                    chunk_queue_capacity: 10000,
+                };
+
+                indexer::scan_worktree_parallel(
+                    &pool,
+                    &repo,
+                    &worktree,
+                    &path,
+                    &commit,
+                    languages,
+                    exclude,
+                    config,
+                )
+                .await
+                .with_context(|| format!("parallel scan failed for {}@{}", worktree, commit))?;
+            } else {
+                // Use sequential single-client processing
+                let client = db::connect().await?;
+                indexer::scan_worktree(
+                    &client,
+                    &repo,
+                    &worktree,
+                    &path,
+                    &commit,
+                    concurrency,
+                    languages,
+                    exclude,
+                )
+                .await
+                .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;
+            }
         }
 
         Commands::Upsert { paths, commit, repo, worktree, root } => {

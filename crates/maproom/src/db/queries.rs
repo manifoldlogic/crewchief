@@ -154,6 +154,89 @@ pub async fn insert_chunk(
     Ok(row.get(0))
 }
 
+/// Batch insert multiple chunks for improved performance.
+///
+/// This function addresses the primary indexing bottleneck identified in PERF_OPT-1002:
+/// - Individual INSERT operations consume 90-95% of indexing time
+/// - Network round-trip latency (~1-2ms per call) dominates
+/// - Batching reduces N inserts to 1 insert, expected 5-10x speedup
+///
+/// # Parameters
+/// - `client`: Database client from connection pool
+/// - `chunks`: Vector of chunk data tuples (file_id, symbol_name, kind, ...)
+///
+/// # Performance
+/// - Expected improvement: 5-10x faster than individual inserts
+/// - Batch size recommendation: 50-100 chunks per batch
+/// - Transaction overhead: Single transaction per batch
+pub async fn insert_chunks_batch(
+    client: &Client,
+    chunks: &[(
+        i64,                          // file_id
+        Option<String>,               // symbol_name
+        String,                       // kind
+        Option<String>,               // signature
+        Option<String>,               // docstring
+        i32,                          // start_line
+        i32,                          // end_line
+        String,                       // preview
+        String,                       // ts_doc_text
+        f32,                          // recency_score
+        f32,                          // churn_score
+        Option<serde_json::Value>,    // metadata
+    )],
+) -> anyhow::Result<Vec<i64>> {
+    if chunks.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build VALUES clause with parameter placeholders
+    // Each chunk has 12 parameters
+    let mut values_clauses = Vec::with_capacity(chunks.len());
+    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(chunks.len() * 12);
+
+    for (idx, chunk) in chunks.iter().enumerate() {
+        let base = idx * 12;
+        values_clauses.push(format!(
+            "(${}, ${}::text, (${}::text)::maproom.symbol_kind, ${}::text, ${}::text, ${}, ${}, ${}::text, to_tsvector('simple', unaccent(${}::text)), ${}, ${}, ${}::jsonb)",
+            base + 1, base + 2, base + 3, base + 4, base + 5,
+            base + 6, base + 7, base + 8, base + 9, base + 10, base + 11, base + 12
+        ));
+
+        params.push(&chunk.0);  // file_id
+        params.push(&chunk.1);  // symbol_name
+        params.push(&chunk.2);  // kind
+        params.push(&chunk.3);  // signature
+        params.push(&chunk.4);  // docstring
+        params.push(&chunk.5);  // start_line
+        params.push(&chunk.6);  // end_line
+        params.push(&chunk.7);  // preview
+        params.push(&chunk.8);  // ts_doc_text
+        params.push(&chunk.9);  // recency_score
+        params.push(&chunk.10); // churn_score
+        params.push(&chunk.11); // metadata
+    }
+
+    let query = format!(
+        "INSERT INTO maproom.chunks (
+           file_id, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
+         ) VALUES {}
+         ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
+           symbol_name = EXCLUDED.symbol_name,
+           kind = EXCLUDED.kind,
+           signature = EXCLUDED.signature,
+           docstring = EXCLUDED.docstring,
+           preview = EXCLUDED.preview,
+           ts_doc = EXCLUDED.ts_doc,
+           metadata = EXCLUDED.metadata
+         RETURNING id",
+        values_clauses.join(", ")
+    );
+
+    let rows = client.query(&query, &params).await?;
+    Ok(rows.iter().map(|row| row.get(0)).collect())
+}
+
 #[derive(Debug, Serialize)]
 pub struct SearchHit {
     pub score: f32,

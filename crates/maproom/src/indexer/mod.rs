@@ -6,6 +6,7 @@ use ignore::WalkBuilder;
 use tokio_postgres::Client;
 use tracing::{info, warn};
 
+pub mod parallel;
 pub mod parser;
 
 /// Process Python imports from chunk metadata and create import edges in chunk_edges table
@@ -117,6 +118,169 @@ fn file_modified_time(path: &Path) -> Option<chrono::DateTime<chrono::Utc>> {
     let t = fs::metadata(path).and_then(|m| m.modified()).ok()?;
     let dur = t.duration_since(UNIX_EPOCH).ok()?;
     chrono::DateTime::<chrono::Utc>::from_timestamp(dur.as_secs() as i64, dur.subsec_nanos())
+}
+
+/// Scan worktree with parallel batch processing for improved performance.
+///
+/// This version uses the parallel indexing pipeline from PERF_OPT-3001:
+/// - Parallel file parsing with rayon work-stealing
+/// - Batch database inserts (50-100 chunks per batch)
+/// - Concurrent database workers (4-8 workers)
+///
+/// Expected performance: 5-10x faster than sequential scan_worktree.
+pub async fn scan_worktree_parallel(
+    pool: &crate::db::PgPool,
+    repo: &str,
+    worktree: &str,
+    root: &Path,
+    commit: &str,
+    languages: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    parallel_config: parallel::ParallelConfig,
+) -> anyhow::Result<()> {
+    use crate::indexer::parallel::{FileTask, ParallelIndexer};
+
+    let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
+
+    // Get database client for setup
+    let client = pool.get().await?;
+
+    let repo_id = crate::db::get_or_create_repo(&client, repo, root_abs.to_string_lossy().as_ref()).await?;
+    let worktree_id = crate::db::get_or_create_worktree(&client, repo_id, worktree, root_abs.to_string_lossy().as_ref()).await?;
+    let commit_id = crate::db::get_or_create_commit(&client, repo_id, commit, None).await?;
+
+    println!("🔍 Scanning worktree (parallel): {} @ {}", worktree, &commit[..8.min(commit.len())]);
+    println!("   Repository: {}", repo);
+    println!("   Path: {}", root_abs.display());
+    println!("   Workers: {}, Batch size: {}", parallel_config.parallel_workers, parallel_config.batch_size);
+
+    // Collect files to process
+    let mut walk = WalkBuilder::new(&root_abs);
+    walk.hidden(false).ignore(true).git_ignore(true).git_exclude(true);
+    if let Some(globs) = &exclude {
+        let mut ob = ignore::overrides::OverrideBuilder::new(&root_abs);
+        for g in globs {
+            ob.add(&format!("!{}", g))?;
+        }
+        walk.overrides(ob.build()?);
+    }
+
+    let allow_langs: Option<Vec<String>> = languages.map(|v| v.into_iter().map(|s| s.to_lowercase()).collect());
+
+    let mut file_tasks = Vec::new();
+    let mut files_skipped = 0;
+    let mut total_bytes = 0usize;
+    let mut language_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for dent in walk.build() {
+        let dent = match dent { Ok(d) => d, Err(_) => continue };
+        if !dent.file_type().map(|t| t.is_file()).unwrap_or(false) { continue; }
+
+        let path = dent.path();
+        let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
+        let language = detect_language_from_path(path);
+
+        if language.is_none() {
+            files_skipped += 1;
+            continue;
+        }
+
+        if let Some(ref allow) = allow_langs {
+            if !allow.iter().any(|l| l == language.unwrap()) {
+                files_skipped += 1;
+                continue;
+            }
+        }
+
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => {
+                files_skipped += 1;
+                continue;
+            }
+        };
+
+        // Skip files larger than max_file_size
+        if content.len() > parallel_config.max_file_size {
+            files_skipped += 1;
+            continue;
+        }
+
+        let content_hash = blake3::hash(content.as_bytes()).to_hex().to_string();
+        let size_bytes = content.len().min(i32::MAX as usize) as i32;
+        let last_modified = file_modified_time(path);
+
+        total_bytes += content.len();
+        *language_counts.entry(language.unwrap().to_string()).or_insert(0) += 1;
+
+        // Create file record
+        let file_id = crate::db::upsert_file(
+            &client,
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath.to_string_lossy().as_ref(),
+            language,
+            &content_hash,
+            size_bytes,
+            last_modified,
+        ).await?;
+
+        file_tasks.push(FileTask {
+            path: path.to_path_buf(),
+            relpath: relpath.to_path_buf(),
+            language: language.unwrap().to_string(),
+            content,
+            file_id,
+        });
+    }
+
+    // Drop client before parallel processing
+    drop(client);
+
+    // Process files in parallel
+    let indexer = ParallelIndexer::new(pool.clone(), parallel_config);
+    let stats = indexer.process_files(file_tasks).await?;
+
+    // Print summary
+    println!("\n✅ Parallel scan completed successfully!");
+    println!("   Files processed: {}", stats.files_processed);
+    if files_skipped > 0 {
+        println!("   Files skipped: {}", files_skipped);
+    }
+    println!("   Total chunks: {}", stats.chunks_inserted);
+    println!("   Batches: {} (avg {:.1} chunks/batch)",
+        stats.batches_processed, stats.avg_chunks_per_batch());
+    println!("   Total size: {:.2} MB", total_bytes as f64 / 1_048_576.0);
+
+    if stats.errors > 0 {
+        println!("   Errors: {}", stats.errors);
+    }
+
+    if !language_counts.is_empty() {
+        println!("\n   Languages indexed:");
+        let mut langs: Vec<_> = language_counts.iter().collect();
+        langs.sort_by(|a, b| b.1.cmp(a.1));
+        for (lang, count) in langs {
+            println!("     {} {}: {}",
+                match lang.as_str() {
+                    "ts" | "tsx" => "📘",
+                    "js" | "jsx" => "📙",
+                    "rs" => "🦀",
+                    "py" => "🐍",
+                    "go" => "🔷",
+                    "md" => "📝",
+                    "json" => "📋",
+                    "yaml" | "yml" => "📄",
+                    "toml" => "⚙️",
+                    _ => "📄"
+                },
+                lang, count);
+        }
+    }
+
+    info!(?repo, ?worktree, ?commit, "parallel scan complete");
+    Ok(())
 }
 
 pub async fn scan_worktree(

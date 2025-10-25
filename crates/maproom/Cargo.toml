@@ -59,6 +59,10 @@ async-trait = "0.1"
 # Cache key hashing
 sha2 = "0.10"
 
+# Parallel processing
+rayon = "1.10"
+crossbeam = "0.8"
+
 [build-dependencies]
 
 [[bin]]

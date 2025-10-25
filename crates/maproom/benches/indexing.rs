@@ -579,11 +579,153 @@ impl Clone for TestFile {
     }
 }
 
+/// Benchmark parallel batch processing performance (PERF_OPT-3001)
+///
+/// This benchmark measures the overhead of parallel processing infrastructure
+/// without database operations. It tests:
+/// - Work-stealing thread pool efficiency
+/// - Channel throughput
+/// - Batch formation overhead
+/// - Parallel parsing vs sequential
+///
+/// Note: This measures parsing + pipeline overhead, not database performance.
+/// Database benchmarks require a live database environment.
+fn bench_parallel_processing(c: &mut Criterion) {
+    use crewchief_maproom::indexer::parser::extract_chunks;
+    use rayon::prelude::*;
+    use crossbeam::channel;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    let mut group = c.benchmark_group("parallel_processing");
+    group.measurement_time(Duration::from_secs(10));
+    group.sample_size(10);
+
+    for size in [100, 1000] {
+        let dataset = generate_test_dataset(size);
+
+        // Baseline: Sequential processing
+        group.bench_with_input(
+            BenchmarkId::new("sequential", size),
+            &dataset,
+            |b, files| {
+                b.iter(|| {
+                    let mut total_chunks = 0;
+                    for file in files {
+                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        total_chunks += chunks.len();
+                    }
+                    black_box(total_chunks)
+                });
+            },
+        );
+
+        // Parallel processing with rayon
+        group.bench_with_input(
+            BenchmarkId::new("rayon_parallel", size),
+            &dataset,
+            |b, files| {
+                b.iter(|| {
+                    let total_chunks: usize = files
+                        .par_iter()
+                        .map(|file| {
+                            let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                            chunks.len()
+                        })
+                        .sum();
+                    black_box(total_chunks)
+                });
+            },
+        );
+
+        // Parallel with channel pipeline (simulates database worker pattern)
+        group.bench_with_input(
+            BenchmarkId::new("channel_pipeline", size),
+            &dataset,
+            |b, files| {
+                b.iter(|| {
+                    let (tx, rx) = channel::bounded(1000);
+                    let total_chunks = Arc::new(AtomicUsize::new(0));
+
+                    // Spawn worker thread
+                    let total_clone = total_chunks.clone();
+                    let worker = std::thread::spawn(move || {
+                        let mut count = 0;
+                        while let Ok(chunk_count) = rx.recv() {
+                            count += chunk_count;
+                        }
+                        total_clone.store(count, Ordering::SeqCst);
+                    });
+
+                    // Parse in parallel and send to worker
+                    files.par_iter().for_each(|file| {
+                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let _ = tx.send(chunks.len());
+                    });
+
+                    drop(tx);
+                    worker.join().unwrap();
+                    black_box(total_chunks.load(Ordering::SeqCst))
+                });
+            },
+        );
+
+        // Parallel with batch formation (simulates batch INSERT pattern)
+        let batch_size = 50;
+        group.bench_with_input(
+            BenchmarkId::new("batched_pipeline", size),
+            &dataset,
+            |b, files| {
+                b.iter(|| {
+                    let (tx, rx) = channel::bounded(1000);
+                    let total_chunks = Arc::new(AtomicUsize::new(0));
+
+                    // Spawn worker thread that processes batches
+                    let total_clone = total_chunks.clone();
+                    let worker = std::thread::spawn(move || {
+                        let mut batch = Vec::with_capacity(batch_size);
+                        let mut count = 0;
+
+                        for chunk_count in rx {
+                            batch.push(chunk_count);
+                            if batch.len() >= batch_size {
+                                // Simulate batch processing
+                                count += batch.iter().sum::<usize>();
+                                batch.clear();
+                            }
+                        }
+
+                        // Process remaining
+                        if !batch.is_empty() {
+                            count += batch.iter().sum::<usize>();
+                        }
+
+                        total_clone.store(count, Ordering::SeqCst);
+                    });
+
+                    // Parse in parallel
+                    files.par_iter().for_each(|file| {
+                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let _ = tx.send(chunks.len());
+                    });
+
+                    drop(tx);
+                    worker.join().unwrap();
+                    black_box(total_chunks.load(Ordering::SeqCst))
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_parse_single_file,
     bench_parse_throughput,
     bench_files_per_minute,
     bench_by_language,
+    bench_parallel_processing,
 );
 criterion_main!(benches);
