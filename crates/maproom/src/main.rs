@@ -23,6 +23,12 @@ enum Commands {
         command: DbCommand,
     },
 
+    /// Cache management commands
+    Cache {
+        #[command(subcommand)]
+        command: crewchief_maproom::cli::CacheCommand,
+    },
+
     /// Scan a worktree and index files into Postgres
     Scan {
         /// Repository name (defaults to git remote origin name)
@@ -213,6 +219,10 @@ async fn main() -> anyhow::Result<()> {
                 db::migrate(&client).await?;
                 tracing::info!("migrations applied");
             }
+        },
+
+        Commands::Cache { command } => {
+            command.execute().await?;
         },
 
         Commands::Scan {

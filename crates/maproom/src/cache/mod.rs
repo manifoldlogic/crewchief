@@ -21,15 +21,25 @@
 //! - Thread-safe concurrent access
 //! - Minimal contention with RwLock
 //!
+//! # Cache Management (PERF_OPT-4002)
+//!
+//! Cache management features include:
+//! - **Eviction policies**: LRU, TTL, size-based, access-count
+//! - **Warming strategies**: Startup, predictive, scheduled, manual
+//! - **Invalidation logic**: File changes, re-indexing, pattern-based
+//! - **Background maintenance**: Periodic cleanup, monitoring, alerts
+//!
 //! # Example
 //!
 //! ```no_run
 //! use crewchief_maproom::cache::{CacheSystem, CacheConfig};
+//! use crewchief_maproom::cache::maintenance::{CacheMaintenance, MaintenanceConfig};
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     let config = CacheConfig::default();
-//!     let cache_system = CacheSystem::new(config);
+//!     let cache_system = Arc::new(CacheSystem::new(config));
 //!
 //!     // Use L1 query cache
 //!     let query_key = "search term".to_string();
@@ -41,14 +51,29 @@
 //!     let stats = cache_system.stats().await;
 //!     println!("Overall hit rate: {:.1}%", stats.overall_hit_rate() * 100.0);
 //!
+//!     // Spawn background maintenance
+//!     let maintenance_config = MaintenanceConfig::default();
+//!     let maintenance = CacheMaintenance::new(Arc::clone(&cache_system), maintenance_config);
+//!     tokio::spawn(async move {
+//!         maintenance.run().await.ok();
+//!     });
+//!
 //!     Ok(())
 //! }
 //! ```
 
 pub mod entry;
+pub mod eviction;
+pub mod invalidation;
+pub mod maintenance;
 pub mod stats;
 pub mod system;
+pub mod warming;
 
 pub use entry::CacheEntry;
+pub use eviction::{EvictionPolicy, EvictionStats, EvictionStrategy};
+pub use invalidation::{CacheInvalidator, CacheLayer, InvalidationStats, InvalidationTrigger};
+pub use maintenance::{CacheMaintenance, MaintenanceConfig};
 pub use stats::{CacheStats, CacheStatsSnapshot, MultiLayerStats};
 pub use system::{CacheConfig, CacheSystem, LayerConfig};
+pub use warming::{CacheWarmer, WarmingStats, WarmingStrategy};

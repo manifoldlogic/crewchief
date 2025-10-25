@@ -5,6 +5,7 @@
 
 pub mod ab_testing;
 pub mod cache;
+pub mod cli;
 pub mod config;
 pub mod context;
 pub mod db;
