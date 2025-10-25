@@ -37,10 +37,13 @@ def process_items(items: List[str], default: Optional[str] = None) -> str:
 "#;
 
     let chunks = parser::extract_chunks(source, "py");
-    assert_eq!(chunks.len(), 1);
+    // Now we extract imports as a separate chunk, so we should have 2 chunks
+    assert_eq!(chunks.len(), 2);
 
-    let func = &chunks[0];
-    assert_eq!(func.symbol_name, Some("process_items".to_string()));
+    // Find the function chunk (not the imports chunk)
+    let func = chunks.iter()
+        .find(|c| c.symbol_name == Some("process_items".to_string()))
+        .expect("Should find process_items function");
     assert!(func.signature.as_ref().unwrap().contains("List[str]"));
     assert!(func.signature.as_ref().unwrap().contains("Optional[str]"));
 }

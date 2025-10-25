@@ -190,9 +190,20 @@ def use_imports():
 
     let chunks = parser::extract_chunks(source, "py");
 
-    // Should extract the function (imports are not extracted as chunks)
-    assert_eq!(chunks.len(), 1);
-    assert_eq!(chunks[0].symbol_name, Some("use_imports".to_string()));
+    // Should extract both the imports chunk and the function
+    assert_eq!(chunks.len(), 2);
+
+    // Find the function chunk
+    let func = chunks.iter()
+        .find(|c| c.symbol_name == Some("use_imports".to_string()))
+        .expect("Should find use_imports function");
+    assert_eq!(func.kind, "func");
+
+    // Verify imports chunk exists
+    let imports_chunk = chunks.iter()
+        .find(|c| c.kind == "imports")
+        .expect("Should have imports chunk");
+    assert!(imports_chunk.metadata.is_some());
 }
 
 #[test]
