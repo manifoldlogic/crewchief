@@ -47,6 +47,11 @@ print_step "Installing Husky globally..."
 npm install -g husky || print_error "Failed to install Husky"
 print_success "Husky installed globally"
 
+# Install CrewChief CLI globally
+print_step "Installing CrewChief CLI globally..."
+npm install -g crewchief@latest || print_error "Failed to install CrewChief CLI"
+print_success "CrewChief CLI installed globally"
+
 # Install pnpm dependencies
 print_step "Installing Node.js dependencies..."
 pnpm install
@@ -215,9 +220,10 @@ fi
 print_success "🎉 CrewChief devcontainer setup complete!"
 echo ""
 echo "Quick start commands:"
-echo "  claude    - Run Claude Code in dangerous mode"
-echo "  ccdev     - Run the CrewChief CLI in development mode"
-echo "  maproom   - Run Maproom commands"
+echo "  claude     - Run Claude Code in dangerous mode"
+echo "  crewchief  - Run the CrewChief CLI (globally installed)"
+echo "  ccdev      - Run the CrewChief CLI in development mode"
+echo "  maproom    - Run Maproom commands"
 echo ""
 echo "Services available:"
 echo "  PostgreSQL: postgres:5432"
