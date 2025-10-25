@@ -8,6 +8,7 @@ fn lang_tsx() -> Language { tree_sitter_typescript::language_tsx() }
 fn lang_javascript() -> Language { tree_sitter_javascript::language() }
 fn lang_python() -> Language { tree_sitter_python::language() }
 fn lang_rust() -> Language { tree_sitter_rust::language() }
+fn lang_go() -> Language { tree_sitter_go::language() }
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
     match language {
@@ -17,6 +18,8 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
         "toml" => extract_toml_chunks(source),
         "py" => extract_python_chunks(source),
         "rs" => extract_rust_chunks(source),
+        "go" => extract_go_chunks(source),
+        "gomod" => extract_gomod_chunks(source),
         _ => extract_code_chunks(source, language),
     }
 }
@@ -2219,6 +2222,491 @@ fn extract_rust_doc_comment(source: &str, node: Node) -> Option<String> {
     } else {
         Some(doc_lines.join("\n"))
     }
+}
+
+// Go-specific parsing functions
+fn extract_go_chunks(source: &str) -> Vec<SymbolChunk> {
+    let mut parser = Parser::new();
+    parser.set_language(&lang_go()).ok();
+
+    let tree = match parser.parse(source, None) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+
+    let mut chunks = Vec::new();
+    let root = tree.root_node();
+
+    // Extract top-level declarations
+    walk_go_decls(source, root, &mut chunks);
+
+    chunks
+}
+
+fn walk_go_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    match node.kind() {
+        "function_declaration" => {
+            extract_go_function(source, node, chunks);
+        }
+        "method_declaration" => {
+            extract_go_method(source, node, chunks);
+        }
+        "type_declaration" => {
+            extract_go_type_declaration(source, node, chunks);
+        }
+        "const_declaration" => {
+            extract_go_const_declaration(source, node, chunks);
+        }
+        "var_declaration" => {
+            extract_go_var_declaration(source, node, chunks);
+        }
+        "package_clause" => {
+            extract_go_package(source, node, chunks);
+        }
+        _ => {}
+    }
+
+    // Recursively walk child nodes
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            walk_go_decls(source, child, chunks);
+        }
+    }
+}
+
+fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract function name
+    let name = node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract parameters
+    let params = node.child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract return type
+    let result = node.child_by_field_name("result")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Build signature
+    let signature = match (&params, &result) {
+        (Some(p), Some(r)) => Some(format!("{} {}", p, r)),
+        (Some(p), None) => Some(p.clone()),
+        (None, Some(r)) => Some(r.clone()),
+        (None, None) => None,
+    };
+
+    // Extract doc comment
+    let docstring = extract_go_doc_comment(source, node);
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "func".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: None,
+    });
+}
+
+fn extract_go_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract method name
+    let name = node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract receiver (e.g., "(r *MyType)")
+    let receiver = node.child_by_field_name("receiver")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract parameters
+    let params = node.child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract return type
+    let result = node.child_by_field_name("result")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Build signature with receiver
+    let signature = match (&receiver, &params, &result) {
+        (Some(r), Some(p), Some(ret)) => Some(format!("{} {} {}", r, p, ret)),
+        (Some(r), Some(p), None) => Some(format!("{} {}", r, p)),
+        (Some(r), None, Some(ret)) => Some(format!("{} {}", r, ret)),
+        (Some(r), None, None) => Some(r.clone()),
+        (None, Some(p), Some(ret)) => Some(format!("{} {}", p, ret)),
+        (None, Some(p), None) => Some(p.clone()),
+        (None, None, Some(ret)) => Some(ret.clone()),
+        (None, None, None) => None,
+    };
+
+    // Extract doc comment
+    let docstring = extract_go_doc_comment(source, node);
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "method".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: receiver.map(|r| serde_json::json!({"receiver": r})),
+    });
+}
+
+fn extract_go_type_declaration(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Go type declarations can have multiple specs (e.g., type ( ... ))
+    // Look for type_spec children
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            if child.kind() == "type_spec" {
+                extract_go_type_spec(source, child, chunks);
+            }
+        }
+    }
+}
+
+fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract type name
+    let name = node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract type definition
+    let type_def = node.child_by_field_name("type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Determine the kind based on the type
+    let kind = if let Some(type_node) = node.child_by_field_name("type") {
+        match type_node.kind() {
+            "struct_type" => "struct",
+            "interface_type" => "interface",
+            _ => "type",
+        }
+    } else {
+        "type"
+    };
+
+    // Extract doc comment
+    let docstring = extract_go_doc_comment(source, node);
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: kind.to_string(),
+        signature: type_def,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: None,
+    });
+}
+
+fn extract_go_const_declaration(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Go const declarations can have multiple specs (e.g., const ( ... ))
+    // Look for const_spec children or const_spec_list
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            if child.kind() == "const_spec" {
+                extract_go_const_spec(source, child, chunks);
+            } else if child.kind() == "const_spec_list" {
+                // Handle const_spec_list which contains multiple const_spec nodes
+                for j in 0..child.child_count() {
+                    if let Some(spec) = child.child(j) {
+                        if spec.kind() == "const_spec" {
+                            extract_go_const_spec(source, spec, chunks);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn extract_go_const_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract constant name - look for first identifier child
+    let name = {
+        let mut const_name = None;
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                if child.kind() == "identifier" {
+                    const_name = child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+        const_name
+    };
+
+    // Extract type (if specified)
+    let type_annotation = node.child_by_field_name("type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract value
+    let value = node.child_by_field_name("value")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Build signature
+    let signature = match (&type_annotation, &value) {
+        (Some(t), Some(v)) => Some(format!("{} = {}", t, v)),
+        (Some(t), None) => Some(t.clone()),
+        (None, Some(v)) => Some(format!("= {}", v)),
+        (None, None) => None,
+    };
+
+    // Extract doc comment
+    let docstring = extract_go_doc_comment(source, node);
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "constant".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: None,
+    });
+}
+
+fn extract_go_var_declaration(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Go var declarations can have multiple specs (e.g., var ( ... ))
+    // Look for var_spec children or var_spec_list
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            if child.kind() == "var_spec" {
+                extract_go_var_spec(source, child, chunks);
+            } else if child.kind() == "var_spec_list" {
+                // Handle var_spec_list which contains multiple var_spec nodes
+                for j in 0..child.child_count() {
+                    if let Some(spec) = child.child(j) {
+                        if spec.kind() == "var_spec" {
+                            extract_go_var_spec(source, spec, chunks);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn extract_go_var_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract variable name - look for first identifier child
+    let name = {
+        let mut var_name = None;
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                if child.kind() == "identifier" {
+                    var_name = child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+        var_name
+    };
+
+    // Extract type (if specified)
+    let type_annotation = node.child_by_field_name("type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract value
+    let value = node.child_by_field_name("value")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Build signature
+    let signature = match (&type_annotation, &value) {
+        (Some(t), Some(v)) => Some(format!("{} = {}", t, v)),
+        (Some(t), None) => Some(t.clone()),
+        (None, Some(v)) => Some(format!("= {}", v)),
+        (None, None) => None,
+    };
+
+    // Extract doc comment
+    let docstring = extract_go_doc_comment(source, node);
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "variable".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: None,
+    });
+}
+
+fn extract_go_package(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract package name from package_identifier child
+    let name = {
+        let mut pkg_name = None;
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                if child.kind() == "package_identifier" {
+                    pkg_name = child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+        pkg_name
+    };
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "package".to_string(),
+        signature: None,
+        docstring: None,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: None,
+    });
+}
+
+fn extract_go_doc_comment(source: &str, node: Node) -> Option<String> {
+    // Look for comment nodes before the declaration
+    let start_line = node.start_position().row;
+    let lines: Vec<&str> = source.lines().collect();
+
+    let mut doc_lines = Vec::new();
+    let mut scan_line = start_line.saturating_sub(1);
+
+    // Scan backwards from the node to find doc comments
+    while scan_line > 0 {
+        let line = lines.get(scan_line)?;
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("//") {
+            // Doc comment line
+            let comment_text = trimmed.trim_start_matches("//").trim();
+            doc_lines.insert(0, comment_text.to_string());
+            scan_line = scan_line.saturating_sub(1);
+        } else if trimmed.is_empty() {
+            // Empty line - check if we already have comments
+            if doc_lines.is_empty() {
+                scan_line = scan_line.saturating_sub(1);
+            } else {
+                // Empty line after comments - stop
+                break;
+            }
+        } else {
+            // Non-comment, non-empty line - stop scanning
+            break;
+        }
+    }
+
+    if doc_lines.is_empty() {
+        None
+    } else {
+        Some(doc_lines.join("\n"))
+    }
+}
+
+// go.mod parsing (simple text-based parsing)
+fn extract_gomod_chunks(source: &str) -> Vec<SymbolChunk> {
+    let mut chunks = Vec::new();
+    let lines: Vec<&str> = source.lines().collect();
+
+    // Extract module name
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("module ") {
+            let module_name = trimmed.strip_prefix("module ").unwrap_or("").trim();
+
+            chunks.push(SymbolChunk {
+                symbol_name: Some(module_name.to_string()),
+                kind: "module".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: (i + 1) as i32,
+                end_line: (i + 1) as i32,
+                metadata: Some(serde_json::json!({"type": "go_module"})),
+            });
+        } else if trimmed.starts_with("go ") {
+            // Go version requirement
+            let version = trimmed.strip_prefix("go ").unwrap_or("").trim();
+
+            chunks.push(SymbolChunk {
+                symbol_name: Some(format!("go {}", version)),
+                kind: "go_version".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: (i + 1) as i32,
+                end_line: (i + 1) as i32,
+                metadata: Some(serde_json::json!({"version": version})),
+            });
+        } else if trimmed.starts_with("require ") {
+            // Single-line require
+            let req = trimmed.strip_prefix("require ").unwrap_or("").trim();
+            if !req.is_empty() && !req.starts_with('(') {
+                chunks.push(SymbolChunk {
+                    symbol_name: Some(req.to_string()),
+                    kind: "require".to_string(),
+                    signature: None,
+                    docstring: None,
+                    start_line: (i + 1) as i32,
+                    end_line: (i + 1) as i32,
+                    metadata: Some(serde_json::json!({"dependency": req})),
+                });
+            }
+        }
+    }
+
+    // Handle multi-line require blocks
+    let mut in_require = false;
+    let mut require_start = 0;
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("require (") || trimmed == "require (" {
+            in_require = true;
+            require_start = i;
+        } else if in_require && trimmed == ")" {
+            in_require = false;
+        } else if in_require && !trimmed.is_empty() && !trimmed.starts_with("//") {
+            // Extract dependency from require block
+            let dep = trimmed.trim();
+            if !dep.is_empty() {
+                chunks.push(SymbolChunk {
+                    symbol_name: Some(dep.to_string()),
+                    kind: "require".to_string(),
+                    signature: None,
+                    docstring: None,
+                    start_line: (require_start + 1) as i32,
+                    end_line: (i + 1) as i32,
+                    metadata: Some(serde_json::json!({"dependency": dep})),
+                });
+            }
+        }
+    }
+
+    chunks
 }
 
 

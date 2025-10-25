@@ -76,6 +76,11 @@ async fn process_python_imports(
 }
 
 fn detect_language_from_path(path: &Path) -> Option<&'static str> {
+    // Check for go.mod file specifically
+    if path.file_name().and_then(|n| n.to_str()) == Some("go.mod") {
+        return Some("gomod");
+    }
+
     match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "ts" => Some("ts"),
         "tsx" => Some("tsx"),
@@ -83,6 +88,7 @@ fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         "jsx" => Some("jsx"),
         "rs" => Some("rs"),
         "py" => Some("py"),
+        "go" => Some("go"),
         "md" => Some("md"),
         "mdx" => Some("mdx"),
         "json" => Some("json"),
@@ -271,6 +277,7 @@ pub async fn scan_worktree(
                     "js" | "jsx" => "📙",
                     "rs" => "🦀",
                     "py" => "🐍",
+                    "go" => "🔷",
                     "md" => "📝",
                     "json" => "📋",
                     "yaml" | "yml" => "📄",
