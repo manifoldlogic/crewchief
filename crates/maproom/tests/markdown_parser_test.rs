@@ -599,3 +599,359 @@ fn test_markdown_single_item_list() {
         assert_eq!(metadata.get("item_count").unwrap().as_u64().unwrap(), 1);
     }
 }
+
+// MD_ENHANCE-2001: Parent Tracking Tests
+
+#[test]
+fn test_heading_parent_path_simple_nesting() {
+    let source = r#"# Guide
+
+## Setup
+
+### Database
+
+Some content.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Find all headings
+    let guide = chunks.iter()
+        .find(|c| c.symbol_name == Some("Guide".to_string()))
+        .expect("Should find Guide heading");
+
+    let setup = chunks.iter()
+        .find(|c| c.symbol_name == Some("Setup".to_string()))
+        .expect("Should find Setup heading");
+
+    let database = chunks.iter()
+        .find(|c| c.symbol_name == Some("Database".to_string()))
+        .expect("Should find Database heading");
+
+    // Check parent paths
+    if let Some(metadata) = &guide.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "", "Root h1 should have empty parent path");
+    } else {
+        panic!("Guide should have metadata");
+    }
+
+    if let Some(metadata) = &setup.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Guide", "h2 should have parent 'Guide'");
+    } else {
+        panic!("Setup should have metadata");
+    }
+
+    if let Some(metadata) = &database.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Guide > Setup", "h3 should have parent 'Guide > Setup'");
+    } else {
+        panic!("Database should have metadata");
+    }
+}
+
+#[test]
+fn test_heading_parent_path_sibling_headings() {
+    let source = r#"# Main
+
+## Section One
+
+Content here.
+
+## Section Two
+
+More content.
+
+## Section Three
+
+Final content.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    let main = chunks.iter()
+        .find(|c| c.symbol_name == Some("Main".to_string()))
+        .expect("Should find Main heading");
+
+    let section_one = chunks.iter()
+        .find(|c| c.symbol_name == Some("Section One".to_string()))
+        .expect("Should find Section One");
+
+    let section_two = chunks.iter()
+        .find(|c| c.symbol_name == Some("Section Two".to_string()))
+        .expect("Should find Section Two");
+
+    let section_three = chunks.iter()
+        .find(|c| c.symbol_name == Some("Section Three".to_string()))
+        .expect("Should find Section Three");
+
+    // Check all siblings have same parent
+    if let Some(metadata) = &main.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "", "Root should have empty parent path");
+    }
+
+    for section in [section_one, section_two, section_three] {
+        if let Some(metadata) = &section.metadata {
+            let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+            assert_eq!(parent_path, "Main", "All h2 siblings should have parent 'Main'");
+        } else {
+            panic!("Section should have metadata");
+        }
+    }
+}
+
+#[test]
+fn test_heading_parent_path_level_jumping() {
+    let source = r#"# Top
+
+#### Deep
+
+Content.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    let top = chunks.iter()
+        .find(|c| c.symbol_name == Some("Top".to_string()))
+        .expect("Should find Top heading");
+
+    let deep = chunks.iter()
+        .find(|c| c.symbol_name == Some("Deep".to_string()))
+        .expect("Should find Deep heading");
+
+    // Check that jumping from h1 to h4 works correctly
+    if let Some(metadata) = &top.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "", "h1 should have empty parent path");
+    }
+
+    if let Some(metadata) = &deep.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Top", "h4 after h1 should have parent 'Top'");
+    }
+}
+
+#[test]
+fn test_heading_parent_path_complex_transitions() {
+    let source = r#"# Root
+
+## Level 2 A
+
+### Level 3 A
+
+Content.
+
+## Level 2 B
+
+### Level 3 B
+
+More content.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    let level_3a = chunks.iter()
+        .find(|c| c.symbol_name == Some("Level 3 A".to_string()))
+        .expect("Should find Level 3 A");
+
+    let level_2b = chunks.iter()
+        .find(|c| c.symbol_name == Some("Level 2 B".to_string()))
+        .expect("Should find Level 2 B");
+
+    let level_3b = chunks.iter()
+        .find(|c| c.symbol_name == Some("Level 3 B".to_string()))
+        .expect("Should find Level 3 B");
+
+    // Check Level 3 A has correct path
+    if let Some(metadata) = &level_3a.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Root > Level 2 A");
+    } else {
+        panic!("Level 3 A should have metadata");
+    }
+
+    // Check Level 2 B (transition from h3 to h2)
+    if let Some(metadata) = &level_2b.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Root", "h2 after h3 should pop back to h1 parent");
+    } else {
+        panic!("Level 2 B should have metadata");
+    }
+
+    // Check Level 3 B has correct path
+    if let Some(metadata) = &level_3b.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Root > Level 2 B");
+    } else {
+        panic!("Level 3 B should have metadata");
+    }
+}
+
+#[test]
+fn test_heading_parent_path_multiple_roots() {
+    let source = r#"# First Root
+
+## Child of First
+
+Content.
+
+# Second Root
+
+## Child of Second
+
+More content.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    let first_root = chunks.iter()
+        .find(|c| c.symbol_name == Some("First Root".to_string()))
+        .expect("Should find First Root");
+
+    let child_of_first = chunks.iter()
+        .find(|c| c.symbol_name == Some("Child of First".to_string()))
+        .expect("Should find Child of First");
+
+    let second_root = chunks.iter()
+        .find(|c| c.symbol_name == Some("Second Root".to_string()))
+        .expect("Should find Second Root");
+
+    let child_of_second = chunks.iter()
+        .find(|c| c.symbol_name == Some("Child of Second".to_string()))
+        .expect("Should find Child of Second");
+
+    // Check first section
+    if let Some(metadata) = &first_root.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "");
+    }
+
+    if let Some(metadata) = &child_of_first.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "First Root");
+    }
+
+    // Check second section (stack should reset for new h1)
+    if let Some(metadata) = &second_root.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "");
+    }
+
+    if let Some(metadata) = &child_of_second.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "Second Root");
+    }
+}
+
+#[test]
+fn test_heading_parent_path_all_levels() {
+    let source = r#"# L1
+
+## L2
+
+### L3
+
+#### L4
+
+##### L5
+
+###### L6
+
+Content at max depth.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Check L1
+    let l1 = chunks.iter().find(|c| c.symbol_name == Some("L1".to_string())).unwrap();
+    if let Some(metadata) = &l1.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "");
+    }
+
+    // Check L2
+    let l2 = chunks.iter().find(|c| c.symbol_name == Some("L2".to_string())).unwrap();
+    if let Some(metadata) = &l2.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "L1");
+    }
+
+    // Check L3
+    let l3 = chunks.iter().find(|c| c.symbol_name == Some("L3".to_string())).unwrap();
+    if let Some(metadata) = &l3.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "L1 > L2");
+    }
+
+    // Check L4
+    let l4 = chunks.iter().find(|c| c.symbol_name == Some("L4".to_string())).unwrap();
+    if let Some(metadata) = &l4.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "L1 > L2 > L3");
+    }
+
+    // Check L5
+    let l5 = chunks.iter().find(|c| c.symbol_name == Some("L5".to_string())).unwrap();
+    if let Some(metadata) = &l5.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "L1 > L2 > L3 > L4");
+    }
+
+    // Check L6 (max depth)
+    let l6 = chunks.iter().find(|c| c.symbol_name == Some("L6".to_string())).unwrap();
+    if let Some(metadata) = &l6.metadata {
+        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "L1 > L2 > L3 > L4 > L5");
+    }
+}
+
+#[test]
+fn test_heading_parent_path_readme_structure() {
+    // Real-world README structure test
+    let source = r#"# Project Name
+
+## Installation
+
+### Prerequisites
+
+System requirements.
+
+### Quick Start
+
+Installation steps.
+
+## API Reference
+
+### Authentication
+
+#### OAuth Flow
+
+Details here.
+
+#### API Keys
+
+More details.
+
+### Database
+
+#### Connections
+
+Connection info.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Check OAuth Flow has correct path
+    let oauth = chunks.iter()
+        .find(|c| c.symbol_name == Some("OAuth Flow".to_string()))
+        .expect("Should find OAuth Flow");
+
+    if let Some(metadata) = &oauth.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Project Name > API Reference > Authentication",
+            "OAuth Flow should have full breadcrumb path");
+    }
+
+    // Check Connections has correct path
+    let connections = chunks.iter()
+        .find(|c| c.symbol_name == Some("Connections".to_string()))
+        .expect("Should find Connections");
+
+    if let Some(metadata) = &connections.metadata {
+        let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
+        assert_eq!(parent_path, "Project Name > API Reference > Database",
+            "Connections should have correct breadcrumb after transitioning sections");
+    }
+}

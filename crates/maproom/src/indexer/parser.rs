@@ -3,6 +3,51 @@ use tree_sitter::{Language, Node, Parser};
 use super::SymbolChunk;
 use crate::profile_scope;
 
+// Heading hierarchy tracking for markdown parent paths
+struct HeadingNode {
+    level: u8,
+    text: String,
+}
+
+struct HierarchyTracker {
+    stack: Vec<HeadingNode>,
+}
+
+impl HierarchyTracker {
+    fn new() -> Self {
+        Self { stack: Vec::new() }
+    }
+
+    /// Update the hierarchy stack when entering a new heading
+    /// Returns the parent path (breadcrumb) for this heading
+    fn enter_heading(&mut self, level: u8, text: String) -> String {
+        // Pop stack until we're at the appropriate parent level
+        // If new level <= current level, we need to pop to find the parent
+        while let Some(top) = self.stack.last() {
+            if top.level >= level {
+                self.stack.pop();
+            } else {
+                break;
+            }
+        }
+
+        // Generate parent path from remaining stack
+        let parent_path = if self.stack.is_empty() {
+            String::new()
+        } else {
+            self.stack.iter()
+                .map(|node| node.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" > ")
+        };
+
+        // Push the new heading onto the stack
+        self.stack.push(HeadingNode { level, text });
+
+        parent_path
+    }
+}
+
 // Use the safe language providers exposed by the crates
 fn lang_typescript() -> Language { tree_sitter_typescript::language_typescript() }
 fn lang_tsx() -> Language { tree_sitter_typescript::language_tsx() }
@@ -58,19 +103,20 @@ fn extract_markdown_chunks(source: &str) -> Vec<SymbolChunk> {
 
     let mut chunks = Vec::new();
     let root = tree.root_node();
+    let mut hierarchy = HierarchyTracker::new();
 
     // Walk the tree and extract headings and code blocks
-    walk_markdown_nodes(source, root, &mut chunks);
+    walk_markdown_nodes(source, root, &mut chunks, &mut hierarchy);
 
     chunks
 }
 
-fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, hierarchy: &mut HierarchyTracker) {
     let kind = node.kind();
 
     match kind {
         "atx_heading" => {
-            extract_heading(source, node, chunks);
+            extract_heading(source, node, chunks, hierarchy);
         }
         "fenced_code_block" => {
             extract_code_block(source, node, chunks);
@@ -91,12 +137,12 @@ fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     // Recurse into children
     for i in 0..node.child_count() {
         if let Some(child) = node.child(i) {
-            walk_markdown_nodes(source, child, chunks);
+            walk_markdown_nodes(source, child, chunks, hierarchy);
         }
     }
 }
 
-fn extract_heading(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+fn extract_heading(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, hierarchy: &mut HierarchyTracker) {
     // Get heading level by checking the marker
     let mut level = 0;
     let mut heading_text = String::new();
@@ -127,6 +173,9 @@ fn extract_heading(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         // Find section end (next heading of same or higher level, or EOF)
         let end_line = find_section_end(source, node, level);
 
+        // Update hierarchy and get parent path
+        let parent_path = hierarchy.enter_heading(level as u8, heading_text.clone());
+
         let kind = format!("heading_{}", level);
 
         chunks.push(SymbolChunk {
@@ -137,7 +186,8 @@ fn extract_heading(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
             start_line,
             end_line,
             metadata: Some(serde_json::json!({
-                "level": level
+                "level": level,
+                "parent_path": parent_path
             })),
         });
     }
