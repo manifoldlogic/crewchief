@@ -175,7 +175,7 @@ impl FileWatcher {
                     }
                 }
             }
-            EventKind::Create(_) | EventKind::Modify(_) => {
+            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Access(_) => {
                 for path in event.paths {
                     if !ignore_matcher.should_ignore(&path) {
                         file_events.push(FileEvent::Modified(path));

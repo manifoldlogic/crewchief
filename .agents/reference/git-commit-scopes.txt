@@ -17,3 +17,4 @@ search
 tests
 tools
 ui
+watcher
