@@ -2310,18 +2310,27 @@ fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     let start = node.start_position();
     let end = node.end_position();
 
-    // Build metadata with goroutine/channel flags if present
-    let metadata = if has_goroutines || has_channels {
+    // Build metadata with goroutine/channel flags and visibility
+    let metadata = {
         let mut meta = serde_json::Map::new();
+
+        // Add visibility based on function name
+        if let Some(ref func_name) = name {
+            meta.insert("visibility".to_string(), serde_json::json!(go_visibility(func_name)));
+        }
+
         if has_goroutines {
             meta.insert("has_goroutines".to_string(), serde_json::json!(true));
         }
         if has_channels {
             meta.insert("has_channels".to_string(), serde_json::json!(true));
         }
-        Some(serde_json::Value::Object(meta))
-    } else {
-        None
+
+        if meta.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(meta))
+        }
     };
 
     chunks.push(SymbolChunk {
@@ -2374,14 +2383,33 @@ fn extract_go_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Detect goroutines and channels in the method body
     let (has_goroutines, has_channels) = detect_go_concurrency(node);
 
+    // Parse receiver to get type and pointer/value information
+    let (receiver_type_name, receiver_type) = if let Some(ref r) = receiver {
+        parse_go_receiver(r)
+    } else {
+        (None, None)
+    };
+
     let start = node.start_position();
     let end = node.end_position();
 
-    // Build metadata with receiver and goroutine/channel flags
+    // Build metadata with receiver, receiver_type, visibility, and goroutine/channel flags
     let metadata = {
         let mut meta = serde_json::Map::new();
+
+        // Add visibility based on method name
+        if let Some(ref method_name) = name {
+            meta.insert("visibility".to_string(), serde_json::json!(go_visibility(method_name)));
+        }
+
         if let Some(r) = receiver {
             meta.insert("receiver".to_string(), serde_json::json!(r));
+        }
+        if let Some(rt) = receiver_type {
+            meta.insert("receiver_type".to_string(), serde_json::json!(rt));
+        }
+        if let Some(rtn) = receiver_type_name {
+            meta.insert("receiver_type_name".to_string(), serde_json::json!(rtn));
         }
         if has_goroutines {
             meta.insert("has_goroutines".to_string(), serde_json::json!(true));
@@ -2430,8 +2458,9 @@ fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    // Determine the kind based on the type
-    let kind = if let Some(type_node) = node.child_by_field_name("type") {
+    // Determine the kind based on the type and extract additional metadata
+    let type_node_opt = node.child_by_field_name("type");
+    let kind = if let Some(ref type_node) = type_node_opt {
         match type_node.kind() {
             "struct_type" => "struct",
             "interface_type" => "interface",
@@ -2447,6 +2476,38 @@ fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
     let start = node.start_position();
     let end = node.end_position();
 
+    // Build metadata with visibility and type-specific details
+    let metadata = {
+        let mut meta = serde_json::Map::new();
+
+        // Add visibility based on type name
+        if let Some(ref type_name) = name {
+            meta.insert("visibility".to_string(), serde_json::json!(go_visibility(type_name)));
+        }
+
+        // For structs, extract embedded types
+        if let Some(ref type_node) = type_node_opt {
+            if type_node.kind() == "struct_type" {
+                let embedded_types = extract_go_embedded_types(source, *type_node);
+                if !embedded_types.is_empty() {
+                    meta.insert("embedded_types".to_string(), serde_json::json!(embedded_types));
+                }
+            } else if type_node.kind() == "interface_type" {
+                // For interfaces, extract method signatures
+                let interface_methods = extract_go_interface_methods(source, *type_node);
+                if !interface_methods.is_empty() {
+                    meta.insert("interface_methods".to_string(), serde_json::json!(interface_methods));
+                }
+            }
+        }
+
+        if meta.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(meta))
+        }
+    };
+
     chunks.push(SymbolChunk {
         symbol_name: name,
         kind: kind.to_string(),
@@ -2454,7 +2515,7 @@ fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
         docstring,
         start_line: (start.row + 1) as i32,
         end_line: (end.row + 1) as i32,
-        metadata: None,
+        metadata,
     });
 }
 
@@ -2518,6 +2579,15 @@ fn extract_go_const_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     let start = node.start_position();
     let end = node.end_position();
 
+    // Build metadata with visibility
+    let metadata = if let Some(ref const_name) = name {
+        let mut meta = serde_json::Map::new();
+        meta.insert("visibility".to_string(), serde_json::json!(go_visibility(const_name)));
+        Some(serde_json::Value::Object(meta))
+    } else {
+        None
+    };
+
     chunks.push(SymbolChunk {
         symbol_name: name,
         kind: "constant".to_string(),
@@ -2525,7 +2595,7 @@ fn extract_go_const_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
         docstring,
         start_line: (start.row + 1) as i32,
         end_line: (end.row + 1) as i32,
-        metadata: None,
+        metadata,
     });
 }
 
@@ -2589,6 +2659,15 @@ fn extract_go_var_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     let start = node.start_position();
     let end = node.end_position();
 
+    // Build metadata with visibility
+    let metadata = if let Some(ref var_name) = name {
+        let mut meta = serde_json::Map::new();
+        meta.insert("visibility".to_string(), serde_json::json!(go_visibility(var_name)));
+        Some(serde_json::Value::Object(meta))
+    } else {
+        None
+    };
+
     chunks.push(SymbolChunk {
         symbol_name: name,
         kind: "variable".to_string(),
@@ -2596,7 +2675,7 @@ fn extract_go_var_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
         docstring,
         start_line: (start.row + 1) as i32,
         end_line: (end.row + 1) as i32,
-        metadata: None,
+        metadata,
     });
 }
 
@@ -2758,6 +2837,99 @@ fn extract_go_doc_comment(source: &str, node: Node) -> Option<String> {
     } else {
         Some(doc_lines.join("\n"))
     }
+}
+
+// Helper function to determine if a Go identifier is exported (PascalCase) or unexported (camelCase)
+fn go_is_exported(name: &str) -> bool {
+    // In Go, an identifier is exported if it starts with an uppercase letter
+    name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+}
+
+// Helper function to determine Go visibility based on identifier name
+fn go_visibility(name: &str) -> &'static str {
+    if go_is_exported(name) {
+        "exported"
+    } else {
+        "unexported"
+    }
+}
+
+// Helper function to parse receiver type and determine if it's a pointer or value receiver
+// Returns (receiver_type_name, is_pointer)
+fn parse_go_receiver(receiver_text: &str) -> (Option<String>, Option<&'static str>) {
+    // Receiver format: "(r *Type)" or "(r Type)"
+    // Strip parentheses and split on whitespace
+    let stripped = receiver_text.trim().trim_start_matches('(').trim_end_matches(')');
+    let parts: Vec<&str> = stripped.split_whitespace().collect();
+
+    if parts.len() >= 2 {
+        let type_part = parts[1];
+        if type_part.starts_with('*') {
+            // Pointer receiver
+            let type_name = type_part.trim_start_matches('*').to_string();
+            (Some(type_name), Some("pointer"))
+        } else {
+            // Value receiver
+            (Some(type_part.to_string()), Some("value"))
+        }
+    } else {
+        (None, None)
+    }
+}
+
+// Helper function to extract embedded types from a struct_type node
+fn extract_go_embedded_types(source: &str, struct_node: Node) -> Vec<String> {
+    let mut embedded_types = Vec::new();
+
+    // Look for field_declaration_list child
+    for i in 0..struct_node.child_count() {
+        if let Some(child) = struct_node.child(i) {
+            if child.kind() == "field_declaration_list" {
+                // Iterate through field declarations
+                for j in 0..child.child_count() {
+                    if let Some(field) = child.child(j) {
+                        if field.kind() == "field_declaration" {
+                            // Check if this is an embedded field (no explicit field name)
+                            // An embedded field has a type but no name list
+                            let has_name = field.child_by_field_name("name").is_some();
+
+                            if !has_name {
+                                // This is an embedded field - extract the type
+                                if let Some(type_node) = field.child_by_field_name("type") {
+                                    if let Ok(type_text) = type_node.utf8_text(source.as_bytes()) {
+                                        // Handle pointer types (strip the *)
+                                        let type_name = type_text.trim_start_matches('*').trim();
+                                        embedded_types.push(type_name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    embedded_types
+}
+
+// Helper function to extract interface method signatures from an interface_type node
+fn extract_go_interface_methods(source: &str, interface_node: Node) -> Vec<String> {
+    let mut methods = Vec::new();
+
+    // Look for method_elem children (used by tree-sitter-go for interface methods)
+    for i in 0..interface_node.child_count() {
+        if let Some(child) = interface_node.child(i) {
+            if child.kind() == "method_elem" {
+                // Extract the full method signature
+                if let Ok(method_sig) = child.utf8_text(source.as_bytes()) {
+                    methods.push(method_sig.trim().to_string());
+                }
+            }
+        }
+    }
+
+    methods
 }
 
 // go.mod parsing (simple text-based parsing)

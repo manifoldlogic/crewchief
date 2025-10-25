@@ -365,3 +365,338 @@ func main() {
     });
     assert!(dot_import.is_some(), "Dot import not found");
 }
+
+// Tests for Go conventions (LANG_PARSE-3003)
+
+#[test]
+fn test_go_exported_vs_unexported_functions() {
+    let source = r#"
+package main
+
+// PublicFunc is exported (PascalCase)
+func PublicFunc() {
+}
+
+// privateFunc is unexported (camelCase)
+func privateFunc() {
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the exported function
+    let public_func = chunks.iter().find(|c| c.kind == "func" && c.symbol_name.as_deref() == Some("PublicFunc"));
+    assert!(public_func.is_some(), "PublicFunc not found");
+    let public_func = public_func.unwrap();
+    assert!(public_func.metadata.is_some(), "PublicFunc should have metadata");
+    let metadata = public_func.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("exported")), "PublicFunc should be exported");
+
+    // Find the unexported function
+    let private_func = chunks.iter().find(|c| c.kind == "func" && c.symbol_name.as_deref() == Some("privateFunc"));
+    assert!(private_func.is_some(), "privateFunc not found");
+    let private_func = private_func.unwrap();
+    assert!(private_func.metadata.is_some(), "privateFunc should have metadata");
+    let metadata = private_func.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("unexported")), "privateFunc should be unexported");
+}
+
+#[test]
+fn test_go_exported_vs_unexported_types() {
+    let source = r#"
+package main
+
+// PublicStruct is exported
+type PublicStruct struct {
+    Name string
+}
+
+// privateType is unexported
+type privateType int
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the exported struct
+    let public_struct = chunks.iter().find(|c| c.symbol_name.as_deref() == Some("PublicStruct"));
+    assert!(public_struct.is_some(), "PublicStruct not found");
+    let public_struct = public_struct.unwrap();
+    assert!(public_struct.metadata.is_some(), "PublicStruct should have metadata");
+    let metadata = public_struct.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("exported")), "PublicStruct should be exported");
+
+    // Find the unexported type
+    let private_type = chunks.iter().find(|c| c.symbol_name.as_deref() == Some("privateType"));
+    assert!(private_type.is_some(), "privateType not found");
+    let private_type = private_type.unwrap();
+    assert!(private_type.metadata.is_some(), "privateType should have metadata");
+    let metadata = private_type.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("unexported")), "privateType should be unexported");
+}
+
+#[test]
+fn test_go_exported_vs_unexported_constants() {
+    let source = r#"
+package main
+
+// MaxRetries is exported
+const MaxRetries = 3
+
+// defaultTimeout is unexported
+const defaultTimeout = 30
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the exported constant
+    let max_retries = chunks.iter().find(|c| c.kind == "constant" && c.symbol_name.as_deref() == Some("MaxRetries"));
+    assert!(max_retries.is_some(), "MaxRetries not found");
+    let max_retries = max_retries.unwrap();
+    assert!(max_retries.metadata.is_some(), "MaxRetries should have metadata");
+    let metadata = max_retries.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("exported")), "MaxRetries should be exported");
+
+    // Find the unexported constant
+    let default_timeout = chunks.iter().find(|c| c.kind == "constant" && c.symbol_name.as_deref() == Some("defaultTimeout"));
+    assert!(default_timeout.is_some(), "defaultTimeout not found");
+    let default_timeout = default_timeout.unwrap();
+    assert!(default_timeout.metadata.is_some(), "defaultTimeout should have metadata");
+    let metadata = default_timeout.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("unexported")), "defaultTimeout should be unexported");
+}
+
+#[test]
+fn test_go_pointer_receiver() {
+    let source = r#"
+package main
+
+type User struct {
+    Name string
+}
+
+// SetName uses a pointer receiver
+func (u *User) SetName(name string) {
+    u.Name = name
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the method
+    let method = chunks.iter().find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("SetName"));
+    assert!(method.is_some(), "SetName method not found");
+    let method = method.unwrap();
+    assert!(method.metadata.is_some(), "SetName should have metadata");
+    let metadata = method.metadata.as_ref().unwrap();
+
+    assert_eq!(metadata.get("receiver_type"), Some(&serde_json::json!("pointer")), "SetName should have pointer receiver");
+    assert_eq!(metadata.get("receiver_type_name"), Some(&serde_json::json!("User")), "Receiver type name should be User");
+}
+
+#[test]
+fn test_go_value_receiver() {
+    let source = r#"
+package main
+
+type User struct {
+    Name string
+}
+
+// GetName uses a value receiver
+func (u User) GetName() string {
+    return u.Name
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the method
+    let method = chunks.iter().find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("GetName"));
+    assert!(method.is_some(), "GetName method not found");
+    let method = method.unwrap();
+    assert!(method.metadata.is_some(), "GetName should have metadata");
+    let metadata = method.metadata.as_ref().unwrap();
+
+    assert_eq!(metadata.get("receiver_type"), Some(&serde_json::json!("value")), "GetName should have value receiver");
+    assert_eq!(metadata.get("receiver_type_name"), Some(&serde_json::json!("User")), "Receiver type name should be User");
+}
+
+#[test]
+fn test_go_embedded_struct_fields() {
+    let source = r#"
+package main
+
+type Base struct {
+    ID int
+}
+
+type Extended struct {
+    Name string
+}
+
+// Derived embeds both Base and Extended
+type Derived struct {
+    Base
+    Extended
+    Value string
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the Derived struct
+    let derived = chunks.iter().find(|c| c.kind == "struct" && c.symbol_name.as_deref() == Some("Derived"));
+    assert!(derived.is_some(), "Derived struct not found");
+    let derived = derived.unwrap();
+    assert!(derived.metadata.is_some(), "Derived should have metadata");
+    let metadata = derived.metadata.as_ref().unwrap();
+
+    // Check for embedded types
+    let embedded_types = metadata.get("embedded_types");
+    assert!(embedded_types.is_some(), "Derived should have embedded_types");
+
+    let embedded_array = embedded_types.unwrap().as_array();
+    assert!(embedded_array.is_some(), "embedded_types should be an array");
+    let embedded_array = embedded_array.unwrap();
+
+    assert_eq!(embedded_array.len(), 2, "Derived should have 2 embedded types");
+    assert!(embedded_array.contains(&serde_json::json!("Base")), "Should contain Base");
+    assert!(embedded_array.contains(&serde_json::json!("Extended")), "Should contain Extended");
+}
+
+#[test]
+fn test_go_embedded_pointer_struct() {
+    let source = r#"
+package main
+
+type Logger struct {
+    Level string
+}
+
+// Service embeds *Logger (pointer)
+type Service struct {
+    *Logger
+    Name string
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the Service struct
+    let service = chunks.iter().find(|c| c.kind == "struct" && c.symbol_name.as_deref() == Some("Service"));
+    assert!(service.is_some(), "Service struct not found");
+    let service = service.unwrap();
+    assert!(service.metadata.is_some(), "Service should have metadata");
+    let metadata = service.metadata.as_ref().unwrap();
+
+    // Check for embedded types
+    let embedded_types = metadata.get("embedded_types");
+    assert!(embedded_types.is_some(), "Service should have embedded_types");
+
+    let embedded_array = embedded_types.unwrap().as_array();
+    assert!(embedded_array.is_some(), "embedded_types should be an array");
+    let embedded_array = embedded_array.unwrap();
+
+    assert_eq!(embedded_array.len(), 1, "Service should have 1 embedded type");
+    // Note: The pointer * should be stripped from the type name
+    assert!(embedded_array.contains(&serde_json::json!("Logger")), "Should contain Logger");
+}
+
+#[test]
+fn test_go_interface_method_signatures() {
+    let source = r#"
+package main
+
+// Reader interface with multiple methods
+type Reader interface {
+    Read(p []byte) (n int, err error)
+    Close() error
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the Reader interface
+    let reader = chunks.iter().find(|c| c.kind == "interface" && c.symbol_name.as_deref() == Some("Reader"));
+    assert!(reader.is_some(), "Reader interface not found");
+    let reader = reader.unwrap();
+    assert!(reader.metadata.is_some(), "Reader should have metadata");
+    let metadata = reader.metadata.as_ref().unwrap();
+
+    // Check for interface methods
+    let interface_methods = metadata.get("interface_methods");
+    assert!(interface_methods.is_some(), "Reader should have interface_methods");
+
+    let methods_array = interface_methods.unwrap().as_array();
+    assert!(methods_array.is_some(), "interface_methods should be an array");
+    let methods_array = methods_array.unwrap();
+
+    assert_eq!(methods_array.len(), 2, "Reader should have 2 methods");
+    assert!(methods_array.iter().any(|m| m.as_str().unwrap().contains("Read")), "Should contain Read method");
+    assert!(methods_array.iter().any(|m| m.as_str().unwrap().contains("Close")), "Should contain Close method");
+}
+
+#[test]
+fn test_go_empty_interface() {
+    let source = r#"
+package main
+
+// Any is an empty interface (accepts any type)
+type Any interface{}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the Any interface
+    let any = chunks.iter().find(|c| c.kind == "interface" && c.symbol_name.as_deref() == Some("Any"));
+    assert!(any.is_some(), "Any interface not found");
+    let any = any.unwrap();
+
+    // Empty interfaces may or may not have metadata depending on whether there are methods
+    // In this case, there should be metadata with visibility but no interface_methods
+    if let Some(metadata) = &any.metadata {
+        let interface_methods = metadata.get("interface_methods");
+        // If present, should be empty array
+        if let Some(methods) = interface_methods {
+            let methods_array = methods.as_array().unwrap();
+            assert_eq!(methods_array.len(), 0, "Empty interface should have no methods");
+        }
+    }
+}
+
+#[test]
+fn test_go_method_visibility() {
+    let source = r#"
+package main
+
+type Service struct {
+    data string
+}
+
+// Start is an exported method
+func (s *Service) Start() {
+}
+
+// stop is an unexported method
+func (s *Service) stop() {
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find the exported method
+    let start_method = chunks.iter().find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("Start"));
+    assert!(start_method.is_some(), "Start method not found");
+    let start_method = start_method.unwrap();
+    assert!(start_method.metadata.is_some(), "Start should have metadata");
+    let metadata = start_method.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("exported")), "Start should be exported");
+
+    // Find the unexported method
+    let stop_method = chunks.iter().find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("stop"));
+    assert!(stop_method.is_some(), "stop method not found");
+    let stop_method = stop_method.unwrap();
+    assert!(stop_method.metadata.is_some(), "stop should have metadata");
+    let metadata = stop_method.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("visibility"), Some(&serde_json::json!("unexported")), "stop should be unexported");
+}
