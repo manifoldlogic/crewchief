@@ -97,3 +97,7 @@ harness = false
 name = "context_assembly_bench"
 harness = false
 
+[[bench]]
+name = "python_parser_bench"
+harness = false
+
