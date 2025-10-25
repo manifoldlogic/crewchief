@@ -127,3 +127,11 @@ harness = false
 name = "concurrent_operations_bench"
 harness = false
 
+[[bench]]
+name = "parser_bench"
+harness = false
+
+[[bench]]
+name = "memory_optimization_bench"
+harness = false
+
