@@ -100,6 +100,7 @@ fn another_function() {
             "test function demonstrates assembler",
             1.0,
             0.0,
+            None,
         )
         .await?;
 

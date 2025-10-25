@@ -34,6 +34,7 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
         include_str!("./../../migrations/0008_context_query_optimizations.sql"),
         include_str!("./../../migrations/0009_create_context_cache.sql"),
         include_str!("./../../migrations/0010_add_blake3_hash.sql"),
+        include_str!("./../../migrations/0011_python_symbol_kinds.sql"),
     ];
 
     for sql in migrations {
@@ -127,13 +128,14 @@ pub async fn insert_chunk(
     ts_doc_text: &str,
     recency_score: f32,
     churn_score: f32,
+    metadata: Option<&serde_json::Value>,
 ) -> anyhow::Result<i64> {
     let row = client
         .query_one(
              "INSERT INTO maproom.chunks (
-               file_id, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score
+               file_id, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
              ) VALUES (
-               $1, $2::text, ($3::text)::maproom.symbol_kind, $4::text, $5::text, $6, $7, $8::text, to_tsvector('simple', unaccent($9::text)), $10, $11
+               $1, $2::text, ($3::text)::maproom.symbol_kind, $4::text, $5::text, $6, $7, $8::text, to_tsvector('simple', unaccent($9::text)), $10, $11, $12::jsonb
              )
              ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
                symbol_name = EXCLUDED.symbol_name,
@@ -141,9 +143,10 @@ pub async fn insert_chunk(
                signature = EXCLUDED.signature,
                docstring = EXCLUDED.docstring,
                preview = EXCLUDED.preview,
-               ts_doc = EXCLUDED.ts_doc
+               ts_doc = EXCLUDED.ts_doc,
+               metadata = EXCLUDED.metadata
              RETURNING id",
-            &[&file_id, &symbol_name, &kind, &signature, &docstring, &start_line, &end_line, &preview, &ts_doc_text, &recency_score, &churn_score],
+            &[&file_id, &symbol_name, &kind, &signature, &docstring, &start_line, &end_line, &preview, &ts_doc_text, &recency_score, &churn_score, &metadata],
         )
         .await?;
     Ok(row.get(0))
@@ -157,6 +160,74 @@ pub struct SearchHit {
     pub kind: String,
     pub start_line: i32,
     pub end_line: i32,
+}
+
+/// Insert a chunk edge representing a relationship between two chunks
+pub async fn insert_chunk_edge(
+    client: &Client,
+    src_chunk_id: i64,
+    dst_chunk_id: i64,
+    edge_type: &str,
+) -> anyhow::Result<()> {
+    client
+        .execute(
+            "INSERT INTO maproom.chunk_edges (src_chunk_id, dst_chunk_id, type)
+             VALUES ($1, $2, ($3::text)::maproom.edge_type)
+             ON CONFLICT (src_chunk_id, dst_chunk_id, type) DO NOTHING",
+            &[&src_chunk_id, &dst_chunk_id, &edge_type],
+        )
+        .await?;
+    Ok(())
+}
+
+/// Find a chunk by symbol name within a specific file or repository
+/// This is used to resolve import targets for creating edges
+pub async fn find_chunk_by_symbol(
+    client: &Client,
+    repo_id: i64,
+    worktree_id: Option<i64>,
+    symbol_name: &str,
+    relpath: Option<&str>,
+) -> anyhow::Result<Option<i64>> {
+    let row = if let Some(wid) = worktree_id {
+        if let Some(path) = relpath {
+            // Find in specific file
+            client
+                .query_opt(
+                    "SELECT c.id FROM maproom.chunks c
+                     JOIN maproom.files f ON f.id = c.file_id
+                     WHERE f.repo_id = $1 AND f.worktree_id = $2
+                       AND f.relpath = $3 AND c.symbol_name = $4
+                     ORDER BY c.id DESC LIMIT 1",
+                    &[&repo_id, &wid, &path, &symbol_name],
+                )
+                .await?
+        } else {
+            // Find anywhere in worktree
+            client
+                .query_opt(
+                    "SELECT c.id FROM maproom.chunks c
+                     JOIN maproom.files f ON f.id = c.file_id
+                     WHERE f.repo_id = $1 AND f.worktree_id = $2 AND c.symbol_name = $3
+                     ORDER BY c.id DESC LIMIT 1",
+                    &[&repo_id, &wid, &symbol_name],
+                )
+                .await?
+        }
+    } else {
+        // Find anywhere in repo
+        client
+            .query_opt(
+                "SELECT c.id FROM maproom.chunks c
+                 JOIN maproom.files f ON f.id = c.file_id
+                 WHERE f.repo_id = $1 AND c.symbol_name = $2
+                 ORDER BY c.id DESC LIMIT 1",
+                &[&repo_id, &symbol_name],
+            )
+            .await?
+    };
+
+    Ok(row.map(|r| r.get(0)))
 }
 
 pub async fn search_chunks_fts(

@@ -8,6 +8,73 @@ use tracing::{info, warn};
 
 pub mod parser;
 
+/// Process Python imports from chunk metadata and create import edges in chunk_edges table
+async fn process_python_imports(
+    client: &Client,
+    repo_id: i64,
+    worktree_id: i64,
+    _file_id: i64,
+    chunks: &[SymbolChunk],
+) -> anyhow::Result<()> {
+    // Find the imports chunk if it exists
+    let imports_chunk = chunks.iter()
+        .find(|c| c.kind == "imports" && c.metadata.is_some());
+
+    if let Some(imports) = imports_chunk {
+        if let Some(metadata) = &imports.metadata {
+            if let Some(imports_array) = metadata.get("imports").and_then(|v| v.as_array()) {
+                // Get the chunk_id for the imports chunk itself
+                let imports_chunk_id = crate::db::find_chunk_by_symbol(
+                    client,
+                    repo_id,
+                    Some(worktree_id),
+                    "__imports__",
+                    None,
+                )
+                .await?;
+
+                if let Some(src_chunk_id) = imports_chunk_id {
+                    // Process each import
+                    for import_obj in imports_array {
+                        // Extract symbol names from the import
+                        let names = import_obj.get("names")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str())
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+
+                        // For each imported name, try to find the target chunk
+                        for name in names {
+                            if let Ok(Some(dst_chunk_id)) = crate::db::find_chunk_by_symbol(
+                                client,
+                                repo_id,
+                                Some(worktree_id),
+                                name,
+                                None,
+                            ).await {
+                                // Create the import edge
+                                if let Err(e) = crate::db::insert_chunk_edge(
+                                    client,
+                                    src_chunk_id,
+                                    dst_chunk_id,
+                                    "imports",
+                                ).await {
+                                    warn!("Failed to create import edge for {}: {}", name, e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn detect_language_from_path(path: &Path) -> Option<&'static str> {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "ts" => Some("ts"),
@@ -151,10 +218,11 @@ pub async fn scan_worktree(
                 &ts_doc,
                 1.0,
                 0.0,
+                None,
             ).await?;
         } else {
             total_chunks += chunks.len();
-            for ch in chunks {
+            for ch in &chunks {
                 let preview = first_n_lines(&content.split('\n').skip(ch.start_line as usize - 1).take((ch.end_line - ch.start_line + 1) as usize).collect::<Vec<&str>>().join("\n"), 40);
                 let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), ch.symbol_name.as_deref(), ch.signature.as_deref(), ch.docstring.as_deref(), &preview);
                 crate::db::insert_chunk(
@@ -170,7 +238,15 @@ pub async fn scan_worktree(
                     &ts_doc,
                     1.0,
                     0.0,
+                    ch.metadata.as_ref(),
                 ).await?;
+            }
+
+            // Process Python imports and create edges
+            if language.unwrap() == "py" {
+                if let Err(e) = process_python_imports(client, repo_id, worktree_id, file_id, &chunks).await {
+                    warn!("Failed to process Python imports for {}: {}", relpath.display(), e);
+                }
             }
         }
     }
@@ -250,16 +326,23 @@ pub async fn upsert_files(
             let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), None, None, None, &preview);
             crate::db::insert_chunk(
                 client, file_id, None, "module", None, None, 1, content.lines().count() as i32,
-                &preview, &ts_doc, 1.0, 0.0
+                &preview, &ts_doc, 1.0, 0.0, None
             ).await?;
         } else {
-            for ch in chunks {
+            for ch in &chunks {
                 let preview = first_n_lines(&content.split('\n').skip(ch.start_line as usize - 1).take((ch.end_line - ch.start_line + 1) as usize).collect::<Vec<&str>>().join("\n"), 40);
                 let ts_doc = build_ts_doc(relpath.to_string_lossy().as_ref(), ch.symbol_name.as_deref(), ch.signature.as_deref(), ch.docstring.as_deref(), &preview);
                 crate::db::insert_chunk(
                     client, file_id, ch.symbol_name.as_deref(), &ch.kind, ch.signature.as_deref(), ch.docstring.as_deref(),
-                    ch.start_line, ch.end_line, &preview, &ts_doc, 1.0, 0.0
+                    ch.start_line, ch.end_line, &preview, &ts_doc, 1.0, 0.0, ch.metadata.as_ref()
                 ).await?;
+            }
+
+            // Process Python imports and create edges
+            if language.unwrap() == "py" {
+                if let Err(e) = process_python_imports(client, repo_id, worktree_id, file_id, &chunks).await {
+                    warn!("Failed to process Python imports for {}: {}", relpath.display(), e);
+                }
             }
         }
     }
