@@ -7,6 +7,7 @@
 //! - File system watching with debouncing
 //! - Ignore pattern filtering
 //! - Multi-worktree support with event isolation
+//! - Priority-based update queue with retry logic
 
 pub mod cache;
 pub mod detector;
@@ -14,6 +15,8 @@ pub mod events;
 pub mod hash;
 pub mod ignore;
 pub mod multi_watcher;
+pub mod queue;
+pub mod task;
 pub mod watcher;
 pub mod worktree_watcher;
 
@@ -23,5 +26,7 @@ pub use events::{EventType, FileEvent, IndexingEvent, WorktreeId};
 pub use hash::{ContentHash, FileHasher};
 pub use ignore::IgnorePatternMatcher;
 pub use multi_watcher::MultiWatcher;
+pub use queue::{QueueStats, UpdateQueue};
+pub use task::{Priority, Trigger, UpdateTask};
 pub use watcher::{FileWatcher, WatcherConfig};
 pub use worktree_watcher::{WatcherStatus, WorktreeWatcher};
