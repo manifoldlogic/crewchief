@@ -1,0 +1,152 @@
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/maproom-mcp/dist/index.js"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
+        "LOG_LEVEL": "info",
+        "MAPROOM_MCP_LOG_FILE": "/tmp/maproom-mcp.log"
+      },
+      "description": "Semantic code search for indexed repositories",
+      "disabled": false
+    }
+  },
+  "_comment": "Configuration for Maproom MCP Server in Claude Desktop",
+  "_instructions": {
+    "setup": [
+      "1. Build the Maproom MCP server: cd packages/maproom-mcp && pnpm build",
+      "2. Replace '/absolute/path/to/maproom-mcp' with the actual absolute path to your maproom-mcp package",
+      "3. Update DATABASE_URL with your PostgreSQL connection string",
+      "4. Ensure the PostgreSQL database is running and accessible",
+      "5. Index your repository using the maproom CLI before using the MCP server",
+      "6. Save this configuration to your Claude Desktop config file"
+    ],
+    "configuration_file_location": {
+      "macOS": "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "Windows": "%APPDATA%/Claude/claude_desktop_config.json",
+      "Linux": "~/.config/Claude/claude_desktop_config.json"
+    },
+    "environment_variables": {
+      "DATABASE_URL": {
+        "description": "PostgreSQL connection string for Maproom database",
+        "required": true,
+        "example": "postgresql://user:password@localhost:5432/maproom"
+      },
+      "LOG_LEVEL": {
+        "description": "Logging level (trace, debug, info, warn, error)",
+        "required": false,
+        "default": "info",
+        "options": ["trace", "debug", "info", "warn", "error"]
+      },
+      "MAPROOM_MCP_LOG_FILE": {
+        "description": "Path to log file for MCP server logs (optional, logs to stderr if not set)",
+        "required": false,
+        "example": "/tmp/maproom-mcp.log"
+      }
+    },
+    "tools_available": [
+      {
+        "name": "status",
+        "description": "Check maproom index status - USE THIS FIRST to see what's indexed",
+        "parameters": {
+          "repo": "(optional) Filter status to specific repo"
+        }
+      },
+      {
+        "name": "search",
+        "description": "Semantic code search across indexed repositories",
+        "parameters": {
+          "repo": "Repository name to search in",
+          "query": "Search query (1-3 words work best)",
+          "worktree": "(optional) Limit search to specific worktree",
+          "filter": "(optional) Filter by file type: all, code, docs, config",
+          "k": "(optional) Number of results (default: 10)"
+        }
+      },
+      {
+        "name": "open",
+        "description": "Retrieve specific code sections from indexed files",
+        "parameters": {
+          "relpath": "Relative path to the file (from search results)",
+          "worktree": "Worktree name where the file is located",
+          "range": "(optional) Line range object {start, end}",
+          "context": "(optional) Number of context lines before/after (default: 0)"
+        }
+      },
+      {
+        "name": "context",
+        "description": "Retrieve contextually relevant code sections around a chunk",
+        "parameters": {
+          "chunk_id": "UUID of target chunk (from search results)",
+          "budget_tokens": "(optional) Max tokens in context bundle (default: 6000)",
+          "expand": "(optional) Expansion config for related chunks"
+        }
+      },
+      {
+        "name": "upsert",
+        "description": "Update the code index for specific files",
+        "parameters": {
+          "paths": "Array of file paths to index",
+          "commit": "Git commit hash (use 'HEAD' for current)",
+          "repo": "Repository name",
+          "worktree": "Worktree name to index",
+          "root": "Root directory path of the repository"
+        }
+      },
+      {
+        "name": "explain",
+        "description": "Generate detailed symbol card for a code chunk (EXPERIMENTAL)",
+        "parameters": {
+          "chunk_id": "Chunk ID to explain (from search results)"
+        }
+      }
+    ],
+    "troubleshooting": {
+      "connection_failed": [
+        "Verify DATABASE_URL is correct and PostgreSQL is running",
+        "Check that the maproom database schema is initialized",
+        "Ensure network connectivity to PostgreSQL server",
+        "Check firewall settings if using remote database"
+      ],
+      "no_results_in_search": [
+        "Use 'status' tool first to verify repository is indexed",
+        "Run maproom CLI to index your repository",
+        "Try simpler search terms (1-3 words)",
+        "Check that worktree parameter matches indexed worktrees"
+      ],
+      "server_not_starting": [
+        "Check that the path to dist/index.js is correct and absolute",
+        "Verify Node.js is installed and accessible",
+        "Check MCP log file for error details",
+        "Ensure all dependencies are installed (run pnpm install)",
+        "Rebuild the server (pnpm build) if code was modified"
+      ],
+      "tools_not_appearing": [
+        "Restart Claude Desktop application",
+        "Check server is not 'disabled' in config",
+        "Verify JSON configuration file is valid (no syntax errors)",
+        "Check Claude Desktop logs for server initialization errors"
+      ]
+    }
+  },
+  "_example_usage": {
+    "beginner": {
+      "step_1_check_status": "Use the 'status' tool to see what repositories are indexed",
+      "step_2_simple_search": "Search with simple terms like 'authentication' or 'database connection'",
+      "step_3_open_file": "Use 'open' tool with relpath and worktree from search results"
+    },
+    "intermediate": {
+      "filtered_search": "Use filter parameter to search only code files (filter: 'code')",
+      "context_gathering": "Get context around a function using 'context' tool with chunk_id from search",
+      "targeted_worktree": "Limit search to specific branch/worktree to narrow results"
+    },
+    "advanced": {
+      "multi_step_workflow": "Search → Context → Open related files → Explain symbols",
+      "index_updates": "Use 'upsert' after making code changes to re-index specific files",
+      "custom_expansion": "Configure 'expand' parameter in context tool to control related chunks"
+    }
+  }
+}

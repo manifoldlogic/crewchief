@@ -57,9 +57,63 @@ You can also point to a custom binary using `CREWCHIEF_MAPROOM_BIN`.
 - **`CREWCHIEF_MAPROOM_BIN`** (optional): Absolute path to the Rust indexer binary
 - **`LOG_LEVEL`** (optional): pino log level (`info`, `debug`, etc.). Logs go to stderr
 
-### Using with Cursor (MCP)
+### Client Integration
 
-Add to Cursor’s MCP configuration (`Settings → MCP Servers`), for example:
+Maproom MCP server integrates with MCP-compatible clients including Claude Desktop, Cursor, and VS Code. Complete configuration examples and usage guides are available in the documentation:
+
+- **[Claude Desktop Configuration](examples/claude_desktop_config.json)**: Full setup with environment variables and troubleshooting
+- **[VS Code Configuration](examples/vscode_config.json)**: Workspace and user settings with MCP extension
+- **[Usage Patterns Guide](docs/usage_patterns.md)**: Comprehensive patterns from beginner to advanced
+- **[Example Workflows](docs/examples.md)**: Step-by-step workflows for common tasks
+
+#### Quick Start: Claude Desktop
+
+Configuration file location:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%/Claude/claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
+
+Example configuration:
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "node",
+      "args": ["/absolute/path/to/maproom-mcp/dist/index.js"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving. See [examples/claude_desktop_config.json](examples/claude_desktop_config.json) for detailed setup instructions.
+
+#### Quick Start: VS Code
+
+Install the MCP extension from the marketplace, then add to your settings.json:
+
+```json
+{
+  "mcp.servers": {
+    "maproom": {
+      "command": "node",
+      "args": ["/absolute/path/to/maproom-mcp/dist/index.js"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom"
+      }
+    }
+  }
+}
+```
+
+Reload the VS Code window (Cmd/Ctrl+Shift+P > Reload Window). See [examples/vscode_config.json](examples/vscode_config.json) for detailed setup.
+
+#### Quick Start: Cursor (MCP)
+
+Add to Cursor's MCP configuration (`Settings → MCP Servers`):
 
 ```json
 {
@@ -76,7 +130,20 @@ Add to Cursor’s MCP configuration (`Settings → MCP Servers`), for example:
 }
 ```
 
-Then restart Cursor. You should see 3 tools enabled for Maproom.
+Then restart Cursor. You should see the Maproom tools enabled.
+
+#### Available Tools
+
+All clients have access to these MCP tools:
+
+- **`status`**: Check index status (repos, worktrees, stats)
+- **`search`**: Semantic code search with filters
+- **`open`**: View file contents with line ranges
+- **`context`**: Get related code (callers, callees, tests)
+- **`upsert`**: Update the index for specific files
+- **`explain`**: Generate detailed symbol documentation (experimental)
+
+See the [Usage Patterns Guide](docs/usage_patterns.md) for detailed tool documentation and the [Examples](docs/examples.md) for step-by-step workflows.
 
 ### Tools
 

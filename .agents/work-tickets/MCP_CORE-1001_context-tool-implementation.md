@@ -1,11 +1,11 @@
 # Ticket: MCP_CORE-1001: Context Tool Implementation
 
 ## Status
-- [ ] **Task completed** - BLOCKED: Requires CONTEXT_ASM-1001 (ContextAssembler implementation)
-- [ ] **Tests pass** - stub implementation tests pass (31/31), but full integration tests blocked
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - UNBLOCKED: CONTEXT_ASM-4001 completed the full implementation
+- [x] **Tests pass** - 32 integration tests in CONTEXT_ASM-4001 (context.int.test.ts)
+- [x] **Verified** - Full implementation verified in CONTEXT_ASM-4001
 
-**Note**: Stub implementation created with 31 passing tests. Full implementation blocked on CONTEXT_ASM-1001. Will complete after CONTEXT_ASM project is finished.
+**Note**: This ticket was completed as part of CONTEXT_ASM-4001 (MCP Tool Implementation). The full context tool with ContextAssembler integration was implemented there, superseding the stub. See CONTEXT_ASM-4001 for complete implementation details.
 
 ## Agents
 - mcp-tools-engineer

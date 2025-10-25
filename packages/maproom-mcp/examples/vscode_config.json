@@ -1,0 +1,227 @@
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/maproom-mcp/dist/index.js"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
+        "LOG_LEVEL": "info",
+        "MAPROOM_MCP_LOG_FILE": "/tmp/maproom-mcp-vscode.log"
+      }
+    }
+  },
+  "_comment": "Configuration for Maproom MCP Server in VS Code",
+  "_instructions": {
+    "setup": [
+      "1. Install the MCP extension for VS Code from the marketplace",
+      "2. Build the Maproom MCP server: cd packages/maproom-mcp && pnpm build",
+      "3. Replace '/absolute/path/to/maproom-mcp' with the actual absolute path to your maproom-mcp package",
+      "4. Update DATABASE_URL with your PostgreSQL connection string",
+      "5. Ensure PostgreSQL is running and the maproom database is initialized",
+      "6. Index your repository using the maproom CLI before using the MCP server",
+      "7. Save this configuration to your VS Code MCP settings"
+    ],
+    "configuration_file_location": {
+      "method_1_settings_json": {
+        "description": "Add to VS Code settings.json",
+        "path_macOS": "~/Library/Application Support/Code/User/settings.json",
+        "path_Windows": "%APPDATA%/Code/User/settings.json",
+        "path_Linux": "~/.config/Code/User/settings.json",
+        "key": "mcp.servers",
+        "note": "Merge this configuration under the 'mcp.servers' key in settings.json"
+      },
+      "method_2_workspace": {
+        "description": "Add to workspace .vscode/settings.json",
+        "path": ".vscode/settings.json",
+        "scope": "Project-specific configuration",
+        "note": "Recommended for project-specific MCP servers"
+      }
+    },
+    "vscode_settings_example": {
+      "mcp.servers": {
+        "maproom": {
+          "command": "node",
+          "args": ["/absolute/path/to/maproom-mcp/dist/index.js"],
+          "env": {
+            "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
+            "LOG_LEVEL": "info"
+          }
+        }
+      },
+      "mcp.autoStart": true,
+      "mcp.logLevel": "info"
+    },
+    "environment_variables": {
+      "DATABASE_URL": {
+        "description": "PostgreSQL connection string for Maproom database",
+        "required": true,
+        "example": "postgresql://user:password@localhost:5432/maproom"
+      },
+      "LOG_LEVEL": {
+        "description": "Logging level for MCP server (trace, debug, info, warn, error)",
+        "required": false,
+        "default": "info",
+        "options": ["trace", "debug", "info", "warn", "error"]
+      },
+      "MAPROOM_MCP_LOG_FILE": {
+        "description": "Path to log file for debugging (optional)",
+        "required": false,
+        "example": "/tmp/maproom-mcp-vscode.log"
+      }
+    },
+    "available_tools": [
+      {
+        "name": "status",
+        "description": "Check maproom index status",
+        "use_case": "Start here to see what repositories and worktrees are indexed",
+        "example": "Call status tool without parameters to see all indexed repos"
+      },
+      {
+        "name": "search",
+        "description": "Semantic code search",
+        "use_case": "Find code by concept or functionality",
+        "example": "Search for 'authentication' or 'database connection'"
+      },
+      {
+        "name": "open",
+        "description": "Open specific code sections",
+        "use_case": "Retrieve code from files found in search results",
+        "example": "Use relpath and worktree from search results"
+      },
+      {
+        "name": "context",
+        "description": "Get contextual code around a chunk",
+        "use_case": "Understand code in context with related functions and imports",
+        "example": "Use chunk_id from search results to get surrounding context"
+      },
+      {
+        "name": "upsert",
+        "description": "Update code index",
+        "use_case": "Re-index files after making changes",
+        "example": "Index specific files or entire directories"
+      },
+      {
+        "name": "explain",
+        "description": "Generate detailed symbol explanation (EXPERIMENTAL)",
+        "use_case": "Get comprehensive documentation for a code symbol",
+        "example": "Use chunk_id from search results to explain a function or class"
+      }
+    ],
+    "vscode_specific_features": {
+      "command_palette": {
+        "description": "Access MCP tools through VS Code Command Palette",
+        "shortcut": "Cmd+Shift+P (macOS) or Ctrl+Shift+P (Windows/Linux)",
+        "search_for": "MCP: ",
+        "available_commands": [
+          "MCP: Call Tool",
+          "MCP: Restart Server",
+          "MCP: Show Server Logs",
+          "MCP: List Available Tools"
+        ]
+      },
+      "inline_integration": {
+        "description": "Some MCP extensions provide inline code actions",
+        "features": [
+          "Right-click context menus for search",
+          "Hover tooltips with semantic information",
+          "Code lens for navigation"
+        ]
+      },
+      "output_panel": {
+        "description": "View MCP server logs and tool results",
+        "access": "View > Output > Select 'MCP' from dropdown"
+      }
+    },
+    "troubleshooting": {
+      "server_not_starting": [
+        "Check the MCP extension is installed and enabled",
+        "Verify the path to dist/index.js is absolute and correct",
+        "Check VS Code Output panel (View > Output > MCP) for errors",
+        "Ensure Node.js is in your PATH",
+        "Try reloading VS Code window (Cmd/Ctrl+Shift+P > Reload Window)"
+      ],
+      "connection_errors": [
+        "Verify DATABASE_URL is correct",
+        "Ensure PostgreSQL is running and accessible",
+        "Check firewall settings for database connections",
+        "Test database connection outside VS Code first"
+      ],
+      "tools_not_working": [
+        "Use 'status' tool first to verify repository is indexed",
+        "Check that worktree names match what's in the index",
+        "Verify search queries are simple (1-3 words work best)",
+        "Check MCP server logs for detailed error messages"
+      ],
+      "performance_issues": [
+        "Reduce search result count (k parameter)",
+        "Limit context token budget (budget_tokens parameter)",
+        "Index only necessary files/directories",
+        "Check database query performance in PostgreSQL logs"
+      ]
+    },
+    "best_practices": {
+      "workspace_configuration": [
+        "Use .vscode/settings.json for project-specific MCP servers",
+        "Commit .vscode/settings.json (without sensitive credentials) to share with team",
+        "Use environment variables for sensitive data like DATABASE_URL"
+      ],
+      "development_workflow": [
+        "Start with 'status' tool to verify what's indexed",
+        "Use simple search terms (1-3 words) for best results",
+        "Use 'open' tool to view code from search results",
+        "Use 'context' tool to understand code relationships",
+        "Re-index with 'upsert' after making significant changes"
+      ],
+      "team_collaboration": [
+        "Share consistent database configurations across team",
+        "Document required environment variables in README",
+        "Use shared PostgreSQL instance for team-wide code search",
+        "Index main branches and active feature branches"
+      ]
+    }
+  },
+  "_example_workflows": {
+    "basic_search_and_open": {
+      "description": "Find and view authentication code",
+      "steps": [
+        "1. Call 'status' tool to verify repo is indexed",
+        "2. Call 'search' with query='authentication' and repo='your-repo'",
+        "3. Review search results for relevant chunks",
+        "4. Call 'open' with relpath and worktree from best result",
+        "5. View the code in VS Code"
+      ]
+    },
+    "context_exploration": {
+      "description": "Understand how a function is used",
+      "steps": [
+        "1. Call 'search' to find the function of interest",
+        "2. Get chunk_id from search results",
+        "3. Call 'context' with chunk_id and budget_tokens=8000",
+        "4. Review the context bundle showing callers, callees, and tests",
+        "5. Use 'open' on related chunks to explore further"
+      ]
+    },
+    "incremental_indexing": {
+      "description": "Update index after code changes",
+      "steps": [
+        "1. Make code changes in your repository",
+        "2. Call 'upsert' with paths to changed files",
+        "3. Provide current commit hash (or 'HEAD')",
+        "4. Verify with 'search' that new code is findable",
+        "5. Continue development with up-to-date search index"
+      ]
+    },
+    "architecture_exploration": {
+      "description": "Understand codebase structure",
+      "steps": [
+        "1. Search for 'main entry index' to find entry points",
+        "2. Use 'context' to see what the entry point imports",
+        "3. Search for key architectural terms (router, controller, service)",
+        "4. Use 'explain' tool to get detailed symbol documentation",
+        "5. Build mental model of codebase architecture"
+      ]
+    }
+  }
+}
