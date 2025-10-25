@@ -79,25 +79,199 @@ This codebase has maproom semantic search indexed! Use the maproom MCP tools for
   - Quick file lookups when you know the filename pattern
   - Simple string searches
 
-### Maproom Tools Guide:
-1. **`mcp__maproom__status`** - Check what's indexed (USE FIRST!)
-   - Shows available repos and worktrees
-   - Displays index statistics and last update times
-   - Helps you understand what's searchable
+### Maproom Tools Guide
 
-2. **`mcp__maproom__search`** - Semantic code search
-   - Searches across functions, classes, and symbols
-   - Returns ranked results with relevance scores
-   - Provides hints and suggestions when no results found
+**Workflow**: Always start with `status` → `search` → `open` or `context` → optionally `upsert` when code changes
 
-3. **`mcp__maproom__open`** - Retrieve specific code sections
-   - Opens files from search results
-   - Supports line ranges and context lines
-   - Use `context` parameter to see surrounding code
+#### 1. `mcp__maproom__status` - Check Index Status (START HERE!)
 
-4. **`mcp__maproom__upsert`** - Update the index
-   - Re-index files after changes
-   - Required when working with new code
+**Purpose**: Verify what's indexed before searching
+
+**Returns**:
+- Available repositories and worktrees
+- File counts by extension (.ts, .rs, .md, etc.)
+- Total chunks indexed and last update times
+- Search tips and hints
+
+**Example**:
+```javascript
+mcp__maproom__status({ repo: "crewchief" })  // Optional: filter to specific repo
+```
+
+**Use when**: Beginning any search session, debugging "no results" issues, verifying index freshness
+
+---
+
+#### 2. `mcp__maproom__search` - Semantic Code Search
+
+**Purpose**: Find code by concept, not just keywords
+
+**Parameters**:
+- `repo` (required): Repository name (e.g., "crewchief")
+- `query` (required): Search terms (1-3 words work best)
+- `worktree` (optional): Limit to specific worktree/branch
+- `k` (optional): Number of results (default: 10, max useful: 20)
+- `mode` (optional): Search strategy
+  - `"hybrid"` (default) - Combines FTS + vector search (best overall)
+  - `"fts"` - Full-text keyword search (exact terms)
+  - `"vector"` - Semantic similarity only (conceptual)
+- `filter` (optional): File type filter (`"code"`, `"docs"`, `"config"`, `"all"`)
+- `debug` (optional): Show score breakdowns (FTS, vector, graph signals)
+
+**Examples**:
+```javascript
+// Conceptual search (hybrid mode, default)
+mcp__maproom__search({ repo: "crewchief", query: "agent orchestration" })
+
+// Keyword search for exact terms
+mcp__maproom__search({ repo: "crewchief", query: "spawnAgent", mode: "fts" })
+
+// Semantic search with filters
+mcp__maproom__search({
+  repo: "crewchief",
+  query: "message handling",
+  filter: "code",
+  k: 20,
+  debug: true
+})
+```
+
+**Tips**:
+- Use 1-3 word queries: "auth flow" not "authentication_handler_function"
+- Try concepts: "error handling", "database query", "terminal control"
+- Use `debug: true` to understand ranking when results seem off
+- If no results, check `status` first to verify index exists
+
+---
+
+#### 3. `mcp__maproom__open` - Retrieve Code Sections
+
+**Purpose**: Fetch specific files or line ranges from search results
+
+**Parameters**:
+- `relpath` (required): Relative file path (copy from search results)
+- `worktree` (required): Worktree name (copy from search results)
+- `range` (optional): Line range object `{ start: N, end: M }`
+- `context` (optional): Additional lines before/after range (try 5-10)
+
+**Examples**:
+```javascript
+// Open entire file
+mcp__maproom__open({
+  relpath: "packages/cli/src/cli/spawn.ts",
+  worktree: "maproom-vamp"
+})
+
+// Open specific function with context
+mcp__maproom__open({
+  relpath: "packages/cli/src/cli/spawn.ts",
+  worktree: "maproom-vamp",
+  range: { start: 72, end: 120 },
+  context: 5
+})
+```
+
+**Use when**: You found relevant code with `search` and need to see implementation details
+
+---
+
+#### 4. `mcp__maproom__context` - Assemble Related Code
+
+**Purpose**: Gather a complete picture of code with its relationships (imports, callers, callees, tests)
+
+**Parameters**:
+- `chunk_id` (required): UUID from search results
+- `budget_tokens` (optional): Max tokens to return (default: 6000, max: 20000)
+- `expand` (optional): Control what to include:
+  - `callers` (default: true) - Functions that call this code
+  - `callees` (default: true) - Functions this code calls
+  - `tests` (default: true) - Test files for this code
+  - `docs` (default: false) - Documentation chunks
+  - `config` (default: false) - Related config files
+  - `max_depth` (default: 2, max: 5) - Relationship traversal depth
+
+**Examples**:
+```javascript
+// Get code with all default relationships
+mcp__maproom__context({
+  chunk_id: "a1b2c3d4-uuid-from-search-results"
+})
+
+// Get code with tests and docs, larger budget
+mcp__maproom__context({
+  chunk_id: "a1b2c3d4-uuid-from-search-results",
+  budget_tokens: 10000,
+  expand: {
+    callers: true,
+    callees: true,
+    tests: true,
+    docs: true,
+    config: false,
+    max_depth: 3
+  }
+})
+```
+
+**Use when**: Understanding how code fits into the larger system, finding all related pieces for a feature
+
+**Note**: This is the most powerful tool for understanding unfamiliar codebases!
+
+---
+
+#### 5. `mcp__maproom__explain` - Get Symbol Explanations (EXPERIMENTAL)
+
+**Purpose**: Generate detailed markdown cards explaining code symbols
+
+**Parameters**:
+- `chunk_id` (required): UUID from search results
+
+**Returns**: Markdown-formatted explanation with:
+- Symbol metadata (type, location, visibility)
+- Code relationships (callers, callees, dependencies)
+- Code preview with syntax highlighting
+- Usage examples and patterns
+
+**Example**:
+```javascript
+mcp__maproom__explain({
+  chunk_id: "a1b2c3d4-uuid-from-search-results"
+})
+```
+
+**Use when**: You need a high-level summary of what a function/class does and how it's used
+
+**Note**: Requires feature flag enabled in configuration. Uses intelligent caching.
+
+---
+
+#### 6. `mcp__maproom__upsert` - Update Index
+
+**Purpose**: Re-index files after code changes
+
+**Parameters**:
+- `repo` (required): Repository name
+- `worktree` (required): Worktree name
+- `root` (required): Repository root path
+- `commit` (required): Git commit hash (use "HEAD" for current)
+- `paths` (required): Array of file paths to re-index
+
+**Example**:
+```javascript
+mcp__maproom__upsert({
+  repo: "crewchief",
+  worktree: "maproom-vamp",
+  root: "/workspace",
+  commit: "HEAD",
+  paths: [
+    "packages/cli/src/cli/spawn.ts",
+    "packages/cli/src/iterm/iterm.service.ts"
+  ]
+})
+```
+
+**Use when**: You've modified code and need search results to reflect latest changes
+
+**Note**: Usually unnecessary - maproom auto-indexes on file changes in most setups
 
 ### Current Index Status:
 - Repository: `crewchief`
@@ -262,4 +436,27 @@ When working on Maproom tickets via /work-on-maproom-tickets command:
 - All acceptance criteria must be met before verification
 - All related tests must pass before verification
 - Verification must pass before commit
-- Each ticket completion must be tracked in the ticket markdown file
+- Each ticket completion must be tracked in the ticket markdown file<!-- Watch test Sat Oct 25 09:43:58 PM UTC 2025 -->
+<!-- Test with RUST_LOG Sat Oct 25 09:45:09 PM UTC 2025 -->
+
+
+# URGENT TEST EDIT 1761428759
+
+This is a test to trigger the watcher.
+
+
+<!-- DEBUG TEST 1761428796 -->
+
+
+## TEST FIX - Event Access Handling 1761428930
+
+This edit should trigger re-indexing now!
+
+
+
+
+## LIVE TEST - Watcher Running 1761428996
+
+This edit happens while watch is active with the fix!
+
+
