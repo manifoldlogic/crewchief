@@ -2,6 +2,7 @@
 //!
 //! This module provides database connectivity, connection pooling, and query utilities.
 
+pub mod materialized_views;
 pub mod pool;
 pub mod queries;
 

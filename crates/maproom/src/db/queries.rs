@@ -36,6 +36,7 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
         include_str!("./../../migrations/0010_add_blake3_hash.sql"),
         include_str!("./../../migrations/0011_python_symbol_kinds.sql"),
         include_str!("./../../migrations/0012_optimize_indices.sql"),
+        include_str!("./../../migrations/0013_query_tuning.sql"),
     ];
 
     for sql in migrations {
