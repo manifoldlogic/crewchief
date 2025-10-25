@@ -257,6 +257,12 @@ async def fetch_data():
 
     assert_eq!(chunks.len(), 1);
     assert_eq!(chunks[0].symbol_name, Some("fetch_data".to_string()));
-    assert_eq!(chunks[0].kind, "func");
+    assert_eq!(chunks[0].kind, "async_func");
     assert_eq!(chunks[0].docstring, Some("Asynchronously fetch data.".to_string()));
+
+    // Verify metadata
+    if let Some(metadata) = &chunks[0].metadata {
+        let is_async = metadata.get("is_async").unwrap().as_bool().unwrap();
+        assert!(is_async);
+    }
 }

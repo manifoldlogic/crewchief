@@ -533,6 +533,7 @@ pub struct SymbolChunk {
     pub docstring: Option<String>,
     pub start_line: i32,
     pub end_line: i32,
+    pub metadata: Option<serde_json::Value>,
 }
 
 

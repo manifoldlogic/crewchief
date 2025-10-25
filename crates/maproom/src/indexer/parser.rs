@@ -104,6 +104,7 @@ fn extract_markdown_chunks(source: &str) -> Vec<SymbolChunk> {
                 docstring: None,
                 start_line,
                 end_line,
+                metadata: None,
             });
         }
         
@@ -226,6 +227,7 @@ fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
                     docstring: None,
                     start_line: start_line as i32,
                     end_line: end_line as i32,
+                    metadata: None,
                 });
             }
         }
@@ -283,6 +285,7 @@ fn extract_yaml_chunks(source: &str) -> Vec<SymbolChunk> {
                 docstring: None,
                 start_line: start_line as i32,
                 end_line: end_line as i32,
+                metadata: None,
             });
             
             i = j;
@@ -345,6 +348,7 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
                 docstring: None,
                 start_line: start_line as i32,
                 end_line: end_line as i32,
+                metadata: None,
             });
             
             i = j;
@@ -371,6 +375,7 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
                         docstring: None,
                         start_line: (i + 1) as i32,
                         end_line: (i + 1) as i32,
+                        metadata: None,
                     });
                 }
             }
@@ -435,6 +440,7 @@ fn push_chunk(source: &str, node: Node, name: Option<String>, kind: &str, out: &
         docstring: None,
         start_line,
         end_line,
+        metadata: None,
     });
 }
 
@@ -455,17 +461,29 @@ fn extract_python_chunks(source: &str) -> Vec<SymbolChunk> {
     };
 
     let mut chunks = Vec::new();
-    walk_python_decls(source, tree.root_node(), &mut chunks);
+    let root = tree.root_node();
+
+    // Extract function and class definitions
+    walk_python_decls(source, root, &mut chunks);
+
+    // Extract module-level assignments (global variables and constants)
+    extract_python_module_assignments(source, root, &mut chunks);
+
     chunks
 }
 
 fn walk_python_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     match node.kind() {
         "function_definition" => {
-            extract_python_function(source, node, chunks);
+            extract_python_function(source, node, chunks, false);
         }
         "class_definition" => {
-            extract_python_class(source, node, chunks);
+            extract_python_class(source, node, chunks, false);
+        }
+        "decorated_definition" => {
+            // Extract decorators and the definition they decorate
+            extract_python_decorated(source, node, chunks);
+            return; // Don't recurse into children; we handle them in extract_python_decorated
         }
         _ => {}
     }
@@ -478,11 +496,86 @@ fn walk_python_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     }
 }
 
-fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+// Extract module-level assignments (global variables and constants)
+fn extract_python_module_assignments(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Only extract assignments at module level (not inside classes or functions)
+    if is_inside_class(node) || is_inside_function(node) {
+        return;
+    }
+
+    // Look for assignment nodes
+    if node.kind() == "assignment" {
+        // Get the left side (variable name)
+        if let Some(left) = node.child_by_field_name("left") {
+            if left.kind() == "identifier" {
+                if let Ok(name) = left.utf8_text(source.as_bytes()) {
+                    // Get the right side (value) for context
+                    let value = node.child_by_field_name("right")
+                        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                        .map(|s| s.to_string());
+
+                    // Determine if it's a constant (uppercase name convention)
+                    let kind = if name.to_uppercase() == name && name.chars().any(|c| c.is_alphabetic()) {
+                        "constant"
+                    } else {
+                        "variable"
+                    };
+
+                    let start = node.start_position();
+                    let end = node.end_position();
+
+                    chunks.push(SymbolChunk {
+                        symbol_name: Some(name.to_string()),
+                        kind: kind.to_string(),
+                        signature: value,
+                        docstring: None,
+                        start_line: (start.row + 1) as i32,
+                        end_line: (end.row + 1) as i32,
+                        metadata: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // Recursively check children
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            extract_python_module_assignments(source, child, chunks);
+        }
+    }
+}
+
+fn is_inside_function(node: Node) -> bool {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if parent.kind() == "function_definition" {
+            return true;
+        }
+        current = parent.parent();
+    }
+    false
+}
+
+fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, has_decorators: bool) {
     // Extract function name
     let name = node.child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
+
+    // Check if this is an async function
+    let is_async = {
+        let mut is_async_fn = false;
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                if child.kind() == "async" {
+                    is_async_fn = true;
+                    break;
+                }
+            }
+        }
+        is_async_fn
+    };
 
     // Extract parameters for signature
     let signature = node.child_by_field_name("parameters")
@@ -492,10 +585,17 @@ fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChun
             let return_type = node.child_by_field_name("return_type")
                 .and_then(|n| n.utf8_text(source.as_bytes()).ok());
 
-            if let Some(ret) = return_type {
+            let sig = if let Some(ret) = return_type {
                 format!("{} -> {}", params, ret)
             } else {
                 params.to_string()
+            };
+
+            // Prepend async if needed
+            if is_async {
+                format!("async {}", sig)
+            } else {
+                sig
             }
         });
 
@@ -504,21 +604,39 @@ fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChun
 
     // Determine if this is a method by checking if parent is a class
     let kind = if is_inside_class(node) {
-        "method"
+        if is_async {
+            "async_method"
+        } else {
+            "method"
+        }
     } else {
-        "func"
+        if is_async {
+            "async_func"
+        } else {
+            "func"
+        }
     };
 
-    push_chunk(source, node, name, kind, chunks);
+    // Build metadata object
+    let mut metadata_obj = serde_json::Map::new();
+    metadata_obj.insert("is_async".to_string(), serde_json::Value::Bool(is_async));
+    metadata_obj.insert("has_decorators".to_string(), serde_json::Value::Bool(has_decorators));
 
-    // Update the last chunk with signature and docstring
-    if let Some(chunk) = chunks.last_mut() {
-        chunk.signature = signature;
-        chunk.docstring = docstring;
-    }
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: kind.to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(serde_json::Value::Object(metadata_obj)),
+    });
 }
 
-fn extract_python_class(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+fn extract_python_class(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, has_decorators: bool) {
     // Extract class name
     let name = node.child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
@@ -532,12 +650,108 @@ fn extract_python_class(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
     // Extract docstring
     let docstring = extract_python_docstring(source, node);
 
-    push_chunk(source, node, name, "class", chunks);
+    // Extract base class names for inheritance tracking
+    let base_classes = if let Some(superclasses) = node.child_by_field_name("superclasses") {
+        let mut bases = Vec::new();
+        for i in 0..superclasses.child_count() {
+            if let Some(child) = superclasses.child(i) {
+                if child.kind() == "identifier" || child.kind() == "attribute" {
+                    if let Ok(base_name) = child.utf8_text(source.as_bytes()) {
+                        bases.push(serde_json::Value::String(base_name.to_string()));
+                    }
+                }
+            }
+        }
+        bases
+    } else {
+        Vec::new()
+    };
 
-    // Update the last chunk with signature and docstring
-    if let Some(chunk) = chunks.last_mut() {
-        chunk.signature = signature;
-        chunk.docstring = docstring;
+    // Build metadata object
+    let mut metadata_obj = serde_json::Map::new();
+    metadata_obj.insert("has_decorators".to_string(), serde_json::Value::Bool(has_decorators));
+    metadata_obj.insert("base_classes".to_string(), serde_json::Value::Array(base_classes));
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "class".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(serde_json::Value::Object(metadata_obj)),
+    });
+}
+
+fn extract_python_decorated(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract decorators
+    let mut decorators = Vec::new();
+    let mut definition_node = None;
+
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            match child.kind() {
+                "decorator" => {
+                    // Extract decorator text (including @)
+                    if let Ok(decorator_text) = child.utf8_text(source.as_bytes()) {
+                        decorators.push(decorator_text.to_string());
+                    }
+                }
+                "function_definition" | "class_definition" => {
+                    definition_node = Some(child);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Extract the decorated definition with decorator information
+    if let Some(def_node) = definition_node {
+        match def_node.kind() {
+            "function_definition" => {
+                // Call extract_python_function but include decorators in metadata
+                extract_python_function(source, def_node, chunks, true);
+
+                // Update the last chunk's metadata to include decorator names
+                if let Some(chunk) = chunks.last_mut() {
+                    if let Some(serde_json::Value::Object(ref mut meta)) = chunk.metadata {
+                        meta.insert(
+                            "decorators".to_string(),
+                            serde_json::Value::Array(
+                                decorators.iter().map(|d| serde_json::Value::String(d.clone())).collect()
+                            ),
+                        );
+                    }
+                }
+            }
+            "class_definition" => {
+                // Call extract_python_class but include decorators in metadata
+                extract_python_class(source, def_node, chunks, true);
+
+                // Update the last chunk's metadata to include decorator names
+                if let Some(chunk) = chunks.last_mut() {
+                    if let Some(serde_json::Value::Object(ref mut meta)) = chunk.metadata {
+                        meta.insert(
+                            "decorators".to_string(),
+                            serde_json::Value::Array(
+                                decorators.iter().map(|d| serde_json::Value::String(d.clone())).collect()
+                            ),
+                        );
+                    }
+                }
+
+                // Recurse into the class body to extract methods
+                for i in 0..def_node.child_count() {
+                    if let Some(child) = def_node.child(i) {
+                        walk_python_decls(source, child, chunks);
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 

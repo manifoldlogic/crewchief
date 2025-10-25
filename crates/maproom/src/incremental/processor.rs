@@ -454,6 +454,7 @@ fn parse_file_chunks(content: &str, language: &str) -> Result<Vec<SymbolChunk>> 
             docstring: None,
             start_line: 1,
             end_line: content.lines().count() as i32,
+            metadata: None,
         }])
     } else {
         Ok(chunks)
