@@ -15,6 +15,7 @@ fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         "js" => Some("js"),
         "jsx" => Some("jsx"),
         "rs" => Some("rs"),
+        "py" => Some("py"),
         "md" => Some("md"),
         "mdx" => Some("mdx"),
         "json" => Some("json"),
@@ -188,11 +189,12 @@ pub async fn scan_worktree(
         let mut langs: Vec<_> = language_counts.iter().collect();
         langs.sort_by(|a, b| b.1.cmp(a.1));
         for (lang, count) in langs {
-            println!("     {} {}: {}", 
+            println!("     {} {}: {}",
                 match lang.as_str() {
                     "ts" | "tsx" => "📘",
                     "js" | "jsx" => "📙",
                     "rs" => "🦀",
+                    "py" => "🐍",
                     "md" => "📝",
                     "json" => "📋",
                     "yaml" | "yml" => "📄",

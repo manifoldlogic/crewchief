@@ -508,6 +508,7 @@ dependencies = [
  "tracing-subscriber",
  "tree-sitter",
  "tree-sitter-javascript",
+ "tree-sitter-python",
  "tree-sitter-typescript",
  "uuid",
 ]
@@ -2907,6 +2908,16 @@ name = "tree-sitter-javascript"
 version = "0.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8710a71bc6779e33811a8067bdda3ed08bed1733296ff915e44faf60f8c533d7"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
+name = "tree-sitter-python"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4066c6cf678f962f8c2c4561f205945c84834cce73d981e71392624fdc390a9"
 dependencies = [
  "cc",
  "tree-sitter",

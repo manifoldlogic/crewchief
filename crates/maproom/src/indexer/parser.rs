@@ -6,6 +6,7 @@ use super::SymbolChunk;
 fn lang_typescript() -> Language { tree_sitter_typescript::language_typescript() }
 fn lang_tsx() -> Language { tree_sitter_typescript::language_tsx() }
 fn lang_javascript() -> Language { tree_sitter_javascript::language() }
+fn lang_python() -> Language { tree_sitter_python::language() }
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
     match language {
@@ -13,6 +14,7 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
         "json" => extract_json_chunks(source),
         "yaml" | "yml" => extract_yaml_chunks(source),
         "toml" => extract_toml_chunks(source),
+        "py" => extract_python_chunks(source),
         _ => extract_code_chunks(source, language),
     }
 }
@@ -440,6 +442,151 @@ fn extract_preview(source: &str, start_line: i32, end_line: i32) -> String {
     let start = start_line.max(1) as usize - 1;
     let end = end_line.max(start_line) as usize;
     source.lines().skip(start).take(end - start).take(60).collect::<Vec<_>>().join("\n")
+}
+
+// Python-specific parsing functions
+fn extract_python_chunks(source: &str) -> Vec<SymbolChunk> {
+    let mut parser = Parser::new();
+    parser.set_language(&lang_python()).ok();
+
+    let tree = match parser.parse(source, None) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+
+    let mut chunks = Vec::new();
+    walk_python_decls(source, tree.root_node(), &mut chunks);
+    chunks
+}
+
+fn walk_python_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    match node.kind() {
+        "function_definition" => {
+            extract_python_function(source, node, chunks);
+        }
+        "class_definition" => {
+            extract_python_class(source, node, chunks);
+        }
+        _ => {}
+    }
+
+    // Recursively walk child nodes
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            walk_python_decls(source, child, chunks);
+        }
+    }
+}
+
+fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract function name
+    let name = node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract parameters for signature
+    let signature = node.child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|params| {
+            // Also check for return type annotation
+            let return_type = node.child_by_field_name("return_type")
+                .and_then(|n| n.utf8_text(source.as_bytes()).ok());
+
+            if let Some(ret) = return_type {
+                format!("{} -> {}", params, ret)
+            } else {
+                params.to_string()
+            }
+        });
+
+    // Extract docstring (first string in body)
+    let docstring = extract_python_docstring(source, node);
+
+    // Determine if this is a method by checking if parent is a class
+    let kind = if is_inside_class(node) {
+        "method"
+    } else {
+        "func"
+    };
+
+    push_chunk(source, node, name, kind, chunks);
+
+    // Update the last chunk with signature and docstring
+    if let Some(chunk) = chunks.last_mut() {
+        chunk.signature = signature;
+        chunk.docstring = docstring;
+    }
+}
+
+fn extract_python_class(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract class name
+    let name = node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract base classes for signature
+    let signature = node.child_by_field_name("superclasses")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract docstring
+    let docstring = extract_python_docstring(source, node);
+
+    push_chunk(source, node, name, "class", chunks);
+
+    // Update the last chunk with signature and docstring
+    if let Some(chunk) = chunks.last_mut() {
+        chunk.signature = signature;
+        chunk.docstring = docstring;
+    }
+}
+
+fn extract_python_docstring(source: &str, node: Node) -> Option<String> {
+    // Find the body of the function or class
+    let body = node.child_by_field_name("body")?;
+
+    // The docstring is typically the first expression_statement in the body
+    for i in 0..body.child_count() {
+        if let Some(child) = body.child(i) {
+            if child.kind() == "expression_statement" {
+                // Check if it contains a string
+                if let Some(expr) = child.child(0) {
+                    if expr.kind() == "string" {
+                        let docstring_raw = expr.utf8_text(source.as_bytes()).ok()?;
+                        // Remove quotes and clean up
+                        let cleaned = docstring_raw
+                            .trim_start_matches("\"\"\"")
+                            .trim_start_matches("'''")
+                            .trim_start_matches("\"")
+                            .trim_start_matches("'")
+                            .trim_end_matches("\"\"\"")
+                            .trim_end_matches("'''")
+                            .trim_end_matches("\"")
+                            .trim_end_matches("'")
+                            .trim()
+                            .to_string();
+                        return Some(cleaned);
+                    }
+                }
+            }
+            // Stop after first non-comment node
+            if !child.kind().contains("comment") {
+                break;
+            }
+        }
+    }
+    None
+}
+
+fn is_inside_class(node: Node) -> bool {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if parent.kind() == "class_definition" {
+            return true;
+        }
+        current = parent.parent();
+    }
+    false
 }
 
 
