@@ -112,6 +112,6 @@ pub use crate::cache::{CacheConfig, LayerConfig};
 pub use feature_flags::FeatureFlags;
 pub use hot_reload::{ConfigReloader, HotReloadError};
 pub use search_config::{
-    EmbeddingConfig, FusionConfig, FusionMethod, IndexConfig, PerformanceConfig, SearchConfig,
-    SearchConfigError,
+    BufferConfig, DatabaseConfig, EmbeddingConfig, FusionConfig, FusionMethod, IndexConfig,
+    IndexingConfig, PerformanceConfig, RuntimeConfig, SearchConfig, SearchConfigError,
 };

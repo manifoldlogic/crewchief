@@ -50,6 +50,22 @@ pub struct SearchConfig {
     /// Cache configuration
     #[serde(default)]
     pub cache: CacheConfig,
+
+    /// Indexing configuration (PERF_OPT-5002)
+    #[serde(default)]
+    pub indexing: IndexingConfig,
+
+    /// Database configuration (PERF_OPT-5002)
+    #[serde(default)]
+    pub database: DatabaseConfig,
+
+    /// Runtime configuration (PERF_OPT-5002)
+    #[serde(default)]
+    pub runtime: RuntimeConfig,
+
+    /// Buffer configuration (PERF_OPT-5002)
+    #[serde(default)]
+    pub buffers: BufferConfig,
 }
 
 impl SearchConfig {
@@ -337,6 +353,18 @@ impl SearchConfig {
         // Validate index config
         self.index.validate()?;
 
+        // Validate indexing config (PERF_OPT-5002)
+        self.indexing.validate()?;
+
+        // Validate database config (PERF_OPT-5002)
+        self.database.validate()?;
+
+        // Validate runtime config (PERF_OPT-5002)
+        self.runtime.validate()?;
+
+        // Validate buffer config (PERF_OPT-5002)
+        self.buffers.validate()?;
+
         Ok(())
     }
 
@@ -588,6 +616,266 @@ impl IndexConfig {
                 "ivfflat_probes ({}) is greater than ivfflat_lists ({}), this is inefficient",
                 self.ivfflat_probes, self.ivfflat_lists
             );
+        }
+
+        Ok(())
+    }
+}
+
+/// Indexing configuration for parallel file processing (PERF_OPT-5002).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexingConfig {
+    /// Number of parallel workers for file indexing
+    pub parallel_workers: usize,
+
+    /// Batch size for file processing
+    pub batch_size: usize,
+
+    /// Maximum file size to index (bytes)
+    pub max_file_size: usize,
+
+    /// Batch size for chunk inserts
+    pub chunk_insert_batch_size: usize,
+
+    /// Batch size for edge inserts
+    pub edge_insert_batch_size: usize,
+}
+
+impl Default for IndexingConfig {
+    fn default() -> Self {
+        Self {
+            parallel_workers: 8,         // Tuned for 8-core CPU
+            batch_size: 50,               // Optimal throughput/memory balance
+            max_file_size: 10 * 1024 * 1024, // 10MB
+            chunk_insert_batch_size: 100, // Database INSERT batch
+            edge_insert_batch_size: 500,  // Edge INSERT batch
+        }
+    }
+}
+
+impl IndexingConfig {
+    /// Validate indexing configuration.
+    pub fn validate(&self) -> Result<()> {
+        if self.parallel_workers == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "parallel_workers must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.batch_size == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "batch_size must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.max_file_size == 0 {
+            warn!("max_file_size is 0, no files will be indexed");
+        }
+
+        if self.chunk_insert_batch_size == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "chunk_insert_batch_size must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.edge_insert_batch_size == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "edge_insert_batch_size must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+}
+
+/// Database configuration for connection pooling and query tuning (PERF_OPT-5002).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseConfig {
+    /// Maximum connection pool size
+    pub pool_size: usize,
+
+    /// Connection timeout in milliseconds
+    pub connection_timeout_ms: u64,
+
+    /// Query statement timeout in milliseconds
+    pub statement_timeout_ms: u64,
+
+    /// Lock timeout in milliseconds
+    pub lock_timeout_ms: u64,
+
+    /// Idle in transaction session timeout in milliseconds
+    pub idle_in_transaction_timeout_ms: u64,
+
+    /// PostgreSQL work_mem setting (per-operation memory)
+    pub work_mem: String,
+
+    /// Maximum lifetime of a connection in seconds
+    pub max_connection_lifetime_secs: u64,
+
+    /// Idle connection timeout in seconds
+    pub idle_connection_timeout_secs: u64,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            pool_size: 20,                    // Handles concurrent operations
+            connection_timeout_ms: 5000,      // 5s to acquire connection
+            statement_timeout_ms: 5000,       // 5s query timeout
+            lock_timeout_ms: 1000,            // 1s lock wait
+            idle_in_transaction_timeout_ms: 30000, // 30s idle in transaction
+            work_mem: "256MB".to_string(),    // Per-operation memory
+            max_connection_lifetime_secs: 1800, // 30 minutes
+            idle_connection_timeout_secs: 600,  // 10 minutes
+        }
+    }
+}
+
+impl DatabaseConfig {
+    /// Validate database configuration.
+    pub fn validate(&self) -> Result<()> {
+        if self.pool_size == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "pool_size must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.pool_size > 100 {
+            warn!(
+                "pool_size ({}) is very large, this may cause PostgreSQL overhead",
+                self.pool_size
+            );
+        }
+
+        if self.statement_timeout_ms == 0 {
+            warn!("statement_timeout_ms is 0, queries will not timeout");
+        }
+
+        // Validate work_mem format (e.g., "256MB", "1GB")
+        if !self.work_mem.ends_with("MB") && !self.work_mem.ends_with("GB") {
+            return Err(SearchConfigError::ValidationError(
+                "work_mem must end with 'MB' or 'GB' (e.g., '256MB')".to_string(),
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+}
+
+/// Runtime configuration for thread pools and async runtime (PERF_OPT-5002).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeConfig {
+    /// Number of Tokio worker threads
+    pub worker_threads: usize,
+
+    /// Maximum blocking threads for spawn_blocking
+    pub max_blocking_threads: usize,
+
+    /// Thread stack size in bytes
+    pub thread_stack_size: usize,
+
+    /// Enable thread name for debugging
+    pub enable_thread_names: bool,
+}
+
+impl Default for RuntimeConfig {
+    fn default() -> Self {
+        Self {
+            worker_threads: 8,              // Number of CPU cores
+            max_blocking_threads: 16,       // For blocking operations
+            thread_stack_size: 2 * 1024 * 1024, // 2MB stack
+            enable_thread_names: true,
+        }
+    }
+}
+
+impl RuntimeConfig {
+    /// Validate runtime configuration.
+    pub fn validate(&self) -> Result<()> {
+        if self.worker_threads == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "worker_threads must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.max_blocking_threads == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "max_blocking_threads must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.thread_stack_size < 256 * 1024 {
+            warn!(
+                "thread_stack_size ({} bytes) is very small, this may cause stack overflows",
+                self.thread_stack_size
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Buffer configuration for I/O operations (PERF_OPT-5002).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BufferConfig {
+    /// File read buffer size in bytes
+    pub file_read_buffer: usize,
+
+    /// Database buffer size in bytes
+    pub db_buffer: usize,
+
+    /// Parse buffer size in bytes
+    pub parse_buffer: usize,
+
+    /// Maximum number of buffers in pool
+    pub buffer_pool_size: usize,
+}
+
+impl Default for BufferConfig {
+    fn default() -> Self {
+        Self {
+            file_read_buffer: 64 * 1024,    // 64KB
+            db_buffer: 32 * 1024,           // 32KB
+            parse_buffer: 1024 * 1024,      // 1MB
+            buffer_pool_size: 100,          // Max pooled buffers
+        }
+    }
+}
+
+impl BufferConfig {
+    /// Validate buffer configuration.
+    pub fn validate(&self) -> Result<()> {
+        if self.file_read_buffer == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "file_read_buffer must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.db_buffer == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "db_buffer must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.parse_buffer == 0 {
+            return Err(SearchConfigError::ValidationError(
+                "parse_buffer must be greater than 0".to_string(),
+            )
+            .into());
+        }
+
+        if self.buffer_pool_size == 0 {
+            warn!("buffer_pool_size is 0, buffer pooling is disabled");
         }
 
         Ok(())
