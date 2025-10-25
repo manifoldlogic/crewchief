@@ -3,9 +3,8 @@ use std::{fs, path::{Path, PathBuf}};
 use anyhow::Context;
 use humantime::parse_duration;
 use ignore::WalkBuilder;
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio_postgres::Client;
-use tracing::info;
+use tracing::{info, warn};
 
 pub mod parser;
 
@@ -268,33 +267,260 @@ pub async fn upsert_files(
 }
 
 pub async fn watch_worktree(
-    client: &Client,
+    _client: &Client,
     repo: &str,
     worktree: &str,
     root: &Path,
     throttle: &str,
 ) -> anyhow::Result<()> {
+    use crate::incremental::{
+        ChangeDetector, FileEvent, IncrementalProcessor, UpdateQueue, UpdateTask,
+        WatcherConfig, WorktreeWatcher, Trigger,
+    };
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
     let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
+
+    // Parse throttle duration and convert to milliseconds for WatcherConfig
     let throttle_dur = parse_duration(throttle)?;
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let debounce_ms = throttle_dur.as_millis().min(u64::MAX as u128) as u64;
 
-    let mut watcher: RecommendedWatcher = RecommendedWatcher::new(
-        move |res| {
-            let _ = tx.send(res);
-        },
-        Config::default(),
+    // Create connection pool
+    let pool = crate::db::pool::create_pool().await?;
+
+    // Initialize components
+    let config = WatcherConfig {
+        debounce_ms,
+        channel_capacity: 1000,
+    };
+
+    let worktree_id = format!("{}:{}", repo, worktree);
+    let (mut watcher, mut event_rx) = WorktreeWatcher::new(
+        worktree_id.clone(),
+        root_abs.clone(),
+        config,
     )?;
-    watcher.watch(&root_abs, RecursiveMode::Recursive)?;
 
-    let mut last_run = std::time::Instant::now() - throttle_dur;
-    while let Some(event) = rx.recv().await {
-        let _ = event; // ignore details for now
-        if last_run.elapsed() < throttle_dur { continue; }
-        last_run = std::time::Instant::now();
-        // For simplicity, re-scan incrementally later; for now run a light scan
-        scan_worktree(client, repo, worktree, &root_abs, "WORKTREE", 1, None, None).await.ok();
+    // Start watching
+    watcher.start()?;
+    info!(
+        repo = %repo,
+        worktree = %worktree,
+        path = %root_abs.display(),
+        "Started incremental watch"
+    );
+
+    // Create change detector and processor
+    let detector = Arc::new(Mutex::new(ChangeDetector::with_capacity(pool.clone(), 1000)));
+    let processor = IncrementalProcessor::new(pool.clone());
+    let queue = Arc::new(Mutex::new(UpdateQueue::with_capacity(100)));
+
+    // Spawn event processor task
+    let queue_clone = queue.clone();
+    let detector_clone = detector.clone();
+    let pool_clone = pool.clone();
+    let root_clone = root_abs.clone();
+    let repo_clone = repo.to_string();
+    let worktree_clone = worktree.to_string();
+
+    let processor_task = tokio::spawn(async move {
+        while let Some(indexing_event) = event_rx.recv().await {
+            // Convert IndexingEvent to FileEvent
+            let file_event = match indexing_event.event_type {
+                crate::incremental::EventType::Modified => FileEvent::Modified(indexing_event.path.clone()),
+                crate::incremental::EventType::Deleted => FileEvent::Deleted(indexing_event.path.clone()),
+                crate::incremental::EventType::Renamed => {
+                    if let Some(old_path) = indexing_event.old_path {
+                        FileEvent::Renamed(old_path, indexing_event.path.clone())
+                    } else {
+                        FileEvent::Modified(indexing_event.path.clone())
+                    }
+                }
+            };
+
+            // Get file_id from database (simplified - assumes file exists)
+            // In production, we'd handle file creation here
+            let relpath = indexing_event.path.strip_prefix(&root_clone).unwrap_or(&indexing_event.path);
+
+            // Detect change type
+            let change_type = match file_event {
+                FileEvent::Modified(ref path) => {
+                    // Try to get file_id from database
+                    if let Ok(Some(file_id)) = get_file_id_by_path(&pool_clone, &repo_clone, &worktree_clone, relpath.to_str().unwrap()).await {
+                        detector_clone.lock().await.detect_change(file_id, path).await.ok()
+                    } else {
+                        // New file - compute hash
+                        if path.exists() {
+                            if let Ok(hash) = crate::incremental::FileHasher::hash_file(path) {
+                                Some(crate::incremental::ChangeType::New(hash))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                }
+                FileEvent::Deleted(ref path) => {
+                    if let Ok(Some(file_id)) = get_file_id_by_path(&pool_clone, &repo_clone, &worktree_clone, relpath.to_str().unwrap()).await {
+                        detector_clone.lock().await.detect_deletion(file_id, path).await.ok().flatten()
+                    } else {
+                        None
+                    }
+                }
+                FileEvent::Renamed(ref _old_path, ref new_path) => {
+                    // Treat rename as delete + new
+                    if let Ok(hash) = crate::incremental::FileHasher::hash_file(new_path) {
+                        Some(crate::incremental::ChangeType::New(hash))
+                    } else {
+                        None
+                    }
+                }
+            };
+
+            if let Some(change) = change_type {
+                if !matches!(change, crate::incremental::ChangeType::None) {
+                    let task = UpdateTask::new(
+                        indexing_event.path.clone(),
+                        change,
+                        Trigger::Auto,
+                    );
+                    queue_clone.lock().await.enqueue(task);
+                }
+            }
+        }
+    });
+
+    // Spawn task processor
+    let queue_clone = queue.clone();
+    let processor_clone = Arc::new(processor);
+    let processing_task = tokio::spawn(async move {
+        loop {
+            let task = {
+                let mut q = queue_clone.lock().await;
+                q.dequeue()
+            };
+
+            if let Some(task) = task {
+                let path = task.path.clone();
+                match processor_clone.process(task).await {
+                    Ok(_) => {
+                        queue_clone.lock().await.mark_completed(&path);
+                    }
+                    Err(e) => {
+                        warn!(path = %path.display(), error = %e, "Failed to process file");
+                        // Re-enqueue with retry
+                        let task_again = {
+                            queue_clone.lock().await.dequeue()
+                        };
+                        if let Some(t) = task_again {
+                            queue_clone.lock().await.mark_failed(t, &e.to_string());
+                        }
+                    }
+                }
+            } else {
+                // No tasks available, sleep briefly
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+    });
+
+    // Status reporting task
+    let queue_clone = queue.clone();
+    let root_clone_status = root_abs.clone();
+    let status_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
+        let mut events_processed = 0usize;
+
+        loop {
+            interval.tick().await;
+            let stats = queue_clone.lock().await.stats();
+            events_processed += stats.processing;
+
+            // Count files in watched directory (estimate)
+            let files_watched = WalkBuilder::new(&root_clone_status)
+                .hidden(false)
+                .ignore(true)
+                .git_ignore(true)
+                .git_exclude(true)
+                .build()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+                .count();
+
+            info!(
+                files_watched = files_watched,
+                watcher_state = "running",
+                queue_size = stats.pending,
+                processing = stats.processing,
+                dead_letter = stats.dead_letter,
+                total_processed = events_processed,
+                "Watch status"
+            );
+        }
+    });
+
+    // Wait for SIGINT (Ctrl+C) or SIGTERM signal
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut sigterm = signal(SignalKind::terminate())
+        .context("Failed to install SIGTERM handler")?;
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received SIGINT");
+        },
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM");
+        },
     }
+
+    info!("Received shutdown signal, stopping watch...");
+
+    // Stop the watcher
+    watcher.stop()?;
+
+    // Wait briefly for in-flight events to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    // Process remaining tasks in queue
+    let remaining = {
+        let q = queue.lock().await;
+        q.queue_size()
+    };
+    if remaining > 0 {
+        info!("Processing {} remaining tasks...", remaining);
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    }
+
+    // Cancel background tasks
+    processor_task.abort();
+    processing_task.abort();
+    status_task.abort();
+
+    info!("Watch stopped gracefully");
     Ok(())
+}
+
+/// Helper function to get file_id from database by path
+async fn get_file_id_by_path(
+    pool: &crate::db::PgPool,
+    repo: &str,
+    worktree: &str,
+    relpath: &str,
+) -> anyhow::Result<Option<i64>> {
+    let client = pool.get().await?;
+
+    let row = client.query_opt(
+        "SELECT f.id FROM maproom.files f
+         JOIN maproom.worktrees w ON f.worktree_id = w.id
+         JOIN maproom.repos r ON w.repo_id = r.id
+         WHERE r.name = $1 AND w.name = $2 AND f.relpath = $3
+         ORDER BY f.id DESC LIMIT 1",
+        &[&repo, &worktree, &relpath],
+    ).await?;
+
+    Ok(row.map(|r| r.get(0)))
 }
 
 #[derive(Debug, Clone)]
