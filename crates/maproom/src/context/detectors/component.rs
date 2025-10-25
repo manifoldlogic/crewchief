@@ -43,7 +43,7 @@ impl Default for ComponentPatterns {
 
 /// Detector for React components.
 pub struct ComponentDetector {
-    patterns: ComponentPatterns,
+    _patterns: ComponentPatterns,
     include_regexes: Vec<Regex>,
     exclude_regexes: Vec<Regex>,
 }
@@ -70,7 +70,7 @@ impl ComponentDetector {
             .collect();
 
         Self {
-            patterns,
+            _patterns: patterns,
             include_regexes,
             exclude_regexes,
         }

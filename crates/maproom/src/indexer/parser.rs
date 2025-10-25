@@ -1252,7 +1252,6 @@ fn parse_python_docstring(docstring: &str) -> String {
 fn parse_google_docstring(docstring: &str) -> String {
     let lines: Vec<&str> = docstring.lines().collect();
     let mut result = String::new();
-    let mut current_section = String::new();
     let mut i = 0;
 
     // Extract brief description (everything before first section)
@@ -1297,7 +1296,7 @@ fn parse_google_docstring(docstring: &str) -> String {
                 trimmed.trim_end_matches(':')
             };
 
-            current_section = section_name.to_string();
+            let current_section = section_name.to_string();
             result.push_str("\n\n");
             result.push_str(section_name);
             result.push_str(":\n");
@@ -1344,7 +1343,6 @@ fn parse_google_docstring(docstring: &str) -> String {
 fn parse_numpy_docstring(docstring: &str) -> String {
     let lines: Vec<&str> = docstring.lines().collect();
     let mut result = String::new();
-    let mut current_section = String::new();
     let mut i = 0;
 
     // Extract brief description (everything before first section)
@@ -1385,7 +1383,7 @@ fn parse_numpy_docstring(docstring: &str) -> String {
 
             // Check if this is a section header (has underline)
             if !line.is_empty() && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '=')) {
-                current_section = line.to_string();
+                let current_section = line.to_string();
                 result.push_str("\n\n");
                 result.push_str(line);
                 result.push_str(":\n");
@@ -2406,7 +2404,7 @@ fn extract_rust_visibility(source: &str, node: Node) -> Option<String> {
     None
 }
 
-fn extract_rust_function_modifiers(source: &str, node: Node) -> Vec<&'static str> {
+fn extract_rust_function_modifiers(_source: &str, node: Node) -> Vec<&'static str> {
     let mut modifiers = Vec::new();
 
     // Look for function_modifiers child

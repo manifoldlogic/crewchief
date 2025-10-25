@@ -93,13 +93,13 @@ pub struct SegmentMetrics {
 /// Dashboard data aggregator
 pub struct Dashboard {
     /// Database connection string
-    db_url: String,
+    _db_url: String,
 }
 
 impl Dashboard {
     /// Create new dashboard
     pub fn new(db_url: String) -> Self {
-        Self { db_url }
+        Self { _db_url: db_url }
     }
 
     /// Get metrics for an experiment over a time period
@@ -121,7 +121,7 @@ impl Dashboard {
             if let Some(truth) = ground_truth.get(&result.query) {
                 let old_metrics = self.calculate_query_metrics(&result.old_results, truth);
                 old_queries.push(QueryResult {
-                    query: result.query.clone(),
+                    _query: result.query.clone(),
                     metrics: old_metrics,
                     latency_ms: result.old_latency_ms as f64,
                 });
@@ -133,7 +133,7 @@ impl Dashboard {
                 if let Some(truth) = ground_truth.get(&result.query) {
                     let new_metrics = self.calculate_query_metrics(new_results, truth);
                     new_queries.push(QueryResult {
-                        query: result.query.clone(),
+                        _query: result.query.clone(),
                         metrics: new_metrics,
                         latency_ms: result.new_latency_ms.unwrap_or(0) as f64,
                     });
@@ -192,7 +192,7 @@ impl Dashboard {
                     if let Some(truth) = ground_truth.get(&result.query) {
                         let metrics = self.calculate_query_metrics(new_results, truth);
                         queries.push(QueryResult {
-                            query: result.query.clone(),
+                            _query: result.query.clone(),
                             metrics,
                             latency_ms: result.new_latency_ms.unwrap_or(0) as f64,
                         });
@@ -248,7 +248,7 @@ impl Dashboard {
                     if let Some(truth) = ground_truth.get(&result.query) {
                         let metrics = self.calculate_query_metrics(new_results, truth);
                         queries.push(QueryResult {
-                            query: result.query.clone(),
+                            _query: result.query.clone(),
                             metrics,
                             latency_ms: result.new_latency_ms.unwrap_or(0) as f64,
                         });
@@ -462,7 +462,7 @@ impl Dashboard {
 
 #[derive(Debug, Clone)]
 struct QueryResult {
-    query: String,
+    _query: String,
     metrics: EvaluationMetrics,
     latency_ms: f64,
 }

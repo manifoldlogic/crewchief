@@ -47,7 +47,7 @@ macro_rules! profile_function {
 ///
 /// Returns the result of the closure. When profiling is disabled, this has zero overhead.
 #[inline]
-pub fn profile_operation<T, F>(name: &str, f: F) -> T
+pub fn profile_operation<T, F>(#[allow(unused_variables)] name: &str, f: F) -> T
 where
     F: FnOnce() -> T,
 {
