@@ -131,6 +131,49 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         force: bool,
     },
+
+    /// Migrate markdown chunks to new tree-sitter parser
+    Migrate {
+        #[command(subcommand)]
+        command: MigrateCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum MigrateCommand {
+    /// Migrate markdown chunks from regex to tree-sitter parser
+    Markdown {
+        /// Repository name
+        #[arg(long)]
+        repo: String,
+        /// Worktree name (optional)
+        #[arg(long)]
+        worktree: Option<String>,
+    },
+
+    /// Rollback markdown migration from a backup
+    Rollback {
+        /// Backup table name (e.g., chunks_backup_20250124_120000)
+        #[arg(long)]
+        backup: String,
+    },
+
+    /// List available backup tables
+    ListBackups,
+
+    /// Delete a backup table
+    DeleteBackup {
+        /// Backup table name to delete
+        #[arg(long)]
+        backup: String,
+    },
+
+    /// Verify migration integrity
+    Verify {
+        /// Repository name
+        #[arg(long)]
+        repo: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -404,6 +447,84 @@ async fn main() -> anyhow::Result<()> {
             println!("{}\n", "=".repeat(60));
             println!("{}", stats.summary());
             println!("{}", "=".repeat(60));
+        }
+
+        Commands::Migrate { command } => {
+            use crewchief_maproom::migrate::{MarkdownMigrator, verify_migration};
+
+            let client = db::connect().await?;
+
+            match command {
+                MigrateCommand::Markdown { repo, worktree } => {
+                    println!("Starting markdown migration for repo: {}", repo);
+                    if let Some(ref wt) = worktree {
+                        println!("Worktree: {}", wt);
+                    }
+
+                    let mut migrator = MarkdownMigrator::new(client);
+                    let result = migrator.migrate(&repo, worktree.as_deref()).await?;
+
+                    println!("\n{}", "=".repeat(60));
+                    println!("Migration Complete");
+                    println!("{}", "=".repeat(60));
+                    println!("Files processed: {}", result.stats.files_processed);
+                    println!("Old chunks: {}", result.stats.total_old_chunks);
+                    println!("New chunks: {}", result.stats.total_new_chunks);
+                    println!("Delta: {:+}", result.stats.delta());
+                    println!("Errors: {}", result.stats.files_with_errors);
+                    println!("Backup table: {}", result.backup_table);
+
+                    if let Some(duration) = result.stats.duration() {
+                        println!("Duration: {:.2}s", duration.num_milliseconds() as f64 / 1000.0);
+                    }
+
+                    println!("{}", "=".repeat(60));
+                    println!("\nTo rollback: cargo run --bin crewchief-maproom -- migrate rollback --backup {}", result.backup_table);
+                }
+
+                MigrateCommand::Rollback { backup } => {
+                    println!("Rolling back migration from backup: {}", backup);
+                    let mut migrator = MarkdownMigrator::new(client);
+                    migrator.rollback(&backup).await?;
+                    println!("Rollback complete");
+                }
+
+                MigrateCommand::ListBackups => {
+                    let migrator = MarkdownMigrator::new(client);
+                    let backups = migrator.list_backups().await?;
+
+                    if backups.is_empty() {
+                        println!("No backup tables found");
+                    } else {
+                        println!("Available backup tables:");
+                        for backup in backups {
+                            println!("  - {}", backup);
+                        }
+                    }
+                }
+
+                MigrateCommand::DeleteBackup { backup } => {
+                    println!("Deleting backup table: {}", backup);
+                    let mut migrator = MarkdownMigrator::new(client);
+                    migrator.delete_backup(&backup).await?;
+                    println!("Backup deleted");
+                }
+
+                MigrateCommand::Verify { repo } => {
+                    println!("Verifying migration for repo: {}", repo);
+                    let results = verify_migration(&client, &repo).await?;
+
+                    println!("\n{}", "=".repeat(60));
+                    println!("Migration Verification Results");
+                    println!("{}", "=".repeat(60));
+
+                    for (key, value) in results.iter() {
+                        println!("{}: {}", key, value);
+                    }
+
+                    println!("{}", "=".repeat(60));
+                }
+            }
         }
     }
 

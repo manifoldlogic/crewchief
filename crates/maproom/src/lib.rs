@@ -15,5 +15,6 @@ pub mod incremental;
 pub mod indexer;
 pub mod memory;
 pub mod metrics;
+pub mod migrate;
 pub mod profiling;
 pub mod search;
