@@ -106,6 +106,9 @@ mod search_config;
 #[cfg(test)]
 mod tests;
 
+// Re-export cache configuration from cache module
+pub use crate::cache::{CacheConfig, LayerConfig};
+
 pub use feature_flags::FeatureFlags;
 pub use hot_reload::{ConfigReloader, HotReloadError};
 pub use search_config::{

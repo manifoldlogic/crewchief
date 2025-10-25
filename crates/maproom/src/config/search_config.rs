@@ -1,5 +1,6 @@
 //! Search configuration structs and loading logic.
 
+use crate::cache::CacheConfig;
 use crate::config::FeatureFlags;
 use crate::search::fusion::FusionWeights;
 use anyhow::{Context, Result};
@@ -45,6 +46,10 @@ pub struct SearchConfig {
 
     /// Feature flags
     pub feature_flags: FeatureFlags,
+
+    /// Cache configuration
+    #[serde(default)]
+    pub cache: CacheConfig,
 }
 
 impl SearchConfig {
