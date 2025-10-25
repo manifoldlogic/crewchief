@@ -119,7 +119,8 @@ no language specified
         .find(|c| c.symbol_name == Some("Code: plain".to_string()))
         .expect("Should find plain code block");
     if let Some(metadata) = &plain_block.metadata {
-        assert!(metadata.get("language").is_none() || metadata.get("language").unwrap().is_null());
+        // Code blocks without language tags should be marked as "plain" (MD_ENHANCE-3001)
+        assert_eq!(metadata.get("language").unwrap().as_str().unwrap(), "plain");
     }
 }
 

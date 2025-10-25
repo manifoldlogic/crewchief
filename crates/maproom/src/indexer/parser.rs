@@ -46,6 +46,19 @@ impl HierarchyTracker {
 
         parent_path
     }
+
+    /// Get the current heading path (full breadcrumb including current heading)
+    /// Used by code blocks and other elements to link to their parent section
+    fn get_current_path(&self) -> String {
+        if self.stack.is_empty() {
+            String::new()
+        } else {
+            self.stack.iter()
+                .map(|node| node.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" > ")
+        }
+    }
 }
 
 // Use the safe language providers exposed by the crates
@@ -119,7 +132,7 @@ fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, 
             extract_heading(source, node, chunks, hierarchy);
         }
         "fenced_code_block" => {
-            extract_code_block(source, node, chunks);
+            extract_code_block(source, node, chunks, hierarchy);
         }
         "pipe_table" => {
             extract_table(source, node, chunks);
@@ -252,7 +265,7 @@ fn get_heading_level_from_line(line: &str) -> Option<usize> {
     None
 }
 
-fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, hierarchy: &HierarchyTracker) {
     let mut language: Option<String> = None;
     let mut code_lines_count = 0;
 
@@ -262,7 +275,10 @@ fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
             match child.kind() {
                 "info_string" => {
                     if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                        language = Some(text.trim().to_string());
+                        // Extract just the language name (first word) from info_string
+                        // This handles cases like "typescript {1-3}" or "rust copy"
+                        let lang_text = text.trim().split_whitespace().next().unwrap_or(text.trim());
+                        language = Some(lang_text.to_string());
                     }
                 }
                 "code_fence_content" => {
@@ -278,6 +294,9 @@ fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     let start_line = (node.start_position().row + 1) as i32;
     let end_line = (node.end_position().row + 1) as i32;
 
+    // Get parent heading path for linking code block to its section
+    let parent_path = hierarchy.get_current_path();
+
     let symbol_name = if let Some(ref lang) = language {
         format!("Code: {}", lang)
     } else {
@@ -292,7 +311,8 @@ fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         start_line,
         end_line,
         metadata: Some(serde_json::json!({
-            "language": language,
+            "language": language.unwrap_or_else(|| "plain".to_string()),
+            "parent_path": parent_path,
             "lines_of_code": code_lines_count
         })),
     });
