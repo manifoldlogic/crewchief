@@ -29,6 +29,11 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
         include_str!("./../../migrations/0003_yaml_toml_support.sql"),
         include_str!("./../../migrations/0004_optimize_vector_indices.sql"),
         include_str!("./../../migrations/0005_create_materialized_views.sql"),
+        include_str!("./../../migrations/0006_optimize_gin_index.sql"),
+        include_str!("./../../migrations/0007_ab_testing_schema.sql"),
+        include_str!("./../../migrations/0008_context_query_optimizations.sql"),
+        include_str!("./../../migrations/0009_create_context_cache.sql"),
+        include_str!("./../../migrations/0010_add_blake3_hash.sql"),
     ];
 
     for sql in migrations {
