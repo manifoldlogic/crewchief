@@ -24,6 +24,8 @@ pub enum ChangeType {
         old: ContentHash,
         new: ContentHash,
     },
+    /// Deleted file - file was removed from filesystem
+    Deleted(ContentHash),
 }
 
 /// Change detector using three-tier comparison.
@@ -221,6 +223,279 @@ impl ChangeDetector {
     pub fn clear_cache(&mut self) {
         self.cache.clear();
     }
+
+    /// Detect if a file has been deleted.
+    ///
+    /// Checks if a file exists on the filesystem. If not, queries the database
+    /// to see if it was previously tracked (had a hash).
+    ///
+    /// # Arguments
+    /// * `file_id` - Database ID of the file
+    /// * `path` - Filesystem path where the file should exist
+    ///
+    /// # Returns
+    /// * `Ok(Some(ChangeType::Deleted(hash)))` - File was deleted, returns its last hash
+    /// * `Ok(None)` - File still exists or was never tracked
+    /// * `Err(_)` - Database query error
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::path::Path;
+    /// # use crewchief_maproom::db::create_pool;
+    /// # use crewchief_maproom::incremental::{ChangeDetector, ChangeType};
+    /// # #[tokio::main]
+    /// # async fn main() -> anyhow::Result<()> {
+    /// # let pool = create_pool().await?;
+    /// let detector = ChangeDetector::new(pool);
+    /// let path = Path::new("deleted_file.rs");
+    ///
+    /// if let Some(ChangeType::Deleted(hash)) = detector.detect_deletion(123, path).await? {
+    ///     println!("File was deleted, last hash: {}", hash);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn detect_deletion(&self, file_id: i64, path: &Path) -> Result<Option<ChangeType>> {
+        // Check if file exists on filesystem
+        if path.exists() {
+            return Ok(None); // Not deleted
+        }
+
+        // File doesn't exist - check if it was in database
+        if let Some(old_hash) = get_hash_from_db(&self.pool, file_id).await? {
+            return Ok(Some(ChangeType::Deleted(old_hash)));
+        }
+
+        Ok(None) // Was never tracked
+    }
+
+    /// Detect if a file has been moved or renamed.
+    ///
+    /// Searches the database for files with the same content hash but at a different path.
+    /// This indicates the file was moved/renamed rather than being a true "new" file.
+    ///
+    /// # Arguments
+    /// * `new_path` - The new path where the file now exists
+    /// * `hash` - The content hash of the file at the new path
+    ///
+    /// # Returns
+    /// * `Ok(Some(old_path))` - File was moved from `old_path` to `new_path`
+    /// * `Ok(None)` - No previous file with this hash found (truly new file)
+    /// * `Err(_)` - Database query error
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::path::Path;
+    /// # use crewchief_maproom::db::create_pool;
+    /// # use crewchief_maproom::incremental::{ChangeDetector, FileHasher};
+    /// # #[tokio::main]
+    /// # async fn main() -> anyhow::Result<()> {
+    /// # let pool = create_pool().await?;
+    /// let detector = ChangeDetector::new(pool);
+    /// let new_path = Path::new("src/new_location.rs");
+    /// let hash = FileHasher::hash_file(new_path)?;
+    ///
+    /// if let Some(old_path) = detector.detect_move(new_path, &hash).await? {
+    ///     println!("File moved: {} -> {}", old_path.display(), new_path.display());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn detect_move(
+        &self,
+        new_path: &Path,
+        hash: &ContentHash,
+    ) -> Result<Option<std::path::PathBuf>> {
+        let client = self
+            .pool
+            .get()
+            .await
+            .context("Failed to get database connection from pool")?;
+
+        let hash_bytes: &[u8] = hash.as_bytes();
+
+        // Query database for files with this hash but different path
+        let row = client
+            .query_opt(
+                "SELECT relpath FROM maproom.files
+                 WHERE blake3_hash = $1 AND relpath != $2
+                 LIMIT 1",
+                &[&hash_bytes, &new_path.to_string_lossy().as_ref()],
+            )
+            .await
+            .context("Failed to query for file moves")?;
+
+        match row {
+            Some(row) => {
+                let old_path: String = row.get(0);
+                Ok(Some(std::path::PathBuf::from(old_path)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Detect changes for multiple files in a batch.
+    ///
+    /// This method efficiently processes multiple files by:
+    /// 1. Computing all filesystem hashes
+    /// 2. Checking the in-memory cache for all files
+    /// 3. Batch querying the database for cache misses
+    /// 4. Comparing hashes to determine change types
+    ///
+    /// # Arguments
+    /// * `files` - Slice of (file_id, path) tuples to process
+    ///
+    /// # Returns
+    /// Vector of (file_id, ChangeType) pairs in the same order as input
+    ///
+    /// # Performance
+    ///
+    /// Batch processing is more efficient than individual calls because:
+    /// - Single database query for all cache misses (vs N queries)
+    /// - Better CPU cache utilization for hash computation
+    /// - Reduced connection pool contention
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::path::PathBuf;
+    /// # use crewchief_maproom::db::create_pool;
+    /// # use crewchief_maproom::incremental::ChangeDetector;
+    /// # #[tokio::main]
+    /// # async fn main() -> anyhow::Result<()> {
+    /// # let pool = create_pool().await?;
+    /// let mut detector = ChangeDetector::new(pool);
+    ///
+    /// let files = vec![
+    ///     (1, PathBuf::from("src/main.rs")),
+    ///     (2, PathBuf::from("src/lib.rs")),
+    ///     (3, PathBuf::from("tests/test.rs")),
+    /// ];
+    ///
+    /// let changes = detector.detect_changes_batch(&files).await?;
+    /// for (file_id, change) in changes {
+    ///     println!("File {}: {:?}", file_id, change);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn detect_changes_batch(
+        &mut self,
+        files: &[(i64, std::path::PathBuf)],
+    ) -> Result<Vec<(i64, ChangeType)>> {
+        use std::collections::HashMap;
+
+        if files.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Step 1: Compute all filesystem hashes
+        let mut file_hashes: HashMap<i64, ContentHash> = HashMap::with_capacity(files.len());
+        for (file_id, path) in files {
+            let hash = FileHasher::hash_file(path)
+                .with_context(|| format!("Failed to hash file: {}", path.display()))?;
+            file_hashes.insert(*file_id, hash);
+        }
+
+        // Step 2: Check cache and collect cache misses
+        let mut cache_misses = Vec::new();
+        let mut results: HashMap<i64, ChangeType> = HashMap::with_capacity(files.len());
+
+        for (file_id, path) in files {
+            let current_hash = file_hashes[file_id];
+
+            if let Some(cached_hash) = self.cache.get(path) {
+                // Cache hit
+                if *cached_hash == current_hash {
+                    results.insert(*file_id, ChangeType::None);
+                } else {
+                    results.insert(
+                        *file_id,
+                        ChangeType::Modified {
+                            old: *cached_hash,
+                            new: current_hash,
+                        },
+                    );
+                    // Update cache with new hash
+                    self.cache.insert(path.to_path_buf(), current_hash);
+                }
+            } else {
+                // Cache miss - need to query database
+                cache_misses.push(*file_id);
+            }
+        }
+
+        // Step 3: Batch query database for all cache misses
+        if !cache_misses.is_empty() {
+            let client = self
+                .pool
+                .get()
+                .await
+                .context("Failed to get database connection from pool")?;
+
+            // Build query with ANY clause for efficient batch lookup
+            let rows = client
+                .query(
+                    "SELECT id, blake3_hash FROM maproom.files WHERE id = ANY($1)",
+                    &[&cache_misses],
+                )
+                .await
+                .context("Failed to batch query file hashes")?;
+
+            let db_hashes: HashMap<i64, Option<ContentHash>> = rows
+                .iter()
+                .map(|row| {
+                    let file_id: i64 = row.get(0);
+                    let hash_bytes: Option<Vec<u8>> = row.get(1);
+                    let hash = match hash_bytes {
+                        Some(bytes) if bytes.len() == 32 => {
+                            let mut hash_array = [0u8; 32];
+                            hash_array.copy_from_slice(&bytes);
+                            Some(ContentHash::from(hash_array))
+                        }
+                        _ => None,
+                    };
+                    (file_id, hash)
+                })
+                .collect();
+
+            // Step 4: Compare DB hashes with current hashes
+            for file_id in cache_misses {
+                let current_hash = file_hashes[&file_id];
+                let path = &files.iter().find(|(id, _)| *id == file_id).unwrap().1;
+
+                let change_type = match db_hashes.get(&file_id) {
+                    Some(Some(old_hash)) => {
+                        if *old_hash == current_hash {
+                            ChangeType::None
+                        } else {
+                            ChangeType::Modified {
+                                old: *old_hash,
+                                new: current_hash,
+                            }
+                        }
+                    }
+                    Some(None) | None => {
+                        // No hash in database - new file
+                        ChangeType::New(current_hash)
+                    }
+                };
+
+                results.insert(file_id, change_type);
+
+                // Update cache
+                self.cache.insert(path.to_path_buf(), current_hash);
+            }
+        }
+
+        // Return results in the same order as input
+        Ok(files
+            .iter()
+            .map(|(file_id, _)| (*file_id, results[file_id].clone()))
+            .collect())
+    }
 }
 
 /// Retrieve a file's blake3 hash from the database.
@@ -369,6 +644,10 @@ mod tests {
             }
         );
 
+        // Test Deleted equality
+        assert_eq!(ChangeType::Deleted(hash1), ChangeType::Deleted(hash1));
+        assert_ne!(ChangeType::Deleted(hash1), ChangeType::Deleted(hash2));
+
         // Test cross-variant inequality
         assert_ne!(ChangeType::None, ChangeType::New(hash1));
         assert_ne!(
@@ -377,6 +656,14 @@ mod tests {
                 old: hash1,
                 new: hash2
             }
+        );
+        assert_ne!(ChangeType::New(hash1), ChangeType::Deleted(hash1));
+        assert_ne!(
+            ChangeType::Modified {
+                old: hash1,
+                new: hash2
+            },
+            ChangeType::Deleted(hash1)
         );
     }
 

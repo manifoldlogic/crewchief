@@ -492,3 +492,249 @@ async fn test_get_hash_nonexistent_file() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_detect_deleted_file() -> Result<()> {
+    let pool = setup_pool().await?;
+
+    // Create test file in database
+    let file_id = insert_test_file(&pool, "test_repo_deleted", "main", "test_deleted.rs").await?;
+
+    // Store a hash (simulating previously tracked file)
+    let old_content = b"file that will be deleted";
+    let old_hash = FileHasher::hash_bytes(old_content);
+    store_hash_in_db(&pool, file_id, old_hash).await?;
+
+    // Create a path that doesn't exist
+    let nonexistent_path = std::path::PathBuf::from("/tmp/nonexistent_file_12345.rs");
+
+    let detector = ChangeDetector::new(pool.clone());
+
+    // Detect deletion
+    let change = detector.detect_deletion(file_id, &nonexistent_path).await?;
+
+    // Should detect as deleted with the old hash
+    match change {
+        Some(ChangeType::Deleted(hash)) => {
+            assert_eq!(hash, old_hash);
+        }
+        _ => panic!("Expected Some(ChangeType::Deleted), got {:?}", change),
+    }
+
+    cleanup_test_file(&pool, file_id).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delete_never_tracked_file() -> Result<()> {
+    let pool = setup_pool().await?;
+
+    // Create test file without hash (never tracked)
+    let file_id =
+        insert_test_file(&pool, "test_repo_never_tracked", "main", "test_never_tracked.rs")
+            .await?;
+
+    // Create a path that doesn't exist
+    let nonexistent_path = std::path::PathBuf::from("/tmp/never_existed_12345.rs");
+
+    let detector = ChangeDetector::new(pool.clone());
+
+    // Detect deletion on never-tracked file
+    let change = detector.detect_deletion(file_id, &nonexistent_path).await?;
+
+    // Should return None since file was never tracked (no hash)
+    assert_eq!(change, None);
+
+    cleanup_test_file(&pool, file_id).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_detect_file_move() -> Result<()> {
+    let pool = setup_pool().await?;
+
+    // Create test file at old location in database
+    let file_id_old =
+        insert_test_file(&pool, "test_repo_move", "main", "old/location/test.rs").await?;
+
+    // Create content and hash
+    let content = b"file that will be moved";
+    let hash = FileHasher::hash_bytes(content);
+
+    // Store hash for old location
+    store_hash_in_db(&pool, file_id_old, hash).await?;
+
+    let detector = ChangeDetector::new(pool.clone());
+
+    // Create new path (different from old path)
+    let new_path = std::path::PathBuf::from("new/location/test.rs");
+
+    // Detect move
+    let old_path = detector.detect_move(&new_path, &hash).await?;
+
+    // Should detect that a file with this hash existed at a different path
+    match old_path {
+        Some(path) => {
+            assert_eq!(path.to_string_lossy(), "old/location/test.rs");
+        }
+        None => panic!("Expected to detect file move, got None"),
+    }
+
+    cleanup_test_file(&pool, file_id_old).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_detect_move_no_previous_file() -> Result<()> {
+    let pool = setup_pool().await?;
+
+    let detector = ChangeDetector::new(pool.clone());
+
+    // Hash of a completely new file
+    let hash = FileHasher::hash_bytes(b"brand new file content");
+    let new_path = std::path::PathBuf::from("new/file.rs");
+
+    // Try to detect move for a file that never existed
+    let old_path = detector.detect_move(&new_path, &hash).await?;
+
+    // Should return None (no previous file with this hash)
+    assert_eq!(old_path, None);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_batch_change_detection() -> Result<()> {
+    let pool = setup_pool().await?;
+
+    // Create multiple test files in database
+    let file_id1 = insert_test_file(&pool, "test_repo_batch", "main", "batch1.rs").await?;
+    let file_id2 = insert_test_file(&pool, "test_repo_batch", "main", "batch2.rs").await?;
+    let file_id3 = insert_test_file(&pool, "test_repo_batch", "main", "batch3.rs").await?;
+
+    // Create temporary files
+    let mut temp_file1 = NamedTempFile::new()?;
+    let mut temp_file2 = NamedTempFile::new()?;
+    let mut temp_file3 = NamedTempFile::new()?;
+
+    let content1 = b"batch file 1";
+    let content2 = b"batch file 2";
+    let content3 = b"batch file 3";
+
+    temp_file1.write_all(content1)?;
+    temp_file1.flush()?;
+    temp_file2.write_all(content2)?;
+    temp_file2.flush()?;
+    temp_file3.write_all(content3)?;
+    temp_file3.flush()?;
+
+    // Store hash for file 2 only (file 1 and 3 are new)
+    let hash2 = FileHasher::hash_bytes(content2);
+    store_hash_in_db(&pool, file_id2, hash2).await?;
+
+    let mut detector = ChangeDetector::new(pool.clone());
+
+    // Batch detect changes
+    let files = vec![
+        (file_id1, temp_file1.path().to_path_buf()),
+        (file_id2, temp_file2.path().to_path_buf()),
+        (file_id3, temp_file3.path().to_path_buf()),
+    ];
+
+    let changes = detector.detect_changes_batch(&files).await?;
+
+    // Verify we got 3 results in the same order
+    assert_eq!(changes.len(), 3);
+
+    // File 1: should be New
+    assert!(matches!(changes[0].1, ChangeType::New(_)));
+    assert_eq!(changes[0].0, file_id1);
+
+    // File 2: should be None (unchanged)
+    assert_eq!(changes[1].1, ChangeType::None);
+    assert_eq!(changes[1].0, file_id2);
+
+    // File 3: should be New
+    assert!(matches!(changes[2].1, ChangeType::New(_)));
+    assert_eq!(changes[2].0, file_id3);
+
+    // Verify all files are now in cache
+    assert_eq!(detector.cache().len(), 3);
+
+    cleanup_test_file(&pool, file_id1).await?;
+    cleanup_test_file(&pool, file_id2).await?;
+    cleanup_test_file(&pool, file_id3).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_batch_change_detection_with_modifications() -> Result<()> {
+    let pool = setup_pool().await?;
+
+    // Create test files
+    let file_id1 = insert_test_file(&pool, "test_repo_batch_mod", "main", "batch_mod1.rs").await?;
+    let file_id2 = insert_test_file(&pool, "test_repo_batch_mod", "main", "batch_mod2.rs").await?;
+
+    // Create temporary files
+    let mut temp_file1 = NamedTempFile::new()?;
+    let mut temp_file2 = NamedTempFile::new()?;
+
+    let old_content1 = b"old content 1";
+    let new_content1 = b"new content 1";
+    let content2 = b"unchanged content 2";
+
+    // Store old hashes
+    let old_hash1 = FileHasher::hash_bytes(old_content1);
+    let hash2 = FileHasher::hash_bytes(content2);
+    store_hash_in_db(&pool, file_id1, old_hash1).await?;
+    store_hash_in_db(&pool, file_id2, hash2).await?;
+
+    // Write new content to files
+    temp_file1.write_all(new_content1)?;
+    temp_file1.flush()?;
+    temp_file2.write_all(content2)?;
+    temp_file2.flush()?;
+
+    let mut detector = ChangeDetector::new(pool.clone());
+
+    // Batch detect
+    let files = vec![
+        (file_id1, temp_file1.path().to_path_buf()),
+        (file_id2, temp_file2.path().to_path_buf()),
+    ];
+
+    let changes = detector.detect_changes_batch(&files).await?;
+
+    assert_eq!(changes.len(), 2);
+
+    // File 1: should be Modified
+    match &changes[0].1 {
+        ChangeType::Modified { old, new } => {
+            assert_eq!(*old, old_hash1);
+            let expected_new = FileHasher::hash_bytes(new_content1);
+            assert_eq!(*new, expected_new);
+        }
+        _ => panic!("Expected ChangeType::Modified for file 1, got {:?}", changes[0].1),
+    }
+
+    // File 2: should be None (unchanged)
+    assert_eq!(changes[1].1, ChangeType::None);
+
+    cleanup_test_file(&pool, file_id1).await?;
+    cleanup_test_file(&pool, file_id2).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_batch_change_detection_empty() -> Result<()> {
+    let pool = setup_pool().await?;
+    let mut detector = ChangeDetector::new(pool);
+
+    // Empty batch should return empty result
+    let changes = detector.detect_changes_batch(&[]).await?;
+    assert_eq!(changes.len(), 0);
+
+    Ok(())
+}
