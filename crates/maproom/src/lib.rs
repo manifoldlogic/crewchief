@@ -13,6 +13,7 @@ pub mod embedding;
 pub mod evaluation;
 pub mod incremental;
 pub mod indexer;
+pub mod memory;
 pub mod metrics;
 pub mod profiling;
 pub mod search;
