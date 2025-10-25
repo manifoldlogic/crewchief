@@ -172,7 +172,7 @@ impl ScoreFusion for BasicWeightedFusion {
             for result in result_set.results {
                 chunk_scores
                     .entry(result.chunk_id)
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .insert(source, result.score);
             }
         }

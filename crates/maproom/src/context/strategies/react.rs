@@ -483,9 +483,7 @@ impl ContextAssembler for ReactAssemblyStrategy {
 
         // Add React-specific context items
         let symbol_name = metadata
-            .symbol_name
-            .as_ref()
-            .map(|s| s.as_str())
+            .symbol_name.as_deref()
             .unwrap_or("Component");
 
         // Priority order: routes → hooks → jsx_parents → jsx_children

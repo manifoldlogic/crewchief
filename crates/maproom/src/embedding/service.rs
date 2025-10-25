@@ -175,7 +175,7 @@ impl EmbeddingService {
             info!(
                 "Processing chunk {}/{} ({} texts)",
                 chunk_idx + 1,
-                (total + batch_size - 1) / batch_size,
+                total.div_ceil(batch_size),
                 chunk.len()
             );
 
@@ -183,7 +183,7 @@ impl EmbeddingService {
             all_embeddings.extend(chunk_embeddings);
 
             // Small delay between chunks to avoid rate limiting
-            if chunk_idx < (total + batch_size - 1) / batch_size - 1 {
+            if chunk_idx < total.div_ceil(batch_size) - 1 {
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             }
         }

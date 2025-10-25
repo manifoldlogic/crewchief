@@ -1,9 +1,9 @@
 # Ticket: INC_INDEX-2002: Multi-Worktree Support
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -18,13 +18,13 @@ Implement multi-worktree support for the incremental indexing system, enabling s
 The incremental indexing system needs to support CrewChief's multi-worktree architecture where multiple agents work in isolated worktrees simultaneously. Each worktree must be watched independently, with events properly tagged and isolated to ensure that file changes in one worktree don't affect the index state of another. This is Phase 2, Week 2, Task 2 of the incremental indexing implementation plan.
 
 ## Acceptance Criteria
-- [ ] Multiple watchers can run simultaneously for different worktree paths
-- [ ] Events are properly isolated by worktree (tagged with worktree_id)
-- [ ] Concurrent watcher operation is stable under load
-- [ ] Watcher lifecycle is properly managed (start, stop, restart)
-- [ ] Watcher crashes are detected and trigger automatic restart
-- [ ] Tests demonstrate concurrent multi-watcher operation
-- [ ] Integration tests verify event isolation between worktrees
+- [x] Multiple watchers can run simultaneously for different worktree paths
+- [x] Events are properly isolated by worktree (tagged with worktree_id)
+- [x] Concurrent watcher operation is stable under load
+- [x] Watcher lifecycle is properly managed (start, stop, restart)
+- [x] Watcher crashes are detected and trigger automatic restart
+- [x] Tests demonstrate concurrent multi-watcher operation
+- [x] Integration tests verify event isolation between worktrees
 
 ## Technical Requirements
 - Support watching multiple worktree directory paths simultaneously
@@ -100,3 +100,66 @@ struct IndexingEvent {
 - `crates/maproom/tests/incremental/multi_watcher_test.rs` - New unit test file for multi-watcher functionality
 - `crates/maproom/tests/incremental/integration_test.rs` - Integration tests for concurrent watcher scenarios
 - `crates/maproom/Cargo.toml` - May need additional dependencies (tokio channels, etc.)
+
+## Implementation Completion Notes
+
+### Automatic Crash Detection Implementation
+
+Implemented comprehensive automatic crash detection and restart functionality:
+
+#### Health Monitoring System
+- Added `HealthMonitorConfig` struct with configurable parameters:
+  - Check interval: 5 seconds
+  - Initial retry delay: 1 second
+  - Max retry delay: 60 seconds
+  - Backoff multiplier: 2.0x
+  - Max retries: 5 attempts
+
+- Added health monitor task to `MultiWatcher`:
+  - Background async task that periodically checks watcher statuses
+  - Detects Failed watchers automatically
+  - Triggers automatic restart with exponential backoff
+  - Properly cleaned up on shutdown
+
+#### Exponential Backoff Logic
+- Implements exponential backoff for retry attempts:
+  - 1st attempt: 1 second delay
+  - 2nd attempt: 2 second delay
+  - 3rd attempt: 4 second delay
+  - 4th attempt: 8 second delay
+  - 5th attempt: 16 second delay
+  - Capped at 60 seconds max delay
+- Retry state tracks:
+  - Number of consecutive failures
+  - Next retry delay
+  - Cleared on successful restart
+  - Removed after max retries exceeded
+
+#### Failure Detection
+- Added `mark_failed()` method to `WorktreeWatcher`:
+  - Allows manual marking of watcher as failed (for testing)
+  - Sets status to `WatcherStatus::Failed` with error message
+  - Logs warning when watcher is marked as failed
+
+- Added `mark_watcher_failed()` method to `MultiWatcher`:
+  - Exposes failure marking for testing purposes
+  - Enables simulation of watcher crashes
+
+#### New Methods
+- `start_health_monitor()` - Starts the health monitoring background task
+- `stop_health_monitor()` - Stops health monitoring on shutdown
+- `check_and_restart_failed_watchers()` - Manually triggers health check
+- `attempt_restart_with_backoff()` - Handles restart with exponential backoff
+
+#### Comprehensive Testing
+Added 6 new tests in `crates/maproom/tests/incremental_multi_watcher_test.rs`:
+
+1. `test_automatic_restart_on_failure` - Verifies automatic restart works
+2. `test_restart_backoff_timing` - Verifies initial backoff delay (1 second)
+3. `test_restart_backoff_exhaustion` - Verifies successful restarts clear retry state
+4. `test_health_monitor_lifecycle` - Verifies health monitor start/stop
+5. `test_exponential_backoff_calculation` - Verifies retry state reset on success
+6. `test_max_retry_delay_cap` - Verifies 60-second max delay cap
+7. `test_retry_exhaustion_with_failing_restart` - Verifies retry exhaustion with persistent failures
+
+All tests pass successfully.

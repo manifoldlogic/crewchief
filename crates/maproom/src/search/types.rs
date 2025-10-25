@@ -11,20 +11,17 @@ use serde::{Deserialize, Serialize};
 /// Search mode indicating query type and optimal search strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum SearchMode {
     /// Code-focused search - query contains code patterns (::, ->, etc.)
     Code,
     /// Text-focused search - natural language query with multiple words
     Text,
     /// Automatic mode selection - ambiguous queries
+    #[default]
     Auto,
 }
 
-impl Default for SearchMode {
-    fn default() -> Self {
-        SearchMode::Auto
-    }
-}
 
 impl SearchMode {
     /// Returns true if this mode prioritizes code embeddings over text embeddings.

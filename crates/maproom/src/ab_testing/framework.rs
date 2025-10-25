@@ -426,7 +426,7 @@ impl ExperimentManager {
         id: Uuid,
         new_percentage: i32,
     ) -> anyhow::Result<()> {
-        if new_percentage < 0 || new_percentage > 100 {
+        if !(0..=100).contains(&new_percentage) {
             return Err(anyhow::anyhow!(
                 "Rollout percentage must be between 0 and 100"
             ));

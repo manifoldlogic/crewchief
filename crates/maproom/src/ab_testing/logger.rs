@@ -258,7 +258,7 @@ impl ABTestLogger {
             let new_results_json = log
                 .new_results
                 .as_ref()
-                .map(|r| serde_json::to_value(r))
+                .map(serde_json::to_value)
                 .transpose()?;
 
             transaction.execute(

@@ -156,7 +156,7 @@ impl ScoreFusion for RRFFusion {
                 // Track original score from this source for transparency
                 chunk_source_scores
                     .entry(result.chunk_id)
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .insert(source, result.score);
             }
         }
@@ -174,7 +174,7 @@ impl ScoreFusion for RRFFusion {
             .map(|(chunk_id, score)| {
                 let source_scores = chunk_source_scores
                     .remove(&chunk_id)
-                    .unwrap_or_else(HashMap::new);
+                    .unwrap_or_default();
                 FusedResult::new(chunk_id, score, source_scores)
             })
             .collect();

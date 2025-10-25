@@ -263,7 +263,6 @@ impl Drop for FileWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_watcher_config_default() {

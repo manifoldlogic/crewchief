@@ -337,7 +337,7 @@ impl SearchOptions {
     pub fn get_fusion_weights(&self) -> crate::search::fusion::FusionWeights {
         self.fusion_weights
             .clone()
-            .unwrap_or_else(crate::search::fusion::FusionWeights::default)
+            .unwrap_or_default()
     }
 }
 

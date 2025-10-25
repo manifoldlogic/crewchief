@@ -80,8 +80,7 @@ async fn handle_connection(
             stream.write_all(response.as_bytes()).await?;
         } else if method == "GET" && path == "/" {
             // Root path - show help message
-            let help_response = format!(
-                "HTTP/1.1 200 OK\r\n\
+            let help_response = "HTTP/1.1 200 OK\r\n\
                  Content-Type: text/html\r\n\
                  \r\n\
                  <html>\
@@ -99,8 +98,7 @@ async fn handle_connection(
                  <li><code>maproom_search_queries_total</code> - Query counter</li>\
                  </ul>\
                  </body>\
-                 </html>"
-            );
+                 </html>".to_string();
             stream.write_all(help_response.as_bytes()).await?;
         } else {
             // 404 for other paths

@@ -120,7 +120,7 @@ impl OpenAIClient {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .map_err(|e| EmbeddingError::Network(e))?;
+            .map_err(EmbeddingError::Network)?;
 
         Ok(Self {
             client,
@@ -196,7 +196,7 @@ impl OpenAIClient {
 
         let response = self
             .client
-            .post(&self.config.api_endpoint_url())
+            .post(self.config.api_endpoint_url())
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&request)

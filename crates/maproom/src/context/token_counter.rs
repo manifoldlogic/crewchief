@@ -97,7 +97,7 @@ impl TokenCounter {
     pub fn estimate_tokens(&self, text: &str) -> usize {
         // Rule of thumb: 1 token ≈ 4 characters
         // Round up to avoid underestimating
-        (text.len() + 3) / 4
+        text.len().div_ceil(4)
     }
 
     /// Count tokens for multiple text segments and return the total.

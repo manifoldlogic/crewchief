@@ -29,6 +29,7 @@ pub enum SearchConfigError {
 
 /// Complete search configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct SearchConfig {
     /// Embedding configuration
     pub embedding: EmbeddingConfig,
@@ -342,17 +343,6 @@ impl SearchConfig {
     }
 }
 
-impl Default for SearchConfig {
-    fn default() -> Self {
-        Self {
-            embedding: EmbeddingConfig::default(),
-            fusion: FusionConfig::default(),
-            performance: PerformanceConfig::default(),
-            index: IndexConfig::default(),
-            feature_flags: FeatureFlags::default(),
-        }
-    }
-}
 
 /// Embedding configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]

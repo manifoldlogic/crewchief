@@ -148,7 +148,7 @@ impl EmbeddingPipeline {
         // Process chunks in batches
         for (batch_idx, batch) in chunks.chunks(self.config.batch_size).enumerate() {
             let batch_num = batch_idx + 1;
-            let total_batches = (chunks.len() + self.config.batch_size - 1) / self.config.batch_size;
+            let total_batches = chunks.len().div_ceil(self.config.batch_size);
 
             info!(
                 "Processing batch {}/{} ({} chunks)",

@@ -42,6 +42,11 @@ else
     print_success "Claude Code already installed"
 fi
 
+# Install Husky globally
+print_step "Installing Husky globally..."
+npm install -g husky || print_error "Failed to install Husky"
+print_success "Husky installed globally"
+
 # Install pnpm dependencies
 print_step "Installing Node.js dependencies..."
 pnpm install
