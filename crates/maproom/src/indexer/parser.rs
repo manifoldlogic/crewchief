@@ -10,6 +10,7 @@ fn lang_javascript() -> Language { tree_sitter_javascript::language() }
 fn lang_python() -> Language { tree_sitter_python::language() }
 fn lang_rust() -> Language { tree_sitter_rust::language() }
 fn lang_go() -> Language { tree_sitter_go::language() }
+fn lang_markdown() -> Language { tree_sitter_md::language() }
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
     profile_scope!("extract_chunks");
@@ -45,92 +46,145 @@ fn extract_code_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
 }
 
 fn extract_markdown_chunks(source: &str) -> Vec<SymbolChunk> {
+    profile_scope!("extract_markdown_chunks");
+
+    let mut parser = Parser::new();
+    parser.set_language(&lang_markdown()).ok();
+
+    let tree = match parser.parse(source, None) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+
     let mut chunks = Vec::new();
-    let lines: Vec<&str> = source.lines().collect();
-    let mut i = 0;
-    let mut in_code_block = false;
-    
-    while i < lines.len() {
-        let line = lines[i];
-        
-        // Check for code block boundaries
-        if line.trim().starts_with("```") {
-            in_code_block = !in_code_block;
-            i += 1;
-            continue;
-        }
-        
-        // Skip lines inside code blocks
-        if in_code_block {
-            i += 1;
-            continue;
-        }
-        
-        // Check if it's a heading (starts with # and has space)
-        if let Some(heading_level) = get_heading_level(line) {
-            let heading_text = line.trim_start_matches('#').trim();
-            let start_line = (i + 1) as i32;
-            
-            // Find the end of this section (next heading of same or higher level, or end of file)
-            let mut end_idx = i + 1;
-            let mut section_code_block = false;
-            while end_idx < lines.len() {
-                // Track code blocks in the section
-                if lines[end_idx].trim().starts_with("```") {
-                    section_code_block = !section_code_block;
-                }
-                // Only check for headings outside of code blocks
-                if !section_code_block {
-                    if let Some(next_level) = get_heading_level(lines[end_idx]) {
-                        if next_level <= heading_level {
-                            break;
-                        }
-                    }
-                }
-                end_idx += 1;
-            }
-            
-            let end_line = end_idx as i32;
-            
-            // Determine the kind based on heading level
-            let kind = match heading_level {
-                1 => "heading_1",
-                2 => "heading_2",
-                3 => "heading_3",
-                4 => "heading_4",
-                5 => "heading_5",
-                6 => "heading_6",
-                _ => "heading",
-            };
-            
-            chunks.push(SymbolChunk {
-                symbol_name: Some(heading_text.to_string()),
-                kind: kind.to_string(),
-                signature: None,
-                docstring: None,
-                start_line,
-                end_line,
-                metadata: None,
-            });
-        }
-        
-        i += 1;
-    }
-    
-    // If no headings found, return empty to trigger module fallback
+    let root = tree.root_node();
+
+    // Walk the tree and extract headings and code blocks
+    walk_markdown_nodes(source, root, &mut chunks);
+
     chunks
 }
 
-fn get_heading_level(line: &str) -> Option<usize> {
+fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    let kind = node.kind();
+
+    match kind {
+        "atx_heading" => {
+            extract_heading(source, node, chunks);
+        }
+        "fenced_code_block" => {
+            extract_code_block(source, node, chunks);
+        }
+        // Note: tree-sitter-md does not provide structured link nodes
+        // Links are parsed as individual punctuation tokens within inline content
+        // Link extraction will be handled in a future ticket (MD_ENHANCE-3002)
+        // using regex or alternative approach
+        _ => {}
+    }
+
+    // Recurse into children
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            walk_markdown_nodes(source, child, chunks);
+        }
+    }
+}
+
+fn extract_heading(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Get heading level by checking the marker
+    let mut level = 0;
+    let mut heading_text = String::new();
+
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            match child.kind() {
+                "atx_h1_marker" => level = 1,
+                "atx_h2_marker" => level = 2,
+                "atx_h3_marker" => level = 3,
+                "atx_h4_marker" => level = 4,
+                "atx_h5_marker" => level = 5,
+                "atx_h6_marker" => level = 6,
+                "inline" => {
+                    // The heading text is in the inline node
+                    if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                        heading_text = text.trim().to_string();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if level > 0 && !heading_text.is_empty() {
+        let start_line = (node.start_position().row + 1) as i32;
+
+        // Find section end (next heading of same or higher level, or EOF)
+        let end_line = find_section_end(source, node, level);
+
+        let kind = format!("heading_{}", level);
+
+        chunks.push(SymbolChunk {
+            symbol_name: Some(heading_text),
+            kind,
+            signature: None,
+            docstring: None,
+            start_line,
+            end_line,
+            metadata: Some(serde_json::json!({
+                "level": level
+            })),
+        });
+    }
+}
+
+fn find_section_end(source: &str, heading_node: Node, heading_level: usize) -> i32 {
+    let start_row = heading_node.start_position().row;
+    let lines: Vec<&str> = source.lines().collect();
+
+    // Start searching from the next line after the heading
+    let mut end_idx = start_row + 1;
+    let mut in_code_block = false;
+
+    while end_idx < lines.len() {
+        let line = lines[end_idx];
+
+        // Track code blocks
+        if line.trim().starts_with("```") {
+            in_code_block = !in_code_block;
+            end_idx += 1;
+            continue;
+        }
+
+        // Only check for headings outside of code blocks
+        if !in_code_block {
+            if let Some(next_level) = get_heading_level_from_line(line) {
+                if next_level <= heading_level {
+                    // Found a heading of same or higher level - section ends here
+                    return end_idx as i32;
+                }
+            }
+        }
+
+        end_idx += 1;
+    }
+
+    // Section goes to end of file
+    lines.len() as i32
+}
+
+fn get_heading_level_from_line(line: &str) -> Option<usize> {
     let trimmed = line.trim_start();
     if !trimmed.starts_with('#') {
         return None;
     }
-    
+
     let mut level = 0;
     for ch in trimmed.chars() {
         if ch == '#' {
             level += 1;
+            if level > 6 {
+                return None; // Not a valid heading
+            }
         } else if ch == ' ' {
             // Valid heading must have space after #
             return Some(level);
@@ -141,6 +195,57 @@ fn get_heading_level(line: &str) -> Option<usize> {
     }
     None
 }
+
+fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    let mut language: Option<String> = None;
+    let mut code_lines_count = 0;
+
+    // Extract language from info_string if present
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            match child.kind() {
+                "info_string" => {
+                    if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                        language = Some(text.trim().to_string());
+                    }
+                }
+                "code_fence_content" => {
+                    if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                        code_lines_count = text.lines().count();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let start_line = (node.start_position().row + 1) as i32;
+    let end_line = (node.end_position().row + 1) as i32;
+
+    let symbol_name = if let Some(ref lang) = language {
+        format!("Code: {}", lang)
+    } else {
+        "Code: plain".to_string()
+    };
+
+    chunks.push(SymbolChunk {
+        symbol_name: Some(symbol_name),
+        kind: "code_block".to_string(),
+        signature: None,
+        docstring: None,
+        start_line,
+        end_line,
+        metadata: Some(serde_json::json!({
+            "language": language,
+            "lines_of_code": code_lines_count
+        })),
+    });
+}
+
+// Note: Link extraction is not implemented in this ticket (MD_ENHANCE-1001)
+// tree-sitter-md does not provide structured link nodes - links are parsed
+// as individual punctuation tokens. Link extraction will be handled in
+// MD_ENHANCE-3002 using regex or an alternative parsing approach.
 
 fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
     // Parse JSON and create chunks for top-level keys
