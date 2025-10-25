@@ -42,8 +42,10 @@
 //! }
 //! ```
 
+pub mod performance;
 pub mod prometheus;
 pub mod search_metrics;
 
+pub use performance::{get_performance_metrics, PerformanceMetrics};
 pub use prometheus::{init_metrics_server, metrics_handler};
 pub use search_metrics::{get_metrics, SearchMetrics};

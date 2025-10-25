@@ -78,6 +78,7 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 serial_test = "3"
+puffin = "0.19"
 
 [[bench]]
 name = "fusion_benchmark"
@@ -101,5 +102,13 @@ harness = false
 
 [[bench]]
 name = "python_parser_bench"
+harness = false
+
+[[bench]]
+name = "indexing"
+harness = false
+
+[[bench]]
+name = "memory"
 harness = false
 
