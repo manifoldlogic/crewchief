@@ -28,6 +28,13 @@ Migrations are numbered sequentially and executed in order:
    - Updates statistics with ANALYZE
    - Documents performance baselines and verification queries
 
+5. **0014_add_enhanced_symbol_kinds.sql** - Enhanced symbol kinds for markdown and multi-language support (MD_ENHANCE-5001)
+   - Adds markdown structural elements: list, table, link, image, image_link
+   - Adds Rust language symbols: use, import, imports, trait, impl, struct, enum, macro, async_method, async_func, static, constant, variable, method
+   - Adds Go language symbols: package, require, go_version
+   - Enables comprehensive indexing of markdown documents and Rust/Go codebases
+   - All additions use IF NOT EXISTS for idempotent migrations
+
 ## Running Migrations
 
 Migrations are automatically executed when the Maproom service starts via `db::migrate()`.
