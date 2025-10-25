@@ -1,4 +1,5 @@
 use tree_sitter::{Language, Node, Parser};
+use regex::Regex;
 
 use super::SymbolChunk;
 use crate::profile_scope;
@@ -120,6 +121,10 @@ fn extract_markdown_chunks(source: &str) -> Vec<SymbolChunk> {
 
     // Walk the tree and extract headings and code blocks
     walk_markdown_nodes(source, root, &mut chunks, &mut hierarchy);
+
+    // Extract links using regex (tree-sitter-md limitation workaround)
+    // See MD_ENHANCE-1001 ticket lines 114-118 for context
+    extract_markdown_links(source, &mut chunks);
 
     chunks
 }
@@ -407,10 +412,92 @@ fn extract_list(_source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     });
 }
 
-// Note: Link extraction is not implemented in this ticket (MD_ENHANCE-1001)
-// tree-sitter-md does not provide structured link nodes - links are parsed
-// as individual punctuation tokens. Link extraction will be handled in
-// MD_ENHANCE-3002 using regex or an alternative parsing approach.
+/// Extract markdown links using regex patterns.
+/// This is a workaround for tree-sitter-md limitation where links are parsed
+/// as individual punctuation tokens rather than structured nodes.
+/// See MD_ENHANCE-1001 ticket lines 114-118 for context.
+///
+/// Extracts three types of links:
+/// 1. Regular links: [text](url)
+/// 2. Image links: ![alt](url)
+/// 3. Both extract the link text/alt and the target URL
+fn extract_markdown_links(source: &str, chunks: &mut Vec<SymbolChunk>) {
+    // Regex patterns for markdown links
+    // Regular link: [text](url) - captures text in group 1, url in group 2
+    // Image link: ![alt](url) - captures alt in group 1, url in group 2
+    let link_pattern = Regex::new(r"(?m)(!?)\[([^\]]*)\]\(([^)]+)\)").unwrap();
+
+    for cap in link_pattern.captures_iter(source) {
+        let is_image = cap.get(1).map_or(false, |m| m.as_str() == "!");
+        let link_text = cap.get(2).map_or("", |m| m.as_str());
+        let target = cap.get(3).map_or("", |m| m.as_str());
+
+        // Skip empty targets
+        if target.trim().is_empty() {
+            continue;
+        }
+
+        // Classify the link type
+        let link_type = classify_link(target);
+
+        // Find the line number where this link appears
+        let full_match = cap.get(0).unwrap();
+        let link_position = full_match.start();
+        let line_number = find_line_number(source, link_position);
+
+        // Create chunk metadata
+        let metadata = serde_json::json!({
+            "link_type": link_type,
+            "target": target,
+            "link_text": link_text,
+            "is_image": is_image,
+        });
+
+        // Create a link chunk
+        let kind = if is_image { "image_link" } else { "link" };
+        let symbol_name = if !link_text.is_empty() {
+            Some(link_text.to_string())
+        } else {
+            Some(target.to_string())
+        };
+
+        chunks.push(SymbolChunk {
+            symbol_name,
+            kind: kind.to_string(),
+            signature: Some(target.to_string()),
+            docstring: None,
+            start_line: line_number as i32,
+            end_line: line_number as i32,
+            metadata: Some(metadata),
+        });
+    }
+}
+
+/// Classify a link target into one of: "external", "anchor", "relative", or "absolute"
+fn classify_link(target: &str) -> String {
+    if target.starts_with("http://") || target.starts_with("https://") {
+        "external".to_string()
+    } else if target.starts_with('#') {
+        "anchor".to_string()
+    } else if target.starts_with('/') {
+        "absolute".to_string()
+    } else {
+        "relative".to_string()
+    }
+}
+
+/// Find the line number (1-indexed) where a character position appears in the source
+fn find_line_number(source: &str, position: usize) -> usize {
+    let mut current_pos = 0;
+    for (line_idx, line) in source.lines().enumerate() {
+        let line_len = line.len() + 1; // +1 for newline
+        if current_pos + line_len > position {
+            return line_idx + 1; // 1-indexed
+        }
+        current_pos += line_len;
+    }
+    1 // Default to line 1 if not found
+}
 
 fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
     // Parse JSON and create chunks for top-level keys

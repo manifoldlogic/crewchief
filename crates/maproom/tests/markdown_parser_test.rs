@@ -126,9 +126,8 @@ no language specified
 
 #[test]
 fn test_markdown_links() {
-    // Note: Link extraction is not implemented in MD_ENHANCE-1001
-    // tree-sitter-md does not provide structured link nodes
-    // This will be addressed in MD_ENHANCE-3002 using regex or alternative approach
+    // Link extraction implemented in MD_ENHANCE-3002 using regex
+    // tree-sitter-md does not provide structured link nodes, so we use regex patterns
     let source = r#"# Links Example
 
 Here's an [external link](https://example.com) to a website.
@@ -140,13 +139,29 @@ Here's an [anchor link](#section-heading) to a section.
 
     let chunks = parser::extract_chunks(source, "md");
 
-    // For now, we should extract the heading successfully
+    // Should extract the heading successfully
     let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
-    assert_eq!(headings, 1, "Should extract heading even though links aren't extracted yet");
+    assert_eq!(headings, 1, "Should extract heading");
 
-    // Links will be extracted in future ticket
+    // Links are now extracted via regex
     let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
-    assert_eq!(links.len(), 0, "Link extraction not yet implemented");
+    assert_eq!(links.len(), 3, "Should extract all 3 links");
+
+    // Verify link types
+    let external = links.iter().find(|l| {
+        l.metadata.as_ref().unwrap()["link_type"] == "external"
+    }).expect("Should have external link");
+    assert_eq!(external.signature.as_ref().unwrap(), "https://example.com");
+
+    let relative = links.iter().find(|l| {
+        l.metadata.as_ref().unwrap()["link_type"] == "relative"
+    }).expect("Should have relative link");
+    assert_eq!(relative.signature.as_ref().unwrap(), "./other-doc.md");
+
+    let anchor = links.iter().find(|l| {
+        l.metadata.as_ref().unwrap()["link_type"] == "anchor"
+    }).expect("Should have anchor link");
+    assert_eq!(anchor.signature.as_ref().unwrap(), "#section-heading");
 }
 
 #[test]
