@@ -11,6 +11,7 @@ use super::graph::{load_relationships_parallel, RelatedChunk};
 use super::token_counter::TokenCounter;
 use super::types::{ContextBundle, ContextItem, ExpandOptions, LineRange};
 use crate::db::PgPool;
+use crate::profile_scope;
 
 /// Chunk metadata retrieved from the database.
 #[derive(Debug, Clone)]
@@ -135,6 +136,7 @@ impl BasicContextAssembler {
 
     /// Retrieve chunk metadata from the database by ID.
     async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
+        profile_scope!("get_chunk_metadata");
         let client = self
             .pool
             .get()
@@ -187,6 +189,7 @@ impl BasicContextAssembler {
         role: &str,
         reason: &str,
     ) -> Result<ContextItem> {
+        profile_scope!("create_context_item");
         // Load file content
         let file_loader = FileLoader::new(&metadata.worktree_path);
         let range = LineRange::new(metadata.start_line, metadata.end_line);
@@ -231,6 +234,7 @@ impl ContextAssembler for BasicContextAssembler {
         budget: usize,
         options: ExpandOptions,
     ) -> Result<ContextBundle> {
+        profile_scope!("context_assemble");
         debug!(
             "Assembling context for chunk {} with budget {} tokens",
             chunk_id, budget
@@ -418,6 +422,7 @@ impl ParallelContextAssembler {
         role: &str,
         reason: &str,
     ) -> Result<ContextItem> {
+        profile_scope!("create_context_item");
         // Load file content
         let file_loader = FileLoader::new(&metadata.worktree_path);
         let range = LineRange::new(metadata.start_line, metadata.end_line);

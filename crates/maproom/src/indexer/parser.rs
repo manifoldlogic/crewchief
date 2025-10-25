@@ -1,6 +1,7 @@
 use tree_sitter::{Language, Node, Parser};
 
 use super::SymbolChunk;
+use crate::profile_scope;
 
 // Use the safe language providers exposed by the crates
 fn lang_typescript() -> Language { tree_sitter_typescript::language_typescript() }
@@ -11,6 +12,7 @@ fn lang_rust() -> Language { tree_sitter_rust::language() }
 fn lang_go() -> Language { tree_sitter_go::language() }
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
+    profile_scope!("extract_chunks");
     match language {
         "md" | "mdx" => extract_markdown_chunks(source),
         "json" => extract_json_chunks(source),
@@ -25,6 +27,7 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
 }
 
 fn extract_code_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
+    profile_scope!("extract_code_chunks");
     let mut parser = Parser::new();
     let lang = match language {
         "ts" => lang_typescript(),

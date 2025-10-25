@@ -12,4 +12,5 @@ pub mod evaluation;
 pub mod incremental;
 pub mod indexer;
 pub mod metrics;
+pub mod profiling;
 pub mod search;

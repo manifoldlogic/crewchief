@@ -4,6 +4,7 @@
 //! parallel execution of FTS, vector, graph, and signal searches using
 //! tokio::join! for optimal performance.
 
+use crate::profile_scope;
 use crate::search::executor_types::RankedResults;
 use crate::search::fts::{FTSError, FTSExecutor};
 use crate::search::graph::{GraphError, GraphExecutor};
@@ -60,6 +61,7 @@ impl SearchExecutors {
         worktree_id: Option<i64>,
         limit: usize,
     ) -> Result<SearchResults, ExecutorError> {
+        profile_scope!("search_execute_all");
         let start = Instant::now();
 
         info!(
