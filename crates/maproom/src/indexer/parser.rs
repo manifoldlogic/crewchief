@@ -75,6 +75,12 @@ fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
         "fenced_code_block" => {
             extract_code_block(source, node, chunks);
         }
+        "pipe_table" => {
+            extract_table(source, node, chunks);
+        }
+        "list" => {
+            extract_list(source, node, chunks);
+        }
         // Note: tree-sitter-md does not provide structured link nodes
         // Links are parsed as individual punctuation tokens within inline content
         // Link extraction will be handled in a future ticket (MD_ENHANCE-3002)
@@ -238,6 +244,95 @@ fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         metadata: Some(serde_json::json!({
             "language": language,
             "lines_of_code": code_lines_count
+        })),
+    });
+}
+
+fn extract_table(_source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    let start_line = (node.start_position().row + 1) as i32;
+    let end_line = (node.end_position().row + 1) as i32;
+
+    // Count rows and columns
+    let mut row_count = 0;
+    let mut column_count = 0;
+    let mut has_header = false;
+
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            match child.kind() {
+                "pipe_table_header" => {
+                    has_header = true;
+                    row_count += 1;
+                    // Count cells in header to determine column count
+                    for j in 0..child.child_count() {
+                        if let Some(cell) = child.child(j) {
+                            if cell.kind() == "pipe_table_cell" {
+                                column_count += 1;
+                            }
+                        }
+                    }
+                }
+                "pipe_table_row" => {
+                    row_count += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    chunks.push(SymbolChunk {
+        symbol_name: Some(format!("Table {}x{}", row_count, column_count)),
+        kind: "table".to_string(),
+        signature: None,
+        docstring: None,
+        start_line,
+        end_line,
+        metadata: Some(serde_json::json!({
+            "rows": row_count,
+            "columns": column_count,
+            "has_header": has_header
+        })),
+    });
+}
+
+fn extract_list(_source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    let start_line = (node.start_position().row + 1) as i32;
+    let end_line = (node.end_position().row + 1) as i32;
+
+    // Determine list type and count items
+    let mut list_type = "unordered";
+    let mut item_count = 0;
+
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            if child.kind() == "list_item" {
+                item_count += 1;
+
+                // Check first list item to determine type
+                if item_count == 1 {
+                    for j in 0..child.child_count() {
+                        if let Some(marker) = child.child(j) {
+                            if marker.kind() == "list_marker_dot" {
+                                list_type = "ordered";
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    chunks.push(SymbolChunk {
+        symbol_name: Some(format!("List ({} items)", item_count)),
+        kind: "list".to_string(),
+        signature: None,
+        docstring: None,
+        start_line,
+        end_line,
+        metadata: Some(serde_json::json!({
+            "list_type": list_type,
+            "item_count": item_count
         })),
     });
 }

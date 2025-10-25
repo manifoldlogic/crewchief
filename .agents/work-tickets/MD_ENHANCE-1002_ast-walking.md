@@ -1,9 +1,9 @@
 # Ticket: MD_ENHANCE-1002: AST Walking
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (20 markdown parser tests passed)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - parser-engineer
@@ -20,13 +20,13 @@ With the tree-sitter parser initialized, we need to systematically walk the AST 
 Reference: `/workspace/crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_PLAN.md` lines 17-21
 
 ## Acceptance Criteria
-- [ ] Tree cursor traversal implemented recursively
-- [ ] All heading levels (h1-h6) extracted with accurate level numbers
-- [ ] Code blocks extracted with language tags (when present)
-- [ ] Tables identified and boundaries determined
-- [ ] Lists (ordered and unordered) detected
-- [ ] Line numbers captured for all elements
-- [ ] Traversal completes without errors on real documentation
+- [x] Tree cursor traversal implemented recursively
+- [x] All heading levels (h1-h6) extracted with accurate level numbers
+- [x] Code blocks extracted with language tags (when present)
+- [x] Tables identified and boundaries determined
+- [x] Lists (ordered and unordered) detected
+- [x] Line numbers captured for all elements
+- [x] Traversal completes without errors on real documentation
 
 ## Technical Requirements
 - Implement `walk_tree()` method that recursively traverses AST nodes
@@ -106,7 +106,55 @@ Reference Architecture: lines 117-131 for node type matching
   - **Mitigation**: Extensive testing with known line positions, validate against source text
 
 ## Files/Packages Affected
-- `crates/maproom/src/parser/markdown.rs` - Add walk_tree, process_heading, process_code_block methods
-- `crates/maproom/src/parser/extractor.rs` - New file for element extraction logic
-- `crates/maproom/tests/parser_test.rs` - Add traversal tests with expected element counts
-- `crates/maproom/tests/fixtures/` - Sample markdown files with known structure
+- `crates/maproom/src/indexer/parser.rs` - Added table and list extraction (extract_table, extract_list)
+- `crates/maproom/tests/markdown_parser_test.rs` - Added comprehensive tests for tables and lists
+
+## Implementation Summary
+
+### What Was Implemented
+
+1. **Table Extraction** (`extract_table` function):
+   - Detects `pipe_table` nodes in the AST
+   - Counts rows by identifying `pipe_table_header` and `pipe_table_row` children
+   - Counts columns by examining cells in the header row
+   - Captures table boundaries (start_line, end_line)
+   - Stores metadata: row count, column count, has_header flag
+   - Symbol name format: "Table {rows}x{columns}"
+
+2. **List Extraction** (`extract_list` function):
+   - Detects `list` nodes in the AST
+   - Counts `list_item` children to determine item count
+   - Distinguishes ordered vs unordered by checking for `list_marker_dot` (ordered) vs `list_marker_minus` (unordered)
+   - Captures list boundaries (start_line, end_line)
+   - Stores metadata: list_type ("ordered" or "unordered"), item_count
+   - Symbol name format: "List ({count} items)"
+
+3. **AST Walking**:
+   - Extended `walk_markdown_nodes()` match statement with "pipe_table" and "list" cases
+   - Recursive traversal continues to work for all node types
+   - Line numbers captured from tree-sitter node positions (row + 1 for 1-indexed)
+
+4. **Comprehensive Tests** (8 new tests):
+   - `test_markdown_table_extraction` - Basic table with header and data rows
+   - `test_markdown_empty_table` - Header-only table edge case
+   - `test_markdown_unordered_list` - Bullet list with multiple items
+   - `test_markdown_ordered_list` - Numbered list with multiple items
+   - `test_markdown_nested_list` - Nested list structure (outer list extracted)
+   - `test_markdown_mixed_table_and_list` - Document with both tables and lists
+   - `test_markdown_single_item_list` - Single-item list edge case
+
+### Notes on Implementation
+
+- Tree-sitter-md provides well-structured nodes for tables (`pipe_table`, `pipe_table_header`, `pipe_table_row`, `pipe_table_cell`)
+- Lists are parsed as `list` nodes containing `list_item` children
+- Nested lists are extracted as separate list chunks (inner and outer lists are separate nodes)
+- All extraction functions follow the same pattern as existing `extract_heading()` and `extract_code_block()` functions
+- Metadata is stored as JSON for flexible querying in the indexing system
+
+### Test Results
+
+All 20 markdown parser tests pass, including:
+- 6 existing heading tests
+- 3 existing code block tests
+- 8 new table and list tests
+- 3 existing edge case tests

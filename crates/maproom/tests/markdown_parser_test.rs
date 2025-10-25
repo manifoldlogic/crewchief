@@ -404,3 +404,198 @@ Other content.
     assert!(code_block.end_line < main_section.end_line,
         "Code block should be within Main Section range");
 }
+
+#[test]
+fn test_markdown_table_extraction() {
+    let source = r#"# Data Overview
+
+Here's a table of data:
+
+| Name    | Age | City      |
+|---------|-----|-----------|
+| Alice   | 30  | Seattle   |
+| Bob     | 25  | Portland  |
+| Charlie | 35  | Vancouver |
+
+End of table.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Should extract heading and table
+    let tables: Vec<_> = chunks.iter().filter(|c| c.kind == "table").collect();
+    assert_eq!(tables.len(), 1, "Expected 1 table");
+
+    let table = tables[0];
+    assert_eq!(table.symbol_name, Some("Table 4x3".to_string()));
+    assert!(table.start_line > 0);
+    assert!(table.end_line > table.start_line);
+
+    // Check metadata
+    if let Some(metadata) = &table.metadata {
+        assert_eq!(metadata.get("rows").unwrap().as_u64().unwrap(), 4);
+        assert_eq!(metadata.get("columns").unwrap().as_u64().unwrap(), 3);
+        assert_eq!(metadata.get("has_header").unwrap().as_bool().unwrap(), true);
+    } else {
+        panic!("Table should have metadata");
+    }
+}
+
+#[test]
+fn test_markdown_empty_table() {
+    let source = r#"
+| Column 1 | Column 2 |
+|----------|----------|
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Should extract table even if it has only header
+    let tables: Vec<_> = chunks.iter().filter(|c| c.kind == "table").collect();
+    assert_eq!(tables.len(), 1, "Expected 1 table (header only)");
+
+    let table = tables[0];
+    if let Some(metadata) = &table.metadata {
+        assert_eq!(metadata.get("rows").unwrap().as_u64().unwrap(), 1);
+        assert_eq!(metadata.get("columns").unwrap().as_u64().unwrap(), 2);
+    }
+}
+
+#[test]
+fn test_markdown_unordered_list() {
+    let source = r#"# Features
+
+Here are the features:
+
+- Fast performance
+- Easy to use
+- Open source
+- Cross-platform
+
+That's the list.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Should extract heading and list
+    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    assert_eq!(lists.len(), 1, "Expected 1 list");
+
+    let list = lists[0];
+    assert_eq!(list.symbol_name, Some("List (4 items)".to_string()));
+    assert!(list.start_line > 0);
+    assert!(list.end_line > list.start_line);
+
+    // Check metadata
+    if let Some(metadata) = &list.metadata {
+        assert_eq!(metadata.get("list_type").unwrap().as_str().unwrap(), "unordered");
+        assert_eq!(metadata.get("item_count").unwrap().as_u64().unwrap(), 4);
+    } else {
+        panic!("List should have metadata");
+    }
+}
+
+#[test]
+fn test_markdown_ordered_list() {
+    let source = r#"# Steps
+
+Follow these steps:
+
+1. Install dependencies
+2. Configure settings
+3. Run the application
+4. Test functionality
+5. Deploy to production
+
+All done!
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Should extract heading and list
+    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    assert_eq!(lists.len(), 1, "Expected 1 ordered list");
+
+    let list = lists[0];
+    assert_eq!(list.symbol_name, Some("List (5 items)".to_string()));
+
+    // Check metadata
+    if let Some(metadata) = &list.metadata {
+        assert_eq!(metadata.get("list_type").unwrap().as_str().unwrap(), "ordered");
+        assert_eq!(metadata.get("item_count").unwrap().as_u64().unwrap(), 5);
+    } else {
+        panic!("List should have metadata");
+    }
+}
+
+#[test]
+fn test_markdown_nested_list() {
+    let source = r#"# Outline
+
+- Section 1
+  - Subsection 1.1
+  - Subsection 1.2
+- Section 2
+- Section 3
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Note: Nested lists are extracted as separate list chunks
+    // The outer list and inner list are separate nodes in tree-sitter-md
+    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    assert!(lists.len() >= 1, "Expected at least 1 list (outer list)");
+
+    // Check that we extracted at least the outer list
+    let outer_list = &lists[0];
+    assert_eq!(outer_list.symbol_name, Some("List (3 items)".to_string()));
+}
+
+#[test]
+fn test_markdown_mixed_table_and_list() {
+    let source = r#"# Documentation
+
+## Data Table
+
+| ID | Name  | Status |
+|----|-------|--------|
+| 1  | Task1 | Done   |
+| 2  | Task2 | Active |
+
+## Features
+
+- Feature A
+- Feature B
+- Feature C
+
+End of document.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Should extract 2 headings, 1 table, and 1 list
+    let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
+    let tables = chunks.iter().filter(|c| c.kind == "table").count();
+    let lists = chunks.iter().filter(|c| c.kind == "list").count();
+
+    assert!(headings >= 2, "Expected at least 2 headings");
+    assert_eq!(tables, 1, "Expected 1 table");
+    assert_eq!(lists, 1, "Expected 1 list");
+}
+
+#[test]
+fn test_markdown_single_item_list() {
+    let source = r#"
+- Only one item
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    assert_eq!(lists.len(), 1, "Expected 1 list");
+
+    let list = lists[0];
+    if let Some(metadata) = &list.metadata {
+        assert_eq!(metadata.get("item_count").unwrap().as_u64().unwrap(), 1);
+    }
+}
