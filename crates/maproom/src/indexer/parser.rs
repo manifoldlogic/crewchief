@@ -2263,6 +2263,9 @@ fn walk_go_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         "package_clause" => {
             extract_go_package(source, node, chunks);
         }
+        "import_declaration" => {
+            extract_go_import(source, node, chunks);
+        }
         _ => {}
     }
 
@@ -2301,8 +2304,25 @@ fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     // Extract doc comment
     let docstring = extract_go_doc_comment(source, node);
 
+    // Detect goroutines and channels in the function body
+    let (has_goroutines, has_channels) = detect_go_concurrency(node);
+
     let start = node.start_position();
     let end = node.end_position();
+
+    // Build metadata with goroutine/channel flags if present
+    let metadata = if has_goroutines || has_channels {
+        let mut meta = serde_json::Map::new();
+        if has_goroutines {
+            meta.insert("has_goroutines".to_string(), serde_json::json!(true));
+        }
+        if has_channels {
+            meta.insert("has_channels".to_string(), serde_json::json!(true));
+        }
+        Some(serde_json::Value::Object(meta))
+    } else {
+        None
+    };
 
     chunks.push(SymbolChunk {
         symbol_name: name,
@@ -2311,7 +2331,7 @@ fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
         docstring,
         start_line: (start.row + 1) as i32,
         end_line: (end.row + 1) as i32,
-        metadata: None,
+        metadata,
     });
 }
 
@@ -2351,8 +2371,30 @@ fn extract_go_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract doc comment
     let docstring = extract_go_doc_comment(source, node);
 
+    // Detect goroutines and channels in the method body
+    let (has_goroutines, has_channels) = detect_go_concurrency(node);
+
     let start = node.start_position();
     let end = node.end_position();
+
+    // Build metadata with receiver and goroutine/channel flags
+    let metadata = {
+        let mut meta = serde_json::Map::new();
+        if let Some(r) = receiver {
+            meta.insert("receiver".to_string(), serde_json::json!(r));
+        }
+        if has_goroutines {
+            meta.insert("has_goroutines".to_string(), serde_json::json!(true));
+        }
+        if has_channels {
+            meta.insert("has_channels".to_string(), serde_json::json!(true));
+        }
+        if meta.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(meta))
+        }
+    };
 
     chunks.push(SymbolChunk {
         symbol_name: name,
@@ -2361,7 +2403,7 @@ fn extract_go_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         docstring,
         start_line: (start.row + 1) as i32,
         end_line: (end.row + 1) as i32,
-        metadata: receiver.map(|r| serde_json::json!({"receiver": r})),
+        metadata,
     });
 }
 
@@ -2585,6 +2627,98 @@ fn extract_go_package(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         end_line: (end.row + 1) as i32,
         metadata: None,
     });
+}
+
+fn extract_go_import(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Go import declarations can have multiple specs (single or grouped imports)
+    // Look for import_spec or import_spec_list children
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            if child.kind() == "import_spec" {
+                extract_go_import_spec(source, child, chunks);
+            } else if child.kind() == "import_spec_list" {
+                // Handle grouped imports: import ( ... )
+                for j in 0..child.child_count() {
+                    if let Some(spec) = child.child(j) {
+                        if spec.kind() == "import_spec" {
+                            extract_go_import_spec(source, spec, chunks);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn extract_go_import_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract import path (the string literal)
+    let import_path = node.child_by_field_name("path")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.trim_matches('"').to_string());
+
+    // Extract import alias (if any)
+    let alias = node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // The symbol name is the alias if present, otherwise the import path
+    let symbol_name = alias.clone().or_else(|| import_path.clone());
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    // Create metadata with import details
+    let mut metadata = serde_json::Map::new();
+    if let Some(path) = &import_path {
+        metadata.insert("import_path".to_string(), serde_json::json!(path));
+    }
+    if let Some(alias_name) = &alias {
+        metadata.insert("alias".to_string(), serde_json::json!(alias_name));
+    }
+
+    chunks.push(SymbolChunk {
+        symbol_name,
+        kind: "import".to_string(),
+        signature: import_path,
+        docstring: None,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: if metadata.is_empty() { None } else { Some(serde_json::Value::Object(metadata)) },
+    });
+}
+
+fn detect_go_concurrency(node: Node) -> (bool, bool) {
+    // Recursively search for goroutine and channel usage in the AST
+    let mut has_goroutines = false;
+    let mut has_channels = false;
+
+    fn walk_node(node: Node, has_goroutines: &mut bool, has_channels: &mut bool) {
+        match node.kind() {
+            "go_statement" => {
+                // Found a goroutine spawn (go keyword)
+                *has_goroutines = true;
+            }
+            "channel_type" => {
+                // Found a channel type declaration (chan int, etc.)
+                *has_channels = true;
+            }
+            "send_statement" | "receive_operator" => {
+                // Found channel send/receive operations (<-)
+                *has_channels = true;
+            }
+            _ => {}
+        }
+
+        // Recursively check child nodes
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                walk_node(child, has_goroutines, has_channels);
+            }
+        }
+    }
+
+    walk_node(node, &mut has_goroutines, &mut has_channels);
+    (has_goroutines, has_channels)
 }
 
 fn extract_go_doc_comment(source: &str, node: Node) -> Option<String> {

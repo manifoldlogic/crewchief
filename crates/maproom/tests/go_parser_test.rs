@@ -174,7 +174,7 @@ func main() {
 
 #[test]
 fn test_go_goroutines_dont_crash() {
-    // Test that code with goroutines doesn't crash the parser
+    // Test that code with goroutines is parsed and metadata is extracted
     let source = r#"
 package main
 
@@ -203,11 +203,28 @@ func worker(ch chan int) {
     // Should find the functions
     let func_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "func").collect();
     assert!(func_chunks.len() >= 2, "Expected at least 2 functions");
+
+    // Check that processData has goroutine metadata
+    let process_data = func_chunks.iter().find(|c| c.symbol_name.as_deref() == Some("processData"));
+    assert!(process_data.is_some(), "processData function not found");
+    let process_data = process_data.unwrap();
+    assert!(process_data.metadata.is_some(), "processData should have metadata");
+    let metadata = process_data.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("has_goroutines"), Some(&serde_json::json!(true)), "processData should have has_goroutines flag");
+    assert_eq!(metadata.get("has_channels"), Some(&serde_json::json!(true)), "processData should have has_channels flag");
+
+    // Check that worker has channel metadata
+    let worker = func_chunks.iter().find(|c| c.symbol_name.as_deref() == Some("worker"));
+    assert!(worker.is_some(), "worker function not found");
+    let worker = worker.unwrap();
+    assert!(worker.metadata.is_some(), "worker should have metadata");
+    let metadata = worker.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("has_channels"), Some(&serde_json::json!(true)), "worker should have has_channels flag");
 }
 
 #[test]
 fn test_go_channels_dont_crash() {
-    // Test that code with channels doesn't crash the parser
+    // Test that code with channels is parsed and metadata is extracted
     let source = r#"
 package main
 
@@ -223,6 +240,14 @@ func main() {
 
     // Should successfully parse without crashing
     assert!(chunks.len() > 0, "Expected some chunks to be extracted");
+
+    // Check that main has channel metadata
+    let main_func = chunks.iter().find(|c| c.kind == "func" && c.symbol_name.as_deref() == Some("main"));
+    assert!(main_func.is_some(), "main function not found");
+    let main_func = main_func.unwrap();
+    assert!(main_func.metadata.is_some(), "main should have metadata");
+    let metadata = main_func.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("has_channels"), Some(&serde_json::json!(true)), "main should have has_channels flag");
 }
 
 #[test]
@@ -280,4 +305,63 @@ require (
     // Check require chunks
     let require_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "require").collect();
     assert!(require_chunks.len() >= 2, "Expected at least 2 require chunks, got {}", require_chunks.len());
+}
+
+#[test]
+fn test_go_import_extraction() {
+    let source = r#"
+package main
+
+import "fmt"
+import "os"
+
+import (
+    "context"
+    "encoding/json"
+    myalias "github.com/example/pkg"
+    . "github.com/another/pkg"
+)
+
+func main() {
+    fmt.Println("Hello")
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "go");
+
+    // Find all import chunks
+    let import_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "import").collect();
+    assert!(import_chunks.len() >= 6, "Expected at least 6 imports, got {}", import_chunks.len());
+
+    // Check single import
+    let fmt_import = import_chunks.iter().find(|c| c.signature.as_deref() == Some("fmt"));
+    assert!(fmt_import.is_some(), "fmt import not found");
+    let fmt_import = fmt_import.unwrap();
+    assert_eq!(fmt_import.symbol_name, Some("fmt".to_string()));
+    assert!(fmt_import.metadata.is_some(), "fmt import should have metadata");
+    let metadata = fmt_import.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("import_path"), Some(&serde_json::json!("fmt")));
+
+    // Check aliased import
+    let aliased_import = import_chunks.iter().find(|c| {
+        c.metadata.as_ref()
+            .and_then(|m| m.get("alias"))
+            .and_then(|a| a.as_str())
+            == Some("myalias")
+    });
+    assert!(aliased_import.is_some(), "Aliased import not found");
+    let aliased_import = aliased_import.unwrap();
+    assert_eq!(aliased_import.symbol_name, Some("myalias".to_string()));
+    let metadata = aliased_import.metadata.as_ref().unwrap();
+    assert_eq!(metadata.get("import_path"), Some(&serde_json::json!("github.com/example/pkg")));
+    assert_eq!(metadata.get("alias"), Some(&serde_json::json!("myalias")));
+
+    // Check dot import
+    let dot_import = import_chunks.iter().find(|c| {
+        c.metadata.as_ref()
+            .and_then(|m| m.get("alias"))
+            .and_then(|a| a.as_str())
+            == Some(".")
+    });
+    assert!(dot_import.is_some(), "Dot import not found");
 }
