@@ -1,9 +1,9 @@
 # Ticket: INC_INDEX-2001: File Watcher Implementation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,14 +20,14 @@ This ticket is part of Phase 2 (Week 2, Task 1) of the INC_INDEX incremental ind
 The watcher needs to be efficient (low CPU usage when idle), fast (detect changes within 2 seconds), and smart (respect ignore patterns to avoid indexing irrelevant files like node_modules or build artifacts).
 
 ## Acceptance Criteria
-- [ ] File changes detected within 2 seconds of modification
-- [ ] CPU usage remains below 1% when idle (no file changes)
-- [ ] Debouncing logic working correctly with 500ms delay
-- [ ] Ignore patterns from .gitignore are respected
-- [ ] All event types handled: Write, Create, Remove, Rename
-- [ ] Events sent through mpsc channel to change detector
-- [ ] Unit tests pass with 100% coverage of core logic
-- [ ] Integration tests demonstrate real file system watching
+- [x] File changes detected within 2 seconds of modification
+- [x] CPU usage remains below 1% when idle (no file changes)
+- [x] Debouncing logic working correctly with 500ms delay
+- [x] Ignore patterns from .gitignore are respected
+- [x] All event types handled: Write, Create, Remove, Rename
+- [x] Events sent through mpsc channel to change detector
+- [x] Unit tests pass with 100% coverage of core logic
+- [x] Integration tests demonstrate real file system watching
 
 ## Technical Requirements
 
