@@ -122,3 +122,7 @@ harness = false
 name = "memory"
 harness = false
 
+[[bench]]
+name = "concurrent_operations_bench"
+harness = false
+
