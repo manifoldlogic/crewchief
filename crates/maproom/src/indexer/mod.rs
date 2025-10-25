@@ -7,7 +7,7 @@ use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio_postgres::Client;
 use tracing::info;
 
-mod parser;
+pub mod parser;
 
 fn detect_language_from_path(path: &Path) -> Option<&'static str> {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
