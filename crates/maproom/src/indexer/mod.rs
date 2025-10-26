@@ -542,8 +542,47 @@ pub async fn watch_worktree(
     let throttle_dur = parse_duration(throttle)?;
     let debounce_ms = throttle_dur.as_millis().min(u64::MAX as u128) as u64;
 
-    // Create connection pool
-    let pool = crate::db::pool::create_pool().await?;
+    println!("🔌 Validating database connection...");
+
+    // Create connection pool and validate connection BEFORE starting watcher
+    // This ensures we fail fast if DATABASE_URL is misconfigured
+    let pool = crate::db::pool::create_pool().await.with_context(|| {
+        "Failed to connect to database. Please check your DATABASE_URL configuration."
+    })?;
+
+    // Test the connection by getting a client from the pool
+    let test_client = pool.get().await.with_context(|| {
+        "Database connection pool created but unable to acquire connection"
+    })?;
+
+    // Verify database has required schema by checking for maproom schema
+    match test_client
+        .query_opt(
+            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'maproom'",
+            &[],
+        )
+        .await
+    {
+        Ok(Some(_)) => {
+            println!("✅ Database connection validated successfully");
+        }
+        Ok(None) => {
+            anyhow::bail!(
+                "Database connected but 'maproom' schema not found.\n\
+                 Run migrations first: cargo run -p crewchief-maproom -- db migrate"
+            );
+        }
+        Err(e) => {
+            anyhow::bail!(
+                "Failed to verify database schema: {}\n\
+                 Check that DATABASE_URL is correct and database is accessible.",
+                e
+            );
+        }
+    }
+
+    // Drop test client to return it to pool
+    drop(test_client);
 
     // Initialize components
     let config = WatcherConfig {

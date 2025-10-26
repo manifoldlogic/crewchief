@@ -167,10 +167,31 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
         .context("Failed to create connection pool")?;
 
     // Test connection and configure ivfflat.probes
-    let client = pool
-        .get()
-        .await
-        .context("Failed to get initial connection from pool")?;
+    let client = pool.get().await.map_err(|e| {
+        // Sanitize DATABASE_URL to hide password
+        let sanitized_url = sanitize_database_url(&database_url);
+
+        // Build helpful error message
+        let mut error_msg = format!(
+            "Failed to connect to database\n  DATABASE_URL: {}\n  Error: {}",
+            sanitized_url, e
+        );
+
+        // Add troubleshooting guidance
+        error_msg.push_str("\n\n  Troubleshooting:");
+        error_msg.push_str("\n  - Verify PostgreSQL is running");
+
+        // Check if using localhost and suggest docker hostname
+        if database_url.contains("localhost") || database_url.contains("127.0.0.1") {
+            error_msg.push_str("\n  - In Docker/devcontainer, use hostname 'postgres' instead of 'localhost'");
+            error_msg.push_str("\n    Example: postgresql://postgres:postgres@postgres:5432/crewchief");
+        }
+
+        error_msg.push_str("\n  - Check that DATABASE_URL points to the correct hostname and port");
+        error_msg.push_str("\n  - Verify database credentials are correct");
+
+        anyhow::anyhow!(error_msg)
+    })?;
 
     // Configure ivfflat.probes for vector search optimization
     // This setting controls the accuracy/speed tradeoff for vector similarity queries
@@ -183,6 +204,49 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
     debug!("Database connection pool created successfully");
 
     Ok(pool)
+}
+
+/// Sanitize a database URL by replacing the password with asterisks.
+///
+/// # Example
+///
+/// ```
+/// # use crewchief_maproom::db::pool::sanitize_database_url;
+/// let url = "postgresql://user:secret@localhost:5432/db";
+/// assert_eq!(sanitize_database_url(url), "postgresql://user:***@localhost:5432/db");
+/// ```
+pub fn sanitize_database_url(url: &str) -> String {
+    // Try to parse as PostgreSQL config to extract components
+    if let Ok(config) = url.parse::<tokio_postgres::Config>() {
+        let user = config.get_user().unwrap_or("unknown");
+        let host = config.get_hosts().first().map(|h| match h {
+            tokio_postgres::config::Host::Tcp(hostname) => hostname.as_str(),
+            _ => "unknown",
+        }).unwrap_or("unknown");
+        let port = config.get_ports().first().copied().unwrap_or(5432);
+        let dbname = config.get_dbname().unwrap_or("unknown");
+
+        format!("postgresql://{}:***@{}:{}/{}", user, host, port, dbname)
+    } else {
+        // Fallback: simple string replacement if parsing fails
+        // Find password between :// and @
+        if let Some(start) = url.find("://") {
+            if let Some(at_pos) = url[start + 3..].find('@') {
+                let after_scheme = &url[start + 3..];
+                if let Some(colon_pos) = after_scheme.find(':') {
+                    if colon_pos < at_pos {
+                        // Reconstruct with password replaced
+                        let scheme = &url[..start + 3];
+                        let user_part = &after_scheme[..colon_pos];
+                        let after_at = &after_scheme[at_pos + 1..];
+                        return format!("{}{}:***@{}", scheme, user_part, after_at);
+                    }
+                }
+            }
+        }
+        // If we can't parse it, just return the URL as-is (better than crashing)
+        url.to_string()
+    }
 }
 
 /// Get pool statistics for monitoring and debugging.

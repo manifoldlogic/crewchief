@@ -105,6 +105,54 @@ DATABASE_URL=postgres://<your_username>:<your_password>@localhost:5432/maproom
 OPENAI_API_KEY=sk-...
 ```
 
+### Database Configuration
+
+The `DATABASE_URL` environment variable must point to a running PostgreSQL instance with the required extensions installed.
+
+**Format:**
+```
+DATABASE_URL=postgresql://username:password@hostname:port/database
+```
+
+**Local Development (PostgreSQL on host machine):**
+```bash
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/crewchief"
+```
+
+**Docker/Devcontainer (PostgreSQL in separate container):**
+
+When running in Docker or a devcontainer, PostgreSQL typically runs in a separate container with hostname `postgres`:
+```bash
+export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
+```
+
+**Common Configuration Issues:**
+
+1. **Connection Refused Error**: If you see "Connection refused (os error 111)", the database is unreachable. Common causes:
+   - Wrong hostname: Use `postgres` instead of `localhost` in Docker/devcontainer environments
+   - PostgreSQL not running: Verify with `docker ps` or `pg_isready`
+   - Wrong port: Ensure PostgreSQL is listening on the specified port
+
+2. **Authentication Failed**: Check username and password are correct
+
+3. **Database Does Not Exist**: Create the database first:
+   ```bash
+   createdb crewchief
+   # or in Docker:
+   docker exec -it postgres psql -U postgres -c "CREATE DATABASE crewchief;"
+   ```
+
+4. **Missing Schema**: After connecting, run migrations:
+   ```bash
+   cargo run -p crewchief-maproom -- db migrate
+   ```
+
+**Validation:**
+
+The `watch` command validates the database connection on startup and provides helpful error messages if misconfigured. You'll see:
+- ✅ Success: "Database connection validated successfully"
+- ❌ Failure: Clear error with the DATABASE_URL being used (password sanitized) and troubleshooting steps
+
 ## Testing
 
 ### Running Tests

@@ -436,27 +436,5 @@ When working on Maproom tickets via /work-on-maproom-tickets command:
 - All acceptance criteria must be met before verification
 - All related tests must pass before verification
 - Verification must pass before commit
-- Each ticket completion must be tracked in the ticket markdown file<!-- Watch test Sat Oct 25 09:43:58 PM UTC 2025 -->
-<!-- Test with RUST_LOG Sat Oct 25 09:45:09 PM UTC 2025 -->
-
-
-# URGENT TEST EDIT 1761428759
-
-This is a test to trigger the watcher.
-
-
-<!-- DEBUG TEST 1761428796 -->
-
-
-## TEST FIX - Event Access Handling 1761428930
-
-This edit should trigger re-indexing now!
-
-
-
-
-## LIVE TEST - Watcher Running 1761428996
-
-This edit happens while watch is active with the fix!
-
+- Each ticket completion must be tracked in the ticket markdown file
 
