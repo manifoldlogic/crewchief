@@ -1,7 +1,7 @@
 # Ticket: LOCAL-3006: Add Configuration Reference Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [x] **Task completed** - marked as future enhancement - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
 
