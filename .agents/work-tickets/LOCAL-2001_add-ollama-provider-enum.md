@@ -1,9 +1,9 @@
 # Ticket: LOCAL-2001: Add Ollama variant to Provider enum
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,13 +20,13 @@ As part of Phase 2 (Ollama Integration), we need to add Ollama as a supported em
 This change must maintain backward compatibility with existing OpenAI, Cohere, and Local providers while adding the new Ollama variant with proper serialization, deserialization, and parsing support.
 
 ## Acceptance Criteria
-- [ ] Ollama variant added to Provider enum definition
-- [ ] Serde serialization/deserialization works correctly for all variants including Ollama
-- [ ] FromStr implementation parses "ollama" string (case-insensitive)
-- [ ] Enum compiles without errors or warnings
-- [ ] Unit tests pass for Provider parsing, including new Ollama variant
-- [ ] No breaking changes to existing OpenAI/Cohere/Local variants
-- [ ] Code follows existing Rust style and conventions in the file
+- [x] Ollama variant added to Provider enum definition
+- [x] Serde serialization/deserialization works correctly for all variants including Ollama
+- [x] FromStr implementation parses "ollama" string (case-insensitive)
+- [x] Enum compiles without errors or warnings
+- [x] Unit tests pass for Provider parsing, including new Ollama variant
+- [x] No breaking changes to existing OpenAI/Cohere/Local variants
+- [x] Code follows existing Rust style and conventions in the file
 
 ## Technical Requirements
 - File location: `crates/maproom/src/embedding/config.rs`

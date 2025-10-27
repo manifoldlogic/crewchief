@@ -12,6 +12,8 @@ pub enum Provider {
     OpenAI,
     /// Cohere embedding API
     Cohere,
+    /// Ollama embedding API
+    Ollama,
     /// Local embedding model
     Local,
 }
@@ -29,6 +31,7 @@ impl std::str::FromStr for Provider {
         match s.to_lowercase().as_str() {
             "openai" => Ok(Self::OpenAI),
             "cohere" => Ok(Self::Cohere),
+            "ollama" => Ok(Self::Ollama),
             "local" => Ok(Self::Local),
             _ => Err(ConfigError::InvalidValue {
                 field: "provider".to_string(),
@@ -148,6 +151,7 @@ impl EmbeddingConfig {
         config.api_key = match config.provider {
             Provider::OpenAI => env::var("OPENAI_API_KEY").ok(),
             Provider::Cohere => env::var("COHERE_API_KEY").ok(),
+            Provider::Ollama => None, // Ollama runs locally, no API key needed
             Provider::Local => None, // Local models don't need API keys
         };
 
@@ -201,6 +205,7 @@ impl EmbeddingConfig {
             match self.provider {
                 Provider::OpenAI => "https://api.openai.com/v1/embeddings".to_string(),
                 Provider::Cohere => "https://api.cohere.ai/v1/embed".to_string(),
+                Provider::Ollama => "http://localhost:11434/api/embeddings".to_string(),
                 Provider::Local => "http://localhost:8080/embeddings".to_string(),
             }
         }
@@ -327,9 +332,58 @@ mod tests {
     fn test_provider_parsing() {
         assert_eq!("openai".parse::<Provider>().unwrap(), Provider::OpenAI);
         assert_eq!("cohere".parse::<Provider>().unwrap(), Provider::Cohere);
+        assert_eq!("ollama".parse::<Provider>().unwrap(), Provider::Ollama);
         assert_eq!("local".parse::<Provider>().unwrap(), Provider::Local);
         assert_eq!("OpenAI".parse::<Provider>().unwrap(), Provider::OpenAI);
         assert!("unknown".parse::<Provider>().is_err());
+    }
+
+    #[test]
+    fn test_provider_parsing_case_insensitive() {
+        // Test case-insensitive parsing for Ollama
+        assert_eq!("ollama".parse::<Provider>().unwrap(), Provider::Ollama);
+        assert_eq!("Ollama".parse::<Provider>().unwrap(), Provider::Ollama);
+        assert_eq!("OLLAMA".parse::<Provider>().unwrap(), Provider::Ollama);
+        assert_eq!("OlLaMa".parse::<Provider>().unwrap(), Provider::Ollama);
+    }
+
+    #[test]
+    fn test_provider_serialization() {
+        // Test serde serialization with rename_all = "lowercase"
+        let provider = Provider::Ollama;
+        let serialized = serde_json::to_string(&provider).unwrap();
+        assert_eq!(serialized, r#""ollama""#);
+
+        let provider = Provider::OpenAI;
+        let serialized = serde_json::to_string(&provider).unwrap();
+        assert_eq!(serialized, r#""openai""#);
+
+        let provider = Provider::Cohere;
+        let serialized = serde_json::to_string(&provider).unwrap();
+        assert_eq!(serialized, r#""cohere""#);
+
+        let provider = Provider::Local;
+        let serialized = serde_json::to_string(&provider).unwrap();
+        assert_eq!(serialized, r#""local""#);
+    }
+
+    #[test]
+    fn test_provider_deserialization() {
+        // Test serde deserialization
+        let provider: Provider = serde_json::from_str(r#""ollama""#).unwrap();
+        assert_eq!(provider, Provider::Ollama);
+
+        let provider: Provider = serde_json::from_str(r#""openai""#).unwrap();
+        assert_eq!(provider, Provider::OpenAI);
+
+        let provider: Provider = serde_json::from_str(r#""cohere""#).unwrap();
+        assert_eq!(provider, Provider::Cohere);
+
+        let provider: Provider = serde_json::from_str(r#""local""#).unwrap();
+        assert_eq!(provider, Provider::Local);
+
+        // Invalid provider should fail
+        assert!(serde_json::from_str::<Provider>(r#""invalid""#).is_err());
     }
 
     #[test]
@@ -396,6 +450,18 @@ mod tests {
         assert_eq!(
             config.api_endpoint_url(),
             "https://api.cohere.ai/v1/embed"
+        );
+
+        config.provider = Provider::Ollama;
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://localhost:11434/api/embeddings"
+        );
+
+        config.provider = Provider::Local;
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://localhost:8080/embeddings"
         );
 
         config.api_endpoint = Some("https://custom.endpoint.com".to_string());
