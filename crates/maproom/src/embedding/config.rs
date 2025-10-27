@@ -180,6 +180,19 @@ impl EmbeddingConfig {
             });
         }
 
+        // Validate Ollama-specific model requirements
+        if self.provider == Provider::Ollama && self.model == "nomic-embed-text" {
+            if self.dimension != 768 {
+                return Err(ConfigError::InvalidValue {
+                    field: "dimension".to_string(),
+                    reason: format!(
+                        "Ollama provider with nomic-embed-text requires dimension=768, got {}",
+                        self.dimension
+                    ),
+                });
+            }
+        }
+
         // Check batch size
         if self.batch_size == 0 || self.batch_size > 1000 {
             return Err(ConfigError::InvalidValue {
@@ -497,5 +510,169 @@ mod tests {
         retry.backoff_multiplier = 2.0;
         retry.max_delay_ms = 500;
         assert!(retry.validate().is_err());
+    }
+
+    #[test]
+    fn test_ollama_validation_no_api_key() {
+        // Ollama should not require an API key
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "nomic-embed-text".to_string(),
+            dimension: 768,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_local_validation_no_api_key() {
+        // Local provider should not require an API key
+        let config = EmbeddingConfig {
+            provider: Provider::Local,
+            model: "custom-model".to_string(),
+            dimension: 512,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_ollama_nomic_embed_text_correct_dimension() {
+        // nomic-embed-text with correct dimension should pass
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "nomic-embed-text".to_string(),
+            dimension: 768,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_ollama_nomic_embed_text_wrong_dimension() {
+        // nomic-embed-text with wrong dimension should fail
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "nomic-embed-text".to_string(),
+            dimension: 512,
+            api_key: None,
+            ..Default::default()
+        };
+        let result = config.validate();
+        assert!(result.is_err());
+
+        if let Err(ConfigError::InvalidValue { field, reason }) = result {
+            assert_eq!(field, "dimension");
+            assert!(reason.contains("nomic-embed-text"));
+            assert!(reason.contains("768"));
+            assert!(reason.contains("512"));
+        } else {
+            panic!("Expected InvalidValue error");
+        }
+    }
+
+    #[test]
+    fn test_ollama_other_models_flexible_dimensions() {
+        // Other Ollama models should accept any valid dimension
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "llama2".to_string(),
+            dimension: 512,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "mistral".to_string(),
+            dimension: 1024,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_openai_requires_api_key() {
+        // OpenAI should require an API key
+        let mut config = EmbeddingConfig {
+            provider: Provider::OpenAI,
+            model: "text-embedding-3-small".to_string(),
+            dimension: 1536,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_err());
+
+        config.api_key = Some("sk-test-key".to_string());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_cohere_requires_api_key() {
+        // Cohere should require an API key
+        let mut config = EmbeddingConfig {
+            provider: Provider::Cohere,
+            model: "embed-english-v3.0".to_string(),
+            dimension: 1024,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_err());
+
+        config.api_key = Some("cohere-test-key".to_string());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_custom_endpoint_override() {
+        // Custom endpoint should override default
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "nomic-embed-text".to_string(),
+            dimension: 768,
+            api_key: None,
+            api_endpoint: Some("http://custom-ollama:8080/api/embeddings".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://custom-ollama:8080/api/embeddings"
+        );
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_endpoint_defaults_all_providers() {
+        // Test default endpoints for all providers
+        let mut config = EmbeddingConfig::default();
+
+        config.provider = Provider::OpenAI;
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.openai.com/v1/embeddings"
+        );
+
+        config.provider = Provider::Cohere;
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.cohere.ai/v1/embed"
+        );
+
+        config.provider = Provider::Ollama;
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://localhost:11434/api/embeddings"
+        );
+
+        config.provider = Provider::Local;
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://localhost:8080/embeddings"
+        );
     }
 }

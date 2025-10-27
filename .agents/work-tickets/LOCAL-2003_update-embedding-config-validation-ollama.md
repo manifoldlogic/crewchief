@@ -1,9 +1,9 @@
 # Ticket: LOCAL-2003: Update EmbeddingConfig validation for Ollama
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -22,18 +22,18 @@ The current validation logic assumes all providers require API keys and doesn't 
 Validation is critical - it prevents runtime errors from misconfiguration and provides clear feedback to users during setup.
 
 ## Acceptance Criteria
-- [ ] `validate()` method updated to check provider type before requiring API key
-- [ ] API key is NOT required for Ollama and Local providers
-- [ ] API key IS required for OpenAI and Cohere providers
-- [ ] nomic-embed-text model enforces exactly 768 dimensions (error if not 768)
-- [ ] New `api_endpoint_url()` method returns correct default for each provider:
+- [x] `validate()` method updated to check provider type before requiring API key
+- [x] API key is NOT required for Ollama and Local providers
+- [x] API key IS required for OpenAI and Cohere providers
+- [x] nomic-embed-text model enforces exactly 768 dimensions (error if not 768)
+- [x] New `api_endpoint_url()` method returns correct default for each provider:
   - OpenAI: https://api.openai.com/v1/embeddings
   - Ollama: http://localhost:11434/api/embeddings
   - Local: http://localhost:8080/embeddings
-- [ ] Custom endpoints can override defaults via `api_endpoint` config field
-- [ ] Validation errors have clear, actionable messages (e.g., "Ollama provider with nomic-embed-text requires dimensions=768, got 512")
-- [ ] All existing tests pass (no regressions)
-- [ ] New unit tests for Ollama validation cases:
+- [x] Custom endpoints can override defaults via `api_endpoint` config field
+- [x] Validation errors have clear, actionable messages (e.g., "Ollama provider with nomic-embed-text requires dimensions=768, got 512")
+- [x] All existing tests pass (no regressions)
+- [x] New unit tests for Ollama validation cases:
   - Test Ollama without API key (should pass)
   - Test Ollama with nomic-embed-text and dimensions=768 (should pass)
   - Test Ollama with nomic-embed-text and dimensions!=768 (should fail with clear error)
