@@ -185,8 +185,26 @@ const toolSchemas = [
     }
   },
   {
+    name: 'scan',
+    description: 'Scan and index an entire repository or worktree - USE FOR: initial indexing of a new repository, re-indexing after major changes, or when you need to ensure all files are indexed. This is a comprehensive operation that discovers and indexes all supported files in the specified path. FASTER THAN: calling upsert on individual files. USE WHEN: setting up a new codebase for search, or when search results seem incomplete.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: 'Repository name (e.g., "crewchief"). Will auto-detect from git remote if not provided.' },
+        worktree: { type: 'string', description: 'Worktree name (e.g., "main", "feature-branch"). Will auto-detect from current git branch if not provided.' },
+        path: { type: 'string', description: 'Path to scan (absolute or relative). Defaults to current directory if not provided.' },
+        commit: { type: 'string', description: 'Git commit hash (use "HEAD" for current). Defaults to HEAD if not provided.' },
+        concurrency: { type: 'integer', minimum: 1, maximum: 16, default: 4, description: 'Number of concurrent file processing workers (default: 4)' },
+        parallel: { type: 'boolean', default: false, description: 'Enable parallel batch processing for better performance with large codebases' },
+        languages: { type: 'array', items: { type: 'string' }, description: 'Optional: limit to specific languages (e.g., ["typescript", "rust"])' },
+        exclude: { type: 'array', items: { type: 'string' }, description: 'Optional: glob patterns to exclude (e.g., ["node_modules/**", "*.test.ts"])' }
+      },
+      required: []
+    }
+  },
+  {
     name: 'upsert',
-    description: 'Index/update files in maproom - USE WHEN: files have changed and need reindexing. RARELY NEEDED: maproom auto-indexes on file changes. Only use if search returns outdated results. Spawns the Rust indexer.',
+    description: 'Index/update specific files in maproom - USE WHEN: files have changed and need reindexing. FOR FULL REPO: use "scan" instead. Only use upsert for targeted updates of a few specific files. Spawns the Rust indexer.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -766,6 +784,105 @@ async function handleOpen(params: any): Promise<any> {
   }
 }
 
+async function handleScan(params: any): Promise<any> {
+  const { spawn } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const execFile = promisify((await import('node:child_process')).execFile)
+
+  try {
+    // Build command arguments
+    const args: string[] = ['scan']
+
+    if (params.repo) args.push('--repo', params.repo)
+    if (params.worktree) args.push('--worktree', params.worktree)
+    if (params.path) args.push('--path', params.path)
+    if (params.commit) args.push('--commit', params.commit)
+    if (params.concurrency) args.push('--concurrency', String(params.concurrency))
+    if (params.parallel) args.push('--parallel')
+    if (params.languages && Array.isArray(params.languages)) {
+      params.languages.forEach((lang: string) => args.push('--languages', lang))
+    }
+    if (params.exclude && Array.isArray(params.exclude)) {
+      params.exclude.forEach((pattern: string) => args.push('--exclude', pattern))
+    }
+
+    log.info({ args }, 'spawning crewchief-maproom scan')
+
+    // Spawn the Rust binary
+    const { findMaproomBinary } = await import('./utils/process.js')
+    const binaryPath = await findMaproomBinary()
+
+    const proc = spawn(binaryPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env }
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (chunk) => {
+      stdout += chunk.toString()
+    })
+
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString()
+      log.info({ line: chunk.toString().trim() }, 'scan output')
+    })
+
+    const exitCode = await new Promise<number>((resolve) => {
+      proc.on('exit', (code) => resolve(code ?? 1))
+    })
+
+    if (exitCode !== 0) {
+      log.error({ exitCode, stderr }, 'scan command failed')
+      return {
+        success: false,
+        error: `Scan command failed with exit code ${exitCode}`,
+        stderr: stderr.trim(),
+        hint: 'Check that the path is a valid git repository and that you have the necessary permissions'
+      }
+    }
+
+    // Parse output for statistics
+    const lines = stderr.split('\n')
+    const stats: any = {
+      filesProcessed: 0,
+      chunksCreated: 0,
+      duration: null
+    }
+
+    for (const line of lines) {
+      const filesMatch = line.match(/Processed (\d+) files/)
+      if (filesMatch) stats.filesProcessed = parseInt(filesMatch[1], 10)
+
+      const chunksMatch = line.match(/Created (\d+) chunks/)
+      if (chunksMatch) stats.chunksCreated = parseInt(chunksMatch[1], 10)
+
+      const durationMatch = line.match(/Completed in ([\d.]+)s/)
+      if (durationMatch) stats.duration = durationMatch[1] + 's'
+    }
+
+    log.info({ stats }, 'scan completed')
+
+    return {
+      success: true,
+      message: 'Repository scan completed successfully',
+      stats,
+      repo: params.repo || 'auto-detected',
+      worktree: params.worktree || 'auto-detected',
+      path: params.path || 'current directory',
+      hint: 'Use the status tool to verify indexing results, then search to find your code'
+    }
+  } catch (error: any) {
+    log.error({ error: error.message }, 'scan error')
+    return {
+      success: false,
+      error: error.message,
+      hint: 'Ensure crewchief-maproom binary is available and the path is a valid git repository'
+    }
+  }
+}
+
 async function handleUpsert(params: any): Promise<any> {
   try {
     const { handleUpsertTool, formatUpsertError } = await import('./tools/upsert.js')
@@ -942,6 +1059,10 @@ async function handleMessage(msg: JsonRpcRequest) {
     case 'open':
       respond(msg.id, await handleOpen(msg.params))
       log.info({ id: msg.id }, 'sent open result')
+      return
+    case 'scan':
+      respond(msg.id, await handleScan(msg.params))
+      log.info({ id: msg.id }, 'sent scan result')
       return
     case 'upsert':
       respond(msg.id, await handleUpsert(msg.params))
