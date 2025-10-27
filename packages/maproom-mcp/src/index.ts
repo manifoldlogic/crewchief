@@ -1044,6 +1044,15 @@ async function handleMessage(msg: JsonRpcRequest) {
           respond(msg.id ?? null, errorResponse)
           log.error({ id: msg.id, tool: name, error }, 'tool error')
         }
+      } else if (name === 'scan') {
+        try {
+          const res = await handleScan(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error: any) {
+          respond(msg.id ?? null, undefined, new Error(error.message || 'Scan failed'))
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else if (name === 'explain') {
         try {
           const res = await handleExplain(args)

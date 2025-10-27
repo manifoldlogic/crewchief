@@ -49,13 +49,14 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
 pub async fn get_or_create_repo(client: &Client, name: &str, root_path: &str) -> anyhow::Result<i64> {
     let row = client
         .query_one(
-            "INSERT INTO maproom.repos(name, root_path) VALUES ($1,$2)
+            "INSERT INTO maproom.repos(name, root_path) VALUES ($1, $2)
              ON CONFLICT(name) DO UPDATE SET root_path = EXCLUDED.root_path
              RETURNING id",
             &[&name, &root_path],
         )
         .await?;
-    Ok(row.get(0))
+    let id: i64 = row.get(0);
+    Ok(id)
 }
 
 pub async fn get_or_create_worktree(
@@ -72,7 +73,8 @@ pub async fn get_or_create_worktree(
             &[&repo_id, &name, &abs_path],
         )
         .await?;
-    Ok(row.get(0))
+    let id: i64 = row.get(0);
+    Ok(id)
 }
 
 pub async fn get_or_create_commit(
