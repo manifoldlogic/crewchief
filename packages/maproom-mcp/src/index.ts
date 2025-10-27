@@ -792,8 +792,6 @@ async function handleOpen(params: any): Promise<any> {
 
 async function handleScan(params: any): Promise<any> {
   const { spawn } = await import('node:child_process')
-  const { promisify } = await import('node:util')
-  const execFile = promisify((await import('node:child_process')).execFile)
 
   try {
     // Build command arguments
@@ -818,6 +816,10 @@ async function handleScan(params: any): Promise<any> {
     const { findMaproomBinary } = await import('./utils/process.js')
     const binaryPath = await findMaproomBinary()
 
+    if (!binaryPath) {
+      throw new Error('Could not find crewchief-maproom binary')
+    }
+
     const proc = spawn(binaryPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env }
@@ -826,17 +828,17 @@ async function handleScan(params: any): Promise<any> {
     let stdout = ''
     let stderr = ''
 
-    proc.stdout.on('data', (chunk) => {
+    proc.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
     })
 
-    proc.stderr.on('data', (chunk) => {
+    proc.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString()
       log.info({ line: chunk.toString().trim() }, 'scan output')
     })
 
     const exitCode = await new Promise<number>((resolve) => {
-      proc.on('exit', (code) => resolve(code ?? 1))
+      proc.on('exit', (code: number | null) => resolve(code ?? 1))
     })
 
     if (exitCode !== 0) {
