@@ -1,6 +1,6 @@
 {
   "name": "@crewchief/maproom-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Maproom MCP server with local LLM embeddings - zero configuration required",
   "main": "dist/index.js",
   "bin": {
@@ -22,9 +22,9 @@
     "test": "node bin/cli.js --test || echo 'Test mode not yet implemented'",
     "dev": "node bin/cli.js",
     "prepublishOnly": "tsc",
-    "release:patch": "npm version patch --no-git-tag-version && npm publish --access public",
-    "release:minor": "npm version minor --no-git-tag-version && npm publish --access public",
-    "release:major": "npm version major --no-git-tag-version && npm publish --access public"
+    "release:patch": "npm version patch --no-git-tag-version && pnpm publish --access public --no-git-checks",
+    "release:minor": "npm version minor --no-git-tag-version && pnpm publish --access public --no-git-checks",
+    "release:major": "npm version major --no-git-tag-version && pnpm publish --access public --no-git-checks"
   },
   "keywords": [
     "mcp",
