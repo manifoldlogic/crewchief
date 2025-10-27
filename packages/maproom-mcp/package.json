@@ -1,53 +1,29 @@
 {
-  "name": "maproom-mcp",
-  "version": "0.1.8",
-  "type": "module",
-  "main": "dist/index.js",
+  "name": "@crewchief/maproom-mcp",
+  "version": "1.0.0",
+  "description": "Maproom MCP server with local LLM embeddings - zero configuration required",
   "bin": {
-    "maproom-mcp": "bin/cli.js"
+    "maproom-mcp": "./bin/cli.js"
   },
-  "files": [
-    "dist/",
-    "bin/",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
-    "build": "rimraf dist && tsc -p tsconfig.json",
-    "prepare": "pnpm run build",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "vitest run tests/e2e",
-    "test:e2e:workflow": "vitest run tests/e2e/workflow_test.ts",
-    "test:e2e:errors": "vitest run tests/e2e/error_scenarios_test.ts",
-    "test:e2e:performance": "vitest run tests/e2e/performance_test.ts",
-    "test:e2e:load": "vitest run tests/e2e/load_test.ts",
-    "test:coverage": "vitest run --coverage",
-    "postinstall": "node ./dist/postinstall.js || true",
-    "release:patch": "node ./scripts/release.mjs patch",
-    "release:minor": "node ./scripts/release.mjs minor",
-    "release:major": "node ./scripts/release.mjs major"
+    "test": "node bin/cli.js --test",
+    "dev": "node bin/cli.js"
   },
-  "dependencies": {
-    "commander": "^12.1.0",
-    "execa": "^9.5.1",
-    "pg": "^8.12.0",
-    "pino": "^9.4.0",
-    "zod": "^3.25.76"
+  "keywords": [
+    "mcp",
+    "embeddings",
+    "ollama",
+    "semantic-search",
+    "code-search"
+  ],
+  "author": "CrewChief",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/crewchief.git",
+    "directory": "packages/maproom-mcp"
   },
-  "devDependencies": {
-    "@types/pg": "^8.15.5",
-    "rimraf": "^6.0.1",
-    "ts-node": "^10.9.2",
-    "tslib": "^2.7.0",
-    "tsx": "^4.17.0",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748"
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

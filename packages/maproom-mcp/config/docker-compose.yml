@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: maproom-postgres
+    environment:
+      POSTGRES_DB: maproom
+      POSTGRES_USER: maproom
+      POSTGRES_PASSWORD: maproom
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - maproom-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Optional: Uncomment if custom PostgreSQL configuration is needed
+      # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - maproom-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maproom -d maproom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: maproom-ollama
+    volumes:
+      - ollama-models:/root/.ollama
+      # Optional: Uncomment if using separate init script
+      # - ./init-ollama.sh:/usr/local/bin/init-ollama.sh:ro
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    networks:
+      - maproom-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s  # Allow time for model download
+    restart: unless-stopped
+    # Optional GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    command: >
+      sh -c "
+        ollama serve &
+        OLLAMA_PID=$$!
+        echo 'Waiting for Ollama server...'
+        until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 1; done
+        echo 'Pulling nomic-embed-text model...'
+        ollama pull nomic-embed-text
+        echo 'Model ready!'
+        wait $$OLLAMA_PID
+      "
+
+  maproom:
+    build:
+      context: ..
+      dockerfile: Dockerfile.maproom
+    container_name: maproom-mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://maproom:maproom@postgres:5432/maproom
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_MODEL: nomic-embed-text
+      EMBEDDING_DIMENSION: 768
+      EMBEDDING_API_ENDPOINT: http://ollama:11434
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - maproom-config:/config
+      - ${HOST_WORKSPACE:-/workspace}:/workspace:ro
+    ports:
+      - "${MAPROOM_PORT:-3000}:3000"
+    networks:
+      - maproom-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  maproom-data:
+    driver: local
+  ollama-models:
+    driver: local
+  maproom-config:
+    driver: local
+
+networks:
+  maproom-network:
+    driver: bridge

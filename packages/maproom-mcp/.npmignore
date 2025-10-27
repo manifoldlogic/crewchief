@@ -1,0 +1,28 @@
+# Test files
+*.test.js
+*.spec.js
+test/
+tests/
+
+# Development files
+.github/
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+node_modules/
+.cache/
+
+# Git files
+.git/
+.gitignore
