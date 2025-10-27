@@ -4,7 +4,7 @@ use crate::embedding::cache::Vector;
 use crate::embedding::config::EmbeddingConfig;
 use crate::embedding::error::{ApiError, EmbeddingError};
 use reqwest::{Client, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::time::{sleep, Duration};
@@ -67,15 +67,6 @@ impl CostMetrics {
         self.failed_requests.store(0, Ordering::Relaxed);
         self.retry_attempts.store(0, Ordering::Relaxed);
     }
-}
-
-/// OpenAI API request structure.
-#[derive(Debug, Serialize)]
-struct EmbeddingRequest {
-    input: Vec<String>,
-    model: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dimensions: Option<usize>,
 }
 
 /// OpenAI API response structure.
@@ -182,26 +173,65 @@ impl OpenAIClient {
 
     /// Single attempt to embed a batch (without retry logic).
     async fn try_embed_batch(&self, texts: &[String]) -> Result<Vec<Vector>, EmbeddingError> {
-        let api_key = self.config.api_key.as_ref().ok_or_else(|| {
-            EmbeddingError::Config(crate::embedding::error::ConfigError::MissingConfig(
-                "API key".to_string(),
-            ))
-        })?;
+        use crate::embedding::config::Provider;
 
-        let request = EmbeddingRequest {
-            input: texts.to_vec(),
-            model: self.config.model.clone(),
-            dimensions: Some(self.config.dimension),
+        let api_key = self.config.api_key.as_ref();
+
+        // Build request based on provider
+        let request = match self.config.provider {
+            Provider::OpenAI => {
+                let key = api_key.ok_or_else(|| {
+                    EmbeddingError::Config(crate::embedding::error::ConfigError::MissingConfig(
+                        "API key for OpenAI".to_string(),
+                    ))
+                })?;
+
+                self.client
+                    .post(self.config.api_endpoint_url())
+                    .header("Authorization", format!("Bearer {}", key))
+                    .header("Content-Type", "application/json")
+            }
+            Provider::Ollama => {
+                // Ollama doesn't require API key
+                self.client
+                    .post(self.config.api_endpoint_url())
+                    .header("Content-Type", "application/json")
+            }
+            Provider::Cohere => {
+                let key = api_key.ok_or_else(|| {
+                    EmbeddingError::Config(crate::embedding::error::ConfigError::MissingConfig(
+                        "API key for Cohere".to_string(),
+                    ))
+                })?;
+
+                self.client
+                    .post(self.config.api_endpoint_url())
+                    .header("Authorization", format!("Bearer {}", key))
+                    .header("Content-Type", "application/json")
+            }
+            Provider::Local => {
+                // Local models don't require API key
+                self.client
+                    .post(self.config.api_endpoint_url())
+                    .header("Content-Type", "application/json")
+            }
         };
 
-        let response = self
-            .client
-            .post(self.config.api_endpoint_url())
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await?;
+        // Ollama uses different request format
+        let body = if self.config.provider == Provider::Ollama {
+            serde_json::json!({
+                "model": self.config.model,
+                "prompt": texts,
+            })
+        } else {
+            serde_json::json!({
+                "input": texts,
+                "model": self.config.model,
+                "dimensions": self.config.dimension,
+            })
+        };
+
+        let response = request.json(&body).send().await?;
 
         self.metrics.total_requests.fetch_add(1, Ordering::Relaxed);
 
@@ -231,6 +261,8 @@ impl OpenAIClient {
         status: StatusCode,
         response: reqwest::Response,
     ) -> EmbeddingError {
+        use crate::embedding::config::Provider;
+
         // Try to parse error response
         let error_detail = response
             .json::<ErrorResponse>()
@@ -239,9 +271,21 @@ impl OpenAIClient {
             .map(|e| e.error.message)
             .unwrap_or_else(|| "Unknown error".to_string());
 
+        // Include provider context in error messages
+        let provider_name = match self.config.provider {
+            Provider::OpenAI => "OpenAI",
+            Provider::Ollama => "Ollama",
+            Provider::Cohere => "Cohere",
+            Provider::Local => "Local",
+        };
+
         let api_error = match status {
-            StatusCode::UNAUTHORIZED => ApiError::Authentication(error_detail),
-            StatusCode::BAD_REQUEST => ApiError::BadRequest(error_detail),
+            StatusCode::UNAUTHORIZED => {
+                ApiError::Authentication(format!("{} API: {}", provider_name, error_detail))
+            }
+            StatusCode::BAD_REQUEST => {
+                ApiError::BadRequest(format!("{} API: {}", provider_name, error_detail))
+            }
             StatusCode::TOO_MANY_REQUESTS => {
                 // Default to 1 second if no retry-after header
                 ApiError::RateLimit {
@@ -250,17 +294,22 @@ impl OpenAIClient {
             }
             StatusCode::FORBIDDEN => {
                 if error_detail.to_lowercase().contains("quota") {
-                    ApiError::QuotaExceeded(error_detail)
+                    ApiError::QuotaExceeded(format!("{} API: {}", provider_name, error_detail))
                 } else {
-                    ApiError::Authentication(error_detail)
+                    ApiError::Authentication(format!("{} API: {}", provider_name, error_detail))
                 }
             }
-            StatusCode::SERVICE_UNAVAILABLE => ApiError::ModelUnavailable(error_detail),
+            StatusCode::SERVICE_UNAVAILABLE => {
+                ApiError::ModelUnavailable(format!("{} API: {}", provider_name, error_detail))
+            }
             _ if status.is_server_error() => ApiError::ServerError {
                 status: status.as_u16(),
-                message: error_detail,
+                message: format!("{} API: {}", provider_name, error_detail),
             },
-            _ => ApiError::InvalidResponse(format!("HTTP {}: {}", status, error_detail)),
+            _ => ApiError::InvalidResponse(format!(
+                "{} API - HTTP {}: {}",
+                provider_name, status, error_detail
+            )),
         };
 
         EmbeddingError::Api(api_error)
@@ -318,6 +367,27 @@ mod tests {
         config.provider = Provider::Local; // Local provider doesn't need API key
         let client = OpenAIClient::new(config);
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_ollama_client_creation() {
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "nomic-embed-text".to_string(),
+            dimension: 768,
+            cache: CacheConfig::default(),
+            batch_size: 100,
+            retry: RetryConfig::default(),
+            api_key: None, // Ollama doesn't need API key
+            api_endpoint: None,
+        };
+        let client = OpenAIClient::new(config);
+        assert!(client.is_ok());
+
+        let client = client.unwrap();
+        assert_eq!(client.config().provider, Provider::Ollama);
+        assert_eq!(client.config().model, "nomic-embed-text");
+        assert_eq!(client.config().api_endpoint_url(), "http://localhost:11434/api/embeddings");
     }
 
     #[test]
