@@ -1,26 +1,47 @@
 # @crewchief/maproom-mcp
 
-Maproom MCP server with local LLM embeddings - zero configuration required.
+Maproom MCP server with local LLM embeddings - **zero configuration required**.
 
-This package provides a fully containerized semantic code search service powered by:
-- **PostgreSQL 16** with pgvector extension for hybrid search
-- **Ollama** with nomic-embed-text model for local embeddings (768 dimensions)
-- **Maproom** indexer and MCP server built in Rust
+Add one line to your `.mcp.json` and get semantic code search powered by local AI. No API keys, no cloud services, no complex setup.
 
 ## Features
 
-- Zero configuration - everything runs in Docker containers
-- Local LLM embeddings - no API keys or cloud services required
-- Hybrid search - combines vector similarity and full-text search
-- Tree-sitter powered code parsing for TypeScript, JavaScript, Rust, and more
-- MCP (Model Context Protocol) server for AI assistant integration
+✨ **Zero Configuration** - Works out of the box with Docker
+🔒 **100% Local** - No API keys, no cloud dependencies, complete privacy
+🚀 **Fast Hybrid Search** - Vector similarity + full-text search with PostgreSQL
+🤖 **Local LLM** - Ollama with nomic-embed-text (768-dimensional embeddings)
+📦 **Fully Containerized** - Everything runs in Docker, isolated and clean
+🌳 **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
 
-## Prerequisites
+## Quick Start
 
-You must have **Docker** installed and running:
+Add this to your `.mcp.json` configuration file:
 
-- **macOS/Windows**: [Docker Desktop 4.x or later](https://www.docker.com/products/docker-desktop/)
-- **Linux**: Docker Engine with Docker Compose v2 plugin
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"]
+    }
+  }
+}
+```
+
+**That's it!** No other configuration needed.
+
+### Where to find `.mcp.json`:
+
+- **Claude Desktop (macOS)**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Claude Desktop (Windows)**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Cursor**: `.cursor/mcp.json` in your project root
+
+## System Requirements
+
+- **Docker Desktop 4.x+** ([Install Docker](https://docs.docker.com/get-docker/))
+- **4-8 GB RAM** available for Docker
+- **5 GB disk space** (images + model + database)
+- **Supported OS**: macOS, Linux, Windows with WSL2
 
 Verify Docker is running:
 ```bash
@@ -28,84 +49,59 @@ docker --version
 docker compose version
 ```
 
-## Installation
+## What to Expect
 
-No installation required! Run directly with npx:
+### First Run (2-5 minutes)
+The first time you use Maproom, it will:
+1. Download Docker images (~1.5 GB compressed)
+2. Download the nomic-embed-text model (~275 MB)
+3. Initialize PostgreSQL database with pgvector
+4. Start all three services (postgres, ollama, maproom-mcp)
 
-```bash
-npx @crewchief/maproom-mcp
+Progress indicators will show each step. This happens once.
+
+### Subsequent Runs (10-20 seconds)
+After the first run, startup is fast:
+- Images and model are cached
+- Services start from Docker cache
+- Database persists between sessions
+
+## Environment Variables
+
+Customize behavior with environment variables in your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "LOG_LEVEL": "debug",
+        "EMBEDDING_MODEL": "nomic-embed-text"
+      }
+    }
+  }
+}
 ```
 
-Or install globally:
+Available variables:
+- `LOG_LEVEL` - Logging verbosity: `error`, `warn`, `info`, `debug` (default: `info`)
+- `EMBEDDING_MODEL` - Ollama model to use (default: `nomic-embed-text`)
+- `EMBEDDING_DIMENSION` - Vector dimensions (default: `768`)
 
-```bash
-npm install -g @crewchief/maproom-mcp
-maproom-mcp
-```
-
-## Quick Start
-
-### 1. Start the Maproom stack
-
-```bash
-npx @crewchief/maproom-mcp start
-```
-
-This will:
-- Pull required Docker images (PostgreSQL, Ollama, Maproom)
-- Download the nomic-embed-text embedding model (~274MB)
-- Initialize the PostgreSQL database with pgvector schema
-- Start all services in the background
-
-**Note**: First run may take 5-10 minutes to download the embedding model.
-
-### 2. Check service status
-
-```bash
-npx @crewchief/maproom-mcp status
-```
-
-### 3. View logs
-
-```bash
-npx @crewchief/maproom-mcp logs
-```
-
-### 4. Stop the stack
-
-```bash
-npx @crewchief/maproom-mcp stop
-```
-
-## Configuration
-
-### Environment Variables
-
-You can customize the stack behavior using environment variables:
-
-- `MAPROOM_PORT` - MCP server port (default: 3000)
-- `OLLAMA_PORT` - Ollama API port (default: 11434)
-- `HOST_WORKSPACE` - Path to workspace directory to index (default: /workspace)
-- `RUST_LOG` - Log level for Maproom service (default: info)
-
-Example:
-
-```bash
-MAPROOM_PORT=8080 npx @crewchief/maproom-mcp start
-```
-
-### Persistent Data
+## Data Persistence
 
 All data is stored in Docker volumes:
-- `maproom-data` - PostgreSQL database (indexed code, embeddings)
-- `ollama-models` - Downloaded Ollama models
-- `maproom-config` - Maproom configuration
+- `maproom-data` - PostgreSQL database (indexed code + embeddings)
+- `ollama-models` - Downloaded Ollama models (~275 MB)
+- `maproom-logs` - MCP server logs
+- `maproom-init-sql` - Database initialization script
 
-To reset all data:
+Your indexed code and embeddings persist between sessions. To completely reset:
 
 ```bash
-npx @crewchief/maproom-mcp stop
-docker volume rm maproom-data ollama-models maproom-config
+docker volume rm maproom-data ollama-models maproom-logs maproom-init-sql
 ```
 
 ## Troubleshooting
@@ -163,22 +159,23 @@ npx @crewchief/maproom-mcp start
 
 ## Architecture
 
-The stack consists of three services:
+The stack consists of three Docker services orchestrated automatically:
 
-1. **PostgreSQL** (pgvector/pgvector:pg16)
+1. **PostgreSQL 16** (`pgvector/pgvector:pg16`)
    - Vector database with pgvector extension
    - Stores code chunks, embeddings, and relationships
-   - Hybrid search combining vector similarity and full-text search
+   - Hybrid search combining full-text (tsvector) and vector similarity (ivfflat)
 
-2. **Ollama** (ollama/ollama:latest)
+2. **Ollama** (`ollama/ollama:latest`)
    - Local LLM inference server
-   - Runs nomic-embed-text model for 768-dimension embeddings
-   - No API keys or cloud dependencies
+   - Runs nomic-embed-text model for 768-dimensional embeddings
+   - Completely offline, no API keys or cloud dependencies
 
-3. **Maproom** (custom Rust binary)
-   - Code indexer using tree-sitter for parsing
-   - MCP server for AI assistant integration
-   - Handles search queries and context assembly
+3. **Maproom MCP Server** (TypeScript + Node.js)
+   - MCP server implementation following Model Context Protocol
+   - Communicates via stdio with Claude/Cursor
+   - Provides tools: `search`, `open`, `context`, `upsert`, `status`
+   - Calls Rust indexer binary for code parsing and indexing
 
 ## Documentation
 
