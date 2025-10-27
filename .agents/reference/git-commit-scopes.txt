@@ -10,6 +10,7 @@ ci
 config
 db
 deploy
+docker
 docs
 deps
 perf
