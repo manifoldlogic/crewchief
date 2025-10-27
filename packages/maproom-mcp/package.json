@@ -21,10 +21,10 @@
     "build": "tsc",
     "test": "node bin/cli.js --test || echo 'Test mode not yet implemented'",
     "dev": "node bin/cli.js",
-    "prepublishOnly": "pnpm build",
-    "release:patch": "pnpm version patch && pnpm publish --access public --no-git-checks",
-    "release:minor": "pnpm version minor && pnpm publish --access public --no-git-checks",
-    "release:major": "pnpm version major && pnpm publish --access public --no-git-checks"
+    "prepublishOnly": "tsc",
+    "release:patch": "npm version patch --no-git-tag-version && npm publish --access public",
+    "release:minor": "npm version minor --no-git-tag-version && npm publish --access public",
+    "release:major": "npm version major --no-git-tag-version && npm publish --access public"
   },
   "keywords": [
     "mcp",
