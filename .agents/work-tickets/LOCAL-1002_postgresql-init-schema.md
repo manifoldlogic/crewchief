@@ -1,9 +1,9 @@
 # Ticket: LOCAL-1002: Write PostgreSQL init.sql schema
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer
@@ -26,15 +26,15 @@ The schema must support:
 This ticket is part of Phase 1 (Core Infrastructure) and runs in parallel with LOCAL-1001 (Dockerfile creation).
 
 ## Acceptance Criteria
-- [ ] init.sql file created in `config/` directory at project root
-- [ ] Schema creates successfully in PostgreSQL 16 with pgvector extension
-- [ ] All tables (repositories, worktrees, files, chunks, chunk_edges, stats) are defined
-- [ ] Vector columns use correct dimension (768) for nomic-embed-text embeddings
-- [ ] ivfflat indexes configured for vector similarity search on code_embedding and text_embedding columns
-- [ ] GIN index configured for full-text search on fts_tokens tsvector column
-- [ ] Foreign key constraints enable proper cascade deletes (deleting a repo deletes all worktrees, files, chunks, edges)
-- [ ] Standard indexes on file_id, kind, from_chunk_id, to_chunk_id for graph traversal performance
-- [ ] Schema can be loaded successfully via docker-entrypoint-initdb.d mechanism
+- [x] init.sql file created in `config/` directory at project root
+- [x] Schema creates successfully in PostgreSQL 16 with pgvector extension
+- [x] All tables (repositories, worktrees, files, chunks, chunk_edges, stats) are defined
+- [x] Vector columns use correct dimension (768) for nomic-embed-text embeddings
+- [x] ivfflat indexes configured for vector similarity search on code_embedding and text_embedding columns
+- [x] GIN index configured for full-text search on fts_tokens tsvector column
+- [x] Foreign key constraints enable proper cascade deletes (deleting a repo deletes all worktrees, files, chunks, edges)
+- [x] Standard indexes on file_id, kind, from_chunk_id, to_chunk_id for graph traversal performance
+- [x] Schema can be loaded successfully via docker-entrypoint-initdb.d mechanism
 
 ## Technical Requirements
 - **Database**: PostgreSQL 16 with pgvector extension
