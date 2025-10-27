@@ -1,8 +1,8 @@
 # Ticket: LOCAL-2503: Update npm Package Structure for Publication
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (services start successfully, all healthy)
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents
@@ -499,17 +499,91 @@ This ticket prepares the package; LOCAL-3008 will handle actual publication. Pre
 - **Mitigation**: Verify GitHub URLs are correct
 - **Mitigation**: Check package.json against published packages
 
+## Implementation Notes
+
+### Changes Made
+
+1. **Updated `/workspace/packages/maproom-mcp/package.json`**:
+   - Added `files` array with specific file inclusions (avoiding Rust binaries)
+   - Added dependencies: `pg`, `pino`, `zod`, `execa`
+   - Added devDependencies: `typescript`, `@types/node`, `@types/pg`
+   - Added scripts: `build`, `prepublishOnly`, `test`, `dev`
+   - Added metadata: bugs URL, homepage URL, engines requirement
+   - Final package size: **68KB** (well under 500KB target)
+
+2. **Updated `/workspace/packages/maproom-mcp/.npmignore`**:
+   - Excluded Rust binaries (bin/darwin-arm64/, bin/linux-arm64/, etc.)
+   - Excluded unnecessary config files (Dockerfile.maproom, postgresql.conf)
+   - Excluded development files (docs/, examples/, scripts/, tests/)
+
+3. **Updated `/workspace/packages/maproom-mcp/bin/cli.js`**:
+   - Added copying of Dockerfile.mcp-server to ~/.maproom-mcp
+   - Added copying of TypeScript source (src/) for Docker build
+   - Added copying of package.json and tsconfig.json for Docker build
+   - Added `copyRecursive()` helper function for directory copying
+   - CLI now copies all files needed for Docker build to ~/.maproom-mcp/
+
+4. **Created `/workspace/packages/maproom-mcp/config/Dockerfile.mcp-server`**:
+   - Copied from root Dockerfile.mcp-server created in LOCAL-2501
+
+5. **Verified files exist**:
+   - LICENSE (MIT license, already present)
+   - README.md (comprehensive docs, already present)
+   - tsconfig.json (already present)
+
+### Test Results
+
+```bash
+# Package build successful
+npm run build  # TypeScript compiled successfully
+npm pack       # Created 68KB tarball (40 files)
+
+# Local installation test
+npm install ./crewchief-maproom-mcp-1.0.0.tgz  # Installed successfully
+
+# CLI execution test
+./node_modules/.bin/maproom-mcp
+# ✓ All pre-flight checks passed
+# ✓ Configuration copied to ~/.maproom-mcp
+# ✓ Docker services started
+# ✓ All three services healthy (postgres, ollama, maproom-mcp)
+
+# Container verification
+docker ps
+# maproom-mcp         Up (healthy)
+# maproom-postgres    Up (healthy)
+# maproom-ollama      Up (healthy)
+```
+
+### Acceptance Criteria Status
+
+- [x] `package.json` updated with all required metadata and dependencies
+- [x] `package.json` has correct `bin` entry: `"maproom-mcp": "./bin/cli.js"`
+- [x] `package.json` has `files` array listing all files to include
+- [x] `.npmignore` updated to exclude unnecessary files
+- [x] `bin/cli.js` is executable and has proper shebang
+- [x] Docker configuration directory created: `config/`
+  - [x] `config/docker-compose.yml`
+  - [x] `config/Dockerfile.mcp-server`
+  - [x] `config/init.sql`
+- [x] TypeScript source included: `src/`
+- [x] `package.json` scripts added: `build`, `test`, `prepublishOnly`, `dev`
+- [x] All dependencies correctly specified (runtime vs. dev)
+- [x] Package builds successfully: `npm pack` creates tarball
+- [x] Tarball size is reasonable (**68KB < 500KB target**)
+- [x] Test installation: `npx ./crewchief-maproom-mcp-*.tgz` works
+- [x] README.md includes usage instructions (already complete)
+- [x] LICENSE file included (MIT license)
+- [x] Repository metadata correct in package.json
+
 ## Files/Packages Affected
-- `/workspace/packages/maproom-mcp/package.json` (updated)
-- `/workspace/packages/maproom-mcp/.npmignore` (new file)
-- `/workspace/packages/maproom-mcp/LICENSE` (new file, if missing)
-- `/workspace/packages/maproom-mcp/README.md` (updated, basic version)
-- `/workspace/packages/maproom-mcp/config/` (new directory)
-  - `docker-compose.yml` (copied from workspace root)
-  - `Dockerfile.mcp-server` (copied from LOCAL-2501)
-  - `init.sql` (copied from LOCAL-1002)
-- `/workspace/packages/maproom-mcp/tsconfig.json` (verify/update)
-- `/workspace/packages/maproom-mcp/bin/cli.js` (verify executable)
+- `/workspace/packages/maproom-mcp/package.json` (updated - dependencies, files array, scripts)
+- `/workspace/packages/maproom-mcp/.npmignore` (updated - excluded binaries and dev files)
+- `/workspace/packages/maproom-mcp/bin/cli.js` (updated - copy all build files to ~/.maproom-mcp)
+- `/workspace/packages/maproom-mcp/config/Dockerfile.mcp-server` (copied from root)
+- `/workspace/packages/maproom-mcp/LICENSE` (verified present)
+- `/workspace/packages/maproom-mcp/README.md` (verified present)
+- `/workspace/packages/maproom-mcp/tsconfig.json` (verified present)
 
 ## Success Metrics
 After implementation:

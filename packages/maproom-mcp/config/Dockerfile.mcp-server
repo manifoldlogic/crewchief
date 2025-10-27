@@ -1,0 +1,76 @@
+# ========================================
+# Stage 1: Build Stage
+# ========================================
+FROM node:20-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++
+
+# Set working directory
+WORKDIR /build
+
+# Copy package files first for better caching
+COPY package.json ./
+
+# Install all dependencies (including devDependencies for TypeScript compilation)
+# Create minimal package.json with required dependencies if original is missing them
+RUN echo '{"dependencies":{"pg":"^8.11.3","pino":"^8.16.2","zod":"^3.22.4","execa":"^8.0.1"},"devDependencies":{"typescript":"^5.3.3","@types/node":"^20.10.5","@types/pg":"^8.10.9"}}' > temp-package.json && \
+    npm install --production=false --package-lock=false --no-audit --no-fund pg pino zod execa typescript @types/node @types/pg || \
+    (cat temp-package.json >> package.json && npm install --production=false --package-lock=false --no-audit --no-fund)
+
+# Copy TypeScript config and source code
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+# Compile TypeScript to JavaScript
+RUN npx tsc
+
+# ========================================
+# Stage 2: Runtime Stage
+# ========================================
+FROM node:20-alpine
+
+# Install runtime dependencies only (ca-certificates for HTTPS, postgresql-client for potential health checks)
+RUN apk add --no-cache \
+    ca-certificates \
+    postgresql-client
+
+# Use existing node user (uid 1000) for security
+# No need to create a new user as node:alpine already has a non-root user
+
+# Create necessary directories
+RUN mkdir -p /app/dist /app/logs && \
+    chown -R node:node /app
+
+# Set working directory
+WORKDIR /app
+
+# Copy package.json for runtime dependency installation
+COPY package.json ./
+
+# Install production dependencies only (no devDependencies)
+# Ensure pg, pino, zod, and execa are installed
+RUN npm install --production --no-audit --no-fund --no-optional pg pino zod execa || \
+    (echo '{"dependencies":{"pg":"^8.11.3","pino":"^8.16.2","zod":"^3.22.4","execa":"^8.0.1"}}' > package.json && \
+     npm install --production --no-audit --no-fund --no-optional)
+
+# Copy compiled JavaScript from build stage
+COPY --from=builder /build/dist ./dist
+COPY --from=builder /build/src/tools ./src/tools
+
+# Switch to non-root user
+USER node
+
+# Health check: Verify process is running and database is accessible
+# Since this is a stdio service, we check if the process can connect to the database
+# Note: This will be overridden by docker-compose.yml with proper connection parameters
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD pg_isready -h postgres -U maproom || exit 1
+
+# Set the entrypoint to node running the MCP server
+ENTRYPOINT ["node", "/app/dist/index.js"]
+
+# No CMD needed - MCP server runs in stdio mode by default

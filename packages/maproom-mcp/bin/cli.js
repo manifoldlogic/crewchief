@@ -18,6 +18,7 @@ const os = require('os');
 const CONFIG_DIR = path.join(os.homedir(), '.maproom-mcp');
 const COMPOSE_FILE = path.join(CONFIG_DIR, 'docker-compose.yml');
 const INIT_SQL_FILE = path.join(CONFIG_DIR, 'init.sql');
+const DOCKERFILE_FILE = path.join(CONFIG_DIR, 'Dockerfile.mcp-server');
 const MAX_HEALTH_WAIT_MS = 120000; // 2 minutes
 const HEALTH_CHECK_INTERVAL_MS = 2000; // 2 seconds
 
@@ -114,7 +115,82 @@ function setupConfigDirectory() {
     }
   }
 
+  // Copy Dockerfile.mcp-server from package
+  if (!fs.existsSync(DOCKERFILE_FILE)) {
+    const srcDockerfile = path.join(__dirname, '..', 'config', 'Dockerfile.mcp-server');
+
+    if (fs.existsSync(srcDockerfile)) {
+      try {
+        fs.copyFileSync(srcDockerfile, DOCKERFILE_FILE);
+        console.error('✓ Copied Dockerfile.mcp-server to', CONFIG_DIR);
+      } catch (error) {
+        console.error('⚠️  Warning: Failed to copy Dockerfile.mcp-server:', error.message);
+      }
+    }
+  }
+
+  // Copy TypeScript source files for Docker build
+  const srcDir = path.join(__dirname, '..', 'src');
+  const destSrcDir = path.join(CONFIG_DIR, 'src');
+
+  if (!fs.existsSync(destSrcDir) && fs.existsSync(srcDir)) {
+    try {
+      copyRecursive(srcDir, destSrcDir);
+      console.error('✓ Copied TypeScript source to', CONFIG_DIR);
+    } catch (error) {
+      console.error('⚠️  Warning: Failed to copy TypeScript source:', error.message);
+    }
+  }
+
+  // Copy package.json for Docker build
+  const srcPackageJson = path.join(__dirname, '..', 'package.json');
+  const destPackageJson = path.join(CONFIG_DIR, 'package.json');
+
+  if (!fs.existsSync(destPackageJson) && fs.existsSync(srcPackageJson)) {
+    try {
+      fs.copyFileSync(srcPackageJson, destPackageJson);
+      console.error('✓ Copied package.json to', CONFIG_DIR);
+    } catch (error) {
+      console.error('⚠️  Warning: Failed to copy package.json:', error.message);
+    }
+  }
+
+  // Copy tsconfig.json for Docker build
+  const srcTsConfig = path.join(__dirname, '..', 'tsconfig.json');
+  const destTsConfig = path.join(CONFIG_DIR, 'tsconfig.json');
+
+  if (!fs.existsSync(destTsConfig) && fs.existsSync(srcTsConfig)) {
+    try {
+      fs.copyFileSync(srcTsConfig, destTsConfig);
+      console.error('✓ Copied tsconfig.json to', CONFIG_DIR);
+    } catch (error) {
+      console.error('⚠️  Warning: Failed to copy tsconfig.json:', error.message);
+    }
+  }
+
   console.error('✓ Configuration ready:', CONFIG_DIR);
+}
+
+/**
+ * Recursively copy directory
+ */
+function copyRecursive(src, dest) {
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      copyRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
 }
 
 /**

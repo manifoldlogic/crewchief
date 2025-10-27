@@ -11,6 +11,9 @@ tests/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+docs/
+examples/
+scripts/
 
 # Editor directories
 .vscode/
@@ -22,7 +25,23 @@ yarn-error.log*
 # Build artifacts
 node_modules/
 .cache/
+coverage/
+*.tgz
 
 # Git files
 .git/
 .gitignore
+
+# Rust binaries (MCP server doesn't need these)
+bin/darwin-arm64/
+bin/darwin-x64/
+bin/linux-arm64/
+bin/linux-x64/
+bin/win32-x64/
+
+# Config files not needed in npm package
+.npmrc
+.nvmrc
+vitest.config.ts
+config/Dockerfile.maproom
+config/postgresql.conf
