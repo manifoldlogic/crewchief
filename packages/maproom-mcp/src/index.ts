@@ -359,12 +359,16 @@ async function handleStatus(params: any): Promise<any> {
       sum + repo.worktrees.reduce((wsum: number, wt: any) => wsum + wt.chunkCount, 0), 0)
     
     let hint = ''
+    let nextStep: string | undefined
+
     if (Object.keys(repos).length === 0) {
-      hint = 'No repositories indexed yet. Use the upsert tool to index files first.'
+      hint = '⚠️ No repositories indexed yet.\n\nTo get started:\n1. Use the scan tool to index a repository\n2. Then use search to find your code'
+      nextStep = 'Run scan tool to index your first repository'
     } else if (totalFiles === 0) {
-      hint = 'Repository exists but no files indexed. Use the upsert tool to index files.'
+      hint = '⚠️ Repository found but no files indexed.\n\nTo fix:\n1. Run scan tool to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+      nextStep = 'Run scan tool to index files'
     } else {
-      hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks. Common searches: "main function", "error handling", "database query"`
+      hint = `✓ Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
     }
     
     return {
@@ -374,6 +378,7 @@ async function handleStatus(params: any): Promise<any> {
       totalFiles,
       totalChunks,
       hint,
+      nextStep,
       searchTips: [
         'Use simple terms: "auth" instead of "authentication_handler"',
         'Search concepts: "message bus" or "event handling"',
@@ -589,9 +594,10 @@ async function handleSearch(params: any): Promise<any> {
       return {
         hits: [],
         error: 'Repository not found',
-        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. For this codebase, use repo:"crewchief"\n3. If needed, run upsert tool to index files`,
+        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. Run scan tool to index this repository\n3. Then search again`,
         availableRepos,
-        suggestion
+        suggestion,
+        nextStep: 'Use the scan tool to index this repository before searching'
       }
     }
     const repoId = repoRows[0].id
@@ -740,9 +746,9 @@ async function handleSearch(params: any): Promise<any> {
       const statusHint = 'Run the status tool first to see what\'s indexed and available for search'
       
       // Build comprehensive hint
-      result.hint = worktreeInfo 
-        ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use upsert tool\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
-        : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine`
+      result.hint = worktreeInfo
+        ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use scan tool to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
+        : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Use scan tool to index it first`
       
       if (suggestions.length > 0) {
         result.suggestions = suggestions
