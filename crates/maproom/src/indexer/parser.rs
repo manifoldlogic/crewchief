@@ -357,12 +357,13 @@ fn extract_table(_source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
     chunks.push(SymbolChunk {
         symbol_name: Some(format!("Table {}x{}", row_count, column_count)),
-        kind: "table".to_string(),
+        kind: "markdown_section".to_string(),
         signature: None,
         docstring: None,
         start_line,
         end_line,
         metadata: Some(serde_json::json!({
+            "section_type": "table",
             "rows": row_count,
             "columns": column_count,
             "has_header": has_header
@@ -400,7 +401,7 @@ fn extract_list(_source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
     chunks.push(SymbolChunk {
         symbol_name: Some(format!("List ({} items)", item_count)),
-        kind: "list".to_string(),
+        kind: "markdown_section".to_string(),
         signature: None,
         docstring: None,
         start_line,

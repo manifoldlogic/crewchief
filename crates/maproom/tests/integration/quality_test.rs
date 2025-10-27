@@ -136,8 +136,16 @@ fn test_parser_accuracy_readme() {
 
         let actual_headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
         let actual_code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
-        let actual_tables = chunks.iter().filter(|c| c.kind == "table").count();
-        let actual_lists = chunks.iter().filter(|c| c.kind == "list").count();
+        // Tables now use markdown_section kind (MAPROOM-1001 fix)
+        let actual_tables = chunks.iter().filter(|c| {
+            c.kind == "markdown_section" &&
+            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+        }).count();
+        // Lists now use markdown_section kind (MAPROOM-1001 fix)
+        let actual_lists = chunks.iter().filter(|c| {
+            c.kind == "markdown_section" &&
+            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+        }).count();
         let actual_links = chunks.iter().filter(|c| c.kind == "link").count();
 
         let total_expected = doc.expected_headings + doc.expected_code_blocks
@@ -185,8 +193,16 @@ fn test_parser_accuracy_claude_md() {
 
         let actual_headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
         let actual_code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
-        let actual_tables = chunks.iter().filter(|c| c.kind == "table").count();
-        let actual_lists = chunks.iter().filter(|c| c.kind == "list").count();
+        // Tables now use markdown_section kind (MAPROOM-1001 fix)
+        let actual_tables = chunks.iter().filter(|c| {
+            c.kind == "markdown_section" &&
+            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+        }).count();
+        // Lists now use markdown_section kind (MAPROOM-1001 fix)
+        let actual_lists = chunks.iter().filter(|c| {
+            c.kind == "markdown_section" &&
+            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+        }).count();
 
         println!("\n{} Parser Accuracy:", doc.name);
         println!("  Headings: {} / {} ({:.1}%)", actual_headings, doc.expected_headings,
@@ -557,8 +573,16 @@ fn test_comprehensive_accuracy_report() {
 
             let actual_headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
             let actual_code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
-            let actual_tables = chunks.iter().filter(|c| c.kind == "table").count();
-            let actual_lists = chunks.iter().filter(|c| c.kind == "list").count();
+            // Tables now use markdown_section kind (MAPROOM-1001 fix)
+            let actual_tables = chunks.iter().filter(|c| {
+                c.kind == "markdown_section" &&
+                c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+            }).count();
+            // Lists now use markdown_section kind (MAPROOM-1001 fix)
+            let actual_lists = chunks.iter().filter(|c| {
+                c.kind == "markdown_section" &&
+                c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+            }).count();
 
             let expected = doc.expected_headings + doc.expected_code_blocks
                 + doc.expected_tables + doc.expected_lists;

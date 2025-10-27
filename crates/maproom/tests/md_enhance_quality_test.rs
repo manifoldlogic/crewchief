@@ -161,8 +161,16 @@ fn test_parser_accuracy_readme() {
 
         let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
         let code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
-        let tables = chunks.iter().filter(|c| c.kind == "table").count();
-        let lists = chunks.iter().filter(|c| c.kind == "list").count();
+        // Tables now use markdown_section kind (MAPROOM-1001 fix)
+        let tables = chunks.iter().filter(|c| {
+            c.kind == "markdown_section" &&
+            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+        }).count();
+        // Lists now use markdown_section kind (MAPROOM-1001 fix)
+        let lists = chunks.iter().filter(|c| {
+            c.kind == "markdown_section" &&
+            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+        }).count();
 
         println!("\nREADME.md Parser Accuracy:");
         println!("  Headings: {}", headings);

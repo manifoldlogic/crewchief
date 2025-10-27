@@ -438,8 +438,11 @@ End of table.
 
     let chunks = parser::extract_chunks(source, "md");
 
-    // Should extract heading and table
-    let tables: Vec<_> = chunks.iter().filter(|c| c.kind == "table").collect();
+    // Should extract heading and table (as markdown_section after MAPROOM-1001 fix)
+    let tables: Vec<_> = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+    }).collect();
     assert_eq!(tables.len(), 1, "Expected 1 table");
 
     let table = tables[0];
@@ -449,6 +452,7 @@ End of table.
 
     // Check metadata
     if let Some(metadata) = &table.metadata {
+        assert_eq!(metadata.get("section_type").unwrap().as_str().unwrap(), "table");
         assert_eq!(metadata.get("rows").unwrap().as_u64().unwrap(), 4);
         assert_eq!(metadata.get("columns").unwrap().as_u64().unwrap(), 3);
         assert_eq!(metadata.get("has_header").unwrap().as_bool().unwrap(), true);
@@ -466,12 +470,16 @@ fn test_markdown_empty_table() {
 
     let chunks = parser::extract_chunks(source, "md");
 
-    // Should extract table even if it has only header
-    let tables: Vec<_> = chunks.iter().filter(|c| c.kind == "table").collect();
+    // Should extract table even if it has only header (as markdown_section after MAPROOM-1001 fix)
+    let tables: Vec<_> = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+    }).collect();
     assert_eq!(tables.len(), 1, "Expected 1 table (header only)");
 
     let table = tables[0];
     if let Some(metadata) = &table.metadata {
+        assert_eq!(metadata.get("section_type").unwrap().as_str().unwrap(), "table");
         assert_eq!(metadata.get("rows").unwrap().as_u64().unwrap(), 1);
         assert_eq!(metadata.get("columns").unwrap().as_u64().unwrap(), 2);
     }
@@ -493,8 +501,11 @@ That's the list.
 
     let chunks = parser::extract_chunks(source, "md");
 
-    // Should extract heading and list
-    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    // Should extract heading and list (as markdown_section after MAPROOM-1001 fix)
+    let lists: Vec<_> = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).collect();
     assert_eq!(lists.len(), 1, "Expected 1 list");
 
     let list = lists[0];
@@ -528,8 +539,11 @@ All done!
 
     let chunks = parser::extract_chunks(source, "md");
 
-    // Should extract heading and list
-    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    // Should extract heading and list (as markdown_section after MAPROOM-1001 fix)
+    let lists: Vec<_> = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).collect();
     assert_eq!(lists.len(), 1, "Expected 1 ordered list");
 
     let list = lists[0];
@@ -559,7 +573,11 @@ fn test_markdown_nested_list() {
 
     // Note: Nested lists are extracted as separate list chunks
     // The outer list and inner list are separate nodes in tree-sitter-md
-    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    // Lists are now mapped to markdown_section kind (MAPROOM-1001 fix)
+    let lists: Vec<_> = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).collect();
     assert!(lists.len() >= 1, "Expected at least 1 list (outer list)");
 
     // Check that we extracted at least the outer list
@@ -589,10 +607,16 @@ End of document.
 
     let chunks = parser::extract_chunks(source, "md");
 
-    // Should extract 2 headings, 1 table, and 1 list
+    // Should extract 2 headings, 1 table, and 1 list (as markdown_section after MAPROOM-1001)
     let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
-    let tables = chunks.iter().filter(|c| c.kind == "table").count();
-    let lists = chunks.iter().filter(|c| c.kind == "list").count();
+    let tables = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
+    }).count();
+    let lists = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).count();
 
     assert!(headings >= 2, "Expected at least 2 headings");
     assert_eq!(tables, 1, "Expected 1 table");
@@ -607,7 +631,11 @@ fn test_markdown_single_item_list() {
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let lists: Vec<_> = chunks.iter().filter(|c| c.kind == "list").collect();
+    // Lists are now mapped to markdown_section kind (MAPROOM-1001 fix)
+    let lists: Vec<_> = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).collect();
     assert_eq!(lists.len(), 1, "Expected 1 list");
 
     let list = lists[0];
@@ -970,4 +998,85 @@ Connection info.
         assert_eq!(parent_path, "Project Name > API Reference > Database",
             "Connections should have correct breadcrumb after transitioning sections");
     }
+}
+
+// MAPROOM-1001: Test that lists use valid enum value (markdown_section, not "list")
+#[test]
+fn test_maproom_1001_list_uses_valid_enum() {
+    // This test verifies the fix for MAPROOM-1001
+    // Lists must use "markdown_section" kind to avoid PostgreSQL enum errors
+    let source = r#"# Test Document
+
+Some intro text.
+
+## Lists Section
+
+Unordered list:
+- Item 1
+- Item 2
+- Item 3
+
+Ordered list:
+1. First
+2. Second
+3. Third
+
+Nested list:
+- Parent item
+  - Nested item 1
+  - Nested item 2
+- Another parent
+
+Task list:
+- [ ] Todo item
+- [x] Done item
+
+End of document.
+"#;
+
+    let chunks = parser::extract_chunks(source, "md");
+
+    // Find all list chunks
+    let lists: Vec<_> = chunks.iter().filter(|c| {
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).collect();
+
+    // Should extract multiple lists
+    assert!(lists.len() >= 3, "Expected at least 3 lists (unordered, ordered, nested)");
+
+    // CRITICAL: All lists must use "markdown_section" kind, not "list"
+    // This prevents PostgreSQL enum errors during database insertion
+    for list in &lists {
+        assert_eq!(list.kind, "markdown_section",
+            "List '{}' must use 'markdown_section' kind to avoid enum error. \
+             The PostgreSQL symbol_kind enum does not include 'list' as a valid value.",
+            list.symbol_name.as_ref().unwrap_or(&"unknown".to_string()));
+
+        // Verify metadata still contains list-specific information
+        if let Some(metadata) = &list.metadata {
+            assert!(metadata.get("list_type").is_some(),
+                "List should have list_type in metadata");
+            assert!(metadata.get("item_count").is_some(),
+                "List should have item_count in metadata");
+        } else {
+            panic!("List should have metadata with list_type and item_count");
+        }
+    }
+
+    // Verify different list types are detected correctly
+    let unordered = lists.iter().find(|l| {
+        l.metadata.as_ref()
+            .and_then(|m| m.get("list_type"))
+            .and_then(|v| v.as_str())
+            == Some("unordered")
+    }).expect("Should find unordered list");
+    assert!(unordered.symbol_name.as_ref().unwrap().contains("items"));
+
+    let ordered = lists.iter().find(|l| {
+        l.metadata.as_ref()
+            .and_then(|m| m.get("list_type"))
+            .and_then(|v| v.as_str())
+            == Some("ordered")
+    }).expect("Should find ordered list");
+    assert!(ordered.symbol_name.as_ref().unwrap().contains("items"));
 }

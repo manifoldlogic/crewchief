@@ -88,7 +88,11 @@ fn test_performance_large_file_parsing() {
 
     let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
     let code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
-    let lists = chunks.iter().filter(|c| c.kind == "list").count();
+    // Lists now use markdown_section kind (MAPROOM-1001 fix)
+    let lists = chunks.iter().filter(|c| {
+        c.kind == "markdown_section" &&
+        c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
+    }).count();
 
     println!("Large Document (Generated):");
     println!("  Lines: {}", line_count);
