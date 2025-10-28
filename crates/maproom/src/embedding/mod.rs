@@ -47,6 +47,7 @@ pub mod config;
 pub mod cost_tracker;
 pub mod error;
 pub mod pipeline;
+pub mod provider;
 pub mod service;
 
 // Re-export main types for convenience
@@ -56,4 +57,5 @@ pub use config::{CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryCo
 pub use cost_tracker::{CostEstimate, CostEstimator, CostSnapshot, CostTracker};
 pub use error::{ApiError, CacheError, ConfigError, EmbeddingError};
 pub use pipeline::{EmbeddingPipeline, PipelineConfig, PipelineStats};
+pub use provider::{EmbeddingProvider, ProviderMetrics};
 pub use service::{BatchResult, EmbeddingService};

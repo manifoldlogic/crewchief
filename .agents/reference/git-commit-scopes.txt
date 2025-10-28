@@ -13,6 +13,7 @@ deploy
 docker
 docs
 deps
+embedding
 perf
 search
 tests

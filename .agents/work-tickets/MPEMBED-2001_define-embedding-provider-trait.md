@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-2001: Define EmbeddingProvider trait with object-safe methods
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - provider-abstraction-architect
@@ -23,14 +23,14 @@ The trait must be object-safe for `Box<dyn EmbeddingProvider>` dynamic dispatch 
 This ticket implements the foundation for Phase 2: Provider Abstraction from the MPEMBED multi-provider embedding support plan.
 
 ## Acceptance Criteria
-- [ ] `EmbeddingProvider` trait defined with object-safe methods
-- [ ] `embed(&self, text: String) -> Result<Vector, EmbeddingError>` method declared
-- [ ] `embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError>` method declared
-- [ ] `dimension(&self) -> usize` method declared (returns 768 or 1536)
-- [ ] `provider_name(&self) -> &'static str` method declared (returns "ollama", "google", "openai")
-- [ ] `metrics(&self) -> Option<ProviderMetrics>` optional method declared
-- [ ] Trait requires `Send + Sync` bounds for async safety
-- [ ] Documentation includes trait contract (invariants, thread safety)
+- [x] `EmbeddingProvider` trait defined with object-safe methods
+- [x] `embed(&self, text: String) -> Result<Vector, EmbeddingError>` method declared
+- [x] `embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError>` method declared
+- [x] `dimension(&self) -> usize` method declared (returns 768 or 1536)
+- [x] `provider_name(&self) -> &'static str` method declared (returns "ollama", "google", "openai")
+- [x] `metrics(&self) -> Option<ProviderMetrics>` optional method declared
+- [x] Trait requires `Send + Sync` bounds for async safety
+- [x] Documentation includes trait contract (invariants, thread safety)
 
 ## Technical Requirements
 - File location: `crates/maproom/src/embedding/provider.rs` (NEW FILE)
