@@ -1,7 +1,7 @@
 # Ticket: LOCAL-3007: Update legacy maproom-mcp with deprecation wrapper
 
 ## Status
-- [x] **Task completed** - marked as future enhancement - acceptance criteria met
+- [ ] **Task completed** - DEFERRED as future enhancement (not MVP-critical)
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
 
