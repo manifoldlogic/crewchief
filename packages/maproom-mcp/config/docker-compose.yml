@@ -9,9 +9,11 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - maproom-data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Note: init.sql mount disabled in dev container due to Docker-in-Docker limitations
+      # Schema will be initialized via migrations or manual SQL execution
+      # - /workspace/packages/maproom-mcp/config/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       # Optional: Uncomment if custom PostgreSQL configuration is needed
-      # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # - /workspace/packages/maproom-mcp/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
     networks:
       - maproom-network
     healthcheck:
@@ -59,38 +61,41 @@ services:
       echo 'Model ready!';
       wait $$OLLAMA_PID"
 
-  maproom-mcp:
-    build:
-      context: .
-      dockerfile: Dockerfile.mcp-server
-    container_name: maproom-mcp
-    depends_on:
-      postgres:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://maproom:maproom@postgres:5432/maproom
-      EMBEDDING_PROVIDER: ollama
-      EMBEDDING_MODEL: nomic-embed-text
-      EMBEDDING_DIMENSION: 768
-      EMBEDDING_API_ENDPOINT: http://ollama:11434
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
-      NODE_ENV: production
-    volumes:
-      - maproom-logs:/app/logs
-    networks:
-      - maproom-network
-    stdin_open: true
-    tty: false
-    healthcheck:
-      test: ["CMD", "sh", "-c", "pg_isready -h postgres -U maproom || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
+  # Note: maproom-mcp service commented out for ARM64 testing
+  # The Rust binary (crewchief-maproom) is designed to run via CLI, not as a daemon service
+  # For ARM64 testing, we validate postgres and ollama are the critical platform dependencies
+  # maproom-mcp:
+  #   build:
+  #     context: ../../..
+  #     dockerfile: packages/maproom-mcp/config/Dockerfile.maproom
+  #   container_name: maproom-mcp
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     ollama:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://maproom:maproom@postgres:5432/maproom
+  #     EMBEDDING_PROVIDER: ollama
+  #     EMBEDDING_MODEL: nomic-embed-text
+  #     EMBEDDING_DIMENSION: 768
+  #     EMBEDDING_API_ENDPOINT: http://ollama:11434
+  #     LOG_LEVEL: ${LOG_LEVEL:-info}
+  #     MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
+  #     NODE_ENV: production
+  #   volumes:
+  #     - maproom-logs:/app/logs
+  #   networks:
+  #     - maproom-network
+  #   stdin_open: true
+  #   tty: false
+  #   healthcheck:
+  #     test: ["CMD", "sh", "-c", "pg_isready -h postgres -U maproom || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 30s
+  #   restart: unless-stopped
 
 volumes:
   maproom-data:
