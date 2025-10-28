@@ -198,6 +198,30 @@ cargo test -- --ignored
 cargo test -- --include-ignored
 ```
 
+**Google Cloud Integration Tests:**
+
+Google Vertex AI provider integration tests require real GCP credentials and are marked with `#[ignore]` to prevent accidental execution. These tests validate end-to-end functionality with Google Cloud services.
+
+Prerequisites:
+- GCP project with Vertex AI API enabled
+- Service account with `roles/aiplatform.user` IAM role
+- Service account JSON key file
+
+```bash
+# Set up environment
+export GCP_INTEGRATION_TESTS=1
+export GOOGLE_PROJECT_ID=your-test-project-id
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+
+# Run Google integration tests
+cargo test --test google_provider_integration -- --ignored
+
+# Run specific Google test
+cargo test --test google_provider_integration test_google_provider_single_embed -- --ignored
+```
+
+For detailed setup instructions, see [docs/development/integration-testing.md](docs/development/integration-testing.md).
+
 ### Test Requirements
 
 Integration tests require:
