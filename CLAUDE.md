@@ -280,6 +280,41 @@ mcp__maproom__upsert({
 
 ## Architecture Overview
 
+### Database Architecture: Dual PostgreSQL Setup
+
+CrewChief uses **two separate PostgreSQL instances**:
+
+1. **Devcontainer PostgreSQL** (`postgres:5432`)
+   - **Purpose**: Local development, CLI testing, integration tests
+   - **Connection**: `postgresql://postgres:postgres@postgres:5432/crewchief`
+   - **When to use**: `cargo run`, `cargo test`, developing Maproom features
+   - **Data**: ~79,625 chunks (ephemeral, can be reset)
+   - **Network**: `crewchief-network`
+
+2. **Maproom MCP PostgreSQL** (`maproom-postgres:5432`)
+   - **Purpose**: Production-like MCP service, stable semantic search
+   - **Connection**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
+   - **When to use**: MCP tools, Claude/Cursor integration, `npx @crewchief/maproom-mcp`
+   - **Data**: ~23,218 chunks (persistent, production data)
+   - **Network**: `maproom-network`
+
+**Why two instances?**
+- Isolation: Development changes don't affect MCP service
+- Network safety: Unique hostnames prevent conflicts on shared networks
+- Use-case optimization: Each tuned for specific workload
+- Data separation: Development vs. production-like data
+
+**Quick Reference**:
+```bash
+# Development (inside devcontainer)
+export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
+
+# MCP Service (standalone or from config/)
+export DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
+```
+
+For complete details, see [Database Architecture Documentation](docs/architecture/DATABASE_ARCHITECTURE.md).
+
 ### Multi-Tool CLI System
 
 CrewChief is a multi-tool CLI for git worktree management, semantic code search, and AI agent orchestration. Key architectural components:

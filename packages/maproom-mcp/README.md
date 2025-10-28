@@ -104,7 +104,96 @@ Your indexed code and embeddings persist between sessions. To completely reset:
 docker volume rm maproom-data ollama-models maproom-logs maproom-init-sql
 ```
 
+## Container Management
+
+The Maproom stack uses Docker containers with automatic restart policies. Understanding how to manage these containers will help you troubleshoot effectively.
+
+### Service Status
+
+Check if services are running:
+```bash
+docker compose -f ~/.maproom-mcp/docker-compose.yml ps
+```
+
+### Viewing Logs
+
+View logs without disrupting the MCP connection:
+```bash
+# All services
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs -f
+
+# Specific service
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs -f postgres
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs -f ollama
+```
+
+### Stopping Services
+
+When you need to stop the services completely:
+```bash
+docker compose -f ~/.maproom-mcp/docker-compose.yml down
+```
+
+**Note**: Stopping services will break the MCP connection. You'll need to reload your MCP configuration in Claude/Cursor after restarting.
+
+### Restarting Services (Advanced)
+
+If you must restart a container, understand the consequences:
+
+```bash
+# Restart a specific container (BREAKS MCP CONNECTION)
+docker restart maproom-postgres
+docker restart maproom-ollama
+
+# Restart all services (BREAKS MCP CONNECTION)
+docker compose -f ~/.maproom-mcp/docker-compose.yml restart
+```
+
+**After restart**: You MUST reload your MCP configuration in Claude Desktop or Cursor (see "Connection lost after container restart" in Troubleshooting).
+
+### Health Checks
+
+All services have health checks that run automatically:
+- **PostgreSQL**: Checked every 10 seconds (ready when accepting connections)
+- **Ollama**: Checked every 30 seconds (ready when model is loaded)
+- **Automatic Recovery**: Services with `restart: unless-stopped` policy will automatically restart if they fail
+
+To verify health status:
+```bash
+docker inspect maproom-postgres --format='{{.State.Health.Status}}'
+docker inspect maproom-ollama --format='{{.State.Health.Status}}'
+```
+
 ## Troubleshooting
+
+### Connection lost after container restart
+
+**Symptom**: MCP tools stop working after restarting Docker containers
+
+**Cause**: The MCP client (Claude Code/Cursor) uses stdio transport, which creates a direct process connection. When you restart the container with `docker restart` or `docker-compose restart`, the stdio connection breaks and cannot automatically reconnect.
+
+**Solution**: Reload the MCP configuration to re-establish the connection:
+
+**Claude Desktop**:
+1. Open the settings menu (⌘+,)
+2. Navigate to "Developer" tab
+3. Click "Reload MCP Configuration"
+4. Or restart Claude Desktop entirely
+
+**Cursor**:
+1. Open Command Palette (⌘+Shift+P or Ctrl+Shift+P)
+2. Run "MCP: Reload Configuration"
+3. Or restart Cursor entirely
+
+**Alternative**: Instead of restarting containers, use Docker's log viewing to troubleshoot without breaking the connection:
+```bash
+# View logs without restarting
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs -f postgres
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs -f ollama
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs -f maproom-mcp
+```
+
+**Why this happens**: MCP's stdio transport creates a persistent process pipe between the client and server. Unlike HTTP-based protocols that can reconnect automatically, stdio connections are tied to the server process lifecycle. When the container restarts, the original process exits and a new one is created, requiring a new connection from the client.
 
 ### Docker is not running
 
@@ -178,6 +267,33 @@ The stack consists of three Docker services orchestrated automatically:
    - Communicates via stdio with Claude/Cursor
    - Provides tools: `search`, `open`, `context`, `upsert`, `status`
    - Calls Rust indexer binary for code parsing and indexing
+
+### Database Architecture: Dual PostgreSQL Setup
+
+**Important**: CrewChief uses **two separate PostgreSQL instances** for different purposes:
+
+1. **Maproom MCP PostgreSQL** (this instance)
+   - **Purpose**: Production-like MCP service, stable semantic search
+   - **Hostname**: `maproom-postgres` (unique to avoid conflicts)
+   - **Credentials**: `maproom:maproom`
+   - **Database**: `maproom`
+   - **When to use**: MCP tools, Claude/Cursor integration, `npx @crewchief/maproom-mcp`
+
+2. **Devcontainer PostgreSQL** (separate instance)
+   - **Purpose**: Local development, CLI testing, integration tests
+   - **Hostname**: `postgres`
+   - **Credentials**: `postgres:postgres`
+   - **Database**: `crewchief`
+   - **When to use**: `cargo run`, development, `cargo test`
+
+**Why two instances?**
+
+- **Isolation**: Development database can be reset without affecting MCP service
+- **Network Safety**: Prevents hostname conflicts on shared Docker networks
+- **Use-Case Optimization**: Each tuned for its specific workload
+- **Data Separation**: Development data vs. production-like persistent data
+
+For complete details on the dual-database architecture, see [Database Architecture Documentation](../../docs/architecture/DATABASE_ARCHITECTURE.md).
 
 ### Database Configuration
 
