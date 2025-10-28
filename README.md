@@ -75,12 +75,17 @@ export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
 crewchief maproom:db
 
 # Index your code (auto-detects git context)
+# Embeddings are generated automatically during scan!
 crewchief maproom:scan
 # ✅ Scan completed successfully!
 #    Files processed: 150
 #    Total chunks: 1234
+# 🔄 Generating embeddings for new chunks...
+#    Found 1234 chunks needing embeddings
+# 📊 Embedding Generation Summary:
+#    Processed 1234 chunks in 15.3s (80.6 chunks/s)
 
-# Search semantically
+# Search semantically (works immediately after scan!)
 crewchief maproom:search "authentication flow"
 
 # Manage worktrees
@@ -123,12 +128,60 @@ crewchief/
 - [Architecture Spec](crewchief_context/cli/specification.md) - Full vision with implementation status
 - [Testing Report](TESTING_REPORT.md) - Features that need verification
 
+## Embedding Configuration
+
+Embeddings are **automatically generated** during `scan` and `upsert` operations, enabling semantic search out-of-the-box.
+
+### Provider Options
+
+Configure your embedding provider in `.env`:
+
+**Option 1: Ollama (Local, Free, Default)**
+```bash
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMENSION=768
+```
+
+**Option 2: OpenAI (Cloud, Requires API Key)**
+```bash
+EMBEDDING_PROVIDER=openai
+OPENAI_API_KEY=your-key-here
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSION=1536
+```
+
+### Control Auto-Generation
+
+```bash
+# Disable auto-generation (for testing or manual control)
+crewchief maproom:scan --generate-embeddings=false
+
+# Adjust batch size for performance tuning
+crewchief maproom:scan --embedding-batch-size=100
+
+# Generate embeddings manually later
+crewchief-maproom generate-embeddings
+```
+
+### Performance Tuning
+
+Fine-tune embedding generation performance in `.env`:
+
+```bash
+EMBEDDING_BATCH_SIZE=50                    # Chunks per batch
+EMBEDDING_PARALLEL_ENABLED=true            # Enable parallel processing
+EMBEDDING_PARALLEL_SUB_BATCH_SIZE=25      # Sub-batch size
+EMBEDDING_PARALLEL_MAX_CONCURRENCY=4      # Concurrent requests
+```
+
 ## Requirements
 
 - Node.js >= 18
 - PostgreSQL (for Maproom)
 - Git
 - iTerm2 (required for agent features, on macOS)
+- **Ollama** (optional, for local embeddings) - [Install Ollama](https://ollama.ai/download)
 
 ## Contributing
 

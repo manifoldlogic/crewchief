@@ -58,6 +58,12 @@ enum Commands {
         /// Batch size for database inserts (only with --parallel)
         #[arg(long, default_value_t = 50)]
         batch_size: usize,
+        /// Automatically generate embeddings after scanning (default: true)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        generate_embeddings: bool,
+        /// Embedding batch size for generation (default: 50)
+        #[arg(long, default_value_t = 50)]
+        embedding_batch_size: usize,
     },
 
     /// Upsert a set of files at a given commit
@@ -72,6 +78,12 @@ enum Commands {
         worktree: String,
         #[arg(long)]
         root: PathBuf,
+        /// Automatically generate embeddings after upserting (default: true)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        generate_embeddings: bool,
+        /// Embedding batch size for generation (default: 50)
+        #[arg(long, default_value_t = 50)]
+        embedding_batch_size: usize,
     },
 
     /// Watch a worktree for changes and incrementally upsert
@@ -182,6 +194,71 @@ enum DbCommand {
     Migrate,
 }
 
+/// Auto-generate embeddings for chunks with NULL embeddings.
+///
+/// This function is called automatically after scan/upsert operations.
+/// It gracefully handles embedding service unavailability.
+async fn auto_generate_embeddings(batch_size: usize) -> anyhow::Result<crewchief_maproom::embedding::PipelineStats> {
+    use crewchief_maproom::embedding::{
+        EmbeddingService, EmbeddingPipeline, PipelineConfig,
+    };
+
+    tracing::info!("Starting auto-embedding generation");
+    println!("\n🔄 Generating embeddings for new chunks...");
+
+    // Try to create embedding service from environment
+    let service = match EmbeddingService::from_env() {
+        Ok(s) => s,
+        Err(e) => {
+            // Check if this is an Ollama configuration without Ollama running
+            let provider = std::env::var("EMBEDDING_PROVIDER").unwrap_or_default();
+            if provider.to_lowercase() == "ollama" || provider.is_empty() {
+                // Try to detect if Ollama is configured
+                tracing::warn!("Embedding service unavailable: {}", e);
+                return Err(anyhow::anyhow!(
+                    "Embedding service not available. Configure EMBEDDING_PROVIDER (openai/ollama) and API keys in .env file."
+                ));
+            }
+            return Err(e.into());
+        }
+    };
+
+    // Configure pipeline for incremental embedding generation
+    let config = PipelineConfig {
+        batch_size,
+        incremental: true, // Only process chunks with NULL embeddings
+        dry_run: false,
+        sample_size: None,
+        batch_delay_ms: 100,
+        max_cost_usd: None,
+    };
+
+    // Connect to database
+    let client = crewchief_maproom::db::connect().await?;
+
+    // Count chunks needing embeddings
+    let count_row = client
+        .query_one(
+            "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NULL OR text_embedding IS NULL",
+            &[],
+        )
+        .await?;
+    let chunk_count: i64 = count_row.get(0);
+
+    if chunk_count == 0 {
+        println!("   ✓ All chunks already have embeddings");
+        return Ok(crewchief_maproom::embedding::PipelineStats::default());
+    }
+
+    println!("   Found {} chunks needing embeddings", chunk_count);
+
+    // Run pipeline
+    let pipeline = EmbeddingPipeline::new(service, config);
+    let stats = pipeline.run(&client).await?;
+
+    Ok(stats)
+}
+
 /// Extract git information from a repository path
 fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     // Get the repository name from remote origin
@@ -279,6 +356,8 @@ async fn main() -> anyhow::Result<()> {
             parallel,
             parallel_workers,
             batch_size,
+            generate_embeddings,
+            embedding_batch_size,
         } => {
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
@@ -291,8 +370,8 @@ async fn main() -> anyhow::Result<()> {
             let commit = commit.unwrap_or(commit_hash);
 
             tracing::info!(
-                "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}",
-                repo, worktree, commit, parallel
+                "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}, generate_embeddings: {}",
+                repo, worktree, commit, parallel, generate_embeddings
             );
 
             if parallel {
@@ -336,13 +415,49 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;
             }
+
+            // Auto-generate embeddings after scan if enabled
+            if generate_embeddings {
+                match auto_generate_embeddings(embedding_batch_size).await {
+                    Ok(stats) => {
+                        if stats.total_chunks > 0 {
+                            println!("\n📊 Embedding Generation Summary:");
+                            println!("   {}", stats.summary());
+                        }
+                    }
+                    Err(e) => {
+                        // Don't fail the entire scan if embeddings fail
+                        tracing::warn!("Embedding generation failed: {}", e);
+                        println!("\n⚠️  Warning: Embedding generation failed: {}", e);
+                        println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
+                    }
+                }
+            }
         }
 
-        Commands::Upsert { paths, commit, repo, worktree, root } => {
+        Commands::Upsert { paths, commit, repo, worktree, root, generate_embeddings, embedding_batch_size } => {
             let client = db::connect().await?;
             indexer::upsert_files(&client, &repo, &worktree, &root, &commit, &paths)
                 .await
                 .with_context(|| "upsert failed")?;
+
+            // Auto-generate embeddings after upsert if enabled
+            if generate_embeddings {
+                match auto_generate_embeddings(embedding_batch_size).await {
+                    Ok(stats) => {
+                        if stats.total_chunks > 0 {
+                            println!("\n📊 Embedding Generation Summary:");
+                            println!("   {}", stats.summary());
+                        }
+                    }
+                    Err(e) => {
+                        // Don't fail the entire upsert if embeddings fail
+                        tracing::warn!("Embedding generation failed: {}", e);
+                        println!("\n⚠️  Warning: Embedding generation failed: {}", e);
+                        println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
+                    }
+                }
+            }
         }
 
         Commands::Watch { repo, worktree, path, throttle } => {

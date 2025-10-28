@@ -10,6 +10,7 @@ Add one line to your `.mcp.json` and get semantic code search powered by local A
 🔒 **100% Local** - No API keys, no cloud dependencies, complete privacy
 🚀 **Fast Hybrid Search** - Vector similarity + full-text search with PostgreSQL
 🤖 **Local LLM** - Ollama with nomic-embed-text (768-dimensional embeddings)
+🔄 **Auto-Embeddings** - Embeddings generated automatically during indexing
 📦 **Fully Containerized** - Everything runs in Docker, isolated and clean
 🌳 **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
 
@@ -57,6 +58,7 @@ The first time you use Maproom, it will:
 2. Download the nomic-embed-text model (~275 MB)
 3. Initialize PostgreSQL database with pgvector
 4. Start all three services (postgres, ollama, maproom-mcp)
+5. **Auto-generate embeddings** during first scan for instant semantic search
 
 Progress indicators will show each step. This happens once.
 
