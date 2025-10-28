@@ -288,6 +288,21 @@ impl OpenAIClient {
             embeddings.into_iter().map(|d| d.embedding).collect()
         };
 
+        // Validate all embeddings have the expected dimension (contract guarantee)
+        let expected_dim = self.config.dimension;
+        for (idx, embedding) in embeddings.iter().enumerate() {
+            if embedding.len() != expected_dim {
+                return Err(EmbeddingError::Api(ApiError::InvalidResponse(
+                    format!(
+                        "Dimension mismatch at index {}: expected {} dimensions but got {}",
+                        idx,
+                        expected_dim,
+                        embedding.len()
+                    ),
+                )));
+            }
+        }
+
         Ok(embeddings)
     }
 

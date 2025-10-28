@@ -207,7 +207,7 @@ async fn auto_generate_embeddings(batch_size: usize) -> anyhow::Result<crewchief
     println!("\n🔄 Generating embeddings for new chunks...");
 
     // Try to create embedding service from environment
-    let service = match EmbeddingService::from_env() {
+    let service = match EmbeddingService::from_env().await {
         Ok(s) => s,
         Err(e) => {
             // Check if this is an Ollama configuration without Ollama running
@@ -503,7 +503,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Initializing embedding generation pipeline");
 
             // Create embedding service from environment
-            let service = EmbeddingService::from_env()
+            let service = EmbeddingService::from_env().await
                 .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
 
             // Configure pipeline

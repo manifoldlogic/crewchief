@@ -241,7 +241,21 @@ impl OllamaProvider {
             )));
         }
 
-        Ok(body.embeddings[0].clone())
+        let embedding = &body.embeddings[0];
+        let expected_dim = self.dimension();
+
+        // Validate dimension matches expected value (contract guarantee)
+        if embedding.len() != expected_dim {
+            return Err(EmbeddingError::Api(ApiError::InvalidResponse(
+                format!(
+                    "Dimension mismatch: expected {} dimensions but got {}",
+                    expected_dim,
+                    embedding.len()
+                ),
+            )));
+        }
+
+        Ok(embedding.clone())
     }
 }
 
