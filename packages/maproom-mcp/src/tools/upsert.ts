@@ -29,7 +29,7 @@ const log = LOG_FILE
  * Default configuration for Upsert tool
  */
 const DEFAULT_CONFIG: UpsertToolConfig = {
-  timeout: 120000, // 2 minutes default timeout
+  timeout: 600000, // 10 minutes timeout (allows for embedding generation on large codebases)
 }
 
 /**
