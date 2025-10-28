@@ -10,8 +10,10 @@ services:
     volumes:
       - maproom-data:/var/lib/postgresql/data
       - maproom-init-sql:/docker-entrypoint-initdb.d:ro
-      # Optional: Uncomment if custom PostgreSQL configuration is needed
-      # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # Custom PostgreSQL configuration for Maproom workload optimization
+      # Mount the config file from the repository
+      - ../packages/maproom-mcp/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     networks:
       - maproom-network
     healthcheck:
