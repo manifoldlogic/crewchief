@@ -135,3 +135,7 @@ harness = false
 name = "memory_optimization_bench"
 harness = false
 
+[[bench]]
+name = "embedding_performance"
+harness = false
+
