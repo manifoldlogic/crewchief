@@ -256,7 +256,7 @@ async fn test_unreachable_endpoint_error() {
         batch_size: 10,
         retry: RetryConfig::default(),
         api_key: None,
-        api_endpoint: Some("http://localhost:99999/api/embeddings".to_string()), // Invalid port
+        api_endpoint: Some("http://localhost:99999/api/embed".to_string()), // Invalid port
     };
 
     let service = EmbeddingService::new(config);
@@ -463,7 +463,7 @@ async fn test_ollama_api_endpoint_default() {
     let config = test_config();
     assert_eq!(
         config.api_endpoint_url(),
-        "http://localhost:11434/api/embeddings",
+        "http://localhost:11434/api/embed",
         "Default Ollama endpoint should be localhost:11434"
     );
 }
@@ -471,11 +471,11 @@ async fn test_ollama_api_endpoint_default() {
 #[tokio::test]
 async fn test_ollama_custom_endpoint() {
     let mut config = test_config();
-    config.api_endpoint = Some("http://custom-ollama:8080/api/embeddings".to_string());
+    config.api_endpoint = Some("http://custom-ollama:8080/api/embed".to_string());
 
     assert_eq!(
         config.api_endpoint_url(),
-        "http://custom-ollama:8080/api/embeddings",
+        "http://custom-ollama:8080/api/embed",
         "Custom endpoint should be used"
     );
 }

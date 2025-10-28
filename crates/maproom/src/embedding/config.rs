@@ -218,7 +218,7 @@ impl EmbeddingConfig {
             match self.provider {
                 Provider::OpenAI => "https://api.openai.com/v1/embeddings".to_string(),
                 Provider::Cohere => "https://api.cohere.ai/v1/embed".to_string(),
-                Provider::Ollama => "http://localhost:11434/api/embeddings".to_string(),
+                Provider::Ollama => "http://localhost:11434/api/embed".to_string(),
                 Provider::Local => "http://localhost:8080/embeddings".to_string(),
             }
         }
@@ -468,7 +468,7 @@ mod tests {
         config.provider = Provider::Ollama;
         assert_eq!(
             config.api_endpoint_url(),
-            "http://localhost:11434/api/embeddings"
+            "http://localhost:11434/api/embed"
         );
 
         config.provider = Provider::Local;
@@ -666,7 +666,7 @@ mod tests {
         config.provider = Provider::Ollama;
         assert_eq!(
             config.api_endpoint_url(),
-            "http://localhost:11434/api/embeddings"
+            "http://localhost:11434/api/embed"
         );
 
         config.provider = Provider::Local;

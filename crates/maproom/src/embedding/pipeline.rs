@@ -9,7 +9,7 @@
 use crate::embedding::service::EmbeddingService;
 use anyhow::{Context, Result};
 use tokio_postgres::Client;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Configuration for the embedding generation pipeline.
 #[derive(Debug, Clone)]
@@ -273,11 +273,17 @@ impl EmbeddingPipeline {
             .collect();
 
         // Generate code embeddings
-        let (code_embeddings, code_batch_stats) = self
+        let (code_embeddings, code_batch_stats) = match self
             .service
             .embed_batch_with_stats(code_texts)
             .await
-            .context("Failed to generate code embeddings")?;
+        {
+            Ok(result) => result,
+            Err(e) => {
+                error!("Failed to generate code embeddings: {:?}", e);
+                return Err(e).context("Failed to generate code embeddings");
+            }
+        };
 
         stats.embeddings_generated += code_batch_stats.from_api;
         stats.embeddings_cached += code_batch_stats.cached;
@@ -386,8 +392,17 @@ impl EmbeddingPipeline {
         code_embedding: &[f32],
         text_embedding: &[f32],
     ) -> Result<()> {
-        // Format vectors as PostgreSQL array strings
-        let code_vec = format!(
+        debug!(
+            "Updating embeddings for chunk {} (code_dim={}, text_dim={})",
+            chunk_id,
+            code_embedding.len(),
+            text_embedding.len()
+        );
+
+        // Format vectors as PostgreSQL array literal strings
+        // Without the pgvector Rust crate, we must embed vectors directly in SQL
+        // This is safe because vectors contain only f32 numbers (no user input)
+        let code_vec_str = format!(
             "[{}]",
             code_embedding
                 .iter()
@@ -396,7 +411,7 @@ impl EmbeddingPipeline {
                 .join(",")
         );
 
-        let text_vec = format!(
+        let text_vec_str = format!(
             "[{}]",
             text_embedding
                 .iter()
@@ -405,15 +420,30 @@ impl EmbeddingPipeline {
                 .join(",")
         );
 
+        // Use formatted SQL with embedded vector literals instead of parameters
+        // because tokio-postgres doesn't support pgvector type conversion
+        let sql = format!(
+            "UPDATE maproom.chunks
+             SET code_embedding = '{}'::vector,
+                 text_embedding = '{}'::vector
+             WHERE id = $1",
+            code_vec_str, text_vec_str
+        );
+
         client
-            .execute(
-                "UPDATE maproom.chunks
-                 SET code_embedding = $1::vector,
-                     text_embedding = $2::vector
-                 WHERE id = $3",
-                &[&code_vec, &text_vec, &chunk_id],
-            )
+            .execute(&sql, &[&chunk_id])
             .await
+            .map(|_| ())
+            .map_err(|e| {
+                error!(
+                    "Failed to update embeddings for chunk {}: Code dim={}, Text dim={}, Error: {:?}",
+                    chunk_id,
+                    code_embedding.len(),
+                    text_embedding.len(),
+                    e
+                );
+                e
+            })
             .context("Failed to update chunk embeddings")?;
 
         Ok(())

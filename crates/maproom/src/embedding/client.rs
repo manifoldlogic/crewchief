@@ -87,6 +87,14 @@ struct Usage {
     total_tokens: u64,
 }
 
+/// Ollama API response structure.
+#[derive(Debug, Deserialize)]
+struct OllamaEmbeddingResponse {
+    #[allow(dead_code)]
+    model: String,
+    embeddings: Vec<Vec<f32>>,
+}
+
 /// OpenAI API error response.
 #[derive(Debug, Deserialize)]
 struct ErrorResponse {
@@ -217,13 +225,15 @@ impl OpenAIClient {
             }
         };
 
-        // Ollama uses different request format
+        // Build request body based on provider
         let body = if self.config.provider == Provider::Ollama {
+            // Ollama uses "input" field (can be string or array)
             serde_json::json!({
                 "model": self.config.model,
-                "prompt": texts,
+                "input": texts,
             })
         } else {
+            // OpenAI and others use "input" field with dimensions
             serde_json::json!({
                 "input": texts,
                 "model": self.config.model,
@@ -241,18 +251,38 @@ impl OpenAIClient {
             return Err(self.handle_error_response(status, response).await);
         }
 
-        let response: EmbeddingResponse = response.json().await?;
+        // Parse response based on provider
+        let embeddings = if self.config.provider == Provider::Ollama {
+            // Parse Ollama response format
+            let ollama_response: OllamaEmbeddingResponse = response.json().await?;
 
-        // Update metrics
-        self.metrics
-            .total_tokens
-            .fetch_add(response.usage.total_tokens, Ordering::Relaxed);
+            // Estimate tokens for Ollama (since it doesn't return usage)
+            // Use a conservative estimate of 1 token per 4 characters
+            let total_chars: usize = texts.iter().map(|s| s.len()).sum();
+            let estimated_tokens = (total_chars / 4) as u64;
 
-        // Sort by index to ensure correct order
-        let mut embeddings: Vec<_> = response.data.into_iter().collect();
-        embeddings.sort_by_key(|d| d.index);
+            self.metrics
+                .total_tokens
+                .fetch_add(estimated_tokens, Ordering::Relaxed);
 
-        Ok(embeddings.into_iter().map(|d| d.embedding).collect())
+            ollama_response.embeddings
+        } else {
+            // Parse OpenAI-format response
+            let openai_response: EmbeddingResponse = response.json().await?;
+
+            // Update metrics with actual token usage
+            self.metrics
+                .total_tokens
+                .fetch_add(openai_response.usage.total_tokens, Ordering::Relaxed);
+
+            // Sort by index to ensure correct order
+            let mut embeddings: Vec<_> = openai_response.data.into_iter().collect();
+            embeddings.sort_by_key(|d| d.index);
+
+            embeddings.into_iter().map(|d| d.embedding).collect()
+        };
+
+        Ok(embeddings)
     }
 
     /// Handle error responses from the API.
@@ -387,7 +417,7 @@ mod tests {
         let client = client.unwrap();
         assert_eq!(client.config().provider, Provider::Ollama);
         assert_eq!(client.config().model, "nomic-embed-text");
-        assert_eq!(client.config().api_endpoint_url(), "http://localhost:11434/api/embeddings");
+        assert_eq!(client.config().api_endpoint_url(), "http://localhost:11434/api/embed");
     }
 
     #[test]
