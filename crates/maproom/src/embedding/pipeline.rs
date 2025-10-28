@@ -159,13 +159,15 @@ impl EmbeddingPipeline {
 
             // Check cost ceiling
             if let Some(max_cost) = self.config.max_cost_usd {
-                let current_cost = self.service.cost_metrics().estimated_cost_usd();
-                if current_cost >= max_cost {
-                    warn!(
-                        "Cost ceiling reached: ${:.4} >= ${:.4}",
-                        current_cost, max_cost
-                    );
-                    break;
+                if let Some(metrics) = self.service.provider_metrics() {
+                    let current_cost = metrics.estimated_cost_usd;
+                    if current_cost >= max_cost {
+                        warn!(
+                            "Cost ceiling reached: ${:.4} >= ${:.4}",
+                            current_cost, max_cost
+                        );
+                        break;
+                    }
                 }
             }
 
@@ -198,12 +200,15 @@ impl EmbeddingPipeline {
 
         // Gather final metrics
         let cache_metrics = self.service.cache_metrics().await;
-        let cost_metrics = self.service.cost_metrics();
-
         stats.cache_hit_rate = cache_metrics.hit_rate();
-        stats.total_tokens = cost_metrics.total_tokens();
-        stats.estimated_cost_usd = cost_metrics.estimated_cost_usd();
-        stats.api_calls = cost_metrics.total_requests() as usize;
+
+        // Get provider metrics if available
+        if let Some(provider_metrics) = self.service.provider_metrics() {
+            stats.total_tokens = provider_metrics.total_tokens;
+            stats.estimated_cost_usd = provider_metrics.estimated_cost_usd;
+            stats.api_calls = provider_metrics.total_requests as usize;
+        }
+
         stats.duration_secs = start_time.elapsed().as_secs_f64();
 
         info!("Pipeline completed");
@@ -462,12 +467,20 @@ struct ChunkRow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::embedding::cache::EmbeddingCache;
+    use crate::embedding::client::OpenAIClient;
     use crate::embedding::config::EmbeddingConfig;
+    use std::sync::Arc;
 
     fn test_embedding_service() -> EmbeddingService {
         let mut config = EmbeddingConfig::default();
         config.api_key = Some("test-key".to_string());
-        EmbeddingService::new(config).unwrap()
+
+        // Create provider and cache
+        let provider = Box::new(OpenAIClient::new(config.clone()).unwrap());
+        let cache = Arc::new(EmbeddingCache::new(config.cache.clone()).unwrap());
+
+        EmbeddingService::new(provider, cache)
     }
 
     #[test]

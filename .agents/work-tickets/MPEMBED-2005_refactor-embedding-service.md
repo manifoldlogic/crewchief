@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-2005: Refactor EmbeddingService to use provider abstraction
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - embeddings-engineer
@@ -23,15 +23,15 @@ The service layer should be provider-agnostic (doesn't know if Ollama or OpenAI)
 This ticket completes Phase 2: Provider Abstraction from the MPEMBED multi-provider embedding support plan.
 
 ## Acceptance Criteria
-- [ ] `EmbeddingService` struct has `provider: Box<dyn EmbeddingProvider>` field
-- [ ] `EmbeddingService::new()` accepts `Box<dyn EmbeddingProvider>`
-- [ ] `EmbeddingService::from_env()` uses factory to create provider
-- [ ] `embed_text()` method delegates to `provider.embed()`
-- [ ] `embed_batch()` method delegates to `provider.embed_batch()`
-- [ ] `dimension()` method added (returns `provider.dimension()`)
-- [ ] `provider_name()` method added (returns `provider.provider_name()`)
-- [ ] Caching layer remains unchanged (provider-agnostic)
-- [ ] Existing tests updated to use trait objects
+- [x] `EmbeddingService` struct has `provider: Box<dyn EmbeddingProvider>` field
+- [x] `EmbeddingService::new()` accepts `Box<dyn EmbeddingProvider>`
+- [x] `EmbeddingService::from_env()` uses factory to create provider
+- [x] `embed_text()` method delegates to `provider.embed()`
+- [x] `embed_batch()` method delegates to `provider.embed_batch()`
+- [x] `dimension()` method added (returns `provider.dimension()`)
+- [x] `provider_name()` method added (returns `provider.provider_name()`)
+- [x] Caching layer remains unchanged (provider-agnostic)
+- [x] Existing tests updated to use trait objects
 
 ## Technical Requirements
 - File location: `crates/maproom/src/embedding/service.rs` (MODIFY)

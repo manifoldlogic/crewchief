@@ -264,14 +264,20 @@ pub enum QueryProcessorError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::embedding::cache::EmbeddingCache;
+    use crate::embedding::client::OpenAIClient;
     use crate::embedding::EmbeddingConfig;
 
     fn test_embedder() -> Arc<EmbeddingService> {
-        // Use a test config with Local provider that doesn't require API key
+        // Use a test config with API key for OpenAI provider
         let mut config = EmbeddingConfig::default();
-        config.provider = crate::embedding::Provider::Local;
-        config.api_key = None; // Local provider doesn't need API key
-        Arc::new(EmbeddingService::new(config).unwrap())
+        config.api_key = Some("test-key".to_string());
+
+        // Create provider and cache
+        let provider = Box::new(OpenAIClient::new(config.clone()).unwrap());
+        let cache = Arc::new(EmbeddingCache::new(config.cache.clone()).unwrap());
+
+        Arc::new(EmbeddingService::new(provider, cache))
     }
 
     #[test]
