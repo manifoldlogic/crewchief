@@ -1,8 +1,8 @@
 # Ticket: LOCAL-3001: Test npx @crewchief/maproom-mcp startup flow
 
 ## Status
-- [x] **Task completed** - acceptance criteria met (tested in LOCAL-2503)
-- [x] **Tests pass** - all services started successfully and reached healthy state
+- [ ] **Task completed** - acceptance criteria met (tested in LOCAL-2503)
+- [ ] **Tests pass** - all services started successfully and reached healthy state
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

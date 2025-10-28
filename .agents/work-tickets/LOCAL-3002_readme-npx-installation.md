@@ -1,8 +1,8 @@
 # Ticket: LOCAL-3002: Write README with npx installation instructions
 
 ## Status
-- [x] **Task completed** - README updated with npx instructions
-- [x] **Tests pass** - documentation matches implementation
+- [ ] **Task completed** - README updated with npx instructions
+- [ ] **Tests pass** - documentation matches implementation
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

@@ -1,7 +1,7 @@
 # Ticket: LOCAL-3003: Implement default environment variable handling
 
 ## Status
-- [x] **Task completed** - marked as future enhancement - acceptance criteria met
+- [ ] **Task completed** - marked as future enhancement - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
 

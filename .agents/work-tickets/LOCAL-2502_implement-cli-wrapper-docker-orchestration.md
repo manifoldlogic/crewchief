@@ -1,7 +1,7 @@
 # Ticket: LOCAL-2502: Implement CLI Wrapper for Docker Orchestration and Stdio Proxy
 
 ## Status
-- [x] **Task completed** - acceptance criteria met
+- [ ] **Task completed** - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
 
