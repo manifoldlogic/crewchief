@@ -9,7 +9,7 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - maproom-data:/var/lib/postgresql/data
-      - maproom-init-sql:/docker-entrypoint-initdb.d:ro
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       # Optional: Uncomment if custom PostgreSQL configuration is needed
       # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     networks:
@@ -99,8 +99,6 @@ volumes:
     driver: local
   maproom-logs:
     driver: local
-  maproom-init-sql:
-    external: true
 
 networks:
   maproom-network:

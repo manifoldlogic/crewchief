@@ -1,9 +1,9 @@
 # Ticket: LOCAL-2504: Fix CLI Wrapper Critical Bugs (Volume Creation & Service Name)
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -29,14 +29,14 @@ These bugs block the entire Phase 2.5-3 workflow:
 The implementation is complete and correct except for these two configuration mismatches. This ticket focuses solely on fixing these bugs without changing any other functionality.
 
 ## Acceptance Criteria
-- [ ] Docker volume `maproom-init-sql` issue resolved (either created or removed from external dependencies)
-- [ ] Service name in CLI health check matches docker-compose.yml service definition
-- [ ] CLI successfully runs `docker compose up -d` without volume errors
-- [ ] CLI health check successfully finds and monitors the maproom service
-- [ ] All three services (postgres, ollama, maproom-mcp) start and become healthy
-- [ ] Stdio proxy connects to the correct container
-- [ ] Manual test: `node /workspace/packages/maproom-mcp/bin/cli.js` completes successfully
-- [ ] No regression in other CLI functionality (Docker checks, error handling, shutdown)
+- [x] Docker volume `maproom-init-sql` issue resolved (either created or removed from external dependencies)
+- [x] Service name in CLI health check matches docker-compose.yml service definition
+- [x] CLI successfully runs `docker compose up -d` without volume errors
+- [x] CLI health check successfully finds and monitors the maproom service
+- [x] All three services (postgres, ollama, maproom-mcp) start and become healthy
+- [x] Stdio proxy connects to the correct container
+- [x] Manual test: `node /workspace/packages/maproom-mcp/bin/cli.js` completes successfully
+- [x] No regression in other CLI functionality (Docker checks, error handling, shutdown)
 
 ## Technical Requirements
 

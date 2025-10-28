@@ -263,7 +263,7 @@ async function waitForServicesHealthy() {
   console.error('⏳ Waiting for services to become healthy...');
   console.error('   This may take 1-2 minutes on first run (downloading Ollama model)...');
 
-  const requiredServices = ['postgres', 'ollama', 'maproom'];
+  const requiredServices = ['postgres', 'ollama', 'maproom-mcp'];
   const startTime = Date.now();
   const serviceStatus = {};
 
@@ -339,7 +339,7 @@ async function waitForServicesHealthy() {
           console.error(`  cd ${CONFIG_DIR}`);
           console.error('  docker compose logs postgres');
           console.error('  docker compose logs ollama');
-          console.error('  docker compose logs maproom');
+          console.error('  docker compose logs maproom-mcp');
           process.exit(1);
         }
 
@@ -363,7 +363,7 @@ async function waitForServicesHealthy() {
   console.error(`  cd ${CONFIG_DIR}`);
   console.error('  docker compose logs postgres');
   console.error('  docker compose logs ollama');
-  console.error('  docker compose logs maproom');
+  console.error('  docker compose logs maproom-mcp');
   console.error('\nTry restarting:');
   console.error('  docker compose down && docker compose up -d');
   process.exit(1);
