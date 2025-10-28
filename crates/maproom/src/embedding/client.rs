@@ -3,6 +3,8 @@
 use crate::embedding::cache::Vector;
 use crate::embedding::config::EmbeddingConfig;
 use crate::embedding::error::{ApiError, EmbeddingError};
+use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics};
+use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -461,6 +463,58 @@ impl OpenAIClient {
     }
 }
 
+/// Implement EmbeddingProvider trait for OpenAIClient.
+///
+/// This implementation wraps the existing OpenAIClient methods to conform to the
+/// EmbeddingProvider trait interface. All methods delegate to the existing
+/// implementations to preserve backward compatibility and maintain the existing
+/// retry logic, caching, and error handling.
+#[async_trait]
+impl EmbeddingProvider for OpenAIClient {
+    /// Generate embedding for a single text.
+    ///
+    /// Delegates to the existing `embed_text()` method and converts errors
+    /// to the trait's EmbeddingError type.
+    async fn embed(&self, text: String) -> Result<Vector, EmbeddingError> {
+        self.embed_text(text).await
+    }
+
+    /// Generate embeddings for a batch of texts.
+    ///
+    /// Delegates to the existing `embed_batch()` method which implements
+    /// efficient batching, retry logic, and error handling.
+    async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+        self.embed_batch(texts).await
+    }
+
+    /// Get the embedding dimension for this provider.
+    ///
+    /// Returns 1536 for OpenAI's text-embedding-3-small model.
+    fn dimension(&self) -> usize {
+        self.config.dimension
+    }
+
+    /// Get the provider name.
+    ///
+    /// Returns "openai" as the identifier for this provider.
+    fn provider_name(&self) -> &'static str {
+        "openai"
+    }
+
+    /// Get provider-specific metrics.
+    ///
+    /// Returns cost tracking data including total requests, tokens processed,
+    /// failed requests, and estimated cost in USD.
+    fn metrics(&self) -> Option<ProviderMetrics> {
+        Some(ProviderMetrics {
+            total_requests: self.metrics.total_requests(),
+            total_tokens: self.metrics.total_tokens(),
+            failed_requests: self.metrics.failed_requests(),
+            estimated_cost_usd: self.metrics.estimated_cost_usd(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -602,5 +656,62 @@ mod tests {
         client.metrics().reset();
         assert_eq!(client.metrics().total_requests(), 0);
         assert_eq!(client.metrics().total_tokens(), 0);
+    }
+
+    #[test]
+    fn test_embedding_provider_trait_implementation() {
+        let config = test_config();
+        let client = OpenAIClient::new(config).unwrap();
+
+        // Test provider_name() through trait
+        assert_eq!(EmbeddingProvider::provider_name(&client), "openai");
+
+        // Test dimension() through trait
+        assert_eq!(EmbeddingProvider::dimension(&client), 1536);
+
+        // Test metrics() through trait returns Some
+        let metrics = EmbeddingProvider::metrics(&client);
+        assert!(metrics.is_some());
+        let metrics = metrics.unwrap();
+        assert_eq!(metrics.total_requests, 0);
+        assert_eq!(metrics.total_tokens, 0);
+        assert_eq!(metrics.failed_requests, 0);
+        assert_eq!(metrics.estimated_cost_usd, 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_embedding_provider_trait_object() {
+        let config = test_config();
+        let client = OpenAIClient::new(config).unwrap();
+
+        // Test that OpenAIClient can be used as a trait object
+        let provider: Box<dyn EmbeddingProvider> = Box::new(client);
+
+        assert_eq!(provider.provider_name(), "openai");
+        assert_eq!(provider.dimension(), 1536);
+
+        // Test empty batch through trait
+        let result = provider.embed_batch(vec![]).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_provider_metrics_conversion() {
+        let config = test_config();
+        let client = OpenAIClient::new(config).unwrap();
+
+        // Set some metrics
+        client.metrics.total_requests.store(100, Ordering::Relaxed);
+        client.metrics.total_tokens.store(50000, Ordering::Relaxed);
+        client.metrics.failed_requests.store(5, Ordering::Relaxed);
+
+        // Get metrics through trait
+        let provider_metrics = EmbeddingProvider::metrics(&client).unwrap();
+
+        assert_eq!(provider_metrics.total_requests, 100);
+        assert_eq!(provider_metrics.total_tokens, 50000);
+        assert_eq!(provider_metrics.failed_requests, 5);
+        assert_eq!(provider_metrics.estimated_cost_usd, 0.001); // 50000 tokens * $0.02 / 1M
     }
 }
