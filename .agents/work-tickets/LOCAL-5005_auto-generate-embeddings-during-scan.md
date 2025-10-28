@@ -12,7 +12,7 @@
 - commit-ticket
 
 ## Summary
-Automatically generate embeddings during scan/upsert operations instead of requiring a separate manual command. This fixes broken vector search functionality and restores the "zero-configuration" user experience.
+Automatically generate embeddings during upsert operations to achieve the "zero configuration" promise stated in the @crewchief/maproom-mcp README. Users should be able to run `npx -y @crewchief/maproom-mcp` and get working semantic search with no additional setup or commands.
 
 ## Background
 Currently, embeddings are NOT generated automatically when indexing code. Users must manually run `crewchief-maproom generate-embeddings` after scanning, which:
@@ -230,23 +230,29 @@ EMBEDDING_BATCH_SIZE=50
 ### Files Modified
 
 1. `crates/maproom/src/main.rs`
-   - Added CLI flags to Scan and Upsert commands
+   - Added CLI flags to Scan and Upsert commands (`--generate-embeddings`, `--embedding-batch-size`)
    - Created auto_generate_embeddings() function
    - Integrated embedding generation into command handlers
 
-2. `.env`
+2. `packages/maproom-mcp/src/tools/upsert.ts` ⭐ **KEY FIX**
+   - Added `--generate-embeddings=true` to args passed to Rust binary
+   - Added support for `EMBEDDING_BATCH_SIZE` environment variable
+   - This ensures MCP upsert tool auto-generates embeddings
+
+3. `.env`
    - Pre-configured Ollama as default provider
    - Added comprehensive configuration comments
    - Documented all embedding-related variables
 
-3. `README.md`
+4. `README.md`
    - Added "Embedding Configuration" section
    - Updated Quick Start with auto-generation example
    - Added Ollama to requirements
 
-4. `packages/maproom-mcp/README.md`
+5. `packages/maproom-mcp/README.md`
    - Added auto-embeddings to features list
    - Updated first-run expectations
+   - Documented EMBEDDING_BATCH_SIZE environment variable
 
 ### Acceptance Criteria Status
 

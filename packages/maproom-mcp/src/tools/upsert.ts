@@ -99,7 +99,14 @@ export async function handleUpsertTool(
     worktree,
     '--root',
     root,
+    '--generate-embeddings=true', // Auto-generate embeddings for zero-config experience
   ]
+
+  // Add embedding batch size if configured
+  const embeddingBatchSize = process.env.EMBEDDING_BATCH_SIZE
+  if (embeddingBatchSize) {
+    args.push('--embedding-batch-size', embeddingBatchSize)
+  }
 
   log.debug({ args }, 'Spawning indexer process')
 

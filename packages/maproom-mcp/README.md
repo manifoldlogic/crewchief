@@ -91,6 +91,7 @@ Available variables:
 - `LOG_LEVEL` - Logging verbosity: `error`, `warn`, `info`, `debug` (default: `info`)
 - `EMBEDDING_MODEL` - Ollama model to use (default: `nomic-embed-text`)
 - `EMBEDDING_DIMENSION` - Vector dimensions (default: `768`)
+- `EMBEDDING_BATCH_SIZE` - Batch size for embedding generation (default: `50`)
 
 ## Data Persistence
 
