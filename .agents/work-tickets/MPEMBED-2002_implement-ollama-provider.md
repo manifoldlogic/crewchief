@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-2002: Implement OllamaProvider for local embeddings
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -23,14 +23,14 @@ Ollama doesn't support native batching, so we'll use concurrent requests with to
 This ticket implements the Ollama provider as part of Phase 2: Provider Abstraction from the MPEMBED multi-provider embedding support plan.
 
 ## Acceptance Criteria
-- [ ] `OllamaProvider` struct defined with `client`, `endpoint`, `model` fields
-- [ ] `OllamaProvider::new()` constructor validates endpoint (returns error if unreachable)
-- [ ] `embed()` method calls Ollama API and returns 768-dim vector
-- [ ] `embed_batch()` method uses concurrent requests (not sequential)
-- [ ] `dimension()` returns 768 (nomic-embed-text fixed dimension)
-- [ ] `provider_name()` returns "ollama"
-- [ ] HTTP errors mapped to `EmbeddingError` enum
-- [ ] Retry logic for transient failures (e.g., Ollama temporary overload)
+- [x] `OllamaProvider` struct defined with `client`, `endpoint`, `model` fields
+- [x] `OllamaProvider::new()` constructor validates endpoint (returns error if unreachable)
+- [x] `embed()` method calls Ollama API and returns 768-dim vector
+- [x] `embed_batch()` method uses concurrent requests (not sequential)
+- [x] `dimension()` returns 768 (nomic-embed-text fixed dimension)
+- [x] `provider_name()` returns "ollama"
+- [x] HTTP errors mapped to `EmbeddingError` enum
+- [x] Retry logic for transient failures (e.g., Ollama temporary overload)
 
 ## Technical Requirements
 - File location: `crates/maproom/src/embedding/ollama.rs` (NEW FILE)
