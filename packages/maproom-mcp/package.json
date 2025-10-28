@@ -1,13 +1,14 @@
 {
   "name": "@crewchief/maproom-mcp",
   "version": "1.0.4",
+  "type": "module",
   "description": "Maproom MCP server with local LLM embeddings - zero configuration required",
   "main": "dist/index.js",
   "bin": {
-    "maproom-mcp": "./bin/cli.js"
+    "maproom-mcp": "./bin/cli.cjs"
   },
   "files": [
-    "bin/cli.js",
+    "bin/cli.cjs",
     "config/docker-compose.yml",
     "config/Dockerfile.mcp-server",
     "config/init.sql",
@@ -19,8 +20,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "node bin/cli.js --test || echo 'Test mode not yet implemented'",
-    "dev": "node bin/cli.js",
+    "test": "node bin/cli.cjs --test || echo 'Test mode not yet implemented'",
+    "dev": "node bin/cli.cjs",
     "prepublishOnly": "tsc",
     "release:patch": "node scripts/bump-version.js patch && pnpm publish --access public --no-git-checks",
     "release:minor": "node scripts/bump-version.js minor && pnpm publish --access public --no-git-checks",
