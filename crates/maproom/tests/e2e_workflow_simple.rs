@@ -200,35 +200,41 @@ async fn test_02_indexed_data_validation() {
     println!("Worktrees: {} ({})", worktree_count, worktree_names.unwrap_or_default());
     assert!(worktree_count > 0, "Should have at least 1 worktree");
 
-    // Check chunks
+    // Check chunks (query both embedding columns)
     let row = client
         .query_one(
             "SELECT
                 COUNT(*) as total,
-                COUNT(embedding) as with_embeddings,
-                COUNT(DISTINCT language) as languages,
-                COUNT(DISTINCT rel_path) as files
-             FROM maproom.chunks",
+                COUNT(c.code_embedding) as code_embeddings,
+                COUNT(c.text_embedding) as text_embeddings,
+                COUNT(DISTINCT c.language) as languages,
+                COUNT(DISTINCT f.id) as files
+             FROM maproom.chunks c
+             JOIN maproom.files f ON c.file_id = f.id",
             &[],
         )
         .await
         .expect("Failed to query chunks");
 
     let total_chunks: i64 = row.get(0);
-    let chunks_with_embeddings: i64 = row.get(1);
-    let language_count: i64 = row.get(2);
-    let file_count: i64 = row.get(3);
+    let code_embeddings: i64 = row.get(1);
+    let text_embeddings: i64 = row.get(2);
+    let language_count: i64 = row.get(3);
+    let file_count: i64 = row.get(4);
 
     println!("Chunks: {} total", total_chunks);
-    println!("  With embeddings: {}", chunks_with_embeddings);
+    println!("  With code embeddings: {}", code_embeddings);
+    println!("  With text embeddings: {}", text_embeddings);
     println!("  Languages: {}", language_count);
     println!("  Files: {}", file_count);
 
     assert!(total_chunks > 0, "Should have chunks");
     assert!(file_count > 0, "Should have files");
 
-    let embedding_pct = (chunks_with_embeddings as f64 / total_chunks as f64) * 100.0;
-    println!("  Embedding coverage: {:.1}%", embedding_pct);
+    let code_embedding_pct = (code_embeddings as f64 / total_chunks as f64) * 100.0;
+    let text_embedding_pct = (text_embeddings as f64 / total_chunks as f64) * 100.0;
+    println!("  Code embedding coverage: {:.1}%", code_embedding_pct);
+    println!("  Text embedding coverage: {:.1}%", text_embedding_pct);
 
     println!("✓ Indexed data validation passed\n");
 }
@@ -253,8 +259,9 @@ async fn test_03_fts_search_functionality() {
 
         let rows = client
             .query(
-                "SELECT c.id, c.rel_path, c.content, ts_rank_cd(c.fts_vector, websearch_to_tsquery('english', $1)) as rank
+                "SELECT c.id, f.relpath, c.preview, ts_rank_cd(c.fts_vector, websearch_to_tsquery('english', $1)) as rank
                  FROM maproom.chunks c
+                 JOIN maproom.files f ON c.file_id = f.id
                  WHERE c.fts_vector @@ websearch_to_tsquery('english', $1)
                  ORDER BY rank DESC
                  LIMIT 10",
@@ -295,34 +302,84 @@ async fn test_04_embedding_quality() {
     let pool = create_pool().await.expect("Failed to create pool");
     let client = pool.get().await.expect("Failed to get client");
 
-    // Sample chunks with embeddings
-    let rows = client
+    // Sample chunks with code embeddings
+    let code_rows = client
         .query(
-            "SELECT id, content, embedding
+            "SELECT id, preview, code_embedding
              FROM maproom.chunks
-             WHERE embedding IS NOT NULL
+             WHERE code_embedding IS NOT NULL
              ORDER BY RANDOM()
-             LIMIT 10",
+             LIMIT 5",
             &[],
         )
         .await
-        .expect("Failed to query embeddings");
+        .expect("Failed to query code embeddings");
 
-    println!("Sampled {} chunks with embeddings", rows.len());
+    // Sample chunks with text embeddings
+    let text_rows = client
+        .query(
+            "SELECT id, preview, text_embedding
+             FROM maproom.chunks
+             WHERE text_embedding IS NOT NULL
+             ORDER BY RANDOM()
+             LIMIT 5",
+            &[],
+        )
+        .await
+        .expect("Failed to query text embeddings");
 
-    if rows.is_empty() {
+    println!("Sampled {} chunks with code embeddings", code_rows.len());
+    println!("Sampled {} chunks with text embeddings", text_rows.len());
+
+    if code_rows.is_empty() && text_rows.is_empty() {
         eprintln!("WARNING: No embeddings found. Run embedding generation first.");
         return;
     }
 
-    for (i, row) in rows.iter().enumerate() {
-        let chunk_id: i32 = row.get(0);
-        let content: String = row.get(1);
+    // Validate code embeddings
+    for (i, row) in code_rows.iter().enumerate() {
+        let chunk_id: i64 = row.get(0);
+        let preview: String = row.get(1);
         let embedding: Vec<f32> = row.get(2);
 
-        println!("\nChunk {}:", i + 1);
+        println!("\nCode Embedding {}:", i + 1);
         println!("  ID: {}", chunk_id);
-        println!("  Content length: {} bytes", content.len());
+        println!("  Preview length: {} bytes", preview.len());
+        println!("  Embedding dimensions: {}", embedding.len());
+
+        // Validate embedding
+        assert_eq!(
+            embedding.len(),
+            768,
+            "nomic-embed-text should produce 768-dimensional embeddings"
+        );
+
+        let non_zero_count = embedding.iter().filter(|&&v| v != 0.0).count();
+        let finite_count = embedding.iter().filter(|&&v| v.is_finite()).count();
+
+        println!("  Non-zero values: {} / {}", non_zero_count, embedding.len());
+        println!("  Finite values: {} / {}", finite_count, embedding.len());
+
+        assert!(
+            non_zero_count > 700,
+            "Embedding should have mostly non-zero values"
+        );
+        assert_eq!(
+            finite_count,
+            768,
+            "All embedding values should be finite"
+        );
+    }
+
+    // Validate text embeddings
+    for (i, row) in text_rows.iter().enumerate() {
+        let chunk_id: i64 = row.get(0);
+        let preview: String = row.get(1);
+        let embedding: Vec<f32> = row.get(2);
+
+        println!("\nText Embedding {}:", i + 1);
+        println!("  ID: {}", chunk_id);
+        println!("  Preview length: {} bytes", preview.len());
         println!("  Embedding dimensions: {}", embedding.len());
 
         // Validate embedding
@@ -370,7 +427,7 @@ async fn test_05_data_persistence() {
         .await
         .expect("Repo should persist");
 
-    let repo_id: i32 = row.get(0);
+    let repo_id: i64 = row.get(0);
     let repo_name: String = row.get(1);
     let repo_root: String = row.get(2);
 
@@ -388,7 +445,7 @@ async fn test_05_data_persistence() {
         .await
         .expect("Worktree should persist");
 
-    let worktree_id: i32 = row.get(0);
+    let worktree_id: i64 = row.get(0);
     let worktree_name: String = row.get(1);
     let commit_hash: String = row.get(2);
 
@@ -397,12 +454,13 @@ async fn test_05_data_persistence() {
     println!("  Name: {}", worktree_name);
     println!("  Commit: {}...", &commit_hash[..8]);
 
-    // Check chunks and edges
+    // Check chunks and edges (count both embedding types)
     let row = client
         .query_one(
             "SELECT
                 COUNT(*) as chunks,
-                COUNT(embedding) as embeddings,
+                COUNT(code_embedding) as code_embeddings,
+                COUNT(text_embedding) as text_embeddings,
                 (SELECT COUNT(*) FROM maproom.chunk_edges) as edges
              FROM maproom.chunks
              WHERE worktree_id = $1",
@@ -412,12 +470,14 @@ async fn test_05_data_persistence() {
         .expect("Chunks should persist");
 
     let chunk_count: i64 = row.get(0);
-    let embedding_count: i64 = row.get(1);
-    let edge_count: i64 = row.get(2);
+    let code_embedding_count: i64 = row.get(1);
+    let text_embedding_count: i64 = row.get(2);
+    let edge_count: i64 = row.get(3);
 
     println!("✓ Data persisted:");
     println!("  Chunks: {}", chunk_count);
-    println!("  Embeddings: {}", embedding_count);
+    println!("  Code embeddings: {}", code_embedding_count);
+    println!("  Text embeddings: {}", text_embedding_count);
     println!("  Edges: {}", edge_count);
 
     assert!(chunk_count > 0, "Should have chunks");
