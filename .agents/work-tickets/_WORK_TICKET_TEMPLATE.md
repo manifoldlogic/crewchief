@@ -20,6 +20,7 @@
 
 ## Background
 [Context and why this work is needed]
+[Reference the specific section/feature from <SLUG>_PLAN.md this ticket implements]
 
 ## Acceptance Criteria
 - [ ] [Specific measurable outcome 1]
