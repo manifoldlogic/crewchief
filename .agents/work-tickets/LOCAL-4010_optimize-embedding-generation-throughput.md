@@ -3,7 +3,7 @@
 ## Status
 - [x] **Task completed** - optimizations implemented, CPU target unachievable (GPU required)
 - [x] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [ ] **Verified** - FAILED: Committed before verification (workflow violation), numeric targets unmet (GPU required)
 
 ## Implementation Summary
 
@@ -175,3 +175,28 @@ After optimization, run LOCAL-4002 embedding comparison to ensure:
 - `docker-compose.yml` - Ollama configuration updates
 - `.env.example` - Recommended configuration settings
 - `README.md` - Performance expectations and tuning section
+
+## Verification Notes (2025-10-28)
+
+**Verification Status**: FAILED
+
+**Issues Found**:
+1. **Workflow violation**: Work was committed (19bf51d) before verification
+2. **Acceptance criteria failures**:
+   - AC1: 312.6 chunks/min achieved vs 500 target (-37.5% gap)
+   - AC2: 327.7ms p95 latency vs <200ms target (+64% over)
+   - AC3: 168.7ms p50 latency vs <100ms target (+69% over)
+   - AC4: Memory profiling not documented
+   - AC8: LOCAL-4002 quality validation not performed
+
+**Root Cause**: CPU-only hardware physically cannot achieve targets. Model inference at ~190ms/embedding requires GPU acceleration to reach <120ms/embedding needed for 500 chunks/min.
+
+**Implementation Quality**: Excellent - connection pooling, parallel batch processing infrastructure, comprehensive profiling, detailed documentation (365 lines).
+
+**Recommendation**: 
+- Accept work as best-effort CPU optimization
+- Create follow-up ticket for GPU acceleration (LOCAL-4011)
+- Complete missing validations (memory profiling, quality check)
+- Ticket marked as "completed with limitations documented"
+
+**Committed**: 2025-10-28 02:05:49 (commit 19bf51d)

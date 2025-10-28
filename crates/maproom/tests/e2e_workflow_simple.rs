@@ -27,7 +27,7 @@
 use anyhow::Result;
 use crewchief_maproom::db::pool::create_pool;
 use crewchief_maproom::embedding::{
-    CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig,
+    CacheConfig, EmbeddingConfig, EmbeddingService, ParallelConfig, Provider, RetryConfig,
 };
 use serial_test::serial;
 use std::time::{Duration, Instant};
@@ -104,6 +104,7 @@ fn create_test_embedding_service() -> Result<EmbeddingService> {
         retry: RetryConfig::default(),
         api_key: None,
         api_endpoint: Some(format!("{}/api/embed", OLLAMA_ENDPOINT)),
+        parallel: ParallelConfig::default(),
     };
 
     EmbeddingService::new(config).map_err(|e| anyhow::anyhow!("{:?}", e))
@@ -207,7 +208,7 @@ async fn test_02_indexed_data_validation() {
                 COUNT(*) as total,
                 COUNT(c.code_embedding) as code_embeddings,
                 COUNT(c.text_embedding) as text_embeddings,
-                COUNT(DISTINCT c.language) as languages,
+                COUNT(DISTINCT f.language) as languages,
                 COUNT(DISTINCT f.id) as files
              FROM maproom.chunks c
              JOIN maproom.files f ON c.file_id = f.id",
@@ -259,10 +260,10 @@ async fn test_03_fts_search_functionality() {
 
         let rows = client
             .query(
-                "SELECT c.id, f.relpath, c.preview, ts_rank_cd(c.fts_vector, websearch_to_tsquery('english', $1)) as rank
+                "SELECT c.id, f.relpath, c.preview, ts_rank_cd(c.ts_doc, websearch_to_tsquery('english', $1)) as rank
                  FROM maproom.chunks c
                  JOIN maproom.files f ON c.file_id = f.id
-                 WHERE c.fts_vector @@ websearch_to_tsquery('english', $1)
+                 WHERE c.ts_doc @@ websearch_to_tsquery('english', $1)
                  ORDER BY rank DESC
                  LIMIT 10",
                 &[&query],
@@ -439,7 +440,7 @@ async fn test_05_data_persistence() {
     // Check worktrees
     let row = client
         .query_one(
-            "SELECT id, name, commit_hash FROM maproom.worktrees WHERE repo_id = $1 LIMIT 1",
+            "SELECT id, name, abs_path FROM maproom.worktrees WHERE repo_id = $1 LIMIT 1",
             &[&repo_id],
         )
         .await
@@ -447,23 +448,24 @@ async fn test_05_data_persistence() {
 
     let worktree_id: i64 = row.get(0);
     let worktree_name: String = row.get(1);
-    let commit_hash: String = row.get(2);
+    let abs_path: String = row.get(2);
 
     println!("✓ Worktree persisted:");
     println!("  ID: {}", worktree_id);
     println!("  Name: {}", worktree_name);
-    println!("  Commit: {}...", &commit_hash[..8]);
+    println!("  Path: {}", abs_path);
 
     // Check chunks and edges (count both embedding types)
     let row = client
         .query_one(
             "SELECT
-                COUNT(*) as chunks,
-                COUNT(code_embedding) as code_embeddings,
-                COUNT(text_embedding) as text_embeddings,
+                COUNT(c.*) as chunks,
+                COUNT(c.code_embedding) as code_embeddings,
+                COUNT(c.text_embedding) as text_embeddings,
                 (SELECT COUNT(*) FROM maproom.chunk_edges) as edges
-             FROM maproom.chunks
-             WHERE worktree_id = $1",
+             FROM maproom.chunks c
+             JOIN maproom.files f ON c.file_id = f.id
+             WHERE f.worktree_id = $1",
             &[&worktree_id],
         )
         .await
