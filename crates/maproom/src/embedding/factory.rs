@@ -37,7 +37,8 @@
 //! - `EMBEDDING_MODEL`: Model name (provider-specific defaults)
 //! - `EMBEDDING_API_ENDPOINT`: API endpoint (provider-specific defaults)
 //! - `OPENAI_API_KEY`: Required for OpenAI provider
-//! - `GOOGLE_PROJECT_ID`: Required for Google provider (future)
+//! - `GOOGLE_PROJECT_ID`: Required for Google provider
+//! - `GOOGLE_APPLICATION_CREDENTIALS`: Required for Google provider
 //!
 //! # Configuration Examples
 //!
@@ -61,8 +62,18 @@
 //! export EMBEDDING_MODEL=nomic-embed-text
 //! cargo run
 //! ```
+//!
+//! ## Google Vertex AI configuration
+//! ```bash
+//! export EMBEDDING_PROVIDER=google
+//! export GOOGLE_PROJECT_ID=my-project
+//! export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+//! cargo run
+//! ```
 
 use std::env;
+use std::fs;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::embedding::error::{ConfigError, EmbeddingError};
@@ -70,6 +81,7 @@ use crate::embedding::provider::EmbeddingProvider;
 use crate::embedding::ollama::OllamaProvider;
 use crate::embedding::client::OpenAIClient;
 use crate::embedding::config::EmbeddingConfig;
+use crate::embedding::google::GoogleProvider;
 
 /// Create embedding provider from environment configuration.
 ///
@@ -198,13 +210,58 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
             Ok(Box::new(client))
         }
         "google" => {
-            // Google provider will be implemented in MPEMBED-3001
-            tracing::error!("Google provider requested but not yet implemented");
-            Err(EmbeddingError::Config(ConfigError::InvalidValue {
-                field: "EMBEDDING_PROVIDER".to_string(),
-                reason: "Google provider not yet implemented. Supported providers: ollama, openai"
-                    .to_string(),
-            }))
+            tracing::debug!("Creating Google provider from environment configuration");
+
+            // Validate GOOGLE_PROJECT_ID
+            let project_id = env::var("GOOGLE_PROJECT_ID").map_err(|_| {
+                EmbeddingError::Config(ConfigError::MissingConfig(
+                    "GOOGLE_PROJECT_ID environment variable not set. Required for Google provider.\n\
+                     Get your project ID from: https://console.cloud.google.com/\n\
+                     Then set: export GOOGLE_PROJECT_ID=your-project-id"
+                        .to_string(),
+                ))
+            })?;
+
+            // Validate GOOGLE_APPLICATION_CREDENTIALS
+            let creds_path_str = env::var("GOOGLE_APPLICATION_CREDENTIALS").map_err(|_| {
+                EmbeddingError::Config(ConfigError::MissingConfig(
+                    "GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Required for Google provider.\n\
+                     Set it to the path of your service account JSON key file.\n\
+                     Download from: https://console.cloud.google.com/iam-admin/serviceaccounts\n\
+                     Then set: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json"
+                        .to_string(),
+                ))
+            })?;
+
+            let creds_path = PathBuf::from(&creds_path_str);
+
+            // Check credentials file exists
+            if !creds_path.exists() {
+                return Err(EmbeddingError::Config(ConfigError::FileError(format!(
+                    "Service account credentials file not found at: {}\n\
+                     Verify the path is correct and the file exists.",
+                    creds_path.display()
+                ))));
+            }
+
+            // Validate credentials file is readable and has valid JSON structure
+            validate_service_account_json(&creds_path)?;
+
+            // Read optional configuration
+            let region = env::var("GOOGLE_REGION")
+                .unwrap_or_else(|_| GoogleProvider::DEFAULT_REGION.to_string());
+            let model = env::var("GOOGLE_MODEL")
+                .unwrap_or_else(|_| GoogleProvider::DEFAULT_MODEL.to_string());
+
+            tracing::info!(
+                "Using provider: google (project: {}, region: {}, model: {})",
+                project_id,
+                region,
+                model
+            );
+
+            let provider = GoogleProvider::new(project_id, creds_path, region, model).await?;
+            Ok(Box::new(provider))
         }
         unknown => {
             tracing::error!("Unknown provider requested: {}", unknown);
@@ -217,6 +274,89 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
             }))
         }
     }
+}
+
+/// Validate service account JSON file structure.
+///
+/// This function validates that a service account JSON file exists, is readable,
+/// contains valid JSON, and has all required fields for Google Cloud authentication.
+///
+/// # Arguments
+///
+/// * `path` - Path to the service account JSON key file
+///
+/// # Required Fields
+///
+/// - `type`: Must be "service_account"
+/// - `project_id`: GCP project ID
+/// - `private_key`: RSA private key for signing JWT tokens
+/// - `client_email`: Service account email address
+///
+/// # Returns
+///
+/// - `Ok(())` - File is valid and contains required fields
+/// - `Err(EmbeddingError)` - File is unreadable, invalid JSON, or missing required fields
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crewchief_maproom::embedding::factory::validate_service_account_json;
+/// # use std::path::PathBuf;
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let path = PathBuf::from("/path/to/service-account.json");
+/// validate_service_account_json(&path)?;
+/// # Ok(())
+/// # }
+/// ```
+fn validate_service_account_json(path: &std::path::Path) -> Result<(), EmbeddingError> {
+    // Read file contents
+    let content = fs::read_to_string(path).map_err(|e| {
+        EmbeddingError::Config(ConfigError::FileError(format!(
+            "Failed to read service account JSON file: {}\n\
+             Ensure the file has proper read permissions.",
+            e
+        )))
+    })?;
+
+    // Parse JSON
+    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+        EmbeddingError::Config(ConfigError::FileError(format!(
+            "Service account file is not valid JSON: {}\n\
+             Download a new service account key from: https://console.cloud.google.com/iam-admin/serviceaccounts",
+            e
+        )))
+    })?;
+
+    // Validate required fields
+    let required_fields = ["type", "project_id", "private_key", "client_email"];
+    for field in &required_fields {
+        if json.get(field).is_none() {
+            return Err(EmbeddingError::Config(ConfigError::FileError(format!(
+                "Service account JSON missing required field: '{}'\n\
+                 Expected fields: type, project_id, private_key, client_email\n\
+                 Download a valid service account key from: https://console.cloud.google.com/iam-admin/serviceaccounts",
+                field
+            ))));
+        }
+    }
+
+    // Validate type field value
+    if let Some(account_type) = json.get("type").and_then(|v| v.as_str()) {
+        if account_type != "service_account" {
+            return Err(EmbeddingError::Config(ConfigError::FileError(format!(
+                "Service account JSON has wrong type: expected 'service_account', got '{}'\n\
+                 Ensure you downloaded a service account key, not an OAuth client ID or other credential type.\n\
+                 Download from: https://console.cloud.google.com/iam-admin/serviceaccounts",
+                account_type
+            ))));
+        }
+    } else {
+        return Err(EmbeddingError::Config(ConfigError::FileError(
+            "Service account JSON 'type' field is not a string".to_string(),
+        )));
+    }
+
+    Ok(())
 }
 
 /// Check if Ollama is available on localhost.
@@ -319,6 +459,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_provider_with_explicit_ollama() {
+        // Clean up all environment variables first
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("EMBEDDING_MODEL");
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
         // Test explicit Ollama configuration
         env::set_var("EMBEDDING_PROVIDER", "ollama");
         env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
@@ -339,8 +487,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_provider_missing_openai_key() {
-        // Ensure OPENAI_API_KEY is not set
+        // Clean up all environment variables first
+        env::remove_var("EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Set provider to openai without API key
         env::set_var("EMBEDDING_PROVIDER", "openai");
 
         let result = create_provider_from_env().await;
@@ -368,6 +521,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_provider_unknown_provider() {
+        // Clean up all environment variables first
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
         env::set_var("EMBEDDING_PROVIDER", "unknown-provider");
 
         let result = create_provider_from_env().await;
@@ -394,7 +553,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_provider_google_not_implemented() {
+    async fn test_create_provider_google_missing_project_id() {
+        // Clean up all environment variables first
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Set provider but not project ID
         env::set_var("EMBEDDING_PROVIDER", "google");
 
         let result = create_provider_from_env().await;
@@ -402,27 +568,261 @@ mod tests {
         // Clean up
         env::remove_var("EMBEDDING_PROVIDER");
 
-        assert!(result.is_err(), "Expected error for unimplemented Google provider");
+        assert!(result.is_err(), "Expected error when GOOGLE_PROJECT_ID is missing");
         if let Err(err) = result {
             assert!(
-                matches!(err, EmbeddingError::Config(ConfigError::InvalidValue { .. })),
-                "Expected InvalidValue error for unimplemented provider, got: {:?}",
+                matches!(err, EmbeddingError::Config(ConfigError::MissingConfig(_))),
+                "Expected MissingConfig error, got: {:?}",
                 err
             );
 
             let err_msg = err.to_string();
             assert!(
-                err_msg.contains("not yet implemented"),
-                "Error message should indicate Google is not yet implemented: {}",
+                err_msg.contains("GOOGLE_PROJECT_ID"),
+                "Error message should mention GOOGLE_PROJECT_ID: {}",
+                err_msg
+            );
+            assert!(
+                err_msg.contains("console.cloud.google.com"),
+                "Error message should reference GCP Console: {}",
                 err_msg
             );
         }
     }
 
     #[tokio::test]
-    async fn test_create_provider_no_config_no_ollama() {
-        // Ensure no explicit provider is set
+    async fn test_create_provider_google_missing_credentials() {
+        // Clean up all environment variables first
         env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Set provider and project ID but not credentials
+        env::set_var("EMBEDDING_PROVIDER", "google");
+        env::set_var("GOOGLE_PROJECT_ID", "test-project");
+
+        let result = create_provider_from_env().await;
+
+        // Clean up
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("GOOGLE_PROJECT_ID");
+
+        assert!(
+            result.is_err(),
+            "Expected error when GOOGLE_APPLICATION_CREDENTIALS is missing"
+        );
+        if let Err(err) = result {
+            assert!(
+                matches!(err, EmbeddingError::Config(ConfigError::MissingConfig(_))),
+                "Expected MissingConfig error, got: {:?}",
+                err
+            );
+
+            let err_msg = err.to_string();
+            assert!(
+                err_msg.contains("GOOGLE_APPLICATION_CREDENTIALS"),
+                "Error message should mention GOOGLE_APPLICATION_CREDENTIALS: {}",
+                err_msg
+            );
+            assert!(
+                err_msg.contains("service account JSON key"),
+                "Error message should reference service account key: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_provider_google_credentials_file_not_found() {
+        // Clean up all environment variables first
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        env::set_var("EMBEDDING_PROVIDER", "google");
+        env::set_var("GOOGLE_PROJECT_ID", "test-project");
+        env::set_var("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent/path/key.json");
+
+        let result = create_provider_from_env().await;
+
+        // Clean up
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        assert!(result.is_err(), "Expected error when credentials file doesn't exist");
+        if let Err(err) = result {
+            assert!(
+                matches!(err, EmbeddingError::Config(ConfigError::FileError(_))),
+                "Expected FileError, got: {:?}",
+                err
+            );
+
+            let err_msg = err.to_string();
+            assert!(
+                err_msg.contains("not found"),
+                "Error message should indicate file not found: {}",
+                err_msg
+            );
+            assert!(
+                err_msg.contains("/nonexistent/path/key.json"),
+                "Error message should show the path: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_validate_service_account_json_invalid_json() {
+        // Create a temporary file with invalid JSON
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("invalid-service-account.json");
+        fs::write(&temp_file, "{ invalid json }").expect("Failed to write temp file");
+
+        let result = validate_service_account_json(&temp_file);
+
+        // Clean up
+        let _ = fs::remove_file(&temp_file);
+
+        assert!(result.is_err(), "Expected error for invalid JSON");
+        if let Err(err) = result {
+            assert!(
+                matches!(err, EmbeddingError::Config(ConfigError::FileError(_))),
+                "Expected FileError, got: {:?}",
+                err
+            );
+
+            let err_msg = err.to_string();
+            assert!(
+                err_msg.contains("not valid JSON"),
+                "Error message should indicate invalid JSON: {}",
+                err_msg
+            );
+            assert!(
+                err_msg.contains("console.cloud.google.com"),
+                "Error message should reference GCP Console: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_validate_service_account_json_missing_field() {
+        // Create a temporary file with incomplete service account JSON
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("incomplete-service-account.json");
+        let incomplete_json = r#"{
+            "type": "service_account",
+            "project_id": "test-project"
+        }"#;
+        fs::write(&temp_file, incomplete_json).expect("Failed to write temp file");
+
+        let result = validate_service_account_json(&temp_file);
+
+        // Clean up
+        let _ = fs::remove_file(&temp_file);
+
+        assert!(result.is_err(), "Expected error for missing required fields");
+        if let Err(err) = result {
+            assert!(
+                matches!(err, EmbeddingError::Config(ConfigError::FileError(_))),
+                "Expected FileError, got: {:?}",
+                err
+            );
+
+            let err_msg = err.to_string();
+            assert!(
+                err_msg.contains("missing required field"),
+                "Error message should indicate missing field: {}",
+                err_msg
+            );
+            // Should mention one of the missing fields (private_key or client_email)
+            assert!(
+                err_msg.contains("private_key") || err_msg.contains("client_email"),
+                "Error message should name a missing field: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_validate_service_account_json_wrong_type() {
+        // Create a temporary file with wrong account type
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("wrong-type-service-account.json");
+        let wrong_type_json = r#"{
+            "type": "authorized_user",
+            "project_id": "test-project",
+            "private_key": "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----\n",
+            "client_email": "test@example.com"
+        }"#;
+        fs::write(&temp_file, wrong_type_json).expect("Failed to write temp file");
+
+        let result = validate_service_account_json(&temp_file);
+
+        // Clean up
+        let _ = fs::remove_file(&temp_file);
+
+        assert!(result.is_err(), "Expected error for wrong account type");
+        if let Err(err) = result {
+            assert!(
+                matches!(err, EmbeddingError::Config(ConfigError::FileError(_))),
+                "Expected FileError, got: {:?}",
+                err
+            );
+
+            let err_msg = err.to_string();
+            assert!(
+                err_msg.contains("wrong type"),
+                "Error message should indicate wrong type: {}",
+                err_msg
+            );
+            assert!(
+                err_msg.contains("authorized_user"),
+                "Error message should show actual type: {}",
+                err_msg
+            );
+            assert!(
+                err_msg.contains("service_account"),
+                "Error message should show expected type: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_validate_service_account_json_valid() {
+        // Create a temporary file with valid service account JSON structure
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("valid-service-account.json");
+        let valid_json = r#"{
+            "type": "service_account",
+            "project_id": "test-project",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC\n-----END PRIVATE KEY-----\n",
+            "client_email": "test@test-project.iam.gserviceaccount.com",
+            "client_id": "123456789",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        }"#;
+        fs::write(&temp_file, valid_json).expect("Failed to write temp file");
+
+        let result = validate_service_account_json(&temp_file);
+
+        // Clean up
+        let _ = fs::remove_file(&temp_file);
+
+        assert!(result.is_ok(), "Expected success for valid service account JSON: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_create_provider_no_config_no_ollama() {
+        // Clean up all environment variables first
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
         // Note: This test will pass if Ollama IS running locally
         // If Ollama is available, it will successfully create a provider
