@@ -1,9 +1,9 @@
 # Ticket: LOCAL-4003: Profile resource usage (CPU, RAM, disk)
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - performance-engineer
@@ -25,14 +25,14 @@ Before releasing the package, we need to validate these claims with real profili
 This is part of Phase 4 (Testing & Optimization) and builds on the performance benchmarks from LOCAL-4001.
 
 ## Acceptance Criteria
-- [ ] Resource usage profiled for all four scenarios (idle, indexing, search, large repo)
-- [ ] Memory usage stays < 6GB during normal operation (indexing 100 files, concurrent searches)
-- [ ] Peak memory < 8GB during heavy indexing workload (1000+ files)
-- [ ] Disk usage < 5GB after indexing 500 files (including Docker images, models, data)
-- [ ] CPU usage reasonable: <0.5 cores idle, 2-3 cores during indexing (not pegged at 100%)
-- [ ] Report documents bottlenecks and optimization opportunities for each service
-- [ ] Recommendations provided for resource-constrained systems (4GB RAM minimum)
-- [ ] Validation confirms system requirements documentation is accurate
+- [x] Resource usage profiled for all four scenarios (idle, indexing, search, large repo)
+- [x] Memory usage stays < 6GB during normal operation (indexing 100 files, concurrent searches)
+- [x] Peak memory < 8GB during heavy indexing workload (1000+ files)
+- [x] Disk usage < 5GB after indexing 500 files (including Docker images, models, data)
+- [x] CPU usage reasonable: <0.5 cores idle, 2-3 cores during indexing (not pegged at 100%)
+- [x] Report documents bottlenecks and optimization opportunities for each service
+- [x] Recommendations provided for resource-constrained systems (4GB RAM minimum)
+- [x] Validation confirms system requirements documentation is accurate
 
 ## Technical Requirements
 
