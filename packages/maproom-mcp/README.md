@@ -165,6 +165,8 @@ The stack consists of three Docker services orchestrated automatically:
    - Vector database with pgvector extension
    - Stores code chunks, embeddings, and relationships
    - Hybrid search combining full-text (tsvector) and vector similarity (ivfflat)
+   - Container name: `maproom-postgres`
+   - Network hostname: `maproom-postgres` (unique to avoid conflicts on shared networks)
 
 2. **Ollama** (`ollama/ollama:latest`)
    - Local LLM inference server
@@ -176,6 +178,24 @@ The stack consists of three Docker services orchestrated automatically:
    - Communicates via stdio with Claude/Cursor
    - Provides tools: `search`, `open`, `context`, `upsert`, `status`
    - Calls Rust indexer binary for code parsing and indexing
+
+### Database Configuration
+
+The MCP server connects to PostgreSQL using a specific hostname to avoid conflicts on shared Docker networks:
+
+- **DATABASE_URL**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
+- **Hostname**: `maproom-postgres` (unique network alias)
+- **Credentials**: `maproom:maproom` (user:password)
+- **Database**: `maproom`
+
+**Why `maproom-postgres` instead of `postgres`?**
+
+On shared Docker networks (e.g., in devcontainer environments), the generic hostname `postgres` can resolve to multiple PostgreSQL instances, causing authentication failures. Using the unique hostname `maproom-postgres` ensures the MCP server always connects to the correct database instance.
+
+**Network Configuration**:
+- The postgres service has a network alias `maproom-postgres` in the `maproom-network`
+- This alias is consistent across both development and production docker-compose configurations
+- Services on shared networks can coexist without hostname conflicts
 
 ## Documentation
 
