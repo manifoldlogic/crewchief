@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-1003: Create migration verification script
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - migration-safety-specialist
@@ -20,14 +20,14 @@ Manual verification is error-prone and doesn't scale for CI/CD pipelines. We nee
 This implements Phase 1: Database Migration verification from the MPEMBED multi-provider embeddings plan.
 
 ## Acceptance Criteria
-- [ ] Script checks `code_embedding_ollama` column exists
-- [ ] Script checks `text_embedding_ollama` column exists
-- [ ] Script checks `idx_chunks_code_vec_ollama` index exists
-- [ ] Script checks `idx_chunks_text_vec_ollama` index exists
-- [ ] Script verifies existing OpenAI embedding count unchanged (23,632 chunks)
-- [ ] Script verifies new Ollama columns are NULL (no data yet)
-- [ ] Script exits with status code 0 on success, non-zero on failure
-- [ ] Script outputs clear ✓ or ✗ for each check
+- [x] Script checks `code_embedding_ollama` column exists
+- [x] Script checks `text_embedding_ollama` column exists
+- [x] Script checks `idx_chunks_code_vec_ollama` index exists
+- [x] Script checks `idx_chunks_text_vec_ollama` index exists
+- [x] Script verifies existing OpenAI embedding count unchanged (23,632 chunks)
+- [x] Script verifies new Ollama columns are NULL (no data yet)
+- [x] Script exits with status code 0 on success, non-zero on failure
+- [x] Script outputs clear ✓ or ✗ for each check
 
 ## Technical Requirements
 - File location: `crates/maproom/scripts/verify_migration_0015.sh`
