@@ -489,6 +489,7 @@ dependencies = [
  "futures",
  "globset",
  "google-cloud-auth",
+ "google-cloud-token",
  "humantime",
  "ignore",
  "lazy_static",

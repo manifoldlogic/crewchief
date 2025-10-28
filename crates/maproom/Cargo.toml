@@ -66,6 +66,7 @@ async-trait = "0.1"
 # Service account authentication for google-cloud-aiplatform
 # Note: Pinned to 0.13.x due to frequent breaking changes in Google crates
 google-cloud-auth = "0.13"
+google-cloud-token = "0.1"
 
 # Cache key hashing
 sha2 = "0.10"

@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-3001: Implement GoogleProvider for Vertex AI embeddings
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - google-cloud-integration-engineer
@@ -20,15 +20,15 @@ This ticket implements Phase 3 (Google Vertex AI Integration) from the MPEMBED m
 Reference: crewchief_context/maproom/MPEMBED-multi-provider-embeddings/phase-3-google-vertex-ai.md
 
 ## Acceptance Criteria
-- [ ] GoogleProvider struct implements EmbeddingProvider trait
-- [ ] Service account JSON key authentication working
-- [ ] Regional endpoint support (us-central1 as default)
-- [ ] Task type parameter support (RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY)
-- [ ] Native batch embedding support (up to 250 texts per request)
-- [ ] 768-dimensional embedding output verified
-- [ ] Error handling for API errors (auth, quota, network)
-- [ ] Rate limiting and retry logic implemented
-- [ ] Unit tests with mocked HTTP responses
+- [x] GoogleProvider struct implements EmbeddingProvider trait
+- [x] Service account JSON key authentication working
+- [x] Regional endpoint support (us-central1 as default)
+- [x] Task type parameter support (RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY)
+- [x] Native batch embedding support (up to 250 texts per request)
+- [x] 768-dimensional embedding output verified
+- [x] Error handling for API errors (auth, quota, network)
+- [x] Rate limiting and retry logic implemented
+- [x] Unit tests with mocked HTTP responses
 
 ## Technical Requirements
 - Use reqwest crate for HTTP client with async support
