@@ -3,8 +3,8 @@
 # ========================================
 FROM rust:1.82-slim AS builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+# Install only essential build dependencies and clean up in same layer
+RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -12,47 +12,44 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /build
 
-# Copy the entire workspace to get Cargo.toml and workspace structure
+# Copy workspace manifests for dependency caching
 COPY Cargo.toml Cargo.lock ./
-COPY crates/ ./crates/
 
-# Build only the maproom binary in release mode
-# This optimizes for size and performance
-WORKDIR /build/crates/maproom
-RUN cargo build --release --bin crewchief-maproom
+# Copy all of maproom crate (Cargo needs benches/ for manifest validation)
+COPY crates/maproom/ ./crates/maproom/
 
-# Strip debug symbols to reduce binary size
-# The binary is located in the workspace target directory
-RUN strip /build/target/release/crewchief-maproom || \
-    strip /build/crates/maproom/target/release/crewchief-maproom
+# Fetch dependencies first (cached layer if dependencies don't change)
+RUN cargo fetch --manifest-path crates/maproom/Cargo.toml --locked
+
+# Build the actual binary with aggressive size optimizations
+# The release profile in Cargo.toml enables LTO, opt-level=z, strip, and panic=abort
+RUN cargo build --release --bin crewchief-maproom --manifest-path crates/maproom/Cargo.toml
+
+# Additional stripping for maximum size reduction
+# The binary is in workspace target directory
+RUN strip --strip-all /build/target/release/crewchief-maproom 2>/dev/null || \
+    strip /build/target/release/crewchief-maproom
 
 # ========================================
 # Stage 2: Runtime Stage
 # ========================================
 FROM debian:bookworm-slim
 
-# Install minimal runtime dependencies
-RUN apt-get update && apt-get install -y \
+# Install minimal runtime dependencies, create user, and setup directories in a single layer
+# This reduces layer count and image size
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 -s /bin/bash maproom \
+    && mkdir -p /etc/maproom /data /workspace \
+    && chown -R maproom:maproom /etc/maproom /data /workspace
 
-# Create non-root user for security
-RUN useradd -m -u 1000 -s /bin/bash maproom
+# Copy the optimized binary from builder stage
+COPY --from=builder --chown=maproom:maproom /build/target/release/crewchief-maproom /usr/local/bin/crewchief-maproom
 
-# Create necessary directories
-RUN mkdir -p /etc/maproom /data /workspace && \
-    chown -R maproom:maproom /etc/maproom /data /workspace
-
-# Copy the binary from builder stage
-# Check both possible locations for the binary
-COPY --from=builder /build/target/release/crewchief-maproom /usr/local/bin/crewchief-maproom
-
-# Set binary permissions
-RUN chmod +x /usr/local/bin/crewchief-maproom
-
-# Switch to non-root user
+# Switch to non-root user for security
 USER maproom
 
 # Set working directory

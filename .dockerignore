@@ -8,6 +8,8 @@ target/
 dist/
 node_modules/
 *.log
+*.rlib
+*.rmeta
 
 # IDE and editor files
 .vscode/
@@ -16,6 +18,10 @@ node_modules/
 *.swo
 *~
 .DS_Store
+
+# Rust development files
+**/*.rs.bk
+**/Cargo.lock.bak
 
 # Environment files
 .env
@@ -31,6 +37,13 @@ docs/
 tests/
 *.test.ts
 *.spec.ts
+**/tests/
+# Note: benches are needed at build time due to Cargo.toml references
+# Commenting out bench exclusions as they're needed for manifest validation
+# **/benches/
+**/examples/
+**/*_test.rs
+# **/*_bench.rs
 
 # CI/CD files
 .gitlab-ci.yml

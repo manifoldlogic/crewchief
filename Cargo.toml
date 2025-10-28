@@ -4,5 +4,17 @@ members = [
 ]
 resolver = "2"
 
+[profile.release]
+# Enable link-time optimization for maximum size reduction
+lto = true
+# Use a single codegen unit for better optimization (slower compile, smaller binary)
+codegen-units = 1
+# Optimize for size while maintaining reasonable performance
+opt-level = "z"
+# Strip debug symbols
+strip = true
+# Panic strategy to reduce binary size
+panic = "abort"
+
 
 
