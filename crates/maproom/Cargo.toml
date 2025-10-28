@@ -6,12 +6,12 @@ description = "Maproom indexer and CLI for CrewChief"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-anyhow = "1"
-blake3 = "1"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4", features = ["derive"] }
+anyhow = "1.0.100"
+blake3 = "1.5"
+chrono = { version = "0.4.42", features = ["serde"] }
+clap = { version = "4.5", features = ["derive"] }
 dotenvy = "0.15"
-ignore = "0.4"
+ignore = "0.4.24"
 once_cell = "1"
 priority-queue = "2.1"
 regex = "1"
@@ -21,15 +21,17 @@ serde_yaml = "0.9"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "time", "sync", "signal"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 
 # Monitoring and metrics
+# Note: prometheus 0.13 uses vulnerable protobuf 2.28, but no newer version available
+# Accepting this risk as prometheus is not processing untrusted data
 prometheus = { version = "0.13", features = ["process"] }
 lazy_static = "1.4"
-base64ct = "1.6.0"
-globset = "0.4"
+base64ct = "1.8.0"
+globset = "0.4.18"
 notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
-humantime = "2"
+humantime = "2.3"
 config = "0.14"
 
 # Database (use tokio-postgres to avoid heavy deps)
@@ -55,7 +57,15 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 # Token counting for context assembly
 tiktoken-rs = "0.5"
+
+# Multi-provider trait abstraction (MPEMBED)
+# Used for EmbeddingProvider trait to support OpenAI, Ollama, Google Vertex AI
 async-trait = "0.1"
+
+# Google Vertex AI authentication (MPEMBED Phase 3)
+# Service account authentication for google-cloud-aiplatform
+# Note: Pinned to 0.13.x due to frequent breaking changes in Google crates
+google-cloud-auth = "0.13"
 
 # Cache key hashing
 sha2 = "0.10"
