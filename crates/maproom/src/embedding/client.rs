@@ -118,6 +118,10 @@ impl OpenAIClient {
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(10) // Connection pooling for performance
+            .pool_idle_timeout(Duration::from_secs(90))
+            .http2_keep_alive_interval(Some(Duration::from_secs(30)))
+            .http2_keep_alive_timeout(Duration::from_secs(10))
             .build()
             .map_err(EmbeddingError::Network)?;
 
@@ -363,12 +367,104 @@ impl OpenAIClient {
     pub fn config(&self) -> &EmbeddingConfig {
         &self.config
     }
+
+    /// Generate embeddings for a batch with parallel sub-batching for improved throughput.
+    ///
+    /// This method splits the input batch into smaller sub-batches and processes them
+    /// concurrently to maximize throughput. This is particularly effective for Ollama
+    /// which processes sequential items in a batch one-by-one on the server side.
+    ///
+    /// # Arguments
+    /// * `texts` - Input texts to embed
+    /// * `sub_batch_size` - Size of each concurrent sub-batch (default: 25)
+    /// * `max_concurrency` - Maximum concurrent requests (default: 4)
+    pub async fn embed_batch_parallel(
+        &self,
+        texts: Vec<String>,
+        sub_batch_size: Option<usize>,
+        max_concurrency: Option<usize>,
+    ) -> Result<Vec<Vector>, EmbeddingError> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let sub_batch_size = sub_batch_size.unwrap_or(25);
+        let max_concurrency = max_concurrency.unwrap_or(4);
+
+        // If the batch is small enough, just process it directly
+        if texts.len() <= sub_batch_size {
+            return self.embed_batch(texts).await;
+        }
+
+        debug!(
+            "Processing {} texts with parallel batching (sub_batch_size: {}, concurrency: {})",
+            texts.len(),
+            sub_batch_size,
+            max_concurrency
+        );
+
+        // Split into sub-batches
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        // Process sub-batches with controlled concurrency using semaphore
+        use tokio::sync::Semaphore;
+        let semaphore = Arc::new(Semaphore::new(max_concurrency));
+        let mut handles = Vec::new();
+
+        for (batch_idx, sub_batch) in sub_batches.into_iter().enumerate() {
+            let client = self.clone();
+            let permit = semaphore.clone().acquire_owned().await.map_err(|e| {
+                EmbeddingError::Other(format!("Semaphore error: {}", e))
+            })?;
+
+            let handle = tokio::spawn(async move {
+                let result = client.embed_batch(sub_batch).await;
+                drop(permit); // Release semaphore
+                (batch_idx, result)
+            });
+
+            handles.push(handle);
+        }
+
+        // Collect results in order
+        let mut results: Vec<(usize, Result<Vec<Vector>, EmbeddingError>)> = Vec::new();
+        for handle in handles {
+            let (idx, result) = handle.await.map_err(|e| {
+                EmbeddingError::Other(format!("Task join error: {}", e))
+            })?;
+            results.push((idx, result));
+        }
+
+        // Sort by batch index to maintain order
+        results.sort_by_key(|(idx, _)| *idx);
+
+        // Flatten results
+        let mut all_embeddings = Vec::new();
+        for (_, result) in results {
+            let embeddings = result?;
+            all_embeddings.extend(embeddings);
+        }
+
+        Ok(all_embeddings)
+    }
+
+    /// Clone the client (shares the underlying HTTP client and config)
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            config: self.config.clone(),
+            metrics: self.metrics.clone(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::embedding::config::{CacheConfig, Provider, RetryConfig};
+    use crate::embedding::config::{CacheConfig, ParallelConfig, Provider, RetryConfig};
 
     fn test_config() -> EmbeddingConfig {
         EmbeddingConfig {
@@ -380,6 +476,7 @@ mod tests {
             retry: RetryConfig::default(),
             api_key: Some("test-key".to_string()),
             api_endpoint: None,
+            parallel: ParallelConfig::default(),
         }
     }
 
@@ -410,6 +507,7 @@ mod tests {
             retry: RetryConfig::default(),
             api_key: None, // Ollama doesn't need API key
             api_endpoint: None,
+            parallel: ParallelConfig::default(),
         };
         let client = OpenAIClient::new(config);
         assert!(client.is_ok());

@@ -6,7 +6,7 @@
 //!
 //! Run with: cargo run --release --example embedding_benchmark
 
-use crewchief_maproom::embedding::config::{CacheConfig, EmbeddingConfig, Provider, RetryConfig};
+use crewchief_maproom::embedding::config::{CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig};
 use crewchief_maproom::embedding::service::EmbeddingService;
 use std::time::Instant;
 
@@ -48,7 +48,7 @@ export async function processData{}(data: UserInput): Promise<ProcessedResult> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Ollama Embedding Performance Benchmark ===\n");
 
-    // Configure Ollama
+    // Configure Ollama with parallel processing enabled
     let config = EmbeddingConfig {
         provider: Provider::Ollama,
         model: "nomic-embed-text".to_string(),
@@ -62,13 +62,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         retry: RetryConfig::default(),
         api_key: None,
         api_endpoint: Some("http://ollama:11434/api/embed".to_string()),
+        parallel: ParallelConfig {
+            enabled: true, // Test with optimal sub-batch size
+            sub_batch_size: 10, // Smaller batches for better parallelism
+            max_concurrency: 6, // More concurrency with 12 threads
+        },
     };
 
     println!("Configuration:");
     println!("  Provider: Ollama");
     println!("  Model: {}", config.model);
     println!("  Endpoint: http://ollama:11434");
-    println!("  Cache: Disabled (for accurate measurements)\n");
+    println!("  Cache: Disabled (for accurate measurements)");
+    println!("  Parallel: {} (sub_batch={}, concurrency={})\n",
+        config.parallel.enabled,
+        config.parallel.sub_batch_size,
+        config.parallel.max_concurrency);
 
     let service = EmbeddingService::new(config)?;
 

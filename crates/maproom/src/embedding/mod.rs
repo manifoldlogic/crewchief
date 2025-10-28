@@ -52,7 +52,7 @@ pub mod service;
 // Re-export main types for convenience
 pub use cache::{CacheMetrics, EmbeddingCache, Vector};
 pub use client::{CostMetrics, OpenAIClient};
-pub use config::{CacheConfig, EmbeddingConfig, Provider, RetryConfig};
+pub use config::{CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig};
 pub use cost_tracker::{CostEstimate, CostEstimator, CostSnapshot, CostTracker};
 pub use error::{ApiError, CacheError, ConfigError, EmbeddingError};
 pub use pipeline::{EmbeddingPipeline, PipelineConfig, PipelineStats};

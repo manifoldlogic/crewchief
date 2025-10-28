@@ -104,7 +104,14 @@ impl EmbeddingService {
         if !uncached_texts.is_empty() {
             info!("Generating {} embeddings via API", uncached_texts.len());
 
-            let new_embeddings = self.client.embed_batch(uncached_texts.clone()).await?;
+            // Use parallel batching if enabled and batch is large enough
+            let new_embeddings = if self.client.config().parallel.enabled {
+                let sub_batch_size = Some(self.client.config().parallel.sub_batch_size);
+                let max_concurrency = Some(self.client.config().parallel.max_concurrency);
+                self.client.embed_batch_parallel(uncached_texts.clone(), sub_batch_size, max_concurrency).await?
+            } else {
+                self.client.embed_batch(uncached_texts.clone()).await?
+            };
 
             // Store new embeddings in cache and update results
             for (i, embedding) in uncached_indices.iter().zip(new_embeddings.iter()) {
@@ -230,7 +237,7 @@ impl EmbeddingService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::embedding::config::{CacheConfig, Provider, RetryConfig};
+    use crate::embedding::config::{CacheConfig, ParallelConfig, Provider, RetryConfig};
 
     fn test_config() -> EmbeddingConfig {
         EmbeddingConfig {
@@ -246,6 +253,7 @@ mod tests {
             retry: RetryConfig::default(),
             api_key: Some("test-key".to_string()),
             api_endpoint: None,
+            parallel: ParallelConfig::default(),
         }
     }
 

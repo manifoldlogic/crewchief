@@ -68,6 +68,9 @@ pub struct EmbeddingConfig {
 
     /// API endpoint (optional override)
     pub api_endpoint: Option<String>,
+
+    /// Parallel processing configuration
+    pub parallel: ParallelConfig,
 }
 
 impl Default for EmbeddingConfig {
@@ -81,6 +84,7 @@ impl Default for EmbeddingConfig {
             retry: RetryConfig::default(),
             api_key: None,
             api_endpoint: None,
+            parallel: ParallelConfig::default(),
         }
     }
 }
@@ -158,6 +162,29 @@ impl EmbeddingConfig {
         // Load API endpoint override
         config.api_endpoint = env::var("EMBEDDING_API_ENDPOINT").ok();
 
+        // Load parallel processing configuration
+        if let Ok(enabled) = env::var("EMBEDDING_PARALLEL_ENABLED") {
+            config.parallel.enabled = enabled.parse().unwrap_or(true);
+        }
+
+        if let Ok(sub_batch) = env::var("EMBEDDING_PARALLEL_SUB_BATCH_SIZE") {
+            config.parallel.sub_batch_size = sub_batch.parse().map_err(|_| {
+                ConfigError::InvalidValue {
+                    field: "EMBEDDING_PARALLEL_SUB_BATCH_SIZE".to_string(),
+                    reason: "Must be a positive integer".to_string(),
+                }
+            })?;
+        }
+
+        if let Ok(concurrency) = env::var("EMBEDDING_PARALLEL_MAX_CONCURRENCY") {
+            config.parallel.max_concurrency = concurrency.parse().map_err(|_| {
+                ConfigError::InvalidValue {
+                    field: "EMBEDDING_PARALLEL_MAX_CONCURRENCY".to_string(),
+                    reason: "Must be a positive integer".to_string(),
+                }
+            })?;
+        }
+
         Ok(config)
     }
 
@@ -206,6 +233,9 @@ impl EmbeddingConfig {
 
         // Validate retry config
         self.retry.validate()?;
+
+        // Validate parallel config
+        self.parallel.validate()?;
 
         Ok(())
     }
@@ -259,6 +289,50 @@ impl CacheConfig {
         }
 
         // TTL of 0 is allowed (means immediate expiration, useful for testing)
+
+        Ok(())
+    }
+}
+
+/// Parallel processing configuration for batch embedding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParallelConfig {
+    /// Enable parallel batch processing (split batches into concurrent sub-batches)
+    pub enabled: bool,
+
+    /// Size of each sub-batch when parallel processing is enabled
+    pub sub_batch_size: usize,
+
+    /// Maximum number of concurrent requests
+    pub max_concurrency: usize,
+}
+
+impl Default for ParallelConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            sub_batch_size: 25, // Sweet spot for Ollama based on testing
+            max_concurrency: 4, // Conservative default for CPU-only systems
+        }
+    }
+}
+
+impl ParallelConfig {
+    /// Validate parallel configuration.
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.sub_batch_size == 0 {
+            return Err(ConfigError::InvalidValue {
+                field: "parallel.sub_batch_size".to_string(),
+                reason: "Must be greater than 0".to_string(),
+            });
+        }
+
+        if self.max_concurrency == 0 {
+            return Err(ConfigError::InvalidValue {
+                field: "parallel.max_concurrency".to_string(),
+                reason: "Must be greater than 0".to_string(),
+            });
+        }
 
         Ok(())
     }

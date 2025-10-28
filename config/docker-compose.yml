@@ -25,6 +25,10 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: maproom-ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_THREAD=12
     volumes:
       - ollama-models:/root/.ollama
       # Optional: Uncomment if using separate init script

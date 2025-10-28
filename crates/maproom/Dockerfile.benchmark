@@ -1,0 +1,10 @@
+FROM debian:bookworm-slim
+
+# Copy the pre-built binary
+COPY target/release/examples/embedding_benchmark /usr/local/bin/embedding_benchmark
+
+# Make it executable
+RUN chmod +x /usr/local/bin/embedding_benchmark
+
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/embedding_benchmark"]
