@@ -2,8 +2,8 @@
 
 ## Status
 - [x] **Task completed** - acceptance criteria met, critical bug fixed
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Bug Fix Notes
 Fixed critical idempotency bug where DO block queried columns without checking existence first.
