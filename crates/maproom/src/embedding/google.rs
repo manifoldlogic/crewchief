@@ -685,10 +685,9 @@ impl EmbeddingProvider for GoogleProvider {
     ///
     /// Current metrics including request counts and failure rates.
     fn metrics(&self) -> Option<ProviderMetrics> {
-        // Create a blocking task to read metrics
-        // This is safe because the lock is held very briefly
-        let metrics = self.metrics.blocking_read();
-        Some(metrics.clone())
+        // Use try_read to avoid blocking in async context
+        // Returns None if metrics are currently locked (rare, transient)
+        self.metrics.try_read().ok().map(|m| m.clone())
     }
 }
 
