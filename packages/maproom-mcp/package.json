@@ -1,6 +1,6 @@
 {
   "name": "@crewchief/maproom-mcp",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "type": "module",
   "description": "Maproom MCP server with local LLM embeddings - zero configuration required",
   "main": "dist/index.js",

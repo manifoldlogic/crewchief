@@ -264,11 +264,10 @@ const toolSchemas = [
 ]
 
 async function getPg(): Promise<Client> {
-  const connectionString = process.env.DATABASE_URL || process.env.PG_DATABASE_URL
-  if (!connectionString) {
-    log.error('No DATABASE_URL or PG_DATABASE_URL environment variable set')
-    throw new Error('Database connection string not configured')
-  }
+  // Default to maproom-postgres connection for zero-config experience
+  const DEFAULT_DATABASE_URL = 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+  const connectionString = process.env.DATABASE_URL || process.env.PG_DATABASE_URL || DEFAULT_DATABASE_URL
+
   log.debug({ connectionString: connectionString.replace(/:[^@]+@/, ':***@') }, 'Connecting to database')
   const client = new Client({ connectionString })
   await client.connect()

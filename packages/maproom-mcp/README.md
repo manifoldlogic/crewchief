@@ -68,9 +68,9 @@ After the first run, startup is fast:
 - Services start from Docker cache
 - Database persists between sessions
 
-## Environment Variables
+## Environment Variables (Optional)
 
-Customize behavior with environment variables in your `.mcp.json`:
+All configuration is optional! Customize behavior only if needed:
 
 ```json
 {
@@ -79,8 +79,8 @@ Customize behavior with environment variables in your `.mcp.json`:
       "command": "npx",
       "args": ["-y", "@crewchief/maproom-mcp"],
       "env": {
-        "LOG_LEVEL": "debug",
-        "EMBEDDING_MODEL": "nomic-embed-text"
+        "EMBEDDING_PROVIDER": "google",
+        "LOG_LEVEL": "debug"
       }
     }
   }
@@ -88,10 +88,29 @@ Customize behavior with environment variables in your `.mcp.json`:
 ```
 
 Available variables:
+- `EMBEDDING_PROVIDER` - Choose provider: `ollama` (default), `openai`, or `google`
 - `LOG_LEVEL` - Logging verbosity: `error`, `warn`, `info`, `debug` (default: `info`)
-- `EMBEDDING_MODEL` - Ollama model to use (default: `nomic-embed-text`)
-- `EMBEDDING_DIMENSION` - Vector dimensions (default: `768`)
+- `EMBEDDING_MODEL` - Override embedding model (provider-specific)
+- `EMBEDDING_DIMENSION` - Vector dimensions (provider-specific default)
 - `EMBEDDING_BATCH_SIZE` - Batch size for embedding generation (default: `50`)
+
+**Advanced: Custom Database**
+
+By default, Maproom connects to `maproom-postgres:5432`. To use a custom database:
+
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:pass@custom-host:5432/mydb"
+      }
+    }
+  }
+}
+```
 
 ## Data Persistence
 
@@ -300,16 +319,36 @@ For complete details on the dual-database architecture, see [Database Architectu
 
 ### Database Configuration
 
-The MCP server connects to PostgreSQL using a specific hostname to avoid conflicts on shared Docker networks:
+**Zero Configuration Default:**
 
-- **DATABASE_URL**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
-- **Hostname**: `maproom-postgres` (unique network alias)
-- **Credentials**: `maproom:maproom` (user:password)
-- **Database**: `maproom`
+The MCP server automatically connects to `maproom-postgres:5432` without requiring `DATABASE_URL` configuration. This provides true zero-config setup for most users.
+
+**Default connection string:**
+```
+postgresql://maproom:maproom@maproom-postgres:5432/maproom
+```
 
 **Why `maproom-postgres` instead of `postgres`?**
 
 On shared Docker networks (e.g., in devcontainer environments), the generic hostname `postgres` can resolve to multiple PostgreSQL instances, causing authentication failures. Using the unique hostname `maproom-postgres` ensures the MCP server always connects to the correct database instance.
+
+**Custom Database (Optional):**
+
+To use a different database, set `DATABASE_URL` in your MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:pass@custom-host:5432/mydb"
+      }
+    }
+  }
+}
+```
 
 **Network Configuration**:
 - The postgres service has a network alias `maproom-postgres` in the `maproom-network`
