@@ -17,6 +17,51 @@ const os = require('os');
 // Diagnostic Mode: Log environment variables for troubleshooting
 const DIAGNOSTIC_MODE = process.env.MAPROOM_MCP_DEBUG === 'true';
 
+// Sensitive environment variables to redact in logs
+const SENSITIVE_ENV_VARS = [
+  'GOOGLE_APPLICATION_CREDENTIALS',
+  'OPENAI_API_KEY',
+  'DATABASE_URL',
+  'POSTGRES_PASSWORD'
+];
+
+// Patterns that indicate sensitive data
+const SENSITIVE_PATTERNS = ['KEY', 'SECRET', 'PASSWORD', 'TOKEN'];
+
+/**
+ * Redact sensitive values from data object
+ * @param {any} data - The data object to redact
+ * @returns {any} - A new object with sensitive values replaced by "(redacted)"
+ */
+function redactSensitive(data) {
+  if (!data || typeof data !== 'object') return data;
+
+  const redacted = { ...data };
+
+  Object.keys(redacted).forEach(key => {
+    const upperKey = key.toUpperCase();
+
+    // Check explicit list
+    const isExplicitlySensitive = SENSITIVE_ENV_VARS.some(
+      sensitive => upperKey.includes(sensitive)
+    );
+
+    // Check patterns
+    const matchesPattern = SENSITIVE_PATTERNS.some(
+      pattern => upperKey.includes(pattern)
+    );
+
+    if (isExplicitlySensitive || matchesPattern) {
+      redacted[key] = '(redacted)';
+    } else if (typeof redacted[key] === 'object') {
+      // Recursively redact nested objects
+      redacted[key] = redactSensitive(redacted[key]);
+    }
+  });
+
+  return redacted;
+}
+
 /**
  * Log diagnostic information to stderr
  * Logs always appear when EMBEDDING_PROVIDER is not set OR when MAPROOM_MCP_DEBUG=true
@@ -25,7 +70,8 @@ function diagnosticLog(message, data) {
   if (DIAGNOSTIC_MODE || !process.env.EMBEDDING_PROVIDER) {
     console.error('🔍 [DIAGNOSTIC]', message);
     if (data) {
-      console.error('   ', JSON.stringify(data, null, 2));
+      const redactedData = redactSensitive(data);
+      console.error('   ', JSON.stringify(redactedData, null, 2));
     }
   }
 }
@@ -33,9 +79,9 @@ function diagnosticLog(message, data) {
 // Log environment variables immediately on startup
 diagnosticLog('CLI Started', {
   EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || '(not set)',
-  GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID ? '(set)' : '(not set)',
-  GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS ? '(set)' : '(not set)',
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '(set)' : '(not set)',
+  GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID || '(not set)',
+  GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || '(not set)',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '(not set)',
   OLLAMA_HOST: process.env.OLLAMA_HOST || '(not set)',
   NODE_ENV: process.env.NODE_ENV || '(not set)',
   cwd: process.cwd(),
