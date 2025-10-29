@@ -11,7 +11,8 @@
 -- - Refresh strategy: CONCURRENTLY for non-blocking updates
 
 -- Drop existing view if it exists (for migration reruns)
-DROP MATERIALIZED VIEW IF EXISTS maproom.chunk_importance;
+-- CASCADE is needed because chunk_search_view depends on this view
+DROP MATERIALIZED VIEW IF EXISTS maproom.chunk_importance CASCADE;
 
 -- Create materialized view with importance scoring
 CREATE MATERIALIZED VIEW maproom.chunk_importance AS

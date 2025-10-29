@@ -397,6 +397,8 @@ impl EmbeddingPipeline {
         code_embedding: &[f32],
         text_embedding: &[f32],
     ) -> Result<()> {
+        use crate::db::queries::upsert_embeddings;
+
         debug!(
             "Updating embeddings for chunk {} (code_dim={}, text_dim={})",
             chunk_id,
@@ -404,52 +406,27 @@ impl EmbeddingPipeline {
             text_embedding.len()
         );
 
-        // Format vectors as PostgreSQL array literal strings
-        // Without the pgvector Rust crate, we must embed vectors directly in SQL
-        // This is safe because vectors contain only f32 numbers (no user input)
-        let code_vec_str = format!(
-            "[{}]",
-            code_embedding
-                .iter()
-                .map(|f| f.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
+        let dimension = self.service.dimension();
 
-        let text_vec_str = format!(
-            "[{}]",
-            text_embedding
-                .iter()
-                .map(|f| f.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-
-        // Use formatted SQL with embedded vector literals instead of parameters
-        // because tokio-postgres doesn't support pgvector type conversion
-        let sql = format!(
-            "UPDATE maproom.chunks
-             SET code_embedding = '{}'::vector,
-                 text_embedding = '{}'::vector
-             WHERE id = $1",
-            code_vec_str, text_vec_str
-        );
-
-        client
-            .execute(&sql, &[&chunk_id])
-            .await
-            .map(|_| ())
-            .map_err(|e| {
-                error!(
-                    "Failed to update embeddings for chunk {}: Code dim={}, Text dim={}, Error: {:?}",
-                    chunk_id,
-                    code_embedding.len(),
-                    text_embedding.len(),
-                    e
-                );
+        upsert_embeddings(
+            client,
+            chunk_id,
+            Some(code_embedding),
+            Some(text_embedding),
+            dimension,
+        )
+        .await
+        .map_err(|e| {
+            error!(
+                "Failed to update embeddings for chunk {}: Code dim={}, Text dim={}, Error: {:?}",
+                chunk_id,
+                code_embedding.len(),
+                text_embedding.len(),
                 e
-            })
-            .context("Failed to update chunk embeddings")?;
+            );
+            e
+        })
+        .context("Failed to update chunk embeddings")?;
 
         Ok(())
     }

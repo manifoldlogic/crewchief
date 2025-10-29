@@ -8,8 +8,9 @@
 --
 -- Existing OpenAI columns (1536 dimensions) remain unchanged.
 -- The new columns will initially be NULL and populated by the embedding service.
-
-BEGIN;
+--
+-- IMPORTANT: batch_execute in tokio-postgres does NOT wrap statements in a transaction,
+-- which allows CREATE INDEX CONCURRENTLY to work correctly (same as migrations 0008, 0010, 0012).
 
 -- Add 768-dimensional columns for Ollama and Google providers
 -- These columns will store embeddings from alternative providers to OpenAI
@@ -24,9 +25,7 @@ COMMENT ON COLUMN maproom.chunks.code_embedding_ollama IS
 COMMENT ON COLUMN maproom.chunks.text_embedding_ollama IS
   'Text summary embeddings from Ollama or Google Vertex AI - 768 dimensions';
 
-COMMIT;
-
--- Create IVFFlat indexes OUTSIDE transaction (CONCURRENTLY requires this)
+-- Create IVFFlat indexes for vector similarity search
 -- Estimated duration: ~30-60 seconds for 25K chunks
 --
 -- IVFFlat parameters:
@@ -36,7 +35,7 @@ COMMIT;
 -- CONCURRENTLY ensures non-blocking index creation:
 -- - Reads and writes continue during index build
 -- - Safe for production deployment
--- - Cannot run inside a transaction block
+-- - Works with batch_execute because it does NOT wrap in BEGIN/COMMIT
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_code_vec_ollama
   ON maproom.chunks

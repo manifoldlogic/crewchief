@@ -97,6 +97,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop trigger if exists to ensure idempotency
+DROP TRIGGER IF EXISTS update_experiments_updated_at ON experiments;
+
 CREATE TRIGGER update_experiments_updated_at
     BEFORE UPDATE ON experiments
     FOR EACH ROW
