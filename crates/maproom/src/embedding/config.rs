@@ -159,6 +159,7 @@ impl EmbeddingConfig {
             Provider::OpenAI => env::var("OPENAI_API_KEY").ok(),
             Provider::Cohere => env::var("COHERE_API_KEY").ok(),
             Provider::Ollama => None, // Ollama runs locally, no API key needed
+            Provider::Google => None, // Google uses service account JSON, not API key
             Provider::Local => None, // Local models don't need API keys
         };
 
@@ -252,6 +253,14 @@ impl EmbeddingConfig {
                 Provider::OpenAI => "https://api.openai.com/v1/embeddings".to_string(),
                 Provider::Cohere => "https://api.cohere.ai/v1/embed".to_string(),
                 Provider::Ollama => "http://localhost:11434/api/embed".to_string(),
+                Provider::Google => {
+                    // Google endpoint is region-specific and constructed by GoogleProvider
+                    // Default to us-central1 for compatibility
+                    let region = env::var("GOOGLE_REGION").unwrap_or_else(|_| "us-central1".to_string());
+                    let project = env::var("GOOGLE_PROJECT_ID").unwrap_or_else(|_| "unknown".to_string());
+                    format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/textembedding-gecko@003:predict",
+                            region, project, region)
+                }
                 Provider::Local => "http://localhost:8080/embeddings".to_string(),
             }
         }
@@ -423,6 +432,7 @@ mod tests {
         assert_eq!("openai".parse::<Provider>().unwrap(), Provider::OpenAI);
         assert_eq!("cohere".parse::<Provider>().unwrap(), Provider::Cohere);
         assert_eq!("ollama".parse::<Provider>().unwrap(), Provider::Ollama);
+        assert_eq!("google".parse::<Provider>().unwrap(), Provider::Google);
         assert_eq!("local".parse::<Provider>().unwrap(), Provider::Local);
         assert_eq!("OpenAI".parse::<Provider>().unwrap(), Provider::OpenAI);
         assert!("unknown".parse::<Provider>().is_err());
@@ -745,6 +755,12 @@ mod tests {
             config.api_endpoint_url(),
             "http://localhost:11434/api/embed"
         );
+
+        config.provider = Provider::Google;
+        // Google endpoint should be constructed with region and project
+        let endpoint = config.api_endpoint_url();
+        assert!(endpoint.contains("aiplatform.googleapis.com"));
+        assert!(endpoint.contains("textembedding-gecko@003:predict"));
 
         config.provider = Provider::Local;
         assert_eq!(

@@ -223,6 +223,16 @@ impl OpenAIClient {
                     .header("Authorization", format!("Bearer {}", key))
                     .header("Content-Type", "application/json")
             }
+            Provider::Google => {
+                // Google uses factory system, not this client
+                // Return error directing user to use EMBEDDING_PROVIDER env var
+                return Err(EmbeddingError::Config(crate::embedding::error::ConfigError::InvalidValue {
+                    field: "provider".to_string(),
+                    reason: "Google provider requires using EMBEDDING_PROVIDER=google environment variable. \
+                             The legacy OpenAIClient does not support Google Vertex AI. \
+                             Use create_provider_from_env() for Google support.".to_string(),
+                }));
+            }
             Provider::Local => {
                 // Local models don't require API key
                 self.client
@@ -327,6 +337,7 @@ impl OpenAIClient {
             Provider::OpenAI => "OpenAI",
             Provider::Ollama => "Ollama",
             Provider::Cohere => "Cohere",
+            Provider::Google => "Google",
             Provider::Local => "Local",
         };
 
