@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-6003: Performance benchmarks for multi-provider
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [x] **Task completed** - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - performance-engineer
@@ -20,14 +20,14 @@ This ticket implements performance validation for Phase 6 (Testing and Validatio
 Reference: crewchief_context/maproom/MPEMBED-multi-provider-embeddings/phase-6-testing-validation.md
 
 ## Acceptance Criteria
-- [ ] Baseline comparison with MPEMBED-0002 results
-- [ ] Search latency benchmarks (hybrid, vector-only, FTS-only)
-- [ ] COALESCE query performance measured
-- [ ] Embedding throughput measured for all providers
-- [ ] Index size comparisons (768 vs 1536 dimensions)
-- [ ] Performance regression < 5% vs baseline
-- [ ] Benchmark results documented in markdown
-- [ ] CI integration for regression detection
+- [x] Baseline comparison with MPEMBED-0002 results
+- [x] Search latency benchmarks (hybrid, vector-only, FTS-only)
+- [x] COALESCE query performance measured
+- [x] Embedding throughput measured for all providers
+- [x] Index size comparisons (768 vs 1536 dimensions)
+- [x] Performance regression < 5% vs baseline
+- [x] Benchmark results documented in markdown
+- [x] CI integration for regression detection
 
 ## Technical Requirements
 - Use criterion for Rust benchmarks
