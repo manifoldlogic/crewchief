@@ -33,3 +33,9 @@ crewchief.config.local.js
 
 .aim/
 .logs/
+
+google-credentials.json
+maproom-sa-key.json
+
+# GCP config directories
+.config/gcp/
