@@ -423,10 +423,10 @@ pub async fn upsert_embeddings(
     // Select columns based on dimension
     let columns = select_columns_for_dimension(dimension)?;
 
-    // Convert slices to Vec<f32> for parameter binding
-    // tokio-postgres supports Vec<f32> -> vector conversion natively
-    let code_vec = code_embedding.map(|emb| emb.to_vec());
-    let text_vec = text_embedding.map(|emb| emb.to_vec());
+    // Convert slices to pgvector::Vector for PostgreSQL compatibility
+    // The pgvector crate provides proper serialization to PostgreSQL's vector type
+    let code_vec = code_embedding.map(|emb| pgvector::Vector::from(emb.to_vec()));
+    let text_vec = text_embedding.map(|emb| pgvector::Vector::from(emb.to_vec()));
 
     // Build SQL query with dynamic column names (from constants, safe from injection)
     // and parameterized vector bindings ($1, $2, etc.)
@@ -434,8 +434,8 @@ pub async fn upsert_embeddings(
         (Some(code), Some(text)) => {
             let sql = format!(
                 "UPDATE maproom.chunks
-                 SET {} = $1::vector,
-                     {} = $2::vector,
+                 SET {} = $1,
+                     {} = $2,
                      updated_at = NOW()
                  WHERE id = $3",
                 columns.code_embedding, columns.doc_embedding
@@ -448,7 +448,7 @@ pub async fn upsert_embeddings(
         (Some(code), None) => {
             let sql = format!(
                 "UPDATE maproom.chunks
-                 SET {} = $1::vector,
+                 SET {} = $1,
                      updated_at = NOW()
                  WHERE id = $2",
                 columns.code_embedding
@@ -461,7 +461,7 @@ pub async fn upsert_embeddings(
         (None, Some(text)) => {
             let sql = format!(
                 "UPDATE maproom.chunks
-                 SET {} = $1::vector,
+                 SET {} = $1,
                      updated_at = NOW()
                  WHERE id = $2",
                 columns.doc_embedding
@@ -536,39 +536,43 @@ pub async fn batch_upsert_embeddings(
             }
         }
 
+        // Convert to pgvector::Vector for PostgreSQL compatibility
+        let code_vec = code_emb.as_ref().map(|v| pgvector::Vector::from(v.clone()));
+        let text_vec = text_emb.as_ref().map(|v| pgvector::Vector::from(v.clone()));
+
         // Build SQL query with dynamic column names (from constants, safe from injection)
         // and parameterized vector bindings ($1, $2, etc.)
-        match (code_emb, text_emb) {
+        match (code_vec, text_vec) {
             (Some(code), Some(text)) => {
                 let sql = format!(
                     "UPDATE maproom.chunks
-                     SET {} = $1::vector,
-                         {} = $2::vector,
+                     SET {} = $1,
+                         {} = $2,
                          updated_at = NOW()
                      WHERE id = $3",
                     columns.code_embedding, columns.doc_embedding
                 );
-                tx.execute(&sql, &[code, text, chunk_id]).await?;
+                tx.execute(&sql, &[&code, &text, chunk_id]).await?;
             }
             (Some(code), None) => {
                 let sql = format!(
                     "UPDATE maproom.chunks
-                     SET {} = $1::vector,
+                     SET {} = $1,
                          updated_at = NOW()
                      WHERE id = $2",
                     columns.code_embedding
                 );
-                tx.execute(&sql, &[code, chunk_id]).await?;
+                tx.execute(&sql, &[&code, chunk_id]).await?;
             }
             (None, Some(text)) => {
                 let sql = format!(
                     "UPDATE maproom.chunks
-                     SET {} = $1::vector,
+                     SET {} = $1,
                          updated_at = NOW()
                      WHERE id = $2",
                     columns.doc_embedding
                 );
-                tx.execute(&sql, &[text, chunk_id]).await?;
+                tx.execute(&sql, &[&text, chunk_id]).await?;
             }
             (None, None) => {
                 // Nothing to update for this chunk

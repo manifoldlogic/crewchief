@@ -520,6 +520,7 @@ dependencies = [
  "lru",
  "notify",
  "once_cell",
+ "pgvector",
  "priority-queue",
  "prometheus",
  "proptest",
@@ -1870,6 +1871,16 @@ checksum = "72f27a2cfee9f9039c4d86faa5af122a0ac3851441a34865b8a043b46be0065a"
 dependencies = [
  "pest",
  "sha2",
+]
+
+[[package]]
+name = "pgvector"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc58e2d255979a31caa7cabfa7aac654af0354220719ab7a68520ae7a91e8c0b"
+dependencies = [
+ "bytes",
+ "postgres-types",
 ]
 
 [[package]]
