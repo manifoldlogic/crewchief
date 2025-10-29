@@ -830,6 +830,46 @@ function establishStdioProxy() {
 }
 
 /**
+ * Validate provider configuration has required environment variables
+ * Prevents silent failures by checking before Docker Compose starts
+ *
+ * @param {string} provider - The embedding provider (google, openai, ollama, etc.)
+ */
+function validateProviderConfig(provider) {
+  diagnosticLog(`Validating provider configuration for: ${provider}`);
+
+  if (provider === 'google') {
+    if (!process.env.GOOGLE_PROJECT_ID) {
+      console.error('❌ ERROR: EMBEDDING_PROVIDER=google requires GOOGLE_PROJECT_ID');
+      console.error('   Check your .mcp.json configuration or set environment variable:');
+      console.error('   export GOOGLE_PROJECT_ID=your-project-id');
+      process.exit(1);
+    }
+    diagnosticLog('✓ GOOGLE_PROJECT_ID found');
+
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.error('⚠️  WARNING: GOOGLE_APPLICATION_CREDENTIALS not set');
+      console.error('   Google Vertex AI may not work without credentials');
+    } else {
+      diagnosticLog('✓ GOOGLE_APPLICATION_CREDENTIALS found');
+    }
+  } else if (provider === 'openai') {
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ ERROR: EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY');
+      console.error('   Check your .mcp.json configuration or set environment variable:');
+      console.error('   export OPENAI_API_KEY=your-api-key');
+      process.exit(1);
+    }
+    diagnosticLog('✓ OPENAI_API_KEY found');
+  } else if (provider === 'ollama' || !provider) {
+    diagnosticLog('Using ollama provider (zero-config)');
+  } else {
+    console.error(`⚠️  WARNING: Unknown provider: ${provider}`);
+    console.error('   Supported: ollama, google, openai');
+  }
+}
+
+/**
  * Sleep helper
  */
 function sleep(ms) {
@@ -850,6 +890,10 @@ async function main() {
 
     // Verify docker-compose.yml uses environment variables (not hardcoded values)
     verifyDockerComposeConfig();
+
+    // Validate provider configuration (after config verification, before Docker Compose starts)
+    const embeddingProvider = process.env.EMBEDDING_PROVIDER || 'ollama';
+    validateProviderConfig(embeddingProvider);
 
     // Start Docker Compose stack
     await startDockerCompose();
