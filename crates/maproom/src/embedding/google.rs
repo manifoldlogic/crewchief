@@ -1,7 +1,7 @@
 //! Google Cloud Vertex AI embedding provider implementation.
 //!
 //! This module provides integration with Google Cloud Vertex AI for enterprise-grade
-//! embedding generation. Uses the textembedding-gecko@003 model which produces
+//! embedding generation. Uses the text-embedding-004 model which produces
 //! 768-dimensional embeddings suitable for semantic search and retrieval.
 //!
 //! # Features
@@ -10,7 +10,7 @@
 //! - Regional endpoint support (us-central1, europe-west1, asia-southeast1, etc.)
 //! - Task type optimization (RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY, SEMANTIC_SIMILARITY)
 //! - Native batch processing (up to 250 texts per request)
-//! - 768-dimensional vectors (textembedding-gecko@003)
+//! - 768-dimensional vectors (text-embedding-004)
 //! - Exponential backoff retry logic for transient errors
 //! - OAuth 2.0 access token authentication using gcp_auth crate
 //!
@@ -128,12 +128,12 @@ struct PredictResponse {
 /// Google Cloud Vertex AI embedding provider.
 ///
 /// This provider integrates with Google Cloud Vertex AI to generate embeddings
-/// using the textembedding-gecko@003 model (768 dimensions). It handles OAuth 2.0
+/// using the text-embedding-004 model (768 dimensions). It handles OAuth 2.0
 /// authentication with service accounts, regional endpoints, and native batch processing.
 ///
 /// # Configuration
 ///
-/// - **Model**: Default `textembedding-gecko@003`
+/// - **Model**: Default `text-embedding-004`
 /// - **Region**: Default `us-central1` (configurable)
 /// - **Task Type**: Default `RETRIEVAL_DOCUMENT`
 /// - **Timeout**: 30s per request, 90s for batch requests
@@ -163,7 +163,7 @@ pub struct GoogleProvider {
 
 impl GoogleProvider {
     /// Default model for embeddings.
-    pub const DEFAULT_MODEL: &'static str = "textembedding-gecko@003";
+    pub const DEFAULT_MODEL: &'static str = "text-embedding-004";
 
     /// Default region for Vertex AI.
     pub const DEFAULT_REGION: &'static str = "us-central1";
@@ -190,7 +190,7 @@ impl GoogleProvider {
     /// * `project_id` - GCP project ID
     /// * `credentials_path` - Path to service account JSON key file
     /// * `region` - GCP region (e.g., "us-central1", "europe-west1")
-    /// * `model` - Model name (default: "textembedding-gecko@003")
+    /// * `model` - Model name (default: "text-embedding-004")
     ///
     /// # Returns
     ///
@@ -208,7 +208,7 @@ impl GoogleProvider {
     ///     "my-project".to_string(),
     ///     PathBuf::from("/path/to/service-account.json"),
     ///     "us-central1".to_string(),
-    ///     "textembedding-gecko@003".to_string(),
+    ///     "text-embedding-004".to_string(),
     /// ).await?;
     /// # Ok(())
     /// # }
@@ -262,7 +262,7 @@ impl GoogleProvider {
     /// - `GOOGLE_APPLICATION_CREDENTIALS`: Path to service account JSON key (required)
     /// - `GOOGLE_PROJECT_ID`: GCP project ID (required)
     /// - `GOOGLE_REGION`: GCP region (optional, defaults to "us-central1")
-    /// - `GOOGLE_MODEL`: Model name (optional, defaults to "textembedding-gecko@003")
+    /// - `GOOGLE_MODEL`: Model name (optional, defaults to "text-embedding-004")
     ///
     /// # Returns
     ///
@@ -588,13 +588,13 @@ impl EmbeddingProvider for GoogleProvider {
 
     /// Get the embedding dimension for this provider.
     ///
-    /// Google Vertex AI's textembedding-gecko@003 model produces 768-dimensional embeddings.
+    /// Google Vertex AI's text-embedding-004 model produces 768-dimensional embeddings.
     ///
     /// # Returns
     ///
     /// Always returns 768.
     fn dimension(&self) -> usize {
-        768 // textembedding-gecko@003 fixed dimension
+        768 // text-embedding-004 fixed dimension
     }
 
     /// Get the provider name identifier.
@@ -661,7 +661,7 @@ mod tests {
         // by creating the URL directly
         let project_id = "my-project";
         let region = "us-central1";
-        let model = "textembedding-gecko@003";
+        let model = "text-embedding-004";
 
         let url = format!(
             "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:predict",
@@ -670,7 +670,7 @@ mod tests {
 
         assert!(url.contains("us-central1-aiplatform.googleapis.com"));
         assert!(url.contains("my-project"));
-        assert!(url.contains("textembedding-gecko@003"));
+        assert!(url.contains("text-embedding-004"));
         assert!(url.contains(":predict"));
     }
 
@@ -711,11 +711,11 @@ mod tests {
 
         // We can't easily create a GoogleProvider without valid credentials,
         // so we'll test these constants directly
-        assert_eq!(GoogleProvider::DEFAULT_MODEL, "textembedding-gecko@003");
+        assert_eq!(GoogleProvider::DEFAULT_MODEL, "text-embedding-004");
         assert_eq!(GoogleProvider::DEFAULT_REGION, "us-central1");
         assert_eq!(GoogleProvider::MAX_BATCH_SIZE, 250);
 
-        // Dimension is always 768 for textembedding-gecko@003
+        // Dimension is always 768 for text-embedding-004
         // Provider name is always "google"
         // These would be tested via integration tests with real credentials
     }
