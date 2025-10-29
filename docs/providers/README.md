@@ -22,7 +22,7 @@ Production-grade embeddings powered by Google's `text-embedding-gecko@003` model
 
 ---
 
-### Ollama (Local Embeddings)
+### [Ollama](./ollama-setup.md) (Local Embeddings)
 
 Free, local embeddings running on your own hardware. No API costs, complete privacy.
 
@@ -36,11 +36,11 @@ Free, local embeddings running on your own hardware. No API costs, complete priv
 
 **Setup Time**: ~5 minutes (requires Ollama installation)
 
-**Documentation**: Coming soon
+**[→ Read Ollama Setup Guide](./ollama-setup.md)**
 
 ---
 
-### OpenAI (text-embedding-3-small)
+### [OpenAI](./openai-setup.md) (text-embedding-3-small)
 
 High-quality embeddings from OpenAI's embedding models.
 
@@ -53,7 +53,7 @@ High-quality embeddings from OpenAI's embedding models.
 
 **Setup Time**: ~5 minutes
 
-**Documentation**: Coming soon
+**[→ Read OpenAI Setup Guide](./openai-setup.md)**
 
 ---
 
@@ -154,7 +154,7 @@ You can switch between providers at any time. See the [Migration Guide](./migrat
 - **GPU acceleration**: Leverage local GPU for faster embedding generation
 - **Customizable**: Fine-tune models for domain-specific embeddings
 
-**Documentation**: Coming soon
+**[→ Full feature list in Ollama setup guide](./ollama-setup.md)**
 
 ### OpenAI
 
@@ -162,7 +162,7 @@ You can switch between providers at any time. See the [Migration Guide](./migrat
 - **Batch processing**: Efficient batch API for large-scale indexing
 - **Integration**: Works seamlessly with other OpenAI services
 
-**Documentation**: Coming soon
+**[→ Full feature list in OpenAI setup guide](./openai-setup.md)**
 
 ---
 
@@ -234,9 +234,15 @@ You can switch between providers at any time. See the [Migration Guide](./migrat
 - 429 Quota exceeded → Request quota increase
 - Invalid JWT signature → Regenerate service account key
 
-**Ollama**: Coming soon
+**Ollama**: [See troubleshooting section](./ollama-setup.md#troubleshooting)
+- Connection refused → Start Ollama service
+- Model not found → Pull embedding model
+- Slow generation → Enable GPU acceleration
 
-**OpenAI**: Coming soon
+**OpenAI**: [See troubleshooting section](./openai-setup.md#troubleshooting)
+- Invalid API key → Regenerate key
+- Rate limit exceeded → Wait or upgrade tier
+- Insufficient quota → Add billing credits
 
 ---
 
