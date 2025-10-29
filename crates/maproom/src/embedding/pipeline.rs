@@ -75,6 +75,12 @@ pub struct PipelineStats {
 
     /// Duration in seconds
     pub duration_secs: f64,
+
+    /// Embedding dimension
+    pub dimension: usize,
+
+    /// Provider name
+    pub provider: String,
 }
 
 impl PipelineStats {
@@ -91,12 +97,15 @@ impl PipelineStats {
     pub fn summary(&self) -> String {
         format!(
             "Processed {} chunks in {:.1}s ({:.1} chunks/s)\n\
+             Provider: {} ({} dimensions)\n\
              Generated: {}, Cached: {}, Failed: {}\n\
              Cache hit rate: {:.1}%\n\
              API calls: {}, Tokens: {}, Cost: ${:.4}",
             self.total_chunks,
             self.duration_secs,
             self.chunks_per_second(),
+            self.provider,
+            self.dimension,
             self.embeddings_generated,
             self.embeddings_cached,
             self.failed_chunks,
@@ -112,18 +121,48 @@ impl PipelineStats {
 pub struct EmbeddingPipeline {
     service: EmbeddingService,
     config: PipelineConfig,
+    dimension: usize,
+    provider_name: String,
 }
 
 impl EmbeddingPipeline {
     /// Create a new embedding pipeline.
     pub fn new(service: EmbeddingService, config: PipelineConfig) -> Self {
-        Self { service, config }
+        let dimension = service.dimension();
+        let provider_name = service.provider_name().to_string();
+
+        info!(
+            "Initialized embedding pipeline: provider={}, dimension={}",
+            provider_name,
+            dimension
+        );
+
+        Self {
+            service,
+            config,
+            dimension,
+            provider_name,
+        }
+    }
+
+    /// Get the embedding dimension for this pipeline.
+    pub fn dimension(&self) -> usize {
+        self.dimension
+    }
+
+    /// Get the provider name for this pipeline.
+    pub fn provider_name(&self) -> &str {
+        &self.provider_name
     }
 
     /// Run the embedding generation pipeline.
     pub async fn run(&self, client: &Client) -> Result<PipelineStats> {
         let start_time = std::time::Instant::now();
-        let mut stats = PipelineStats::default();
+        let mut stats = PipelineStats {
+            dimension: self.dimension,
+            provider: self.provider_name.clone(),
+            ..Default::default()
+        };
 
         info!("Starting embedding generation pipeline");
         info!(
@@ -133,6 +172,7 @@ impl EmbeddingPipeline {
             self.config.dry_run,
             self.config.sample_size
         );
+        info!("Provider: {} (dimension: {})", self.provider_name, self.dimension);
 
         // Fetch chunks that need embeddings
         let chunks = self.fetch_chunks_needing_embeddings(client).await?;
@@ -373,14 +413,13 @@ impl EmbeddingPipeline {
 
     /// Validate embedding dimensions.
     fn validate_embeddings(&self, embeddings: &[Vec<f32>]) -> Result<()> {
-        let expected_dim = self.service.dimension();
-
         for (i, emb) in embeddings.iter().enumerate() {
-            if emb.len() != expected_dim {
+            if emb.len() != self.dimension {
                 return Err(anyhow::anyhow!(
-                    "Invalid embedding dimension at index {}: expected {}, got {}",
+                    "Invalid embedding dimension at index {}: provider={}, expected {}, got {}",
                     i,
-                    expected_dim,
+                    self.provider_name,
+                    self.dimension,
                     emb.len()
                 ));
             }
@@ -400,26 +439,28 @@ impl EmbeddingPipeline {
         use crate::db::queries::upsert_embeddings;
 
         debug!(
-            "Updating embeddings for chunk {} (code_dim={}, text_dim={})",
+            "Updating embeddings for chunk {} (code_dim={}, text_dim={}, provider={}, dimension={})",
             chunk_id,
             code_embedding.len(),
-            text_embedding.len()
+            text_embedding.len(),
+            self.provider_name,
+            self.dimension
         );
-
-        let dimension = self.service.dimension();
 
         upsert_embeddings(
             client,
             chunk_id,
             Some(code_embedding),
             Some(text_embedding),
-            dimension,
+            self.dimension,
         )
         .await
         .map_err(|e| {
             error!(
-                "Failed to update embeddings for chunk {}: Code dim={}, Text dim={}, Error: {:?}",
+                "Failed to update embeddings for chunk {}: Provider={}, Expected dimension={}, Code dim={}, Text dim={}, Error: {:?}",
                 chunk_id,
+                self.provider_name,
+                self.dimension,
                 code_embedding.len(),
                 text_embedding.len(),
                 e
@@ -429,6 +470,216 @@ impl EmbeddingPipeline {
         .context("Failed to update chunk embeddings")?;
 
         Ok(())
+    }
+
+    /// Process only chunks missing embeddings for this dimension (incremental mode).
+    ///
+    /// This method queries for chunks that are missing embeddings for the pipeline's
+    /// configured dimension and processes only those chunks. This allows for efficient
+    /// incremental updates when adding new embedding dimensions without reprocessing
+    /// chunks that already have embeddings from other providers.
+    ///
+    /// # Arguments
+    /// * `client` - Database client
+    /// * `repo` - Repository name to filter chunks
+    /// * `worktree` - Worktree name to filter chunks
+    ///
+    /// # Returns
+    /// Pipeline statistics for the incremental update
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use crewchief_maproom::embedding::pipeline::{EmbeddingPipeline, PipelineConfig};
+    /// # use crewchief_maproom::embedding::service::EmbeddingService;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let service = EmbeddingService::from_env().await?;
+    /// # let pipeline = EmbeddingPipeline::new(service, PipelineConfig::default());
+    /// # let client = crate::db::queries::connect().await?;
+    /// // Process only chunks missing 768-dim Ollama embeddings
+    /// let stats = pipeline.process_missing_embeddings(&client, "crewchief", "main").await?;
+    /// println!("Processed {} chunks with {}-dim embeddings", stats.total_chunks, stats.dimension);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn process_missing_embeddings(
+        &self,
+        client: &Client,
+        repo: &str,
+        worktree: &str,
+    ) -> Result<PipelineStats> {
+        use crate::db::select_columns_for_dimension;
+
+        let columns = select_columns_for_dimension(self.dimension)?;
+
+        info!(
+            "Finding chunks missing {}-dimensional embeddings (provider: {})",
+            self.dimension, self.provider_name
+        );
+
+        // Query chunks missing embeddings for this dimension
+        let query = format!(
+            r#"
+            SELECT c.id
+            FROM maproom.chunks c
+            JOIN maproom.files f ON f.id = c.file_id
+            JOIN maproom.worktrees w ON w.id = f.worktree_id
+            JOIN maproom.repos r ON r.id = w.repo_id
+            WHERE r.name = $1
+              AND w.name = $2
+              AND (c.{} IS NULL OR c.{} IS NULL)
+            ORDER BY c.id
+            "#,
+            columns.code_embedding, columns.doc_embedding
+        );
+
+        let rows = client
+            .query(&query, &[&repo, &worktree])
+            .await
+            .context("Failed to query chunks missing embeddings")?;
+
+        let chunk_ids: Vec<i64> = rows.iter().map(|row| row.get(0)).collect();
+
+        info!(
+            "Found {} chunks missing {}-dimensional embeddings (provider: {})",
+            chunk_ids.len(),
+            self.dimension,
+            self.provider_name
+        );
+
+        if chunk_ids.is_empty() {
+            return Ok(PipelineStats {
+                dimension: self.dimension,
+                provider: self.provider_name.clone(),
+                ..Default::default()
+            });
+        }
+
+        // Convert to ChunkRow format and process
+        let chunks = self.fetch_chunks_by_ids(client, &chunk_ids).await?;
+        let start_time = std::time::Instant::now();
+        let mut stats = PipelineStats {
+            dimension: self.dimension,
+            provider: self.provider_name.clone(),
+            total_chunks: chunks.len(),
+            ..Default::default()
+        };
+
+        // Process chunks in batches
+        for (batch_idx, batch) in chunks.chunks(self.config.batch_size).enumerate() {
+            let batch_num = batch_idx + 1;
+            let total_batches = chunks.len().div_ceil(self.config.batch_size);
+
+            info!(
+                "Processing incremental batch {}/{} ({} chunks)",
+                batch_num,
+                total_batches,
+                batch.len()
+            );
+
+            // Check cost ceiling
+            if let Some(max_cost) = self.config.max_cost_usd {
+                if let Some(metrics) = self.service.provider_metrics() {
+                    let current_cost = metrics.estimated_cost_usd;
+                    if current_cost >= max_cost {
+                        warn!(
+                            "Cost ceiling reached: ${:.4} >= ${:.4}",
+                            current_cost, max_cost
+                        );
+                        break;
+                    }
+                }
+            }
+
+            // Generate embeddings for batch
+            match self.process_batch(client, batch, &mut stats).await {
+                Ok(_) => {
+                    debug!("Incremental batch {} completed successfully", batch_num);
+                }
+                Err(e) => {
+                    warn!("Incremental batch {} failed: {}", batch_num, e);
+                    stats.failed_chunks += batch.len();
+                }
+            }
+
+            // Delay between batches to avoid rate limiting
+            if batch_idx < total_batches - 1 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(
+                    self.config.batch_delay_ms,
+                ))
+                .await;
+            }
+
+            // Report progress
+            let progress = ((batch_num as f64 / total_batches as f64) * 100.0) as u32;
+            info!(
+                "Incremental progress: {}% ({}/{})",
+                progress, batch_num, total_batches
+            );
+        }
+
+        // Gather final metrics
+        let cache_metrics = self.service.cache_metrics().await;
+        stats.cache_hit_rate = cache_metrics.hit_rate();
+
+        // Get provider metrics if available
+        if let Some(provider_metrics) = self.service.provider_metrics() {
+            stats.total_tokens = provider_metrics.total_tokens;
+            stats.estimated_cost_usd = provider_metrics.estimated_cost_usd;
+            stats.api_calls = provider_metrics.total_requests as usize;
+        }
+
+        stats.duration_secs = start_time.elapsed().as_secs_f64();
+
+        info!("Incremental embedding generation completed");
+        info!("{}", stats.summary());
+
+        Ok(stats)
+    }
+
+    /// Fetch chunks by their IDs.
+    async fn fetch_chunks_by_ids(
+        &self,
+        client: &Client,
+        chunk_ids: &[i64],
+    ) -> Result<Vec<ChunkRow>> {
+        if chunk_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Build parameter placeholders for the IN clause
+        let placeholders: Vec<String> = (1..=chunk_ids.len())
+            .map(|i| format!("${}", i))
+            .collect();
+
+        let query = format!(
+            "SELECT c.id, c.signature, c.docstring, c.preview
+             FROM maproom.chunks c
+             WHERE c.id IN ({})
+             ORDER BY c.id",
+            placeholders.join(", ")
+        );
+
+        let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = chunk_ids
+            .iter()
+            .map(|id| id as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        let rows = client
+            .query(&query, &params)
+            .await
+            .context("Failed to fetch chunks by IDs")?;
+
+        let chunks: Vec<ChunkRow> = rows
+            .into_iter()
+            .map(|row| ChunkRow {
+                id: row.get(0),
+                signature: row.get(1),
+                docstring: row.get(2),
+                preview: row.get(3),
+            })
+            .collect();
+
+        Ok(chunks)
     }
 }
 
@@ -445,19 +696,55 @@ struct ChunkRow {
 mod tests {
     use super::*;
     use crate::embedding::cache::EmbeddingCache;
-    use crate::embedding::client::OpenAIClient;
-    use crate::embedding::config::EmbeddingConfig;
+    use crate::embedding::config::CacheConfig;
+    use crate::embedding::error::EmbeddingError;
+    use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics};
+    use async_trait::async_trait;
     use std::sync::Arc;
 
-    fn test_embedding_service() -> EmbeddingService {
-        let mut config = EmbeddingConfig::default();
-        config.api_key = Some("test-key".to_string());
+    // Mock provider for testing
+    struct MockProvider {
+        dimension: usize,
+        name: &'static str,
+    }
 
-        // Create provider and cache
-        let provider = Box::new(OpenAIClient::new(config.clone()).unwrap());
-        let cache = Arc::new(EmbeddingCache::new(config.cache.clone()).unwrap());
+    #[async_trait]
+    impl EmbeddingProvider for MockProvider {
+        async fn embed(&self, _text: String) -> Result<Vec<f32>, EmbeddingError> {
+            Ok(vec![0.0; self.dimension])
+        }
 
-        EmbeddingService::new(provider, cache)
+        async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+            Ok(vec![vec![0.0; self.dimension]; texts.len()])
+        }
+
+        fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        fn provider_name(&self) -> &'static str {
+            self.name
+        }
+
+        fn metrics(&self) -> Option<ProviderMetrics> {
+            Some(ProviderMetrics {
+                total_requests: 10,
+                total_tokens: 1000,
+                failed_requests: 0,
+                estimated_cost_usd: 0.001,
+            })
+        }
+    }
+
+    fn create_test_service(dimension: usize, name: &'static str) -> EmbeddingService {
+        let provider = Box::new(MockProvider { dimension, name });
+        let cache_config = CacheConfig {
+            max_entries: 100,
+            ttl_seconds: 3600,
+            enable_metrics: true,
+        };
+        let cache = EmbeddingCache::new(cache_config).unwrap();
+        EmbeddingService::new(provider, Arc::new(cache))
     }
 
     #[test]
@@ -483,16 +770,45 @@ mod tests {
             estimated_cost_usd: 1.0,
             cache_hit_rate: 0.8,
             duration_secs: 10.0,
+            dimension: 1536,
+            provider: "openai".to_string(),
         };
 
         assert_eq!(stats.chunks_per_second(), 100.0);
         assert!(stats.summary().contains("1000 chunks"));
         assert!(stats.summary().contains("$1.0000"));
+        assert!(stats.summary().contains("openai"));
+        assert!(stats.summary().contains("1536 dimensions"));
+    }
+
+    #[test]
+    fn test_pipeline_dimension_caching() {
+        let service = create_test_service(768, "ollama");
+        let config = PipelineConfig::default();
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        assert_eq!(pipeline.dimension(), 768);
+        assert_eq!(pipeline.provider_name(), "ollama");
+    }
+
+    #[test]
+    fn test_pipeline_dimension_matches_service() {
+        let service = create_test_service(1536, "openai");
+        let config = PipelineConfig::default();
+
+        // Store dimension and provider name before moving service
+        let expected_dim = service.dimension();
+        let expected_provider = service.provider_name().to_string();
+
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        assert_eq!(pipeline.dimension(), expected_dim);
+        assert_eq!(pipeline.provider_name(), expected_provider);
     }
 
     #[test]
     fn test_prepare_code_text() {
-        let service = test_embedding_service();
+        let service = create_test_service(1536, "openai");
         let config = PipelineConfig::default();
         let pipeline = EmbeddingPipeline::new(service, config);
 
@@ -511,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_prepare_text_summary() {
-        let service = test_embedding_service();
+        let service = create_test_service(1536, "openai");
         let config = PipelineConfig::default();
         let pipeline = EmbeddingPipeline::new(service, config);
 
@@ -528,7 +844,7 @@ mod tests {
 
     #[test]
     fn test_validate_embeddings() {
-        let service = test_embedding_service();
+        let service = create_test_service(1536, "openai");
         let config = PipelineConfig::default();
         let pipeline = EmbeddingPipeline::new(service, config);
 
@@ -537,5 +853,22 @@ mod tests {
 
         let invalid_embeddings = vec![vec![0.1; 768], vec![0.2; 1536]];
         assert!(pipeline.validate_embeddings(&invalid_embeddings).is_err());
+    }
+
+    #[test]
+    fn test_validate_embeddings_dimension_mismatch() {
+        // Test with 768-dim pipeline
+        let service = create_test_service(768, "ollama");
+        let config = PipelineConfig::default();
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        // Should fail with 1536-dim embeddings
+        let wrong_dim_embeddings = vec![vec![0.1; 1536]];
+        let result = pipeline.validate_embeddings(&wrong_dim_embeddings);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("768"));
+        assert!(err_msg.contains("1536"));
+        assert!(err_msg.contains("ollama"));
     }
 }
