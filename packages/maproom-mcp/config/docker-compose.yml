@@ -81,41 +81,39 @@ services:
       echo 'Model ready!';
       wait $$OLLAMA_PID"
 
-  # Note: maproom-mcp service commented out for ARM64 testing
-  # The Rust binary (crewchief-maproom) is designed to run via CLI, not as a daemon service
-  # For ARM64 testing, we validate postgres and ollama are the critical platform dependencies
-  # maproom-mcp:
-  #   build:
-  #     context: ../../..
-  #     dockerfile: packages/maproom-mcp/config/Dockerfile.maproom
-  #   container_name: maproom-mcp
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     ollama:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
-  #     EMBEDDING_PROVIDER: ollama
-  #     EMBEDDING_MODEL: nomic-embed-text
-  #     EMBEDDING_DIMENSION: 768
-  #     EMBEDDING_API_ENDPOINT: http://ollama:11434
-  #     LOG_LEVEL: ${LOG_LEVEL:-info}
-  #     MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
-  #     NODE_ENV: production
-  #   volumes:
-  #     - maproom-logs:/app/logs
-  #   networks:
-  #     - maproom-network
-  #   stdin_open: true
-  #   tty: false
-  #   healthcheck:
-  #     test: ["CMD", "sh", "-c", "pg_isready -h maproom-postgres -U maproom || exit 1"]
-  #     interval: 30s
-  #     timeout: 5s
-  #     retries: 3
-  #     start_period: 30s
-  #   restart: unless-stopped
+  # MCP server service - required for stdio proxy connection (line 428 in cli.cjs)
+  maproom-mcp:
+    build:
+      context: ../../..
+      dockerfile: packages/maproom-mcp/config/Dockerfile.maproom
+    container_name: maproom-mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_MODEL: nomic-embed-text
+      EMBEDDING_DIMENSION: 768
+      EMBEDDING_API_ENDPOINT: http://ollama:11434
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
+      NODE_ENV: production
+    volumes:
+      - maproom-logs:/app/logs
+    networks:
+      - maproom-network
+    stdin_open: true
+    tty: false
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pg_isready -h maproom-postgres -U maproom || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   maproom-data:

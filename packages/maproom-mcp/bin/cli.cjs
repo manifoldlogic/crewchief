@@ -200,8 +200,9 @@ function getRequiredServices() {
   const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase();
 
   const services = {
-    postgres: true,  // Always required for database
-    ollama: false    // Only if using Ollama provider
+    postgres: true,     // Always required for database
+    ollama: false,      // Only if using Ollama provider
+    'maproom-mcp': true // Always required - the MCP server itself
   };
 
   // Determine if Ollama is needed
