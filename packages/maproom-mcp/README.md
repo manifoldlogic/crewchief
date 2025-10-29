@@ -479,6 +479,224 @@ Redact credentials in error messages using regex replacement.
 
 ## Troubleshooting
 
+### Ollama starts when using Google/OpenAI
+
+If you see Ollama containers starting even though you set `EMBEDDING_PROVIDER=google` or `openai`, follow these diagnostic steps to identify and fix the issue.
+
+#### Enable Diagnostic Mode
+
+Start the MCP server with debug logging enabled:
+
+```bash
+MAPROOM_MCP_DEBUG=true EMBEDDING_PROVIDER=google npx @crewchief/maproom-mcp
+```
+
+Or add to your `.mcp.json` configuration:
+
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "EMBEDDING_PROVIDER": "google",
+        "MAPROOM_MCP_DEBUG": "true"
+      }
+    }
+  }
+}
+```
+
+#### What to Check in Diagnostic Output
+
+The diagnostic mode provides detailed information about what's happening during startup. Look for these key indicators:
+
+**1. Environment Variables Being Passed to Docker Compose**
+
+Expected output when correctly configured:
+```
+[DEBUG] Environment variables being passed to Docker Compose:
+  EMBEDDING_PROVIDER=google
+  GOOGLE_API_KEY=***REDACTED***
+  EMBEDDING_MODEL=text-embedding-004
+```
+
+Problem indicator:
+```
+[DEBUG] Environment variables being passed to Docker Compose:
+  (EMBEDDING_PROVIDER is missing or shows "ollama")
+```
+
+**2. Docker Compose Configuration Validation**
+
+Expected output:
+```
+[INFO] Checking docker-compose.yml configuration...
+[INFO] ✓ docker-compose.yml config is up to date
+```
+
+Problem indicator:
+```
+[WARN] ✗ docker-compose.yml config is outdated
+[INFO] Updating configuration...
+```
+
+**3. Service List**
+
+Expected output when using Google/OpenAI:
+```
+[INFO] Starting services: maproom-postgres, maproom-embedder, maproom-mcp
+```
+
+Problem indicator:
+```
+[INFO] Starting services: maproom-postgres, maproom-ollama, maproom-embedder, maproom-mcp
+                                          ^^^^^^^^^^^^^^
+                                          Should NOT be here!
+```
+
+**4. Container States After Startup**
+
+Expected output:
+```
+[DEBUG] Container states after startup:
+  maproom-postgres: healthy
+  maproom-embedder: running
+  maproom-mcp: running
+  maproom-ollama: not running
+```
+
+Problem indicator:
+```
+[DEBUG] Container states after startup:
+  maproom-postgres: healthy
+  maproom-ollama: starting (or healthy)  ← Should not be starting!
+  maproom-embedder: running
+  maproom-mcp: running
+```
+
+#### Common Issues and Solutions
+
+**Issue 1: Configuration Files Outdated**
+
+**Symptoms:**
+- Diagnostic shows "config is outdated" warning
+- Ollama container still starts despite setting `EMBEDDING_PROVIDER=google`
+
+**Solution:**
+Delete the cached configuration and restart:
+```bash
+rm -f ~/.maproom-mcp/docker-compose.yml
+MAPROOM_MCP_DEBUG=true EMBEDDING_PROVIDER=google npx @crewchief/maproom-mcp
+```
+
+The MCP server will regenerate the configuration file with the correct provider settings.
+
+**Issue 2: Environment Variable Not Set Correctly**
+
+**Symptoms:**
+- Diagnostic output shows `EMBEDDING_PROVIDER` missing or set to "ollama"
+- You know you set it in your shell or `.mcp.json`
+
+**Solution for shell environment:**
+```bash
+# Verify environment variable is exported
+echo $EMBEDDING_PROVIDER  # Should print "google" or "openai"
+
+# If empty, export it:
+export EMBEDDING_PROVIDER=google
+MAPROOM_MCP_DEBUG=true npx @crewchief/maproom-mcp
+```
+
+**Solution for `.mcp.json`:**
+1. Verify the environment variable is in the `env` object, not somewhere else
+2. Check for typos in the variable name (`EMBEDDING_PROVIDER`, not `EMBEDDING_PROVIDOR`)
+3. Restart your MCP client (Claude Desktop or Cursor) after changing `.mcp.json`
+
+**Issue 3: Previous Containers Still Running**
+
+**Symptoms:**
+- Diagnostic shows ollama container as "healthy" or "running"
+- You've already updated configuration but containers persist
+
+**Solution:**
+Stop all containers and restart with fresh configuration:
+```bash
+# Stop all Maproom containers
+docker compose -f ~/.maproom-mcp/docker-compose.yml down
+
+# Verify containers are stopped
+docker ps | grep maproom-ollama  # Should return nothing
+
+# Start with correct configuration
+MAPROOM_MCP_DEBUG=true EMBEDDING_PROVIDER=google npx @crewchief/maproom-mcp
+```
+
+**Issue 4: Docker Compose Environment Variable Interpolation**
+
+**Symptoms:**
+- Configuration file exists and looks correct
+- Environment variable is set correctly
+- Ollama still starts
+
+**Solution:**
+Check if Docker Compose is correctly interpolating environment variables:
+```bash
+# Inspect the actual configuration Docker Compose is using
+docker compose -f ~/.maproom-mcp/docker-compose.yml config | grep -A 5 "services:"
+
+# Look for hardcoded "ollama" service that shouldn't be there
+```
+
+If you see the ollama service defined when it shouldn't be, this indicates a configuration generation bug. File an issue with the diagnostic output.
+
+#### When to File an Issue
+
+If you've tried all the solutions above and Ollama still starts incorrectly, please file an issue with:
+
+1. **Diagnostic Output**: Full output from running with `MAPROOM_MCP_DEBUG=true`
+2. **MCP Configuration**: Your `.mcp.json` configuration (redact API keys)
+3. **Environment**: OS, Docker version, MCP client (Claude Desktop/Cursor)
+4. **Steps Taken**: List the troubleshooting steps you've already tried
+
+Example issue template:
+
+```markdown
+Title: Ollama starts despite EMBEDDING_PROVIDER=google
+
+**Diagnostic Output:**
+[Paste full output from MAPROOM_MCP_DEBUG=true here]
+
+**MCP Configuration:**
+```json
+{
+  "mcpServers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "EMBEDDING_PROVIDER": "google"
+      }
+    }
+  }
+}
+```
+
+**Environment:**
+- OS: macOS 14.1
+- Docker Desktop: 4.25.0
+- MCP Client: Claude Desktop 1.0.0
+
+**Steps Tried:**
+- [x] Deleted ~/.maproom-mcp/docker-compose.yml
+- [x] Ran docker compose down
+- [x] Verified EMBEDDING_PROVIDER is set
+- [x] Restarted Claude Desktop
+```
+
+This information helps us quickly identify and fix the root cause.
+
 ### Connection lost after container restart
 
 **Symptom**: MCP tools stop working after restarting Docker containers

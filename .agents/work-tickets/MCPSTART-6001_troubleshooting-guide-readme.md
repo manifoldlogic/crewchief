@@ -1,9 +1,9 @@
 # Ticket: MCPSTART-6001: Update README with troubleshooting guide
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -17,12 +17,12 @@ Add comprehensive troubleshooting section to README with diagnostic steps for co
 From MCPSTART_QUALITY_STRATEGY.md lines 419-441 - users need self-service debugging guidance. The troubleshooting section enables users to diagnose provider startup issues themselves using diagnostic mode. This is critical for Phase 6 documentation as it empowers users to identify and resolve configuration issues without requiring developer intervention.
 
 ## Acceptance Criteria
-- [ ] Add "Troubleshooting" section to README after the main usage instructions
-- [ ] Include "Ollama starts when using Google/OpenAI" subsection
-- [ ] Document MAPROOM_MCP_DEBUG=true diagnostic mode with clear examples
-- [ ] Explain what to check in diagnostic output (container states, env vars, config files)
-- [ ] Provide links to common solutions (config validation, network binding, etc.)
-- [ ] Include example diagnostic output showing both working and failing scenarios
+- [x] Add "Troubleshooting" section to README after the main usage instructions
+- [x] Include "Ollama starts when using Google/OpenAI" subsection
+- [x] Document MAPROOM_MCP_DEBUG=true diagnostic mode with clear examples
+- [x] Explain what to check in diagnostic output (container states, env vars, config files)
+- [x] Provide links to common solutions (config validation, network binding, etc.)
+- [x] Include example diagnostic output showing both working and failing scenarios
 
 ## Technical Requirements
 
