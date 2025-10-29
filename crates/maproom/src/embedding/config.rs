@@ -14,6 +14,8 @@ pub enum Provider {
     Cohere,
     /// Ollama embedding API
     Ollama,
+    /// Google Vertex AI embedding API
+    Google,
     /// Local embedding model
     Local,
 }
@@ -32,10 +34,11 @@ impl std::str::FromStr for Provider {
             "openai" => Ok(Self::OpenAI),
             "cohere" => Ok(Self::Cohere),
             "ollama" => Ok(Self::Ollama),
+            "google" => Ok(Self::Google),
             "local" => Ok(Self::Local),
             _ => Err(ConfigError::InvalidValue {
                 field: "provider".to_string(),
-                reason: format!("Unknown provider: {}", s),
+                reason: format!("Unknown provider: {}. Supported: openai, cohere, ollama, google, local", s),
             }),
         }
     }

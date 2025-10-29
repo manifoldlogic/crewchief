@@ -268,7 +268,7 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
             Err(EmbeddingError::Config(ConfigError::InvalidValue {
                 field: "EMBEDDING_PROVIDER".to_string(),
                 reason: format!(
-                    "Unknown provider: '{}'. Supported providers: ollama, openai",
+                    "Unknown provider: '{}'. Supported providers: ollama, openai, google",
                     unknown
                 ),
             }))
