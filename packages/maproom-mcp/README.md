@@ -273,6 +273,210 @@ Never publish with known high/critical vulnerabilities in direct dependencies.
 4. **Pin versions**: Use exact versions in package.json for production packages
 5. **Monitor security advisories**: Subscribe to GitHub security alerts for this repository
 
+## Security Considerations
+
+### Credentials Management
+
+⚠️ **Never commit credentials to version control**
+
+Maproom uses environment variables and `.env` files for sensitive configuration. Follow these best practices:
+
+**Use `.env` files** (git-ignored by default):
+```bash
+# .env file (automatically excluded from git)
+DATABASE_URL=postgresql://maproom:secure-password@maproom-postgres:5432/maproom
+OPENAI_API_KEY=sk-your-api-key-here
+GOOGLE_API_KEY=your-google-api-key
+```
+
+**Security checklist**:
+- ✅ **Rotate credentials regularly** - Change database passwords and API keys periodically
+- ✅ **Use unique credentials per environment** - Development, staging, and production should have different credentials
+- ✅ **Use strong passwords** - Generate random passwords with tools like `openssl rand -base64 32`
+- ✅ **Consider secret management tools** - For production deployments, use HashiCorp Vault, AWS Secrets Manager, or similar
+- ✅ **Revoke unused credentials** - Remove API keys and passwords when no longer needed
+
+**Example: Rotating database password**:
+```bash
+# 1. Generate new password
+NEW_PASSWORD=$(openssl rand -base64 24)
+
+# 2. Update docker-compose.yml environment variable
+# POSTGRES_PASSWORD=${NEW_PASSWORD}
+
+# 3. Update DATABASE_URL in .env or MCP config
+# DATABASE_URL=postgresql://maproom:${NEW_PASSWORD}@maproom-postgres:5432/maproom
+
+# 4. Restart services with new password
+docker compose -f ~/.maproom-mcp/docker-compose.yml down
+docker compose -f ~/.maproom-mcp/docker-compose.yml up -d
+```
+
+### Network Security
+
+🔒 **Services are bound to localhost (127.0.0.1) by default**
+
+Maproom services are configured to only accept connections from the local machine, preventing unauthorized network access.
+
+**Default configuration** (secure):
+```yaml
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"  # Only accessible from localhost
+  ollama:
+    ports:
+      - "127.0.0.1:11434:11434"  # Only accessible from localhost
+```
+
+**Exposing services to the network** (⚠️ use with caution):
+
+If you need to access Maproom services from other machines (e.g., remote development, team collaboration), understand the risks:
+
+```yaml
+services:
+  postgres:
+    ports:
+      - "5432:5432"  # ⚠️ WARNING: Exposed to all network interfaces
+```
+
+**⚠️ Security implications**:
+- Database will be accessible from other machines on your network
+- Weak passwords can lead to unauthorized access
+- Sensitive code and embeddings could be exposed
+
+**Safer alternatives for remote access**:
+
+1. **SSH Tunneling** (recommended):
+   ```bash
+   # On remote machine, create tunnel to local Maproom
+   ssh -L 5432:localhost:5432 user@maproom-host
+   ssh -L 11434:localhost:11434 user@maproom-host
+
+   # Now connect to localhost:5432 as if Maproom was local
+   ```
+
+2. **VPN**: Use a VPN to securely access the network where Maproom is running
+
+3. **Firewall Rules**: If you must expose services, use firewall rules to restrict access:
+   ```bash
+   # Linux (iptables) - only allow specific IP
+   sudo iptables -A INPUT -p tcp --dport 5432 -s 192.168.1.100 -j ACCEPT
+   sudo iptables -A INPUT -p tcp --dport 5432 -j DROP
+
+   # macOS (pfctl) - restrict to local network
+   # Add to /etc/pf.conf:
+   # block in proto tcp from any to any port 5432
+   # pass in proto tcp from 192.168.1.0/24 to any port 5432
+   ```
+
+**Container networking**:
+- All Maproom services communicate via the `maproom-network` Docker network
+- This network is isolated from other Docker networks by default
+- Cross-container communication uses internal hostnames (`maproom-postgres`, `maproom-ollama`)
+
+### Diagnostic Logging
+
+🔍 **Sensitive values are redacted in diagnostic logs**
+
+Maproom automatically redacts sensitive information from logs to prevent credential leakage.
+
+**What gets redacted**:
+- Database passwords in connection strings
+- API keys (OpenAI, Google, etc.)
+- OAuth tokens
+- Authentication headers
+- Secret environment variables
+
+**Example redacted log output**:
+```
+[INFO] Connecting to database: postgresql://maproom:***REDACTED***@maproom-postgres:5432/maproom
+[INFO] Embedding provider: openai (API key: ***REDACTED***)
+[DEBUG] Environment: DATABASE_URL=postgresql://maproom:***REDACTED***@...
+```
+
+**Safe log sharing**:
+
+When reporting issues, you can safely share diagnostic logs:
+
+```bash
+# Collect logs for bug reports
+docker compose -f ~/.maproom-mcp/docker-compose.yml logs > maproom-debug.log
+
+# Verify sensitive data is redacted before sharing
+grep -i "password\|api_key\|token" maproom-debug.log
+# Should show: ***REDACTED*** for all sensitive values
+```
+
+**⚠️ What is NOT redacted**:
+- Repository names and file paths (may contain sensitive project names)
+- Code content in search results (your actual source code)
+- Database host and port numbers
+- Embedding model names
+
+**Before sharing logs publicly**:
+1. Review for sensitive project names or file paths
+2. Remove any internal hostnames or IP addresses
+3. Verify all passwords/tokens show as `***REDACTED***`
+4. Consider sharing only relevant excerpts instead of full logs
+
+### Security Reporting
+
+🛡️ **Found a security vulnerability?**
+
+We take security seriously and appreciate responsible disclosure.
+
+**Contact**: security@crewchief.dev
+
+**What to include in your report**:
+1. **Description** - Clear description of the vulnerability
+2. **Impact** - What an attacker could do (data exposure, code execution, etc.)
+3. **Reproduction steps** - Detailed steps to reproduce the issue
+4. **Environment** - OS, Docker version, Maproom version
+5. **Suggested fix** (optional) - If you have ideas for mitigation
+
+**Example security report**:
+```
+Subject: [SECURITY] Credential leak in error messages
+
+Description:
+Database passwords appear in plaintext in error messages when
+connection fails with invalid credentials.
+
+Impact:
+An attacker with access to error logs could extract database passwords.
+
+Reproduction:
+1. Configure invalid DATABASE_URL with password
+2. Start Maproom MCP
+3. Check logs - password appears in plaintext
+
+Environment:
+- macOS 13.5
+- Docker Desktop 4.25.0
+- Maproom MCP v1.0.0
+
+Suggested Fix:
+Redact credentials in error messages using regex replacement.
+```
+
+**What to expect**:
+- **Acknowledgment**: Within 48 hours
+- **Assessment**: Initial assessment within 1 week
+- **Fix timeline**: Critical issues patched within 2 weeks, others in next release
+- **Credit**: We'll credit you in release notes (unless you prefer anonymity)
+
+**Disclosure policy**:
+- Please allow 90 days for us to fix the issue before public disclosure
+- We'll coordinate disclosure timing with you
+- Critical vulnerabilities may be disclosed sooner if actively exploited
+
+**Out of scope**:
+- Vulnerabilities in third-party dependencies (report to upstream projects)
+- Docker daemon vulnerabilities (report to Docker)
+- Issues requiring physical access to the machine
+- Social engineering attacks
+
 ## Troubleshooting
 
 ### Connection lost after container restart
