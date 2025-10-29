@@ -102,13 +102,28 @@ const HEALTH_CHECK_INTERVAL_MS = 2000; // 2 seconds
 function checkDockerDaemon() {
   console.error('🔍 Checking Docker availability...');
 
+  // Explicitly pass environment variables to docker command
+  const env = {
+    ...process.env,  // CRITICAL: Include all parent env vars FIRST
+    // Ensure key vars are present with defaults
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+  };
+
   diagnosticLog('Docker Command: Checking Docker daemon status', {
     command: 'docker',
     args: ['info'],
-    cwd: process.cwd()
+    cwd: process.cwd(),
+    env: redactSensitive({
+      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+    })
   });
 
   const result = spawnSync('docker', ['info'], {
+    env: env,
     stdio: 'pipe',
     encoding: 'utf-8'
   });
@@ -135,13 +150,28 @@ function checkDockerDaemon() {
  * Check if Docker Compose v2 is available
  */
 function checkDockerCompose() {
+  // Explicitly pass environment variables to docker command
+  const env = {
+    ...process.env,  // CRITICAL: Include all parent env vars FIRST
+    // Ensure key vars are present with defaults
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+  };
+
   diagnosticLog('Docker Command: Checking Docker Compose version', {
     command: 'docker',
     args: ['compose', 'version'],
-    cwd: process.cwd()
+    cwd: process.cwd(),
+    env: redactSensitive({
+      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+    })
   });
 
   const result = spawnSync('docker', ['compose', 'version'], {
+    env: env,
     stdio: 'pipe',
     encoding: 'utf-8'
   });
@@ -300,14 +330,29 @@ function copyRecursive(src, dest) {
  * Queries `docker compose ps` and logs the actual running state of all containers
  */
 function logDockerState() {
+  // Explicitly pass environment variables to docker command
+  const env = {
+    ...process.env,  // CRITICAL: Include all parent env vars FIRST
+    // Ensure key vars are present with defaults
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+  };
+
   diagnosticLog('Docker Command: Querying container state', {
     command: 'docker',
     args: ['compose', 'ps', '--format', 'json'],
-    cwd: CONFIG_DIR
+    cwd: CONFIG_DIR,
+    env: redactSensitive({
+      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+    })
   });
 
   const result = spawnSync('docker', ['compose', 'ps', '--format', 'json'], {
     cwd: CONFIG_DIR,
+    env: env,
     encoding: 'utf-8',
     stdio: 'pipe'
   });
@@ -397,14 +442,29 @@ function startDockerCompose() {
     if (unnecessaryServices.length > 0) {
       console.error('🛑 Stopping unnecessary services:', unnecessaryServices.join(', '));
 
+      // Explicitly pass environment variables to docker command
+      const env = {
+        ...process.env,  // CRITICAL: Include all parent env vars FIRST
+        // Ensure key vars are present with defaults
+        EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+        EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+        EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+      };
+
       diagnosticLog('Docker Compose Command: Stopping unnecessary services', {
         command: 'docker',
         args: ['compose', 'stop', ...unnecessaryServices],
-        cwd: CONFIG_DIR
+        cwd: CONFIG_DIR,
+        env: redactSensitive({
+          EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+          EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+          EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+        })
       });
 
       const stopResult = spawnSync('docker', ['compose', 'stop', ...unnecessaryServices], {
         cwd: CONFIG_DIR,
+        env: env,
         stdio: 'pipe'
       });
 
@@ -423,14 +483,33 @@ function startDockerCompose() {
     // Only start required services
     args.push(...requiredServices);
 
+    // Explicitly pass environment variables to docker command
+    const env = {
+      ...process.env,  // CRITICAL: Include all parent env vars FIRST
+      // Ensure key vars are present with defaults
+      EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+      EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+      EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    };
+
     diagnosticLog('Docker Compose Command: Starting services', {
       command: 'docker',
       args: args,
-      cwd: CONFIG_DIR
+      cwd: CONFIG_DIR,
+      env: redactSensitive({
+        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION,
+        GOOGLE_PROJECT_ID: env.GOOGLE_PROJECT_ID,
+        GOOGLE_APPLICATION_CREDENTIALS: env.GOOGLE_APPLICATION_CREDENTIALS,
+        OPENAI_API_KEY: env.OPENAI_API_KEY,
+        DATABASE_URL: env.DATABASE_URL
+      })
     });
 
     const compose = spawn('docker', args, {
       cwd: CONFIG_DIR,
+      env: env,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf-8'
     });
@@ -503,14 +582,29 @@ async function waitForServicesHealthy() {
   const serviceStatus = {};
 
   while (Date.now() - startTime < MAX_HEALTH_WAIT_MS) {
+    // Explicitly pass environment variables to docker command
+    const env = {
+      ...process.env,  // CRITICAL: Include all parent env vars FIRST
+      // Ensure key vars are present with defaults
+      EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+      EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+      EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    };
+
     diagnosticLog('Docker Compose Command: Checking container status', {
       command: 'docker',
       args: ['compose', 'ps', '--format', 'json'],
-      cwd: CONFIG_DIR
+      cwd: CONFIG_DIR,
+      env: redactSensitive({
+        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+      })
     });
 
     const result = spawnSync('docker', ['compose', 'ps', '--format', 'json'], {
       cwd: CONFIG_DIR,
+      env: env,
       encoding: 'utf-8',
       stdio: 'pipe'
     });
@@ -618,10 +712,24 @@ function establishStdioProxy() {
   console.error('📝 Logs available: docker compose logs -f (in', CONFIG_DIR + ')');
   console.error('');
 
+  // Explicitly pass environment variables to docker command
+  const env = {
+    ...process.env,  // CRITICAL: Include all parent env vars FIRST
+    // Ensure key vars are present with defaults
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+  };
+
   diagnosticLog('Docker Command: Establishing stdio proxy to MCP server', {
     command: 'docker',
     args: ['exec', '-i', 'maproom-mcp', 'node', '/app/dist/index.js'],
-    cwd: process.cwd()
+    cwd: process.cwd(),
+    env: redactSensitive({
+      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+    })
   });
 
   // Proxy stdin/stdout to the maproom-mcp container
@@ -633,6 +741,7 @@ function establishStdioProxy() {
     'node',            // Run node
     '/app/dist/index.js'  // MCP server entrypoint
   ], {
+    env: env,
     stdio: ['pipe', 'pipe', 'inherit'] // stdin: pipe, stdout: pipe, stderr: inherit (for logs)
   });
 
