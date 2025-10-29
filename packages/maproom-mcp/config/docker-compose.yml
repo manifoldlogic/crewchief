@@ -90,14 +90,21 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
+      # Note: Ollama dependency removed - only required if EMBEDDING_PROVIDER=ollama
+      # CLI ensures Ollama is started when needed via conditional service startup
     environment:
       DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
-      EMBEDDING_PROVIDER: ollama
-      EMBEDDING_MODEL: nomic-embed-text
-      EMBEDDING_DIMENSION: 768
-      EMBEDDING_API_ENDPOINT: http://ollama:11434
+      # Pass through provider from environment, default to ollama for zero-config
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+      EMBEDDING_API_ENDPOINT: ${EMBEDDING_API_ENDPOINT:-http://ollama:11434}
+      # Google Vertex AI configuration (when EMBEDDING_PROVIDER=google)
+      GOOGLE_PROJECT_ID: ${GOOGLE_PROJECT_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      GOOGLE_VERTEX_REGION: ${GOOGLE_VERTEX_REGION:-us-west1}
+      # OpenAI configuration (when EMBEDDING_PROVIDER=openai)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
       NODE_ENV: production
