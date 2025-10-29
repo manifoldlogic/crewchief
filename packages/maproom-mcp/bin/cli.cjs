@@ -520,6 +520,91 @@ function getRequiredServices() {
 }
 
 /**
+ * Remove unnecessary services that should not be running
+ * Stops and removes containers for services not required by current provider configuration
+ *
+ * @param {string[]} requiredServices - List of services that should be running
+ */
+function removeUnnecessaryServices(requiredServices) {
+  const ALL_SERVICES = ['postgres', 'ollama', 'maproom-mcp'];
+  const unnecessaryServices = ALL_SERVICES.filter(s => !requiredServices.includes(s));
+
+  if (unnecessaryServices.length === 0) {
+    console.error('No unnecessary services to remove\n');
+    return;
+  }
+
+  console.error('\n=== Removing Unnecessary Services ===');
+  console.error(`Required services: ${requiredServices.join(', ')}`);
+  console.error(`Removing: ${unnecessaryServices.join(', ')}\n`);
+
+  // Explicitly pass environment variables to docker command
+  const env = {
+    ...process.env,  // CRITICAL: Include all parent env vars FIRST
+    // Ensure key vars are present with defaults
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+  };
+
+  for (const service of unnecessaryServices) {
+    console.error(`Stopping ${service}...`);
+
+    diagnosticLog('Docker Compose Command: Stopping unnecessary service', {
+      command: 'docker',
+      args: ['compose', 'stop', service],
+      cwd: CONFIG_DIR,
+      env: redactSensitive({
+        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+      })
+    });
+
+    const stopResult = spawnSync('docker', ['compose', 'stop', service], {
+      cwd: CONFIG_DIR,
+      env: env,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    // Stopping a non-existent service is not an error
+    if (stopResult.status !== 0 && !stopResult.stderr.includes('no such service')) {
+      console.error(`Warning: Failed to stop ${service}`);
+    }
+
+    console.error(`Removing ${service}...`);
+
+    diagnosticLog('Docker Compose Command: Removing unnecessary service', {
+      command: 'docker',
+      args: ['compose', 'rm', '-f', service],
+      cwd: CONFIG_DIR,
+      env: redactSensitive({
+        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
+        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
+      })
+    });
+
+    const rmResult = spawnSync('docker', ['compose', 'rm', '-f', service], {
+      cwd: CONFIG_DIR,
+      env: env,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    if (rmResult.status !== 0 && !rmResult.stderr.includes('no such service')) {
+      console.error(`Warning: Failed to remove ${service}`);
+    }
+  }
+
+  // Verify removal
+  console.error('\nVerifying removal:');
+  logDockerState();
+  console.error('Service removal complete\n');
+}
+
+/**
  * Start Docker Compose stack with selective services
  */
 async function startDockerCompose() {
@@ -531,45 +616,8 @@ async function startDockerCompose() {
 
     console.error('📦 Required services:', requiredServices.join(', '));
 
-    // Stop any services that are running but not required
-    const allServices = ['postgres', 'ollama', 'maproom-mcp'];
-    const unnecessaryServices = allServices.filter(s => !requiredServices.includes(s));
-
-    if (unnecessaryServices.length > 0) {
-      console.error('🛑 Stopping unnecessary services:', unnecessaryServices.join(', '));
-
-      // Explicitly pass environment variables to docker command
-      const env = {
-        ...process.env,  // CRITICAL: Include all parent env vars FIRST
-        // Ensure key vars are present with defaults
-        EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-        EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-        EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
-      };
-
-      diagnosticLog('Docker Compose Command: Stopping unnecessary services', {
-        command: 'docker',
-        args: ['compose', 'stop', ...unnecessaryServices],
-        cwd: CONFIG_DIR,
-        env: redactSensitive({
-          EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-          EMBEDDING_MODEL: env.EMBEDDING_MODEL,
-          EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
-        })
-      });
-
-      const stopResult = spawnSync('docker', ['compose', 'stop', ...unnecessaryServices], {
-        cwd: CONFIG_DIR,
-        env: env,
-        stdio: 'pipe'
-      });
-
-      if (stopResult.status === 0) {
-        console.error('   ✓ Stopped:', unnecessaryServices.join(', '));
-        // Log container state after stopping services
-        logDockerState();
-      }
-    }
+    // Remove services that shouldn't be running
+    removeUnnecessaryServices(requiredServices);
 
     console.error('⬇️  Starting required services (downloading images if needed)...');
 
