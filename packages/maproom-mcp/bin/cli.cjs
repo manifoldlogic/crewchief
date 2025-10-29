@@ -605,6 +605,86 @@ function removeUnnecessaryServices(requiredServices) {
 }
 
 /**
+ * Verify final container state matches expected services
+ * Compares running services against expected services and logs any discrepancies
+ *
+ * @param {string[]} expectedServices - List of services that should be running
+ * @returns {boolean} - True if state matches expectations, false otherwise
+ */
+function verifyFinalState(expectedServices) {
+  console.error('\n=== Verifying Final Container State ===');
+  console.error(`Expected services: ${expectedServices.join(', ')}`);
+
+  // Log current state first
+  logDockerState();
+
+  // Explicitly pass environment variables to docker command
+  const env = {
+    ...process.env,  // CRITICAL: Include all parent env vars FIRST
+    // Ensure key vars are present with defaults
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+  };
+
+  // Get running services
+  const result = spawnSync('docker', ['compose', 'ps', '--format', 'json'], {
+    cwd: CONFIG_DIR,
+    env: env,
+    encoding: 'utf-8',
+    stdio: 'pipe'
+  });
+
+  if (result.status !== 0) {
+    console.error('❌ ERROR: Failed to verify container state');
+    console.error(result.stderr);
+    return false;
+  }
+
+  // Parse JSON output
+  const containers = result.stdout.trim().split('\n')
+    .filter(line => line.trim())
+    .map(line => {
+      try {
+        return JSON.parse(line);
+      } catch (e) {
+        console.error(`Warning: Failed to parse container JSON: ${line}`);
+        return null;
+      }
+    })
+    .filter(c => c !== null && c.State === 'running');
+
+  const runningServices = containers.map(c => c.Service);
+
+  console.error(`Running services: ${runningServices.join(', ') || '(none)'}`);
+
+  // Check for unexpected services
+  const unexpected = runningServices.filter(s => !expectedServices.includes(s));
+  if (unexpected.length > 0) {
+    console.error(`⚠️  WARNING: Unexpected services running: ${unexpected.join(', ')}`);
+    console.error('These services should have been removed. Manual cleanup may be needed.');
+  }
+
+  // Check for missing services
+  const missing = expectedServices.filter(s => !runningServices.includes(s));
+  if (missing.length > 0) {
+    console.error(`❌ ERROR: Expected services not running: ${missing.join(', ')}`);
+    console.error('Startup may have failed. Check logs above for errors.');
+    return false;
+  }
+
+  // Success
+  if (unexpected.length === 0) {
+    console.error(`✅ All expected services running: ${runningServices.join(', ')}`);
+    console.error('Final state verification: PASS\n');
+    return true;
+  } else {
+    console.error('Final state verification: PASS (with warnings)\n');
+    return true;
+  }
+}
+
+/**
  * Start Docker Compose stack with selective services
  */
 async function startDockerCompose() {
@@ -701,9 +781,16 @@ async function startDockerCompose() {
         reject(new Error(`Docker Compose exited with code ${code}`));
       } else {
         console.error('✓ Services started');
-        // Log container state after starting services
-        logDockerState();
-        resolve();
+
+        // Verify final state
+        const stateOk = verifyFinalState(requiredServices);
+        if (!stateOk) {
+          console.error('\n⚠️  Container state verification failed. Check errors above.');
+          console.error('You may need to manually stop containers: docker compose stop');
+          reject(new Error('Container state verification failed'));
+        } else {
+          resolve();
+        }
       }
     });
   });
