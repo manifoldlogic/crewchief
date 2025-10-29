@@ -14,6 +14,34 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Diagnostic Mode: Log environment variables for troubleshooting
+const DIAGNOSTIC_MODE = process.env.MAPROOM_MCP_DEBUG === 'true';
+
+/**
+ * Log diagnostic information to stderr
+ * Logs always appear when EMBEDDING_PROVIDER is not set OR when MAPROOM_MCP_DEBUG=true
+ */
+function diagnosticLog(message, data) {
+  if (DIAGNOSTIC_MODE || !process.env.EMBEDDING_PROVIDER) {
+    console.error('🔍 [DIAGNOSTIC]', message);
+    if (data) {
+      console.error('   ', JSON.stringify(data, null, 2));
+    }
+  }
+}
+
+// Log environment variables immediately on startup
+diagnosticLog('CLI Started', {
+  EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || '(not set)',
+  GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID ? '(set)' : '(not set)',
+  GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS ? '(set)' : '(not set)',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '(set)' : '(not set)',
+  OLLAMA_HOST: process.env.OLLAMA_HOST || '(not set)',
+  NODE_ENV: process.env.NODE_ENV || '(not set)',
+  cwd: process.cwd(),
+  nodeVersion: process.version
+});
+
 // Configuration
 const CONFIG_DIR = path.join(os.homedir(), '.maproom-mcp');
 const COMPOSE_FILE = path.join(CONFIG_DIR, 'docker-compose.yml');
