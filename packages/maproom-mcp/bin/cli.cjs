@@ -81,19 +81,35 @@ function setupConfigDirectory() {
     console.error('✓ Created configuration directory:', CONFIG_DIR);
   }
 
-  // Copy docker-compose.yml from package
-  if (!fs.existsSync(COMPOSE_FILE)) {
-    const srcCompose = path.join(__dirname, '..', 'config', 'docker-compose.yml');
+  // Copy docker-compose.yml from package (or update if outdated)
+  const srcCompose = path.join(__dirname, '..', 'config', 'docker-compose.yml');
 
-    if (!fs.existsSync(srcCompose)) {
-      console.error('❌ ERROR: docker-compose.yml not found in package.');
-      console.error('   Expected at:', srcCompose);
-      process.exit(1);
+  if (!fs.existsSync(srcCompose)) {
+    console.error('❌ ERROR: docker-compose.yml not found in package.');
+    console.error('   Expected at:', srcCompose);
+    process.exit(1);
+  }
+
+  // Check if existing docker-compose.yml needs updating
+  let needsUpdate = !fs.existsSync(COMPOSE_FILE);
+
+  if (!needsUpdate && fs.existsSync(COMPOSE_FILE)) {
+    const existingContent = fs.readFileSync(COMPOSE_FILE, 'utf-8');
+    // Check if file has old hardcoded EMBEDDING_PROVIDER (MCP-008 fix)
+    const hasHardcodedProvider = existingContent.includes('EMBEDDING_PROVIDER: ollama');
+    const hasEnvironmentVariable = existingContent.includes('${EMBEDDING_PROVIDER');
+
+    if (hasHardcodedProvider && !hasEnvironmentVariable) {
+      console.error('⚡ Detected outdated docker-compose.yml (pre-MCP-008)');
+      console.error('   Updating to support EMBEDDING_PROVIDER configuration...');
+      needsUpdate = true;
     }
+  }
 
+  if (needsUpdate) {
     try {
       fs.copyFileSync(srcCompose, COMPOSE_FILE);
-      console.error('✓ Copied docker-compose.yml to', CONFIG_DIR);
+      console.error('✓ Updated docker-compose.yml to', CONFIG_DIR);
     } catch (error) {
       console.error('❌ ERROR: Failed to copy docker-compose.yml');
       console.error('   Error:', error.message);
@@ -234,7 +250,24 @@ function startDockerCompose() {
     const requiredServices = getRequiredServices();
 
     console.error('📦 Required services:', requiredServices.join(', '));
-    console.error('⬇️  Downloading Docker images (first time only)...');
+
+    // Stop any services that are running but not required
+    const allServices = ['postgres', 'ollama', 'maproom-mcp'];
+    const unnecessaryServices = allServices.filter(s => !requiredServices.includes(s));
+
+    if (unnecessaryServices.length > 0) {
+      console.error('🛑 Stopping unnecessary services:', unnecessaryServices.join(', '));
+      const stopResult = spawnSync('docker', ['compose', 'stop', ...unnecessaryServices], {
+        cwd: CONFIG_DIR,
+        stdio: 'pipe'
+      });
+
+      if (stopResult.status === 0) {
+        console.error('   ✓ Stopped:', unnecessaryServices.join(', '));
+      }
+    }
+
+    console.error('⬇️  Starting required services (downloading images if needed)...');
 
     // Build docker compose command with service selection
     const args = ['compose', 'up', '-d'];
