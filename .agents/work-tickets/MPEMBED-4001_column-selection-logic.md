@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-4001: Implement column selection based on embedding dimension
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer
@@ -20,14 +20,14 @@ This ticket implements Phase 4 (Database and Search Integration) from the MPEMBE
 Reference: crewchief_context/maproom/MPEMBED-multi-provider-embeddings/phase-4-database-search-integration.md
 
 ## Acceptance Criteria
-- [ ] `select_columns_for_dimension()` function created
-- [ ] Function returns ColumnSet struct with code and doc column names
-- [ ] Dimension 768 → code_embedding_ollama, doc_embedding_ollama
-- [ ] Dimension 1536 → code_embedding, doc_embedding
-- [ ] Error for unsupported dimensions (not 768 or 1536)
-- [ ] Unit tests for all dimension mappings
-- [ ] Unit tests for error cases (0, 384, 3072, etc.)
-- [ ] Documentation explaining column selection logic
+- [x] `select_columns_for_dimension()` function created
+- [x] Function returns ColumnSet struct with code and doc column names
+- [x] Dimension 768 → code_embedding_ollama, doc_embedding_ollama
+- [x] Dimension 1536 → code_embedding, doc_embedding
+- [x] Error for unsupported dimensions (not 768 or 1536)
+- [x] Unit tests for all dimension mappings
+- [x] Unit tests for error cases (0, 384, 3072, etc.)
+- [x] Documentation explaining column selection logic
 
 ## Technical Requirements
 - Create new module: crates/maproom/src/db/columns.rs
