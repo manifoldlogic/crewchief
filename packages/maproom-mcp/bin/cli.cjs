@@ -250,6 +250,59 @@ function copyRecursive(src, dest) {
 }
 
 /**
+ * Log current Docker container state for verification
+ * Queries `docker compose ps` and logs the actual running state of all containers
+ */
+function logDockerState() {
+  diagnosticLog('Docker Command: Querying container state', {
+    command: 'docker',
+    args: ['compose', 'ps', '--format', 'json'],
+    cwd: CONFIG_DIR
+  });
+
+  const result = spawnSync('docker', ['compose', 'ps', '--format', 'json'], {
+    cwd: CONFIG_DIR,
+    encoding: 'utf-8',
+    stdio: 'pipe'
+  });
+
+  if (result.status !== 0) {
+    diagnosticLog('Container State: Query failed', {
+      exitCode: result.status,
+      error: result.stderr || 'Unknown error'
+    });
+    return;
+  }
+
+  // Check for empty output (no containers running)
+  if (!result.stdout || !result.stdout.trim()) {
+    diagnosticLog('Container State', []);
+    return;
+  }
+
+  try {
+    // Parse JSON output (one object per line)
+    const containers = result.stdout.trim().split('\n')
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
+
+    // Extract service name, state, and status for each container
+    const containerStates = containers.map(c => ({
+      service: c.Service,
+      state: c.State,
+      status: c.Status
+    }));
+
+    diagnosticLog('Container State', containerStates);
+  } catch (error) {
+    diagnosticLog('Container State: Parse error', {
+      error: error.message,
+      stdout: result.stdout.substring(0, 200) // Log first 200 chars for debugging
+    });
+  }
+}
+
+/**
  * Determine which services to start based on EMBEDDING_PROVIDER
  */
 function getRequiredServices() {
@@ -311,6 +364,8 @@ function startDockerCompose() {
 
       if (stopResult.status === 0) {
         console.error('   ✓ Stopped:', unnecessaryServices.join(', '));
+        // Log container state after stopping services
+        logDockerState();
       }
     }
 
@@ -377,6 +432,8 @@ function startDockerCompose() {
         reject(new Error(`Docker Compose exited with code ${code}`));
       } else {
         console.error('✓ Services started');
+        // Log container state after starting services
+        logDockerState();
         resolve();
       }
     });
