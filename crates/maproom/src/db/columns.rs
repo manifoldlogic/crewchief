@@ -11,14 +11,14 @@
 
 /// Column names for embedding storage.
 ///
-/// This struct holds the database column names used to store code and documentation embeddings.
+/// This struct holds the database column names used to store code and text embeddings.
 /// Different embedding providers use different column sets based on their vector dimensions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnSet {
     /// Column name for code embeddings
     pub code_embedding: &'static str,
-    /// Column name for documentation embeddings
-    pub doc_embedding: &'static str,
+    /// Column name for text embeddings
+    pub text_embedding: &'static str,
 }
 
 impl ColumnSet {
@@ -28,7 +28,7 @@ impl ColumnSet {
     /// with the original OpenAI columns.
     pub const OLLAMA: Self = Self {
         code_embedding: "code_embedding_ollama",
-        doc_embedding: "doc_embedding_ollama",
+        text_embedding: "text_embedding_ollama",
     };
 
     /// Column set for 1536-dimensional embeddings (OpenAI).
@@ -37,7 +37,7 @@ impl ColumnSet {
     /// with existing OpenAI-based embeddings.
     pub const OPENAI: Self = Self {
         code_embedding: "code_embedding",
-        doc_embedding: "doc_embedding",
+        text_embedding: "text_embedding",
     };
 }
 
@@ -58,9 +58,9 @@ impl ColumnSet {
 ///
 /// # Supported Dimensions
 ///
-/// - `768` - Maps to `code_embedding_ollama` and `doc_embedding_ollama`
+/// - `768` - Maps to `code_embedding_ollama` and `text_embedding_ollama`
 ///   - Used by: Ollama providers (e.g., nomic-embed-text), Google Gemini
-/// - `1536` - Maps to `code_embedding` and `doc_embedding`
+/// - `1536` - Maps to `code_embedding` and `text_embedding`
 ///   - Used by: OpenAI text-embedding-3-small, text-embedding-ada-002
 ///
 /// # Errors
@@ -76,12 +76,12 @@ impl ColumnSet {
 /// // Select columns for Ollama embeddings
 /// let cols = select_columns_for_dimension(768)?;
 /// assert_eq!(cols.code_embedding, "code_embedding_ollama");
-/// assert_eq!(cols.doc_embedding, "doc_embedding_ollama");
+/// assert_eq!(cols.text_embedding, "text_embedding_ollama");
 ///
 /// // Select columns for OpenAI embeddings
 /// let cols = select_columns_for_dimension(1536)?;
 /// assert_eq!(cols.code_embedding, "code_embedding");
-/// assert_eq!(cols.doc_embedding, "doc_embedding");
+/// assert_eq!(cols.text_embedding, "text_embedding");
 ///
 /// // Unsupported dimension returns error
 /// let result = select_columns_for_dimension(384);
@@ -108,7 +108,7 @@ mod tests {
         let cols = select_columns_for_dimension(768).unwrap();
         assert_eq!(cols, ColumnSet::OLLAMA);
         assert_eq!(cols.code_embedding, "code_embedding_ollama");
-        assert_eq!(cols.doc_embedding, "doc_embedding_ollama");
+        assert_eq!(cols.text_embedding, "text_embedding_ollama");
     }
 
     #[test]
@@ -116,7 +116,7 @@ mod tests {
         let cols = select_columns_for_dimension(1536).unwrap();
         assert_eq!(cols, ColumnSet::OPENAI);
         assert_eq!(cols.code_embedding, "code_embedding");
-        assert_eq!(cols.doc_embedding, "doc_embedding");
+        assert_eq!(cols.text_embedding, "text_embedding");
     }
 
     #[test]
@@ -151,9 +151,9 @@ mod tests {
     #[test]
     fn test_column_set_constants() {
         assert_eq!(ColumnSet::OLLAMA.code_embedding, "code_embedding_ollama");
-        assert_eq!(ColumnSet::OLLAMA.doc_embedding, "doc_embedding_ollama");
+        assert_eq!(ColumnSet::OLLAMA.text_embedding, "text_embedding_ollama");
         assert_eq!(ColumnSet::OPENAI.code_embedding, "code_embedding");
-        assert_eq!(ColumnSet::OPENAI.doc_embedding, "doc_embedding");
+        assert_eq!(ColumnSet::OPENAI.text_embedding, "text_embedding");
     }
 
     #[test]

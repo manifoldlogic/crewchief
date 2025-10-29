@@ -22,7 +22,7 @@ async fn test_upsert_768_dimension_embeddings() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_function_768',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -46,22 +46,22 @@ async fn test_upsert_768_dimension_embeddings() -> Result<()> {
         .query_one(
             "SELECT
                 code_embedding_ollama IS NOT NULL as has_code_ollama,
-                doc_embedding_ollama IS NOT NULL as has_doc_ollama,
+                text_embedding_ollama IS NOT NULL as has_text_ollama,
                 code_embedding IS NULL as code_null,
                 text_embedding IS NULL as text_null,
                 array_length(code_embedding_ollama, 1) as code_dim,
-                array_length(doc_embedding_ollama, 1) as doc_dim
+                array_length(text_embedding_ollama, 1) as text_dim
              FROM maproom.chunks WHERE id = $1",
             &[&chunk_id],
         )
         .await?;
 
     assert!(row.get::<_, bool>("has_code_ollama"), "code_embedding_ollama should not be NULL");
-    assert!(row.get::<_, bool>("has_doc_ollama"), "doc_embedding_ollama should not be NULL");
+    assert!(row.get::<_, bool>("has_text_ollama"), "text_embedding_ollama should not be NULL");
     assert!(row.get::<_, bool>("code_null"), "code_embedding should be NULL");
     assert!(row.get::<_, bool>("text_null"), "text_embedding should be NULL");
     assert_eq!(row.get::<_, i32>("code_dim"), 768, "code_embedding_ollama should have 768 dimensions");
-    assert_eq!(row.get::<_, i32>("doc_dim"), 768, "doc_embedding_ollama should have 768 dimensions");
+    assert_eq!(row.get::<_, i32>("text_dim"), 768, "text_embedding_ollama should have 768 dimensions");
 
     Ok(())
 }
@@ -82,7 +82,7 @@ async fn test_upsert_1536_dimension_embeddings() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_function_1536',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -108,7 +108,7 @@ async fn test_upsert_1536_dimension_embeddings() -> Result<()> {
                 code_embedding IS NOT NULL as has_code,
                 text_embedding IS NOT NULL as has_text,
                 code_embedding_ollama IS NULL as code_ollama_null,
-                doc_embedding_ollama IS NULL as doc_ollama_null,
+                text_embedding_ollama IS NULL as text_ollama_null,
                 array_length(code_embedding, 1) as code_dim,
                 array_length(text_embedding, 1) as text_dim
              FROM maproom.chunks WHERE id = $1",
@@ -119,7 +119,7 @@ async fn test_upsert_1536_dimension_embeddings() -> Result<()> {
     assert!(row.get::<_, bool>("has_code"), "code_embedding should not be NULL");
     assert!(row.get::<_, bool>("has_text"), "text_embedding should not be NULL");
     assert!(row.get::<_, bool>("code_ollama_null"), "code_embedding_ollama should be NULL");
-    assert!(row.get::<_, bool>("doc_ollama_null"), "doc_embedding_ollama should be NULL");
+    assert!(row.get::<_, bool>("text_ollama_null"), "text_embedding_ollama should be NULL");
     assert_eq!(row.get::<_, i32>("code_dim"), 1536, "code_embedding should have 1536 dimensions");
     assert_eq!(row.get::<_, i32>("text_dim"), 1536, "text_embedding should have 1536 dimensions");
 
@@ -142,7 +142,7 @@ async fn test_dimension_mismatch_error() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_mismatch',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -187,7 +187,7 @@ async fn test_batch_upsert_768_dimension() -> Result<()> {
                  ) VALUES (
                     (SELECT id FROM maproom.files LIMIT 1),
                     $1,
-                    'function',
+                    'func',
                     1, 10,
                     'test content',
                     to_tsvector('simple', 'test'),
@@ -216,7 +216,7 @@ async fn test_batch_upsert_768_dimension() -> Result<()> {
             .query_one(
                 "SELECT
                     code_embedding_ollama IS NOT NULL as has_code_ollama,
-                    doc_embedding_ollama IS NOT NULL as has_doc_ollama,
+                    text_embedding_ollama IS NOT NULL as has_text_ollama,
                     array_length(code_embedding_ollama, 1) as code_dim
                  FROM maproom.chunks WHERE id = $1",
                 &[&chunk_id],
@@ -224,7 +224,7 @@ async fn test_batch_upsert_768_dimension() -> Result<()> {
             .await?;
 
         assert!(row.get::<_, bool>("has_code_ollama"));
-        assert!(row.get::<_, bool>("has_doc_ollama"));
+        assert!(row.get::<_, bool>("has_text_ollama"));
         assert_eq!(row.get::<_, i32>("code_dim"), 768);
     }
 
@@ -249,7 +249,7 @@ async fn test_batch_upsert_1536_dimension() -> Result<()> {
                  ) VALUES (
                     (SELECT id FROM maproom.files LIMIT 1),
                     $1,
-                    'function',
+                    'func',
                     1, 10,
                     'test content',
                     to_tsvector('simple', 'test'),
@@ -309,7 +309,7 @@ async fn test_batch_dimension_mismatch_error() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_batch_mismatch',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -352,7 +352,7 @@ async fn test_batch_transaction_rollback() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_tx_1',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -371,7 +371,7 @@ async fn test_batch_transaction_rollback() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_tx_2',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -435,7 +435,7 @@ async fn test_unsupported_dimension_error() -> Result<()> {
              ) VALUES (
                 (SELECT id FROM maproom.files LIMIT 1),
                 'test_unsupported',
-                'function',
+                'func',
                 1, 10,
                 'test content',
                 to_tsvector('simple', 'test'),
@@ -457,6 +457,240 @@ async fn test_unsupported_dimension_error() -> Result<()> {
         err_msg.contains("Unsupported") && err_msg.contains("384"),
         "Error message should mention unsupported dimension: {}",
         err_msg
+    );
+
+    Ok(())
+}
+
+/// Test that text embeddings are written to text_embedding column, not doc_embedding.
+///
+/// This test verifies the bug fix for MCP-009 where text embeddings were incorrectly
+/// being written to doc_embedding columns instead of text_embedding columns.
+#[tokio::test]
+async fn test_text_embedding_column_correct_768() -> Result<()> {
+    use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
+
+    let client = connect().await?;
+    migrate(&client).await?;
+
+    // Ensure required columns exist for test
+    client
+        .batch_execute(
+            "ALTER TABLE maproom.chunks
+             ADD COLUMN IF NOT EXISTS code_embedding_ollama vector(768),
+             ADD COLUMN IF NOT EXISTS text_embedding_ollama vector(768),
+             ADD COLUMN IF NOT EXISTS doc_embedding_ollama vector(768),
+             ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();",
+        )
+        .await?;
+
+    // Create test hierarchy: repo -> worktree -> commit -> file -> chunk
+    let test_name = format!("test-repo-{}", uuid::Uuid::new_v4());
+    let repo_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, '/test') RETURNING id",
+            &[&test_name],
+        )
+        .await?
+        .get(0);
+
+    let worktree_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, 'main', '/test/worktree') RETURNING id",
+            &[&repo_id],
+        )
+        .await?
+        .get(0);
+
+    let commit_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.commits (repo_id, sha) VALUES ($1, 'abc123') RETURNING id",
+            &[&repo_id],
+        )
+        .await?
+        .get(0);
+
+    let file_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, language, content_hash)
+             VALUES ($1, $2, $3, 'test.ts', 'typescript', 'testhash')
+             RETURNING id",
+            &[&repo_id, &worktree_id, &commit_id],
+        )
+        .await?
+        .get(0);
+
+    // Create a test chunk
+    let chunk_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.chunks (
+                file_id, symbol_name, kind, start_line, end_line, preview, ts_doc, recency_score, churn_score
+             ) VALUES (
+                $1,
+                'test_text_embedding_768',
+                'func',
+                1, 10,
+                'test content',
+                to_tsvector('simple', 'test'),
+                0.5, 0.5
+             )
+             RETURNING id",
+            &[&file_id],
+        )
+        .await?
+        .get(0);
+
+    // Create 768-dimensional embeddings
+    let code_emb = vec![0.1f32; 768];
+    let text_emb = vec![0.2f32; 768];
+
+    // Upsert with dimension 768
+    upsert_embeddings(&client, chunk_id, Some(&code_emb), Some(&text_emb), 768).await?;
+
+    // Verify text embeddings are in text_embedding_ollama column
+    let row = client
+        .query_one(
+            "SELECT
+                code_embedding_ollama IS NOT NULL as has_code_ollama,
+                text_embedding_ollama IS NOT NULL as has_text_ollama,
+                array_length(code_embedding_ollama::real[], 1) as code_dim,
+                array_length(text_embedding_ollama::real[], 1) as text_dim
+             FROM maproom.chunks WHERE id = $1",
+            &[&chunk_id],
+        )
+        .await?;
+
+    assert!(
+        row.get::<_, bool>("has_code_ollama"),
+        "code_embedding_ollama should not be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("has_text_ollama"),
+        "text_embedding_ollama should not be NULL - embeddings should be in text_embedding column"
+    );
+    assert_eq!(
+        row.get::<_, i32>("code_dim"),
+        768,
+        "code_embedding_ollama should have 768 dimensions"
+    );
+    assert_eq!(
+        row.get::<_, i32>("text_dim"),
+        768,
+        "text_embedding_ollama should have 768 dimensions"
+    );
+
+    Ok(())
+}
+
+/// Test that text embeddings are written to text_embedding column for 1536 dimensions.
+#[tokio::test]
+async fn test_text_embedding_column_correct_1536() -> Result<()> {
+    use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
+
+    let client = connect().await?;
+    migrate(&client).await?;
+
+    // Ensure required columns exist for test
+    client
+        .batch_execute(
+            "ALTER TABLE maproom.chunks
+             ADD COLUMN IF NOT EXISTS code_embedding_ollama vector(768),
+             ADD COLUMN IF NOT EXISTS text_embedding_ollama vector(768),
+             ADD COLUMN IF NOT EXISTS doc_embedding_ollama vector(768),
+             ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();",
+        )
+        .await?;
+
+    // Create test hierarchy: repo -> worktree -> commit -> file -> chunk
+    let test_name = format!("test-repo-1536-{}", uuid::Uuid::new_v4());
+    let repo_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, '/test1536') RETURNING id",
+            &[&test_name],
+        )
+        .await?
+        .get(0);
+
+    let worktree_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, 'main', '/test/worktree') RETURNING id",
+            &[&repo_id],
+        )
+        .await?
+        .get(0);
+
+    let commit_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.commits (repo_id, sha) VALUES ($1, 'def456') RETURNING id",
+            &[&repo_id],
+        )
+        .await?
+        .get(0);
+
+    let file_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, language, content_hash)
+             VALUES ($1, $2, $3, 'test1536.ts', 'typescript', 'testhash1536')
+             RETURNING id",
+            &[&repo_id, &worktree_id, &commit_id],
+        )
+        .await?
+        .get(0);
+
+    // Create a test chunk
+    let chunk_id: i64 = client
+        .query_one(
+            "INSERT INTO maproom.chunks (
+                file_id, symbol_name, kind, start_line, end_line, preview, ts_doc, recency_score, churn_score
+             ) VALUES (
+                $1,
+                'test_text_embedding_1536',
+                'func',
+                1, 10,
+                'test content',
+                to_tsvector('simple', 'test'),
+                0.5, 0.5
+             )
+             RETURNING id",
+            &[&file_id],
+        )
+        .await?
+        .get(0);
+
+    // Create 1536-dimensional embeddings
+    let code_emb = vec![0.3f32; 1536];
+    let text_emb = vec![0.4f32; 1536];
+
+    // Upsert with dimension 1536
+    upsert_embeddings(&client, chunk_id, Some(&code_emb), Some(&text_emb), 1536).await?;
+
+    // Verify text embeddings are in text_embedding column
+    let row = client
+        .query_one(
+            "SELECT
+                code_embedding IS NOT NULL as has_code,
+                text_embedding IS NOT NULL as has_text,
+                array_length(code_embedding::real[], 1) as code_dim,
+                array_length(text_embedding::real[], 1) as text_dim
+             FROM maproom.chunks WHERE id = $1",
+            &[&chunk_id],
+        )
+        .await?;
+
+    assert!(row.get::<_, bool>("has_code"), "code_embedding should not be NULL");
+    assert!(
+        row.get::<_, bool>("has_text"),
+        "text_embedding should not be NULL - embeddings should be in text_embedding column"
+    );
+    assert_eq!(
+        row.get::<_, i32>("code_dim"),
+        1536,
+        "code_embedding should have 1536 dimensions"
+    );
+    assert_eq!(
+        row.get::<_, i32>("text_dim"),
+        1536,
+        "text_embedding should have 1536 dimensions"
     );
 
     Ok(())

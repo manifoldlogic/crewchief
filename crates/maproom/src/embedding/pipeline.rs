@@ -529,7 +529,7 @@ impl EmbeddingPipeline {
               AND (c.{} IS NULL OR c.{} IS NULL)
             ORDER BY c.id
             "#,
-            columns.code_embedding, columns.doc_embedding
+            columns.code_embedding, columns.text_embedding
         );
 
         let rows = client

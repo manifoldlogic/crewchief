@@ -294,7 +294,7 @@ pub async fn insert_chunks_batch(
 
 #[derive(Debug, Serialize)]
 pub struct SearchHit {
-    pub score: f32,
+    pub score: f64,
     pub file_relpath: String,
     pub symbol_name: Option<String>,
     pub kind: String,
@@ -438,7 +438,7 @@ pub async fn upsert_embeddings(
                      {} = $2,
                      updated_at = NOW()
                  WHERE id = $3",
-                columns.code_embedding, columns.doc_embedding
+                columns.code_embedding, columns.text_embedding
             );
             client
                 .execute(&sql, &[&code, &text, &chunk_id])
@@ -464,7 +464,7 @@ pub async fn upsert_embeddings(
                  SET {} = $1,
                      updated_at = NOW()
                  WHERE id = $2",
-                columns.doc_embedding
+                columns.text_embedding
             );
             client
                 .execute(&sql, &[&text, &chunk_id])
@@ -550,7 +550,7 @@ pub async fn batch_upsert_embeddings(
                          {} = $2,
                          updated_at = NOW()
                      WHERE id = $3",
-                    columns.code_embedding, columns.doc_embedding
+                    columns.code_embedding, columns.text_embedding
                 );
                 tx.execute(&sql, &[&code, &text, chunk_id]).await?;
             }
@@ -570,7 +570,7 @@ pub async fn batch_upsert_embeddings(
                      SET {} = $1,
                          updated_at = NOW()
                      WHERE id = $2",
-                    columns.doc_embedding
+                    columns.text_embedding
                 );
                 tx.execute(&sql, &[&text, chunk_id]).await?;
             }
@@ -671,7 +671,7 @@ pub async fn search_chunks_fts(
             symbol_name: r.get::<_, Option<String>>(2),
             kind: r.get::<_, String>(3),
             file_relpath: r.get::<_, String>(4),
-            score: r.get::<_, f32>(5),
+            score: r.get::<_, f64>(5),
         })
         .collect();
     Ok(hits)
