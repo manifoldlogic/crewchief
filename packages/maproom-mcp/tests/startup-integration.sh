@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Get the workspace root directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+CLI_PATH="$WORKSPACE_ROOT/packages/maproom-mcp/bin/cli.cjs"
+
 echo "Starting Maproom MCP Integration Tests"
 echo "======================================="
+echo "Workspace root: $WORKSPACE_ROOT"
+echo "CLI path: $CLI_PATH"
+echo ""
 
 # Cleanup function
 cleanup() {
@@ -25,7 +33,7 @@ test_google_provider() {
   export GOOGLE_API_KEY="test-key-123"
   export EMBEDDING_PROVIDER="google"
 
-  timeout 15 node packages/maproom-mcp/bin/cli.cjs &
+  timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
   sleep 8
 
@@ -66,7 +74,7 @@ test_default_all_services() {
   unset GOOGLE_API_KEY
   unset OPENAI_API_KEY
 
-  timeout 15 node packages/maproom-mcp/bin/cli.cjs &
+  timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
   sleep 8
 
@@ -93,7 +101,7 @@ test_openai_provider() {
   export OPENAI_API_KEY="sk-test-key-456"
   export EMBEDDING_PROVIDER="openai"
 
-  timeout 15 node packages/maproom-mcp/bin/cli.cjs &
+  timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
   sleep 8
 
@@ -125,7 +133,7 @@ test_explicit_ollama() {
 
   export EMBEDDING_PROVIDER="ollama"
 
-  timeout 15 node packages/maproom-mcp/bin/cli.cjs &
+  timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
   sleep 8
 
