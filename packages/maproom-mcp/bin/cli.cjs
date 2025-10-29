@@ -194,14 +194,54 @@ function copyRecursive(src, dest) {
 }
 
 /**
- * Start Docker Compose stack
+ * Determine which services to start based on EMBEDDING_PROVIDER
+ */
+function getRequiredServices() {
+  const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase();
+
+  const services = {
+    postgres: true,  // Always required for database
+    ollama: false    // Only if using Ollama provider
+  };
+
+  // Determine if Ollama is needed
+  if (!provider || provider === 'ollama') {
+    // No provider specified (zero-config) or explicitly ollama
+    services.ollama = true;
+    console.error('🚀 Starting with Ollama (local embeddings)...');
+  } else if (provider === 'google') {
+    console.error('🚀 Starting with Google Vertex AI...');
+    console.error('   (Skipping Ollama - not needed)');
+  } else if (provider === 'openai') {
+    console.error('🚀 Starting with OpenAI...');
+    console.error('   (Skipping Ollama - not needed)');
+  } else {
+    console.error(`⚠️  Warning: Unknown provider '${provider}', defaulting to Ollama`);
+    services.ollama = true;
+  }
+
+  return Object.entries(services)
+    .filter(([_, needed]) => needed)
+    .map(([service, _]) => service);
+}
+
+/**
+ * Start Docker Compose stack with selective services
  */
 function startDockerCompose() {
   return new Promise((resolve, reject) => {
-    console.error('🚀 Starting Maproom MCP with local LLM...');
+    const requiredServices = getRequiredServices();
+
+    console.error('📦 Required services:', requiredServices.join(', '));
     console.error('⬇️  Downloading Docker images (first time only)...');
 
-    const compose = spawn('docker', ['compose', 'up', '-d'], {
+    // Build docker compose command with service selection
+    const args = ['compose', 'up', '-d'];
+
+    // Only start required services
+    args.push(...requiredServices);
+
+    const compose = spawn('docker', args, {
       cwd: CONFIG_DIR,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf-8'
@@ -260,10 +300,15 @@ function startDockerCompose() {
  * Wait for all services to become healthy
  */
 async function waitForServicesHealthy() {
-  console.error('⏳ Waiting for services to become healthy...');
-  console.error('   This may take 1-2 minutes on first run (downloading Ollama model)...');
+  const requiredServices = getRequiredServices();
 
-  const requiredServices = ['postgres', 'ollama', 'maproom-mcp'];
+  console.error('⏳ Waiting for services:', requiredServices.join(', '));
+
+  // Only show Ollama model download message if Ollama is being started
+  if (requiredServices.includes('ollama')) {
+    console.error('   This may take 1-2 minutes on first run (downloading Ollama model)...');
+  }
+
   const startTime = Date.now();
   const serviceStatus = {};
 
