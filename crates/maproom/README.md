@@ -1,8 +1,182 @@
-# crewchief-maproom
+# CrewChief Maproom
 
-Rust indexer + CLI for Maproom. Stores AST-aware chunks and metadata into Postgres with pgvector.
+Semantic code search powered by embeddings and PostgreSQL.
 
-## Setup
+## Features
+
+- **🔍 Semantic Code Search** - Find code by concept, not just keywords
+- **🎯 Multi-Provider Embeddings** - Choose Ollama (free), OpenAI, or Google Vertex AI
+- **⚡ Zero-Config Setup** - Auto-detects Ollama, works out of the box
+- **🗃️ PostgreSQL Storage** - Reliable vector storage with pgvector
+- **🔄 Incremental Indexing** - Fast updates for changed files
+- **🌐 MCP Integration** - Works with Claude, Cursor, and other AI tools
+
+## Quick Start (Zero Config)
+
+### 1. Install Ollama (Free, Local)
+```bash
+curl -sSL https://ollama.ai/install.sh | sh
+ollama pull nomic-embed-text
+```
+
+### 2. Index Your Repository
+```bash
+crewchief maproom scan --generate-embeddings
+```
+
+### 3. Search Your Code
+```bash
+crewchief maproom search "authentication middleware"
+```
+
+**That's it!** No API keys, no configuration, no costs.
+
+---
+
+## Embedding Providers
+
+Maproom supports three embedding providers:
+
+| Provider | Cost | Setup | Dimensions | Best For |
+|----------|------|-------|------------|----------|
+| **Ollama** | Free | Easy | 768 | Local dev, privacy, cost |
+| **OpenAI** | ~$0.0001/1K | Easy | 1536 | Proven quality |
+| **Google Vertex AI** | ~$0.00025/1K | Medium | 768 | Enterprise, compliance |
+
+See [Provider Comparison](docs/providers/comparison.md) for detailed breakdown.
+
+### Ollama (Recommended for Most Users)
+
+**Advantages:**
+- ✅ Completely free
+- ✅ Works offline
+- ✅ Zero configuration
+- ✅ Fast (local processing)
+- ✅ Complete privacy (data never leaves your machine)
+
+**Setup:** See [Quick Start](#quick-start-zero-config) above
+
+### OpenAI
+
+**Advantages:**
+- ✅ Proven embedding quality
+- ✅ Simple API setup
+- ✅ Reliable cloud service
+
+**Setup:**
+```bash
+export OPENAI_API_KEY="sk-proj-..."
+export EMBEDDING_PROVIDER=openai
+crewchief maproom scan --generate-embeddings
+```
+
+See [OpenAI Setup Guide](docs/providers/openai-setup.md)
+
+### Google Vertex AI
+
+**Advantages:**
+- ✅ Enterprise compliance (HIPAA, SOC2)
+- ✅ Regional data residency
+- ✅ GCP integration
+
+**Setup:**
+```bash
+export GOOGLE_PROJECT_ID="your-project"
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
+export EMBEDDING_PROVIDER=google
+crewchief maproom scan --generate-embeddings
+```
+
+See [Google Setup Guide](docs/providers/google-vertex-ai-setup.md)
+
+---
+
+## Configuration
+
+Maproom auto-detects your provider:
+
+1. Checks `EMBEDDING_PROVIDER` env var (explicit)
+2. Detects Ollama on localhost:11434
+3. Falls back to OpenAI if `OPENAI_API_KEY` present
+4. Falls back to Google if `GOOGLE_PROJECT_ID` present
+
+### Explicit Provider Selection
+```bash
+export EMBEDDING_PROVIDER=ollama  # or openai, google
+```
+
+### Mixed Embeddings
+
+You can use multiple providers simultaneously! The database stores 768-dim and 1536-dim embeddings in separate columns. Search automatically uses COALESCE to prefer 768-dim embeddings when both exist.
+
+**Migration:** See [Migration Guide](docs/guides/provider-migration.md)
+
+---
+
+## FAQ
+
+### What embedding dimensions does Maproom use?
+
+- **Ollama**: 768 dimensions (nomic-embed-text model)
+- **Google**: 768 dimensions (textembedding-gecko model)
+- **OpenAI**: 1536 dimensions (text-embedding-3-small model)
+
+### Can I switch providers without re-indexing?
+
+Yes! Existing embeddings are preserved. New embeddings go in separate columns. See [Migration Guide](docs/guides/provider-migration.md).
+
+### Which provider should I use?
+
+- **Start with Ollama** - Free, fast, and private
+- **Use OpenAI** - If you're already an OpenAI customer
+- **Use Google** - If you need compliance certifications or GCP integration
+
+See [Provider Comparison](docs/providers/comparison.md) for detailed guidance.
+
+### Do I need a GPU for Ollama?
+
+No, but it helps. Ollama works on CPU (slower) or GPU (faster).
+
+### How much does it cost?
+
+- **Ollama**: $0 (free)
+- **OpenAI**: ~$5 per 100K chunks
+- **Google**: ~$12.50 per 100K chunks
+
+### Can I use this offline?
+
+Yes with Ollama! It runs entirely locally with no internet required.
+
+---
+
+## For Existing Users
+
+**⚠️ Notice for existing Maproom users:**
+
+If you already have OpenAI embeddings:
+- Your existing embeddings are **preserved**
+- New embeddings use separate columns
+- Search works across both embedding types
+- No re-indexing required
+
+See [Migration Guide](docs/guides/provider-migration.md) for details.
+
+---
+
+## Documentation
+
+- [Provider Comparison](docs/providers/comparison.md)
+- [Ollama Setup](docs/providers/ollama-setup.md)
+- [OpenAI Setup](docs/providers/openai-setup.md)
+- [Google Vertex AI Setup](docs/providers/google-vertex-ai-setup.md)
+- [Migration Guide](docs/guides/provider-migration.md)
+- [MCP Integration](docs/mcp/README.md)
+
+---
+
+## Installation & Setup
+
+### Database Setup
 
 1. Install Postgres with `vector`, `pg_trgm`, and `unaccent` extensions.
 2. Create a DB and apply migrations:
@@ -78,17 +252,32 @@ cargo run -p crewchief-maproom -- search \
 
 ## Environment Variables
 
-Required:
+### Required
 - `DATABASE_URL` - PostgreSQL connection string
-- `OPENAI_API_KEY` - OpenAI API key for embedding generation
 
-Optional:
-- `EMBEDDING_PROVIDER` - Provider to use (default: openai)
-- `EMBEDDING_MODEL` - Model name (default: text-embedding-3-small)
-- `EMBEDDING_DIMENSION` - Embedding dimension (default: 1536)
+### Provider-Specific (pick one)
+
+**Ollama (default):**
+- No environment variables required! Just install and run Ollama.
+
+**OpenAI:**
+- `OPENAI_API_KEY` - OpenAI API key for embedding generation
+- `EMBEDDING_PROVIDER=openai` (optional if API key present)
+
+**Google Vertex AI:**
+- `GOOGLE_PROJECT_ID` - Your GCP project ID
+- `GOOGLE_APPLICATION_CREDENTIALS` - Path to service account JSON key
+- `EMBEDDING_PROVIDER=google` (optional if project ID present)
+
+### Optional Configuration
+- `EMBEDDING_PROVIDER` - Explicit provider selection: `ollama`, `openai`, or `google`
+- `EMBEDDING_MODEL` - Model name override
+- `EMBEDDING_DIMENSION` - Embedding dimension override
 - `EMBEDDING_CACHE_SIZE` - LRU cache size (default: 10000)
 - `EMBEDDING_CACHE_TTL` - Cache TTL in seconds (default: 3600)
 - `EMBEDDING_BATCH_SIZE` - API batch size (default: 100)
+
+### Configuration File
 
 Create a `.env` at the repo root or in `crates/maproom/` by copying `.env.example`:
 
@@ -98,11 +287,22 @@ cp crates/maproom/.env.example .env
 cp crates/maproom/.env.example crates/maproom/.env
 ```
 
-Then edit the configuration:
+**Example configurations:**
 
-```
-DATABASE_URL=postgres://<your_username>:<your_password>@localhost:5432/maproom
-OPENAI_API_KEY=sk-...
+```bash
+# Ollama (default - no configuration needed!)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/maproom
+
+# OpenAI
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/maproom
+OPENAI_API_KEY=sk-proj-...
+EMBEDDING_PROVIDER=openai
+
+# Google Vertex AI
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/maproom
+GOOGLE_PROJECT_ID=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+EMBEDDING_PROVIDER=google
 ```
 
 ### Database Configuration
