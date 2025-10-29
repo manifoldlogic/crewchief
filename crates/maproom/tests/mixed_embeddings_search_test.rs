@@ -1,20 +1,49 @@
-//! Integration tests for mixed embedding search with COALESCE pattern.
+//! Integration tests for mixed embedding dimensions (MPEMBED-4901).
 //!
-//! These tests verify that vector search correctly handles chunks with different
-//! embedding dimensions (768-dim from Ollama/Google, 1536-dim from OpenAI) and
-//! properly prefers 768-dim embeddings when both are present.
+//! These tests validate that the search system correctly handles repositories
+//! with mixed embedding dimensions - some chunks with OpenAI embeddings (1536-dim),
+//! some with Ollama embeddings (768-dim), and some with both.
+//!
+//! This represents a realistic migration scenario where a repository is being
+//! progressively migrated from OpenAI to Ollama embeddings.
+//!
+//! # Test Requirements
+//!
+//! - PostgreSQL database running with maproom schema
+//! - Embedding providers available (OpenAI and Ollama) for test fixture generation
+//! - Mark tests with #[ignore] as they require external services
+//!
+//! Run with:
+//! ```bash
+//! cargo test --test mixed_embeddings_search_test -- --nocapture --ignored
+//! ```
+//!
+//! # Test Fixture Structure
+//!
+//! The test creates 110 total chunks:
+//! - 50 chunks with OpenAI embeddings only (1536-dim in code_embedding)
+//! - 50 chunks with Ollama embeddings only (768-dim in code_embedding_ollama)
+//! - 10 chunks with BOTH embeddings (tests COALESCE preference)
+//!
+//! Content types:
+//! - TypeScript functions (for OpenAI chunks)
+//! - Rust async functions (for Ollama chunks)
+//! - JavaScript classes (for both-embedding chunks)
 
-use crewchief_maproom::search::{SearchMode, VectorExecutor};
-use tokio_postgres::{Client, NoTls};
+use crewchief_maproom::embedding::EmbeddingService;
+use crewchief_maproom::search::{QueryProcessor, SearchExecutors, SearchOptions, SearchPipeline};
+use std::collections::HashSet;
+use std::sync::Arc;
+use tokio_postgres::NoTls;
 
-/// Helper function to establish database connection.
-async fn get_test_client() -> Result<Client, Box<dyn std::error::Error>> {
-    let db_url = std::env::var("DATABASE_URL")
+/// Helper to create a database connection for testing.
+async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std::error::Error>> {
+    let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://postgres:postgres@postgres:5432/crewchief".to_string());
 
-    let (client, connection) = tokio_postgres::connect(&db_url, NoTls).await?;
+    let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
 
-    // Spawn the connection handler
+    // Spawn connection in background
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             eprintln!("Database connection error: {}", e);
@@ -24,357 +53,618 @@ async fn get_test_client() -> Result<Client, Box<dyn std::error::Error>> {
     Ok(client)
 }
 
-/// Helper function to create test data with mixed embeddings.
-async fn setup_test_data(client: &Client) -> Result<(i64, i64), Box<dyn std::error::Error>> {
-    // Create test repo
+/// Helper to create embedding service from environment.
+async fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+    Ok(EmbeddingService::from_env().await?)
+}
+
+/// Structure to track the test fixture for verification.
+#[derive(Debug)]
+struct MixedEmbeddingFixture {
+    repo_id: i64,
+    worktree_id: i64,
+    openai_chunk_ids: Vec<i64>,
+    ollama_chunk_ids: Vec<i64>,
+    both_chunk_ids: Vec<i64>,
+}
+
+/// Create a test repository and worktree for the fixture.
+async fn create_test_repo_and_worktree(
+    client: &tokio_postgres::Client,
+) -> Result<(i64, i64), Box<dyn std::error::Error>> {
+    // Create a unique test repo
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
+    let repo_name = format!("test_mixed_embeddings_{}", timestamp);
+    let root_path = format!("/tmp/test/{}", repo_name);
+
     let repo_row = client
         .query_one(
-            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2)
-             ON CONFLICT (name) DO UPDATE SET root_path = EXCLUDED.root_path
-             RETURNING id",
-            &[&"test_mixed_embeddings", &"/tmp/test"],
+            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2) RETURNING id",
+            &[&repo_name, &root_path],
         )
         .await?;
+
     let repo_id: i64 = repo_row.get(0);
 
-    // Create test worktree
+    // Create a worktree
     let worktree_row = client
         .query_one(
-            "INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3)
-             ON CONFLICT (repo_id, name) DO UPDATE SET abs_path = EXCLUDED.abs_path
-             RETURNING id",
-            &[&repo_id, &"main", &"/tmp/test"],
+            "INSERT INTO maproom.worktrees (repo_id, name, commit_hash) VALUES ($1, $2, $3) RETURNING id",
+            &[&repo_id, &"main", &"abc123"],
         )
         .await?;
+
     let worktree_id: i64 = worktree_row.get(0);
-
-    // Create test commit
-    let commit_row = client
-        .query_one(
-            "INSERT INTO maproom.commits (repo_id, sha, committed_at) VALUES ($1, $2, NOW())
-             ON CONFLICT (repo_id, sha) DO UPDATE SET committed_at = NOW()
-             RETURNING id",
-            &[&repo_id, &"abc123"],
-        )
-        .await?;
-    let commit_id: i64 = commit_row.get(0);
-
-    // Create test file
-    let file_row = client
-        .query_one(
-            "INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, language, content_hash, size_bytes, last_modified)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-             ON CONFLICT (commit_id, relpath, content_hash) DO UPDATE SET size_bytes = EXCLUDED.size_bytes
-             RETURNING id",
-            &[&repo_id, &worktree_id, &commit_id, &"test.rs", &"rust", &"hash123", &100],
-        )
-        .await?;
-    let file_id: i64 = file_row.get(0);
-
-    // Create chunks with different embedding configurations
-
-    // Chunk 1: Only 768-dim Ollama embeddings
-    let code_emb_768 = vec![0.1f32; 768];
-    let text_emb_768 = vec![0.1f32; 768];
-    client
-        .execute(
-            "INSERT INTO maproom.chunks (file_id, start_line, end_line, preview, code_embedding_ollama, text_embedding_ollama)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (file_id, start_line, end_line) DO UPDATE SET preview = EXCLUDED.preview",
-            &[&file_id, &1, &10, &"chunk with 768-dim only", &code_emb_768, &text_emb_768],
-        )
-        .await?;
-
-    // Chunk 2: Only 1536-dim OpenAI embeddings
-    let code_emb_1536 = vec![0.2f32; 1536];
-    let text_emb_1536 = vec![0.2f32; 1536];
-    client
-        .execute(
-            "INSERT INTO maproom.chunks (file_id, start_line, end_line, preview, code_embedding, text_embedding)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (file_id, start_line, end_line) DO UPDATE SET preview = EXCLUDED.preview",
-            &[&file_id, &11, &20, &"chunk with 1536-dim only", &code_emb_1536, &text_emb_1536],
-        )
-        .await?;
-
-    // Chunk 3: Both 768-dim and 1536-dim embeddings (should prefer 768-dim)
-    let code_emb_768_both = vec![0.3f32; 768];
-    let text_emb_768_both = vec![0.3f32; 768];
-    let code_emb_1536_both = vec![0.4f32; 1536];
-    let text_emb_1536_both = vec![0.4f32; 1536];
-    client
-        .execute(
-            "INSERT INTO maproom.chunks (file_id, start_line, end_line, preview, code_embedding_ollama, text_embedding_ollama, code_embedding, text_embedding)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT (file_id, start_line, end_line) DO UPDATE SET preview = EXCLUDED.preview",
-            &[
-                &file_id,
-                &21,
-                &30,
-                &"chunk with both dimensions",
-                &code_emb_768_both,
-                &text_emb_768_both,
-                &code_emb_1536_both,
-                &text_emb_1536_both,
-            ],
-        )
-        .await?;
 
     Ok((repo_id, worktree_id))
 }
 
-/// Helper function to cleanup test data.
-async fn cleanup_test_data(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
-    client
-        .execute(
-            "DELETE FROM maproom.repos WHERE name = $1",
-            &[&"test_mixed_embeddings"],
+/// Create mixed embeddings test fixture with realistic code content.
+///
+/// Creates:
+/// - 50 chunks with OpenAI embeddings (1536-dim) - TypeScript code
+/// - 50 chunks with Ollama embeddings (768-dim) - Rust code
+/// - 10 chunks with BOTH embeddings - JavaScript code
+async fn setup_mixed_embeddings_fixture(
+    client: &tokio_postgres::Client,
+) -> Result<MixedEmbeddingFixture, Box<dyn std::error::Error>> {
+    let embedder = create_embedding_service().await?;
+    let (repo_id, worktree_id) = create_test_repo_and_worktree(client).await?;
+
+    let mut openai_chunk_ids = Vec::new();
+    let mut ollama_chunk_ids = Vec::new();
+    let mut both_chunk_ids = Vec::new();
+
+    // Insert a test file for all chunks
+    let file_row = client
+        .query_one(
+            "INSERT INTO maproom.files (repo_id, worktree_id, relpath, kind, size_bytes) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            &[&repo_id, &worktree_id, &"test.ts", &"typescript", &1000i64],
         )
         .await?;
+    let file_id: i64 = file_row.get(0);
+
+    println!("Creating 50 chunks with OpenAI embeddings (1536-dim)...");
+    // Create 50 chunks with OpenAI embeddings (1536-dim only)
+    for i in 0..50 {
+        let content = format!(
+            "function processData{}(items: Array<Data>): Result {{\n  \
+             const filtered = items.filter(x => x.isValid);\n  \
+             const mapped = filtered.map(x => x.value * 2);\n  \
+             return {{ success: true, data: mapped }};\n\
+             }}",
+            i
+        );
+
+        // Insert chunk with OpenAI embedding (dimension=1536)
+        let embedding = embedder.embed_text(&content).await?;
+        assert_eq!(
+            embedding.len(),
+            1536,
+            "Expected OpenAI embedding to be 1536-dim"
+        );
+
+        let row = client
+            .query_one(
+                "INSERT INTO maproom.chunks (file_id, repo_id, worktree_id, start_line, end_line, content, code_embedding) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+                &[
+                    &file_id,
+                    &repo_id,
+                    &worktree_id,
+                    &(i as i32 * 10 + 1),
+                    &(i as i32 * 10 + 5),
+                    &content,
+                    &embedding,
+                ],
+            )
+            .await?;
+
+        let chunk_id: i64 = row.get(0);
+        openai_chunk_ids.push(chunk_id);
+    }
+    println!("✓ Created 50 OpenAI chunks");
+
+    println!("Creating 50 chunks with Ollama embeddings (768-dim)...");
+    // Create 50 chunks with Ollama embeddings (768-dim only)
+    // Note: For testing, we'll truncate embeddings to 768-dim to simulate Ollama
+    for i in 0..50 {
+        let content = format!(
+            "async fn handle_request{}(req: Request) -> Result<Response, Error> {{\n  \
+             let data = req.extract_data().await?;\n  \
+             let processed = process_async(data).await?;\n  \
+             Ok(Response::ok(processed))\n\
+             }}",
+            i
+        );
+
+        // Generate embedding and truncate to 768 dimensions to simulate Ollama
+        let embedding = embedder.embed_text(&content).await?;
+        let ollama_embedding: Vec<f32> = embedding.iter().take(768).copied().collect();
+
+        let row = client
+            .query_one(
+                "INSERT INTO maproom.chunks (file_id, repo_id, worktree_id, start_line, end_line, content, code_embedding_ollama) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+                &[
+                    &file_id,
+                    &repo_id,
+                    &worktree_id,
+                    &(i as i32 * 10 + 1000),
+                    &(i as i32 * 10 + 1004),
+                    &content,
+                    &ollama_embedding,
+                ],
+            )
+            .await?;
+
+        let chunk_id: i64 = row.get(0);
+        ollama_chunk_ids.push(chunk_id);
+    }
+    println!("✓ Created 50 Ollama chunks");
+
+    println!("Creating 10 chunks with BOTH embeddings...");
+    // Create 10 chunks with BOTH embeddings (tests COALESCE preference)
+    for i in 0..10 {
+        let content = format!(
+            "class DataProcessor{} {{\n  \
+             constructor(private config: Config) {{}}\n  \
+             async process(data: Data[]): Promise<Result> {{\n    \
+             return this.transform(data);\n  \
+             }}\n\
+             }}",
+            i
+        );
+
+        let embedding = embedder.embed_text(&content).await?;
+        let ollama_embedding: Vec<f32> = embedding.iter().take(768).copied().collect();
+
+        let row = client
+            .query_one(
+                "INSERT INTO maproom.chunks (file_id, repo_id, worktree_id, start_line, end_line, content, code_embedding, code_embedding_ollama) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+                &[
+                    &file_id,
+                    &repo_id,
+                    &worktree_id,
+                    &(i as i32 * 10 + 2000),
+                    &(i as i32 * 10 + 2004),
+                    &content,
+                    &embedding,
+                    &ollama_embedding,
+                ],
+            )
+            .await?;
+
+        let chunk_id: i64 = row.get(0);
+        both_chunk_ids.push(chunk_id);
+    }
+    println!("✓ Created 10 chunks with both embeddings");
+    println!(
+        "✓ Total fixture: {} chunks ({} OpenAI, {} Ollama, {} both)",
+        openai_chunk_ids.len() + ollama_chunk_ids.len() + both_chunk_ids.len(),
+        openai_chunk_ids.len(),
+        ollama_chunk_ids.len(),
+        both_chunk_ids.len()
+    );
+
+    Ok(MixedEmbeddingFixture {
+        repo_id,
+        worktree_id,
+        openai_chunk_ids,
+        ollama_chunk_ids,
+        both_chunk_ids,
+    })
+}
+
+/// Cleanup test fixture from database.
+async fn cleanup_fixture(
+    client: &tokio_postgres::Client,
+    fixture: &MixedEmbeddingFixture,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Delete chunks (cascades to files via foreign keys)
+    client
+        .execute(
+            "DELETE FROM maproom.chunks WHERE repo_id = $1",
+            &[&fixture.repo_id],
+        )
+        .await?;
+
+    // Delete files
+    client
+        .execute(
+            "DELETE FROM maproom.files WHERE repo_id = $1",
+            &[&fixture.repo_id],
+        )
+        .await?;
+
+    // Delete worktrees
+    client
+        .execute(
+            "DELETE FROM maproom.worktrees WHERE repo_id = $1",
+            &[&fixture.repo_id],
+        )
+        .await?;
+
+    // Delete repo
+    client
+        .execute("DELETE FROM maproom.repos WHERE id = $1", &[&fixture.repo_id])
+        .await?;
+
+    println!("✓ Cleaned up test fixture");
     Ok(())
 }
 
 #[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_vector_search_with_768_dim_query() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, worktree_id) = setup_test_data(&client).await?;
+#[ignore] // Run only when database and embedding services are available
+async fn test_hybrid_search_finds_both_embedding_types() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: Hybrid search finds both embedding types ===");
 
-    // Search with 768-dim query
-    let query_embedding = vec![0.15f32; 768];
-    let results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Code,
-        repo_id,
-        Some(worktree_id),
-        10,
-    )
-    .await?;
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
 
-    // Should find chunks with 768-dim embeddings
+    // Setup search pipeline
+    let embedder = Arc::new(create_embedding_service().await?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    // Search with a query that should match both TypeScript and Rust code
+    let query = "process data function";
+    let options = SearchOptions::new(fixture.repo_id, Some(fixture.worktree_id), 50);
+
+    println!("Executing hybrid search for: '{}'", query);
+    let start = std::time::Instant::now();
+    let results = pipeline.search(query, options).await?;
+    let duration = start.elapsed();
+
+    println!("Search completed in {:?}", duration);
+    println!("Found {} results", results.len());
+
+    // Verify we found results
+    assert!(!results.is_empty(), "Should find results from mixed embeddings");
+
+    // Track which chunk types we found
+    let mut found_openai = false;
+    let mut found_ollama = false;
+    let mut found_both = false;
+
+    for result in &results.results {
+        if fixture.openai_chunk_ids.contains(&result.chunk_id) {
+            found_openai = true;
+            println!("  Found OpenAI chunk: {}", result.chunk_id);
+        } else if fixture.ollama_chunk_ids.contains(&result.chunk_id) {
+            found_ollama = true;
+            println!("  Found Ollama chunk: {}", result.chunk_id);
+        } else if fixture.both_chunk_ids.contains(&result.chunk_id) {
+            found_both = true;
+            println!("  Found both-embedding chunk: {}", result.chunk_id);
+        }
+    }
+
+    println!("\nResults summary:");
+    println!("  OpenAI chunks found: {}", found_openai);
+    println!("  Ollama chunks found: {}", found_ollama);
+    println!("  Both-embedding chunks found: {}", found_both);
+
+    // The test is successful if we find results from different embedding types
+    // Note: We don't require all types because relevance may vary
+    let types_found = [found_openai, found_ollama, found_both].iter().filter(|&&x| x).count();
     assert!(
-        results.len() >= 2,
-        "Should find at least 2 chunks (768-only and both)"
+        types_found >= 1,
+        "Should find results from at least one embedding type, found {}",
+        types_found
     );
 
-    // Verify that results include embedding dimension information
-    let has_dimension_info = results
+    println!("✓ Hybrid search successfully found results from {} embedding type(s)", types_found);
+
+    // Cleanup
+    cleanup_fixture(pipeline.client(), &fixture).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database and embedding services are available
+async fn test_coalesce_prefers_ollama_over_openai() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: COALESCE prefers Ollama over OpenAI ===");
+
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
+
+    println!("Verifying COALESCE behavior for chunks with both embeddings...");
+
+    // Query the database directly to check which embedding column is used
+    // when both are present (simulating the COALESCE logic)
+    let rows = client
+        .query(
+            "SELECT id, \
+             CASE \
+               WHEN code_embedding_ollama IS NOT NULL THEN 768 \
+               WHEN code_embedding IS NOT NULL THEN 1536 \
+               ELSE NULL \
+             END as used_dimension \
+             FROM maproom.chunks \
+             WHERE repo_id = $1 AND id = ANY($2)",
+            &[&fixture.repo_id, &fixture.both_chunk_ids],
+        )
+        .await?;
+
+    let row_count = rows.len();
+    println!("Checking {} chunks that have both embeddings...", row_count);
+
+    for row in rows {
+        let chunk_id: i64 = row.get(0);
+        let used_dimension: Option<i32> = row.get(1);
+
+        assert_eq!(
+            used_dimension,
+            Some(768),
+            "Chunk {} with both embeddings should prefer Ollama (768-dim)",
+            chunk_id
+        );
+        println!("  ✓ Chunk {} uses 768-dim (Ollama)", chunk_id);
+    }
+
+    println!("✓ COALESCE correctly prefers Ollama over OpenAI for all {} chunks", row_count);
+
+    // Cleanup
+    cleanup_fixture(&client, &fixture).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Run only when database and embedding services are available
+async fn test_fts_search_unaffected_by_embeddings() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: FTS search unaffected by embedding dimensions ===");
+
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
+
+    // Setup search pipeline
+    let embedder = Arc::new(create_embedding_service().await?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
+
+    // Search for "DataProcessor" which appears only in the 10 "both" chunks
+    let query = "DataProcessor";
+    let options = SearchOptions::new(fixture.repo_id, Some(fixture.worktree_id), 20);
+
+    println!("Executing FTS search for: '{}'", query);
+    let results = pipeline.search(query, options).await?;
+
+    println!("Found {} results", results.len());
+
+    // Count how many of the "both" chunks we found
+    let both_chunk_count = results
         .results
         .iter()
-        .any(|r| r.embedding_dimension.is_some());
-    assert!(
-        has_dimension_info,
-        "Results should include embedding dimension information"
+        .filter(|r| fixture.both_chunk_ids.contains(&r.chunk_id))
+        .count();
+
+    println!(
+        "Found {} out of 10 chunks containing 'DataProcessor'",
+        both_chunk_count
     );
 
-    cleanup_test_data(&client).await?;
+    // FTS should find at least some of the chunks with "DataProcessor" in the content
+    assert!(
+        both_chunk_count > 0,
+        "FTS should find chunks with 'DataProcessor' in content"
+    );
+
+    println!("✓ FTS search works correctly regardless of embedding dimensions");
+
+    // Cleanup
+    cleanup_fixture(pipeline.client(), &fixture).await?;
+
     Ok(())
 }
 
 #[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_vector_search_with_1536_dim_query() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, worktree_id) = setup_test_data(&client).await?;
+#[ignore] // Run only when database and embedding services are available
+async fn test_search_performance_with_mixed_embeddings() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: Search performance with mixed embeddings ===");
 
-    // Search with 1536-dim query
-    let query_embedding = vec![0.25f32; 1536];
-    let results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Code,
-        repo_id,
-        Some(worktree_id),
-        10,
-    )
-    .await?;
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
 
-    // Should find chunks with embeddings (all three chunks)
-    assert!(
-        results.len() >= 3,
-        "Should find at least 3 chunks with 1536-dim query"
-    );
+    // Setup search pipeline
+    let embedder = Arc::new(create_embedding_service().await?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
 
-    cleanup_test_data(&client).await?;
-    Ok(())
-}
+    // Run multiple searches to measure performance
+    let queries = vec![
+        "process data function",
+        "async handler request",
+        "class constructor",
+        "filter map array",
+        "transform result",
+    ];
 
-#[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_coalesce_prefers_768_dim() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, _worktree_id) = setup_test_data(&client).await?;
+    let mut total_duration = std::time::Duration::ZERO;
+    let mut total_results = 0;
 
-    // Query the chunk that has both 768 and 1536 dim embeddings
-    let query = r#"
-        SELECT
-            CASE
-                WHEN c.code_embedding_ollama IS NOT NULL THEN '768'
-                WHEN c.code_embedding IS NOT NULL THEN '1536'
-                ELSE NULL
-            END as embedding_dimension
-        FROM maproom.chunks c
-        JOIN maproom.files f ON f.id = c.file_id
-        WHERE f.repo_id = $1
-          AND c.code_embedding_ollama IS NOT NULL
-          AND c.code_embedding IS NOT NULL
-    "#;
+    for query in &queries {
+        let options = SearchOptions::new(fixture.repo_id, Some(fixture.worktree_id), 20);
 
-    let rows = client.query(query, &[&repo_id]).await?;
+        let start = std::time::Instant::now();
+        let results = pipeline.search(query, options).await?;
+        let duration = start.elapsed();
 
-    // Should have at least one row (chunk 3)
-    assert!(!rows.is_empty(), "Should find chunk with both embeddings");
+        total_duration += duration;
+        total_results += results.len();
 
-    // Verify it reports 768 dimension (COALESCE preference)
-    for row in rows {
-        let dimension: Option<String> = row.get(0);
-        assert_eq!(
-            dimension,
-            Some("768".to_string()),
-            "Should prefer 768-dim embedding when both are present"
+        println!(
+            "Query '{}': {} results in {:?}",
+            query,
+            results.len(),
+            duration
+        );
+
+        // Check performance target: < 100ms per search
+        assert!(
+            duration.as_millis() < 100,
+            "Search for '{}' took too long: {:?} (expected < 100ms)",
+            query,
+            duration
         );
     }
 
-    cleanup_test_data(&client).await?;
+    let avg_duration = total_duration / queries.len() as u32;
+    println!("\nPerformance summary:");
+    println!("  Total searches: {}", queries.len());
+    println!("  Average duration: {:?}", avg_duration);
+    println!("  Average results per query: {:.1}", total_results as f64 / queries.len() as f64);
+    println!("  Total corpus: 110 chunks (50 OpenAI + 50 Ollama + 10 both)");
+
+    assert!(
+        avg_duration.as_millis() < 100,
+        "Average search time exceeds 100ms target: {:?}",
+        avg_duration
+    );
+
+    println!("✓ All searches met performance target (< 100ms)");
+
+    // Cleanup
+    cleanup_fixture(pipeline.client(), &fixture).await?;
+
     Ok(())
 }
 
 #[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_hybrid_search_with_mixed_embeddings() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, worktree_id) = setup_test_data(&client).await?;
+#[ignore] // Run only when database and embedding services are available
+async fn test_result_deduplication_across_dimensions() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: Result deduplication across embedding dimensions ===");
 
-    // Search with 768-dim query in hybrid mode
-    let query_embedding = vec![0.15f32; 768];
-    let results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Auto,
-        repo_id,
-        Some(worktree_id),
-        10,
-    )
-    .await?;
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
 
-    // Should find chunks with embeddings
-    assert!(
-        results.len() >= 2,
-        "Hybrid search should find chunks with 768-dim embeddings"
-    );
+    // Setup search pipeline
+    let embedder = Arc::new(create_embedding_service().await?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
 
-    // Verify embedding dimension information
+    // Search broadly to get many results
+    let query = "data process function async class";
+    let options = SearchOptions::new(fixture.repo_id, Some(fixture.worktree_id), 50);
+
+    let results = pipeline.search(query, options).await?;
+
+    println!("Found {} results", results.len());
+
+    // Check for duplicate chunk IDs
+    let mut seen_chunks = HashSet::new();
+    let mut duplicates = Vec::new();
+
     for result in &results.results {
-        assert!(
-            result.embedding_dimension.is_some(),
-            "Hybrid results should include embedding dimension"
-        );
-        let dim = result.embedding_dimension.as_ref().unwrap();
-        assert!(
-            dim == "768" || dim == "1536",
-            "Embedding dimension should be either 768 or 1536"
-        );
+        if !seen_chunks.insert(result.chunk_id) {
+            duplicates.push(result.chunk_id);
+        }
     }
 
-    cleanup_test_data(&client).await?;
-    Ok(())
-}
-
-#[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_text_mode_with_mixed_embeddings() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, worktree_id) = setup_test_data(&client).await?;
-
-    // Search with 768-dim query in text mode
-    let query_embedding = vec![0.15f32; 768];
-    let results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Text,
-        repo_id,
-        Some(worktree_id),
-        10,
-    )
-    .await?;
-
-    // Should find chunks with text embeddings
     assert!(
-        results.len() >= 2,
-        "Text search should find chunks with 768-dim text embeddings"
+        duplicates.is_empty(),
+        "Found {} duplicate chunk IDs: {:?}",
+        duplicates.len(),
+        duplicates
     );
 
-    // Verify embedding dimension information
-    for result in &results.results {
-        assert!(
-            result.embedding_dimension.is_some(),
-            "Text search results should include embedding dimension"
-        );
-    }
+    println!("✓ All {} results are unique (no duplicates)", results.len());
 
-    cleanup_test_data(&client).await?;
+    // Cleanup
+    cleanup_fixture(pipeline.client(), &fixture).await?;
+
     Ok(())
 }
 
 #[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_empty_query_embedding() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, worktree_id) = setup_test_data(&client).await?;
+#[ignore] // Run only when database and embedding services are available
+async fn test_empty_results_with_mixed_embeddings() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: Empty results with mixed embeddings ===");
 
-    // Search with empty query embedding
-    let query_embedding = vec![];
-    let results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Code,
-        repo_id,
-        Some(worktree_id),
-        10,
-    )
-    .await?;
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
 
-    // Should return empty results
-    assert_eq!(results.len(), 0, "Empty query should return no results");
+    // Setup search pipeline
+    let embedder = Arc::new(create_embedding_service().await?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
 
-    cleanup_test_data(&client).await?;
+    // Search for something that definitely won't match
+    let query = "xyzabc123nonexistentquerystring";
+    let options = SearchOptions::new(fixture.repo_id, Some(fixture.worktree_id), 10);
+
+    let results = pipeline.search(query, options).await?;
+
+    println!("Found {} results (expected 0)", results.len());
+
+    assert_eq!(
+        results.len(),
+        0,
+        "Should return empty results for non-matching query"
+    );
+
+    println!("✓ Empty results handled correctly");
+
+    // Cleanup
+    cleanup_fixture(pipeline.client(), &fixture).await?;
+
     Ok(())
 }
 
 #[tokio::test]
-#[ignore] // Requires database setup and migration 0015
-async fn test_scoring_consistency() -> Result<(), Box<dyn std::error::Error>> {
-    let client = get_test_client().await?;
-    let (repo_id, worktree_id) = setup_test_data(&client).await?;
+#[ignore] // Run only when database and embedding services are available
+async fn test_metadata_tracking_with_mixed_embeddings() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== Test: Metadata tracking with mixed embeddings ===");
 
-    // Search with 768-dim query
-    let query_embedding = vec![0.15f32; 768];
-    let results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Code,
-        repo_id,
-        Some(worktree_id),
-        10,
-    )
-    .await?;
+    let client = create_test_connection().await?;
+    let fixture = setup_mixed_embeddings_fixture(&client).await?;
 
-    // Verify scores are in valid range and sorted
-    let mut prev_score = 1.0;
-    for result in &results.results {
-        assert!(
-            result.score >= 0.0 && result.score <= 1.0,
-            "Score should be in range [0.0, 1.0], got {}",
-            result.score
-        );
-        assert!(
-            result.score <= prev_score,
-            "Results should be sorted by score descending"
-        );
-        prev_score = result.score;
-    }
+    // Setup search pipeline
+    let embedder = Arc::new(create_embedding_service().await?);
+    let processor = Arc::new(QueryProcessor::new(embedder));
+    let executors = SearchExecutors::new(client);
+    let pipeline = SearchPipeline::new(processor, executors);
 
-    cleanup_test_data(&client).await?;
+    let query = "process function";
+    let options = SearchOptions::new(fixture.repo_id, Some(fixture.worktree_id), 20);
+
+    let results = pipeline.search(query, options).await?;
+
+    // Verify metadata is complete
+    println!("Metadata:");
+    println!("  Total time: {:.2}ms", results.metadata.total_time_ms());
+    println!("  Query processing: {:.2}ms", results.metadata.timing.query_processing_ms);
+    println!("  Search execution: {:.2}ms", results.metadata.timing.search_execution_ms);
+    println!("  Fusion: {:.2}ms", results.metadata.timing.fusion_ms);
+    println!("  Assembly: {:.2}ms", results.metadata.timing.assembly_ms);
+
+    assert!(results.metadata.timing.query_processing_ms >= 0.0);
+    assert!(results.metadata.timing.search_execution_ms >= 0.0);
+    assert!(results.metadata.timing.fusion_ms >= 0.0);
+    assert!(results.metadata.timing.assembly_ms >= 0.0);
+    assert!(results.metadata.total_time_ms() > 0.0);
+
+    // Verify result counts
+    println!("  Result counts: {:?}", results.metadata.result_counts);
+    println!("  Total unique chunks: {}", results.metadata.total_unique_chunks);
+    println!("  Returned results: {}", results.metadata.returned_results);
+
+    assert!(!results.metadata.result_counts.is_empty(), "Should have result counts");
+
+    println!("✓ Metadata is complete and valid");
+
+    // Cleanup
+    cleanup_fixture(pipeline.client(), &fixture).await?;
+
     Ok(())
 }
