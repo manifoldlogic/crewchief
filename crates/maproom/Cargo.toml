@@ -99,6 +99,7 @@ tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 serial_test = "3"
 wiremock = "0.6"
+proptest = "1.4"
 
 [features]
 profiling = ["puffin"]
