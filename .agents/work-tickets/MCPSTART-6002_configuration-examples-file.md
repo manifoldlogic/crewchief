@@ -1,9 +1,9 @@
 # Ticket: MCPSTART-6002: Create configuration examples file
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -17,14 +17,14 @@ Create `docker-compose.env.example` with all provider configurations as referenc
 From MCPSTART_ARCHITECTURE.md lines 421-450 - users need clear examples of how to configure each embedding provider. A comprehensive `.env.example` file serves as both documentation and a quick-start template for users setting up maproom-mcp with different providers.
 
 ## Acceptance Criteria
-- [ ] Create `packages/maproom-mcp/config/docker-compose.env.example` file
-- [ ] Include Ollama configuration section (marked as default, zero-config)
-- [ ] Include Google Vertex AI configuration section with all required variables
-- [ ] Include OpenAI configuration section with all required variables
-- [ ] Include database configuration section
-- [ ] Include logging configuration section
-- [ ] Add clear comments explaining each variable and when to use it
-- [ ] Document in README how to use .env files with instructions
+- [x] Create `packages/maproom-mcp/config/docker-compose.env.example` file
+- [x] Include Ollama configuration section (marked as default, zero-config)
+- [x] Include Google Vertex AI configuration section with all required variables
+- [x] Include OpenAI configuration section with all required variables
+- [x] Include database configuration section
+- [x] Include logging configuration section
+- [x] Add clear comments explaining each variable and when to use it
+- [x] Document in README how to use .env files with instructions
 
 ## Technical Requirements
 
@@ -128,3 +128,35 @@ Alternatively, you can set environment variables directly when running npx comma
 ## Files/Packages Affected
 - `packages/maproom-mcp/config/docker-compose.env.example` (new file)
 - `packages/maproom-mcp/README.md` (add documentation reference)
+
+## Implementation Notes
+
+**Files Created:**
+1. `/workspace/packages/maproom-mcp/config/docker-compose.env.example`
+   - Complete template with all provider configurations
+   - Well-commented sections for Ollama (default), Google Vertex AI, OpenAI
+   - Database configuration section with default connection string
+   - Logging configuration with MAPROOM_MCP_DEBUG and RUST_LOG variables
+   - Clear section headers using comment dividers
+   - Emphasis on Ollama being zero-config default
+
+**Documentation Added:**
+2. `/workspace/packages/maproom-mcp/README.md`
+   - Added "Using Environment Files" section after "Environment Variables (Optional)" section (line 115)
+   - Three-step instructions: copy example file, edit for provider, automatic loading
+   - Example showing Google Vertex AI configuration
+   - Note about alternative direct environment variable usage
+
+**Formatting:**
+- Used comment dividers (=== and ---) for visual separation of sections
+- All configuration lines are commented out (using #) as they are examples
+- Clear indication that Ollama is default with "zero-config" emphasis
+- Placeholder values for sensitive data (your-gcp-project-id, sk-..., etc.)
+- Grouped related variables logically (provider selection, provider configs, database, logging)
+
+**Verification Steps:**
+1. Check that `/workspace/packages/maproom-mcp/config/docker-compose.env.example` exists
+2. Verify all required sections are present (Ollama, Google, OpenAI, Database, Logging)
+3. Confirm README includes "Using Environment Files" section with cp command showing ~/.maproom-mcp path
+4. Verify Ollama is marked as default with "zero-config" language
+5. Confirm all variables match the template from MCPSTART_ARCHITECTURE.md lines 425-450

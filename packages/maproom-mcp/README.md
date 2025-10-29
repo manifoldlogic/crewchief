@@ -112,6 +112,27 @@ By default, Maproom connects to `maproom-postgres:5432`. To use a custom databas
 }
 ```
 
+### Using Environment Files
+
+You can configure maproom-mcp using an environment file:
+
+1. Copy the example file:
+   ```bash
+   cp ~/.maproom-mcp/docker-compose.env.example ~/.maproom-mcp/docker-compose.env
+   ```
+
+2. Edit the file with your provider configuration:
+   ```bash
+   # For Google Vertex AI
+   EMBEDDING_PROVIDER=google
+   GOOGLE_PROJECT_ID=my-project
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+   ```
+
+3. The MCP server will automatically load this file on startup.
+
+Alternatively, you can set environment variables directly when running npx commands.
+
 ## Data Persistence
 
 All data is stored in Docker volumes:
