@@ -128,12 +128,14 @@ crewchief maproom scan --dry-run
 
 ## Switching Providers
 
-You can switch between providers at any time. See the [Migration Guide](./migration-guide.md) for detailed instructions on:
+You can switch between providers at any time. See the **[Provider Migration Guide](../guides/provider-migration.md)** for detailed instructions on:
 
-- Re-generating embeddings with a new provider
+- Switching from OpenAI to Ollama (and vice versa)
 - Preserving existing embeddings during migration
-- Testing provider performance before committing
-- Rollback procedures
+- Running multiple providers simultaneously for testing
+- Re-indexing strategies and cost comparisons
+- Step-by-step migration scenarios
+- Rollback procedures and troubleshooting
 
 ---
 

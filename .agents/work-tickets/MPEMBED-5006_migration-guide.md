@@ -1,7 +1,7 @@
 # Ticket: MPEMBED-5006: Migration guide for existing users
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [x] **Task completed** - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
 
@@ -19,13 +19,13 @@ This ticket addresses a critical user experience question: "I already have OpenA
 Reference: crewchief_context/maproom/MPEMBED-multi-provider-embeddings/phase-5-mcp-documentation.md
 
 ## Acceptance Criteria
-- [ ] Clear explanation of what happens to existing embeddings
-- [ ] Step-by-step guide to switch from OpenAI to Ollama
-- [ ] Instructions for preserving OpenAI embeddings
-- [ ] Guide for running both providers simultaneously
-- [ ] Re-indexing strategy and commands
-- [ ] Cost comparison for migration scenarios
-- [ ] FAQ section addressing common concerns
+- [x] Clear explanation of what happens to existing embeddings
+- [x] Step-by-step guide to switch from OpenAI to Ollama
+- [x] Instructions for preserving OpenAI embeddings
+- [x] Guide for running both providers simultaneously
+- [x] Re-indexing strategy and commands
+- [x] Cost comparison for migration scenarios
+- [x] FAQ section addressing common concerns
 
 ## Technical Requirements
 - Document format: Markdown with clear sections
@@ -279,3 +279,51 @@ crewchief maproom upsert \
 ## Files/Packages Affected
 - docs/guides/provider-migration.md (create)
 - docs/guides/README.md (modify - add link)
+
+## Implementation Notes
+
+**Completed**: 2025-10-29
+
+**Files Created**:
+1. `/workspace/docs/guides/provider-migration.md` (788 lines)
+   - Comprehensive migration guide with 5 detailed scenarios
+   - Technical explanations of column storage and COALESCE logic
+   - Step-by-step instructions with code examples
+   - Verification queries and rollback procedures
+   - Cost comparison tables
+   - Extensive FAQ section (14 Q&A pairs)
+   - Troubleshooting section with common issues
+
+2. `/workspace/docs/guides/README.md` (59 lines)
+   - Index page for guides directory
+   - Links to migration guide and related documentation
+   - Quick navigation for users
+
+**Files Modified**:
+3. `/workspace/docs/providers/README.md`
+   - Updated "Switching Providers" section with correct link to migration guide
+   - Added more detailed bullet points about migration features
+
+**Key Features Implemented**:
+- **5 Migration Scenarios**: Preserve existing, full re-index, gradual, simultaneous, Ollama-to-cloud
+- **Verification Section**: SQL queries to check embedding distribution, search quality tests, database size monitoring
+- **Rollback Strategy**: Three rollback methods with detailed steps
+- **Cost Analysis**: Comprehensive table comparing all migration scenarios with time estimates
+- **FAQ Section**: 14 frequently asked questions covering general, technical, and operational concerns
+- **Best Practices**: Before/during/after checklists and production checklist
+- **Troubleshooting**: Common issues with causes and solutions
+
+**Content Highlights**:
+- Clear explanation of dimension-based column storage (768-dim vs 1536-dim)
+- COALESCE preference logic explanation (prefers 768-dim)
+- Database backup recommendations throughout
+- Time and cost estimates for each scenario
+- Concrete SQL queries for verification and monitoring
+- Links to related technical documentation
+
+**Quality Assurance**:
+- All acceptance criteria met
+- Follows existing documentation style (matches providers README structure)
+- Includes code examples for all scenarios
+- Comprehensive cross-linking to related docs
+- Production-ready with operational checklists
