@@ -1,9 +1,9 @@
 # Ticket: MCPSTART-4001: Create integration test script framework
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - integration-tester
@@ -156,3 +156,44 @@ None - this ticket can be completed in parallel with implementation tickets. The
 
 ## Files/Packages Affected
 - `packages/maproom-mcp/tests/startup-integration.sh` (new file - create directory if needed)
+
+## Implementation Notes
+
+### Completed Implementation
+Created the integration test script framework at `/workspace/packages/maproom-mcp/tests/startup-integration.sh` with all required components:
+
+1. **Script Structure**:
+   - Shebang: `#!/usr/bin/env bash`
+   - Strict error handling: `set -euo pipefail`
+   - Clear output headers and sections
+
+2. **Cleanup Function**:
+   - Stops all maproom containers: `docker compose down` in ~/.maproom-mcp
+   - Kills CLI processes: `pkill -f "maproom-mcp"`
+   - Graceful error handling with `|| true` to prevent cleanup failures
+   - 2-second sleep to ensure cleanup completes
+   - Registered with `trap cleanup EXIT` for guaranteed execution
+
+3. **Test Counter Structure**:
+   - `TESTS_PASSED` variable initialized to 0
+   - `TESTS_FAILED` variable initialized to 0
+   - Ready for test functions to increment these counters
+
+4. **Summary Output**:
+   - Clear section header with dividers
+   - Pass/fail counts displayed
+   - Emoji indicators: ✅ for success, ❌ for failure
+   - Exit code 0 when all tests pass (TESTS_FAILED = 0)
+   - Exit code 1 when any test fails (TESTS_FAILED > 0)
+
+5. **File Permissions**:
+   - Script made executable with `chmod +x`
+   - Verified with `ls -lh`: `-rwxr-xr-x`
+
+### Testing Performed
+- Ran script with no tests: correctly shows 0 passed, 0 failed, exits with code 0
+- Verified cleanup function executes on exit
+- Confirmed script structure matches the template from MCPSTART_QUALITY_STRATEGY.md
+
+### Next Steps (MCPSTART-4002)
+The framework is ready for test cases to be added. The placeholder comment on line 20 indicates where test functions will be inserted in the next ticket.
