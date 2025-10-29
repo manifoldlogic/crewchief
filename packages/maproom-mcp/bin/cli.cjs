@@ -56,6 +56,12 @@ const HEALTH_CHECK_INTERVAL_MS = 2000; // 2 seconds
 function checkDockerDaemon() {
   console.error('🔍 Checking Docker availability...');
 
+  diagnosticLog('Docker Command: Checking Docker daemon status', {
+    command: 'docker',
+    args: ['info'],
+    cwd: process.cwd()
+  });
+
   const result = spawnSync('docker', ['info'], {
     stdio: 'pipe',
     encoding: 'utf-8'
@@ -83,6 +89,12 @@ function checkDockerDaemon() {
  * Check if Docker Compose v2 is available
  */
 function checkDockerCompose() {
+  diagnosticLog('Docker Command: Checking Docker Compose version', {
+    command: 'docker',
+    args: ['compose', 'version'],
+    cwd: process.cwd()
+  });
+
   const result = spawnSync('docker', ['compose', 'version'], {
     stdio: 'pipe',
     encoding: 'utf-8'
@@ -285,6 +297,13 @@ function startDockerCompose() {
 
     if (unnecessaryServices.length > 0) {
       console.error('🛑 Stopping unnecessary services:', unnecessaryServices.join(', '));
+
+      diagnosticLog('Docker Compose Command: Stopping unnecessary services', {
+        command: 'docker',
+        args: ['compose', 'stop', ...unnecessaryServices],
+        cwd: CONFIG_DIR
+      });
+
       const stopResult = spawnSync('docker', ['compose', 'stop', ...unnecessaryServices], {
         cwd: CONFIG_DIR,
         stdio: 'pipe'
@@ -302,6 +321,12 @@ function startDockerCompose() {
 
     // Only start required services
     args.push(...requiredServices);
+
+    diagnosticLog('Docker Compose Command: Starting services', {
+      command: 'docker',
+      args: args,
+      cwd: CONFIG_DIR
+    });
 
     const compose = spawn('docker', args, {
       cwd: CONFIG_DIR,
@@ -375,6 +400,12 @@ async function waitForServicesHealthy() {
   const serviceStatus = {};
 
   while (Date.now() - startTime < MAX_HEALTH_WAIT_MS) {
+    diagnosticLog('Docker Compose Command: Checking container status', {
+      command: 'docker',
+      args: ['compose', 'ps', '--format', 'json'],
+      cwd: CONFIG_DIR
+    });
+
     const result = spawnSync('docker', ['compose', 'ps', '--format', 'json'], {
       cwd: CONFIG_DIR,
       encoding: 'utf-8',
@@ -483,6 +514,12 @@ function establishStdioProxy() {
   console.error('🔗 Connected to MCP server (stdio mode)');
   console.error('📝 Logs available: docker compose logs -f (in', CONFIG_DIR + ')');
   console.error('');
+
+  diagnosticLog('Docker Command: Establishing stdio proxy to MCP server', {
+    command: 'docker',
+    args: ['exec', '-i', 'maproom-mcp', 'node', '/app/dist/index.js'],
+    cwd: process.cwd()
+  });
 
   // Proxy stdin/stdout to the maproom-mcp container
   // Use 'exec -T' for non-TTY mode (required for stdio piping)
