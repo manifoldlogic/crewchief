@@ -1,9 +1,9 @@
 # Ticket: MCPSTART-3001: Implement pre-flight container state check
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -20,12 +20,12 @@ Stale containers from previous runs might still be running with old configuratio
 This implements **Phase 3.1: Pre-Flight Container Cleanup** from MCPSTART_ARCHITECTURE.md (lines 163-201).
 
 ## Acceptance Criteria
-- [ ] Function `ensureCleanState()` checks for existing containers using `docker compose ps -q`
-- [ ] If containers found, stops all services with `docker compose stop`
-- [ ] Logs container states before and after cleanup with descriptive messages
-- [ ] Waits briefly (1 second) after stop for complete shutdown
-- [ ] Called before starting services in `startDockerCompose()` function
-- [ ] Does not fail if no containers are running (graceful handling)
+- [x] Function `ensureCleanState()` checks for existing containers using `docker compose ps -q`
+- [x] If containers found, stops all services with `docker compose stop`
+- [x] Logs container states before and after cleanup with descriptive messages
+- [x] Waits briefly (1 second) after stop for complete shutdown
+- [x] Called before starting services in `startDockerCompose()` function
+- [x] Does not fail if no containers are running (graceful handling)
 
 ## Technical Requirements
 - Use `spawnSync('docker', ['compose', 'ps', '-q'], ...)` to detect running containers
@@ -111,3 +111,58 @@ async function startDockerCompose(options) {
 
 ## Files/Packages Affected
 - `packages/maproom-mcp/bin/cli.cjs` - Add `ensureCleanState()` function and call it from `startDockerCompose()`
+
+## Implementation Summary
+
+**Changes Made:**
+
+1. **Added `ensureCleanState()` function** (lines 447-487):
+   - Async function that checks for existing containers using `docker compose ps -q`
+   - If containers exist:
+     - Logs "Found existing containers, stopping all services..."
+     - Calls `logDockerState()` to log state before cleanup
+     - Executes `docker compose stop` to stop all services
+     - Throws error if stop command fails
+     - Waits 1 second for complete shutdown
+     - Calls `logDockerState()` again to verify cleanup
+     - Logs "Container cleanup complete"
+   - If no containers exist:
+     - Logs "No existing containers found, clean state confirmed"
+
+2. **Updated `startDockerCompose()` function** (line 525):
+   - Made function async
+   - Added call to `await ensureCleanState()` at the beginning (line 527)
+   - Ensures clean state before any service startup logic
+
+**Verification Steps:**
+
+1. Run the CLI with existing containers running:
+   ```bash
+   cd /workspace/packages/maproom-mcp
+   # Start containers manually first
+   docker compose -f ~/.maproom-mcp/docker-compose.yml up -d
+   # Then run the CLI
+   node bin/cli.cjs
+   ```
+   - Should see pre-flight check detecting containers
+   - Should see containers being stopped
+   - Should see 1-second wait message
+   - Should see cleanup complete message
+
+2. Run the CLI with no containers running:
+   ```bash
+   cd /workspace/packages/maproom-mcp
+   # Ensure no containers running
+   docker compose -f ~/.maproom-mcp/docker-compose.yml down
+   # Run the CLI
+   node bin/cli.cjs
+   ```
+   - Should see "No existing containers found, clean state confirmed"
+
+**All Acceptance Criteria Met:**
+- [x] Function `ensureCleanState()` checks for existing containers using `docker compose ps -q`
+- [x] If containers found, stops all services with `docker compose stop`
+- [x] Logs container states before and after cleanup with descriptive messages
+- [x] Waits briefly (1 second) after stop for complete shutdown
+- [x] Called before starting services in `startDockerCompose()` function
+- [x] Does not fail if no containers are running (graceful handling)

@@ -441,6 +441,52 @@ function logDockerState() {
 }
 
 /**
+ * Ensure clean container state before starting services
+ * Stops any existing containers to prevent stale configuration
+ */
+async function ensureCleanState() {
+  console.error('\n=== Pre-Flight: Checking for Existing Containers ===');
+
+  // Check if any containers exist
+  const psResult = spawnSync('docker', ['compose', 'ps', '-q'], {
+    cwd: CONFIG_DIR,
+    encoding: 'utf-8',
+    stdio: 'pipe'
+  });
+
+  const containerIds = psResult.stdout.trim();
+
+  if (containerIds) {
+    console.error('Found existing containers, stopping all services...');
+
+    // Log current state before stopping
+    logDockerState();
+
+    // Stop all services
+    const stopResult = spawnSync('docker', ['compose', 'stop'], {
+      cwd: CONFIG_DIR,
+      encoding: 'utf-8',
+      stdio: 'inherit'
+    });
+
+    if (stopResult.status !== 0) {
+      console.error('Failed to stop existing containers');
+      throw new Error('Container cleanup failed');
+    }
+
+    // Wait for complete shutdown
+    console.error('Waiting for containers to fully stop...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Verify cleanup
+    logDockerState();
+    console.error('Container cleanup complete\n');
+  } else {
+    console.error('No existing containers found, clean state confirmed\n');
+  }
+}
+
+/**
  * Determine which services to start based on EMBEDDING_PROVIDER
  */
 function getRequiredServices() {
@@ -476,7 +522,10 @@ function getRequiredServices() {
 /**
  * Start Docker Compose stack with selective services
  */
-function startDockerCompose() {
+async function startDockerCompose() {
+  // Pre-flight: Ensure clean container state
+  await ensureCleanState();
+
   return new Promise((resolve, reject) => {
     const requiredServices = getRequiredServices();
 
