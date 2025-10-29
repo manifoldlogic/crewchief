@@ -47,6 +47,11 @@ pub struct RankedResult {
 
     /// 1-based rank position in the result set
     pub rank: usize,
+
+    /// Embedding dimension used for this result ("768" or "1536")
+    /// None if result is not from vector search
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_dimension: Option<String>,
 }
 
 impl RankedResult {
@@ -56,6 +61,22 @@ impl RankedResult {
             chunk_id,
             score,
             rank,
+            embedding_dimension: None,
+        }
+    }
+
+    /// Create a new RankedResult with embedding dimension information.
+    pub fn new_with_dimension(
+        chunk_id: i64,
+        score: f32,
+        rank: usize,
+        embedding_dimension: Option<String>,
+    ) -> Self {
+        Self {
+            chunk_id,
+            score,
+            rank,
+            embedding_dimension,
         }
     }
 }
