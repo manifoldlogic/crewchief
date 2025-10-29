@@ -8,8 +8,21 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 use crewchief_maproom::{db, indexer};
 
+/// Validate provider name against supported providers.
+///
+/// Returns the provider name if valid, or an error message if invalid.
+fn validate_provider(s: &str) -> Result<String, String> {
+    match s.to_lowercase().as_str() {
+        "ollama" | "openai" | "google" => Ok(s.to_lowercase()),
+        _ => Err(format!(
+            "Invalid provider: '{}'. Supported providers: ollama, openai, google",
+            s
+        )),
+    }
+}
+
 #[derive(Parser, Debug)]
-#[command(name = "crewchief-maproom", version, about = "Maproom indexer & CLI")] 
+#[command(name = "crewchief-maproom", version, about = "Maproom indexer & CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -64,6 +77,9 @@ enum Commands {
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
         embedding_batch_size: usize,
+        /// Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
+        #[arg(long, value_parser = validate_provider)]
+        provider: Option<String>,
     },
 
     /// Upsert a set of files at a given commit
@@ -84,6 +100,9 @@ enum Commands {
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
         embedding_batch_size: usize,
+        /// Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
+        #[arg(long, value_parser = validate_provider)]
+        provider: Option<String>,
     },
 
     /// Watch a worktree for changes and incrementally upsert
@@ -198,7 +217,15 @@ enum DbCommand {
 ///
 /// This function is called automatically after scan/upsert operations.
 /// It gracefully handles embedding service unavailability.
-async fn auto_generate_embeddings(batch_size: usize) -> anyhow::Result<crewchief_maproom::embedding::PipelineStats> {
+///
+/// # Arguments
+///
+/// * `batch_size` - Number of chunks to process per batch
+/// * `provider` - Optional provider name (overrides EMBEDDING_PROVIDER env var)
+async fn auto_generate_embeddings(
+    batch_size: usize,
+    provider: Option<String>,
+) -> anyhow::Result<crewchief_maproom::embedding::PipelineStats> {
     use crewchief_maproom::embedding::{
         EmbeddingService, EmbeddingPipeline, PipelineConfig,
     };
@@ -206,17 +233,29 @@ async fn auto_generate_embeddings(batch_size: usize) -> anyhow::Result<crewchief
     tracing::info!("Starting auto-embedding generation");
     println!("\n🔄 Generating embeddings for new chunks...");
 
+    // Set provider in environment if specified via CLI (overrides env var)
+    if let Some(ref provider_name) = provider {
+        tracing::info!("Using provider from CLI flag: {}", provider_name);
+        std::env::set_var("EMBEDDING_PROVIDER", provider_name);
+    } else {
+        let env_provider = std::env::var("EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
+        tracing::info!("Using provider from environment: {}", env_provider);
+    }
+
     // Try to create embedding service from environment
     let service = match EmbeddingService::from_env().await {
-        Ok(s) => s,
+        Ok(s) => {
+            tracing::info!("Created embedding service with provider: {}", s.provider_name());
+            s
+        }
         Err(e) => {
             // Check if this is an Ollama configuration without Ollama running
-            let provider = std::env::var("EMBEDDING_PROVIDER").unwrap_or_default();
-            if provider.to_lowercase() == "ollama" || provider.is_empty() {
+            let provider_name = std::env::var("EMBEDDING_PROVIDER").unwrap_or_default();
+            if provider_name.to_lowercase() == "ollama" || provider_name.is_empty() {
                 // Try to detect if Ollama is configured
                 tracing::warn!("Embedding service unavailable: {}", e);
                 return Err(anyhow::anyhow!(
-                    "Embedding service not available. Configure EMBEDDING_PROVIDER (openai/ollama) and API keys in .env file."
+                    "Embedding service not available. Configure EMBEDDING_PROVIDER (openai/ollama/google) and API keys in .env file."
                 ));
             }
             return Err(e.into());
@@ -358,6 +397,7 @@ async fn main() -> anyhow::Result<()> {
             batch_size,
             generate_embeddings,
             embedding_batch_size,
+            provider,
         } => {
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
@@ -418,7 +458,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Auto-generate embeddings after scan if enabled
             if generate_embeddings {
-                match auto_generate_embeddings(embedding_batch_size).await {
+                match auto_generate_embeddings(embedding_batch_size, provider).await {
                     Ok(stats) => {
                         if stats.total_chunks > 0 {
                             println!("\n📊 Embedding Generation Summary:");
@@ -435,7 +475,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::Upsert { paths, commit, repo, worktree, root, generate_embeddings, embedding_batch_size } => {
+        Commands::Upsert { paths, commit, repo, worktree, root, generate_embeddings, embedding_batch_size, provider } => {
             let client = db::connect().await?;
             indexer::upsert_files(&client, &repo, &worktree, &root, &commit, &paths)
                 .await
@@ -443,7 +483,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Auto-generate embeddings after upsert if enabled
             if generate_embeddings {
-                match auto_generate_embeddings(embedding_batch_size).await {
+                match auto_generate_embeddings(embedding_batch_size, provider).await {
                     Ok(stats) => {
                         if stats.total_chunks > 0 {
                             println!("\n📊 Embedding Generation Summary:");

@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-5002: Update MCP scan/upsert tools for provider flag
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - mcp-tools-engineer
@@ -20,14 +20,14 @@ This ticket extends Phase 5 (MCP Integration) by integrating the provider detect
 Reference: crewchief_context/maproom/MPEMBED-multi-provider-embeddings/phase-5-mcp-documentation.md
 
 ## Acceptance Criteria
-- [ ] scan.ts imports and uses getProviderConfig()
-- [ ] upsert.ts imports and uses getProviderConfig()
-- [ ] --provider flag passed to Rust binary in both tools
-- [ ] Error handling for provider detection failures
-- [ ] User-friendly error messages with setup instructions
-- [ ] Tool descriptions updated to mention multi-provider support
-- [ ] Unit tests for provider flag passing
-- [ ] Integration test with mocked provider detection
+- [x] scan.ts imports and uses getProviderConfig() (handleScan in index.ts)
+- [x] upsert.ts imports and uses getProviderConfig()
+- [x] --provider flag passed to Rust binary in both tools
+- [x] Error handling for provider detection failures
+- [x] User-friendly error messages with setup instructions
+- [x] Tool descriptions updated to mention multi-provider support
+- [x] Unit tests for provider flag passing
+- [x] Integration test with mocked provider detection
 
 ## Technical Requirements
 - Import getProviderConfig from utils/provider-detection
@@ -136,7 +136,50 @@ export async function upsert(params: UpsertParams): Promise<UpsertResult> {
   - **Mitigation**: Return structured error responses with setup instructions
 
 ## Files/Packages Affected
-- packages/maproom-mcp/src/tools/scan.ts (modify)
-- packages/maproom-mcp/src/tools/upsert.ts (modify)
-- packages/maproom-mcp/tests/tools/scan.test.ts (modify)
-- packages/maproom-mcp/tests/tools/upsert.test.ts (modify)
+- packages/maproom-mcp/src/tools/upsert.ts (modified)
+- packages/maproom-mcp/src/index.ts (modified handleScan function)
+- packages/maproom-mcp/src/types.ts (modified UpsertResult interface)
+- packages/maproom-mcp/tests/tools/upsert.test.ts (modified)
+- packages/maproom-mcp/tests/tools/scan.test.ts (created)
+
+## Implementation Notes
+
+Successfully integrated provider detection into both scan and upsert MCP tools:
+
+**Changes Made:**
+1. **upsert.ts**:
+   - Imported `getProviderConfig` from provider-detection module
+   - Added provider detection call before binary spawning
+   - Added provider flag (`--provider`) to binary arguments
+   - Enhanced error handling for NO_PROVIDER errors with helpful setup instructions
+   - Updated result to include provider name and dimension
+
+2. **index.ts (handleScan)**:
+   - Added provider detection before spawning scan binary
+   - Added provider flag to scan binary arguments
+   - Enhanced error handling with user-friendly messages
+   - Updated scan result to include provider info
+
+3. **types.ts**:
+   - Extended UpsertResult interface with optional `provider` and `dimension` fields
+
+4. **Tool Descriptions**:
+   - Updated both scan and upsert tool descriptions to mention multi-provider support
+   - Noted that provider selection is cached for session performance
+
+**Tests:**
+- Created comprehensive provider integration tests in `tests/tools/scan.test.ts`
+- Updated `tests/tools/upsert.test.ts` with provider integration tests
+- All tests pass (84 passed in provider/scan/upsert test suites)
+
+**Error Handling:**
+- Both tools throw `NO_PROVIDER` error with helpful setup instructions when no provider available
+- Error messages include options for Ollama, OpenAI, and Google Vertex AI setup
+- Maintains backward compatibility (tools work without explicit provider config if auto-detection succeeds)
+
+**Key Features:**
+- Provider detection is cached per MCP session (no performance impact on repeated calls)
+- Supports explicit provider override via EMBEDDING_PROVIDER env var
+- Auto-detects Ollama → OpenAI → Google in priority order
+- Both tools log provider selection for debugging
+- Results include provider metadata for transparency

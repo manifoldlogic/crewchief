@@ -1,9 +1,9 @@
 # Ticket: MPEMBED-5003: Add --provider CLI flag to Rust binary
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -190,3 +190,136 @@ async fn run_upsert(
 ## Files/Packages Affected
 - crates/maproom/src/main.rs (modify - add CLI flags)
 - crates/maproom/tests/cli_test.rs (create)
+
+## Implementation Summary
+
+### Changes Made
+
+1. **Added `validate_provider()` function** (`main.rs`):
+   - Validates provider names against supported list: "ollama", "openai", "google"
+   - Case-insensitive matching (normalizes to lowercase)
+   - Returns helpful error message listing all supported providers
+
+2. **Added `--provider` flag to `Scan` command** (`main.rs`):
+   - Optional parameter using `value_parser = validate_provider`
+   - Help text: "Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)"
+   - Passed to `auto_generate_embeddings()` function
+
+3. **Added `--provider` flag to `Upsert` command** (`main.rs`):
+   - Same validation and help text as Scan command
+   - Passed to `auto_generate_embeddings()` function
+
+4. **Updated `auto_generate_embeddings()` function** (`main.rs`):
+   - Added `provider: Option<String>` parameter
+   - CLI flag overrides `EMBEDDING_PROVIDER` env var via `std::env::set_var()`
+   - Logs provider selection for debugging
+   - Falls back to environment variable if CLI flag not provided
+
+5. **Created comprehensive CLI tests** (`tests/cli_test.rs`):
+   - 17 unit tests covering all validation scenarios
+   - Tests for valid providers (ollama, openai, google)
+   - Tests for case-insensitive handling (OLLAMA, OpenAI, GOOGLE)
+   - Tests for invalid provider names with helpful error messages
+   - Tests for optional flag behavior (works without --provider)
+   - Tests for both scan and upsert commands
+
+### Test Results
+```
+running 17 tests
+test test_provider_normalization ... ok
+test test_validate_provider_case_insensitive ... ok
+test test_validate_provider_google ... ok
+test test_error_message_quality ... ok
+test test_validate_provider_empty ... ok
+test test_validate_provider_ollama ... ok
+test test_validate_provider_invalid ... ok
+test test_validate_provider_typo ... ok
+test test_upsert_without_provider ... ok
+test test_upsert_with_valid_provider ... ok
+test test_upsert_with_invalid_provider ... ok
+test test_scan_with_invalid_provider ... ok
+test test_scan_with_openai_provider ... ok
+test test_validate_provider_openai ... ok
+test test_scan_with_valid_provider ... ok
+test test_scan_with_google_provider ... ok
+test test_scan_without_provider ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+### Verification
+
+1. **Binary compiles successfully**:
+   ```bash
+   cargo build --release --bin crewchief-maproom
+   # Success with 2 unrelated warnings
+   ```
+
+2. **Help text displays correctly**:
+   ```bash
+   ./target/release/crewchief-maproom scan --help
+   # Shows: --provider <PROVIDER>
+   #        Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
+   ```
+
+3. **Validation works**:
+   ```bash
+   ./target/release/crewchief-maproom scan --provider invalid
+   # Error: invalid value 'invalid' for '--provider <PROVIDER>':
+   #        Invalid provider: 'invalid'. Supported providers: ollama, openai, google
+   ```
+
+4. **Case-insensitive handling**:
+   ```bash
+   ./target/release/crewchief-maproom scan --provider OpenAI
+   # Accepted and normalized to lowercase
+   ```
+
+### Acceptance Criteria Status
+- [x] --provider flag added to scan command
+- [x] --provider flag added to upsert command
+- [x] Flag validates provider name (ollama, openai, google)
+- [x] Flag overrides EMBEDDING_PROVIDER env var if both set
+- [x] Provider passed to create_provider() factory (via EmbeddingService::from_env())
+- [x] Help text updated with provider options
+- [x] Error message for invalid provider name
+- [x] Unit tests for CLI parsing (17 tests)
+- [x] Integration test with --provider flag (CLI parsing tests + manual verification)
+
+## Verification Report
+
+VERIFICATION PASSED - All acceptance criteria met.
+
+### Evidence Summary:
+
+1. **Scan/Upsert Commands** (main.rs lines 80-82, 103-105)
+   - Both commands include `--provider` flag with validation
+   - Help text: "Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)"
+
+2. **Provider Validation** (main.rs lines 14-21)
+   - `validate_provider()` function validates against: ollama, openai, google
+   - Case-insensitive matching with lowercase normalization
+   - Clear error messages listing supported providers
+
+3. **Environment Override** (main.rs lines 236-243)
+   - CLI flag sets EMBEDDING_PROVIDER via `std::env::set_var()`
+   - Logs provider selection source (CLI vs environment)
+   - Falls back to environment variable if flag not provided
+
+4. **Provider Passing** (main.rs lines 461, 486)
+   - Provider passed to `auto_generate_embeddings()` in both scan and upsert
+   - Service created via `EmbeddingService::from_env()` which reads set environment variable
+   - Logs final provider name after service creation
+
+5. **Test Coverage** (tests/cli_test.rs)
+   - 17 comprehensive tests all passing
+   - Covers valid/invalid providers, case handling, error messages, optional flag behavior
+   - Tests both scan and upsert commands
+
+6. **Build & Manual Testing**
+   - Binary compiles successfully
+   - Help text displays correctly for both commands
+   - Invalid provider rejected with helpful error
+   - Case-insensitive handling verified (OpenAI → openai)
+
+Next Step: Use commit-ticket agent to commit these changes.
