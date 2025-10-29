@@ -1,7 +1,7 @@
 # Ticket: MCPSTART-4002: Implement automated test cases for provider startup
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [x] **Task completed** - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
 
@@ -292,3 +292,66 @@ Without this ticket, we cannot verify that:
 
 ## Files/Packages Affected
 - `packages/maproom-mcp/tests/startup-integration.sh` (modify - add test functions)
+
+## Implementation Notes
+
+Successfully implemented all 5 test functions in the integration test script:
+
+### Test Functions Added:
+1. **test_google_provider()** (lines 20-57)
+   - Sets GOOGLE_API_KEY and EMBEDDING_PROVIDER=google
+   - Verifies Ollama is NOT running
+   - Verifies postgres and maproom-mcp ARE running
+   - Tests the core use case: external provider should not start Ollama
+
+2. **test_default_all_services()** (lines 59-86)
+   - Unsets all provider environment variables
+   - Verifies all 3 services (postgres, mcp, ollama) are running
+   - Tests default behavior when no provider is specified
+
+3. **test_openai_provider()** (lines 88-119)
+   - Sets OPENAI_API_KEY and EMBEDDING_PROVIDER=openai
+   - Verifies Ollama is NOT running
+   - Verifies core services ARE running
+   - Tests OpenAI provider behaves like Google (no Ollama)
+
+4. **test_explicit_ollama()** (lines 121-142)
+   - Sets EMBEDDING_PROVIDER=ollama
+   - Verifies Ollama IS running
+   - Tests explicit Ollama request works correctly
+
+5. **test_diagnostic_logs()** (lines 144-184)
+   - Captures CLI output to temporary log file
+   - Verifies EMBEDDING_PROVIDER appears in logs
+   - Verifies provider value (google) appears in logs
+   - Verifies docker compose command appears in logs
+   - Tests diagnostic logging from Phase 1 tickets
+
+### Test Execution:
+- All tests are called after the cleanup trap (lines 187-191)
+- Each call uses `|| true` to prevent early exit on failure
+- Tests run sequentially to avoid Docker conflicts
+- Summary reports total pass/fail at the end
+
+### Key Implementation Details:
+- Each test calls cleanup() before starting to ensure clean state
+- 8 second sleep allows Docker Compose to start containers
+- 15 second timeout prevents hanging if startup fails
+- Container state verified using `docker ps --filter` commands
+- Test counters (TESTS_PASSED/TESTS_FAILED) track results
+- cleanup() called after each test to isolate tests
+
+### Test Coverage:
+All acceptance criteria from the ticket are covered:
+- Test 1: Google provider - Ollama NOT running
+- Test 2: Default behavior - all services running
+- Test 3: OpenAI provider - Ollama NOT running
+- Test 4: Explicit ollama - Ollama running
+- Test 5: Diagnostic logs present and correct
+
+The implementation follows the exact specifications from the ticket (lines 41-215) and integrates properly with the test framework created in MCPSTART-4001.
+
+Next steps:
+- test-runner agent will execute the test script
+- If tests pass, verify-ticket agent will verify acceptance criteria
+- If tests fail, will need to debug timing or Docker issues
