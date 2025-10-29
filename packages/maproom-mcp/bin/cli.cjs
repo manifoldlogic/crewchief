@@ -326,6 +326,53 @@ function copyRecursive(src, dest) {
 }
 
 /**
+ * Verify docker-compose.yml uses environment variable syntax
+ * Prevents silent failures where hardcoded values override user configuration
+ *
+ * This checks for outdated configs from before MCP-008 and MCP-011 that had:
+ *   EMBEDDING_PROVIDER: ollama
+ * Instead of the correct environment variable syntax:
+ *   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+ */
+function verifyDockerComposeConfig() {
+  if (!fs.existsSync(COMPOSE_FILE)) {
+    console.error('⚠️  Warning: docker-compose.yml not found at', COMPOSE_FILE);
+    return;
+  }
+
+  const content = fs.readFileSync(COMPOSE_FILE, 'utf-8');
+
+  // Check for environment variable syntax (correct pattern)
+  const hasEnvVarSyntax = /\$\{EMBEDDING_PROVIDER[:\-]/.test(content);
+
+  // Check for hardcoded provider (incorrect pattern)
+  const hasHardcodedProvider = /EMBEDDING_PROVIDER:\s*['"]?ollama['"]?\s*$/m.test(content);
+
+  if (hasHardcodedProvider && !hasEnvVarSyntax) {
+    console.error('');
+    console.error('❌ ERROR: docker-compose.yml contains hardcoded EMBEDDING_PROVIDER');
+    console.error('   File:', COMPOSE_FILE);
+    console.error('');
+    console.error('   Your config file has:');
+    console.error('     EMBEDDING_PROVIDER: ollama');
+    console.error('');
+    console.error('   It should be:');
+    console.error('     EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}');
+    console.error('');
+    console.error('   This was fixed in MCP-011. Please update your config file or run:');
+    console.error('     npx @crewchief/maproom-mcp setup');
+    console.error('');
+    process.exit(1);
+  }
+
+  diagnosticLog('Docker Compose Config Verified', {
+    hasEnvVarSyntax,
+    hasHardcodedProvider: false,
+    configFile: COMPOSE_FILE
+  });
+}
+
+/**
  * Log current Docker container state for verification
  * Queries `docker compose ps` and logs the actual running state of all containers
  */
@@ -800,6 +847,9 @@ async function main() {
 
     // Setup configuration
     setupConfigDirectory();
+
+    // Verify docker-compose.yml uses environment variables (not hardcoded values)
+    verifyDockerComposeConfig();
 
     // Start Docker Compose stack
     await startDockerCompose();
