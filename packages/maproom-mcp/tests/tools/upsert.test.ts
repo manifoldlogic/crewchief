@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { validateUpsertParams } from '../../src/tools/upsert_schema.js'
+import { handleUpsertTool } from '../../src/tools/upsert.js'
 import { ValidationError } from '../../src/utils/validation.js'
 import {
   parseIndexingStats,
@@ -20,6 +21,7 @@ import {
   getBinarycandidates,
   ProcessError,
 } from '../../src/utils/process.js'
+import { clearProviderCache } from '../../src/utils/provider-detection.js'
 
 describe('Upsert Tool - Parameter Validation', () => {
   it('should validate required parameters', () => {
@@ -476,5 +478,62 @@ Duration: 800ms
     const stats = parseIndexingStats(output)
     expect(stats.files).toBe(8)
     expect(stats.chunks).toBe(40)
+  })
+})
+
+describe('Upsert Tool - Provider Integration', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    clearProviderCache()
+    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  it('should throw NO_PROVIDER error when no provider available', async () => {
+    // Clear all provider configs
+    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.OPENAI_API_KEY
+    delete process.env.GOOGLE_PROJECT_ID
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS
+
+    // Mock Ollama not available
+    global.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'))
+
+    const params = {
+      paths: ['src/index.ts'],
+      commit: 'abc123',
+      repo: 'test-repo',
+      worktree: 'main',
+      root: '/workspace/test',
+    }
+
+    await expect(handleUpsertTool(params)).rejects.toThrow('No provider available')
+  })
+
+  it('should include helpful error message when provider unavailable', async () => {
+    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.OPENAI_API_KEY
+    global.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'))
+
+    const params = {
+      paths: ['src/index.ts'],
+      commit: 'abc123',
+      repo: 'test-repo',
+      worktree: 'main',
+      root: '/workspace/test',
+    }
+
+    try {
+      await handleUpsertTool(params)
+      expect.fail('Should have thrown error')
+    } catch (error: any) {
+      expect(error.message).toContain('No provider available')
+      expect(error.message).toContain('Install Ollama')
+      expect(error.message).toContain('OPENAI_API_KEY')
+    }
   })
 })

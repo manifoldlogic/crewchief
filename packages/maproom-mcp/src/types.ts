@@ -84,6 +84,12 @@ export interface UpsertResult {
 
   /** Duration of indexing operation in milliseconds */
   duration_ms: number
+
+  /** Embedding provider used (ollama, openai, google) */
+  provider?: string
+
+  /** Embedding dimension (768 or 1536) */
+  dimension?: number
 }
 
 /**

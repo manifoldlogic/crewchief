@@ -186,7 +186,7 @@ const toolSchemas = [
   },
   {
     name: 'scan',
-    description: 'Scan and index an entire repository or worktree - USE FOR: initial indexing of a new repository, re-indexing after major changes, or when you need to ensure all files are indexed. This is a comprehensive operation that discovers and indexes all supported files in the specified path. FASTER THAN: calling upsert on individual files. USE WHEN: setting up a new codebase for search, or when search results seem incomplete.',
+    description: 'Scan and index an entire repository or worktree with automatic embedding generation - USE FOR: initial indexing of a new repository, re-indexing after major changes, or when you need to ensure all files are indexed. This is a comprehensive operation that discovers and indexes all supported files in the specified path. FASTER THAN: calling upsert on individual files. USE WHEN: setting up a new codebase for search, or when search results seem incomplete.\n\nMULTI-PROVIDER SUPPORT: Automatically detects and uses available embedding provider (Ollama, OpenAI, or Google Vertex AI). Provider selection is cached for session performance.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -204,7 +204,7 @@ const toolSchemas = [
   },
   {
     name: 'upsert',
-    description: 'Index/update specific files in maproom - USE WHEN: files have changed and need reindexing. FOR FULL REPO: use "scan" instead. Only use upsert for targeted updates of a few specific files. Spawns the Rust indexer.',
+    description: 'Index/update specific files in maproom with automatic embedding generation - USE WHEN: files have changed and need reindexing. FOR FULL REPO: use "scan" instead. Only use upsert for targeted updates of a few specific files. Spawns the Rust indexer.\n\nMULTI-PROVIDER SUPPORT: Automatically detects and uses available embedding provider (Ollama, OpenAI, or Google Vertex AI). Provider selection is cached for session performance.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -794,6 +794,23 @@ async function handleScan(params: any): Promise<any> {
   const { spawn } = await import('node:child_process')
 
   try {
+    // Detect provider before scanning
+    const { getProviderConfig } = await import('./utils/provider-detection.js')
+    let providerConfig
+    try {
+      providerConfig = await getProviderConfig()
+      log.info({ provider: providerConfig.provider, dimension: providerConfig.dimension }, 'Scanning with provider')
+    } catch (error: any) {
+      if (error.message && error.message.includes('No embedding provider available')) {
+        return {
+          success: false,
+          error: 'Cannot scan with embeddings: No provider available.\n' + error.message,
+          hint: 'Configure an embedding provider to enable semantic search. See error message for setup instructions.'
+        }
+      }
+      throw error
+    }
+
     // Build command arguments
     const args: string[] = ['scan']
 
@@ -809,6 +826,9 @@ async function handleScan(params: any): Promise<any> {
     if (params.exclude && Array.isArray(params.exclude)) {
       params.exclude.forEach((pattern: string) => args.push('--exclude', pattern))
     }
+
+    // Add provider flag
+    args.push('--provider', providerConfig.provider)
 
     log.info({ args }, 'spawning crewchief-maproom scan')
 
@@ -879,6 +899,8 @@ async function handleScan(params: any): Promise<any> {
       repo: params.repo || 'auto-detected',
       worktree: params.worktree || 'auto-detected',
       path: params.path || 'current directory',
+      provider: providerConfig.provider,
+      dimension: providerConfig.dimension,
       hint: 'Use the status tool to verify indexing results, then search to find your code'
     }
   } catch (error: any) {

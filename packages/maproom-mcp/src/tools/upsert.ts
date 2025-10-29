@@ -19,6 +19,7 @@ import {
   ProcessError,
   type SpawnOptions,
 } from '../utils/process.js'
+import { getProviderConfig } from '../utils/provider-detection.js'
 
 const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
 const log = LOG_FILE
@@ -72,6 +73,22 @@ export async function handleUpsertTool(
 
   log.debug({ paths, commit, repo, worktree, root }, 'handleUpsertTool called')
 
+  // Detect provider before indexing
+  let providerConfig
+  try {
+    providerConfig = await getProviderConfig()
+    log.info(`Upserting with ${providerConfig.provider} provider (${providerConfig.dimension} dimensions)`)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('No embedding provider available')) {
+      throw new ProcessError(
+        'Cannot upsert with embeddings: No provider available.\n' +
+        error.message,
+        'NO_PROVIDER'
+      )
+    }
+    throw error
+  }
+
   // Validate all paths to prevent security issues
   let validatedPaths: string[]
   try {
@@ -99,6 +116,8 @@ export async function handleUpsertTool(
     worktree,
     '--root',
     root,
+    '--provider',
+    providerConfig.provider,
     '--generate-embeddings=true', // Auto-generate embeddings for zero-config experience
   ]
 
@@ -181,6 +200,8 @@ export async function handleUpsertTool(
     updated_files: stats.files ?? 0,
     updated_chunks: stats.chunks ?? 0,
     duration_ms: stats.duration_ms ?? 0,
+    provider: providerConfig.provider,
+    dimension: providerConfig.dimension,
   }
 
   // Warn if we couldn't parse statistics
