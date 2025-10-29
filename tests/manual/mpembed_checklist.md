@@ -1,45 +1,3 @@
-# Ticket: MPEMBED-6901: Manual testing and production readiness
-
-## Status
-- [x] **Task completed** - acceptance criteria met
-- [x] **Tests pass** - related tests pass
-- [x] **Verified** - by the verify-ticket agent
-
-## Agents
-- verify-ticket
-- commit-ticket
-
-## Summary
-Complete comprehensive manual testing checklist covering zero-config experience, provider switching, backward compatibility, and production readiness. Verify all user-facing features work end-to-end.
-
-## Background
-This ticket represents the final validation gate before releasing multi-provider embedding support. Manual testing covers scenarios that are difficult to automate and validates the overall user experience.
-
-Reference: crewchief_context/maproom/MPEMBED-multi-provider-embeddings/phase-6-testing-validation.md
-
-## Acceptance Criteria
-- [ ] All manual test scenarios pass
-- [ ] Zero-config experience verified (Ollama auto-detection)
-- [ ] Provider switching tested (OpenAI → Ollama → Google)
-- [ ] Backward compatibility confirmed (existing OpenAI users unaffected)
-- [ ] Documentation accuracy verified
-- [ ] MCP integration tested in real AI assistants
-- [ ] Fresh install test completed
-- [ ] Migration scenarios validated
-
-## Technical Requirements
-- Test on clean environment (fresh VM or container)
-- Test with each supported provider
-- Test all documented workflows
-- Verify error messages are helpful
-- Test with real codebases (not just fixtures)
-- Document any issues found
-- Create test report with screenshots
-
-## Implementation Notes
-**Manual Testing Checklist:**
-
-```markdown
 # MPEMBED Manual Testing Checklist
 
 **Tester:** _________________
@@ -308,15 +266,3 @@ Test with real codebase queries:
 
 **Tester Sign-Off:** _________________
 **Date:** _________________
-```
-
-## Dependencies
-- All previous MPEMBED tickets (this is the final validation)
-
-## Risk Assessment
-- **Risk**: Manual testing may miss edge cases
-  - **Mitigation**: Combine with automated tests, multiple testers
-
-## Files/Packages Affected
-- tests/manual/mpembed_checklist.md (create)
-- tests/manual/mpembed_test_report.md (create - filled out after testing)
