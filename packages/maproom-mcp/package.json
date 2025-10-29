@@ -22,7 +22,8 @@
     "build": "tsc",
     "test": "node bin/cli.cjs --test || echo 'Test mode not yet implemented'",
     "dev": "node bin/cli.cjs",
-    "prepublishOnly": "tsc",
+    "prepublishOnly": "tsc && pnpm audit --audit-level=high --prod",
+    "security-check": "pnpm audit --audit-level=moderate",
     "release:patch": "node scripts/bump-version.js patch && pnpm publish --access public --no-git-checks",
     "release:minor": "node scripts/bump-version.js minor && pnpm publish --access public --no-git-checks",
     "release:major": "node scripts/bump-version.js major && pnpm publish --access public --no-git-checks"

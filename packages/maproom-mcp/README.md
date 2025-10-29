@@ -186,6 +186,93 @@ docker inspect maproom-postgres --format='{{.State.Health.Status}}'
 docker inspect maproom-ollama --format='{{.State.Health.Status}}'
 ```
 
+## Security
+
+### Automated Vulnerability Scanning
+
+The Maproom MCP package includes automated security checks to prevent publishing packages with known vulnerabilities:
+
+**Pre-Publish Audit**: Before every `npm publish` or `pnpm publish`, the package automatically runs:
+```bash
+pnpm audit --audit-level=high --prod
+```
+
+This checks **production dependencies only** for high or critical severity vulnerabilities. If any are found, the publish process is blocked automatically.
+
+**Why production only?** Development dependencies (like test frameworks) don't ship to end users, so their vulnerabilities don't affect package consumers.
+
+### Manual Security Checks
+
+Run security audits manually during development:
+
+```bash
+# Check for moderate+ vulnerabilities (more comprehensive)
+pnpm security-check
+
+# Or run audit directly with custom levels
+pnpm audit --audit-level=moderate
+pnpm audit --audit-level=low
+```
+
+### Fixing Vulnerabilities
+
+When vulnerabilities are detected:
+
+1. **Automatic fixes** (try this first):
+   ```bash
+   pnpm audit fix
+   ```
+   This updates dependencies to patched versions automatically.
+
+2. **Manual updates** (if automatic fixes don't work):
+   ```bash
+   # Update specific vulnerable package
+   pnpm update <package-name>
+
+   # Or update all dependencies to latest compatible versions
+   pnpm update
+   ```
+
+3. **Check for breaking changes**:
+   ```bash
+   # Review what changed
+   git diff package.json
+
+   # Test the package still works
+   pnpm build
+   pnpm test
+   ```
+
+### Emergency Override (Use with Extreme Caution)
+
+If you must publish despite vulnerabilities (e.g., false positive, no fix available):
+
+```bash
+# Temporarily remove security check from prepublishOnly
+# Edit package.json to remove "pnpm audit --audit-level=high --prod"
+# Then publish
+pnpm publish
+
+# IMMEDIATELY restore the security check after publishing
+git checkout package.json
+```
+
+**WARNING**: Only override security checks when:
+- You've verified the vulnerability is a false positive
+- The vulnerability is in a transitive dependency with no fix available
+- You've documented the risk and mitigation strategy
+- You've filed an issue to track fixing the vulnerability
+
+Never publish with known high/critical vulnerabilities in direct dependencies.
+
+### Supply Chain Security Best Practices
+
+1. **Keep dependencies updated**: Run `pnpm update` regularly
+2. **Review dependency changes**: Check `pnpm audit` output before updates
+3. **Minimize dependencies**: Fewer dependencies = smaller attack surface
+4. **Pin versions**: Use exact versions in package.json for production packages
+5. **Monitor security advisories**: Subscribe to GitHub security alerts for this repository
+
 ## Troubleshooting
 
 ### Connection lost after container restart
