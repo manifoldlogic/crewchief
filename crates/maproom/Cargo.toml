@@ -64,9 +64,8 @@ async-trait = "0.1"
 
 # Google Vertex AI authentication (MPEMBED Phase 3)
 # Service account authentication for google-cloud-aiplatform
-# Note: Pinned to 0.13.x due to frequent breaking changes in Google crates
-google-cloud-auth = "0.13"
-google-cloud-token = "0.1"
+# Using gcp_auth for reliable OAuth2 access token generation
+gcp_auth = "0.12"
 
 # Cache key hashing
 sha2 = "0.10"
