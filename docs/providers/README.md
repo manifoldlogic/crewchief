@@ -59,6 +59,10 @@ High-quality embeddings from OpenAI's embedding models.
 
 ## Provider Comparison
 
+**[→ Read Full Comparison Guide](./comparison.md)** for detailed cost analysis, performance benchmarks, privacy models, compliance details, and use case recommendations.
+
+### Quick Comparison Table
+
 | Feature | Google Vertex AI | Ollama | OpenAI |
 |---------|------------------|--------|--------|
 | **Embedding Dimensions** | 768 | Varies by model | 1536 (text-embedding-3-small) |
@@ -70,6 +74,8 @@ High-quality embeddings from OpenAI's embedding models.
 | **Data Privacy** | Cloud (encrypted) | ✅ Local only | Cloud (encrypted) |
 | **Regional Support** | ✅ Multi-region | N/A | ✅ Global |
 | **Enterprise Compliance** | ✅ SOC 2, ISO | ✅ Self-hosted | ✅ SOC 2, ISO |
+
+**[→ See detailed breakdown in Comparison Guide](./comparison.md)**
 
 ---
 
