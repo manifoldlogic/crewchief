@@ -26,8 +26,8 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1005 (lines 208-245)
 
 ## Acceptance Criteria
 - [ ] Build and push step added using `docker/build-push-action@v5`
-- [ ] Build context set to `packages/maproom-mcp`
-- [ ] Dockerfile path set to `packages/maproom-mcp/config/Dockerfile.mcp-server`
+- [ ] Build context set to workspace root (`.`)
+- [ ] Dockerfile path set to `packages/maproom-mcp/config/Dockerfile.combined`
 - [ ] Platforms configured: `linux/amd64,linux/arm64`
 - [ ] Build arguments passed: VERSION, COMMIT_SHA, BUILD_DATE
 - [ ] Tags from metadata action applied
@@ -39,8 +39,8 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1005 (lines 208-245)
 - Action: `docker/build-push-action@v5`
 - Step name: "Build and push Docker image"
 - Inputs:
-  - context: `${{ env.BUILD_CONTEXT }}` (packages/maproom-mcp)
-  - file: `${{ env.DOCKERFILE_PATH }}` (packages/maproom-mcp/config/Dockerfile.mcp-server)
+  - context: `${{ env.BUILD_CONTEXT }}` (workspace root: `.`)
+  - file: `${{ env.DOCKERFILE_PATH }}` (packages/maproom-mcp/config/Dockerfile.combined)
   - platforms: `linux/amd64,linux/arm64`
   - push: `${{ github.event_name != 'workflow_dispatch' || github.event.inputs.push_to_registry == 'true' }}`
   - tags: `${{ steps.meta.outputs.tags }}`
@@ -69,17 +69,26 @@ These are passed to the Dockerfile and used in LABEL directives:
 - `cache-to: type=gha,mode=max`: Cache all layers including intermediate stages
 - Reduces build time from 15min (cold) to 5min (warm)
 
-**Performance Expectations** (from DKRHUB_ARCHITECTURE.md lines 665-705):
-- First build: ~15 minutes
-- Subsequent builds: ~5 minutes
-- Image size: ~300MB uncompressed, ~120MB compressed
+**Combined Dockerfile Build**:
+Dockerfile.combined builds both Rust and Node.js components in multi-stage build:
+- Stage 1: Rust binary compilation (cargo build)
+- Stage 2: TypeScript compilation (npx tsc)
+- Stage 3: Runtime image with both components
+- Build time: ~12-15 min (cold), ~5 min (warm with cache)
+
+**Performance Expectations**:
+- First build: ~12-15 minutes total
+- Subsequent builds: ~5 minutes with cache
+- Image size: ~350-400MB (includes both Rust and Node.js runtimes)
 
 Reference DKRHUB_QUALITY_STRATEGY.md lines 42-76 for build validation test cases.
 
 ## Dependencies
-- DKRHUB-1004: Version extraction and metadata must be configured
-- DKRHUB-1003: Docker Hub authentication must be configured
-- DKRHUB-1002: Buildx and QEMU must be set up
+- **DKRHUB-1000**: Dockerfile.combined must exist and be tested
+- **DKRHUB-1007**: Local Dockerfile testing must pass before GitHub Actions build
+- **DKRHUB-1004**: Version extraction and metadata must be configured
+- **DKRHUB-1003**: Docker Hub authentication must be configured
+- **DKRHUB-1002**: Buildx and QEMU must be set up
 
 ## Risk Assessment
 - **Risk**: Multi-platform build failures (especially ARM64)

@@ -22,7 +22,7 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1001 (lines 85-108)
 - [x] File created at `.github/workflows/publish-maproom-mcp-image.yml`
 - [x] Workflow triggers on version tags matching pattern `v*.*.*`
 - [x] Manual trigger available via workflow_dispatch with version and push_to_registry inputs
-- [x] Environment variables defined: DOCKER_HUB_REPO, DOCKERFILE_PATH, BUILD_CONTEXT
+- [x] Environment variables defined: DOCKER_HUB_REPO, DOCKERFILE_PATH (Dockerfile.combined), BUILD_CONTEXT (workspace root)
 - [x] Permissions correctly scoped: contents: read, packages: write, security-events: write
 
 ## Technical Requirements
@@ -32,8 +32,8 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1001 (lines 85-108)
   - workflow_dispatch with inputs: version (required), push_to_registry (default: false)
 - Environment variables:
   - DOCKER_HUB_REPO: `crewchief/maproom-mcp`
-  - DOCKERFILE_PATH: `packages/maproom-mcp/config/Dockerfile.mcp-server`
-  - BUILD_CONTEXT: `packages/maproom-mcp`
+  - DOCKERFILE_PATH: `packages/maproom-mcp/config/Dockerfile.combined`
+  - BUILD_CONTEXT: `.` (workspace root, required for Rust + Node.js builds)
 - Jobs: Single job named `build-and-push` running on `ubuntu-latest`
 - Initial steps placeholder (will be filled in subsequent tickets)
 
@@ -45,8 +45,9 @@ The workflow_dispatch trigger is essential for testing - it allows manual runs w
 Reference DKRHUB_ARCHITECTURE.md lines 93-250 for complete workflow specification.
 
 ## Dependencies
+- **DKRHUB-1000**: Dockerfile.combined must exist before workflow can reference it
+- **DKRHUB-1007**: Local Dockerfile testing should pass before GitHub Actions implementation
 - GitHub repository must have DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets configured (prerequisite - already completed)
-- No other ticket dependencies (this is the first implementation ticket)
 
 ## Risk Assessment
 - **Risk**: Workflow syntax errors could prevent execution

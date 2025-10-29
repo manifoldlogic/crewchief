@@ -50,10 +50,14 @@ GitHub Actions cache (type=gha) dramatically improves build times on subsequent 
 
 The cache-to mode=max ensures maximum layer caching including intermediate build stages.
 
+**Multi-Stage Caching with Dockerfile.combined**:
+GitHub Actions cache works with combined Dockerfile's Rust and Node.js build stages. Each stage (Rust builder, Node.js builder, runtime) benefits from layer caching, significantly reducing rebuild times when dependencies haven't changed.
+
 Reference DKRHUB_ARCHITECTURE.md lines 130-150 and DKRHUB_QUALITY_STRATEGY.md lines 692-705 for performance expectations.
 
 ## Dependencies
-- DKRHUB-1001: Workflow file must exist before adding these steps
+- **DKRHUB-1000**: Dockerfile.combined must exist
+- **DKRHUB-1001**: Workflow file must exist before adding these steps
 
 ## Risk Assessment
 - **Risk**: QEMU emulation could be slow or unstable

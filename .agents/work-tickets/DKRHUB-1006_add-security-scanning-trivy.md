@@ -69,10 +69,18 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1006 (lines 247-279)
 - Trivy scan adds ~2-3 minutes to workflow
 - Acceptable overhead for security assurance
 
+**Combined Dockerfile Scanning**:
+Trivy scans the combined image containing both Rust and Node.js components:
+- Rust runtime dependencies: libgcc, libssl3, ca-certificates
+- Node.js dependencies: pg, pino, zod, execa
+- Alpine base packages
+- Comprehensive coverage of all runtime components
+
 Reference DKRHUB_SECURITY_REVIEW.md lines 368-402 for vulnerability response process.
 
 ## Dependencies
-- DKRHUB-1005: Image must be built and pushed before scanning
+- **DKRHUB-1000**: Dockerfile.combined must exist
+- **DKRHUB-1005**: Image must be built and pushed before scanning
 - Prerequisite: Repository must have security-events: write permission (configured in DKRHUB-1001)
 
 ## Risk Assessment

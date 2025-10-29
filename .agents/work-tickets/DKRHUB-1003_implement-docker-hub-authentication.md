@@ -55,7 +55,8 @@ Security best practices from DKRHUB_SECURITY_REVIEW.md (lines 105-176):
 - 2FA enabled on Docker Hub account
 
 ## Dependencies
-- DKRHUB-1002: Buildx must be configured before authentication
+- **DKRHUB-1000**: Dockerfile.combined must exist
+- **DKRHUB-1002**: Buildx must be configured before authentication
 - Prerequisite: GitHub Secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN must exist (already completed)
 
 ## Risk Assessment

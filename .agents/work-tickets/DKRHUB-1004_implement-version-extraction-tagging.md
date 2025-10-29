@@ -74,8 +74,9 @@ OCI labels provide metadata for tools and users:
 Reference DKRHUB_ARCHITECTURE.md lines 545-610 for version management strategy.
 
 ## Dependencies
-- DKRHUB-1003: Authentication must be configured before metadata generation
-- DKRHUB-1001: Workflow environment variables must be defined
+- **DKRHUB-1000**: Dockerfile.combined must exist
+- **DKRHUB-1003**: Authentication must be configured before version extraction
+- **DKRHUB-1001**: Workflow environment variables must be defined
 
 ## Risk Assessment
 - **Risk**: Version parsing fails on unexpected tag format

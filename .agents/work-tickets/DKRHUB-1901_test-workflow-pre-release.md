@@ -31,8 +31,14 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1007 (lines 281-316)
 - [ ] GitHub Actions workflow triggers automatically on tag push
 - [ ] All workflow steps complete without errors (checkout, QEMU, buildx, login, version, metadata, build-push, trivy, upload)
 - [ ] Images appear on Docker Hub at `crewchief/maproom-mcp:1.1.10-rc1`
-- [ ] Both AMD64 and ARM64 images exist (verified via `docker manifest inspect`)
-- [ ] Images can be pulled successfully: `docker pull crewchief/maproom-mcp:1.1.10-rc1`
+- [ ] Multi-platform manifest includes both platforms: `docker manifest inspect crewchief/maproom-mcp:1.1.10-rc1`
+- [ ] AMD64 image builds successfully (verify in GitHub Actions logs)
+- [ ] ARM64 image builds successfully (verify in GitHub Actions logs)
+- [ ] AMD64 image can be pulled: `docker pull --platform linux/amd64 crewchief/maproom-mcp:1.1.10-rc1`
+- [ ] ARM64 image can be pulled: `docker pull --platform linux/arm64 crewchief/maproom-mcp:1.1.10-rc1`
+- [ ] Both components exist in AMD64 image: Node.js runtime + Rust binary
+- [ ] Both components exist in ARM64 image: Node.js runtime + Rust binary
+- [ ] Image size reasonable (< 450MB for combined Rust + Node.js image)
 - [ ] No credentials visible in GitHub Actions logs (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN redacted)
 - [ ] Trivy scan results uploaded to GitHub Security tab
 - [ ] Build completes in <20 minutes
@@ -46,14 +52,30 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1007 (lines 281-316)
   # Pull and test image
   docker pull crewchief/maproom-mcp:1.1.10-rc1
 
-  # Verify platforms
+  # Verify multi-platform manifest
   docker manifest inspect crewchief/maproom-mcp:1.1.10-rc1 | jq '.manifests[].platform'
+
+  # Pull platform-specific images
+  docker pull --platform linux/amd64 crewchief/maproom-mcp:1.1.10-rc1
+  docker pull --platform linux/arm64 crewchief/maproom-mcp:1.1.10-rc1
+
+  # Verify Node.js runtime exists (AMD64)
+  docker run --rm --platform linux/amd64 crewchief/maproom-mcp:1.1.10-rc1 node --version
+
+  # Verify Rust binary exists (AMD64)
+  docker run --rm --platform linux/amd64 crewchief/maproom-mcp:1.1.10-rc1 crewchief-maproom --version
+
+  # Verify Node.js runtime exists (ARM64)
+  docker run --rm --platform linux/arm64 crewchief/maproom-mcp:1.1.10-rc1 node --version
+
+  # Verify Rust binary exists (ARM64)
+  docker run --rm --platform linux/arm64 crewchief/maproom-mcp:1.1.10-rc1 crewchief-maproom --version
+
+  # Check image size
+  docker images crewchief/maproom-mcp:1.1.10-rc1
 
   # Check metadata
   docker inspect crewchief/maproom-mcp:1.1.10-rc1 --format='{{json .Config.Labels}}' | jq
-
-  # Test run
-  docker run --rm crewchief/maproom-mcp:1.1.10-rc1 --help
   ```
 
 ## Implementation Notes
@@ -72,8 +94,9 @@ Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1007 (lines 281-316)
 2. Docker Hub:
    - Tag exists: 1.1.10-rc1
    - Two manifests (AMD64, ARM64)
-   - Image size ~300MB
+   - Image size ~350-450MB (combined Rust + Node.js image)
    - Metadata labels present
+   - Both components present: Node.js runtime + Rust binary
 
 3. GitHub Security:
    - Trivy results uploaded
@@ -92,8 +115,10 @@ All checks pass → Proceed to Phase 2 (docker-compose updates)
 Any failures → Fix and retest before proceeding
 
 ## Dependencies
-- DKRHUB-1001 through DKRHUB-1006: All workflow steps must be implemented
-- Prerequisite: GitHub Secrets configured
+- **DKRHUB-1000**: Dockerfile.combined must exist and be tested locally
+- **DKRHUB-1007**: Local Dockerfile testing must pass completely
+- **DKRHUB-1001 through DKRHUB-1006**: All workflow steps must be implemented
+- Prerequisite: GitHub Secrets configured (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN)
 - Prerequisite: Docker Hub account exists
 
 ## Risk Assessment
