@@ -11,10 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
           node-version: 24
+          cache: 'pnpm'
       - run: pnpm install
       - run: pnpm test
 
@@ -23,5 +28,15 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - run: pnpm install
       - run: pnpm build
       - run: pnpm lint
