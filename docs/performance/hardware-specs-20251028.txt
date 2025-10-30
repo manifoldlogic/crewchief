@@ -1,0 +1,34 @@
+# Hardware Specifications - Tue Oct 28 01:14:21 AM UTC 2025
+
+## System
+Linux 23fab513fa04 6.10.14-linuxkit #1 SMP Wed Sep 10 06:47:45 UTC 2025 aarch64 aarch64 aarch64 GNU/Linux
+
+## CPU
+CPU(s):                               12
+On-line CPU(s) list:                  0-11
+Thread(s) per core:                   1
+
+## Memory
+               total        used        free      shared  buff/cache   available
+Mem:            45Gi        15Gi       9.6Gi       485Mi        21Gi        29Gi
+Swap:          2.0Gi          0B       2.0Gi
+
+## Docker
+Version: 28.4.0
+CPUs: 12, Memory: 49373974528
+
+## Ollama
+Ollama service not running at localhost:11434
+
+## GPU (if available)
+No GPU detected (or nvidia-smi/rocm-smi not available)
+
+## Storage
+overlay         260G  102G  145G  42% /
+
+## Rust/Cargo Version
+rustc: rustc 1.90.0 (1159e78c4 2025-09-14)
+cargo: cargo 1.90.0 (840b83a10 2025-07-30)
+
+---
+Specifications collected at Tue Oct 28 01:14:22 AM UTC 2025

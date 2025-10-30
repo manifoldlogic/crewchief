@@ -1,0 +1,213 @@
+# Prometheus Alert Rules for Maproom Hybrid Search
+#
+# This file defines alerting rules for monitoring the hybrid search system.
+# Configure Prometheus to load these rules and route alerts to Alertmanager.
+#
+# Configuration:
+# 1. Place this file in Prometheus rules directory
+# 2. Add to prometheus.yml:
+#    rule_files:
+#      - "search_alerts.yml"
+# 3. Configure Alertmanager for notification routing
+
+groups:
+  - name: maproom_search_latency
+    interval: 30s
+    rules:
+      # WARNING: p95 latency exceeds 50ms threshold
+      - alert: SearchLatencyP95High
+        expr: histogram_quantile(0.95, rate(maproom_search_query_latency_seconds_bucket{status="success"}[5m])) > 0.050
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+          category: performance
+        annotations:
+          summary: "Search p95 latency is high ({{ $labels.mode }} mode)"
+          description: "The p95 search latency for {{ $labels.mode }} mode is {{ $value | humanizeDuration }}, which exceeds the 50ms warning threshold. This may indicate performance degradation."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#high-latency"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+      # CRITICAL: p95 latency exceeds 100ms threshold
+      - alert: SearchLatencyP95Critical
+        expr: histogram_quantile(0.95, rate(maproom_search_query_latency_seconds_bucket{status="success"}[5m])) > 0.100
+        for: 5m
+        labels:
+          severity: critical
+          component: search
+          category: performance
+        annotations:
+          summary: "Search p95 latency is critically high ({{ $labels.mode }} mode)"
+          description: "The p95 search latency for {{ $labels.mode }} mode is {{ $value | humanizeDuration }}, which exceeds the 100ms critical threshold. Immediate investigation required."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#high-latency"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+      # WARNING: p99 latency exceeds 100ms threshold
+      - alert: SearchLatencyP99High
+        expr: histogram_quantile(0.99, rate(maproom_search_query_latency_seconds_bucket{status="success"}[5m])) > 0.100
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+          category: performance
+        annotations:
+          summary: "Search p99 latency is high ({{ $labels.mode }} mode)"
+          description: "The p99 search latency for {{ $labels.mode }} mode is {{ $value | humanizeDuration }}, which exceeds the 100ms warning threshold."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#high-latency"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+  - name: maproom_search_errors
+    interval: 30s
+    rules:
+      # WARNING: Error rate exceeds 1%
+      - alert: SearchErrorRateHigh
+        expr: |
+          (
+            sum(rate(maproom_search_errors_total[5m]))
+            /
+            sum(rate(maproom_search_queries_total[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+          category: reliability
+        annotations:
+          summary: "Search error rate is high"
+          description: "The search error rate is {{ $value | humanizePercentage }}, which exceeds the 1% warning threshold. Check logs for error details."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#high-error-rate"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+      # CRITICAL: Error rate exceeds 5%
+      - alert: SearchErrorRateCritical
+        expr: |
+          (
+            sum(rate(maproom_search_errors_total[5m]))
+            /
+            sum(rate(maproom_search_queries_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: search
+          category: reliability
+        annotations:
+          summary: "Search error rate is critically high"
+          description: "The search error rate is {{ $value | humanizePercentage }}, which exceeds the 5% critical threshold. Immediate investigation required."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#high-error-rate"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+      # WARNING: Specific error type spiking
+      - alert: SearchErrorTypeSpike
+        expr: rate(maproom_search_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+          category: reliability
+        annotations:
+          summary: "Spike in {{ $labels.error_type }} errors"
+          description: "The {{ $labels.error_type }} error rate is {{ $value }} errors/sec, indicating a potential issue with this component."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#error-type-{{ $labels.error_type }}"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+  - name: maproom_search_cache
+    interval: 30s
+    rules:
+      # WARNING: Cache hit rate below 50%
+      - alert: SearchCacheHitRateLow
+        expr: maproom_search_cache_hit_rate < 0.50
+        for: 10m
+        labels:
+          severity: warning
+          component: search
+          category: performance
+        annotations:
+          summary: "Search cache hit rate is low"
+          description: "The search cache hit rate is {{ $value | humanizePercentage }}, which is below the 50% threshold. This may indicate inefficient caching or high query diversity."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#low-cache-hit-rate"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+      # INFO: Cache hit rate critically low (< 20%)
+      - alert: SearchCacheHitRateCriticallyLow
+        expr: maproom_search_cache_hit_rate < 0.20
+        for: 10m
+        labels:
+          severity: info
+          component: search
+          category: performance
+        annotations:
+          summary: "Search cache hit rate is critically low"
+          description: "The search cache hit rate is {{ $value | humanizePercentage }}, which is below 20%. Consider reviewing cache configuration or query patterns."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#low-cache-hit-rate"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+  - name: maproom_search_fusion
+    interval: 30s
+    rules:
+      # WARNING: Fusion time exceeds 10ms at p95
+      - alert: SearchFusionTimeHigh
+        expr: histogram_quantile(0.95, rate(maproom_search_fusion_time_seconds_bucket[5m])) > 0.010
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+          category: performance
+        annotations:
+          summary: "Search fusion time is high ({{ $labels.strategy }} strategy)"
+          description: "The p95 fusion time for {{ $labels.strategy }} is {{ $value | humanizeDuration }}, which exceeds the 10ms threshold. This may impact overall search latency."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#slow-fusion"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+  - name: maproom_search_availability
+    interval: 30s
+    rules:
+      # CRITICAL: No queries in last 5 minutes (system down?)
+      - alert: SearchSystemDown
+        expr: rate(maproom_search_queries_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: search
+          category: availability
+        annotations:
+          summary: "Search system appears to be down"
+          description: "No search queries have been processed in the last 5 minutes. The search system may be down or unreachable."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#system-down"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+      # WARNING: Query rate dropped significantly
+      - alert: SearchQueryRateDropped
+        expr: |
+          (
+            rate(maproom_search_queries_total[5m])
+            /
+            rate(maproom_search_queries_total[5m] offset 1h)
+          ) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: search
+          category: availability
+        annotations:
+          summary: "Search query rate has dropped significantly"
+          description: "The search query rate is {{ $value | humanizePercentage }} of the rate 1 hour ago, indicating a potential issue or traffic drop."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#low-query-rate"
+          dashboard: "https://grafana.example.com/d/maproom-search"
+
+  - name: maproom_search_quality
+    interval: 30s
+    rules:
+      # WARNING: Result count consistently low (may indicate indexing issues)
+      - alert: SearchResultCountLow
+        expr: histogram_quantile(0.50, rate(maproom_search_result_count_bucket[5m])) < 1
+        for: 10m
+        labels:
+          severity: warning
+          component: search
+          category: quality
+        annotations:
+          summary: "Search median result count is very low ({{ $labels.mode }} mode)"
+          description: "The median number of results for {{ $labels.mode }} searches is {{ $value }}, which is below 1. This may indicate indexing issues or overly restrictive queries."
+          runbook: "https://github.com/your-org/maproom/docs/runbook.md#low-result-count"
+          dashboard: "https://grafana.example.com/d/maproom-search"

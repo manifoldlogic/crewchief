@@ -1,0 +1,72 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+target/
+dist/
+node_modules/
+*.log
+*.rlib
+*.rmeta
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Rust development files
+**/*.rs.bk
+**/Cargo.lock.bak
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation (not needed in container)
+*.md
+docs/
+.github/
+
+# Test files (not needed in production container)
+tests/
+*.test.ts
+*.spec.ts
+**/tests/
+# Note: benches are needed at build time due to Cargo.toml references
+# Commenting out bench exclusions as they're needed for manifest validation
+# **/benches/
+**/examples/
+**/*_test.rs
+# **/*_bench.rs
+
+# CI/CD files
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Docker files (don't copy Docker files into the image)
+docker-compose.yml
+Dockerfile*
+.dockerignore
+
+# Package manager cache
+.npm/
+.cargo/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage and reports
+coverage/
+*.lcov

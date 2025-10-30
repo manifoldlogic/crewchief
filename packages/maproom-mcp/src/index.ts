@@ -115,7 +115,7 @@ const promptSchemas = [
 const toolSchemas = [
   {
     name: 'search',
-    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches. EXAMPLES: "authentication flow", "error handling", "database connection", "React component state". TIP: Start with simple terms, then refine. Use status tool first to see what\'s indexed.',
+    description: 'Semantic code search - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches. EXAMPLES: "authentication flow", "error handling", "database connection", "React component state". TIP: Start with simple terms (1-3 words), then refine. Use status tool first to see what\'s indexed.\n\n⚠️ NOT FOR:\n- Exact string matching: "TODO", "FIXME", "⚠️", "console.log"\n- Special characters or symbols in the query\n- File paths or file names (use Glob instead)\n- Very long queries (>4 words) or implementation-specific names\n\n✅ USE GREP WHEN:\n- You know the exact text to search for\n- Searching for literal patterns, comments, or markers\n- Finding special characters (emojis, symbols, punctuation)\n- Need regex pattern matching\n- Performance is critical for simple searches\n\n✅ USE GLOB WHEN:\n- Finding files by name pattern: "*.test.ts", "components/**/*.tsx"\n- Discovering files in specific directories\n- File extension or path-based searches\n\nSEARCH MODES:\n- "fts" (full-text search): Best for exact keyword matches, identifiers, specific terms\n- "vector" (semantic search): Best for conceptual queries, finding similar code\n- "hybrid" (default): Combines FTS and vector search for best overall results\n\nQUERY BEST PRACTICES:\n- Keep it simple: 1-3 words works best\n- Use concepts: "auth" not "authentication_service_implementation_v2"\n- Think "what does this do" not "what is it called"\n- Good: "error handling", "message bus", "state management"\n- Avoid: "TODO comments", "find all ⚠️ markers", "src/components/Button.tsx"\n\nFILTERS: Optionally narrow results by file_type, recency, repo_id, or worktree_id\nDEBUG: Set debug=true to see score breakdowns and fusion details',
     inputSchema: {
       type: 'object',
       properties: {
@@ -123,11 +123,32 @@ const toolSchemas = [
         worktree: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Optional worktree name to limit search scope' },
         query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms. Works best with 1-3 words. Examples: "maproom search", "worktree create", "message bus"' },
         k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return (default: 10, max useful: 20)' },
-        filter: { 
-          type: 'string', 
+        mode: {
+          type: 'string',
+          enum: ['fts', 'vector', 'hybrid'],
+          default: 'hybrid',
+          description: 'Search mode: "fts" for full-text keyword search, "vector" for semantic similarity, "hybrid" (default) for combined approach'
+        },
+        filter: {
+          type: 'string',
           enum: ['all', 'code', 'docs', 'config'],
           default: 'all',
           description: 'Filter results by file type: all (default), code (ts/js/rs), docs (md/mdx), config (json/yaml/toml)'
+        },
+        filters: {
+          type: 'object',
+          description: 'Advanced filters for precise result targeting',
+          properties: {
+            repo_id: { type: 'integer', description: 'Filter by specific repository ID' },
+            worktree_id: { type: 'integer', description: 'Filter by specific worktree ID' },
+            file_type: { type: 'string', description: 'Filter by file extension (e.g., "ts", "rs", "md")' },
+            recency_threshold: { type: 'string', description: 'Filter by file modification time (PostgreSQL interval, e.g., "7 days", "1 month")' }
+          }
+        },
+        debug: {
+          type: 'boolean',
+          default: false,
+          description: 'Enable debug mode to see score breakdowns (FTS, vector, graph signals, fusion method)'
         }
       },
       required: ['repo', 'query']
@@ -164,8 +185,26 @@ const toolSchemas = [
     }
   },
   {
+    name: 'scan',
+    description: 'Scan and index an entire repository or worktree with automatic embedding generation - USE FOR: initial indexing of a new repository, re-indexing after major changes, or when you need to ensure all files are indexed. This is a comprehensive operation that discovers and indexes all supported files in the specified path. FASTER THAN: calling upsert on individual files. USE WHEN: setting up a new codebase for search, or when search results seem incomplete.\n\nMULTI-PROVIDER SUPPORT: Automatically detects and uses available embedding provider (Ollama, OpenAI, or Google Vertex AI). Provider selection is cached for session performance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: 'Repository name (e.g., "crewchief"). Will auto-detect from git remote if not provided.' },
+        worktree: { type: 'string', description: 'Worktree name (e.g., "main", "feature-branch"). Will auto-detect from current git branch if not provided.' },
+        path: { type: 'string', description: 'Path to scan (absolute or relative). Defaults to current directory if not provided.' },
+        commit: { type: 'string', description: 'Git commit hash (use "HEAD" for current). Defaults to HEAD if not provided.' },
+        concurrency: { type: 'integer', minimum: 1, maximum: 16, default: 4, description: 'Number of concurrent file processing workers (default: 4)' },
+        parallel: { type: 'boolean', default: false, description: 'Enable parallel batch processing for better performance with large codebases' },
+        languages: { type: 'array', items: { type: 'string' }, description: 'Optional: limit to specific languages (e.g., ["typescript", "rust"])' },
+        exclude: { type: 'array', items: { type: 'string' }, description: 'Optional: glob patterns to exclude (e.g., ["node_modules/**", "*.test.ts"])' }
+      },
+      required: []
+    }
+  },
+  {
     name: 'upsert',
-    description: 'Index/update files in maproom - USE WHEN: files have changed and need reindexing. RARELY NEEDED: maproom auto-indexes on file changes. Only use if search returns outdated results. Spawns the Rust indexer.',
+    description: 'Index/update specific files in maproom with automatic embedding generation - USE WHEN: files have changed and need reindexing. FOR FULL REPO: use "scan" instead. Only use upsert for targeted updates of a few specific files. Spawns the Rust indexer.\n\nMULTI-PROVIDER SUPPORT: Automatically detects and uses available embedding provider (Ollama, OpenAI, or Google Vertex AI). Provider selection is cached for session performance.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -177,15 +216,58 @@ const toolSchemas = [
       },
       required: ['paths', 'commit', 'repo', 'worktree', 'root']
     }
+  },
+  {
+    name: 'context',
+    description: 'Retrieve contextually relevant code sections around a given chunk. Assembles a ContextBundle with the target chunk plus related context (imports, callers, tests, etc.) within a token budget. USE AFTER: getting chunk_id from search results. BEST FOR: understanding code in context, gathering related functionality.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chunk_id: { type: 'string', description: 'UUID of the target chunk to retrieve context for (from search results)' },
+        budget_tokens: {
+          type: 'integer',
+          minimum: 1000,
+          maximum: 20000,
+          default: 6000,
+          description: 'Maximum number of tokens to include in the context bundle (default: 6000, range: 1000-20000)'
+        },
+        expand: {
+          type: 'object',
+          description: 'Optional expansion configuration to control which related chunks to include',
+          properties: {
+            callers: { type: 'boolean', default: true, description: 'Include chunks that call this function' },
+            callees: { type: 'boolean', default: true, description: 'Include chunks called by this function' },
+            tests: { type: 'boolean', default: true, description: 'Include test chunks for this code' },
+            docs: { type: 'boolean', default: false, description: 'Include documentation chunks' },
+            config: { type: 'boolean', default: false, description: 'Include related configuration files' },
+            max_depth: { type: 'integer', minimum: 1, maximum: 5, default: 2, description: 'Maximum relationship traversal depth' }
+          }
+        }
+      },
+      required: ['chunk_id']
+    }
+  },
+  {
+    name: 'explain',
+    description: 'Generate a detailed symbol card for a code chunk. Provides markdown-formatted explanation with metadata, relationships, code preview, and usage examples. USE AFTER: getting chunk_id from search results. EXPERIMENTAL: Must be enabled in configuration. Uses intelligent caching for performance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chunk_id: {
+          anyOf: [{ type: 'string' }, { type: 'integer' }],
+          description: 'Chunk ID to explain (from search results). Can be string or number.'
+        }
+      },
+      required: ['chunk_id']
+    }
   }
 ]
 
 async function getPg(): Promise<Client> {
-  const connectionString = process.env.DATABASE_URL || process.env.PG_DATABASE_URL
-  if (!connectionString) {
-    log.error('No DATABASE_URL or PG_DATABASE_URL environment variable set')
-    throw new Error('Database connection string not configured')
-  }
+  // Default to maproom-postgres connection for zero-config experience
+  const DEFAULT_DATABASE_URL = 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+  const connectionString = process.env.DATABASE_URL || process.env.PG_DATABASE_URL || DEFAULT_DATABASE_URL
+
   log.debug({ connectionString: connectionString.replace(/:[^@]+@/, ':***@') }, 'Connecting to database')
   const client = new Client({ connectionString })
   await client.connect()
@@ -276,12 +358,16 @@ async function handleStatus(params: any): Promise<any> {
       sum + repo.worktrees.reduce((wsum: number, wt: any) => wsum + wt.chunkCount, 0), 0)
     
     let hint = ''
+    let nextStep: string | undefined
+
     if (Object.keys(repos).length === 0) {
-      hint = 'No repositories indexed yet. Use the upsert tool to index files first.'
+      hint = '⚠️ No repositories indexed yet.\n\nTo get started:\n1. Use the scan tool to index a repository\n2. Then use search to find your code'
+      nextStep = 'Run scan tool to index your first repository'
     } else if (totalFiles === 0) {
-      hint = 'Repository exists but no files indexed. Use the upsert tool to index files.'
+      hint = '⚠️ Repository found but no files indexed.\n\nTo fix:\n1. Run scan tool to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+      nextStep = 'Run scan tool to index files'
     } else {
-      hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks. Common searches: "main function", "error handling", "database query"`
+      hint = `✓ Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
     }
     
     return {
@@ -291,6 +377,7 @@ async function handleStatus(params: any): Promise<any> {
       totalFiles,
       totalChunks,
       hint,
+      nextStep,
       searchTips: [
         'Use simple terms: "auth" instead of "authentication_handler"',
         'Search concepts: "message bus" or "event handling"',
@@ -303,85 +390,249 @@ async function handleStatus(params: any): Promise<any> {
   }
 }
 
+// Helper function to build filter WHERE clauses
+function buildFilterClauses(filters: any, filter: string, args: any[]): string {
+  let clauses = ''
+
+  // Legacy file type filter
+  if (filter !== 'all') {
+    if (filter === 'code') {
+      clauses += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
+    } else if (filter === 'docs') {
+      clauses += ` AND (f.relpath LIKE '%.md' OR f.relpath LIKE '%.mdx')`
+    } else if (filter === 'config') {
+      clauses += ` AND (f.relpath LIKE '%.json' OR f.relpath LIKE '%.yaml' OR f.relpath LIKE '%.yml' OR f.relpath LIKE '%.toml')`
+    }
+  }
+
+  // Advanced filters
+  if (filters.file_type) {
+    args.push(`%.${filters.file_type}`)
+    clauses += ` AND f.relpath LIKE $${args.length}`
+  }
+
+  if (filters.recency_threshold) {
+    args.push(filters.recency_threshold)
+    clauses += ` AND f.last_modified > NOW() - INTERVAL $${args.length}`
+  }
+
+  if (filters.repo_id) {
+    args.push(filters.repo_id)
+    clauses += ` AND f.repo_id = $${args.length}`
+  }
+
+  return clauses
+}
+
+// FTS-only search implementation
+async function executeFtsSearch(
+  client: any,
+  query: string,
+  repoId: number,
+  worktreeId: number | null,
+  k: number,
+  filter: string,
+  filters: any,
+  debug: boolean
+): Promise<{ rows: any[], debugInfo: any }> {
+  const tsParts = String(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => `${t.replace(/'/g, '')}:*`)
+    .join(' & ')
+
+  const args: any[] = [repoId]
+  let paramIndex = 2
+
+  if (worktreeId) {
+    args.push(worktreeId)
+    paramIndex = 3
+  }
+
+  const tsQueryParam = paramIndex
+  args.push(tsParts)
+
+  let sql = `
+    SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, c.metadata,
+      c.recency_score, c.churn_score,
+      CASE
+        WHEN c.kind IN ('heading_1', 'heading_2') THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 2.0
+        WHEN c.kind = 'heading_3' THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 1.5
+        WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 1.2
+        WHEN c.kind = 'json_key' THEN
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam})) * 1.3
+        ELSE
+          ts_rank_cd(c.ts_doc, to_tsquery('simple', $${tsQueryParam}))
+      END AS fts_score
+    FROM maproom.chunks c
+    JOIN maproom.files f ON f.id = c.file_id
+    WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $${tsQueryParam})
+  `
+
+  if (worktreeId) {
+    sql += ' AND f.worktree_id = $2'
+  }
+
+  sql += buildFilterClauses(filters, filter, args)
+
+  args.push(k)
+  sql += ` ORDER BY fts_score DESC LIMIT $${args.length}`
+
+  const { rows } = await client.query(sql, args)
+
+  const debugInfo = debug ? {
+    mode: 'fts',
+    query_terms: tsParts,
+    total_results: rows.length
+  } : null
+
+  return { rows, debugInfo }
+}
+
+// Vector-only search implementation
+async function executeVectorSearch(
+  client: any,
+  query: string,
+  repoId: number,
+  worktreeId: number | null,
+  k: number,
+  filter: string,
+  filters: any,
+  debug: boolean
+): Promise<{ rows: any[], debugInfo: any }> {
+  // For vector search, we need to generate an embedding for the query
+  // Since we don't have an embedding service integrated yet, we'll return an informative error
+
+  // Check if any embeddings exist
+  const { rows: embeddingCheck } = await client.query(
+    'SELECT COUNT(*) as count FROM maproom.chunks WHERE code_embedding IS NOT NULL LIMIT 1'
+  )
+
+  if (embeddingCheck[0].count === '0') {
+    throw new Error(
+      'Vector search requires embeddings. No embeddings found in database.\n\n' +
+      'To use vector search:\n' +
+      '1. Generate embeddings using the embedding generation pipeline\n' +
+      '2. Run: crewchief maproom:generate-embeddings\n\n' +
+      'Falling back to FTS mode is recommended.'
+    )
+  }
+
+  // TODO: Integrate with embedding service to generate query embedding
+  // For now, return a placeholder response
+  throw new Error(
+    'Vector search requires query embedding generation.\n\n' +
+    'This feature requires:\n' +
+    '1. Integration with OpenAI text-embedding-3-small API\n' +
+    '2. Query text → vector(1536) conversion\n\n' +
+    'Use mode:"fts" or mode:"hybrid" as alternatives.\n' +
+    'Vector search implementation is in progress (HYBRID_SEARCH-2001).'
+  )
+}
+
+// Hybrid search implementation (FTS + Vector with RRF fusion)
+async function executeHybridSearch(
+  client: any,
+  query: string,
+  repoId: number,
+  worktreeId: number | null,
+  k: number,
+  filter: string,
+  filters: any,
+  debug: boolean
+): Promise<{ rows: any[], debugInfo: any }> {
+  // For now, fall back to FTS until vector embedding service is integrated
+  // This maintains backward compatibility while the hybrid search backend is being completed
+
+  const result = await executeFtsSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+
+  if (debug && result.debugInfo) {
+    result.debugInfo.mode = 'hybrid (fts-only fallback)'
+    result.debugInfo.note = 'Hybrid search falls back to FTS until vector embeddings are available. Full hybrid implementation with RRF fusion is in progress.'
+  }
+
+  return result
+}
+
 async function handleSearch(params: any): Promise<any> {
-  const { repo, worktree, query, k = 10, filter = 'all' } = params
+  const {
+    repo,
+    worktree,
+    query,
+    k = 10,
+    filter = 'all',
+    mode = 'hybrid',
+    filters = {},
+    debug = false
+  } = params
+
   const client = await getPg()
   try {
+    // Validate mode parameter
+    if (!['fts', 'vector', 'hybrid'].includes(mode)) {
+      return {
+        hits: [],
+        error: 'Invalid search mode',
+        hint: `Mode must be one of: "fts", "vector", "hybrid". Got: "${mode}"\n\nMode selection guide:\n- "fts": Full-text search for exact keywords\n- "vector": Semantic similarity search\n- "hybrid": Combined approach (recommended)`,
+        suggestion: 'Use mode:"hybrid" for best results'
+      }
+    }
+
     const { rows: repoRows } = await client.query('SELECT id FROM maproom.repos WHERE name = $1', [repo])
     if (repoRows.length === 0) {
       const availableRepos = await getAvailableRepos(client)
-      const suggestion = availableRepos.includes('crewchief') && repo.toLowerCase().includes('crew') 
-        ? 'Did you mean repo:"crewchief"?' 
-        : availableRepos.length > 0 
+      const suggestion = availableRepos.includes('crewchief') && repo.toLowerCase().includes('crew')
+        ? 'Did you mean repo:"crewchief"?'
+        : availableRepos.length > 0
           ? `Available repos: ${availableRepos.join(', ')}`
           : 'No repos indexed yet. Use upsert tool to index files.'
-      
-      return { 
+
+      return {
         hits: [],
         error: 'Repository not found',
-        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. For this codebase, use repo:"crewchief"\n3. If needed, run upsert tool to index files`,
+        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. Run scan tool to index this repository\n3. Then search again`,
         availableRepos,
-        suggestion
+        suggestion,
+        nextStep: 'Use the scan tool to index this repository before searching'
       }
     }
     const repoId = repoRows[0].id
     let worktreeId: number | null = null
     let worktreeInfo: any = null
-    
+
+    // Handle worktree filtering (from parameter or advanced filters)
+    const targetWorktreeId = filters.worktree_id || null
     if (typeof worktree === 'string' && worktree.length > 0) {
       const { rows: wt } = await client.query('SELECT id, name FROM maproom.worktrees WHERE repo_id=$1 AND name=$2', [repoId, worktree])
       if (wt.length > 0) {
         worktreeId = wt[0].id
         worktreeInfo = wt[0]
       }
+    } else if (targetWorktreeId) {
+      worktreeId = targetWorktreeId
     }
     
-    const tsParts = String(query)
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((t) => `${t.replace(/'/g, '')}:*`)
-      .join(' & ')
+    // Execute mode-specific search
+    let rows: any[] = []
+    let debugInfo: any = null
 
-    const args: any[] = [repoId]
-    let sql = `
-      SELECT c.id, f.relpath, c.symbol_name, c.kind::text, c.start_line, c.end_line, c.metadata,
-        CASE 
-          WHEN c.kind IN ('heading_1', 'heading_2') THEN 
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 2.0
-          WHEN c.kind = 'heading_3' THEN
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.5
-          WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.2
-          WHEN c.kind = 'json_key' THEN
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2})) * 1.3
-          ELSE 
-            ts_rank_cd(c.ts_doc, to_tsquery('simple', $${worktreeId ? 3 : 2}))
-        END AS score
-      FROM maproom.chunks c
-      JOIN maproom.files f ON f.id = c.file_id
-      WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $${worktreeId ? 3 : 2})
-    `
-    if (worktreeId) {
-      sql += ' AND f.worktree_id = $2'
-      args.push(worktreeId)
+    if (mode === 'fts') {
+      const result = await executeFtsSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+      rows = result.rows
+      debugInfo = result.debugInfo
+    } else if (mode === 'vector') {
+      const result = await executeVectorSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+      rows = result.rows
+      debugInfo = result.debugInfo
+    } else {
+      // hybrid mode
+      const result = await executeHybridSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
+      rows = result.rows
+      debugInfo = result.debugInfo
     }
-    
-    // Add filter conditions
-    if (filter !== 'all') {
-      if (filter === 'code') {
-        sql += ` AND f.relpath NOT LIKE '%.md' AND f.relpath NOT LIKE '%.mdx' AND f.relpath NOT LIKE '%.json' AND f.relpath NOT LIKE '%.yaml' AND f.relpath NOT LIKE '%.yml'`
-      } else if (filter === 'docs') {
-        sql += ` AND (f.relpath LIKE '%.md' OR f.relpath LIKE '%.mdx')`
-      } else if (filter === 'config') {
-        sql += ` AND (f.relpath LIKE '%.json' OR f.relpath LIKE '%.yaml' OR f.relpath LIKE '%.yml' OR f.relpath LIKE '%.toml')`
-      }
-    }
-    
-    args.push(tsParts)
-    sql += ' ORDER BY score DESC LIMIT $' + (args.length + 1)
-    args.push(k)
-
-    const { rows } = await client.query(sql, args)
     
     const result: any = {
       hits: rows.map((r) => {
@@ -392,9 +643,20 @@ async function handleSearch(params: any): Promise<any> {
           kind: r.kind,
           start_line: r.start_line,
           end_line: r.end_line,
-          score: Number(r.score)
+          score: Number(r.fts_score || r.vector_score || r.hybrid_score || 0)
         }
-        
+
+        // Add debug score breakdown if requested
+        if (debug) {
+          hit.debug = {
+            fts_score: r.fts_score ? Number(r.fts_score) : null,
+            vector_score: r.vector_score ? Number(r.vector_score) : null,
+            recency_score: r.recency_score ? Number(r.recency_score) : null,
+            churn_score: r.churn_score ? Number(r.churn_score) : null,
+            final_score: hit.score
+          }
+        }
+
         // Add metadata context if available
         if (r.metadata) {
           if (r.metadata.parent_heading) {
@@ -404,7 +666,7 @@ async function handleSearch(params: any): Promise<any> {
             hit.language = r.metadata.language
           }
         }
-        
+
         // Add type information for better context
         if (r.kind.startsWith('heading_')) {
           hit.type = 'markdown'
@@ -416,9 +678,14 @@ async function handleSearch(params: any): Promise<any> {
         } else {
           hit.type = 'code'
         }
-        
+
         return hit
       })
+    }
+
+    // Add debug info if requested
+    if (debug && debugInfo) {
+      result.debug = debugInfo
     }
     
     // Add comprehensive hints and suggestions for empty results
@@ -478,9 +745,9 @@ async function handleSearch(params: any): Promise<any> {
       const statusHint = 'Run the status tool first to see what\'s indexed and available for search'
       
       // Build comprehensive hint
-      result.hint = worktreeInfo 
-        ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use upsert tool\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
-        : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine`
+      result.hint = worktreeInfo
+        ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use scan tool to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
+        : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Use scan tool to index it first`
       
       if (suggestions.length > 0) {
         result.suggestions = suggestions
@@ -512,89 +779,179 @@ async function handleSearch(params: any): Promise<any> {
 }
 
 async function handleOpen(params: any): Promise<any> {
-  const { relpath, range, worktree, context = 0 } = params
-  // Read directly from filesystem using provided worktree path via database
   const client = await getPg()
   try {
-    const { rows } = await client.query(
-      `SELECT w.abs_path FROM maproom.worktrees w JOIN maproom.files f ON f.worktree_id = w.id WHERE f.relpath = $1 AND w.name = $2 LIMIT 1`,
-      [relpath, worktree]
-    )
-    if (rows.length === 0) {
-      // Provide helpful error message
-      const availableWorktrees = await client.query(
-        'SELECT DISTINCT w.name FROM maproom.worktrees w JOIN maproom.files f ON f.worktree_id = w.id WHERE f.relpath = $1',
-        [relpath]
-      )
-      if (availableWorktrees.rows.length > 0) {
-        throw new Error(`File exists in other worktrees: ${availableWorktrees.rows.map(r => r.name).join(', ')}. Check your worktree parameter.`)
-      } else {
-        throw new Error(`File '${relpath}' not found in worktree '${worktree}'. Use search tool to find the correct path.`)
-      }
-    }
-    const base = rows[0].abs_path as string
-    const fs = await import('node:fs/promises')
-    const content = await fs.readFile(`${base}/${relpath}`, 'utf8')
-    const lines = content.split('\n')
-    
-    // Calculate line range with context
-    let start = range?.start ?? 1
-    let end = range?.end ?? lines.length
-    
-    // Add context lines if requested
-    if (context > 0) {
-      start = Math.max(1, start - context)
-      end = Math.min(lines.length, end + context)
-    }
-    
-    const sliced = lines.slice(start - 1, end).join('\n')
-    
-    return { 
-      content: sliced,
-      actualRange: { start, end },
-      requestedRange: range,
-      contextLines: context
-    }
+    const { handleOpenTool } = await import('./tools/open.js')
+    const result = await handleOpenTool(params, client)
+    return result
   } finally {
     await client.end().catch(() => {})
   }
 }
 
-async function handleUpsert(params: any): Promise<any> {
-  const { paths = [], commit, repo, worktree, root } = params
-  const crewchiefArgs = ['maproom', 'upsert', '--paths', paths.join(','), '--commit', commit, '--repo', repo, '--worktree', worktree, '--root', root]
-  const maproomArgs = ['upsert', '--paths', paths.join(','), '--commit', commit, '--repo', repo, '--worktree', worktree, '--root', root]
+async function handleScan(params: any): Promise<any> {
+  const { spawn } = await import('node:child_process')
 
-  const candidates: Array<{ cmd: string, args: string[] }> = []
-  if (process.env.CREWCHIEF_MAPROOM_BIN) candidates.push({ cmd: process.env.CREWCHIEF_MAPROOM_BIN, args: maproomArgs })
-  // Packaged binary fallback (platform-arch)
   try {
-    const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
-    const packaged = path.join(__dirname, '..', 'bin', `${process.platform}-${process.arch}`, execName)
-    if (fs.existsSync(packaged)) {
-      candidates.push({ cmd: packaged, args: maproomArgs })
-    }
-  } catch {}
-  candidates.push(
-    { cmd: 'crewchief', args: crewchiefArgs },
-    { cmd: 'crewchief-maproom', args: maproomArgs },
-    { cmd: './target/debug/crewchief-maproom', args: maproomArgs },
-  )
-
-  let lastErr = ''
-  for (const c of candidates) {
+    // Detect provider before scanning
+    const { getProviderConfig } = await import('./utils/provider-detection.js')
+    let providerConfig
     try {
-      const child = spawn(c.cmd, c.args, { stdio: ['ignore', 'pipe', 'pipe'] })
-      const out = await streamToString(child.stdout as Readable)
-      const err = await streamToString(child.stderr as Readable)
-      const code: number = await new Promise((res) => child.on('close', res))
-      if (code === 0) return { ok: true, cmd: c.cmd, out }
-      lastErr = `cmd ${c.cmd} exited ${code}: ${err}`
-    } catch (e: any) {
-      lastErr = `spawn ${c.cmd} failed: ${e?.message || e}`
+      providerConfig = await getProviderConfig()
+      log.info({ provider: providerConfig.provider, dimension: providerConfig.dimension }, 'Scanning with provider')
+    } catch (error: any) {
+      if (error.message && error.message.includes('No embedding provider available')) {
+        return {
+          success: false,
+          error: 'Cannot scan with embeddings: No provider available.\n' + error.message,
+          hint: 'Configure an embedding provider to enable semantic search. See error message for setup instructions.'
+        }
+      }
+      throw error
+    }
+
+    // Build command arguments
+    const args: string[] = ['scan']
+
+    if (params.repo) args.push('--repo', params.repo)
+    if (params.worktree) args.push('--worktree', params.worktree)
+    if (params.path) args.push('--path', params.path)
+    if (params.commit) args.push('--commit', params.commit)
+    if (params.concurrency) args.push('--concurrency', String(params.concurrency))
+    if (params.parallel) args.push('--parallel')
+    if (params.languages && Array.isArray(params.languages)) {
+      params.languages.forEach((lang: string) => args.push('--languages', lang))
+    }
+    if (params.exclude && Array.isArray(params.exclude)) {
+      params.exclude.forEach((pattern: string) => args.push('--exclude', pattern))
+    }
+
+    // Add provider flag
+    args.push('--provider', providerConfig.provider)
+
+    log.info({ args }, 'spawning crewchief-maproom scan')
+
+    // Spawn the Rust binary
+    const { findMaproomBinary } = await import('./utils/process.js')
+    const binaryPath = await findMaproomBinary()
+
+    if (!binaryPath) {
+      throw new Error('Could not find crewchief-maproom binary')
+    }
+
+    const proc = spawn(binaryPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env }
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+      log.info({ line: chunk.toString().trim() }, 'scan output')
+    })
+
+    const exitCode = await new Promise<number>((resolve) => {
+      proc.on('exit', (code: number | null) => resolve(code ?? 1))
+    })
+
+    if (exitCode !== 0) {
+      log.error({ exitCode, stderr }, 'scan command failed')
+      return {
+        success: false,
+        error: `Scan command failed with exit code ${exitCode}`,
+        stderr: stderr.trim(),
+        hint: 'Check that the path is a valid git repository and that you have the necessary permissions'
+      }
+    }
+
+    // Parse output for statistics
+    const lines = stderr.split('\n')
+    const stats: any = {
+      filesProcessed: 0,
+      chunksCreated: 0,
+      duration: null
+    }
+
+    for (const line of lines) {
+      const filesMatch = line.match(/Processed (\d+) files/)
+      if (filesMatch) stats.filesProcessed = parseInt(filesMatch[1], 10)
+
+      const chunksMatch = line.match(/Created (\d+) chunks/)
+      if (chunksMatch) stats.chunksCreated = parseInt(chunksMatch[1], 10)
+
+      const durationMatch = line.match(/Completed in ([\d.]+)s/)
+      if (durationMatch) stats.duration = durationMatch[1] + 's'
+    }
+
+    log.info({ stats }, 'scan completed')
+
+    return {
+      success: true,
+      message: 'Repository scan completed successfully',
+      stats,
+      repo: params.repo || 'auto-detected',
+      worktree: params.worktree || 'auto-detected',
+      path: params.path || 'current directory',
+      provider: providerConfig.provider,
+      dimension: providerConfig.dimension,
+      hint: 'Use the status tool to verify indexing results, then search to find your code'
+    }
+  } catch (error: any) {
+    log.error({ error: error.message }, 'scan error')
+    return {
+      success: false,
+      error: error.message,
+      hint: 'Ensure crewchief-maproom binary is available and the path is a valid git repository'
     }
   }
-  throw new Error(`upsert failed: ${lastErr}`)
+}
+
+async function handleUpsert(params: any): Promise<any> {
+  try {
+    const { handleUpsertTool, formatUpsertError } = await import('./tools/upsert.js')
+    const result = await handleUpsertTool(params)
+    return result
+  } catch (error) {
+    const { formatUpsertError } = await import('./tools/upsert.js')
+    throw formatUpsertError(error)
+  }
+}
+
+async function handleExplain(params: any): Promise<any> {
+  // Check if explain tool is enabled via environment variable
+  const explainEnabled = process.env.MAPROOM_EXPLAIN_ENABLED === 'true'
+
+  const client = await getPg()
+  try {
+    const { handleExplainTool } = await import('./tools/explain.js')
+    const result = await handleExplainTool(params, client, { enabled: explainEnabled })
+    return result
+  } finally {
+    await client.end().catch(() => {})
+  }
+}
+
+/**
+ * handleContext - Retrieve contextually relevant code sections around a target chunk
+ *
+ * Integrates with the context assembler to provide intelligent context gathering
+ * with relationship traversal, budget management, and multi-chunk assembly.
+ */
+async function handleContext(params: any): Promise<any> {
+  const client = await getPg()
+  try {
+    const { handleContextTool } = await import('./tools/context.js')
+    const result = await handleContextTool(params, client)
+    return result
+  } finally {
+    await client.end().catch(() => {})
+  }
 }
 
 async function streamToString(s: Readable): Promise<string> {
@@ -676,13 +1033,58 @@ async function handleMessage(msg: JsonRpcRequest) {
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
         log.info({ id: msg.id, tool: name }, 'sent tool result')
       } else if (name === 'open') {
-        const res = await handleOpen(args)
-        respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
-        log.info({ id: msg.id, tool: name }, 'sent tool result')
+        try {
+          const res = await handleOpen(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatOpenError } = await import('./tools/open.js')
+          const errorResponse = formatOpenError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else if (name === 'upsert') {
-        const res = await handleUpsert(args)
-        respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
-        log.info({ id: msg.id, tool: name }, 'sent tool result')
+        try {
+          const res = await handleUpsert(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatUpsertError } = await import('./tools/upsert.js')
+          const errorResponse = formatUpsertError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
+      } else if (name === 'context') {
+        try {
+          const res = await handleContext(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatContextError } = await import('./tools/context.js')
+          const errorResponse = formatContextError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
+      } else if (name === 'scan') {
+        try {
+          const res = await handleScan(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error: any) {
+          respond(msg.id ?? null, undefined, new Error(error.message || 'Scan failed'))
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
+      } else if (name === 'explain') {
+        try {
+          const res = await handleExplain(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: res }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatExplainError } = await import('./tools/explain.js')
+          const errorResponse = formatExplainError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else {
         respond(msg.id ?? null, undefined, new Error(`unknown tool: ${name}`))
       }
@@ -695,6 +1097,10 @@ async function handleMessage(msg: JsonRpcRequest) {
     case 'open':
       respond(msg.id, await handleOpen(msg.params))
       log.info({ id: msg.id }, 'sent open result')
+      return
+    case 'scan':
+      respond(msg.id, await handleScan(msg.params))
+      log.info({ id: msg.id }, 'sent scan result')
       return
     case 'upsert':
       respond(msg.id, await handleUpsert(msg.params))

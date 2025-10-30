@@ -1,0 +1,33 @@
+{
+  "name": "user-management-system",
+  "version": "1.0.0",
+  "description": "A sample user management system for testing",
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "users_db",
+    "pool": {
+      "min": 2,
+      "max": 10
+    }
+  },
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origins": ["http://localhost:3000"]
+    }
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "outputs": ["stdout", "file"]
+  },
+  "features": {
+    "email_validation": true,
+    "user_creation": true,
+    "user_deletion": true,
+    "user_search": true
+  }
+}

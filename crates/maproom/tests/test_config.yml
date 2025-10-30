@@ -1,0 +1,164 @@
+# Test Configuration for Embedding Infrastructure Tests
+# This file configures test behavior for CI and local development
+
+# Embedding Service Configuration
+embedding:
+  provider: openai
+  model: text-embedding-3-small
+  dimension: 1536
+  batch_size: 10  # Smaller batch size for tests
+
+  # Cache configuration for tests
+  cache:
+    max_entries: 100
+    ttl_seconds: 3600
+    enable_metrics: true
+
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    initial_delay_ms: 1000
+    max_delay_ms: 10000
+
+# Database Configuration for Tests
+database:
+  # Use DATABASE_URL environment variable
+  # Example: postgresql://localhost:5432/maproom_test
+  migration_path: ./migrations
+
+  # Vector index configuration
+  vector_index:
+    lists: 200  # IVF-Flat lists parameter
+    probes: 10  # Runtime probes parameter
+
+# Test Execution Configuration
+test_settings:
+  # Skip tests that require API key if not available
+  skip_without_api_key: true
+
+  # Skip tests that require database if not available
+  skip_without_database: true
+
+  # Performance test thresholds
+  performance:
+    max_p95_latency_ms: 100
+    min_cache_hit_rate: 0.80
+    max_cost_per_1k_embeddings_usd: 0.01
+
+  # Integration test settings
+  integration:
+    sample_size: 20  # Number of chunks to process in tests
+    max_cost_usd: 0.10  # Maximum cost for integration tests
+    batch_delay_ms: 200  # Delay between batches to avoid rate limits
+
+# CI Environment Configuration
+ci:
+  # Use mocked API client for most tests in CI
+  use_mock_client: true
+
+  # Docker Compose services for CI
+  services:
+    postgres:
+      image: pgvector/pgvector:pg16
+      port: 5432
+      database: maproom_test
+      user: test_user
+      password: test_password
+
+  # Test timeout settings
+  timeouts:
+    unit_test_seconds: 30
+    integration_test_seconds: 300
+    performance_test_seconds: 600
+
+# Test Data Configuration
+fixtures:
+  embedding_test_data: ./tests/fixtures/embedding_test_data.json
+  realistic_queries: ./tests/fixtures/realistic_queries.txt
+
+  # Generate test embeddings (for mocking)
+  mock_embeddings:
+    dimension: 1536
+    use_deterministic: true  # Same input always produces same output
+    seed: 42
+
+# Logging Configuration for Tests
+logging:
+  level: info  # debug, info, warn, error
+  format: compact  # compact, pretty, json
+  test_output: true  # Show logs during test execution
+
+# Cost Tracking Configuration
+cost_tracking:
+  # Track costs even in test environment
+  enable: true
+
+  # Alert if costs exceed threshold
+  warning_threshold_usd: 0.05
+  error_threshold_usd: 0.10
+
+  # Pricing (text-embedding-3-small)
+  price_per_million_tokens: 0.02
+
+# Cache Testing Configuration
+cache_testing:
+  # Test with realistic query patterns
+  realistic_patterns:
+    - name: "development_workflow"
+      description: "Developer working on a feature"
+      operations: 100
+      unique_queries: 10
+      expected_hit_rate: 0.90
+
+    - name: "code_review"
+      description: "Reviewing multiple files"
+      operations: 50
+      unique_queries: 20
+      expected_hit_rate: 0.60
+
+    - name: "exploration"
+      description: "Exploring unfamiliar codebase"
+      operations: 100
+      unique_queries: 80
+      expected_hit_rate: 0.20
+
+  # LRU eviction testing
+  eviction_tests:
+    - cache_size: 10
+      operations: 50
+      expected_evictions: 40
+
+    - cache_size: 100
+      operations: 200
+      expected_evictions: 100
+
+# Vector Database Testing Configuration
+vector_db_testing:
+  # Sample queries for performance testing
+  num_queries: 20
+
+  # Different probe values to test
+  probe_values: [1, 5, 10, 20]
+
+  # Query result limits
+  result_limit: 20
+
+  # Expected performance
+  expected_results_per_query: 10
+
+  # Index verification
+  verify_index_usage: true
+  verify_statistics: true
+
+# Documentation and Reporting
+reporting:
+  # Generate test reports
+  generate_report: true
+  report_format: markdown
+  report_path: ./test-results
+
+  # Include performance metrics
+  include_metrics: true
+
+  # Include cost analysis
+  include_costs: true

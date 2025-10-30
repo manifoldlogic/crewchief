@@ -1,0 +1,25 @@
+# docker-compose.override.yml
+#
+# Development override - allows building Maproom MCP from source
+#
+# This file is for local development only and is NOT published to npm.
+# Docker Compose automatically merges this with docker-compose.yml when
+# both files are present in the same directory.
+#
+# Usage:
+#   Development (with override):
+#     docker-compose build        # Builds from source using this override
+#     docker-compose up -d        # Uses locally built image
+#
+#   Production (no override):
+#     docker-compose up -d        # Pulls from Docker Hub (uses image: directive)
+#
+# See: https://docs.docker.com/compose/extends/
+
+services:
+  maproom-mcp:
+    # Override image with build configuration for local development
+    build:
+      context: ../../..
+      dockerfile: packages/maproom-mcp/config/Dockerfile.combined
+    # The image: directive from docker-compose.yml is overridden by build

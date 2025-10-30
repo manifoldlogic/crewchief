@@ -1,0 +1,206 @@
+# Realistic Query Sequences for Cache Hit Rate Testing
+# This file contains queries that simulate real developer workflows
+# Each section represents a different usage pattern
+
+# Section 1: Development on a feature branch (high locality)
+# Queries repeated as developer iterates on the same files
+src/components/Button.tsx
+src/components/Button.tsx
+src/components/Button.tsx
+src/styles/button.css
+src/components/Button.tsx
+tests/Button.test.tsx
+src/components/Button.tsx
+src/styles/button.css
+
+# Section 2: Code review workflow (scanning multiple files)
+src/api/users.ts
+src/api/auth.ts
+src/models/User.ts
+src/utils/validation.ts
+src/api/users.ts
+tests/api/users.test.ts
+src/api/users.ts
+
+# Section 3: Documentation updates (low churn, high repeat access)
+README.md
+docs/getting-started.md
+README.md
+docs/api-reference.md
+README.md
+docs/architecture.md
+README.md
+
+# Section 4: Refactoring workflow (accessing related files)
+src/utils/helpers.ts
+src/utils/string-utils.ts
+src/utils/array-utils.ts
+src/utils/helpers.ts
+src/utils/date-utils.ts
+src/utils/helpers.ts
+src/utils/string-utils.ts
+
+# Section 5: Testing workflow (alternating between tests and implementation)
+src/services/EmailService.ts
+tests/services/EmailService.test.ts
+src/services/EmailService.ts
+tests/services/EmailService.test.ts
+src/services/EmailService.ts
+src/config/email.config.ts
+tests/services/EmailService.test.ts
+
+# Section 6: Debugging workflow (focused on specific functions)
+src/lib/parser.ts
+src/lib/parser.ts
+src/lib/tokenizer.ts
+src/lib/parser.ts
+src/lib/ast.ts
+src/lib/parser.ts
+src/lib/tokenizer.ts
+
+# Section 7: New feature development (exploring codebase)
+src/features/payments/index.ts
+src/features/payments/PaymentProcessor.ts
+src/features/payments/PaymentGateway.ts
+src/models/Payment.ts
+src/features/payments/PaymentProcessor.ts
+src/utils/currency.ts
+src/features/payments/PaymentProcessor.ts
+
+# Section 8: CI/CD pipeline inspection (config files)
+.github/workflows/test.yml
+.github/workflows/deploy.yml
+.github/workflows/test.yml
+package.json
+.github/workflows/test.yml
+tsconfig.json
+
+# Section 9: Working on multiple related components
+src/components/Form/Input.tsx
+src/components/Form/Select.tsx
+src/components/Form/Button.tsx
+src/components/Form/Input.tsx
+src/components/Form/Checkbox.tsx
+src/components/Form/Input.tsx
+src/components/Form/validation.ts
+
+# Section 10: Hot path optimization (same core files repeatedly)
+src/core/engine.ts
+src/core/engine.ts
+src/core/engine.ts
+src/core/performance.ts
+src/core/engine.ts
+src/core/engine.ts
+src/core/metrics.ts
+src/core/engine.ts
+
+# Additional common queries to reach 1000 operations
+# These simulate general codebase navigation
+
+src/index.ts
+src/app.ts
+src/config/index.ts
+src/types/global.d.ts
+src/index.ts
+src/middleware/auth.ts
+src/middleware/logging.ts
+src/routes/index.ts
+src/index.ts
+src/app.ts
+
+# Database and migration files
+src/db/connection.ts
+src/db/migrations/001_init.sql
+src/db/models/index.ts
+src/db/connection.ts
+src/db/queries.ts
+src/db/connection.ts
+
+# Utility functions (frequently referenced)
+src/utils/logger.ts
+src/utils/config.ts
+src/utils/errors.ts
+src/utils/logger.ts
+src/utils/http.ts
+src/utils/logger.ts
+src/utils/validation.ts
+
+# API endpoints (REST API development)
+src/api/v1/users/index.ts
+src/api/v1/users/controller.ts
+src/api/v1/users/routes.ts
+src/api/v1/users/index.ts
+src/api/v1/users/service.ts
+src/api/v1/users/controller.ts
+
+# Frontend components (React/Vue development)
+src/components/Layout/Header.tsx
+src/components/Layout/Footer.tsx
+src/components/Layout/Sidebar.tsx
+src/components/Layout/Header.tsx
+src/components/common/Button.tsx
+src/components/common/Input.tsx
+src/components/Layout/Header.tsx
+
+# State management (Redux/Vuex patterns)
+src/store/actions.ts
+src/store/reducers.ts
+src/store/selectors.ts
+src/store/actions.ts
+src/store/middleware.ts
+src/store/actions.ts
+
+# Test utilities and fixtures
+tests/helpers/setup.ts
+tests/fixtures/users.json
+tests/helpers/mocks.ts
+tests/helpers/setup.ts
+tests/fixtures/config.json
+tests/helpers/setup.ts
+
+# Configuration and environment
+.env.example
+config/development.json
+config/production.json
+.env.example
+config/test.json
+.env.example
+
+# Build and deployment scripts
+scripts/build.sh
+scripts/deploy.sh
+scripts/test.sh
+scripts/build.sh
+scripts/cleanup.sh
+scripts/build.sh
+
+# Repeat high-frequency files to simulate realistic patterns
+src/index.ts
+src/app.ts
+src/config/index.ts
+src/utils/logger.ts
+README.md
+src/index.ts
+src/app.ts
+src/utils/logger.ts
+package.json
+src/index.ts
+
+# Service layer patterns
+src/services/UserService.ts
+src/services/AuthService.ts
+src/services/PaymentService.ts
+src/services/UserService.ts
+src/services/NotificationService.ts
+src/services/UserService.ts
+
+# Model definitions
+src/models/User.ts
+src/models/Post.ts
+src/models/Comment.ts
+src/models/User.ts
+src/models/Product.ts
+src/models/User.ts
+
+# Continue pattern to reach ~200 unique files with realistic repeat patterns
+# This gives us a good base for 1000+ operations with 80%+ cache hit rate

@@ -1,0 +1,141 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: maproom-postgres
+    environment:
+      POSTGRES_DB: maproom
+      POSTGRES_USER: maproom
+      POSTGRES_PASSWORD: maproom
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - maproom-data:/var/lib/postgresql/data
+      # Note: init.sql mount disabled in dev container due to Docker-in-Docker limitations
+      # Schema will be initialized via migrations or manual SQL execution
+      # - /workspace/packages/maproom-mcp/config/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Note: postgresql.conf mount disabled in dev container due to Docker-in-Docker limitations
+      # Using command-line overrides instead (see command below)
+      # - /workspace/packages/maproom-mcp/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    ports:
+      - "127.0.0.1:5433:5432"  # Bind to localhost only for security
+    command: >
+      postgres
+      -c max_connections=50
+      -c shared_buffers=512MB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c maintenance_io_concurrency=100
+      -c work_mem=16MB
+      -c min_wal_size=512MB
+      -c max_wal_size=2GB
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+    networks:
+      maproom-network:
+        aliases:
+          - maproom-postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maproom -d maproom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: maproom-ollama
+    volumes:
+      - ollama-models:/root/.ollama
+      # Optional: Uncomment if using separate init script
+      # - ./init-ollama.sh:/usr/local/bin/init-ollama.sh:ro
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"  # Bind to localhost only for security
+    networks:
+      - maproom-network
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s  # Allow time for model download
+    restart: unless-stopped
+    # Optional GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "ollama serve &
+      OLLAMA_PID=$$!;
+      echo 'Waiting for Ollama server...';
+      sleep 5;
+      echo 'Pulling nomic-embed-text model...';
+      ollama pull nomic-embed-text;
+      echo 'Model ready!';
+      wait $$OLLAMA_PID"
+
+  # MCP server service - required for stdio proxy connection (line 428 in cli.cjs)
+  maproom-mcp:
+    # Pull pre-built multi-platform image from Docker Hub
+    # Set MAPROOM_VERSION environment variable to pin to specific version:
+    #   MAPROOM_VERSION=1.1.10 (pin to exact version - recommended for production)
+    #   MAPROOM_VERSION=1.1 (pin to minor, get patch updates)
+    #   MAPROOM_VERSION=1 (pin to major, get minor updates)
+    #   Default: latest (always newest release)
+    image: crewchief/maproom-mcp:${MAPROOM_VERSION:-latest}
+    container_name: maproom-mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Note: Ollama dependency removed - only required if EMBEDDING_PROVIDER=ollama
+      # CLI ensures Ollama is started when needed via conditional service startup
+    environment:
+      DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      # Pass through provider from environment, default to ollama for zero-config
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+      EMBEDDING_API_ENDPOINT: ${EMBEDDING_API_ENDPOINT:-http://ollama:11434}
+      # Google Vertex AI configuration (when EMBEDDING_PROVIDER=google)
+      GOOGLE_PROJECT_ID: ${GOOGLE_PROJECT_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      GOOGLE_VERTEX_REGION: ${GOOGLE_VERTEX_REGION:-us-west1}
+      # OpenAI configuration (when EMBEDDING_PROVIDER=openai)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
+      NODE_ENV: production
+    volumes:
+      - maproom-logs:/app/logs
+    networks:
+      - maproom-network
+    stdin_open: true
+    tty: false
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pg_isready -h maproom-postgres -U maproom || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  maproom-data:
+    driver: local
+  ollama-models:
+    driver: local
+  maproom-logs:
+    driver: local
+
+networks:
+  maproom-network:
+    driver: bridge

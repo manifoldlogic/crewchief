@@ -9,12 +9,6 @@ until pg_isready -h postgres -p 5432 -U postgres; do
     sleep 2
 done
 
-# Ensure Redis is ready
-until redis-cli -h redis ping; do
-    echo "Waiting for Redis..."
-    sleep 2
-done
-
 # Update dependencies if package.json has changed
 if [ -f /workspace/.devcontainer/.last-package-json-hash ]; then
     CURRENT_HASH=$(sha256sum package.json | cut -d' ' -f1)
@@ -36,9 +30,6 @@ if ! tmux has-session -t crewchief 2>/dev/null; then
     tmux send-keys -t crewchief:main "clear" C-m
     
     # Create additional windows
-    tmux new-window -t crewchief -n web-ui
-    tmux send-keys -t crewchief:web-ui "cd /workspace/packages/web-ui" C-m
-    
     tmux new-window -t crewchief -n cli
     tmux send-keys -t crewchief:cli "cd /workspace/packages/cli" C-m
     

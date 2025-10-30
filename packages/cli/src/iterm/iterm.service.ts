@@ -1,6 +1,5 @@
 import { spawnSync, spawn, ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import fetch from 'node-fetch'
 import type {
   ITermAgentInfo,
   ITermRpcRequest,
@@ -38,10 +37,7 @@ export class ITermService {
    * Check if iTerm2 is available on the system
    */
   ensureITerm(): void {
-    const res = spawnSync('osascript', [
-      '-e',
-      'tell application "System Events" to name of every application process',
-    ])
+    const res = spawnSync('osascript', ['-e', 'tell application "System Events" to name of every application process'])
     const apps = res.stdout.toString()
     if (!apps.includes('iTerm')) {
       throw new Error('iTerm2 not found. Please install iTerm2.')
@@ -166,10 +162,7 @@ export class ITermService {
    */
   async attach(): Promise<void> {
     // Use AppleScript to focus iTerm2
-    spawnSync('osascript', [
-      '-e',
-      'tell application "iTerm2" to activate',
-    ])
+    spawnSync('osascript', ['-e', 'tell application "iTerm2" to activate'])
   }
 
   /**
@@ -303,10 +296,7 @@ export class ITermService {
   /**
    * Create a named window
    */
-  async createNamedWindow(
-    name: string,
-    cwd?: string,
-  ): Promise<{ windowId: string; paneId: string; target: string }> {
+  async createNamedWindow(name: string, cwd?: string): Promise<{ windowId: string; paneId: string; target: string }> {
     const result = await this.createWindowWithCwd(cwd)
     await this.sendRpc('setBadge', {
       sessionId: result.paneId,

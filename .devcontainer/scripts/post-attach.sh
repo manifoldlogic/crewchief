@@ -36,12 +36,6 @@ else
     echo -e "  PostgreSQL: ❌ Not running"
 fi
 
-if redis-cli -h redis ping &>/dev/null; then
-    echo -e "  Redis:      ${GREEN}✓ Running${NC}"
-else
-    echo -e "  Redis:      ❌ Not running"
-fi
-
 if [ -f "/usr/local/bin/crewchief-maproom" ]; then
     echo -e "  Maproom:    ${GREEN}✓ Installed${NC}"
 else
@@ -50,7 +44,6 @@ fi
 
 echo ""
 echo -e "${YELLOW}Quick Commands:${NC}"
-echo "  ${GREEN}webui${NC}      - Start Web UI development server"
 echo "  ${GREEN}ccdev${NC}      - Run CrewChief CLI in dev mode"
 echo "  ${GREEN}maproom${NC}    - Run Maproom commands"
 echo "  ${GREEN}claude${NC}     - Run Claude Code in dangerous mode"
@@ -99,12 +92,7 @@ if [ "$TERM_PROGRAM" = "Cursor" ] || [ -n "$CURSOR_IDE" ]; then
     echo "export WORKSPACE_DIR=/workspace" >> ~/.bashrc.tmp
     cat ~/.bashrc >> ~/.bashrc.tmp 2>/dev/null || true
     mv ~/.bashrc.tmp ~/.bashrc
-    
-    # Same for zsh if it exists
-    if [ -f ~/.zshrc ]; then
-        echo "cd /workspace" >> ~/.zshrc.tmp
-        echo "export WORKSPACE_DIR=/workspace" >> ~/.zshrc.tmp
-        cat ~/.zshrc >> ~/.zshrc.tmp 2>/dev/null || true
-        mv ~/.zshrc.tmp ~/.zshrc
-    fi
+
+    # Note: .zshrc is mounted from host, so not modifying it here
+    # Add 'cd /workspace' to your host .zshrc if needed for Cursor compatibility
 fi

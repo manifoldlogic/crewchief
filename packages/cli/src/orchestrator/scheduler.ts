@@ -4,6 +4,8 @@ import { Task, TaskAssignment } from './task.types'
 import { getAgentType } from '../agents/registry'
 import { loadConfig } from '../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
+// TODO: Remove tmux code - replaced with iTerm
+// eslint-disable-next-line import/no-unresolved
 import { TmuxService } from '../tmux/tmux.service'
 
 export class Scheduler {

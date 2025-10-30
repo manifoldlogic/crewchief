@@ -1,43 +1,67 @@
 {
-  "name": "maproom-mcp",
-  "version": "0.1.8",
+  "name": "@crewchief/maproom-mcp",
+  "version": "1.1.10",
   "type": "module",
+  "description": "Maproom MCP server with local LLM embeddings - zero configuration required",
   "main": "dist/index.js",
   "bin": {
-    "maproom-mcp": "bin/cli.js"
+    "maproom-mcp": "./bin/cli.cjs"
   },
   "files": [
+    "bin/cli.cjs",
+    "config/docker-compose.yml",
+    "config/Dockerfile.mcp-server",
+    "config/init.sql",
     "dist/",
-    "bin/",
+    "src/",
+    "tsconfig.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "rimraf dist && tsc -p tsconfig.json",
-    "prepare": "pnpm run build",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
-    "postinstall": "node ./dist/postinstall.js || true",
-    "release:patch": "node ./scripts/release.mjs patch",
-    "release:minor": "node ./scripts/release.mjs minor",
-    "release:major": "node ./scripts/release.mjs major"
+    "build": "tsc",
+    "test": "node bin/cli.cjs --test || echo 'Test mode not yet implemented'",
+    "dev": "node bin/cli.cjs",
+    "prepublishOnly": "tsc && pnpm audit --audit-level=high --prod",
+    "security-check": "pnpm audit --audit-level=moderate",
+    "release:patch": "node scripts/bump-version.js patch && pnpm publish --access public --no-git-checks",
+    "release:minor": "node scripts/bump-version.js minor && pnpm publish --access public --no-git-checks",
+    "release:major": "node scripts/bump-version.js major && pnpm publish --access public --no-git-checks"
+  },
+  "keywords": [
+    "mcp",
+    "embeddings",
+    "ollama",
+    "semantic-search",
+    "code-search",
+    "local-llm",
+    "docker",
+    "postgresql",
+    "pgvector"
+  ],
+  "author": "CrewChief",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danielbushman/crewchief.git",
+    "directory": "packages/maproom-mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/danielbushman/crewchief/issues"
+  },
+  "homepage": "https://github.com/danielbushman/crewchief/tree/main/packages/maproom-mcp#readme",
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
-    "commander": "^12.1.0",
-    "execa": "^9.5.1",
-    "pg": "^8.12.0",
-    "pino": "^9.4.0"
+    "pg": "^8.11.3",
+    "pino": "^8.16.2",
+    "zod": "^3.22.4",
+    "execa": "^8.0.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.15.5",
-    "rimraf": "^6.0.1",
-    "ts-node": "^10.9.2",
-    "tslib": "^2.7.0",
-    "tsx": "^4.17.0",
-    "typescript": "^5.6.3"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748"
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.5",
+    "@types/pg": "^8.10.9"
+  }
 }

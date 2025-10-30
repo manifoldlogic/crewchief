@@ -22,6 +22,16 @@ print_success() {
     echo -e "${GREEN}✓${NC} $1"
 }
 
+# Install Oh My Zsh if not already installed
+print_step "Checking for Oh My Zsh..."
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+    print_step "Installing Oh My Zsh..."
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    print_success "Oh My Zsh installed"
+else
+    print_success "Oh My Zsh already installed"
+fi
+
 # Install Claude Code if not already installed
 print_step "Checking for Claude Code..."
 if ! command -v claude &> /dev/null; then
@@ -31,6 +41,16 @@ if ! command -v claude &> /dev/null; then
 else
     print_success "Claude Code already installed"
 fi
+
+# Install Husky globally
+print_step "Installing Husky globally..."
+npm install -g husky || print_error "Failed to install Husky"
+print_success "Husky installed globally"
+
+# Install CrewChief CLI globally
+print_step "Installing CrewChief CLI globally..."
+npm install -g crewchief@latest || print_error "Failed to install CrewChief CLI"
+print_success "CrewChief CLI installed globally"
 
 # Install pnpm dependencies
 print_step "Installing Node.js dependencies..."
@@ -69,20 +89,6 @@ else
     print_error "Maproom binary not found, skipping migrations"
 fi
 
-# Run web UI database migrations
-print_step "Running Web UI database migrations..."
-cd packages/web-ui
-pnpm run db:migrate || true
-cd ../..
-print_success "Web UI database migrations complete"
-
-# Build the web UI
-print_step "Building Web UI..."
-cd packages/web-ui
-pnpm run build
-cd ../..
-print_success "Web UI built successfully"
-
 # Set up git configuration
 print_step "Configuring Git..."
 git config --global --add safe.directory /workspace
@@ -96,7 +102,6 @@ cat >> ~/.bashrc << 'EOF'
 # CrewChief aliases
 alias cc='node /workspace/packages/cli/dist/cli/index.js'
 alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
-alias webui='cd /workspace/packages/web-ui && pnpm dev'
 alias maproom='crewchief-maproom'
 alias claude='claude --dangerous-mode'
 alias ll='ls -la'
@@ -131,49 +136,8 @@ fi
 
 EOF
 
-# Also add to zsh if it exists
-if [ -f ~/.zshrc ]; then
-    cat >> ~/.zshrc << 'EOF'
-
-# CrewChief aliases
-alias cc='node /workspace/packages/cli/dist/cli/index.js'
-alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
-alias webui='cd /workspace/packages/web-ui && pnpm dev'
-alias maproom='crewchief-maproom'
-alias claude='claude --dangerous-mode'
-alias ll='ls -la'
-alias gs='git status'
-alias gd='git diff'
-alias gc='git commit'
-alias gp='git push'
-alias gl='git log --oneline --graph --decorate'
-
-# Docker aliases
-alias dps='docker ps'
-alias dlog='docker logs -f'
-alias dexec='docker exec -it'
-
-# tmux aliases
-alias ta='tmux attach -t'
-alias tl='tmux list-sessions'
-alias tn='tmux new -s'
-
-# Navigation
-alias ..='cd ..'
-alias ...='cd ../..'
-alias ....='cd ../../..'
-
-# Ensure we start in workspace (for Cursor compatibility)
-if [ -z "$IN_WORKSPACE_CHECK" ]; then
-    export IN_WORKSPACE_CHECK=1
-    if [ "$(pwd)" != "/workspace" ] && [ -d "/workspace" ]; then
-        cd /workspace
-    fi
-fi
-
-EOF
-fi
 print_success "Shell aliases configured"
+print_step "Note: Using host .zshrc - add CrewChief aliases to your host .zshrc if needed"
 
 # Install tmux plugins
 print_step "Installing tmux plugins..."
@@ -186,15 +150,8 @@ if [ ! -f .env ]; then
     cp .env.example .env 2>/dev/null || cat > .env << EOF
 # CrewChief Environment Variables
 NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-REDIS_URL=redis://redis:6379
-CREWCHIEF_DB_HOST=postgres
-CREWCHIEF_DB_PORT=5432
-CREWCHIEF_DB_NAME=crewchief
-CREWCHIEF_DB_USER=postgres
-CREWCHIEF_DB_PASSWORD=postgres
+PG_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
 CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom
-PORT=3456
 EOF
     print_success ".env file created"
 fi
@@ -263,16 +220,13 @@ fi
 print_success "🎉 CrewChief devcontainer setup complete!"
 echo ""
 echo "Quick start commands:"
-echo "  claude    - Run Claude Code in dangerous mode"
-echo "  webui     - Start the web UI development server"
-echo "  ccdev     - Run the CrewChief CLI in development mode"
-echo "  maproom   - Run Maproom commands"
+echo "  claude     - Run Claude Code in dangerous mode"
+echo "  crewchief  - Run the CrewChief CLI (globally installed)"
+echo "  ccdev      - Run the CrewChief CLI in development mode"
+echo "  maproom    - Run Maproom commands"
 echo ""
 echo "Services available:"
 echo "  PostgreSQL: postgres:5432"
-echo "  Redis:      redis:6379"
-echo "  pgAdmin:    http://localhost:5050"
-echo "  Redis Commander: http://localhost:8081"
 echo ""
 echo "⚠️  Claude Code dangerous mode is ENABLED"
 echo "   - Network access is restricted via iptables"
