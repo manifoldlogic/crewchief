@@ -434,9 +434,9 @@ docker exec maproom-postgres psql -U maproom -d maproom \
 - Modify one docker-compose to use different host port:
   ```yaml
   ports:
-    - "5433:5432"  # Host:Container
+    - "15433:5432"  # Host:Container
   ```
-- Access via `localhost:5433` from host machine
+- Access via `localhost:15433` from host machine
 
 ## Best Practices
 

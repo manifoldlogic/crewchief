@@ -287,7 +287,7 @@ Created comprehensive test script at `/workspace/packages/maproom-mcp/tests/test
 - Dependencies: ca-certificates, libssl3, postgresql-client installed
 
 **Test Script Modifications**:
-- Original script targeted docker-compose integration but encountered port conflicts (5433, 11434)
+- Original script targeted docker-compose integration but encountered port conflicts (15433, 11434)
 - Modified to use isolated Docker network testing instead
 - All test commands use `--entrypoint` override to bypass MCP stdio server for validation
 - Test approach validates all components without requiring full docker-compose stack

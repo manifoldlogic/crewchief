@@ -20,7 +20,7 @@ From MCPSTART_SECURITY_REVIEW.md Section 5 (Network Exposure) - services are cur
 This implements Phase 5 (Security Hardening) of the MCPSTART project plan.
 
 ## Acceptance Criteria
-- [x] PostgreSQL port binding changed to 127.0.0.1:5433:5432 in docker-compose.yml
+- [x] PostgreSQL port binding changed to 127.0.0.1:15433:5432 in docker-compose.yml
 - [x] Ollama port binding changed to 127.0.0.1:11434:11434 in docker-compose.yml
 - [x] MCP server remains stdio-only (no port binding changes)
 - [x] Updated docker-compose.yml file in `packages/maproom-mcp/config/`
@@ -35,7 +35,7 @@ Update the ports section in docker-compose.yml:
 services:
   postgres:
     ports:
-      - "127.0.0.1:5433:5432"  # Changed from "0.0.0.0:5433:5432"
+      - "127.0.0.1:15433:5432"  # Changed from "0.0.0.0:15433:5432"
 
   ollama:
     ports:
@@ -68,9 +68,9 @@ None - this is an independent security hardening change
 
 Successfully updated the docker-compose.yml file to bind services to localhost only:
 
-1. **PostgreSQL**: Added port binding `"127.0.0.1:5433:5432"` (line 18-19)
+1. **PostgreSQL**: Added port binding `"127.0.0.1:15433:5432"` (line 18-19)
    - Previously had no port binding in the config
-   - Now binds port 5433 on localhost to container port 5432
+   - Now binds port 15433 on localhost to container port 5432
 
 2. **Ollama**: Updated port binding from `"${OLLAMA_PORT:-11434}:11434"` to `"127.0.0.1:${OLLAMA_PORT:-11434}:11434"` (line 57)
    - Previously bound to all interfaces (0.0.0.0 by default)
@@ -85,6 +85,6 @@ Successfully updated the docker-compose.yml file to bind services to localhost o
 
 **Testing Recommendations**:
 - Verify services start successfully: `docker-compose up -d`
-- Verify PostgreSQL accessible on localhost: `psql -h 127.0.0.1 -p 5433 -U maproom -d maproom`
+- Verify PostgreSQL accessible on localhost: `psql -h 127.0.0.1 -p 15433 -U maproom -d maproom`
 - Verify Ollama accessible on localhost: `curl http://127.0.0.1:11434/api/tags`
 - Verify services NOT accessible from network IP (requires external machine or network testing tool)

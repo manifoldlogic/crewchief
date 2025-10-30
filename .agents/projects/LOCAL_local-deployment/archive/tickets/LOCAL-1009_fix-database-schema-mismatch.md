@@ -249,4 +249,4 @@ $ cargo run --bin crewchief-maproom -- scan --repo crewchief --path /workspace/p
 The devcontainer environment connects to postgres via Docker network IP: `172.23.0.4:5432`
 - Use `DATABASE_URL=postgresql://maproom:maproom@172.23.0.4:5432/maproom` for Rust tools
 - The postgres container is on the same Docker network: `crewchief_devcontainer_crewchief-network`
-- Port 5433 on host maps to 5432 in container
+- Port 15433 on host maps to 5432 in container

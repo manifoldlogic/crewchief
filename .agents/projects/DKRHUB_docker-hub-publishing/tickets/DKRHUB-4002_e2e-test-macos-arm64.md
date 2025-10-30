@@ -181,7 +181,7 @@ If AMD64 image is pulled on ARM64 host:
    - Cause: ARM64 manifest missing, pulling AMD64
    - Fix: Verify workflow built ARM64 image
 3. **Port conflicts**: Built-in services on macOS
-   - Fix: Check `lsof -i :5433` and `lsof -i :11434`
+   - Fix: Check `lsof -i :15433` and `lsof -i :11434`
 
 **Apple Silicon Specifics**:
 - M1/M2/M3 chips have unified memory (fast)

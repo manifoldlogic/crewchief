@@ -301,7 +301,7 @@ services:
     volumes:
       - maproom-data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:15433:5432"
     command: >
       postgres
       -c max_connections=50
