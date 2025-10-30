@@ -5,17 +5,56 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CLI_PATH="$WORKSPACE_ROOT/packages/maproom-mcp/bin/cli.cjs"
+CONFIG_DIR="$WORKSPACE_ROOT/packages/maproom-mcp/config"
 
 echo "Starting Maproom MCP Integration Tests"
 echo "======================================="
 echo "Workspace root: $WORKSPACE_ROOT"
 echo "CLI path: $CLI_PATH"
+echo "Config dir: $CONFIG_DIR"
+echo ""
+
+# ========================================
+# Docker Compose Configuration Selection
+# ========================================
+# Determine which docker-compose configuration to use based on TEST_BUILD_FROM_SOURCE.
+#
+# TEST_BUILD_FROM_SOURCE controls whether to build from source or pull from Docker Hub:
+#   - true (default): Use docker-compose.test.yml to build from source
+#     * Best for: Integration tests during development, CI/CD, before images published
+#     * Build time: ~2-5 minutes on first build (cached thereafter)
+#     * Image tag: maproom-mcp:test
+#
+#   - false: Use docker-compose.yml only to pull from Docker Hub
+#     * Best for: Testing published images, production-like testing
+#     * Requires: Images already published to crewchief/maproom-mcp
+#     * Startup: Fast (no build), just image pull
+#
+# The test configuration (docker-compose.test.yml) overrides only the maproom-mcp service
+# to build from source. All other configuration (environment, volumes, networks, health
+# checks) is inherited from the base docker-compose.yml.
+#
+if [ "${TEST_BUILD_FROM_SOURCE:-true}" = "true" ]; then
+  COMPOSE_FILES="-f docker-compose.yml -f docker-compose.test.yml"
+  echo "🔧 Using TEST configuration (building from source)"
+  echo "   - Base config: docker-compose.yml"
+  echo "   - Override: docker-compose.test.yml"
+  echo "   - Image tag: maproom-mcp:test"
+  echo "   - Build time: ~2-5 minutes (first build)"
+else
+  COMPOSE_FILES="-f docker-compose.yml"
+  echo "📦 Using PRODUCTION configuration (pulling from Docker Hub)"
+  echo "   - Config: docker-compose.yml only"
+  echo "   - Image: crewchief/maproom-mcp:\${MAPROOM_VERSION:-latest}"
+  echo "   - Requires: Pre-published images"
+fi
 echo ""
 
 # Cleanup function
 cleanup() {
   echo "Cleaning up test environment..."
-  cd ~/.maproom-mcp 2>/dev/null && docker compose down 2>/dev/null || true
+  # Use the same COMPOSE_FILES configuration for cleanup
+  cd "$CONFIG_DIR" 2>/dev/null && docker compose $COMPOSE_FILES down 2>/dev/null || true
   pkill -f "maproom-mcp" 2>/dev/null || true
   sleep 2
 }

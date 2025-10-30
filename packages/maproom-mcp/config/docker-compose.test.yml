@@ -1,0 +1,119 @@
+# ========================================
+# Test-Specific Docker Compose Configuration
+# ========================================
+#
+# PURPOSE:
+#   This configuration override allows integration tests and local development
+#   to build the maproom-mcp service from source instead of pulling pre-built
+#   images from Docker Hub.
+#
+# USAGE:
+#   # For integration tests (default behavior)
+#   docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+#   # From the config directory
+#   cd packages/maproom-mcp/config
+#   docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+#   # Control via environment variable in tests
+#   TEST_BUILD_FROM_SOURCE=true bash startup-integration.sh
+#
+# WHAT THIS OVERRIDE DOES:
+#   - Builds maproom-mcp service from source using Dockerfile.combined
+#   - Tags the built image as "maproom-mcp:test" (avoids conflicts with production tags)
+#   - Inherits ALL other configuration from docker-compose.yml:
+#     * Environment variables (DATABASE_URL, EMBEDDING_PROVIDER, etc.)
+#     * Service dependencies (depends_on with health checks)
+#     * Volumes (maproom-logs)
+#     * Networks (maproom-network)
+#     * Health checks
+#     * Restart policies
+#
+# WHAT THIS OVERRIDE DOES NOT DO:
+#   - Does NOT modify postgres or ollama services
+#   - Does NOT change any environment variables or runtime configuration
+#   - Does NOT affect production deployments (only used when explicitly loaded)
+#
+# WHEN TO USE THIS CONFIGURATION:
+#   ✅ Integration tests during development (before images published)
+#   ✅ CI/CD pipelines testing code changes
+#   ✅ Local development when modifying maproom-mcp code
+#   ✅ Verifying builds work before publishing to Docker Hub
+#
+# WHEN TO USE BASE CONFIGURATION ONLY (docker-compose.yml):
+#   ✅ Production deployments via "npx @crewchief/maproom-mcp start"
+#   ✅ User installations pulling from Docker Hub
+#   ✅ Testing published images (DKRHUB-2902)
+#   ✅ When images are already available on Docker Hub
+#
+# DEVELOPMENT WORKFLOW COMPARISON:
+#
+#   docker-compose.yml only:
+#     → Pulls crewchief/maproom-mcp:latest from Docker Hub
+#     → Fast startup (no build)
+#     → Requires pre-published images
+#
+#   docker-compose.yml + docker-compose.test.yml:
+#     → Builds from workspace source code
+#     → Tags as maproom-mcp:test
+#     → Slower startup (build time ~2-5 minutes)
+#     → Works without published images
+#
+#   docker-compose.yml + docker-compose.override.yml (DKRHUB-2002):
+#     → Builds from source with volume mounts for live code reload
+#     → Automatically loaded by docker-compose up (no -f needed)
+#     → Best for interactive development
+#
+# TECHNICAL DETAILS:
+#   - Build context: ../../.. (workspace root at /workspace)
+#   - Dockerfile: packages/maproom-mcp/config/Dockerfile.combined
+#   - Image tag: maproom-mcp:test (local-only, not pushed to registry)
+#   - Multi-stage build: Compiles Rust binary + Node.js MCP server
+#   - Build time: ~2-5 minutes on first build, faster with Docker layer cache
+#
+# VALIDATION:
+#   # Validate compose file syntax
+#   docker-compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.test.yml \
+#     config
+#
+#   # Verify image tagged correctly after build
+#   docker images | grep maproom-mcp
+#
+# TROUBLESHOOTING:
+#   - If build fails: Check Dockerfile.combined exists and workspace structure is correct
+#   - If image pull error: You're using docker-compose.yml alone - add docker-compose.test.yml
+#   - If services fail health checks: Check logs with "docker-compose logs maproom-mcp"
+#   - If wrong image used: Verify COMPOSE_FILES variable in test script includes both files
+#
+# RELATED TICKETS:
+#   - DKRHUB-1000: Created Dockerfile.combined (multi-stage build)
+#   - DKRHUB-2001: Updated docker-compose.yml to pull from Docker Hub
+#   - DKRHUB-2002: Created docker-compose.override.yml for interactive development
+#   - DKRHUB-2004: This file - test configuration for integration tests
+#   - DKRHUB-2902: Production image testing (uses docker-compose.yml only)
+#
+# ========================================
+
+services:
+  maproom-mcp:
+    # Override the image directive to build from source
+    # The "image" field serves dual purpose:
+    #   1. Tags the built image as "maproom-mcp:test"
+    #   2. Ensures this override takes precedence over docker-compose.yml's "image" field
+    build:
+      context: ../../..  # Workspace root (/workspace)
+      dockerfile: packages/maproom-mcp/config/Dockerfile.combined
+    image: maproom-mcp:test  # Local tag for test images (not pushed to Docker Hub)
+
+    # All other configuration inherited from docker-compose.yml:
+    # - container_name: maproom-mcp
+    # - depends_on: postgres (condition: service_healthy)
+    # - environment: DATABASE_URL, EMBEDDING_PROVIDER, LOG_LEVEL, etc.
+    # - volumes: maproom-logs:/app/logs
+    # - networks: maproom-network
+    # - stdin_open: true
+    # - tty: false
+    # - healthcheck: PostgreSQL connectivity check
+    # - restart: unless-stopped
