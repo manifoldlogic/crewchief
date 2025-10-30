@@ -95,9 +95,22 @@ jobs:
             org.opencontainers.image.vendor=CrewChief
             org.opencontainers.image.version=${{ steps.version.outputs.full }}
 
-      # Placeholder: Image build and push will be added in DKRHUB-1005
-      - name: Placeholder - Build and Push
-        run: echo "Multi-platform image build and push to be added in DKRHUB-1005"
+      # 7. Build and push Docker image
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.BUILD_CONTEXT }}
+          file: ${{ env.DOCKERFILE_PATH }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.push_to_registry == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.full }}
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
 
       # Placeholder: Security scanning will be added in DKRHUB-1006
       - name: Placeholder - Security Scan
