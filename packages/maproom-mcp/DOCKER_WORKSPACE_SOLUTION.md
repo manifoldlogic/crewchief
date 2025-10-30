@@ -164,7 +164,7 @@ WORKSPACE_PATH=$(pwd) npx @crewchief/maproom-mcp
 1. Update `~/.maproom-mcp/docker-compose.yml`:
    - Add external network reference to `crewchief-network`
    - Mount `/workspace:/workspace:ro` (works inside devcontainer)
-   - Keep postgres on port 15433 to avoid conflicts
+   - Keep postgres on port 5433 to avoid conflicts
 
 2. Test:
    ```bash

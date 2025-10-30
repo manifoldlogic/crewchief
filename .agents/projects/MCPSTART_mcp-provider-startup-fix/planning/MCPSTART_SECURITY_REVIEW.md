@@ -224,7 +224,7 @@ services:
 ### 5. Network Exposure
 
 **Current State**:
-- PostgreSQL exposed on `0.0.0.0:15433`
+- PostgreSQL exposed on `0.0.0.0:5433`
 - Ollama exposed on `0.0.0.0:11434`
 - MCP server accessed via stdio (not network)
 
@@ -240,7 +240,7 @@ services:
 services:
   postgres:
     ports:
-      - "127.0.0.1:15433:5432"  # Bind to localhost only
+      - "127.0.0.1:5433:5432"  # Bind to localhost only
 
   ollama:
     ports:
@@ -390,7 +390,7 @@ function diagnosticLog(message, data) {
 services:
   postgres:
     ports:
-      - "127.0.0.1:15433:5432"  # Changed from 0.0.0.0
+      - "127.0.0.1:5433:5432"  # Changed from 0.0.0.0
 
   ollama:
     ports:
@@ -431,7 +431,7 @@ to network (e.g., for Docker Desktop on macOS with containers in VM):
 services:
   postgres:
     ports:
-      - "0.0.0.0:15433:5432"  # WARNING: Exposes to network
+      - "0.0.0.0:5433:5432"  # WARNING: Exposes to network
 ```
 
 ### Diagnostic Logs

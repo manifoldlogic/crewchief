@@ -149,7 +149,7 @@ docker pull --platform linux/arm64 crewchief/maproom-mcp:latest
 1. Check what's using the port:
    ```bash
    # PostgreSQL port
-   lsof -i :15433
+   lsof -i :5433
 
    # Ollama port
    lsof -i :11434

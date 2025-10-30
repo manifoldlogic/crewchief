@@ -104,7 +104,7 @@ The code was written for OpenAI's embedding API and needs to be adapted for Olla
 docker-compose exec -T maproom-mcp /usr/local/bin/crewchief-maproom generate-embeddings --sample 5
 
 # 2. Verify embeddings in database
-psql -h localhost -p 15433 -U maproom -d maproom -c "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NOT NULL;"
+psql -h localhost -p 5433 -U maproom -d maproom -c "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NOT NULL;"
 
 # 3. Test vector search
 docker-compose exec -T maproom-mcp /usr/local/bin/crewchief-maproom search --repo crewchief --query "agent spawn" --mode vector --k 5

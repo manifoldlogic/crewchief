@@ -184,7 +184,7 @@ echo "E2E Test: PASSED"
    - Fix: `sudo systemctl start docker`
 2. **Permission denied**: User not in docker group
    - Fix: `sudo usermod -aG docker $USER` (logout/login)
-3. **Port conflicts**: Ports 15433, 11434 already in use
+3. **Port conflicts**: Ports 5433, 11434 already in use
    - Fix: Stop conflicting services or configure different ports
 
 Reference DKRHUB_QUALITY_STRATEGY.md lines 312-396 for complete E2E test specification.
