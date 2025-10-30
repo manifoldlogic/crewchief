@@ -685,7 +685,7 @@ These optimizations enable the Context Assembly Engine to scale efficiently to 5
 
 - **Migration File**: `/workspace/crates/maproom/migrations/0008_context_query_optimizations.sql`
 - **Implementation**: `/workspace/crates/maproom/src/context/graph.rs`
-- **Architecture**: `/workspace/crewchief_context/maproom/CONTEXT_ASM/CONTEXT_ASM_ARCHITECTURE.md`
+- **Architecture**: `/workspace/.agents/archive/projects/CONTEXT_ASM_context-assembly-engine/planning/CONTEXT_ASM_ARCHITECTURE.md`
 - **PostgreSQL Documentation**: https://www.postgresql.org/docs/current/indexes.html
 - **Recursive CTEs**: https://www.postgresql.org/docs/current/queries-with.html
 - **Materialized Views**: https://www.postgresql.org/docs/current/sql-creatematerializedview.html

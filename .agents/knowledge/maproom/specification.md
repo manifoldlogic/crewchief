@@ -58,9 +58,10 @@ crewchief/
 │  └─ maproom-mcp/
 │     ├─ package.json
 │     └─ src/                      # MCP server implementation
-├─ crewchief_context/
-│  └─ maproom/
-│     └─ specification.md          # This file
+├─ .agents/
+│  └─ knowledge/
+│     └─ maproom/
+│        └─ specification.md       # This file
 ```
 
 ---

@@ -397,12 +397,12 @@ maproom-mcp:
 This project creates/modifies:
 
 1. **Project Documentation**:
-   - `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/README.md` (this file)
-   - `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_ANALYSIS.md`
-   - `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_ARCHITECTURE.md`
-   - `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_QUALITY_STRATEGY.md`
-   - `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_SECURITY_REVIEW.md`
-   - `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_PLAN.md`
+   - `.agents/projects/DKRHUB-Docker_Hub_Publishing/README.md` (this file)
+   - `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_ANALYSIS.md`
+   - `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_ARCHITECTURE.md`
+   - `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_QUALITY_STRATEGY.md`
+   - `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_SECURITY_REVIEW.md`
+   - `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_PLAN.md`
 
 2. **Implementation Files** (to be created):
    - `.github/workflows/publish-maproom-mcp-image.yml` (NEW)

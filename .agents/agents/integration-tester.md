@@ -332,7 +332,7 @@ An Integration Tester successfully completes a ticket when:
 ### Project Context
 - Test fixtures: `tests/fixtures/`
 - Integration tests: `tests/integration/`
-- Specification: `crewchief_context/maproom/specification.md`
+- Specification: `.agents/knowledge/maproom/specification.md`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

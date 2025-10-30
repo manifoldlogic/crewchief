@@ -12,11 +12,11 @@
 **Root Cause**: Environment variables from `.mcp.json` are not propagating correctly through the MCP client → CLI → Docker Compose chain.
 
 **Project Documents**:
-- Analysis: `/workspace/crewchief_context/maproom/MCPSTART-mcp-provider-startup-fix/MCPSTART_ANALYSIS.md`
-- Architecture: `/workspace/crewchief_context/maproom/MCPSTART-mcp-provider-startup-fix/MCPSTART_ARCHITECTURE.md`
-- Quality Strategy: `/workspace/crewchief_context/maproom/MCPSTART-mcp-provider-startup-fix/MCPSTART_QUALITY_STRATEGY.md`
-- Security Review: `/workspace/crewchief_context/maproom/MCPSTART-mcp-provider-startup-fix/MCPSTART_SECURITY_REVIEW.md`
-- Plan: `/workspace/crewchief_context/maproom/MCPSTART-mcp-provider-startup-fix/MCPSTART_PLAN.md`
+- Analysis: `/workspace/.agents/projects/MCPSTART-mcp-provider-startup-fix/MCPSTART_ANALYSIS.md`
+- Architecture: `/workspace/.agents/projects/MCPSTART-mcp-provider-startup-fix/MCPSTART_ARCHITECTURE.md`
+- Quality Strategy: `/workspace/.agents/projects/MCPSTART-mcp-provider-startup-fix/MCPSTART_QUALITY_STRATEGY.md`
+- Security Review: `/workspace/.agents/projects/MCPSTART-mcp-provider-startup-fix/MCPSTART_SECURITY_REVIEW.md`
+- Plan: `/workspace/.agents/projects/MCPSTART-mcp-provider-startup-fix/MCPSTART_PLAN.md`
 
 ---
 
@@ -298,7 +298,7 @@ Phase 1 (Diagnostics) → Phase 2 (Env Propagation) → Phase 3 (Clean State)
 - MCP-011 (commit 3bb0071): Second fix attempt - auto-update and service stop
 
 **Project Planning**:
-- See `/workspace/crewchief_context/maproom/MCPSTART-mcp-provider-startup-fix/README.md` for full project overview
+- See `/workspace/.agents/projects/MCPSTART-mcp-provider-startup-fix/README.md` for full project overview
 
 **Test Strategy**:
 - See `MCPSTART_QUALITY_STRATEGY.md` for comprehensive testing approach

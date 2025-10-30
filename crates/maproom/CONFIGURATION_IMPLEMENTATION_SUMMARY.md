@@ -268,5 +268,5 @@ This configuration system is ready for:
 ## References
 
 - Ticket: `/workspace/.agents/work-tickets/HYBRID_SEARCH-6002_configuration-management.md`
-- Architecture: `/workspace/crewchief_context/maproom/HYBRID_SEARCH/HYBRID_SEARCH_ARCHITECTURE.md`
+- Architecture: `/workspace/.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md`
 - Configuration Guide: `/workspace/crates/maproom/docs/configuration_guide.md`

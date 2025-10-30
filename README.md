@@ -119,13 +119,13 @@ crewchief/
 │   └── maproom-mcp/   # MCP server for AI assistants
 ├── crates/
 │   └── maproom/       # Rust indexing engine
-└── crewchief_context/ # Architecture docs & specifications
+└── .agents/           # Project planning, tickets, and knowledge base
 ```
 
 ## Documentation
 
 - [CLI README](packages/cli/README.md) - Detailed command reference
-- [Architecture Spec](crewchief_context/cli/specification.md) - Full vision with implementation status
+- [Architecture Spec](.agents/knowledge/cli/specification.md) - Full vision with implementation status
 - [Testing Report](TESTING_REPORT.md) - Features that need verification
 
 ## Embedding Configuration
@@ -190,4 +190,4 @@ This project is actively being developed. Key areas that need work:
 1. Completing the agent orchestration features
 2. Implementing evaluation metrics for competition mode
 
-See the [specification](crewchief_context/cli/specification.md) for the full roadmap.
+See the [specification](.agents/knowledge/cli/specification.md) for the full roadmap.

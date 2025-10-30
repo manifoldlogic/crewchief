@@ -38,11 +38,11 @@ This project fixes the critical v1.1.9 deployment failure by implementing automa
 3. Update docker-compose.yml to use `image:` instead of `build:`
 
 **Documentation**:
-- Analysis: `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_ANALYSIS.md`
-- Architecture: `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_ARCHITECTURE.md`
-- Security: `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_SECURITY_REVIEW.md`
-- Quality: `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_QUALITY_STRATEGY.md`
-- Plan: `crewchief_context/maproom/DKRHUB-Docker_Hub_Publishing/DKRHUB_PLAN.md`
+- Analysis: `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_ANALYSIS.md`
+- Architecture: `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_ARCHITECTURE.md`
+- Security: `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_SECURITY_REVIEW.md`
+- Quality: `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_QUALITY_STRATEGY.md`
+- Plan: `.agents/projects/DKRHUB-Docker_Hub_Publishing/DKRHUB_PLAN.md`
 - **Review**: `DKRHUB_TICKETS_REVIEW_REPORT.md` [NEW]
 - **Update Plan**: `DKRHUB_TICKETS_UPDATE_PLAN.md` [NEW]
 

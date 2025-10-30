@@ -244,11 +244,11 @@ Update .mcp.json to:
 
 ## Files Created
 
-1. `crewchief_context/maproom/LOCAL/LOCAL_ANALYSIS.md` - Problem analysis
-2. `crewchief_context/maproom/LOCAL/LOCAL_ARCHITECTURE.md` - Technical design
-3. `crewchief_context/maproom/LOCAL/LOCAL_PLAN.md` - Implementation roadmap
+1. `.agents/projects/LOCAL/LOCAL_ANALYSIS.md` - Problem analysis
+2. `.agents/projects/LOCAL/LOCAL_ARCHITECTURE.md` - Technical design
+3. `.agents/projects/LOCAL/LOCAL_PLAN.md` - Implementation roadmap
 4. `.agents/specialized-agents/docker-engineer.md` - New agent definition
-5. `crewchief_context/maproom/LOCAL/README.md` - This file
+5. `.agents/projects/LOCAL/README.md` - This file
 
 ## Questions or Issues?
 

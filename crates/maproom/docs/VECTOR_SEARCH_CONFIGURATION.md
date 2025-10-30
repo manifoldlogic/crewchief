@@ -675,7 +675,7 @@ Use `pgbench` or custom load generator to simulate concurrent searches.
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [PostgreSQL Index Documentation](https://www.postgresql.org/docs/current/indexes.html)
 - [PostgreSQL Performance Tuning](https://wiki.postgresql.org/wiki/Performance_Optimization)
-- HYBRID_SEARCH Architecture: `/workspace/crewchief_context/maproom/HYBRID_SEARCH/HYBRID_SEARCH_ARCHITECTURE.md`
+- HYBRID_SEARCH Architecture: `/workspace/.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md`
 - Migration: `/workspace/crates/maproom/migrations/0004_optimize_vector_indices.sql`
 
 ## Changelog

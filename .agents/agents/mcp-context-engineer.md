@@ -533,7 +533,7 @@ An MCP Context Engineer successfully completes a ticket when:
 - OpenAI tokenizer: cl100k_base encoding
 
 ### Project Context
-- Specification: `crewchief_context/maproom/specification.md` (see `context` tool spec)
+- Specification: `.agents/knowledge/maproom/specification.md` (see `context` tool spec)
 - Database schema: `crates/maproom/migrations/`
 - MCP server: `packages/maproom-mcp/src/index.ts`
 - Work tickets: `.agents/work-tickets/`
