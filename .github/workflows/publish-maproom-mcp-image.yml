@@ -23,7 +23,7 @@ permissions:
   security-events: write  # For security scan uploads
 
 env:
-  DOCKER_HUB_REPO: crewchief/maproom-mcp
+  DOCKER_HUB_REPO: manifoldlogic/crewchief_maproom-mcp
   DOCKERFILE_PATH: packages/maproom-mcp/config/Dockerfile.combined
   BUILD_CONTEXT: .
 
