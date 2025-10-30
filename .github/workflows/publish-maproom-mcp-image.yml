@@ -59,9 +59,41 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Placeholder: Version extraction will be added in DKRHUB-1004
-      - name: Placeholder - Version Extraction
-        run: echo "Version extraction logic to be added in DKRHUB-1004"
+      # 5. Extract version from git tag or workflow_dispatch input
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+
+          echo "full=${VERSION}" >> $GITHUB_OUTPUT
+          echo "minor=$(echo ${VERSION} | cut -d. -f1-2)" >> $GITHUB_OUTPUT
+          echo "major=$(echo ${VERSION} | cut -d. -f1)" >> $GITHUB_OUTPUT
+
+          echo "Extracted versions:"
+          echo "  Full: ${VERSION}"
+          echo "  Minor: $(echo ${VERSION} | cut -d. -f1-2)"
+          echo "  Major: $(echo ${VERSION} | cut -d. -f1)"
+
+      # 6. Generate Docker metadata (tags and labels)
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_HUB_REPO }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.full }}
+            type=raw,value=${{ steps.version.outputs.minor }}
+            type=raw,value=${{ steps.version.outputs.major }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=Maproom MCP Server
+            org.opencontainers.image.description=Semantic code search MCP server with local LLM embeddings
+            org.opencontainers.image.vendor=CrewChief
+            org.opencontainers.image.version=${{ steps.version.outputs.full }}
 
       # Placeholder: Image build and push will be added in DKRHUB-1005
       - name: Placeholder - Build and Push

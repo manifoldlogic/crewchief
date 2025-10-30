@@ -1,9 +1,9 @@
 # Ticket: DKRHUB-1004: Implement Version Extraction and Tagging
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -24,14 +24,14 @@ This enables users to pin to specific versions or follow minor/major updates aut
 Reference: DKRHUB_PLAN.md Phase 1, Task DKRHUB-1004 (lines 175-206)
 
 ## Acceptance Criteria
-- [ ] Version extraction step added with id `version`
-- [ ] Full version extracted and stored in `$GITHUB_OUTPUT` as `full` (e.g., "1.1.10")
-- [ ] Major version extracted and stored as `major` (e.g., "1")
-- [ ] Minor version extracted and stored as `minor` (e.g., "1.1")
-- [ ] Supports both tag triggers (`v1.1.10`) and manual workflow_dispatch
-- [ ] Docker metadata action configured with `docker/metadata-action@v5`
-- [ ] Metadata generates tags: `{full}`, `{minor}`, `{major}`, `latest`
-- [ ] OCI labels included: title, description, vendor, version
+- [x] Version extraction step added with id `version`
+- [x] Full version extracted and stored in `$GITHUB_OUTPUT` as `full` (e.g., "1.1.10")
+- [x] Major version extracted and stored as `major` (e.g., "1")
+- [x] Minor version extracted and stored as `minor` (e.g., "1.1")
+- [x] Supports both tag triggers (`v1.1.10`) and manual workflow_dispatch
+- [x] Docker metadata action configured with `docker/metadata-action@v5`
+- [x] Metadata generates tags: `{full}`, `{minor}`, `{major}`, `latest`
+- [x] OCI labels included: title, description, vendor, version
 
 ## Technical Requirements
 - Step: "Extract version"
