@@ -85,9 +85,13 @@ services:
 
   # MCP server service - required for stdio proxy connection (line 428 in cli.cjs)
   maproom-mcp:
-    build:
-      context: ../../..
-      dockerfile: packages/maproom-mcp/config/Dockerfile.maproom
+    # Pull pre-built multi-platform image from Docker Hub
+    # Set MAPROOM_VERSION environment variable to pin to specific version:
+    #   MAPROOM_VERSION=1.1.10 (pin to exact version - recommended for production)
+    #   MAPROOM_VERSION=1.1 (pin to minor, get patch updates)
+    #   MAPROOM_VERSION=1 (pin to major, get minor updates)
+    #   Default: latest (always newest release)
+    image: crewchief/maproom-mcp:${MAPROOM_VERSION:-latest}
     container_name: maproom-mcp
     depends_on:
       postgres:

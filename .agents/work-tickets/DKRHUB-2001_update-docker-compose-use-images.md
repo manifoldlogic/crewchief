@@ -1,9 +1,9 @@
 # Ticket: DKRHUB-2001: Update docker-compose.yml to Use Images
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -23,12 +23,12 @@ This is the critical fix that makes the npm package functional in production.
 Reference: DKRHUB_PLAN.md Phase 2, Task DKRHUB-2001 (lines 324-362)
 
 ## Acceptance Criteria
-- [ ] `build:` section removed from maproom-mcp service in docker-compose.yml (lines 87-91)
-- [ ] `image:` directive added: `crewchief/maproom-mcp:${MAPROOM_VERSION:-latest}`
-- [ ] Environment variable `MAPROOM_VERSION` supports version pinning with default `latest`
-- [ ] Other services (postgres, ollama) remain unchanged
-- [ ] File passes `docker-compose config` validation
-- [ ] Comments document the change and version pinning option
+- [x] `build:` section removed from maproom-mcp service in docker-compose.yml (lines 87-91)
+- [x] `image:` directive added: `crewchief/maproom-mcp:${MAPROOM_VERSION:-latest}`
+- [x] Environment variable `MAPROOM_VERSION` supports version pinning with default `latest`
+- [x] Other services (postgres, ollama) remain unchanged
+- [x] File passes `docker-compose config` validation
+- [x] Comments document the change and version pinning option
 
 ## Technical Requirements
 **File**: `packages/maproom-mcp/config/docker-compose.yml`
@@ -98,3 +98,48 @@ Reference DKRHUB_ARCHITECTURE.md lines 286-411 for complete docker-compose speci
 
 ## Files/Packages Affected
 - `packages/maproom-mcp/config/docker-compose.yml` (modify lines 87-91, add comments)
+
+## Implementation Notes (docker-engineer)
+**Date**: 2025-10-30
+
+**Changes Made**:
+1. Removed `build:` section from maproom-mcp service (lines 88-90 in original)
+2. Added `image:` directive: `crewchief/maproom-mcp:${MAPROOM_VERSION:-latest}` (line 94)
+3. Added comprehensive comments documenting version pinning options (lines 88-93)
+4. Verified docker-compose.yml syntax with `docker-compose config` - PASSED
+5. Confirmed postgres and ollama services remain unchanged
+
+**Validation Results**:
+```bash
+$ docker-compose -f /workspace/packages/maproom-mcp/config/docker-compose.yml config
+# Output: Successfully parsed and validated (see full output above)
+# Key verification: image: crewchief/maproom-mcp:latest
+```
+
+**All Acceptance Criteria Met**:
+- [x] `build:` section removed from maproom-mcp service
+- [x] `image:` directive added with correct format
+- [x] `MAPROOM_VERSION` environment variable supports version pinning (default: latest)
+- [x] Other services (postgres, ollama) remain unchanged
+- [x] File passes `docker-compose config` validation
+- [x] Comments document the change and version pinning options
+
+**File Modified**:
+- `/workspace/packages/maproom-mcp/config/docker-compose.yml` (lines 87-94)
+
+**Build/Run Commands**:
+```bash
+# Default (latest version)
+docker-compose -f packages/maproom-mcp/config/docker-compose.yml up -d
+
+# Pin to specific version
+MAPROOM_VERSION=1.1.10 docker-compose -f packages/maproom-mcp/config/docker-compose.yml up -d
+
+# Pull image manually to verify Docker Hub access
+docker pull crewchief/maproom-mcp:latest
+```
+
+**Platform-Specific Notes**:
+- This change is platform-independent (AMD64, ARM64, etc.)
+- Docker will automatically pull the appropriate multi-platform image
+- No platform-specific issues encountered
