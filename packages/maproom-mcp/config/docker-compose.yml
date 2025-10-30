@@ -91,7 +91,7 @@ services:
     #   MAPROOM_VERSION=1.1 (pin to minor, get patch updates)
     #   MAPROOM_VERSION=1 (pin to major, get minor updates)
     #   Default: latest (always newest release)
-    image: crewchief/maproom-mcp:${MAPROOM_VERSION:-latest}
+    image: manifoldlogic/crewchief_maproom-mcp:${MAPROOM_VERSION:-latest}
     container_name: maproom-mcp
     depends_on:
       postgres:
