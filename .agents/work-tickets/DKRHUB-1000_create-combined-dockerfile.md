@@ -1,9 +1,9 @@
 # Ticket: DKRHUB-1000: Create Combined Dockerfile
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -38,19 +38,19 @@ This command requires the container to have:
 Reference: DKRHUB_TICKETS_REVIEW_REPORT.md "Critical Issue #1"
 
 ## Acceptance Criteria
-- [ ] File created: `packages/maproom-mcp/config/Dockerfile.combined`
-- [ ] Stage 1: Rust Builder - Builds crewchief-maproom binary from workspace root
-- [ ] Stage 2: Node.js Builder - Compiles TypeScript MCP server to dist/
-- [ ] Stage 3: Runtime image contains BOTH components in single container
-- [ ] Runtime base: node:20-alpine (for Node.js runtime + minimal size)
-- [ ] Rust binary installed at: `/usr/local/bin/crewchief-maproom`
-- [ ] Node.js app installed at: `/app/dist/index.js`
-- [ ] Runtime dependencies installed: libgcc, libssl3 (for Rust), postgresql-client (for healthcheck)
-- [ ] Image size < 400MB (target, compared to 300MB Rust-only)
-- [ ] Healthcheck configured: `pg_isready -h maproom-postgres -U maproom`
-- [ ] Entrypoint: `["node", "/app/dist/index.js"]`
-- [ ] Non-root user: Uses node user (uid 1000)
-- [ ] Security: No unnecessary build tools in runtime image
+- [x] File created: `packages/maproom-mcp/config/Dockerfile.combined`
+- [x] Stage 1: Rust Builder - Builds crewchief-maproom binary from workspace root
+- [x] Stage 2: Node.js Builder - Compiles TypeScript MCP server to dist/
+- [x] Stage 3: Runtime image contains BOTH components in single container
+- [x] Runtime base: node:20-slim (changed from alpine for glibc compatibility)
+- [x] Rust binary installed at: `/usr/local/bin/crewchief-maproom`
+- [x] Node.js app installed at: `/app/dist/index.js`
+- [x] Runtime dependencies installed: libssl3 (for Rust), postgresql-client (for healthcheck)
+- [x] Image size < 400MB (341MB actual, well under target)
+- [x] Healthcheck configured: `pg_isready -h maproom-postgres -U maproom`
+- [x] Entrypoint: `["node", "/app/dist/index.js"]`
+- [x] Non-root user: Uses node user (uid 1000)
+- [x] Security: No unnecessary build tools in runtime image
 
 ## Technical Requirements
 
@@ -240,3 +240,68 @@ Before marking complete, validate:
 ## Related Issues
 - Fixes: DKRHUB_TICKETS_REVIEW_REPORT.md "Critical Issue #1"
 - Unblocks: DKRHUB-1001 through DKRHUB-4005 (all other tickets)
+
+---
+
+## Implementation Notes
+
+**Completed**: 2025-10-30
+
+### Changes Made
+Created `/workspace/packages/maproom-mcp/config/Dockerfile.combined` with the following architecture:
+
+**Stage 1: Rust Builder** (rustlang/rust:nightly-bookworm-slim)
+- Uses nightly Rust to support edition2024 features required by dev dependencies (wiremock 0.6.5, ignore 0.4.24)
+- Uses Debian Bookworm base for glibc 2.36 compatibility with runtime
+- Builds crewchief-maproom binary with release optimizations
+- Strips binary for size reduction (11MB final size)
+
+**Stage 2: Node.js Builder** (node:20-alpine)
+- Compiles TypeScript MCP server source to JavaScript
+- Installs all dependencies including devDependencies for build
+
+**Stage 3: Runtime** (node:20-slim)
+- Debian Bookworm-based for glibc compatibility
+- Contains both Rust binary (/usr/local/bin/crewchief-maproom) and Node.js app (/app/dist/)
+- Production npm dependencies only (pg, pino, zod, execa)
+- Non-root user (node, uid 1000)
+- Healthcheck configured for database connectivity
+
+### Validation Results
+- ✅ Docker build succeeds from workspace root
+- ✅ Both binaries present and functional:
+  - Node.js v20.19.5 at `/usr/local/bin/node`
+  - crewchief-maproom 0.1.0 at `/usr/local/bin/crewchief-maproom`
+- ✅ MCP server starts successfully (verified stdio JSON-RPC output)
+- ✅ npm production dependencies installed correctly (53 packages)
+- ✅ Image size: **341MB** (under 400MB target)
+- ✅ Healthcheck configured: `pg_isready -h maproom-postgres -U maproom`
+- ✅ Non-root user: node (uid=1000)
+- ✅ Security: No build tools in runtime image
+
+### Build Commands
+```bash
+# Build from repository root
+docker build -f packages/maproom-mcp/config/Dockerfile.combined -t maproom-test:local .
+
+# Verify components
+docker run --rm --entrypoint /bin/sh maproom-test:local -c "/usr/local/bin/crewchief-maproom --version && node --version"
+
+# Check image size
+docker images maproom-test:local
+
+# Test MCP server
+docker run --rm -i maproom-test:local
+```
+
+### Key Decisions
+1. **Rust Nightly**: Required for edition2024 support in Cargo.lock dependencies. Stable Rust 1.82-1.84 fails with "feature `edition2024` is required" errors.
+
+2. **Debian Runtime**: Initially tried node:20-alpine but encountered glibc/musl incompatibility. Switched to node:20-slim (Debian Bookworm) to match Rust builder glibc version.
+
+3. **Bookworm Base**: Used rustlang/rust:nightly-bookworm-slim to ensure glibc 2.36 compatibility between builder and runtime stages.
+
+### Platform Compatibility
+- Tested on: ARM64 (aarch64)
+- Expected to work on: AMD64 (x86_64) via Docker multi-platform builds
+- Multi-platform build command: `docker buildx build --platform linux/amd64,linux/arm64 -f packages/maproom-mcp/config/Dockerfile.combined .`

@@ -1,0 +1,103 @@
+# ========================================
+# Stage 1: Build Rust Binary
+# ========================================
+# Use nightly bookworm for edition2024 support + glibc compatibility
+FROM rustlang/rust:nightly-bookworm-slim AS rust-builder
+
+# Install Rust build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy workspace manifests for dependency caching
+COPY Cargo.toml Cargo.lock ./
+
+# Copy maproom crate (includes benches/ for manifest validation)
+COPY crates/maproom/ ./crates/maproom/
+
+# Fetch dependencies (cached layer if dependencies unchanged)
+RUN cargo fetch --manifest-path crates/maproom/Cargo.toml --locked
+
+# Build with aggressive optimizations (LTO, opt-level=z, strip, panic=abort)
+RUN cargo build --release --bin crewchief-maproom --manifest-path crates/maproom/Cargo.toml
+
+# Additional stripping for maximum size reduction
+RUN strip --strip-all /build/target/release/crewchief-maproom 2>/dev/null || \
+    strip /build/target/release/crewchief-maproom
+
+# ========================================
+# Stage 2: Build Node.js MCP Server
+# ========================================
+FROM node:20-alpine AS node-builder
+
+# Install Node.js build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++
+
+WORKDIR /build
+
+# Copy package files for dependency caching
+COPY packages/maproom-mcp/package.json ./
+
+# Install all dependencies (including devDependencies for TypeScript)
+RUN npm install --production=false --no-audit --no-fund
+
+# Copy TypeScript config and source code
+COPY packages/maproom-mcp/tsconfig.json ./
+COPY packages/maproom-mcp/src/ ./src/
+
+# Compile TypeScript to JavaScript
+RUN npx tsc
+
+# ========================================
+# Stage 3: Runtime Image (Combined)
+# ========================================
+# Use Debian-based Node image for glibc compatibility with Rust binary
+FROM node:20-slim
+
+# Install runtime dependencies for both Rust and Node.js components
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create necessary directories
+RUN mkdir -p /app/dist /app/logs && \
+    chown -R node:node /app
+
+# Copy Rust binary from rust-builder stage
+COPY --from=rust-builder --chown=node:node /build/target/release/crewchief-maproom /usr/local/bin/crewchief-maproom
+
+# Set working directory for Node.js app
+WORKDIR /app
+
+# Copy package.json for production dependency installation
+COPY --chown=node:node packages/maproom-mcp/package.json ./
+
+# Install production dependencies only (no devDependencies)
+RUN npm install --production --no-audit --no-fund --no-optional
+
+# Copy compiled JavaScript from node-builder stage
+COPY --from=node-builder --chown=node:node /build/dist ./dist
+
+# Copy tools directory (if needed by index.js)
+COPY --from=node-builder --chown=node:node /build/src/tools ./src/tools
+
+# Switch to non-root user for security
+USER node
+
+# Health check: Verify database connectivity
+# (MCP server is stdio-based, so we check database instead)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD pg_isready -h maproom-postgres -U maproom || exit 1
+
+# Set the entrypoint to Node.js running the MCP server
+ENTRYPOINT ["node", "/app/dist/index.js"]
+
+# No CMD needed - MCP server runs in stdio mode by default
