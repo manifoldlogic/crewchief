@@ -9,6 +9,7 @@
   "scripts": {
     "prepare": "husky",
     "build": "node packages/cli/dist/cli/index.js build",
+    "test": "pnpm -r --filter='./packages/*' test",
     "release": "node packages/cli/dist/cli/index.js release",
     "release:patch": "node packages/cli/dist/cli/index.js release --type patch",
     "release:minor": "node packages/cli/dist/cli/index.js release --type minor",
