@@ -15,6 +15,7 @@ docs
 deps
 embedding
 perf
+release
 search
 tests
 tools
