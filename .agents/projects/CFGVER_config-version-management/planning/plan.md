@@ -1,344 +1,191 @@
-# Config Version Management - Implementation Plan
+# Config Version Management - Simplified Implementation Plan
 
-## Project Overview
+## Overview
 
-Implement version-based configuration management to prevent config drift in the Maproom MCP CLI. This ensures users always have up-to-date configurations when running `npx -y @crewchief/maproom-mcp@latest`.
+Implement simple version tracking to prevent config drift. Focus on solving the immediate problem quickly, iterate if needed.
 
-**Goal:** Zero config drift incidents, automatic updates, safe rollback on failure.
+## Implementation Strategy
 
-## Implementation Phases
+### Core Principle
+**KISS (Keep It Simple, Stupid)**: Detect version changes, copy fresh configs, preserve user `.env` file.
 
-### Phase 1: Core Version Management (Week 1)
+### What We're Building
 
-**Objective:** Implement version tracking and detection logic
+```typescript
+// Version file: ~/.maproom-mcp/.version
+1.2.0
 
-**Deliverables:**
-1. Version file schema and creation logic
-2. Version comparison function
-3. Update detection logic
-4. File integrity checking (SHA-256 hashing)
+// On CLI startup:
+1. Read cached version from .version file
+2. Compare to package.json version
+3. If different: copy all configs from package, preserve .env
+4. Write new version to .version file
+```
 
-**Acceptance Criteria:**
-- Can detect when config needs update (version mismatch, missing file, corrupted file)
-- Can create version file with accurate metadata
-- Can compute and verify file hashes
-- Unit tests for all core logic (80% coverage)
+## Tickets (4 total, ~1-2 days)
 
-**Estimated Effort:** 2-3 days
+### CFGVER-001: Version File Schema (2 hours)
+**Goal**: Track package version in cache directory
 
-**Agent Assignments:**
-- **Implementation:** database-engineer (handles file management and integrity logic)
-- **Testing:** unit-test-runner (creates and runs unit tests)
-- **Review:** code-reviewer (verifies correctness and edge cases)
+**Implementation**:
+- Location: `~/.maproom-mcp/.version`
+- Content: Single line with version string (e.g., "1.2.0")
+- Functions: `readVersion()`, `writeVersion(version)`
 
----
-
-### Phase 2: Safe Update Process (Week 1-2)
-
-**Objective:** Implement backup, update, and rollback mechanisms
-
-**Deliverables:**
-1. Backup creation logic (copy all configs to timestamped directory)
-2. Config update logic (copy new files from package)
-3. Rollback mechanism (restore from backup on failure)
-4. Cleanup logic (remove old backups, keep last 5)
-
-**Acceptance Criteria:**
-- Can create backup before update
-- Can copy new config files
-- Can rollback on failure
-- Can cleanup old backups
-- Integration tests for update flow
-
-**Estimated Effort:** 3-4 days
-
-**Agent Assignments:**
-- **Implementation:** database-engineer (file operations, backup logic)
-- **Testing:** integration-tester (end-to-end update scenarios)
-- **Review:** code-reviewer (verify safety and error handling)
+**No need for**:
+- JSON schema
+- File hashes
+- Timestamps
+- Metadata
 
 ---
 
-### Phase 3: Docker Integration (Week 2)
+### CFGVER-002: Version Comparison (2 hours)
+**Goal**: Detect when cached configs are stale
 
-**Objective:** Handle Docker containers during updates
+**Implementation**:
+```typescript
+function needsConfigUpdate(): boolean {
+  const currentVersion = require('../package.json').version;
+  const versionFile = path.join(CACHE_DIR, '.version');
 
-**Deliverables:**
-1. Container stop logic (docker compose down)
-2. Volume cleanup logic (prune with filters)
-3. Error handling for Docker not running
-4. Container restart verification
+  if (!fs.existsSync(versionFile)) return true; // First run
 
-**Acceptance Criteria:**
-- Stops containers before update
-- Cleans up old volumes safely
-- Handles Docker not available gracefully
-- Doesn't affect user's other containers
-- Integration tests with Docker
+  const cachedVersion = fs.readFileSync(versionFile, 'utf-8').trim();
+  return currentVersion !== cachedVersion; // Version mismatch
+}
+```
 
-**Estimated Effort:** 2-3 days
-
-**Agent Assignments:**
-- **Implementation:** docker-engineer (Docker operations and cleanup)
-- **Testing:** integration-tester (Docker scenarios)
-- **Review:** code-reviewer (verify container safety)
+**Returns**: Simple boolean (true = needs update)
 
 ---
 
-### Phase 4: CLI Integration (Week 2)
+### CFGVER-003: Config Update with .env Preservation (3-4 hours)
+**Goal**: Copy fresh configs, preserve user customizations
 
-**Objective:** Integrate version management into CLI entry point
+**Implementation**:
+```typescript
+function updateConfigs() {
+  const CACHE_DIR = path.join(os.homedir(), '.maproom-mcp');
+  const PACKAGE_CONFIGS = path.join(__dirname, '../config');
 
-**Deliverables:**
-1. Update CLI entry point to check version on startup
-2. User-friendly progress messages
-3. Error messages with recovery steps
-4. Environment variable support for cache directory (testing)
+  // Backup user .env if exists
+  const userEnv = path.join(CACHE_DIR, '.env');
+  let envBackup = null;
+  if (fs.existsSync(userEnv)) {
+    envBackup = fs.readFileSync(userEnv, 'utf-8');
+  }
 
-**Acceptance Criteria:**
-- CLI checks for updates on every run
-- Shows clear progress messages during update
-- Provides actionable error messages
-- Can run in test mode (custom cache directory)
-- Manual testing checklist complete
+  // Copy all configs from package
+  fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+  fs.mkdirSync(CACHE_DIR, { recursive: true, mode: 0o700 });
+  fs.cpSync(PACKAGE_CONFIGS, CACHE_DIR, { recursive: true });
 
-**Estimated Effort:** 1-2 days
+  // Restore user .env if existed
+  if (envBackup) {
+    fs.writeFileSync(userEnv, envBackup, { mode: 0o600 });
+  }
 
-**Agent Assignments:**
-- **Implementation:** mcp-tools-engineer (CLI integration)
-- **Testing:** integration-tester (manual testing scenarios)
-- **Review:** code-reviewer (UX and error handling)
+  // Write new version
+  const currentVersion = require('../package.json').version;
+  fs.writeFileSync(path.join(CACHE_DIR, '.version'), currentVersion);
+}
+```
 
----
-
-### Phase 5: Testing and Validation (Week 3)
-
-**Objective:** Comprehensive testing and validation
-
-**Deliverables:**
-1. Complete unit test suite (80%+ coverage)
-2. Integration test suite (all critical paths)
-3. Manual testing on macOS and Linux
-4. Documentation updates
-5. CI/CD pipeline updates
-
-**Acceptance Criteria:**
-- All unit tests pass
-- All integration tests pass
-- Manual testing checklist complete
-- CI pipeline green
-- Documentation updated
-
-**Estimated Effort:** 3-4 days
-
-**Agent Assignments:**
-- **Unit Testing:** unit-test-runner (vitest tests)
-- **Integration Testing:** integration-tester (end-to-end scenarios)
-- **Manual Testing:** mcp-tools-engineer (user experience validation)
-- **Documentation:** documentation-engineer (update docs)
+**Key points**:
+- Delete everything EXCEPT user `.env` contents (in memory)
+- Copy fresh from package
+- Restore user `.env` if it existed
+- No backup directory (if fails, user re-runs npx)
 
 ---
 
-### Phase 6: Release and Monitoring (Week 3)
+### CFGVER-004: CLI Integration (2-3 hours)
+**Goal**: Check version on every CLI startup
 
-**Objective:** Ship to production and monitor for issues
+**Implementation** (`bin/cli.cjs`):
+```javascript
+async function main() {
+  // Check for config updates
+  if (needsConfigUpdate()) {
+    console.log('📦 Updating Maproom MCP configs...');
+    try {
+      updateConfigs();
+      console.log('✅ Configs updated successfully');
+    } catch (error) {
+      console.error('❌ Config update failed:', error.message);
+      console.error('💡 Try deleting ~/.maproom-mcp/ and re-running');
+      process.exit(1);
+    }
+  }
 
-**Deliverables:**
-1. Version bump (patch: 1.2.3)
-2. Publish to npm registry
-3. Update GitHub release notes
-4. Monitor for user-reported issues
+  // Continue with normal CLI startup...
+}
+```
 
-**Acceptance Criteria:**
-- Package published to npm
-- Release notes accurate
-- No critical issues within 48 hours
-- User feedback collected
-
-**Estimated Effort:** 1 day
-
-**Agent Assignments:**
-- **Release:** database-engineer (version bump, npm publish)
-- **Documentation:** documentation-engineer (release notes)
-- **Monitoring:** None (manual user feedback collection)
-
----
-
-## Dependencies and Blockers
-
-### External Dependencies
-
-- **Docker** - Must be available for integration tests
-- **npm Registry** - For publishing package
-- **GitHub Actions** - For CI/CD pipeline
-
-### Internal Dependencies
-
-- Phase 2 depends on Phase 1 (version detection needed for update logic)
-- Phase 3 depends on Phase 2 (Docker cleanup happens during update)
-- Phase 4 depends on Phase 1-3 (CLI integration needs all components)
-- Phase 5 depends on Phase 1-4 (testing validates complete system)
-- Phase 6 depends on Phase 5 (can't release without passing tests)
-
-### Known Blockers
-
-None identified. If Docker integration proves complex, Phase 3 can be simplified (skip volume cleanup initially).
+**User experience**:
+- Seamless: Update happens automatically
+- Fast: Only on version change (not every run)
+- Clear: Progress messages
+- Safe fallback: Manual fix instructions if fails
 
 ---
 
-## Risk Management
+## Timeline
 
-### High Risks
+| Ticket | Hours | Cumulative |
+|--------|-------|------------|
+| CFGVER-001 | 2 | 2 |
+| CFGVER-002 | 2 | 4 |
+| CFGVER-003 | 3-4 | 7-8 |
+| CFGVER-004 | 2-3 | 9-11 |
+| **Total** | **9-11 hours** | **1-2 days** |
 
-1. **Rollback Failure** - Backup corrupted or missing
-   - **Mitigation:** Verify backup immediately after creation
-   - **Contingency:** Document manual recovery steps
+## Testing Strategy
 
-2. **Docker Conflicts** - Update affects user's other containers
-   - **Mitigation:** Use label filters for cleanup
-   - **Contingency:** Document volume recovery
+**Minimal testing approach**:
+- Manual testing: First run, version update, .env preservation
+- No unit tests initially (add if bugs appear)
+- Real-world validation: Ship and monitor for issues
 
-3. **Permission Errors** - Can't write to ~/.maproom-mcp/
-   - **Mitigation:** Check permissions before update
-   - **Contingency:** Clear error message with fix command
+**Test scenarios**:
+1. First run (no .version file) → creates configs
+2. Version change (1.1.12 → 1.2.0) → updates configs
+3. User has custom .env → preserved after update
+4. Update fails → clear error message with recovery steps
 
-### Medium Risks
+## Risk Assessment
 
-1. **Concurrent Updates** - Two terminals running npx simultaneously
-   - **Mitigation:** Document that it's not supported (acceptable for MVP)
-   - **Future:** Add file locking
+**Low Risk Approach**:
+- Worst case: Update fails, user deletes `~/.maproom-mcp/` and re-runs
+- No data loss: User `.env` preserved in memory during update
+- No breaking changes: New configs are known-good from package
 
-2. **Disk Space** - Not enough space for backup
-   - **Mitigation:** Check available space (future enhancement)
-   - **Contingency:** Error message mentions disk space
+**What if things go wrong?**
+- Update fails mid-process → User re-runs `npx` command
+- .env lost → User recreates (rare, only if write fails)
+- Containers broken → Restart with `docker compose up -d`
 
-3. **Test Coverage** - Edge cases not covered
-   - **Mitigation:** Focus on critical paths (first run, update, rollback)
-   - **Acceptance:** Document known limitations
-
----
+**Recovery is simple**: Delete cache directory, re-run npx.
 
 ## Success Metrics
 
-### Functional Metrics
+- Zero config drift incidents after shipping
+- Users don't notice the update (seamless)
+- No support tickets about stale configs
 
-- **Zero config drift incidents** reported by users after release
-- **100% success rate** for first-run config creation
-- **95%+ success rate** for version updates
-- **100% success rate** for rollback when triggered
+## Future Enhancements
 
-### Quality Metrics
+**If we need more safety later**, implement from comprehensive plan:
+- Backup before update (rollback on failure)
+- File integrity verification (detect corruption)
+- Docker container cleanup (stop before update)
+- Comprehensive test coverage (80%+)
 
-- **80%+ code coverage** for config-manager module
-- **All critical paths covered** by integration tests
-- **Zero high-severity security issues** in security review
-- **All manual test cases passing**
+**Archive location**: `.agents/archive/projects/CFGVER_config-version-management-comprehensive/`
 
-### User Experience Metrics
+## Decision: Ship Simple, Iterate
 
-- **Clear progress messages** during update (validated by manual testing)
-- **Actionable error messages** for common failures
-- **No user intervention required** for normal updates
-- **Positive user feedback** (monitor GitHub issues/discussions)
+**Philosophy**: Solve the immediate problem (config drift) with minimal code. Add complexity only if real issues emerge.
 
----
-
-## Timeline Summary
-
-| Phase | Duration | Completion Criteria |
-|-------|----------|-------------------|
-| 1. Core Version Management | 2-3 days | Version detection working |
-| 2. Safe Update Process | 3-4 days | Update with rollback working |
-| 3. Docker Integration | 2-3 days | Container management working |
-| 4. CLI Integration | 1-2 days | CLI integration complete |
-| 5. Testing and Validation | 3-4 days | All tests passing |
-| 6. Release and Monitoring | 1 day | Package published |
-| **Total** | **12-17 days** | **MVP shipped** |
-
-**Target Ship Date:** 3 weeks from project start
-
----
-
-## Post-MVP Enhancements
-
-### Phase 2 Features (Future)
-
-1. **File Locking** - Prevent concurrent updates
-2. **Config Migrations** - Support schema changes between versions
-3. **Partial Updates** - Only update changed files
-4. **Rollback Command** - Manual rollback: `npx maproom-mcp rollback`
-5. **Update Notifications** - Show changelog when updating
-6. **Dry Run Mode** - Preview updates: `--dry-run`
-7. **Encrypted Backups** - Encrypt backups at rest
-8. **Audit Logging** - Log all config operations
-
-**Estimated Effort:** 1-2 weeks per feature
-
-**Priority:** Based on user feedback and reported issues
-
----
-
-## Resource Requirements
-
-### Team
-
-- **Primary Developer:** 1 full-time
-- **Reviewers:** 1 part-time (code review)
-- **Testers:** Automated + manual (primary developer)
-
-### Tools and Infrastructure
-
-- **Development:** Node.js 18+, Docker, Git
-- **Testing:** Vitest, memfs, real Docker containers
-- **CI/CD:** GitHub Actions (existing)
-- **Publishing:** npm registry access
-
-### Documentation
-
-- **User-Facing:** Update README.md, add troubleshooting guide
-- **Developer-Facing:** Code comments, JSDoc annotations
-- **Process:** This plan, architecture, quality strategy, security review
-
----
-
-## Communication Plan
-
-### Internal Updates
-
-- **Daily:** Quick status update in team channel
-- **Weekly:** Progress report (phases complete, blockers, next steps)
-- **Phase Completion:** Demo to team, review feedback
-
-### External Communication
-
-- **Release Notes:** Detailed changelog with upgrade instructions
-- **GitHub Issue:** Close config drift issues with reference to fix
-- **npm Deprecation:** Deprecate old versions with security issues
-
----
-
-## Acceptance and Sign-Off
-
-### Definition of Done
-
-A phase is complete when:
-1. ✅ All deliverables implemented
-2. ✅ All acceptance criteria met
-3. ✅ Tests passing (unit + integration)
-4. ✅ Code reviewed and approved
-5. ✅ Documentation updated
-
-Project is complete when:
-1. ✅ All phases complete
-2. ✅ Package published to npm
-3. ✅ Release notes published
-4. ✅ Zero critical issues within 48 hours
-
----
-
-## References
-
-- **Analysis:** `analysis.md` - Problem space and industry solutions
-- **Architecture:** `architecture.md` - Technical design and components
-- **Quality Strategy:** `quality-strategy.md` - Testing approach
-- **Security Review:** `security-review.md` - Security considerations
+**Bet**: The simple approach will work fine for 95% of cases. The 5% edge cases can be handled with clear error messages and manual recovery.
