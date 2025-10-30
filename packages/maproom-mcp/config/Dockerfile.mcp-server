@@ -3,6 +3,11 @@
 # ========================================
 FROM node:20-alpine AS builder
 
+# Build arguments for metadata (passed from GitHub Actions)
+ARG VERSION=unknown
+ARG COMMIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
 # Install build dependencies
 RUN apk add --no-cache \
     python3 \
@@ -32,6 +37,11 @@ RUN npx tsc
 # Stage 2: Runtime Stage
 # ========================================
 FROM node:20-alpine
+
+# Re-declare build arguments for labels (multi-stage build requires re-declaration)
+ARG VERSION=unknown
+ARG COMMIT_SHA=unknown
+ARG BUILD_DATE=unknown
 
 # Install runtime dependencies only (ca-certificates for HTTPS, postgresql-client for potential health checks)
 RUN apk add --no-cache \
@@ -63,6 +73,16 @@ COPY --from=builder /build/src/tools ./src/tools
 
 # Switch to non-root user
 USER node
+
+# OCI-compliant image metadata labels
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.title="Maproom MCP Server" \
+      org.opencontainers.image.description="Semantic code search MCP server with local LLM embeddings" \
+      org.opencontainers.image.vendor="CrewChief" \
+      org.opencontainers.image.source="https://github.com/danielbushman/crewchief" \
+      org.opencontainers.image.licenses="MIT"
 
 # Health check: Verify process is running and database is accessible
 # Since this is a stdio service, we check if the process can connect to the database
