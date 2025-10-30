@@ -1,6 +1,6 @@
+import { spawnSync } from 'node:child_process'
 import chalk from 'chalk'
 import { Command } from 'commander'
-import { spawnSync } from 'node:child_process'
 import { runCommand } from '../utils/exec'
 
 type CheckResult = {
@@ -51,18 +51,15 @@ async function checkITerm(): Promise<CheckResult> {
     }
 
     // Check if iTerm2 is installed
-    const res = spawnSync('osascript', [
-      '-e',
-      'tell application "System Events" to name of every application process',
-    ])
+    const res = spawnSync('osascript', ['-e', 'tell application "System Events" to name of every application process'])
     const apps = res.stdout.toString()
     const hasITerm = apps.includes('iTerm')
-    
+
     return {
       name: 'iTerm2',
       ok: hasITerm,
-      message: hasITerm 
-        ? 'iTerm2 found (optional, needed for agent features)' 
+      message: hasITerm
+        ? 'iTerm2 found (optional, needed for agent features)'
         : 'iTerm2 not found (optional, needed for agent features)',
       optional: true,
     }
