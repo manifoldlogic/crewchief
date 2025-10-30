@@ -13,6 +13,7 @@ const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { needsConfigUpdate, updateConfigs } = require('../dist/config-manager.js');
 
 // Diagnostic Mode: Log environment variables for troubleshooting
 const DIAGNOSTIC_MODE = process.env.MAPROOM_MCP_DEBUG === 'true';
@@ -1065,6 +1066,20 @@ function sleep(ms) {
  */
 async function main() {
   try {
+    // Check for config updates
+    if (needsConfigUpdate()) {
+      console.log('\n📦 Maproom MCP configs need updating...\n');
+
+      try {
+        updateConfigs();
+        console.log('\n✅ Configs updated successfully!\n');
+      } catch (updateError) {
+        console.error('\n❌ Failed to update configs:', updateError.message);
+        console.error('\n💡 Recovery: Delete ~/.maproom-mcp/ and re-run this command\n');
+        process.exit(1);
+      }
+    }
+
     // Pre-flight checks
     checkDockerDaemon();
     checkDockerCompose();

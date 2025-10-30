@@ -438,7 +438,7 @@ A Graph Algorithms Engineer successfully completes a ticket when:
 
 ### Project Context
 - Edge schema: `crates/maproom/migrations/`
-- Context assembly: `crewchief_context/maproom/CONTEXT_ASM/`
+- Context assembly: `.agents/archive/projects/CONTEXT_ASM_context-assembly-engine/planning/`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

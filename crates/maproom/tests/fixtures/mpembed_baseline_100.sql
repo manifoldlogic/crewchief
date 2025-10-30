@@ -115,7 +115,7 @@ SET session_replication_role = replica;
 627	1	1	1	packages/maproom-mcp/src/utils/process.ts	ts	e095d6b6f08654fcae787bf48c921647d749045541418b216a1f6d76fa927e5b	10624	2025-10-24 17:52:25.074547+00
 629	1	1	1	packages/maproom-mcp/src/utils/git.ts	ts	d48f767fc4652a8f3b27a786c55673d81a579e4702b07ea1ee2bd6d27294528d	2597	2025-10-24 17:40:43.942423+00
 632	1	1	1	packages/maproom-mcp/src/index.ts	ts	1ae490a056a2deda2de2d836f67ce5691f7bcb06ea2079b4a7ef9acf182b03c9	46070	2025-10-27 05:53:01.069223+00
-665	1	1	1	crewchief_context/maproom/LANG_PARSE/LANG_PARSE_ANALYSIS.md	md	b1aeaf66b611f6b86d9cc12c0a5a9aedf307940d7515278f74e73a81087e7028	6016	2025-10-26 03:17:03.859003+00
+665	1	1	1	.agents/archive/projects/LANG_PARSE_multi-language-support/planning/LANG_PARSE_ANALYSIS.md	md	b1aeaf66b611f6b86d9cc12c0a5a9aedf307940d7515278f74e73a81087e7028	6016	2025-10-26 03:17:03.859003+00
 1806	1	1	1	docs/architecture/DATABASE_ARCHITECTURE.md	md	38fc001874deea268f615d0b92f11da072b804f063478a772685fe1cdcb21c64	18482	2025-10-28 06:12:24.919218+00
 2010	1	1	1	test-embedding.ts	ts	e95e7dc678e01d0ff35e1078e6b0fb44deaa4c2adb30b140e4f9f9ce8e85838b	131	2025-10-28 06:54:43.650685+00
 \.

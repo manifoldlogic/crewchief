@@ -230,7 +230,7 @@ fn test_parser_accuracy_claude_md() {
 fn test_parser_accuracy_architecture_doc() {
     let doc = ReferenceDoc::load(
         "MD_ENHANCE_ARCHITECTURE.md",
-        "/workspace/crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_ARCHITECTURE.md"
+        "/workspace/.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_ARCHITECTURE.md"
     );
 
     if let Some(doc) = doc {
@@ -561,7 +561,7 @@ fn test_comprehensive_accuracy_report() {
     let test_files = vec![
         ("README.md", "/workspace/README.md"),
         ("CLAUDE.md", "/workspace/CLAUDE.md"),
-        ("MD_ENHANCE_ARCHITECTURE.md", "/workspace/crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_ARCHITECTURE.md"),
+        ("MD_ENHANCE_ARCHITECTURE.md", "/workspace/.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_ARCHITECTURE.md"),
     ];
 
     let mut total_elements = 0;

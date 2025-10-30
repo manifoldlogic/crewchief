@@ -455,7 +455,7 @@ A Graph Analysis Engineer successfully completes a ticket when:
 - Cycle detection for circular dependencies
 
 ### Project Context
-- Specification: `crewchief_context/maproom/specification.md`
+- Specification: `.agents/knowledge/maproom/specification.md`
 - Schema: `crates/maproom/migrations/`
 - Indexer: `crates/maproom/src/indexer/`
 - Work tickets: `.agents/work-tickets/`

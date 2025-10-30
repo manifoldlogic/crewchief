@@ -123,8 +123,8 @@ fn test_performance_multiple_files_batch() {
     let files = vec![
         "/workspace/README.md",
         "/workspace/CLAUDE.md",
-        "/workspace/crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_PLAN.md",
-        "/workspace/crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_ARCHITECTURE.md",
+        "/workspace/.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_PLAN.md",
+        "/workspace/.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_ARCHITECTURE.md",
     ];
 
     let mut total_lines = 0;

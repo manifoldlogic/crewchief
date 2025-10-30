@@ -272,8 +272,8 @@ cargo criterion --bench parser_bench
 ### References
 
 - Ticket: `.agents/work-tickets/MD_ENHANCE-4002_quality-testing.md`
-- Plan: `crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_PLAN.md`
-- Architecture: `crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_ARCHITECTURE.md`
+- Plan: `.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_PLAN.md`
+- Architecture: `.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_ARCHITECTURE.md`
 
 ---
 

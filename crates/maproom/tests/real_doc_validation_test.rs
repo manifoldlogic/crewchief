@@ -47,7 +47,7 @@ fn test_parse_real_claude_md() {
 #[test]
 fn test_parse_real_architecture_doc() {
     // Parse an architecture document if available
-    let arch_doc_path = "/workspace/crewchief_context/maproom/MD_ENHANCE/MD_ENHANCE_ARCHITECTURE.md";
+    let arch_doc_path = "/workspace/.agents/archive/projects/MD_ENHANCE_markdown-enhancement/planning/MD_ENHANCE_ARCHITECTURE.md";
     if let Ok(content) = fs::read_to_string(arch_doc_path) {
         let chunks = parser::extract_chunks(&content, "md");
 

@@ -659,7 +659,7 @@ A Performance Regression Test Engineer successfully completes a ticket when:
 ### Project Context
 - Benchmark suite: `benchmarks/`
 - Baseline tracking: `benchmarks/baselines/`
-- Performance targets: `crewchief_context/maproom/PERF_OPT/`
+- Performance targets: `.agents/archive/projects/PERF_OPT_performance-optimization/planning/`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

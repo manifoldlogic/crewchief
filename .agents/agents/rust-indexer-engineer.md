@@ -422,7 +422,7 @@ A Rust Indexer Engineer successfully completes a ticket when:
 
 ### Project Context
 - Maproom codebase: `crates/maproom/src/`
-- Specification: `crewchief_context/maproom/specification.md`
+- Specification: `.agents/knowledge/maproom/specification.md`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

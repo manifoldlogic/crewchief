@@ -661,8 +661,8 @@ A Monitoring & Observability Engineer successfully completes a ticket when:
 - ELK Stack: https://www.elastic.co/guide/
 
 ### Project Context
-- Metrics requirements: `crewchief_context/maproom/PERF_OPT/`
-- System architecture: `crewchief_context/maproom/specification.md`
+- Metrics requirements: `.agents/archive/projects/PERF_OPT_performance-optimization/planning/`
+- System architecture: `.agents/knowledge/maproom/specification.md`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

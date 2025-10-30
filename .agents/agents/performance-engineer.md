@@ -326,7 +326,7 @@ A Performance Engineer successfully completes a ticket when:
 - Database: EXPLAIN ANALYZE, pg_stat_statements
 
 ### Project Context
-- Specification: `crewchief_context/maproom/specification.md` (Performance Targets section)
+- Specification: `.agents/knowledge/maproom/specification.md` (Performance Targets section)
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles
