@@ -41,3 +41,37 @@ export function needsConfigUpdate(): boolean {
   // Version mismatch
   return cachedVersion !== currentVersion;
 }
+
+export function updateConfigs(): void {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const PACKAGE_CONFIGS = path.join(currentDir, '../config');
+  const userEnvPath = path.join(CACHE_DIR, '.env');
+
+  // Step 1: Backup user .env if exists
+  let userEnvContent: string | null = null;
+  if (fs.existsSync(userEnvPath)) {
+    userEnvContent = fs.readFileSync(userEnvPath, 'utf-8');
+    console.log('  💾 Preserving user .env file...');
+  }
+
+  // Step 2: Delete old cache directory
+  if (fs.existsSync(CACHE_DIR)) {
+    fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+  }
+
+  // Step 3: Copy fresh configs from package
+  fs.mkdirSync(CACHE_DIR, { recursive: true, mode: 0o700 });
+  fs.cpSync(PACKAGE_CONFIGS, CACHE_DIR, { recursive: true });
+  console.log('  📋 Copied fresh configs from package...');
+
+  // Step 4: Restore user .env if it existed
+  if (userEnvContent !== null) {
+    fs.writeFileSync(userEnvPath, userEnvContent, { mode: 0o600 });
+    console.log('  ✅ Restored user .env file');
+  }
+
+  // Step 5: Write current version
+  const packageJsonPath = path.join(currentDir, '../package.json');
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+  writeVersion(packageJson.version);
+}
