@@ -3,6 +3,12 @@ set -e
 
 echo "🔄 Running post-start setup..."
 
+# Fix Docker socket permissions for docker-in-docker
+if [ -S /var/run/docker.sock ]; then
+    sudo chown root:docker /var/run/docker.sock 2>/dev/null || true
+    echo "✓ Fixed Docker socket permissions"
+fi
+
 # Ensure PostgreSQL is ready
 until pg_isready -h postgres -p 5432 -U postgres; do
     echo "Waiting for PostgreSQL..."
