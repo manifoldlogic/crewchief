@@ -98,6 +98,63 @@ const MAX_HEALTH_WAIT_MS = 120000; // 2 minutes
 const HEALTH_CHECK_INTERVAL_MS = 2000; // 2 seconds
 
 /**
+ * Get the correct PostgreSQL connection string based on environment
+ * @returns {string} The appropriate connection string
+ */
+function getDatabaseConnectionString() {
+  // Check if MAPROOM_DB_HOST environment variable is set (allows override)
+  if (process.env.MAPROOM_DB_HOST) {
+    return `postgresql://maproom:maproom@${process.env.MAPROOM_DB_HOST}:${process.env.MAPROOM_DB_PORT || 5432}/maproom`;
+  }
+
+  // Try to detect if we're in a Docker/devcontainer environment
+  // by checking if we can resolve the maproom-postgres hostname
+  try {
+    const { execSync } = require('child_process');
+    // Quick DNS check for maproom-postgres hostname
+    execSync('getent hosts maproom-postgres 2>/dev/null || ping -c 1 -W 1 maproom-postgres 2>/dev/null', {
+      stdio: 'pipe',
+      timeout: 1000
+    });
+    // If we got here, maproom-postgres hostname resolves
+    diagnosticLog('Using container hostname for database connection');
+    return 'postgresql://maproom:maproom@maproom-postgres:5432/maproom';
+  } catch (error) {
+    // Hostname doesn't resolve, use localhost
+    diagnosticLog('Using localhost for database connection');
+    return 'postgresql://maproom:maproom@127.0.0.1:5433/maproom';
+  }
+}
+
+/**
+ * Parse command-line arguments
+ * @returns {{command: string|null, flags: object}} Parsed command and flags
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
+
+  // Find the first non-flag argument as the command
+  const command = args.find(arg => !arg.startsWith('--'));
+
+  // Parse all --flag=value or --flag arguments
+  const flags = {};
+  args.forEach(arg => {
+    if (arg.startsWith('--')) {
+      const flagStr = arg.substring(2);
+      const [key, value] = flagStr.split('=');
+      flags[key] = value !== undefined ? value : true;
+    }
+  });
+
+  return { command, flags };
+}
+
+// Parse arguments at startup
+const { command, flags } = parseArgs();
+
+diagnosticLog('Command Line Arguments', { command, flags });
+
+/**
  * Check if Docker daemon is running
  */
 function checkDockerDaemon() {
@@ -494,7 +551,7 @@ function getRequiredServices() {
   const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase();
 
   const services = {
-    // postgres: true,  // Already started by docker-compose.yml
+    // postgres: NOT included here - automatically started by docker-compose.yml via depends_on
     ollama: false,      // Only if using Ollama provider
     'maproom-mcp': true // Always required - the MCP server itself
   };
@@ -527,8 +584,10 @@ function getRequiredServices() {
  * @param {string[]} requiredServices - List of services that should be running
  */
 function removeUnnecessaryServices(requiredServices) {
-  const ALL_SERVICES = ['postgres', 'ollama', 'maproom-mcp'];
-  const unnecessaryServices = ALL_SERVICES.filter(s => !requiredServices.includes(s));
+  // Note: postgres is NOT included here - it's always needed and auto-started via depends_on
+  // We only conditionally start/stop ollama based on the provider
+  const CONDITIONAL_SERVICES = ['ollama'];
+  const unnecessaryServices = CONDITIONAL_SERVICES.filter(s => !requiredServices.includes(s));
 
   if (unnecessaryServices.length === 0) {
     console.error('No unnecessary services to remove\n');
@@ -536,7 +595,7 @@ function removeUnnecessaryServices(requiredServices) {
   }
 
   console.error('\n=== Removing Unnecessary Services ===');
-  console.error(`Required services: ${requiredServices.join(', ')}`);
+  console.error(`Required services: ${requiredServices.join(', ')} (+ postgres via depends_on)`);
   console.error(`Removing: ${unnecessaryServices.join(', ')}\n`);
 
   // Explicitly pass environment variables to docker command
@@ -614,7 +673,10 @@ function removeUnnecessaryServices(requiredServices) {
  */
 function verifyFinalState(expectedServices) {
   console.error('\n=== Verifying Final Container State ===');
-  console.error(`Expected services: ${expectedServices.join(', ')}`);
+
+  // postgres is always expected (auto-started via depends_on)
+  const allExpectedServices = [...expectedServices, 'postgres'];
+  console.error(`Expected services: ${allExpectedServices.join(', ')}`);
 
   // Log current state first
   logDockerState();
@@ -659,15 +721,15 @@ function verifyFinalState(expectedServices) {
 
   console.error(`Running services: ${runningServices.join(', ') || '(none)'}`);
 
-  // Check for unexpected services
-  const unexpected = runningServices.filter(s => !expectedServices.includes(s));
+  // Check for unexpected services (using allExpectedServices which includes postgres)
+  const unexpected = runningServices.filter(s => !allExpectedServices.includes(s));
   if (unexpected.length > 0) {
     console.error(`⚠️  WARNING: Unexpected services running: ${unexpected.join(', ')}`);
     console.error('These services should have been removed. Manual cleanup may be needed.');
   }
 
-  // Check for missing services
-  const missing = expectedServices.filter(s => !runningServices.includes(s));
+  // Check for missing services (using allExpectedServices)
+  const missing = allExpectedServices.filter(s => !runningServices.includes(s));
   if (missing.length > 0) {
     console.error(`❌ ERROR: Expected services not running: ${missing.join(', ')}`);
     console.error('Startup may have failed. Check logs above for errors.');
@@ -1055,6 +1117,70 @@ function validateProviderConfig(provider) {
 }
 
 /**
+ * Validate provider requirements during setup
+ * (More lenient than validateProviderConfig - shows helpful messages)
+ */
+function validateProviderRequirements(provider) {
+  console.error(`\n🔍 Validating ${provider.toUpperCase()} configuration...\n`);
+
+  if (provider === 'openai') {
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ OpenAI API key required!\n');
+      console.error('Set OPENAI_API_KEY environment variable:');
+      console.error('  export OPENAI_API_KEY=sk-...\n');
+      console.error('Get your API key: https://platform.openai.com/api-keys\n');
+      process.exit(1);
+    }
+    console.error('✓ OPENAI_API_KEY found\n');
+  } else if (provider === 'google') {
+    if (!process.env.GOOGLE_PROJECT_ID) {
+      console.error('❌ Google Cloud project required!\n');
+      console.error('Set GOOGLE_PROJECT_ID environment variable:');
+      console.error('  export GOOGLE_PROJECT_ID=my-project\n');
+      process.exit(1);
+    }
+    console.error('✓ GOOGLE_PROJECT_ID found\n');
+
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.error('⚠️  Warning: GOOGLE_APPLICATION_CREDENTIALS not set');
+      console.error('   Authentication will use Application Default Credentials\n');
+    } else {
+      console.error('✓ GOOGLE_APPLICATION_CREDENTIALS found\n');
+    }
+  } else if (provider === 'ollama') {
+    console.error('✓ Ollama requires no API keys (100% local)\n');
+    console.error('⚠️  Note: Ollama is slower without GPU hardware\n');
+  }
+}
+
+/**
+ * Save the chosen provider to config directory
+ */
+function saveProviderChoice(provider) {
+  const providerPath = path.join(CONFIG_DIR, '.provider');
+  fs.writeFileSync(providerPath, provider);
+
+  const markerPath = path.join(CONFIG_DIR, '.setup-complete');
+  fs.writeFileSync(markerPath, new Date().toISOString());
+
+  diagnosticLog('Provider choice saved', { provider, path: providerPath });
+}
+
+/**
+ * Get the configured provider (from saved config)
+ */
+function getConfiguredProvider() {
+  const providerPath = path.join(CONFIG_DIR, '.provider');
+
+  if (fs.existsSync(providerPath)) {
+    return fs.readFileSync(providerPath, 'utf-8').trim();
+  }
+
+  // Default to ollama if not configured
+  return 'ollama';
+}
+
+/**
  * Sleep helper
  */
 function sleep(ms) {
@@ -1062,9 +1188,608 @@ function sleep(ms) {
 }
 
 /**
- * Main entry point
+ * Initialize database schema using maproom binary migrations
  */
-async function main() {
+async function initializeDatabaseSchema() {
+  console.error('🗄️  Initializing database schema...\n');
+
+  try {
+    const binPath = await getMaproomBinaryPath();
+    const connectionString = getDatabaseConnectionString();
+
+    const result = spawnSync(binPath, ['db', 'migrate'], {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      env: {
+        ...process.env,
+        DATABASE_URL: connectionString
+      }
+    });
+
+    if (result.status !== 0) {
+      console.error('❌ Database migration failed:', result.stderr);
+      throw new Error('Database migration failed');
+    }
+
+    diagnosticLog('Database migrations applied', { stdout: result.stdout });
+    console.error('✓ Database schema created\n');
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Validate database schema exists
+ */
+async function validateDatabaseSchema() {
+  diagnosticLog('Validating database schema');
+
+  try {
+    const { Client } = require('pg');
+    const connectionString = getDatabaseConnectionString();
+    const client = new Client({ connectionString });
+
+    await client.connect();
+
+    // Check if maproom schema exists
+    const schemaResult = await client.query(`
+      SELECT schema_name FROM information_schema.schemata
+      WHERE schema_name = 'maproom'
+    `);
+
+    if (schemaResult.rows.length === 0) {
+      await client.end();
+      throw new Error('Database schema not initialized. Run setup: npx @crewchief/maproom-mcp setup');
+    }
+
+    // Check if key tables exist
+    const tablesResult = await client.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'maproom'
+      AND table_name IN ('repos', 'chunks', 'files')
+    `);
+
+    if (tablesResult.rows.length < 3) {
+      await client.end();
+      throw new Error('Database schema incomplete. Run setup: npx @crewchief/maproom-mcp setup');
+    }
+
+    await client.end();
+
+    diagnosticLog('Database schema validated successfully');
+  } catch (error) {
+    if (error.code === 'ECONNREFUSED') {
+      throw new Error('Database not running. Services may not be started.');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Show provider-specific completion message
+ */
+function showCompletionMessage(provider) {
+  console.error('\n✅ Setup complete!\n');
+
+  if (provider === 'openai') {
+    console.error('📝 Add this to your MCP configuration:\n');
+    console.error('Claude Code (.claude/mcp.json):');
+    console.error(JSON.stringify({
+      mcpServers: {
+        maproom: {
+          command: "npx",
+          args: ["-y", "@crewchief/maproom-mcp"],
+          env: {
+            EMBEDDING_PROVIDER: "openai",
+            OPENAI_API_KEY: "${OPENAI_API_KEY}"
+          }
+        }
+      }
+    }, null, 2));
+    console.error('\nCursor (.cursor/mcp.json):');
+    console.error(JSON.stringify({
+      mcpServers: {
+        maproom: {
+          command: "npx",
+          args: ["-y", "@crewchief/maproom-mcp"],
+          env: {
+            EMBEDDING_PROVIDER: "openai",
+            OPENAI_API_KEY: "${OPENAI_API_KEY}"
+          }
+        }
+      }
+    }, null, 2));
+    console.error('\n💡 Set OPENAI_API_KEY in your shell profile (~/.zshrc or ~/.bashrc)\n');
+  } else if (provider === 'google') {
+    console.error('📝 Add this to your MCP configuration:\n');
+    console.error('Claude Code (.claude/mcp.json):');
+    console.error(JSON.stringify({
+      mcpServers: {
+        maproom: {
+          command: "npx",
+          args: ["-y", "@crewchief/maproom-mcp"],
+          env: {
+            EMBEDDING_PROVIDER: "google",
+            GOOGLE_PROJECT_ID: "${GOOGLE_PROJECT_ID}",
+            GOOGLE_APPLICATION_CREDENTIALS: "${GOOGLE_APPLICATION_CREDENTIALS}"
+          }
+        }
+      }
+    }, null, 2));
+    console.error('\nCursor (.cursor/mcp.json):');
+    console.error(JSON.stringify({
+      mcpServers: {
+        maproom: {
+          command: "npx",
+          args: ["-y", "@crewchief/maproom-mcp"],
+          env: {
+            EMBEDDING_PROVIDER: "google",
+            GOOGLE_PROJECT_ID: "${GOOGLE_PROJECT_ID}",
+            GOOGLE_APPLICATION_CREDENTIALS: "${GOOGLE_APPLICATION_CREDENTIALS}"
+          }
+        }
+      }
+    }, null, 2));
+    console.error('\n💡 Set env vars in your shell profile (~/.zshrc or ~/.bashrc)\n');
+  } else {  // ollama
+    console.error('📝 Add this to your MCP configuration:\n');
+    console.error('Claude Code (.claude/mcp.json):');
+    console.error(JSON.stringify({
+      mcpServers: {
+        maproom: {
+          command: "npx",
+          args: ["-y", "@crewchief/maproom-mcp"]
+        }
+      }
+    }, null, 2));
+    console.error('\nCursor (.cursor/mcp.json):');
+    console.error(JSON.stringify({
+      mcpServers: {
+        maproom: {
+          command: "npx",
+          args: ["-y", "@crewchief/maproom-mcp"]
+        }
+      }
+    }, null, 2));
+    console.error('\n💡 Ollama embeddings are 100% local (no API keys needed)\n');
+    console.error('⚠️  Note: Ollama is slower without GPU. Consider OpenAI/Google for better performance.\n');
+  }
+
+  console.error('📊 Next steps:');
+  console.error('  1. Add config to your MCP file');
+  console.error('  2. Restart your MCP client (Claude Code, Cursor)');
+  console.error('  3. Index your codebase:');
+  console.error('       npx @crewchief/maproom-mcp scan /path/to/repo');
+  console.error('  4. Keep index updated:');
+  console.error('       npx @crewchief/maproom-mcp watch /path/to/repo\n');
+}
+
+/**
+ * Detect repository information from git
+ */
+async function detectRepoInfo(scanPath) {
+  try {
+    const repoResult = spawnSync('git', ['remote', 'get-url', 'origin'], {
+      cwd: scanPath,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    const worktreeResult = spawnSync('git', ['branch', '--show-current'], {
+      cwd: scanPath,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    const commitResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+      cwd: scanPath,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    if (repoResult.status !== 0 || worktreeResult.status !== 0 || commitResult.status !== 0) {
+      throw new Error('Not a git repository');
+    }
+
+    const repo = repoResult.stdout.trim().split('/').pop().replace('.git', '');
+    const worktree = worktreeResult.stdout.trim();
+    const commit = commitResult.stdout.trim();
+
+    return { repo, worktree, commit };
+  } catch (error) {
+    console.error('❌ Not a git repository:', scanPath);
+    console.error('   Scan command requires a git repository\n');
+    process.exit(1);
+  }
+}
+
+/**
+ * Get path to Maproom binary
+ */
+async function getMaproomBinaryPath() {
+  const platform = process.platform;
+  const arch = process.arch;
+
+  let binaryName = 'crewchief-maproom';
+  if (platform === 'win32') binaryName += '.exe';
+
+  // Look for binary in package
+  const packageBinPath = path.join(__dirname, '..', 'bin', `${platform}-${arch}`, binaryName);
+
+  if (fs.existsSync(packageBinPath)) {
+    return packageBinPath;
+  }
+
+  // Fall back to cargo build (development)
+  const devBinPath = path.join(__dirname, '..', '..', '..', 'target', 'release', binaryName);
+
+  if (fs.existsSync(devBinPath)) {
+    return devBinPath;
+  }
+
+  console.error('❌ Maproom binary not found');
+  console.error('Expected:', packageBinPath);
+  console.error('\nFor development, build with: cargo build --release --bin crewchief-maproom\n');
+  process.exit(1);
+}
+
+/**
+ * Ensure Docker Compose services are running
+ */
+async function ensureServicesRunning() {
+  console.error('🔍 Checking Docker services...\n');
+
+  const result = spawnSync('docker', ['compose', 'ps', '--format', 'json'], {
+    cwd: CONFIG_DIR,
+    stdio: 'pipe',
+    encoding: 'utf-8',
+    env: process.env
+  });
+
+  if (result.status !== 0 || !result.stdout || result.stdout.trim() === '') {
+    console.error('⚠️  Services not running, starting them...\n');
+    await startDockerCompose();
+    await waitForServicesHealthy();
+  } else {
+    const services = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+    const allRunning = services.every(s => s.State === 'running');
+
+    if (!allRunning) {
+      console.error('⚠️  Some services stopped, restarting...\n');
+      await startDockerCompose();
+      await waitForServicesHealthy();
+    } else {
+      console.error('✓ Services running\n');
+    }
+  }
+}
+
+/**
+ * Run scan command
+ */
+async function runScan() {
+  const scanPath = flags.path || process.argv[3] || process.cwd();
+
+  console.error(`\n📊 Scanning repository: ${scanPath}\n`);
+
+  // Ensure containers are running
+  await ensureServicesRunning();
+
+  // Detect repo info
+  const repoInfo = await detectRepoInfo(scanPath);
+
+  console.error(`Repository: ${repoInfo.repo}`);
+  console.error(`Worktree: ${repoInfo.worktree}`);
+  console.error(`Commit: ${repoInfo.commit}\n`);
+
+  // Get provider from saved config
+  const provider = getConfiguredProvider();
+  console.error(`Using provider: ${provider.toUpperCase()}\n`);
+
+  // Set provider-specific environment variables
+  const providerEnv = {
+    EMBEDDING_PROVIDER: provider
+  };
+
+  if (provider === 'openai') {
+    providerEnv.EMBEDDING_MODEL = 'text-embedding-3-small';
+    providerEnv.EMBEDDING_DIMENSION = '1536';
+    // WORKAROUND: Explicitly set OpenAI endpoint due to Rust bug
+    providerEnv.EMBEDDING_API_ENDPOINT = 'https://api.openai.com/v1/embeddings';
+  } else if (provider === 'google') {
+    providerEnv.EMBEDDING_MODEL = 'text-embedding-004';
+    providerEnv.EMBEDDING_DIMENSION = '768';
+  } else if (provider === 'ollama') {
+    providerEnv.EMBEDDING_MODEL = 'nomic-embed-text';
+    providerEnv.EMBEDDING_DIMENSION = '768';
+    providerEnv.EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
+  }
+
+  // Get binary path
+  const binPath = await getMaproomBinaryPath();
+
+  const args = [
+    'scan',
+    '--path', scanPath,
+    '--repo', repoInfo.repo,
+    '--worktree', repoInfo.worktree,
+    '--commit', repoInfo.commit,
+    '--provider', provider
+  ];
+
+  console.error('⚙️  Running indexer...\n');
+
+  // Build environment with provider-specific settings
+  const env = {
+    ...process.env,
+    DATABASE_URL: getDatabaseConnectionString(),
+    ...providerEnv
+  };
+
+  // Note: EMBEDDING_API_ENDPOINT is now explicitly set for all providers in providerEnv
+
+  // Debug: Show embedding environment variables
+  console.error('🔍 [DEBUG] Embedding environment variables being passed:');
+  console.error(`   EMBEDDING_PROVIDER: ${env.EMBEDDING_PROVIDER}`);
+  console.error(`   EMBEDDING_MODEL: ${env.EMBEDDING_MODEL}`);
+  console.error(`   EMBEDDING_DIMENSION: ${env.EMBEDDING_DIMENSION}`);
+  console.error(`   EMBEDDING_API_ENDPOINT: ${env.EMBEDDING_API_ENDPOINT || '(not set)'}`);
+  console.error(`   OPENAI_API_KEY: ${env.OPENAI_API_KEY ? '(set)' : '(NOT SET)'}\n`);
+
+  const result = spawnSync(binPath, args, {
+    stdio: 'inherit',
+    env
+  });
+
+  if (result.status !== 0) {
+    console.error('\n❌ Scan failed');
+    process.exit(1);
+  }
+
+  console.error('\n✅ Scan complete!\n');
+  console.error('Use Maproom MCP tools to search your codebase.\n');
+}
+
+/**
+ * Run watch command
+ */
+async function runWatch() {
+  const watchPath = flags.path || process.argv[3] || process.cwd();
+  const debounceMs = parseInt(flags.debounce) || 3000;  // 3 second default
+
+  console.error(`\n👁️  Watching repository: ${watchPath}\n`);
+  console.error(`Debounce: ${debounceMs}ms\n`);
+
+  // Ensure containers are running
+  await ensureServicesRunning();
+
+  // Get repo info
+  const repoInfo = await detectRepoInfo(watchPath);
+
+  console.error(`Repository: ${repoInfo.repo}`);
+  console.error(`Worktree: ${repoInfo.worktree}\n`);
+
+  // Get provider from saved config
+  const provider = getConfiguredProvider();
+  console.error(`Using provider: ${provider.toUpperCase()}\n`);
+
+  console.error('Watching for changes (Ctrl+C to stop)...\n');
+
+  // Check if chokidar is available
+  let chokidar;
+  try {
+    chokidar = require('chokidar');
+  } catch (error) {
+    console.error('❌ chokidar module not found');
+    console.error('Install it with: npm install chokidar\n');
+    process.exit(1);
+  }
+
+  let debounceTimer = null;
+  let changedFiles = new Set();
+
+  const watcher = chokidar.watch(watchPath, {
+    ignored: /(^|[\/\\])\.|node_modules|\.git|dist|target|build/,
+    persistent: true,
+    ignoreInitial: true
+  });
+
+  watcher.on('change', (filePath) => {
+    const relPath = path.relative(watchPath, filePath);
+
+    // Only watch relevant files
+    if (relPath.match(/\.(ts|js|tsx|jsx|rs|go|py|java|md|json|yaml|toml|c|cpp|h|hpp|cs|rb|php|swift|kt)$/)) {
+      changedFiles.add(relPath);
+
+      // Debounce: wait for changes to settle
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const filesToUpdate = Array.from(changedFiles);
+        changedFiles.clear();
+
+        console.error(`\n📝 Detected changes in ${filesToUpdate.length} file(s)`);
+        console.error('   Re-indexing...\n');
+
+        try {
+          await upsertFiles(watchPath, repoInfo, provider, filesToUpdate);
+          console.error('✓ Index updated\n');
+        } catch (error) {
+          console.error('⚠️  Re-index failed:', error.message, '\n');
+        }
+
+        console.error('Watching for changes...\n');
+      }, debounceMs);
+    }
+  });
+
+  // Keep process alive
+  process.on('SIGINT', () => {
+    console.error('\n\n👋 Stopping watch...\n');
+    watcher.close();
+    process.exit(0);
+  });
+}
+
+/**
+ * Upsert files to index
+ */
+async function upsertFiles(rootPath, repoInfo, provider, files) {
+  const binPath = await getMaproomBinaryPath();
+
+  // Update commit hash to latest
+  const commitResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: rootPath,
+    encoding: 'utf-8',
+    stdio: 'pipe'
+  });
+  const commit = commitResult.stdout.trim();
+
+  // Set provider-specific environment variables
+  const providerEnv = {
+    EMBEDDING_PROVIDER: provider
+  };
+
+  if (provider === 'openai') {
+    providerEnv.EMBEDDING_MODEL = 'text-embedding-3-small';
+    providerEnv.EMBEDDING_DIMENSION = '1536';
+    // WORKAROUND: Explicitly set OpenAI endpoint due to Rust bug
+    providerEnv.EMBEDDING_API_ENDPOINT = 'https://api.openai.com/v1/embeddings';
+  } else if (provider === 'google') {
+    providerEnv.EMBEDDING_MODEL = 'text-embedding-004';
+    providerEnv.EMBEDDING_DIMENSION = '768';
+  } else if (provider === 'ollama') {
+    providerEnv.EMBEDDING_MODEL = 'nomic-embed-text';
+    providerEnv.EMBEDDING_DIMENSION = '768';
+    providerEnv.EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
+  }
+
+  const args = [
+    'upsert',
+    '--root', rootPath,
+    '--repo', repoInfo.repo,
+    '--worktree', repoInfo.worktree,
+    '--commit', commit,
+    '--provider', provider,
+    '--paths', files.join(',')
+  ];
+
+  // Build environment with provider-specific settings
+  const env = {
+    ...process.env,
+    DATABASE_URL: getDatabaseConnectionString(),
+    ...providerEnv
+  };
+
+  // Note: EMBEDDING_API_ENDPOINT is now explicitly set for all providers in providerEnv
+
+  const result = spawnSync(binPath, args, {
+    stdio: 'pipe',
+    encoding: 'utf-8',
+    env
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr || 'Upsert failed');
+  }
+}
+
+/**
+ * Run setup command
+ */
+async function runSetup() {
+  const provider = flags.provider;
+
+  if (!provider) {
+    console.error('\n🎯 Provider selection required!\n');
+    console.error('Choose an embedding provider:\n');
+    console.error('  1. OpenAI (Recommended - fast, low cost)');
+    console.error('     npx @crewchief/maproom-mcp setup --provider=openai\n');
+    console.error('  2. Google Vertex AI (Recommended - fast, low cost)');
+    console.error('     npx @crewchief/maproom-mcp setup --provider=google\n');
+    console.error('  3. Ollama (Local, no API key - slower without GPU)');
+    console.error('     npx @crewchief/maproom-mcp setup --provider=ollama\n');
+    process.exit(1);
+  }
+
+  if (!['openai', 'google', 'ollama'].includes(provider)) {
+    console.error('❌ Invalid provider. Choose: openai, google, or ollama');
+    process.exit(1);
+  }
+
+  console.error(`\n🚀 Setting up Maproom with ${provider.toUpperCase()} embeddings...\n`);
+
+  // Set environment variables for this session
+  process.env.EMBEDDING_PROVIDER = provider;
+
+  // Set provider-specific model and dimension
+  if (provider === 'openai') {
+    process.env.EMBEDDING_MODEL = 'text-embedding-3-small';
+    process.env.EMBEDDING_DIMENSION = '1536';
+    // OpenAI uses cloud endpoint - ensure EMBEDDING_API_ENDPOINT is not set
+    if (process.env.EMBEDDING_API_ENDPOINT) {
+      delete process.env.EMBEDDING_API_ENDPOINT;
+    }
+  } else if (provider === 'google') {
+    process.env.EMBEDDING_MODEL = 'text-embedding-004';
+    process.env.EMBEDDING_DIMENSION = '768';
+    // Google uses cloud endpoint - ensure EMBEDDING_API_ENDPOINT is not set
+    if (process.env.EMBEDDING_API_ENDPOINT) {
+      delete process.env.EMBEDDING_API_ENDPOINT;
+    }
+  } else if (provider === 'ollama') {
+    process.env.EMBEDDING_MODEL = 'nomic-embed-text';
+    process.env.EMBEDDING_DIMENSION = '768';
+    process.env.EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
+  }
+
+  // Validate provider-specific requirements
+  validateProviderRequirements(provider);
+
+  // Standard checks
+  checkDockerDaemon();
+  checkDockerCompose();
+
+  // Copy configs
+  setupConfigDirectory();
+
+  // Start Docker Compose (respects EMBEDDING_PROVIDER)
+  await startDockerCompose();
+
+  // Wait for services
+  await waitForServicesHealthy();
+
+  // Initialize database schema
+  await initializeDatabaseSchema();
+
+  // Validate schema
+  await validateDatabaseSchema();
+
+  // Save provider choice and create setup marker
+  saveProviderChoice(provider);
+
+  // Show completion message with provider-specific config
+  showCompletionMessage(provider);
+}
+
+/**
+ * Run MCP server mode
+ */
+async function runMCPServer() {
+  // Check if setup has been completed
+  const setupMarkerPath = path.join(CONFIG_DIR, '.setup-complete');
+  if (!fs.existsSync(setupMarkerPath)) {
+    console.error('❌ Setup required!\n');
+    console.error('Run setup first:\n');
+    console.error('  npx @crewchief/maproom-mcp setup --provider=openai\n');
+    console.error('Or choose a provider:\n');
+    console.error('  --provider=openai   (Recommended, fast)');
+    console.error('  --provider=google   (Recommended, fast)');
+    console.error('  --provider=ollama   (Local, slower)\n');
+    process.exit(1);
+  }
+
+  // Normal MCP server startup
   try {
     // Check for config updates
     if (needsConfigUpdate()) {
@@ -1091,7 +1816,7 @@ async function main() {
     verifyDockerComposeConfig();
 
     // Validate provider configuration (after config verification, before Docker Compose starts)
-    const embeddingProvider = process.env.EMBEDDING_PROVIDER || 'ollama';
+    const embeddingProvider = process.env.EMBEDDING_PROVIDER || getConfiguredProvider();
     validateProviderConfig(embeddingProvider);
 
     // Start Docker Compose stack
@@ -1100,11 +1825,51 @@ async function main() {
     // Wait for services to become healthy
     await waitForServicesHealthy();
 
+    // Validate database schema
+    await validateDatabaseSchema();
+
     // Establish stdio proxy
     establishStdioProxy();
 
   } catch (error) {
     console.error('❌ ERROR:', error.message);
+    console.error('\n💡 Try running setup again:');
+    console.error('  npx @crewchief/maproom-mcp setup --provider=<your-provider>\n');
+    process.exit(1);
+  }
+}
+
+/**
+ * Main entry point - routes to appropriate command
+ */
+async function main() {
+  try {
+    // Route to appropriate command
+    if (command === 'setup' || flags.setup) {
+      await runSetup();
+      process.exit(0);
+    }
+
+    if (command === 'scan') {
+      await runScan();
+      process.exit(0);
+    }
+
+    if (command === 'watch') {
+      await runWatch();
+      // Doesn't exit - runs until Ctrl+C
+      return;
+    }
+
+    // Default: MCP server mode
+    await runMCPServer();
+
+  } catch (error) {
+    console.error('❌ ERROR:', error.message);
+    if (DIAGNOSTIC_MODE) {
+      console.error('\nStack trace:');
+      console.error(error.stack);
+    }
     process.exit(1);
   }
 }
