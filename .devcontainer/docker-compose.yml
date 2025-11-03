@@ -21,12 +21,6 @@ services:
     working_dir: /workspace
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-      - CREWCHIEF_DB_HOST=postgres
-      - CREWCHIEF_DB_PORT=5432
-      - CREWCHIEF_DB_NAME=crewchief
-      - CREWCHIEF_DB_USER=postgres
-      - CREWCHIEF_DB_PASSWORD=postgres
       # Claude Code environment
       - CLAUDE_CONFIG_DIR=/home/vscode/.claude
       - CLAUDE_DANGEROUS_MODE=true

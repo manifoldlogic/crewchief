@@ -106,9 +106,7 @@
   // Environment variables
   "remoteEnv": {
     "NODE_ENV": "development",
-    "CREWCHIEF_DEV": "true",
-    "DATABASE_URL": "postgresql://postgres:postgres@postgres:5432/crewchief",
-    "CREWCHIEF_MAPROOM_BIN": "/usr/local/bin/crewchief-maproom"
+    "CREWCHIEF_DEV": "true"
   },
 
   // Startup commands
