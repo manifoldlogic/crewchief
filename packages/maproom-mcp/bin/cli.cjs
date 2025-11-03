@@ -1360,9 +1360,9 @@ function showCompletionMessage(provider) {
   console.error('  1. Add config to your MCP file');
   console.error('  2. Restart your MCP client (Claude Code, Cursor)');
   console.error('  3. Index your codebase:');
-  console.error('       npx @crewchief/maproom-mcp scan /path/to/repo');
+  console.error(`       EMBEDDING_PROVIDER=${provider} npx @crewchief/maproom-mcp scan /path/to/repo`);
   console.error('  4. Keep index updated:');
-  console.error('       npx @crewchief/maproom-mcp watch /path/to/repo\n');
+  console.error(`       EMBEDDING_PROVIDER=${provider} npx @crewchief/maproom-mcp watch /path/to/repo\n`);
 }
 
 /**
@@ -1483,8 +1483,8 @@ async function runScan() {
   console.error(`Worktree: ${repoInfo.worktree}`);
   console.error(`Commit: ${repoInfo.commit}\n`);
 
-  // Get provider from saved config
-  const provider = getConfiguredProvider();
+  // Get provider from environment variable or saved config
+  const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase() || getConfiguredProvider();
   console.error(`Using provider: ${provider.toUpperCase()}\n`);
 
   // Set provider-specific environment variables
@@ -1568,8 +1568,8 @@ async function runWatch() {
   console.error(`Repository: ${repoInfo.repo}`);
   console.error(`Worktree: ${repoInfo.worktree}\n`);
 
-  // Get provider from saved config
-  const provider = getConfiguredProvider();
+  // Get provider from environment variable or saved config
+  const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase() || getConfiguredProvider();
   console.error(`Using provider: ${provider.toUpperCase()}\n`);
 
   console.error('Watching for changes (Ctrl+C to stop)...\n');

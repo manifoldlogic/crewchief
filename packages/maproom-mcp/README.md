@@ -43,13 +43,24 @@ This will (2-5 minutes on first run):
 
 ### 2. Index Your Codebase
 
+**With OpenAI:**
 ```bash
-npx @crewchief/maproom-mcp scan /path/to/your/repo
+EMBEDDING_PROVIDER=openai npx @crewchief/maproom-mcp scan /path/to/your/repo
+```
+
+**With Google Vertex AI:**
+```bash
+EMBEDDING_PROVIDER=google npx @crewchief/maproom-mcp scan /path/to/your/repo
+```
+
+**With Ollama (local):**
+```bash
+EMBEDDING_PROVIDER=ollama npx @crewchief/maproom-mcp scan /path/to/your/repo
 ```
 
 **Optional: Auto-sync with watch mode**
 ```bash
-npx @crewchief/maproom-mcp watch /path/to/your/repo
+EMBEDDING_PROVIDER=openai npx @crewchief/maproom-mcp watch /path/to/your/repo
 ```
 
 This keeps your index up-to-date as you edit code. Leave it running in a terminal.
