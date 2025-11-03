@@ -280,37 +280,37 @@ mcp__maproom__upsert({
 
 ## Architecture Overview
 
-### Database Architecture: Dual PostgreSQL Setup
+### Database Architecture: maproom-postgres
 
-CrewChief uses **two separate PostgreSQL instances**:
+CrewChief uses a single PostgreSQL instance for all Maproom operations:
 
-1. **Devcontainer PostgreSQL** (`postgres:5432`)
-   - **Purpose**: Local development, CLI testing, integration tests
-   - **Connection**: `postgresql://postgres:postgres@postgres:5432/crewchief`
-   - **When to use**: `cargo run`, `cargo test`, developing Maproom features
-   - **Data**: ~79,625 chunks (ephemeral, can be reset)
-   - **Network**: `crewchief-network`
+**Maproom PostgreSQL** (`maproom-postgres:5432/maproom`)
+- **Purpose**: Semantic code search, MCP service, development, testing
+- **Connection**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
+- **Network**: Accessible from devcontainer and MCP containers via `maproom-network`
+- **Data**: Persistent via Docker volumes
+- **Container**: Managed via `config/docker-compose.yml` in maproom-mcp package
 
-2. **Maproom MCP PostgreSQL** (`maproom-postgres:5432`)
-   - **Purpose**: Production-like MCP service, stable semantic search
-   - **Connection**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
-   - **When to use**: MCP tools, Claude/Cursor integration, `npx @crewchief/maproom-mcp`
-   - **Data**: ~23,218 chunks (persistent, production data)
-   - **Network**: `maproom-network`
+**Connection Fallback**:
+The system automatically detects the database using this priority:
+1. **DATABASE_URL** environment variable (explicit configuration) - highest priority
+2. **MAPROOM_DB_HOST** environment variable (component override) - build connection from parts
+3. **maproom-postgres** hostname resolution (auto-detection) - works in Docker environments
+4. **localhost:5433** (development fallback) - for local testing
 
-**Why two instances?**
-- Isolation: Development changes don't affect MCP service
-- Network safety: Unique hostnames prevent conflicts on shared networks
-- Use-case optimization: Each tuned for specific workload
-- Data separation: Development vs. production-like data
+Both Rust binary and Node.js CLI use identical fallback logic for consistency.
 
-**Quick Reference**:
+**Example Usage**:
 ```bash
-# Development (inside devcontainer)
-export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
-
-# MCP Service (standalone or from config/)
+# Explicit configuration (recommended for production)
 export DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
+
+# Component override (useful for custom setups)
+export MAPROOM_DB_HOST="custom-postgres"
+export MAPROOM_DB_PORT="5432"
+
+# Auto-detection (works automatically in devcontainer)
+# No configuration needed - just ensure maproom-postgres is running
 ```
 
 For complete details, see [Database Architecture Documentation](docs/architecture/DATABASE_ARCHITECTURE.md).

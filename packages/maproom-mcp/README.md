@@ -275,6 +275,73 @@ docker volume rm maproom-data ollama-models maproom-logs
 
 ---
 
+## Database Connection
+
+The Maproom MCP server uses intelligent connection fallback to detect and connect to the PostgreSQL database automatically.
+
+### Connection Priority
+
+The system tries these methods in order:
+
+1. **DATABASE_URL** (explicit config) - If set, uses this connection string exactly
+   ```bash
+   export DATABASE_URL="postgresql://user:pass@host:port/dbname"
+   ```
+
+2. **MAPROOM_DB_HOST** (component override) - If DATABASE_URL not set, constructs connection from parts
+   ```bash
+   export MAPROOM_DB_HOST="custom-host"
+   export MAPROOM_DB_PORT="5432"  # optional, defaults to 5432
+   ```
+
+3. **maproom-postgres** (auto-detection) - Attempts to connect to maproom-postgres hostname
+   - Works automatically in Docker environments
+   - No configuration needed if maproom-postgres container is running (default)
+
+4. **localhost:5433** (fallback) - Development fallback for local testing
+   - Useful for local postgres instances on non-standard port
+
+### Troubleshooting Connection Issues
+
+**Can't connect to database:**
+1. Verify maproom-postgres is running:
+   ```bash
+   docker ps | grep maproom-postgres
+   ```
+
+2. Start if needed:
+   ```bash
+   docker compose -f ~/.maproom-mcp/docker-compose.yml up -d
+   ```
+
+3. Check logs:
+   ```bash
+   docker logs maproom-postgres
+   ```
+
+**Connection refused:**
+- Verify port 5432 (internal) or 5433 (host) is not blocked
+- Check network connectivity:
+  ```bash
+  docker network inspect maproom-network
+  ```
+
+**Hostname not found:**
+- Verify you're in correct Docker network
+- Try setting DATABASE_URL explicitly:
+  ```bash
+  export DATABASE_URL="postgresql://maproom:maproom@127.0.0.1:5433/maproom"
+  ```
+
+**Custom database setup:**
+If you want to use your own PostgreSQL instance instead of the bundled one:
+```bash
+export DATABASE_URL="postgresql://myuser:mypass@myhost:5432/mydb"
+npx @crewchief/maproom-mcp scan /path/to/code
+```
+
+---
+
 ## Advanced Configuration
 
 ### Custom Database
