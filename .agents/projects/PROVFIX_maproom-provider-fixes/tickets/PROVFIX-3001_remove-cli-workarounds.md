@@ -1,9 +1,9 @@
 # Ticket: PROVFIX-3001: Remove CLI Workarounds After Rust Fixes
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose (JavaScript/Node.js cleanup)

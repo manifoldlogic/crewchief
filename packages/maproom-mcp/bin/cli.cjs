@@ -1495,8 +1495,6 @@ async function runScan() {
   if (provider === 'openai') {
     providerEnv.EMBEDDING_MODEL = 'text-embedding-3-small';
     providerEnv.EMBEDDING_DIMENSION = '1536';
-    // WORKAROUND: Explicitly set OpenAI endpoint due to Rust bug
-    providerEnv.EMBEDDING_API_ENDPOINT = 'https://api.openai.com/v1/embeddings';
   } else if (provider === 'google') {
     providerEnv.EMBEDDING_MODEL = 'text-embedding-004';
     providerEnv.EMBEDDING_DIMENSION = '768';
@@ -1653,8 +1651,6 @@ async function upsertFiles(rootPath, repoInfo, provider, files) {
   if (provider === 'openai') {
     providerEnv.EMBEDDING_MODEL = 'text-embedding-3-small';
     providerEnv.EMBEDDING_DIMENSION = '1536';
-    // WORKAROUND: Explicitly set OpenAI endpoint due to Rust bug
-    providerEnv.EMBEDDING_API_ENDPOINT = 'https://api.openai.com/v1/embeddings';
   } else if (provider === 'google') {
     providerEnv.EMBEDDING_MODEL = 'text-embedding-004';
     providerEnv.EMBEDDING_DIMENSION = '768';
@@ -1726,17 +1722,9 @@ async function runSetup() {
   if (provider === 'openai') {
     process.env.EMBEDDING_MODEL = 'text-embedding-3-small';
     process.env.EMBEDDING_DIMENSION = '1536';
-    // OpenAI uses cloud endpoint - ensure EMBEDDING_API_ENDPOINT is not set
-    if (process.env.EMBEDDING_API_ENDPOINT) {
-      delete process.env.EMBEDDING_API_ENDPOINT;
-    }
   } else if (provider === 'google') {
     process.env.EMBEDDING_MODEL = 'text-embedding-004';
     process.env.EMBEDDING_DIMENSION = '768';
-    // Google uses cloud endpoint - ensure EMBEDDING_API_ENDPOINT is not set
-    if (process.env.EMBEDDING_API_ENDPOINT) {
-      delete process.env.EMBEDDING_API_ENDPOINT;
-    }
   } else if (provider === 'ollama') {
     process.env.EMBEDDING_MODEL = 'nomic-embed-text';
     process.env.EMBEDDING_DIMENSION = '768';
