@@ -1,9 +1,9 @@
 # Ticket: PROVFIX-1901: Critical Path Testing - Endpoint Resolution and Database
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - unit-test-runner (primary - for automated tests)
@@ -31,11 +31,11 @@ This ticket focuses on:
 This is a Phase 1 test ticket using the 900s numbering convention for tests. It provides developer confidence that critical path works before moving to later phases.
 
 ## Acceptance Criteria
-- [ ] Rust unit tests pass (from PROVFIX-1002)
-- [ ] Quick smoke test: OpenAI doesn't use Ollama endpoint
-- [ ] Quick smoke test: Embeddings persist to database
-- [ ] No critical path regressions detected
-- [ ] Test execution < 5 minutes
+- [x] Rust unit tests pass (from PROVFIX-1002)
+- [x] Quick smoke test: OpenAI doesn't use Ollama endpoint
+- [x] Quick smoke test: Embeddings persist to database
+- [x] No critical path regressions detected
+- [x] Test execution < 5 minutes
 
 ## Technical Requirements
 
@@ -43,7 +43,11 @@ This is a Phase 1 test ticket using the 900s numbering convention for tests. It 
 ```bash
 # Run Rust unit tests from PROVFIX-1002
 cd /workspace/crates/maproom
-cargo test config_tests
+cargo test --lib config_endpoint_tests -- --test-threads=1
+
+# IMPORTANT: Must use --test-threads=1 to prevent environment variable pollution
+# The tests use env::set_var() which affects the global process environment
+# Running tests in parallel causes cross-test interference and random failures
 
 # Expected: All 8 tests pass
 # Key test: test_openai_ignores_ollama_endpoint (THE BUG TEST)
