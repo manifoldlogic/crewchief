@@ -1,4 +1,4 @@
-# Manual Execution Guide for BINPKG-1901
+git # Manual Execution Guide for BINPKG-1901
 # Canary Release Integration Test
 
 ## IMPORTANT: This Test Requires GitHub Actions Access
