@@ -49,11 +49,10 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
     // and handles complex SQL constructs that batch_execute may not parse correctly.
 
     // Migration 0008: Context query optimizations (CREATE INDEX CONCURRENTLY)
-    eprintln!("Running migration 0008...");
-    // Test: execute just the first CREATE INDEX statement
-    client.simple_query("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_test_links_target ON maproom.test_links(target_chunk_id);").await?;
-    eprintln!("Test statement complete");
-    return Ok(()); // Early return for testing
+    execute_with_concurrent_indexes(
+        client,
+        include_str!("./../../migrations/0008_context_query_optimizations.sql"),
+    ).await?;
 
     // Migration 0009: Context cache (uses || in COMMENT statements)
     client.simple_query(include_str!("./../../migrations/0009_create_context_cache.sql")).await?;
@@ -78,6 +77,9 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
         client,
         include_str!("./../../migrations/0015_add_ollama_columns.sql"),
     ).await?;
+
+    // Migration 0016: Add updated_at column to chunks table (PROVFIX-2001)
+    client.batch_execute(include_str!("./../../migrations/0016_add_updated_at_to_chunks.sql")).await?;
 
     Ok(())
 }
