@@ -1,9 +1,9 @@
 # Ticket: DBFALLBK-1001: Remove Devcontainer Postgres Service
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [x] **Task completed** - acceptance criteria met
 - [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
