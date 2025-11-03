@@ -1,0 +1,100 @@
+name: Build and Publish Maproom MCP
+
+# Trigger on version tags (v1.2.3, v2.0.0, etc.) and manual dispatch
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  # Allow manual triggering with dry-run option
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip publish)'
+        required: false
+        type: boolean
+        default: false
+
+# Prevent concurrent publishes for the same tag to avoid conflicts
+# cancel-in-progress: false ensures publishes complete even if new tag is pushed
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Build binaries for all 4 platforms in parallel using matrix strategy
+  build-binaries:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux x64 - Use cross-compilation for consistency and glibc compatibility
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64
+            use_cross: true
+
+          # Linux ARM64 - Cross-compile from x64 runner
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+            use_cross: true
+
+          # macOS x64 - Native build on Intel runner
+          - os: macos-13
+            target: x86_64-apple-darwin
+            platform: darwin-x64
+            use_cross: false
+
+          # macOS ARM64 - Native build on Apple Silicon runner
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: darwin-arm64
+            use_cross: false
+
+    steps:
+      # Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # TODO (BINPKG-1002): Add Linux x64 build steps
+      #   - Install Rust toolchain
+      #   - Install cross-compilation tools
+      #   - Build maproom binary with cross
+      #   - Upload artifact
+
+      # TODO (BINPKG-1003): Add Linux ARM64 build steps
+      #   - Install Rust toolchain
+      #   - Install cross-compilation tools
+      #   - Build maproom binary with cross
+      #   - Upload artifact
+
+      # TODO (BINPKG-1004): Add macOS x64 build steps
+      #   - Install Rust toolchain
+      #   - Build maproom binary natively
+      #   - Upload artifact
+
+      # TODO (BINPKG-1005): Add macOS ARM64 build steps
+      #   - Install Rust toolchain
+      #   - Build maproom binary natively
+      #   - Upload artifact
+
+  # Validate all binaries and publish to npm (only after all builds succeed)
+  validate-and-publish:
+    name: Validate and Publish to npm
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    steps:
+      # TODO (BINPKG-1006): Add binary validation steps
+      #   - Download all artifacts
+      #   - Verify binary signatures/checksums
+      #   - Test basic functionality (--version, --help)
+      #   - Validate file structure matches package.json expectations
+
+      # TODO (BINPKG-1007): Add npm publish steps
+      #   - Set up Node.js
+      #   - Install dependencies
+      #   - Copy binaries to correct locations in packages/maproom-mcp/bin/
+      #   - Update package.json version
+      #   - Publish to npm (or skip if dry_run is true)
+      #   - Create GitHub release with binaries
