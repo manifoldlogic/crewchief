@@ -8,7 +8,7 @@
     "maproom-mcp": "./bin/cli.cjs"
   },
   "files": [
-    "bin/cli.cjs",
+    "bin",
     "config/docker-compose.yml",
     "config/Dockerfile.mcp-server",
     "config/init.sql",
