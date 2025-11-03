@@ -163,8 +163,26 @@ impl EmbeddingConfig {
             Provider::Local => None, // Local models don't need API keys
         };
 
-        // Load API endpoint override with provider-aware validation
-        // Only accept endpoints that match the configured provider
+        // Provider-aware endpoint loading and validation (PROVFIX-1001)
+        //
+        // This validation prevents cross-provider endpoint pollution, which was causing
+        // critical bugs where cloud providers (OpenAI, Cohere) would inherit Ollama's
+        // default endpoint from Docker Compose environment variables.
+        //
+        // Example of the bug this prevents:
+        //   - Docker Compose sets: EMBEDDING_API_ENDPOINT=http://ollama:11434
+        //   - User configures: EMBEDDING_PROVIDER=openai
+        //   - Without validation: OpenAI attempts connection to localhost:11434 (fails)
+        //   - With validation: OpenAI ignores Ollama endpoint, uses api.openai.com (works)
+        //
+        // Validation rules by provider:
+        //   - OpenAI: Only endpoints containing "openai.com" accepted
+        //   - Cohere: Only endpoints containing "cohere" accepted
+        //   - Ollama/Local: Any endpoint accepted (flexible for self-hosting)
+        //   - Google: Ignores EMBEDDING_API_ENDPOINT (uses region-based construction)
+        //
+        // See PROVFIX project documentation for full context on this critical fix.
+        //
         if let Ok(endpoint) = env::var("EMBEDDING_API_ENDPOINT") {
             match config.provider {
                 Provider::OpenAI => {

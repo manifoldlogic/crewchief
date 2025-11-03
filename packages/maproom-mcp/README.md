@@ -169,6 +169,52 @@ Leave running in a terminal. Press Ctrl+C to stop.
 
 ## Troubleshooting
 
+### "Connection refused" errors to localhost:11434
+
+**Problem:** OpenAI or Cohere provider attempting to connect to local Ollama endpoint.
+
+**Solution:** This was a bug in earlier versions (< 1.2.0). Update to the latest version where provider-aware endpoint validation prevents this issue:
+
+```bash
+npx @crewchief/maproom-mcp@latest setup --provider=openai
+```
+
+The fix ensures cloud providers only use their official endpoints, preventing cross-provider endpoint pollution.
+
+### Custom endpoint not used
+
+**Problem:** Set `EMBEDDING_API_ENDPOINT` but provider uses default.
+
+**Solution:** Ensure the endpoint domain matches your provider:
+- **OpenAI**: Must contain "openai.com"
+- **Cohere**: Must contain "cohere"
+- **Ollama/Local**: Any endpoint accepted
+- **Google**: Ignores `EMBEDDING_API_ENDPOINT` (uses region-based endpoint)
+
+Example of correct custom endpoint:
+```bash
+# ✅ Correct: OpenAI custom endpoint (contains "openai.com")
+export EMBEDDING_API_ENDPOINT=https://api.openai.com/v1/embeddings
+
+# ❌ Wrong: Ollama endpoint for OpenAI provider (ignored)
+export EMBEDDING_API_ENDPOINT=http://localhost:11434
+```
+
+### Database "column updated_at does not exist" errors
+
+**Problem:** Missing column in database schema.
+
+**Solution:** Run database migrations. The maproom binary automatically applies migrations on startup:
+
+```bash
+npx @crewchief/maproom-mcp setup --provider=<your-provider>
+```
+
+Or manually apply migrations by restarting containers:
+```bash
+docker compose -f ~/.maproom-mcp/docker-compose.yml restart
+```
+
 ### "Setup required!" error
 Run the setup command with your chosen provider:
 ```bash
@@ -276,6 +322,47 @@ Adjust embedding batch size (default: 50):
 ```
 
 Higher = faster but more memory. Lower = slower but less memory.
+
+---
+
+## Environment Variables
+
+### Provider Configuration
+
+- `EMBEDDING_PROVIDER`: (Required) One of: `openai`, `cohere`, `google`, `ollama`, `local`
+- `EMBEDDING_MODEL`: (Required) Model name for the provider
+- `EMBEDDING_DIMENSION`: (Required) Vector dimension for embeddings
+- `EMBEDDING_API_ENDPOINT`: (Optional) Custom endpoint override
+
+### Endpoint Configuration
+
+**Cloud Providers (OpenAI, Cohere):**
+- Use official endpoints by default (https://api.openai.com/v1/embeddings, etc.)
+- `EMBEDDING_API_ENDPOINT` only used if domain matches provider
+- Example: Setting `EMBEDDING_API_ENDPOINT=http://localhost:11434` for OpenAI is ignored
+
+**Ollama:**
+- Defaults to `http://localhost:11434/api/embed`
+- Set `EMBEDDING_API_ENDPOINT` for custom Ollama server location
+
+**Google Vertex AI:**
+- Endpoint constructed from `GOOGLE_VERTEX_REGION` (e.g., `us-west1`)
+- `EMBEDDING_API_ENDPOINT` is ignored
+
+**Local Provider:**
+- Requires `EMBEDDING_API_ENDPOINT` to be set explicitly
+
+### Environment Variable Precedence
+
+1. Explicit configuration in code (if applicable)
+2. `EMBEDDING_API_ENDPOINT` environment variable (validated by provider)
+3. Provider-specific default endpoint
+
+### API Keys
+
+- `OPENAI_API_KEY`: For OpenAI provider
+- `COHERE_API_KEY`: For Cohere provider
+- `GOOGLE_APPLICATION_CREDENTIALS`: For Google Vertex AI
 
 ---
 

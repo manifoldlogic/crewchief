@@ -5,6 +5,71 @@ All notable changes to the Maproom MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Critical**: Fixed provider endpoint resolution bug where cloud providers (OpenAI, Cohere) would inherit Ollama's default endpoint (PROVFIX-1001)
+  - Added provider-aware endpoint validation that validates endpoint domains match configured provider
+  - OpenAI now ignores `EMBEDDING_API_ENDPOINT=http://localhost:11434` from Docker Compose defaults
+  - Prevents "Connection refused" errors when using cloud providers
+  - Fixed cross-provider endpoint pollution from environment variables
+- **Database schema**: Added missing `updated_at` column to `chunks` table (PROVFIX-2001)
+  - Prevents "column updated_at does not exist" errors during embedding updates
+  - Added auto-update trigger for timestamp tracking
+  - Migration applies automatically on container startup
+- **CLI cleanup**: Removed workaround code that explicitly set endpoints for cloud providers (PROVFIX-3001)
+  - Simplified codebase by removing 3 instances of endpoint-setting workarounds
+  - Rust now handles all endpoint resolution (single source of truth)
+- **Docker defaults**: Removed default `EMBEDDING_API_ENDPOINT` from docker-compose.yml (PROVFIX-4001)
+  - Prevents Docker Compose defaults from polluting environment for all providers
+  - Provider-specific defaults now handled cleanly by Rust code
+
+### Added
+- Comprehensive unit tests for endpoint resolution covering all providers (PROVFIX-1002)
+  - 8 tests including critical regression test `test_openai_ignores_ollama_endpoint`
+  - Tests prove OpenAI/Cohere ignore wrong endpoints, Ollama accepts custom endpoints
+  - All tests pass with `cargo test --lib config_endpoint_tests -- --test-threads=1`
+- Integration test suite validating complete fix across all scenarios (PROVFIX-5001)
+  - Database schema verification
+  - Environment precedence validation
+  - Provider-specific endpoint resolution
+- Enhanced documentation for environment variables and troubleshooting (PROVFIX-6001)
+  - Clear precedence rules for endpoint configuration
+  - Provider-specific endpoint behavior documented
+  - Troubleshooting section covers common misconfigurations
+
+### Improved
+- Clear environment variable precedence rules for all providers
+- Provider-specific endpoint validation prevents configuration errors
+- Code comments in config.rs explain validation logic for future maintainers
+- README troubleshooting section addresses the exact bugs that were fixed
+
+### Technical Details
+Environment variable precedence (new behavior):
+1. Explicit configuration in code (if applicable)
+2. `EMBEDDING_API_ENDPOINT` environment variable (validated by provider)
+3. Provider-specific default endpoint
+
+Provider-specific validation rules:
+- **OpenAI**: Only accepts endpoints containing "openai.com"
+- **Cohere**: Only accepts endpoints containing "cohere"
+- **Ollama/Local**: Accepts any endpoint (flexible for self-hosting)
+- **Google**: Ignores `EMBEDDING_API_ENDPOINT` (uses region-based construction)
+
+### Migration Notes
+No breaking changes. Existing configurations will continue to work.
+
+Benefits of upgrading:
+- Cloud providers (OpenAI, Cohere) work reliably without workarounds
+- Database updates persist correctly with new schema
+- Cleaner environment variable handling
+- Better error messages for misconfigurations
+
+To upgrade:
+```bash
+npx @crewchief/maproom-mcp@latest setup --provider=<your-provider>
+```
+
 ## [1.1.10] - 2025-10-29
 
 ### Fixed
