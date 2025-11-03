@@ -1,9 +1,9 @@
 # Ticket: DBFALLBK-3901: Test Node.js CLI DATABASE_URL Behavior
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -23,11 +23,11 @@ After implementing the CLI changes in DBFALLBK-3001, we need tests to ensure:
 This implements the testing strategy from planning/quality-strategy.md Phase 3 (Node.js CLI Tests).
 
 ## Acceptance Criteria
-- [ ] 2 Node.js tests pass
-- [ ] Test "respects explicit DATABASE_URL" passes
-- [ ] Test "sets DATABASE_URL when not present" passes
-- [ ] npm test succeeds in maproom-mcp package
-- [ ] Tests complete in under 100ms
+- [x] 2 Node.js tests pass
+- [x] Test "respects explicit DATABASE_URL" passes
+- [x] Test "sets DATABASE_URL when not present" passes
+- [x] npm test succeeds in maproom-mcp package
+- [x] Tests complete in under 100ms
 
 ## Technical Requirements
 
