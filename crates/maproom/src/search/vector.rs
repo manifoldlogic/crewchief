@@ -316,27 +316,6 @@ impl VectorExecutor {
         Ok(("hybrid", results))
     }
 
-    /// Process query rows into RankedResults (without embedding dimension).
-    fn process_rows(rows: Vec<tokio_postgres::Row>) -> Result<Vec<RankedResult>, VectorError> {
-        if rows.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let results: Vec<RankedResult> = rows
-            .iter()
-            .enumerate()
-            .map(|(idx, row)| {
-                let chunk_id: i64 = row.get(0);
-                let similarity: f32 = row.get(1);
-                // Clamp to 0.0-1.0 range (should already be in range, but ensure it)
-                let score = similarity.clamp(0.0, 1.0);
-                RankedResult::new(chunk_id, score, idx + 1)
-            })
-            .collect();
-
-        Ok(results)
-    }
-
     /// Process query rows into RankedResults with embedding dimension information.
     fn process_rows_with_dimension(
         rows: Vec<tokio_postgres::Row>,
