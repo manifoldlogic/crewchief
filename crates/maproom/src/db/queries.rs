@@ -3,8 +3,8 @@ use tokio_postgres::{types::ToSql, Client, NoTls};
 use serde::Serialize;
 
 pub async fn connect() -> anyhow::Result<Client> {
-    let database_url = std::env::var("DATABASE_URL")
-        .context("DATABASE_URL env var is required (tip: use a .env file)")?;
+    let database_url = crate::db::connection::get_database_url()
+        .context("Failed to determine database connection URL")?;
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     // Spawn the connection driver
     tokio::spawn(async move {

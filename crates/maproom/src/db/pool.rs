@@ -116,8 +116,8 @@ pub type PgPool = Pool;
 /// }
 /// ```
 pub async fn create_pool() -> anyhow::Result<PgPool> {
-    let database_url = std::env::var("DATABASE_URL")
-        .context("DATABASE_URL env var is required (tip: use a .env file)")?;
+    let database_url = crate::db::connection::get_database_url()
+        .context("Failed to determine database connection URL")?;
 
     info!(
         "Creating database connection pool (max_size: {}, timeout: {}ms)",

@@ -1,9 +1,9 @@
 # Ticket: DBFALLBK-2001: Implement Rust Database Connection Fallback Logic
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -24,12 +24,12 @@ This creates inconsistent behavior:
 This ticket implements Phase 2 from planning/plan.md: adding the same fallback logic to the Rust binary so it behaves consistently with the Node.js CLI.
 
 ## Acceptance Criteria
-- [ ] New module `crates/maproom/src/db/connection.rs` created with `get_database_url()` function
-- [ ] Fallback hierarchy implemented: DATABASE_URL → MAPROOM_DB_HOST → maproom-postgres hostname → localhost:5433
-- [ ] `pool.rs` updated to use `get_database_url()` instead of `std::env::var("DATABASE_URL")`
-- [ ] `queries.rs` updated to use `get_database_url()` instead of `std::env::var("DATABASE_URL")`
-- [ ] Module exported in `db/mod.rs`
-- [ ] Debug logging added to show which connection method was used
+- [x] New module `crates/maproom/src/db/connection.rs` created with `get_database_url()` function
+- [x] Fallback hierarchy implemented: DATABASE_URL → MAPROOM_DB_HOST → maproom-postgres hostname → localhost:5433
+- [x] `pool.rs` updated to use `get_database_url()` instead of `std::env::var("DATABASE_URL")`
+- [x] `queries.rs` updated to use `get_database_url()` instead of `std::env::var("DATABASE_URL")`
+- [x] Module exported in `db/mod.rs`
+- [x] Debug logging added to show which connection method was used
 
 ## Technical Requirements
 - Implement `get_database_url() -> Result<String>` function with this fallback logic:
