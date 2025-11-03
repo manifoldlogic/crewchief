@@ -796,3 +796,155 @@ mod tests {
         );
     }
 }
+
+/// Tests for endpoint resolution with provider-aware validation (PROVFIX-1002)
+#[cfg(test)]
+mod config_endpoint_tests {
+    use super::*;
+
+    // OpenAI Provider Tests
+
+    #[test]
+    fn test_openai_uses_default_endpoint() {
+        // No EMBEDDING_API_ENDPOINT set
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::set_var("EMBEDDING_PROVIDER", "openai");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.openai.com/v1/embeddings"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    #[test]
+    fn test_openai_ignores_ollama_endpoint() {
+        // THIS IS THE BUG TEST - verify fix prevents regression
+        // Set up: Ollama endpoint in environment (like Docker Compose default)
+        env::set_var("EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var("EMBEDDING_PROVIDER", "openai");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+
+        // Assert: OpenAI should use its default, NOT the Ollama endpoint
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.openai.com/v1/embeddings"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    #[test]
+    fn test_openai_accepts_custom_openai_endpoint() {
+        // Allow explicit OpenAI endpoint override
+        env::set_var("EMBEDDING_API_ENDPOINT", "https://api.openai.com/v2/embeddings");
+        env::set_var("EMBEDDING_PROVIDER", "openai");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.openai.com/v2/embeddings"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    // Cohere Provider Tests
+
+    #[test]
+    fn test_cohere_uses_default_endpoint() {
+        // No EMBEDDING_API_ENDPOINT set
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::set_var("EMBEDDING_PROVIDER", "cohere");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.cohere.ai/v1/embed"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    #[test]
+    fn test_cohere_ignores_wrong_endpoint() {
+        // Cohere should ignore Ollama endpoint
+        env::set_var("EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var("EMBEDDING_PROVIDER", "cohere");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(
+            config.api_endpoint_url(),
+            "https://api.cohere.ai/v1/embed"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    // Ollama Provider Tests
+
+    #[test]
+    fn test_ollama_uses_custom_endpoint() {
+        env::set_var("EMBEDDING_API_ENDPOINT", "http://custom:8080/api/embed");
+        env::set_var("EMBEDDING_PROVIDER", "ollama");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://custom:8080/api/embed"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    #[test]
+    fn test_ollama_uses_default_if_no_override() {
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::set_var("EMBEDDING_PROVIDER", "ollama");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(
+            config.api_endpoint_url(),
+            "http://localhost:11434/api/embed"
+        );
+
+        // Cleanup
+        env::remove_var("EMBEDDING_PROVIDER");
+    }
+
+    // Google Provider Tests
+
+    #[test]
+    fn test_google_ignores_embedding_api_endpoint() {
+        env::set_var("EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var("EMBEDDING_PROVIDER", "google");
+        env::set_var("GOOGLE_REGION", "us-central1");
+        env::set_var("GOOGLE_PROJECT_ID", "test-project");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        // Should use region-based URL, not EMBEDDING_API_ENDPOINT
+        let endpoint = config.api_endpoint_url();
+        assert!(endpoint.contains("us-central1"));
+        assert!(endpoint.contains("aiplatform.googleapis.com"));
+        assert!(!endpoint.contains("11434"));
+
+        // Cleanup
+        env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("GOOGLE_REGION");
+        env::remove_var("GOOGLE_PROJECT_ID");
+    }
+}

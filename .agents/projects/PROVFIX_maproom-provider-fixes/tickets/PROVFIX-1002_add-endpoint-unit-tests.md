@@ -1,9 +1,9 @@
 # Ticket: PROVFIX-1002: Add Comprehensive Unit Tests for Endpoint Resolution
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose (or rust-specialist if available)
