@@ -1,9 +1,9 @@
 # Ticket: PROVFIX-1001: Fix Rust Endpoint Resolution Bug in EmbeddingConfig
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose (or rust-specialist if available)
@@ -29,12 +29,12 @@ The fix implements provider-aware endpoint loading with domain validation to ens
 This is Phase 1, Ticket 1 of the PROVFIX implementation plan.
 
 ## Acceptance Criteria
-- [ ] `EmbeddingConfig::from_env()` validates endpoint domain matches provider
-- [ ] OpenAI provider ignores Ollama endpoints in environment
-- [ ] OpenAI provider accepts custom OpenAI endpoints (https://api.openai.com/*)
-- [ ] Ollama provider continues to accept custom endpoints
-- [ ] Google provider ignores `EMBEDDING_API_ENDPOINT` entirely (uses region-based URL)
-- [ ] Clear precedence: explicit parameter > validated env var > provider default
+- [x] `EmbeddingConfig::from_env()` validates endpoint domain matches provider
+- [x] OpenAI provider ignores Ollama endpoints in environment
+- [x] OpenAI provider accepts custom OpenAI endpoints (https://api.openai.com/*)
+- [x] Ollama provider continues to accept custom endpoints
+- [x] Google provider ignores `EMBEDDING_API_ENDPOINT` entirely (uses region-based URL)
+- [x] Clear precedence: explicit parameter > validated env var > provider default
 
 ## Technical Requirements
 

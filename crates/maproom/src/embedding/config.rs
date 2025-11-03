@@ -163,8 +163,35 @@ impl EmbeddingConfig {
             Provider::Local => None, // Local models don't need API keys
         };
 
-        // Load API endpoint override
-        config.api_endpoint = env::var("EMBEDDING_API_ENDPOINT").ok();
+        // Load API endpoint override with provider-aware validation
+        // Only accept endpoints that match the configured provider
+        if let Ok(endpoint) = env::var("EMBEDDING_API_ENDPOINT") {
+            match config.provider {
+                Provider::OpenAI => {
+                    // Only accept OpenAI endpoints
+                    if endpoint.contains("openai.com") {
+                        config.api_endpoint = Some(endpoint);
+                    }
+                    // Otherwise ignore - wrong provider's endpoint
+                }
+                Provider::Cohere => {
+                    // Only accept Cohere endpoints
+                    if endpoint.contains("cohere") {
+                        config.api_endpoint = Some(endpoint);
+                    }
+                    // Otherwise ignore - wrong provider's endpoint
+                }
+                Provider::Ollama | Provider::Local => {
+                    // Accept any endpoint for Ollama and Local providers
+                    config.api_endpoint = Some(endpoint);
+                }
+                Provider::Google => {
+                    // Google doesn't use EMBEDDING_API_ENDPOINT
+                    // Endpoint is constructed from region/project
+                    // Ignore any endpoint setting
+                }
+            }
+        }
 
         // Load parallel processing configuration
         if let Ok(enabled) = env::var("EMBEDDING_PARALLEL_ENABLED") {
