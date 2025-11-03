@@ -16,7 +16,8 @@ pub async fn connect() -> anyhow::Result<Client> {
     // Configure ivfflat.probes for vector search optimization
     // This setting controls the accuracy/speed tradeoff for vector similarity queries
     // probes=10 provides ~80-85% recall with <25ms p95 latency
-    client.execute("SET ivfflat.probes = 10", &[]).await?;
+    // Use batch_execute (simple query protocol) to avoid starting an implicit transaction
+    client.batch_execute("SET ivfflat.probes = 10").await?;
 
     Ok(client)
 }
@@ -31,7 +32,6 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
         include_str!("./../../migrations/0001_init.sql"),
         include_str!("./../../migrations/0002_markdown_support.sql"),
         include_str!("./../../migrations/0003_yaml_toml_support.sql"),
-        include_str!("./../../migrations/0004_optimize_vector_indices.sql"),
         include_str!("./../../migrations/0005_create_materialized_views.sql"),
         include_str!("./../../migrations/0006_optimize_gin_index.sql"),
         include_str!("./../../migrations/0007_ab_testing_schema.sql"),
@@ -39,6 +39,8 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
         include_str!("./../../migrations/0014_add_enhanced_symbol_kinds.sql"),
     ];
 
+    // Execute migrations that don't have CONCURRENT indexes
+    // Each migration runs in its own implicit transaction via batch_execute
     for sql in migrations {
         client.batch_execute(sql).await?;
     }
@@ -47,6 +49,12 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
     // must use simple_query instead of batch_execute.
     // simple_query does NOT wrap in transactions, allowing CONCURRENTLY to work,
     // and handles complex SQL constructs that batch_execute may not parse correctly.
+
+    // Migration 0004: Optimize vector indices (CREATE INDEX CONCURRENTLY)
+    execute_with_concurrent_indexes(
+        client,
+        include_str!("./../../migrations/0004_optimize_vector_indices.sql"),
+    ).await?;
 
     // Migration 0008: Context query optimizations (CREATE INDEX CONCURRENTLY)
     execute_with_concurrent_indexes(
