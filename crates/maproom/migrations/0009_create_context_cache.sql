@@ -42,9 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_context_cache_access_count
 
 -- Add comment explaining the table
 COMMENT ON TABLE maproom.context_cache IS
-  'Caches assembled context bundles to improve performance. ' ||
-  'Key: (chunk_id, options_hash) where options_hash is SHA-256 of ExpandOptions. ' ||
-  'Supports TTL and LRU eviction strategies.';
+  'Caches assembled context bundles to improve performance. Key: (chunk_id, options_hash) where options_hash is SHA-256 of ExpandOptions. Supports TTL and LRU eviction strategies.';
 
 COMMENT ON COLUMN maproom.context_cache.chunk_id IS
   'ID of the primary chunk for which context was assembled';
@@ -101,8 +99,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION maproom.evict_expired_cache_entries IS
-  'Removes cache entries older than the specified TTL in seconds. ' ||
-  'Returns the number of entries evicted.';
+  'Removes cache entries older than the specified TTL in seconds. Returns the number of entries evicted.';
 
 -- Function to evict least recently used entries when cache is full
 CREATE OR REPLACE FUNCTION maproom.evict_lru_cache_entries(
@@ -134,9 +131,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION maproom.evict_lru_cache_entries IS
-  'Evicts the least recently used cache entries when total entries exceeds max_entries. ' ||
-  'evict_count determines how many entries to remove at once (default: 100). ' ||
-  'Returns the number of entries evicted.';
+  'Evicts the least recently used cache entries when total entries exceeds max_entries. evict_count determines how many entries to remove at once (default: 100). Returns the number of entries evicted.';
 
 -- Function to invalidate cache entries for a specific chunk
 -- (useful when a chunk is updated)
@@ -153,9 +148,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION maproom.invalidate_chunk_cache IS
-  'Invalidates all cache entries for a specific chunk. ' ||
-  'Used when a chunk is updated to ensure cache consistency. ' ||
-  'Returns the number of entries invalidated.';
+  'Invalidates all cache entries for a specific chunk. Used when a chunk is updated to ensure cache consistency. Returns the number of entries invalidated.';
 
 -- Function to clear the entire cache
 CREATE OR REPLACE FUNCTION maproom.clear_context_cache()
@@ -170,6 +163,4 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION maproom.clear_context_cache IS
-  'Clears the entire context cache. ' ||
-  'Useful for manual cache clearing or testing. ' ||
-  'Returns the number of entries cleared.';
+  'Clears the entire context cache. Useful for manual cache clearing or testing. Returns the number of entries cleared.';

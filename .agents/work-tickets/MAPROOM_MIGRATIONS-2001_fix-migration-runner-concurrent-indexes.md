@@ -1,9 +1,9 @@
 # Ticket: MAPROOM_MIGRATIONS-2001: Fix Migration Runner to Support CONCURRENT Indexes
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose

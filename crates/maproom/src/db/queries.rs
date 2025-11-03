@@ -23,88 +23,287 @@ pub async fn connect() -> anyhow::Result<Client> {
 }
 
 pub async fn migrate(client: &Client) -> anyhow::Result<()> {
-    // Minimal migration runner: execute all migrations in order
-    // IMPORTANT: batch_execute() wraps statements in an implicit transaction,
-    // which prevents CREATE INDEX CONCURRENTLY from working.
-    // Solution: Execute CREATE INDEX CONCURRENTLY statements separately using simple_query()
+    // Migration runner with tracking and idempotency support
+    // IMPORTANT: Migrations are tracked in maproom.schema_migrations table
+    // CONCURRENT indexes are executed statement-by-statement to avoid transaction context issues
 
-    let migrations = vec![
-        include_str!("./../../migrations/0001_init.sql"),
-        include_str!("./../../migrations/0002_markdown_support.sql"),
-        include_str!("./../../migrations/0003_yaml_toml_support.sql"),
-        include_str!("./../../migrations/0005_create_materialized_views.sql"),
-        include_str!("./../../migrations/0006_optimize_gin_index.sql"),
-        include_str!("./../../migrations/0007_ab_testing_schema.sql"),
-        include_str!("./../../migrations/0011_python_symbol_kinds.sql"),
-        include_str!("./../../migrations/0014_add_enhanced_symbol_kinds.sql"),
+    // Step 1: Ensure schema_migrations table exists (migration 0000)
+    let migration_0000 = include_str!("./../../migrations/0000_schema_migrations.sql");
+    client.batch_execute(migration_0000).await
+        .context("Failed to create schema_migrations table")?;
+
+    // Step 2: Get list of applied migrations
+    let applied_migrations = get_applied_migrations(client).await?;
+
+    // Step 3: Define all migrations in order with their version numbers
+    // Format: (version, filename, sql_content, use_concurrent_handler)
+    // use_concurrent_handler=true for migrations with CREATE INDEX CONCURRENTLY statements
+    let all_migrations: Vec<(i32, &str, &str, bool)> = vec![
+        (1, "0001_init.sql", include_str!("./../../migrations/0001_init.sql"), false),
+        (2, "0002_markdown_support.sql", include_str!("./../../migrations/0002_markdown_support.sql"), false),
+        (3, "0003_yaml_toml_support.sql", include_str!("./../../migrations/0003_yaml_toml_support.sql"), false),
+        (4, "0004_optimize_vector_indices.sql", include_str!("./../../migrations/0004_optimize_vector_indices.sql"), false),
+        (5, "0005_create_materialized_views.sql", include_str!("./../../migrations/0005_create_materialized_views.sql"), false),
+        (6, "0006_optimize_gin_index.sql", include_str!("./../../migrations/0006_optimize_gin_index.sql"), false),
+        (7, "0007_ab_testing_schema.sql", include_str!("./../../migrations/0007_ab_testing_schema.sql"), false),
+        (8, "0008_context_query_optimizations.sql", include_str!("./../../migrations/0008_context_query_optimizations.sql"), true),
+        (9, "0009_create_context_cache.sql", include_str!("./../../migrations/0009_create_context_cache.sql"), false),
+        (10, "0010_add_blake3_hash.sql", include_str!("./../../migrations/0010_add_blake3_hash.sql"), true),
+        (11, "0011_python_symbol_kinds.sql", include_str!("./../../migrations/0011_python_symbol_kinds.sql"), false),
+        (12, "0012_optimize_indices.sql", include_str!("./../../migrations/0012_optimize_indices.sql"), true),
+        (13, "0013_query_tuning.sql", include_str!("./../../migrations/0013_query_tuning.sql"), false),
+        (14, "0014_add_enhanced_symbol_kinds.sql", include_str!("./../../migrations/0014_add_enhanced_symbol_kinds.sql"), false),
+        (15, "0015_add_ollama_columns.sql", include_str!("./../../migrations/0015_add_ollama_columns.sql"), true),
+        (16, "0016_add_updated_at_to_chunks.sql", include_str!("./../../migrations/0016_add_updated_at_to_chunks.sql"), false),
     ];
 
-    // Execute migrations that don't have CONCURRENT indexes
-    // Each migration runs in its own implicit transaction via batch_execute
-    for sql in migrations {
-        client.batch_execute(sql).await?;
+    // Step 4: Apply each unapplied migration
+    for (version, filename, sql, use_concurrent_handler) in all_migrations {
+        // Skip if already applied
+        if applied_migrations.contains(&version) {
+            println!("⏭️  Skipping migration {}: {} (already applied)", version, filename);
+            continue;
+        }
+
+        println!("🔄 Applying migration {}: {}", version, filename);
+
+        // Execute migration based on whether it contains CONCURRENT indexes
+        if use_concurrent_handler {
+            execute_with_concurrent_indexes(client, sql).await
+                .with_context(|| format!("Failed to apply migration {}: {}", version, filename))?;
+        } else {
+            client.batch_execute(sql).await
+                .with_context(|| format!("Failed to apply migration {}: {}", version, filename))?;
+        }
+
+        // Record successful application
+        record_migration(client, version, filename).await
+            .with_context(|| format!("Failed to record migration {}: {}", version, filename))?;
+
+        println!("✅ Applied migration {}: {}", version, filename);
     }
 
-    // Migrations with CREATE INDEX CONCURRENTLY or multi-line string concatenation (||)
-    // must use simple_query instead of batch_execute.
-    // simple_query does NOT wrap in transactions, allowing CONCURRENTLY to work,
-    // and handles complex SQL constructs that batch_execute may not parse correctly.
-
-    // Migration 0004: Optimize vector indices (CREATE INDEX CONCURRENTLY)
-    execute_with_concurrent_indexes(
-        client,
-        include_str!("./../../migrations/0004_optimize_vector_indices.sql"),
-    ).await?;
-
-    // Migration 0008: Context query optimizations (CREATE INDEX CONCURRENTLY)
-    execute_with_concurrent_indexes(
-        client,
-        include_str!("./../../migrations/0008_context_query_optimizations.sql"),
-    ).await?;
-
-    // Migration 0009: Context cache (uses || in COMMENT statements)
-    client.simple_query(include_str!("./../../migrations/0009_create_context_cache.sql")).await?;
-
-    // Migration 0010: Add blake3_hash column (CREATE INDEX CONCURRENTLY)
-    execute_with_concurrent_indexes(
-        client,
-        include_str!("./../../migrations/0010_add_blake3_hash.sql"),
-    ).await?;
-
-    // Migration 0012: Optimize indices (CREATE INDEX CONCURRENTLY)
-    execute_with_concurrent_indexes(
-        client,
-        include_str!("./../../migrations/0012_optimize_indices.sql"),
-    ).await?;
-
-    // Migration 0013: Query tuning (uses || in COMMENT statements)
-    client.simple_query(include_str!("./../../migrations/0013_query_tuning.sql")).await?;
-
-    // Migration 0015: Add Ollama/Google embedding columns (CREATE INDEX CONCURRENTLY)
-    execute_with_concurrent_indexes(
-        client,
-        include_str!("./../../migrations/0015_add_ollama_columns.sql"),
-    ).await?;
-
-    // Migration 0016: Add updated_at column to chunks table (PROVFIX-2001)
-    client.batch_execute(include_str!("./../../migrations/0016_add_updated_at_to_chunks.sql")).await?;
-
+    println!("🎉 All migrations applied successfully");
     Ok(())
 }
 
 /// Execute a migration that contains CREATE INDEX CONCURRENTLY statements.
-/// Uses simple_query which does NOT wrap in implicit transactions.
+/// Parses SQL and executes CONCURRENT statements individually to avoid transaction context issues.
 async fn execute_with_concurrent_indexes(client: &Client, sql: &str) -> anyhow::Result<()> {
-    // After extensive testing, discovered that simple_query in tokio-postgres
-    // uses the PostgreSQL "simple query protocol" which does NOT wrap statements
-    // in an implicit transaction. This allows CREATE INDEX CONCURRENTLY to work.
+    // The problem: When PostgreSQL receives multiple statements in a single message
+    // (even via simple_query protocol), it may execute them in a pseudo-transaction
+    // context that blocks CREATE INDEX CONCURRENTLY operations.
     //
-    // We just pass the entire migration SQL to simple_query and let PostgreSQL
-    // handle the parsing and execution. PostgreSQL correctly handles:
-    // - Multi-line string literals
-    // - Comments
-    // - CREATE INDEX CONCURRENTLY outside transactions
-    client.simple_query(sql).await?;
+    // Solution: Parse the SQL into individual statements and execute:
+    // - CREATE INDEX CONCURRENTLY statements individually (one at a time)
+    // - Other statements can be batched together
+
+    let statements = parse_sql_statements(sql);
+
+    for stmt in statements {
+        let trimmed = stmt.trim();
+
+        // Skip empty statements
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Check if this is a CREATE INDEX CONCURRENTLY statement
+        let is_concurrent = trimmed.to_uppercase().contains("CREATE INDEX CONCURRENTLY")
+                         || trimmed.to_uppercase().contains("CREATE UNIQUE INDEX CONCURRENTLY");
+
+        if is_concurrent {
+            // Execute CONCURRENT indexes individually using simple_query
+            // This ensures they run outside any transaction context
+            client.simple_query(trimmed).await
+                .with_context(|| format!("Failed to execute CONCURRENT index statement: {}",
+                    truncate_for_display(trimmed, 100)))?;
+        } else {
+            // Execute other statements using batch_execute
+            // This is safer for regular DDL as it provides transaction boundaries
+            client.batch_execute(trimmed).await
+                .with_context(|| format!("Failed to execute statement: {}",
+                    truncate_for_display(trimmed, 100)))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse SQL into individual statements.
+/// This is a simple parser that handles:
+/// - Semicolon-terminated statements
+/// - Single-line comments (--)
+/// - Multi-line comments (/* */)
+/// - String literals (single quotes)
+/// - Dollar-quoted strings ($$...$$)
+fn parse_sql_statements(sql: &str) -> Vec<String> {
+    let mut statements = Vec::new();
+    let mut current_stmt = String::new();
+    let mut chars = sql.chars().peekable();
+    let mut in_single_quote = false;
+    let mut in_dollar_quote = false;
+    let mut dollar_tag = String::new();
+
+    while let Some(ch) = chars.next() {
+        // Handle single-line comments
+        if ch == '-' && chars.peek() == Some(&'-') && !in_single_quote && !in_dollar_quote {
+            // Skip until end of line
+            while let Some(c) = chars.next() {
+                if c == '\n' {
+                    current_stmt.push(c);
+                    break;
+                }
+            }
+            continue;
+        }
+
+        // Handle multi-line comments
+        if ch == '/' && chars.peek() == Some(&'*') && !in_single_quote && !in_dollar_quote {
+            current_stmt.push(ch);
+            current_stmt.push(chars.next().unwrap()); // consume '*'
+            // Skip until */
+            while let Some(c) = chars.next() {
+                current_stmt.push(c);
+                if c == '*' && chars.peek() == Some(&'/') {
+                    current_stmt.push(chars.next().unwrap());
+                    break;
+                }
+            }
+            continue;
+        }
+
+        // Handle dollar-quoted strings ($$...$$, $tag$...$tag$)
+        if ch == '$' && !in_single_quote {
+            if in_dollar_quote {
+                // Check if this ends the dollar quote
+                let mut potential_tag = String::from("$");
+                let mut temp_chars = chars.clone();
+
+                while let Some(&c) = temp_chars.peek() {
+                    if c == '$' {
+                        potential_tag.push(c);
+                        temp_chars.next();
+                        break;
+                    } else if c.is_alphanumeric() || c == '_' {
+                        potential_tag.push(c);
+                        temp_chars.next();
+                    } else {
+                        break;
+                    }
+                }
+
+                if potential_tag == dollar_tag {
+                    // End of dollar quote
+                    current_stmt.push_str(&potential_tag);
+                    // Consume the characters we checked
+                    for _ in 1..potential_tag.len() {
+                        chars.next();
+                    }
+                    in_dollar_quote = false;
+                    dollar_tag.clear();
+                    continue;
+                }
+            } else {
+                // Start of dollar quote
+                let mut tag = String::from("$");
+                while let Some(&c) = chars.peek() {
+                    if c == '$' {
+                        tag.push(c);
+                        chars.next();
+                        break;
+                    } else if c.is_alphanumeric() || c == '_' {
+                        tag.push(c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+
+                current_stmt.push_str(&tag);
+                in_dollar_quote = true;
+                dollar_tag = tag;
+                continue;
+            }
+        }
+
+        // Handle single quotes (string literals)
+        if ch == '\'' && !in_dollar_quote {
+            in_single_quote = !in_single_quote;
+            current_stmt.push(ch);
+            continue;
+        }
+
+        // Handle semicolon (statement terminator)
+        if ch == ';' && !in_single_quote && !in_dollar_quote {
+            current_stmt.push(ch);
+            statements.push(current_stmt.trim().to_string());
+            current_stmt.clear();
+            continue;
+        }
+
+        // Regular character
+        current_stmt.push(ch);
+    }
+
+    // Add any remaining statement (might not end with semicolon)
+    let final_stmt = current_stmt.trim();
+    if !final_stmt.is_empty() {
+        statements.push(final_stmt.to_string());
+    }
+
+    statements
+}
+
+/// Truncate a string for display purposes
+fn truncate_for_display(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
+}
+
+/// Get list of applied migration versions from schema_migrations table
+async fn get_applied_migrations(client: &Client) -> anyhow::Result<std::collections::HashSet<i32>> {
+    // First check if the schema_migrations table exists
+    let table_exists = client
+        .query_opt(
+            "SELECT 1 FROM information_schema.tables
+             WHERE table_schema = 'maproom' AND table_name = 'schema_migrations'",
+            &[],
+        )
+        .await?
+        .is_some();
+
+    if !table_exists {
+        // Table doesn't exist yet, return empty set
+        return Ok(std::collections::HashSet::new());
+    }
+
+    // Query the applied migrations
+    let rows = client
+        .query("SELECT version FROM maproom.schema_migrations", &[])
+        .await?;
+
+    let applied: std::collections::HashSet<i32> = rows
+        .iter()
+        .map(|row| row.get::<_, i32>(0))
+        .collect();
+
+    Ok(applied)
+}
+
+/// Record a successfully applied migration in schema_migrations table
+async fn record_migration(client: &Client, version: i32, filename: &str) -> anyhow::Result<()> {
+    client
+        .execute(
+            "INSERT INTO maproom.schema_migrations (version, filename)
+             VALUES ($1, $2)
+             ON CONFLICT (version) DO NOTHING",
+            &[&version, &filename],
+        )
+        .await?;
     Ok(())
 }
 
