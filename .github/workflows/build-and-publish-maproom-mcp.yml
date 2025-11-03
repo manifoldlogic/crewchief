@@ -317,10 +317,80 @@ jobs:
           echo "=== Final package structure ==="
           ls -lR packages/maproom-mcp/bin/
 
-      # TODO (BINPKG-1007): Add npm publish steps
-      #   - Set up Node.js
-      #   - Install dependencies
-      #   - Copy binaries to correct locations in packages/maproom-mcp/bin/
-      #   - Update package.json version
-      #   - Publish to npm (or skip if dry_run is true)
-      #   - Create GitHub release with binaries
+      # Step 6: Setup Node.js with npm registry
+      - name: Setup Node.js with npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Step 7: Create npm tarball
+      - name: Create npm tarball
+        working-directory: packages/maproom-mcp
+        run: npm pack
+
+      # Step 8: Verify tarball contains all binaries
+      - name: Verify tarball contains all binaries
+        working-directory: packages/maproom-mcp
+        run: |
+          echo "Extracting tarball contents..."
+          tar -tzf *.tgz | grep bin/
+
+          echo "Verifying all 4 binaries are present..."
+          tar -tzf *.tgz | grep "package/bin/linux-x64/crewchief-maproom"
+          tar -tzf *.tgz | grep "package/bin/linux-arm64/crewchief-maproom"
+          tar -tzf *.tgz | grep "package/bin/darwin-x64/crewchief-maproom"
+          tar -tzf *.tgz | grep "package/bin/darwin-arm64/crewchief-maproom"
+
+          echo "✓ All binaries present in tarball"
+
+      # Step 9: Publish to npm (conditional)
+      - name: Publish to npm
+        if: inputs.dry_run != 'true'
+        working-directory: packages/maproom-mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Retry logic for network resilience
+          for i in 1 2 3; do
+            npm publish --access public && break || {
+              if [ $i -lt 3 ]; then
+                echo "Publish attempt $i failed, retrying in 10 seconds..."
+                sleep 10
+              else
+                echo "All publish attempts failed"
+                exit 1
+              fi
+            }
+          done
+
+      # Step 10: Verify package on npm registry
+      - name: Verify package on npm registry
+        if: inputs.dry_run != 'true'
+        working-directory: packages/maproom-mcp
+        run: |
+          # Wait for npm to propagate
+          sleep 5
+
+          # Get package version from package.json
+          VERSION=$(node -p "require('./package.json').version")
+
+          # Verify package is available
+          npm view @crewchief/maproom-mcp@$VERSION version
+
+          echo "✓ Package verified on npm registry"
+          echo "Package: @crewchief/maproom-mcp@$VERSION"
+          echo "Download: npm install @crewchief/maproom-mcp@$VERSION"
+          echo "Registry: https://www.npmjs.com/package/@crewchief/maproom-mcp/v/$VERSION"
+
+      # Step 11: Dry run summary
+      - name: Dry run summary
+        if: inputs.dry_run == 'true'
+        working-directory: packages/maproom-mcp
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "DRY RUN MODE - Publish skipped"
+          echo "Would publish: @crewchief/maproom-mcp@$VERSION"
+          echo "Tarball verified and ready for publication"
