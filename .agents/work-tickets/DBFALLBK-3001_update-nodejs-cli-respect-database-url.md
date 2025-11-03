@@ -1,9 +1,9 @@
 # Ticket: DBFALLBK-3001: Update Node.js CLI to Respect Explicit DATABASE_URL
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -25,12 +25,12 @@ This creates problems:
 This ticket implements Phase 3 from planning/plan.md: making the CLI respect explicit DATABASE_URL and only use auto-detection as a fallback.
 
 ## Acceptance Criteria
-- [ ] scan command respects existing DATABASE_URL when set
-- [ ] watch command respects existing DATABASE_URL when set
-- [ ] Logging clearly shows "Using explicit DATABASE_URL from environment" vs "Auto-detected database connection"
-- [ ] When DATABASE_URL not set, auto-detection works as before (backward compatible)
-- [ ] Debug output shows which connection method was used
-- [ ] DATABASE_URL is sanitized in debug output (password replaced with ***)
+- [x] scan command respects existing DATABASE_URL when set
+- [x] watch command respects existing DATABASE_URL when set
+- [x] Logging clearly shows "Using explicit DATABASE_URL from environment" vs "Auto-detected database connection"
+- [x] When DATABASE_URL not set, auto-detection works as before (backward compatible)
+- [x] Debug output shows which connection method was used
+- [x] DATABASE_URL is sanitized in debug output (password replaced with ***)
 
 ## Technical Requirements
 Update scan command (around line 1522-1526 in cli.cjs):

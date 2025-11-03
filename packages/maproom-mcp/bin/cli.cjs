@@ -64,6 +64,31 @@ function redactSensitive(data) {
 }
 
 /**
+ * Sanitize DATABASE_URL for logging by masking password
+ * @param {string} url - The database URL to sanitize
+ * @returns {string} - URL with password replaced by asterisks
+ */
+function sanitizeDatabaseUrl(url) {
+  if (!url) return '(not set)';
+
+  try {
+    // Use URL API to properly parse and replace password
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = '***';
+    }
+    return parsed.toString();
+  } catch (error) {
+    // Fallback to regex for non-standard URLs
+    try {
+      return url.replace(/:([^@:]+)@/, ':***@');
+    } catch (e) {
+      return '(invalid URL format)';
+    }
+  }
+}
+
+/**
  * Log diagnostic information to stderr
  * Logs always appear when EMBEDDING_PROVIDER is not set OR when MAPROOM_MCP_DEBUG=true
  */
@@ -1521,9 +1546,16 @@ async function runScan() {
   // Build environment with provider-specific settings
   const env = {
     ...process.env,
-    DATABASE_URL: getDatabaseConnectionString(),
     ...providerEnv
   };
+
+  // Only set DATABASE_URL if not already set
+  if (!env.DATABASE_URL) {
+    env.DATABASE_URL = getDatabaseConnectionString();
+    console.error('🔗 Auto-detected database connection');
+  } else {
+    console.error('🔗 Using explicit DATABASE_URL from environment');
+  }
 
   // Note: EMBEDDING_API_ENDPOINT is now explicitly set for all providers in providerEnv
 
@@ -1533,6 +1565,7 @@ async function runScan() {
   console.error(`   EMBEDDING_MODEL: ${env.EMBEDDING_MODEL}`);
   console.error(`   EMBEDDING_DIMENSION: ${env.EMBEDDING_DIMENSION}`);
   console.error(`   EMBEDDING_API_ENDPOINT: ${env.EMBEDDING_API_ENDPOINT || '(not set)'}`);
+  console.error(`   DATABASE_URL: ${sanitizeDatabaseUrl(env.DATABASE_URL)}`);
   console.error(`   OPENAI_API_KEY: ${env.OPENAI_API_KEY ? '(set)' : '(NOT SET)'}\n`);
 
   const result = spawnSync(binPath, args, {
@@ -1673,9 +1706,20 @@ async function upsertFiles(rootPath, repoInfo, provider, files) {
   // Build environment with provider-specific settings
   const env = {
     ...process.env,
-    DATABASE_URL: getDatabaseConnectionString(),
     ...providerEnv
   };
+
+  // Only set DATABASE_URL if not already set
+  if (!env.DATABASE_URL) {
+    env.DATABASE_URL = getDatabaseConnectionString();
+    console.error('🔗 Auto-detected database connection');
+  } else {
+    console.error('🔗 Using explicit DATABASE_URL from environment');
+  }
+
+  // Debug: Show database connection
+  console.error('🔍 [DEBUG] Database connection:');
+  console.error(`   DATABASE_URL: ${sanitizeDatabaseUrl(env.DATABASE_URL)}\n`);
 
   // Note: EMBEDDING_API_ENDPOINT is now explicitly set for all providers in providerEnv
 
