@@ -142,10 +142,43 @@ jobs:
           path: artifacts/bin/${{ matrix.platform }}
           if-no-files-found: error
 
-      # TODO (BINPKG-1004): Add macOS x64 build steps
-      #   - Install Rust toolchain
-      #   - Build maproom binary natively
-      #   - Upload artifact
+      # macOS x64 build steps (BINPKG-1004)
+      - name: Setup Rust toolchain
+        if: matrix.platform == 'darwin-x64'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - name: Build binary
+        if: matrix.platform == 'darwin-x64'
+        run: |
+          cargo build --release --target ${{ matrix.target }} --manifest-path crates/maproom/Cargo.toml
+
+      - name: Strip binary
+        if: matrix.platform == 'darwin-x64'
+        run: |
+          strip target/${{ matrix.target }}/release/crewchief-maproom
+
+      - name: Verify binary
+        if: matrix.platform == 'darwin-x64'
+        run: |
+          ls -lh target/${{ matrix.target }}/release/crewchief-maproom
+          file target/${{ matrix.target }}/release/crewchief-maproom
+
+      - name: Prepare artifact
+        if: matrix.platform == 'darwin-x64'
+        run: |
+          mkdir -p artifacts/bin/${{ matrix.platform }}
+          cp target/${{ matrix.target }}/release/crewchief-maproom artifacts/bin/${{ matrix.platform }}/
+
+      - name: Upload artifact
+        if: matrix.platform == 'darwin-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: maproom-${{ matrix.platform }}
+          path: artifacts/bin/${{ matrix.platform }}
+          if-no-files-found: error
 
       # TODO (BINPKG-1005): Add macOS ARM64 build steps
       #   - Install Rust toolchain
