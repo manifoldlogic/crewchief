@@ -53,6 +53,11 @@ tree-sitter-md = "0.2"
 reqwest = { version = "0.12", features = ["json"] }
 lru = "0.12"
 
+# OpenSSL with vendored feature for cross-platform builds
+# The vendored feature statically links OpenSSL, eliminating system dependency
+# This ensures builds work with `cross` tool in GitHub Actions (BINPKG-1903)
+openssl = { version = "0.10", features = ["vendored"] }
+
 # A/B Testing dependencies
 uuid = { version = "1", features = ["v4", "serde"] }
 
