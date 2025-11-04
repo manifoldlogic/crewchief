@@ -24,14 +24,14 @@ After implementing the connection fallback logic in Phases 1-3, we need comprehe
 This implements the testing strategy from planning/quality-strategy.md Phase 4 (End-to-End Scenario Tests).
 
 ## Acceptance Criteria
-- [ ] All 4 scenarios tested and documented
-- [ ] Scenario 1 (Devcontainer): Uses maproom-postgres from DATABASE_URL
-- [ ] Scenario 2 (MCP user): Auto-detects maproom-postgres
-- [ ] Scenario 3 (Direct Rust): Auto-detects maproom-postgres
-- [ ] Scenario 4 (Override): Uses MAPROOM_DB_HOST value
-- [ ] All connection attempts succeed
-- [ ] Logging output is clear and helpful
-- [ ] No database connection errors
+- [x] All 4 scenarios tested and documented
+- [x] Scenario 1 (Devcontainer): Uses maproom-postgres from DATABASE_URL
+- [x] Scenario 2 (MCP user): Auto-detects maproom-postgres
+- [x] Scenario 3 (Direct Rust): Auto-detects maproom-postgres
+- [x] Scenario 4 (Override): Uses MAPROOM_DB_HOST value
+- [x] All connection attempts succeed
+- [x] Logging output is clear and helpful
+- [x] No database connection errors
 
 ## Technical Requirements
 Test the following 4 scenarios manually and document results:
