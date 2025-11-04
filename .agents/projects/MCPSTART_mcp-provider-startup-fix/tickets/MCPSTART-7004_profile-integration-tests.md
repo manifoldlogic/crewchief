@@ -1,9 +1,11 @@
 # Ticket: MCPSTART-7004: Profile Integration Tests
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [ ] **Task completed** - DEFERRED (Phase 3 solution implemented instead)
+- [ ] **Tests pass** - N/A (ticket deferred)
+- [ ] **Verified** - N/A (ticket deferred)
+
+**Note**: Phase 7 (Docker Compose Profiles) was deferred in favor of the Phase 3 solution (explicit stop/remove of unnecessary services via CLI logic). The Phase 3 implementation successfully solves the problem and has been validated in production through v1.3.1. Docker profiles remain a viable alternative for future enhancement.
 
 ## Agents
 - integration-tester (primary)
