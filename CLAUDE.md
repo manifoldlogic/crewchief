@@ -30,7 +30,31 @@ pnpm dev                    # Run CLI without building
 tsx src/cli/index.ts --help # Direct execution
 ```
 
-### Rust Components (Maproom)
+### Maproom MCP Package (`packages/maproom-mcp`)
+
+MCP server that wraps the Rust indexer binary. Handles Docker orchestration, setup, and MCP protocol.
+
+```bash
+cd packages/maproom-mcp
+
+# Build TypeScript
+pnpm build
+
+# CLI commands
+node bin/cli.cjs setup --provider=openai
+node bin/cli.cjs scan /path/to/repo
+node bin/cli.cjs watch /path/to/repo
+```
+
+**Key Files:**
+- `bin/cli.cjs` - CLI wrapper with Docker orchestration
+- `src/index.ts` - MCP server implementation
+- `config/docker-compose.yml` - Container setup
+- `config/init.sql` - Database schema
+
+### Rust Indexer (`crates/maproom`)
+
+Core indexer that does the actual parsing and indexing work. Called by the MCP package.
 
 ```bash
 # Build
@@ -40,11 +64,13 @@ cargo build --release --bin crewchief-maproom
 # Test
 cargo test
 
-# Run commands
+# Run commands directly
 cargo run --bin crewchief-maproom -- db
-cargo run --bin crewchief-maproom -- scan
-cargo run --bin crewchief-maproom -- search
+cargo run --bin crewchief-maproom -- scan /path/to/repo
+cargo run --bin crewchief-maproom -- search "query"
 ```
+
+**Note**: The MCP package includes pre-built binaries. Rebuild only when changing Rust code.
 
 ## Maproom Semantic Search
 
@@ -73,6 +99,24 @@ This codebase is indexed! Use maproom MCP tools for semantic search.
 
 **Tips**: Use concepts not keywords. If no results, check `status` first. Use `debug: true` to understand rankings.
 
+## Documentation
+
+### `.agents/` - Work in Flight
+Project planning, active work tickets, and execution tracking. Agents write here.
+- Project planning documents
+- Active work tickets
+- Progress tracking
+- Implementation notes
+
+### `docs/` - Permanent Documentation
+Long-term codebase documentation. Read by both agents and humans.
+- Architecture documentation
+- How-to guides
+- API references
+- Technical specifications
+
+**Rule**: Agents document active work in `.agents/`, finalized knowledge goes in `docs/`.
+
 ## Architecture
 
 ### Database
@@ -80,14 +124,7 @@ This codebase is indexed! Use maproom MCP tools for semantic search.
 Single PostgreSQL instance: `maproom-postgres:5432/maproom`
 - Connection: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
 - Managed via `packages/maproom-mcp/config/docker-compose.yml`
-
-**Auto-detection priority**:
-1. `DATABASE_URL` environment variable
-2. `MAPROOM_DB_HOST` + `MAPROOM_DB_PORT`
-3. `maproom-postgres` hostname (Docker)
-4. `localhost:5433` fallback
-
-See `docs/architecture/DATABASE_ARCHITECTURE.md` for details.
+- Details: `docs/architecture/DATABASE_ARCHITECTURE.md`
 
 ### CLI Structure
 
