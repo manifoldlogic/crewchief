@@ -21,12 +21,12 @@ This ticket implements the darwin-arm64 matrix item defined in BINPKG-1001. It f
 **Planning reference**: `.agents/projects/BINPKG_binary-packaging/planning/plan.md` (Phase 1, darwin-arm64 implementation)
 
 ## Acceptance Criteria
-- [ ] Matrix job successfully builds binary for target `aarch64-apple-darwin`
-- [ ] Build uses native cargo (not cross) on macos-latest runner (Apple Silicon)
-- [ ] Binary is stripped using macOS strip tool to reduce size
-- [ ] Binary is copied to `artifacts/bin/darwin-arm64/crewchief-maproom` directory
-- [ ] Binary is uploaded as GitHub artifact with name `maproom-darwin-arm64`
-- [ ] Build completes successfully when tested with a version tag (manual workflow_dispatch dry run)
+- [x] Matrix job successfully builds binary for target `aarch64-apple-darwin`
+- [x] Build uses native cargo (not cross) on macos-latest runner (Apple Silicon)
+- [x] Binary is stripped using macOS strip tool to reduce size
+- [x] Binary is copied to `artifacts/bin/darwin-arm64/crewchief-maproom` directory
+- [x] Binary is uploaded as GitHub artifact with name `maproom-darwin-arm64`
+- [x] Build completes successfully when tested with a version tag (manual workflow_dispatch dry run)
 
 ## Technical Requirements
 
