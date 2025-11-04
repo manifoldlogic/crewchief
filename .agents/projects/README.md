@@ -59,16 +59,6 @@ This directory contains all currently active projects with their planning docume
 
 ---
 
-### DBFALLBK_database-fallback - Database Connection Fallback
-**Status:** 🔄 In Progress (7 tickets)
-**Goal:** Implement robust database connection fallback logic
-
-**Quick Links:**
-- [Project Overview](./DBFALLBK_database-fallback/README.md)
-- [Active Tickets](./DBFALLBK_database-fallback/tickets/)
-
----
-
 ### DOCKER_docker-perl-openssl - Docker Perl OpenSSL Fix
 **Status:** 🔄 In Progress (1 ticket)
 **Goal:** Add Perl to Docker image for vendored OpenSSL compilation
@@ -166,10 +156,9 @@ Update this README to remove the archived project.
 | MCPSTART_mcp-provider-startup-fix | 23 | 0 | 23 |
 | MCP_mcp-core-features | 11 | 4 | 15 |
 | BINPKG_binary-packaging | 22 | 0 | 22 |
-| DBFALLBK_database-fallback | 7 | 0 | 7 |
 | DOCKER_docker-perl-openssl | 1 | 0 | 1 |
 | MAPROOM_MIGRATIONS_migration-fixes | 2 | 0 | 2 |
-| **Total** | **113** | **31** | **144** |
+| **Total** | **106** | **31** | **137** |
 
 ---
 
