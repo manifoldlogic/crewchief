@@ -4,7 +4,7 @@
 - [x] **Task completed** - both cleanup and specific filename implemented
 - [x] **Tests pass** - workflow change only, no code tests
 - [ ] **Verified** - awaiting GitHub Actions workflow run
-- [ ] **Committed**
+- [x] **Committed** - commit 2386df4
 
 ## Agents
 - github-actions-engineer
