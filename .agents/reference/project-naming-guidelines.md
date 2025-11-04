@@ -5,17 +5,17 @@ This document defines the naming conventions for projects in the `.agents/` dire
 ## Format
 
 ```
-{CODE}_{descriptive-name}
+{SLUG}_{descriptive-name}
 ```
 
 **Components:**
-- **CODE**: UPPERCASE project identifier (4-8 characters)
+- **SLUG**: UPPERCASE project identifier (4-8 characters)
 - **Separator**: Single underscore `_`
 - **descriptive-name**: lowercase-with-dashes description
 
 ## Requirements
 
-### CODE Component
+### SLUG Component
 - **Length**: 4-8 characters
 - **Case**: UPPERCASE only
 - **Purpose**: Matches ticket prefix for easy association
@@ -32,7 +32,7 @@ This document defines the naming conventions for projects in the `.agents/` dire
 - `DHP` - Too cryptic
 - `DOCKERHUBPUBLISHING` - Too long
 - `docker` - Wrong case
-- `DKR_HUB` - No underscores in code
+- `DKR_HUB` - No underscores in slug
 
 ### descriptive-name Component
 - **Case**: lowercase only
@@ -78,7 +78,7 @@ ls -d .agents/**/projects/*embed*
 AI agents can immediately understand project purpose from the path alone, without needing to read README files.
 
 ### 4. Ticket Association
-Tickets still use the short code:
+Tickets still use the short slug:
 - Folder: `DKRHUB_docker-hub-publishing/`
 - Tickets: `DKRHUB-001_setup.md`, `DKRHUB-002_build.md`
 
@@ -111,10 +111,10 @@ Tickets still use the short code:
 
 ## Creating a New Project
 
-### Step 1: Choose a CODE
+### Step 1: Choose a SLUG
 
-1. Review existing codes in `.agents/projects/` and `.agents/archive/projects/`
-2. Choose a unique, memorable code (4-8 chars)
+1. Review existing slugs in `.agents/projects/` and `.agents/archive/projects/`
+2. Choose a unique, memorable slug (4-8 chars)
 3. Use abbreviations that make sense in your domain
 
 ### Step 2: Write descriptive-name
@@ -137,17 +137,17 @@ LOCAL_local-deployment        ✓
 MPEMBED_multi-provider-embed  ✓
 
 # Invalid examples
-dkrhub_docker-hub             ✗ (lowercase code)
+dkrhub_docker-hub             ✗ (lowercase slug)
 DKRHUB-docker-hub             ✗ (wrong separator)
 DKRHUB_Docker-Hub             ✗ (uppercase in description)
-DKR_docker-hub-publishing     ✗ (code too short)
-DKRHUBPUB_docker-hub          ✗ (code too long)
+DKR_docker-hub-publishing     ✗ (slug too short)
+DKRHUBPUB_docker-hub          ✗ (slug too long)
 ```
 
 ### Step 4: Create Structure
 
 ```bash
-mkdir -p .agents/projects/{CODE}_{descriptive-name}/{planning,tickets}
+mkdir -p .agents/projects/{SLUG}_{descriptive-name}/{planning,tickets}
 ```
 
 ### Step 5: Update Documentation
@@ -162,7 +162,7 @@ If you need to rename an existing project:
 
 1. **Rename folder:**
    ```bash
-   mv .agents/projects/{OLD} .agents/projects/{CODE}_{descriptive-name}
+   mv .agents/projects/{OLD} .agents/projects/{SLUG}_{descriptive-name}
    ```
 
 2. **Update references in:**
@@ -170,7 +170,7 @@ If you need to rename an existing project:
    - `.agents/projects/README.md` or `.agents/archive/README.md`
    - Any documentation that links to the project
 
-3. **Do NOT rename tickets** - they keep their original `{CODE}-NNN` format
+3. **Do NOT rename tickets** - they keep their original `{SLUG}-NNN` format
 
 ## Anti-Patterns to Avoid
 
@@ -201,10 +201,10 @@ Projects should describe their purpose, not their iteration.
 
 ## FAQ
 
-**Q: What if my CODE is already taken?**
-A: Choose a different code. Add numbers if needed: `MCP2`, `AUTH2`, or use a more specific abbreviation.
+**Q: What if my SLUG is already taken?**
+A: Choose a different slug. Add numbers if needed: `MCP2`, `AUTH2`, or use a more specific abbreviation.
 
-**Q: Can I use numbers in the CODE?**
+**Q: Can I use numbers in the SLUG?**
 A: Yes, but prefer letters. Numbers are useful for disambiguation: `LOCAL2`, `MCP3`.
 
 **Q: Can I use numbers in descriptive-name?**
@@ -228,6 +228,6 @@ These guidelines should be followed for:
 
 ## Related Documents
 
-- [Work Ticket Template](./work-ticket-template.md) - Ticket naming follows the CODE
+- [Work Ticket Template](./work-ticket-template.md) - Ticket naming follows the SLUG
 - [Spec-Driven Development](./spec-driven-development.md) - Process from vision to tickets
 - [.agents README](../README.md) - Overall directory structure

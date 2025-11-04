@@ -81,20 +81,20 @@ cat .agents/agents/database-engineer.md
 ## Conventions
 
 ### Project Naming
-- Format: `{CODE}_{descriptive-name}`
-- **Code**: UPPERCASE, short (4-8 chars), matches ticket prefix
+- Format: `{SLUG}_{descriptive-name}`
+- **SLUG**: UPPERCASE, short (4-8 chars), matches ticket prefix
 - **Description**: lowercase-with-dashes, clear and specific
 - Examples: `DKRHUB_docker-hub-publishing/`, `LOCAL_local-deployment/`
 - See [Project Naming Guidelines](./reference/project-naming-guidelines.md) for details
 
 ### File Naming
 - Use lowercase-with-dashes: `analysis.md`, `quality-strategy.md`
-- Ticket files: `{CODE}-{NUMBER}_{description}.md` (e.g., `DKRHUB-001_setup.md`)
-- Index files: `{CODE}_TICKET_INDEX.md` or `README.md`
+- Ticket files: `{SLUG}-{NUMBER}_{description}.md` (e.g., `DKRHUB-001_setup.md`)
+- Index files: `{SLUG}_TICKET_INDEX.md` or `README.md`
 
 ### Project Organization
 ```
-projects/{CODE}_{descriptive-name}/
+projects/{SLUG}_{descriptive-name}/
 ├── README.md                  # Project status and overview
 ├── planning/                  # Strategic planning docs
 │   ├── analysis.md
@@ -103,7 +103,7 @@ projects/{CODE}_{descriptive-name}/
 │   ├── quality-strategy.md
 │   └── security-review.md
 ├── tickets/                   # Active work tickets
-│   ├── {CODE}-001.md
+│   ├── {SLUG}-001.md
 │   └── ...
 └── archive/                   # Completed tickets (optional)
     └── tickets/
@@ -125,11 +125,11 @@ mv .agents/projects/{PROJECT} .agents/archive/projects/
 
 ### Adding New Projects
 
-1. Choose a project code and name following [naming guidelines](./reference/project-naming-guidelines.md)
+1. Choose a project slug and name following [naming guidelines](./reference/project-naming-guidelines.md)
 
 2. Create project structure:
 ```bash
-mkdir -p .agents/projects/{CODE}_{descriptive-name}/{planning,tickets}
+mkdir -p .agents/projects/{SLUG}_{descriptive-name}/{planning,tickets}
 ```
 
 3. Create planning documents in `planning/`:

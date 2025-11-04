@@ -1,6 +1,6 @@
-// filename based on PROJ-0001_ticket-name.md where PROJ is the project slug
-// Ticket nubmers are prefaced with their phase nubmer
-// e.g., phase 2 starts with PROJ-2001_ticket-name.md
+// filename based on SLUG-0001_ticket-name.md where SLUG is the project slug
+// Ticket numbers are prefaced with their phase number
+// e.g., phase 2 starts with SLUG-2001_ticket-name.md
 
 # Ticket: [TICKET-ID]: [Title]
 

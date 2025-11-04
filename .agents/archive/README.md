@@ -140,7 +140,7 @@ Historical session summaries and progress reports:
 ```
 archive/
 ├── projects/                  # Completed projects
-│   └── {CODE}_{descriptive-name}/
+│   └── {SLUG}_{descriptive-name}/
 │       ├── README.md         # Project overview (optional)
 │       ├── planning/         # Planning documents
 │       └── tickets/          # Completed tickets

@@ -53,7 +53,7 @@ This directory contains all currently active projects with their planning docume
 Each project follows this structure:
 
 ```
-{CODE}_{descriptive-name}/
+{SLUG}_{descriptive-name}/
 ├── README.md                  # Project overview and status
 ├── planning/                  # Strategic planning documents
 │   ├── analysis.md           # Problem analysis
@@ -62,13 +62,13 @@ Each project follows this structure:
 │   ├── quality-strategy.md   # Testing approach
 │   └── security-review.md    # Security considerations
 ├── tickets/                   # Active work tickets
-│   └── {CODE}-NNN_description.md
+│   └── {SLUG}-NNN_description.md
 └── archive/                   # Completed tickets (optional)
     └── tickets/
 ```
 
-**Naming Convention:** `{CODE}_{descriptive-name}`
-- CODE: UPPERCASE project code (matches ticket prefix)
+**Naming Convention:** `{SLUG}_{descriptive-name}`
+- SLUG: UPPERCASE project slug (matches ticket prefix)
 - descriptive-name: lowercase-with-dashes, clear project purpose
 
 ## Working with Projects
@@ -111,7 +111,7 @@ When all tickets are done and knowledge is synthesized to `/docs`:
 
 ```bash
 # Move project to archive
-mv .agents/projects/{CODE}_{descriptive-name} .agents/archive/projects/
+mv .agents/projects/{SLUG}_{descriptive-name} .agents/archive/projects/
 ```
 
 Update this README to remove the archived project.
