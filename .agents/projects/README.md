@@ -48,6 +48,47 @@ This directory contains all currently active projects with their planning docume
 
 ---
 
+### BINPKG_binary-packaging - Binary Packaging
+**Status:** 🔄 In Progress (22 tickets)
+**Goal:** Build and publish cross-platform Rust binaries for @crewchief/maproom-mcp to npm
+
+**Quick Links:**
+- [Project Overview](./BINPKG_binary-packaging/README.md)
+- [Planning Docs](./BINPKG_binary-packaging/planning/)
+- [Active Tickets](./BINPKG_binary-packaging/tickets/)
+
+---
+
+### DBFALLBK_database-fallback - Database Connection Fallback
+**Status:** 🔄 In Progress (7 tickets)
+**Goal:** Implement robust database connection fallback logic
+
+**Quick Links:**
+- [Project Overview](./DBFALLBK_database-fallback/README.md)
+- [Active Tickets](./DBFALLBK_database-fallback/tickets/)
+
+---
+
+### DOCKER_docker-perl-openssl - Docker Perl OpenSSL Fix
+**Status:** 🔄 In Progress (1 ticket)
+**Goal:** Add Perl to Docker image for vendored OpenSSL compilation
+
+**Quick Links:**
+- [Project Overview](./DOCKER_docker-perl-openssl/README.md)
+- [Active Tickets](./DOCKER_docker-perl-openssl/tickets/)
+
+---
+
+### MAPROOM_MIGRATIONS_migration-fixes - Migration Runner Fixes
+**Status:** 🔄 In Progress (2 tickets)
+**Goal:** Fix migration runner transaction handling and concurrent index creation
+
+**Quick Links:**
+- [Project Overview](./MAPROOM_MIGRATIONS_migration-fixes/README.md)
+- [Active Tickets](./MAPROOM_MIGRATIONS_migration-fixes/tickets/)
+
+---
+
 ## Project Structure
 
 Each project follows this structure:
@@ -124,7 +165,11 @@ Update this README to remove the archived project.
 | LOCAL_local-deployment | 21 | 27 | 48 |
 | MCPSTART_mcp-provider-startup-fix | 23 | 0 | 23 |
 | MCP_mcp-core-features | 11 | 4 | 15 |
-| **Total** | **81** | **31** | **112** |
+| BINPKG_binary-packaging | 22 | 0 | 22 |
+| DBFALLBK_database-fallback | 7 | 0 | 7 |
+| DOCKER_docker-perl-openssl | 1 | 0 | 1 |
+| MAPROOM_MIGRATIONS_migration-fixes | 2 | 0 | 2 |
+| **Total** | **113** | **31** | **144** |
 
 ---
 
