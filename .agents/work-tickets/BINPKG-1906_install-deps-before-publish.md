@@ -1,10 +1,10 @@
 # Ticket: BINPKG-1906: Install dependencies before npm publish for prepublishOnly hook
 
 ## Status
-- [x] **Task completed** - added npm install --ignore-scripts before publish
+- [x] **Task completed** - added npm install --ignore-scripts + fixed prepublishOnly to use npm audit
 - [x] **Tests pass** - workflow change only, no code tests
 - [ ] **Verified** - awaiting GitHub Actions workflow run
-- [x] **Committed** - commit c9114a6 (initial), updated with --ignore-scripts fix
+- [x] **Committed** - commit c9114a6 (initial), 75a1ee9 (--ignore-scripts), pending (npm audit fix)
 
 ## Agents
 - github-actions-engineer
@@ -57,10 +57,10 @@ The tarball already includes the compiled `dist/` directory from the local build
 3. **Run `npm install --ignore-scripts` → installs dependencies, skips prepare hook**
 4. Run `npm publish` → triggers prepublishOnly hook
 5. prepublishOnly runs `tsc` → SUCCESS (dependencies available)
-6. prepublishOnly runs `pnpm audit` → SUCCESS
+6. prepublishOnly runs `npm audit` → SUCCESS (changed from pnpm to npm)
 7. Publish completes
 
-### Additional Issue Discovered (Workflow Run #19055002462)
+### Additional Issue #1: Root workspace prepare hook (Workflow Run #19055002462)
 
 After adding `npm install`, a new issue appeared:
 ```
@@ -76,6 +76,24 @@ npm error code 127
 **Solution**: Use `npm install --ignore-scripts` to:
 - Skip the "prepare" hook during dependency installation
 - Still allow "prepublishOnly" to run during publish (publish-specific hooks aren't affected)
+
+### Additional Issue #2: prepublishOnly uses pnpm audit (Workflow Run #19055207167)
+
+After fixing the prepare hook issue, a third issue appeared:
+```
+> @crewchief/maproom-mcp@1.3.0 prepublishOnly
+> tsc && pnpm audit --audit-level=high --prod
+
+sh: 1: pnpm: not found
+npm error code 127
+```
+
+**Root Cause**: The package.json prepublishOnly script uses `pnpm audit` but the GitHub Actions workflow uses npm, not pnpm. pnpm is not installed in the workflow runner.
+
+**Solution**: Change the prepublishOnly script in package.json to use npm audit:
+- Changed from: `"prepublishOnly": "tsc && pnpm audit --audit-level=high --prod"`
+- Changed to: `"prepublishOnly": "tsc && npm audit --audit-level=high --production"`
+- Note: npm uses `--production` instead of `--prod`
 
 ### Solution Implemented
 
@@ -142,6 +160,7 @@ npm publish "$TARBALL"
 
 ## Files to Modify
 - `.github/workflows/build-and-publish-maproom-mcp.yml` (added Step 9, renumbered Steps 10-12)
+- `packages/maproom-mcp/package.json` (changed prepublishOnly to use npm audit instead of pnpm audit)
 
 ## Verification
 After implementing:

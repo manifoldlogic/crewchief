@@ -26,7 +26,7 @@
     "test": "node tests/connection-fallback.test.cjs",
     "test:connection": "node tests/connection-fallback.test.cjs",
     "dev": "node bin/cli.cjs",
-    "prepublishOnly": "tsc && pnpm audit --audit-level=high --prod",
+    "prepublishOnly": "tsc && npm audit --audit-level=high --production",
     "security-check": "pnpm audit --audit-level=moderate",
     "release:patch": "node scripts/bump-version.js patch && pnpm publish --access public --no-git-checks",
     "release:minor": "node scripts/bump-version.js minor && pnpm publish --access public --no-git-checks",
