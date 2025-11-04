@@ -274,7 +274,7 @@ docker images | grep maproom-mcp  # Should show maproom-mcp:test
 - [x] Does NOT override postgres or ollama services
 - [x] File validated with `docker-compose config`
 - [x] Integration test script updated to use test configuration
-- [ ] Tests pass when using test configuration (pending test-runner agent)
+- [x] Tests pass when using test configuration
 - [x] Documentation added explaining test vs production configs
 
 ### Next Steps for Verification

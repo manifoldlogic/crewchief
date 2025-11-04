@@ -25,12 +25,12 @@ These labels enable tools to query image metadata and help with debugging and su
 Reference: DKRHUB_PLAN.md Phase 2, Task DKRHUB-2003 (lines 404-442)
 
 ## Acceptance Criteria
-- [ ] ARG declarations added at top of Dockerfile (after first FROM): VERSION, COMMIT_SHA, BUILD_DATE
-- [ ] LABEL directives added before ENTRYPOINT in final stage (runtime stage)
-- [ ] Labels follow OCI image spec: `org.opencontainers.image.*`
-- [ ] Required labels: version, revision, created, title, vendor
-- [ ] Default values provided for ARGs (e.g., "unknown") for local builds
-- [ ] Build succeeds with and without build arguments provided
+- [x] ARG declarations added at top of Dockerfile (after first FROM): VERSION, COMMIT_SHA, BUILD_DATE
+- [x] LABEL directives added before ENTRYPOINT in final stage (runtime stage)
+- [x] Labels follow OCI image spec: `org.opencontainers.image.*`
+- [x] Required labels: version, revision, created, title, vendor
+- [x] Default values provided for ARGs (e.g., "unknown") for local builds
+- [x] Build succeeds with and without build arguments provided
 
 ## Technical Requirements
 **File**: `packages/maproom-mcp/config/Dockerfile.mcp-server`

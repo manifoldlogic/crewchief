@@ -24,13 +24,13 @@ The override file is NOT published to npm, only exists in the development reposi
 Reference: DKRHUB_PLAN.md Phase 2, Task DKRHUB-2002 (lines 364-402)
 
 ## Acceptance Criteria
-- [ ] File created: `packages/maproom-mcp/config/docker-compose.override.yml`
-- [ ] Contains `services.maproom-mcp.build` configuration with correct context and dockerfile
-- [ ] Context path is `../../..` (three levels up from config/)
-- [ ] Dockerfile path is `packages/maproom-mcp/config/Dockerfile.mcp-server`
-- [ ] File includes explanatory comments documenting purpose and usage
-- [ ] File is NOT added to package.json `files` array (development-only)
-- [ ] Works with `docker-compose build` and `docker-compose up` commands
+- [x] File created: `packages/maproom-mcp/config/docker-compose.override.yml`
+- [x] Contains `services.maproom-mcp.build` configuration with correct context and dockerfile
+- [x] Context path is `../../..` (three levels up from config/)
+- [x] Dockerfile path is `packages/maproom-mcp/config/Dockerfile.mcp-server`
+- [x] File includes explanatory comments documenting purpose and usage
+- [x] File is NOT added to package.json `files` array (development-only)
+- [x] Works with `docker-compose build` and `docker-compose up` commands
 
 ## Technical Requirements
 **File**: `packages/maproom-mcp/config/docker-compose.override.yml`
