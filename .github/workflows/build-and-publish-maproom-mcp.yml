@@ -353,7 +353,13 @@ jobs:
 
           echo "✓ All binaries present in tarball"
 
-      # Step 9: Publish to npm (conditional)
+      # Step 9: Install dependencies for prepublishOnly hook
+      - name: Install dependencies
+        if: inputs.dry_run != 'true'
+        working-directory: packages/maproom-mcp
+        run: npm install
+
+      # Step 10: Publish to npm (conditional)
       - name: Publish to npm
         if: inputs.dry_run != 'true'
         working-directory: packages/maproom-mcp
@@ -373,7 +379,7 @@ jobs:
             }
           done
 
-      # Step 10: Verify package on npm registry
+      # Step 11: Verify package on npm registry
       - name: Verify package on npm registry
         if: inputs.dry_run != 'true'
         working-directory: packages/maproom-mcp
@@ -392,7 +398,7 @@ jobs:
           echo "Download: npm install @crewchief/maproom-mcp@$VERSION"
           echo "Registry: https://www.npmjs.com/package/@crewchief/maproom-mcp/v/$VERSION"
 
-      # Step 11: Dry run summary
+      # Step 12: Dry run summary
       - name: Dry run summary
         if: inputs.dry_run == 'true'
         working-directory: packages/maproom-mcp
