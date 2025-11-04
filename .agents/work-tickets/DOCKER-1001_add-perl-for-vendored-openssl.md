@@ -4,7 +4,8 @@
 - [x] **Task completed** - added perl to rust-builder stage dependencies
 - [x] **Tests pass** - Dockerfile change only, no code tests
 - [ ] **Verified** - awaiting Docker image build workflow run
-- [ ] **Committed** - ready to commit
+- [x] **Committed** - commit 8090d39
+- [ ] **Pushed to GitHub** - ready to push
 
 ## Agents
 - docker-engineer
