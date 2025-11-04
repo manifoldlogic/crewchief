@@ -2,6 +2,7 @@
 # One scope per line - use in commit messages like: feat(db): add new feature
 
 maproom
+maproom-mcp
 ab-testing
 api
 build
