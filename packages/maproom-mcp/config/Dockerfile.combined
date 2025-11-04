@@ -5,11 +5,13 @@
 FROM rustlang/rust:nightly-bookworm-slim AS rust-builder
 
 # Install Rust build dependencies
-# perl is required for vendored OpenSSL build (BINPKG-1903 cross-compilation support)
+# perl and make are required for vendored OpenSSL build (BINPKG-1903 cross-compilation support)
+# The vendored feature compiles OpenSSL from source, requiring full build toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
     perl \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
