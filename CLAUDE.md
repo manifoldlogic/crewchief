@@ -1,475 +1,206 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working with this repository.
 
-## Project Status
+## Project Overview
 
-CrewChief is a multi-tool CLI that combines:
-- **Git worktree management** - Simplify creating, listing, and managing git worktrees
-- **Semantic code search** (Maproom) - Index and search code using PostgreSQL and tree-sitter
-- **AI agent orchestration** - Spawn and coordinate AI agents in isolated environments
-
-**Important:** Agent orchestration features require **macOS with iTerm2**.
+CrewChief is a CLI tool combining:
+- **Git worktree management** - Create, list, and manage git worktrees
+- **Semantic code search (Maproom)** - Index and search code using PostgreSQL and tree-sitter
 
 ## Development Commands
 
-### TypeScript/Node CLI Package
+### TypeScript CLI
 
 ```bash
-# Install dependencies
+# Install and build
 pnpm install
-
-# Build the TypeScript CLI
 pnpm build
-# or specifically for the CLI package:
-cd packages/cli && pnpm build
 
-# Run tests
+# Testing
 pnpm test
-pnpm test:watch  # Run tests in watch mode
+pnpm test:watch
 
-# Run a single test file
-pnpm vitest run tests/agent.int.test.ts
-
-# Lint and format
+# Code quality
 pnpm lint
 pnpm format
 
-# Development (run CLI without building)
-pnpm dev
-# or use tsx directly:
-tsx src/cli/index.ts --help
-
-# Release versions
-pnpm release:patch
-pnpm release:minor
-pnpm release:major
+# Development
+pnpm dev                    # Run CLI without building
+tsx src/cli/index.ts --help # Direct execution
 ```
 
 ### Rust Components (Maproom)
 
 ```bash
-# Build Maproom binary
+# Build
 cargo build --release --bin crewchief-maproom
-# or use the comprehensive build script:
-./scripts/build-and-package.sh
+./scripts/build-and-package.sh  # Build for all platforms
 
-# Run Maproom tests
+# Test
 cargo test
 
-# Run Maproom with specific commands
+# Run commands
 cargo run --bin crewchief-maproom -- db
 cargo run --bin crewchief-maproom -- scan
 cargo run --bin crewchief-maproom -- search
 ```
 
-## Maproom Semantic Search Available
+## Maproom Semantic Search
 
-This codebase has maproom semantic search indexed! Use the maproom MCP tools for:
+This codebase is indexed! Use maproom MCP tools for semantic search.
 
-### When to use Maproom vs other search tools:
-- **Use `mcp__maproom__search`** for:
-  - Finding code by concept: "authentication flow", "message handling", "state management"
-  - Exploring architecture: "main classes", "entry points", "core components"
-  - Understanding relationships: "what calls sendMessage", "database queries"
-  - Navigating unfamiliar code: When you need to understand how something works
-  
-- **Use `Grep/Glob`** for:
-  - Finding exact text matches
-  - Quick file lookups when you know the filename pattern
-  - Simple string searches
+### When to Use Maproom
 
-### Maproom Tools Guide
+**Use `mcp__maproom__search`** for:
+- Finding code by concept: "authentication flow", "message handling"
+- Exploring architecture: "main classes", "entry points"
+- Understanding relationships: "what calls sendMessage"
+- Navigating unfamiliar code
 
-**Workflow**: Always start with `status` → `search` → `open` or `context` → optionally `upsert` when code changes
+**Use `Grep/Glob`** for:
+- Exact text matches
+- Known filename patterns
+- Simple string searches
 
-#### 1. `mcp__maproom__status` - Check Index Status (START HERE!)
+### Quick Maproom Workflow
 
-**Purpose**: Verify what's indexed before searching
+1. **Check status**: `mcp__maproom__status({ repo: "crewchief" })`
+2. **Search**: `mcp__maproom__search({ repo: "crewchief", query: "agent spawn" })`
+3. **Get code**: `mcp__maproom__open({ relpath: "path", worktree: "main" })`
+4. **Get context**: `mcp__maproom__context({ chunk_id: "uuid" })`
+5. **Update**: `mcp__maproom__upsert({ repo, worktree, root, commit: "HEAD", paths: [...] })`
 
-**Returns**:
-- Available repositories and worktrees
-- File counts by extension (.ts, .rs, .md, etc.)
-- Total chunks indexed and last update times
-- Search tips and hints
+**Tips**: Use concepts not keywords. If no results, check `status` first. Use `debug: true` to understand rankings.
 
-**Example**:
-```javascript
-mcp__maproom__status({ repo: "crewchief" })  // Optional: filter to specific repo
+## Architecture
+
+### Database
+
+Single PostgreSQL instance: `maproom-postgres:5432/maproom`
+- Connection: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
+- Managed via `packages/maproom-mcp/config/docker-compose.yml`
+
+**Auto-detection priority**:
+1. `DATABASE_URL` environment variable
+2. `MAPROOM_DB_HOST` + `MAPROOM_DB_PORT`
+3. `maproom-postgres` hostname (Docker)
+4. `localhost:5433` fallback
+
+See `docs/architecture/DATABASE_ARCHITECTURE.md` for details.
+
+### CLI Structure
+
 ```
-
-**Use when**: Beginning any search session, debugging "no results" issues, verifying index freshness
-
----
-
-#### 2. `mcp__maproom__search` - Semantic Code Search
-
-**Purpose**: Find code by concept, not just keywords
-
-**Parameters**:
-- `repo` (required): Repository name (e.g., "crewchief")
-- `query` (required): Search terms (1-3 words work best)
-- `worktree` (optional): Limit to specific worktree/branch
-- `k` (optional): Number of results (default: 10, max useful: 20)
-- `mode` (optional): Search strategy
-  - `"hybrid"` (default) - Combines FTS + vector search (best overall)
-  - `"fts"` - Full-text keyword search (exact terms)
-  - `"vector"` - Semantic similarity only (conceptual)
-- `filter` (optional): File type filter (`"code"`, `"docs"`, `"config"`, `"all"`)
-- `debug` (optional): Show score breakdowns (FTS, vector, graph signals)
-
-**Examples**:
-```javascript
-// Conceptual search (hybrid mode, default)
-mcp__maproom__search({ repo: "crewchief", query: "agent orchestration" })
-
-// Keyword search for exact terms
-mcp__maproom__search({ repo: "crewchief", query: "spawnAgent", mode: "fts" })
-
-// Semantic search with filters
-mcp__maproom__search({
-  repo: "crewchief",
-  query: "message handling",
-  filter: "code",
-  k: 20,
-  debug: true
-})
+packages/cli/src/
+├── agents/        # Agent registry, runner, discovery
+├── bus/           # Inter-agent message bus (JSONL)
+├── cli/           # Command implementations (Commander.js)
+├── config/        # Config loading and validation (Zod)
+├── git/           # Worktree management
+├── iterm/         # iTerm2 integration (macOS)
+├── orchestrator/  # Run management, scheduling
+└── terminal/      # Terminal backend abstraction
 ```
-
-**Tips**:
-- Use 1-3 word queries: "auth flow" not "authentication_handler_function"
-- Try concepts: "error handling", "database query", "terminal control"
-- Use `debug: true` to understand ranking when results seem off
-- If no results, check `status` first to verify index exists
-
----
-
-#### 3. `mcp__maproom__open` - Retrieve Code Sections
-
-**Purpose**: Fetch specific files or line ranges from search results
-
-**Parameters**:
-- `relpath` (required): Relative file path (copy from search results)
-- `worktree` (required): Worktree name (copy from search results)
-- `range` (optional): Line range object `{ start: N, end: M }`
-- `context` (optional): Additional lines before/after range (try 5-10)
-
-**Examples**:
-```javascript
-// Open entire file
-mcp__maproom__open({
-  relpath: "packages/cli/src/cli/spawn.ts",
-  worktree: "maproom-vamp"
-})
-
-// Open specific function with context
-mcp__maproom__open({
-  relpath: "packages/cli/src/cli/spawn.ts",
-  worktree: "maproom-vamp",
-  range: { start: 72, end: 120 },
-  context: 5
-})
-```
-
-**Use when**: You found relevant code with `search` and need to see implementation details
-
----
-
-#### 4. `mcp__maproom__context` - Assemble Related Code
-
-**Purpose**: Gather a complete picture of code with its relationships (imports, callers, callees, tests)
-
-**Parameters**:
-- `chunk_id` (required): UUID from search results
-- `budget_tokens` (optional): Max tokens to return (default: 6000, max: 20000)
-- `expand` (optional): Control what to include:
-  - `callers` (default: true) - Functions that call this code
-  - `callees` (default: true) - Functions this code calls
-  - `tests` (default: true) - Test files for this code
-  - `docs` (default: false) - Documentation chunks
-  - `config` (default: false) - Related config files
-  - `max_depth` (default: 2, max: 5) - Relationship traversal depth
-
-**Examples**:
-```javascript
-// Get code with all default relationships
-mcp__maproom__context({
-  chunk_id: "a1b2c3d4-uuid-from-search-results"
-})
-
-// Get code with tests and docs, larger budget
-mcp__maproom__context({
-  chunk_id: "a1b2c3d4-uuid-from-search-results",
-  budget_tokens: 10000,
-  expand: {
-    callers: true,
-    callees: true,
-    tests: true,
-    docs: true,
-    config: false,
-    max_depth: 3
-  }
-})
-```
-
-**Use when**: Understanding how code fits into the larger system, finding all related pieces for a feature
-
-**Note**: This is the most powerful tool for understanding unfamiliar codebases!
-
----
-
-#### 5. `mcp__maproom__explain` - Get Symbol Explanations (EXPERIMENTAL)
-
-**Purpose**: Generate detailed markdown cards explaining code symbols
-
-**Parameters**:
-- `chunk_id` (required): UUID from search results
-
-**Returns**: Markdown-formatted explanation with:
-- Symbol metadata (type, location, visibility)
-- Code relationships (callers, callees, dependencies)
-- Code preview with syntax highlighting
-- Usage examples and patterns
-
-**Example**:
-```javascript
-mcp__maproom__explain({
-  chunk_id: "a1b2c3d4-uuid-from-search-results"
-})
-```
-
-**Use when**: You need a high-level summary of what a function/class does and how it's used
-
-**Note**: Requires feature flag enabled in configuration. Uses intelligent caching.
-
----
-
-#### 6. `mcp__maproom__upsert` - Update Index
-
-**Purpose**: Re-index files after code changes
-
-**Parameters**:
-- `repo` (required): Repository name
-- `worktree` (required): Worktree name
-- `root` (required): Repository root path
-- `commit` (required): Git commit hash (use "HEAD" for current)
-- `paths` (required): Array of file paths to re-index
-
-**Example**:
-```javascript
-mcp__maproom__upsert({
-  repo: "crewchief",
-  worktree: "maproom-vamp",
-  root: "/workspace",
-  commit: "HEAD",
-  paths: [
-    "packages/cli/src/cli/spawn.ts",
-    "packages/cli/src/iterm/iterm.service.ts"
-  ]
-})
-```
-
-**Use when**: You've modified code and need search results to reflect latest changes
-
-**Note**: Usually unnecessary - maproom auto-indexes on file changes in most setups
-
-### Current Index Status:
-- Repository: `crewchief`
-- Worktree: Automatically detected from current branch
-- File types: TypeScript, JavaScript, JSON, Markdown, Rust, YAML, TOML
-
-## Architecture Overview
-
-### Database Architecture: maproom-postgres
-
-CrewChief uses a single PostgreSQL instance for all Maproom operations:
-
-**Maproom PostgreSQL** (`maproom-postgres:5432/maproom`)
-- **Purpose**: Semantic code search, MCP service, development, testing
-- **Connection**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
-- **Network**: Accessible from devcontainer and MCP containers via `maproom-network`
-- **Data**: Persistent via Docker volumes
-- **Container**: Managed via `config/docker-compose.yml` in maproom-mcp package
-
-**Connection Fallback**:
-The system automatically detects the database using this priority:
-1. **DATABASE_URL** environment variable (explicit configuration) - highest priority
-2. **MAPROOM_DB_HOST** environment variable (component override) - build connection from parts
-3. **maproom-postgres** hostname resolution (auto-detection) - works in Docker environments
-4. **localhost:5433** (development fallback) - for local testing
-
-Both Rust binary and Node.js CLI use identical fallback logic for consistency.
-
-**Example Usage**:
-```bash
-# Explicit configuration (recommended for production)
-export DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
-
-# Component override (useful for custom setups)
-export MAPROOM_DB_HOST="custom-postgres"
-export MAPROOM_DB_PORT="5432"
-
-# Auto-detection (works automatically in devcontainer)
-# No configuration needed - just ensure maproom-postgres is running
-```
-
-For complete details, see [Database Architecture Documentation](docs/architecture/DATABASE_ARCHITECTURE.md).
-
-### Multi-Tool CLI System
-
-CrewChief is a multi-tool CLI for git worktree management, semantic code search, and AI agent orchestration. Key architectural components:
-
-1. **Agent Management** (`packages/cli/src/agents/`)
-   - `registry.ts`: Central registry for agent types and capabilities
-   - `runner.ts`: Handles agent lifecycle and execution
-   - `discovery.ts`: Discovers available agents on the system
-   - Each agent runs in its own terminal pane (iTerm2) and git worktree
-
-2. **Message Bus** (`packages/cli/src/bus/`)
-   - `message.bus.ts`: Core inter-agent communication infrastructure
-   - `jsonl.ts`: JSONL format for message persistence
-   - `logFollower.ts`: Real-time log monitoring
-   - All agent communications are logged for inspection
-
-3. **Git Worktree Isolation** (`packages/cli/src/git/`)
-   - `worktrees.ts`: Manages isolated git worktrees for each agent
-   - `merge.ts`: Handles merging agent work back to main branch
-   - `copy-ignored-files.ts`: Automatically copies git-ignored files (like .env) to new worktrees
-   - Each agent works in `.crewchief/worktrees/<agent-id>/`
-
-4. **Orchestration** (`packages/cli/src/orchestrator/`)
-   - `runManager.ts`: Manages agent runs and their lifecycle
-   - `scheduler.ts`: Schedules and coordinates agent tasks
-   - `competition.ts`: Runs quality competitions between agents (in progress)
-   - `autoMerge.ts`: Automatic merge based on evaluation scores
-
-5. **CLI Commands** (`packages/cli/src/cli/`)
-   - Each command file (`agent.ts`, `worktree.ts`, `spawn.ts`, etc.) registers subcommands
-   - Main entry point is `index.ts` which sets up all commands
-   - Uses Commander.js for CLI structure
-
-6. **Terminal Integration** (`packages/cli/src/terminal/` and `packages/cli/src/iterm/`)
-   - `factory.ts`: Creates terminal adapter (iTerm2 only)
-   - `iterm.adapter.ts`: iTerm2 integration for macOS
-   - Each agent gets its own terminal pane for isolation
-
-7. **Configuration** (`packages/cli/src/config/`)
-   - `loader.ts`: Loads `crewchief.config.ts` from project root
-   - `schema.ts`: Zod schema for config validation
-   - Configuration controls agent defaults, terminal backend, evaluation thresholds
 
 ### Rust Components
 
-1. **Maproom** (`crates/maproom/`)
-   - Code indexing and search service
-   - Uses PostgreSQL for storage
-   - Tree-sitter for parsing TypeScript/JavaScript
-   - Provides semantic search capabilities
-   - MCP server integration for AI assistants
+```
+crates/maproom/
+├── src/           # Code indexing and search
+├── migrations/    # PostgreSQL migrations
+└── Cargo.toml     # Rust dependencies
+```
 
-### Key Design Patterns
+## Development Practices
 
-- **Agent Isolation**: Each agent operates in its own sandbox (terminal pane + git worktree)
-- **Message-Based Communication**: Agents communicate via logged message bus
-- **Competition Framework**: Multiple agents can compete on the same task (in progress)
-- **Evaluation Pipeline**: Automated evaluation of agent outputs before merging
-- **Plugin Architecture**: Extensible agent types through registry pattern
-- **Terminal Backend Abstraction**: Support for multiple terminal backends (iTerm2 preferred)
+### TypeScript
+- ESM modules (import/export)
+- Vitest for testing
+- Trailing commas enforced (pre-commit)
+- Build to `dist/`
 
-## Working with CrewChief Code
+### Rust
+- Tokio async runtime
+- anyhow/thiserror for errors
+- Binaries in `packages/cli/bin/<platform>/`
 
-When modifying the CLI:
+## Safety Rules
 
-1. TypeScript code is in `packages/cli/src/`
-2. Use ESM modules (import/export syntax)
-3. Follow existing patterns in command files for new subcommands
-4. Tests use Vitest framework
-5. Build outputs to `dist/` directory
-6. Linting enforces trailing commas everywhere (runs automatically on commit)
-7. Use `pnpm lint` and `pnpm format` to check and fix code style
+**CRITICAL**: File operations must stay within current worktree.
 
-When working with the Maproom component:
+**Verify before ANY file operation**:
+```bash
+git rev-parse --show-toplevel  # Get worktree root
+```
 
-1. Maproom code is in `crates/maproom/`
-2. Database migrations in `crates/maproom/migrations/`
-3. Uses tokio for async runtime
-4. Follow Rust error handling with anyhow/thiserror
-5. Binary is built and packaged for multiple platforms in `packages/cli/bin/<platform>/`
+**Never modify**:
+- System directories (`/usr/`, `/etc/`, `/System/`)
+- Home directory files outside worktree (`~/.bashrc`, `~/.gitconfig`)
+- Other repositories or worktrees
+- `.git` directory
+- Paths outside current worktree
 
-## Key Features
+**If external modification seems needed**: STOP, explain what/why, suggest alternatives, wait for approval.
 
-### Maproom (Semantic Search)
-- **Auto-detection**: Commands automatically detect repo, worktree, path, and commit from git context
-- **MCP Integration**: Works as an MCP server for AI assistants (Claude, Cursor)
-- **Multi-language Support**: TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML
-- **Statistics Output**: Detailed indexing statistics (files processed, chunks created, language breakdown)
-- **Platform Binaries**: Pre-built binaries for multiple platforms in `packages/cli/bin/<platform>/`
+## Project Workflow
 
-### Worktree Management
-- **Quick Commands**: Create, list, use, and merge worktrees with simple commands
-- **Ignored Files Copying**: Automatically copy git-ignored files (like .env) to new worktrees
-- **Agent Integration**: Each AI agent gets its own isolated worktree
-- **Flexible Configuration**: Configure patterns, source paths, and overwrite strategies in `crewchief.config.ts`
+CrewChief uses a structured ticket-based workflow for planning and execution. See [.agents/README.md](.agents/README.md) for full directory structure and conventions.
 
-### Agent Orchestration (macOS + iTerm2)
-- **Multi-agent Spawning**: Launch multiple AI agents simultaneously with smart window splitting
-- **Isolated Environments**: Each agent works in its own worktree and terminal pane
-- **Message Bus**: Inter-agent communication via logged message bus
-- **Competition Mode** (in progress): Run multiple agents on the same task and compare results
+### Slash Commands (`.claude/commands/`)
 
-### Development Experience
-- **ESLint + Prettier**: Automatic code formatting with trailing commas on commit
-- **Husky Pre-commit Hooks**: Ensures code quality before commits
-- **Comprehensive Build Script**: `./scripts/build-and-package.sh` builds all components for all platforms
-- **TypeScript + Vitest**: Modern development stack with fast testing
+- **`/create-project [description]`** - Create project planning documents (analysis, architecture, quality strategy, plan)
+- **`/create-project-tickets [PROJECT_SLUG]`** - Generate individual tickets from project plan
+- **`/review-tickets [PROJECT_SLUG]`** - Review created tickets for quality and completeness
+- **`/work-on-project [PROJECT_SLUG]`** - Execute all tickets for a project sequentially
+- **`/single-ticket [ticket-id]`** - Complete, verify, and commit a single ticket
 
-- CRITICAL SAFETY RULE: File modifications must be strictly confined to the current git worktree or repository working directory.
+### Ticket Workflow Agents (`.claude/agents/ticket-workflow/`)
 
-PROHIBITED: Never modify, create, or delete files in:
-- System directories (e.g., /usr/, /etc/, /System/)
-- User home directory files outside the current worktree (e.g., ~/.bashrc, ~/.zshrc, ~/.gitconfig)
-- Parent directories above the current worktree root
-- Other git repositories, projects, or other worktrees of the same repository
-- Package manager global directories (e.g., /usr/local/, node_modules outside the project)
-- The .git directory itself (whether in .git/ or in a separate worktree location)
-- Any absolute paths that lead outside the current worktree
+Each ticket progresses through these agents:
 
-REQUIRED: Before ANY file operation:
-1. Verify the target path is within the current worktree using `git rev-parse --show-toplevel`
-   (This correctly returns the worktree root, whether in main repo or linked worktree)
-2. Use relative paths from the worktree root whenever possible
-3. If you believe there's a legitimate need to modify external files, STOP immediately and:
-   - Explain WHAT file you want to modify and its full path
-   - Explain WHY this seems necessary
-   - Suggest alternative approaches that stay within the current worktree
-   - Wait for explicit user approval before proceeding
+1. **ticket-creator** - Creates standardized work tickets from requirements
+2. **[implementation agent]** - Specialized agent completes the work (e.g., database-engineer, rust-indexer-engineer)
+3. **unit-test-runner** - Executes tests and reports results (no fixes)
+4. **verify-ticket** - Verifies all acceptance criteria are met
+5. **commit-ticket** - Creates Conventional Commit with proper formatting
 
-RATIONALE: Modifying files outside the worktree can damage system configurations, break other projects (including other worktrees of the same repo), create security vulnerabilities, or cause data loss. The worktree boundary is a critical safety barrier.
+### Workflow Sequence
 
-## Maproom Ticket Workflow
+```
+Planning Phase:
+  /create-project → analysis, architecture, quality-strategy, plan
+  /create-project-tickets → individual ticket files
+  /review-tickets → validate ticket quality
 
-When working on Maproom tickets via /work-on-maproom-tickets command:
+Execution Phase (per ticket):
+  Implementation → Tests → Verification → Commit
 
-### Core Objectives
-1. **Sequential Execution**: Work through tickets one by one from INDEX_BY_PROJECT.md
-2. **Agent Workflow**: Each ticket follows this sequence:
-   - Implementing agent completes work and marks "Task completed" checkbox
-   - test-runner agent runs relevant tests
-   - If tests pass: verify-ticket agent verifies acceptance criteria
-   - If tests fail: return to implementing agent to fix
-   - If verification passes: commit-ticket agent commits changes
-   - If verification fails: return to implementing agent to fix
-3. **Keep Working**: Use /keep-working command to continue until all tickets complete
+  If tests fail: return to implementation
+  If verification fails: return to implementation
+  If verification passes: commit and move to next ticket
+```
 
-### Ticket Order (from INDEX_BY_PROJECT.md)
-- **Current Project**: HYBRID_SEARCH (22 tickets)
-- **Phase 1**: Embedding Infrastructure (Week 1) - 4 tickets
-  - HYBRID_SEARCH-1001, 1002, 1003, 1901
-- Continue through all phases sequentially
+### Project Organization
 
-### Quality Gates
-- All acceptance criteria must be met before verification
-- All related tests must pass before verification
-- Verification must pass before commit
-- Each ticket completion must be tracked in the ticket markdown file
+```
+.agents/projects/{SLUG}_{descriptive-name}/
+├── README.md           # Project overview
+├── planning/           # Strategic docs
+│   ├── analysis.md
+│   ├── architecture.md
+│   ├── plan.md
+│   └── quality-strategy.md
+└── tickets/            # Work tickets
+    ├── {SLUG}-1001_description.md
+    └── ...
+```
 
+**Active projects**: `.agents/projects/`
+**Completed projects**: `.agents/archive/projects/`
+
+See [.agents/README.md](.agents/README.md) for:
+- Project lifecycle details
+- Naming conventions
+- Agent capabilities
+- Archive process
