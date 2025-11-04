@@ -3,8 +3,7 @@
 ## Status
 - [x] **Task completed** - both cleanup and specific filename implemented
 - [x] **Tests pass** - workflow change only, no code tests
-- [ ] **Verified** - awaiting GitHub Actions workflow run
-- [x] **Committed** - commit 2386df4
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - github-actions-engineer
@@ -32,11 +31,11 @@ tar: Exiting with failure status due to previous errors
 **Root Cause**: When `*.tgz` wildcard expands to multiple files (e.g., from previous workflow runs that weren't cleaned up), tar interprets the command as trying to find files inside the archive rather than listing the archive contents.
 
 ## Acceptance Criteria
-- [ ] Tarball verification uses specific filename from package.json version
-- [ ] Verification step succeeds with tarball from successful npm pack
-- [ ] All 4 binary paths are verified to exist in tarball
-- [ ] Workflow completes successfully in dry-run mode
-- [ ] Optional: Clean up old .tgz files before npm pack to prevent future issues
+- [x] Tarball verification uses specific filename from package.json version
+- [x] Verification step succeeds with tarball from successful npm pack
+- [x] All 4 binary paths are verified to exist in tarball
+- [x] Workflow completes successfully in dry-run mode (v1.3.1 Run ID: 19055680204)
+- [x] Optional: Clean up old .tgz files before npm pack to prevent future issues
 
 ## Technical Requirements
 
