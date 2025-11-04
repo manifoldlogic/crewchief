@@ -42,12 +42,12 @@ For example, `libssl-dev` on Ubuntu or `openssl-devel` on Fedora.
 
 ## Acceptance Criteria
 - [x] OpenSSL dependency resolved for linux-x64 build (vendored feature added)
-- [ ] linux-x64 build completes successfully in GitHub Actions (pending workflow run)
-- [ ] linux-arm64 build completes successfully (same fix applies, pending workflow run)
+- [x] linux-x64 build completes successfully in GitHub Actions (v1.3.1 Run ID: 19055680204)
+- [x] linux-arm64 build completes successfully (same fix applies, v1.3.1 confirmed)
 - [x] Binary links correctly - verify with `ldd` on Linux shows no missing dependencies (✓ OpenSSL statically linked)
 - [x] All existing tests pass with vendored OpenSSL: `cargo test --manifest-path crates/maproom/Cargo.toml` (✓ 699 passed)
-- [ ] No regression on darwin-x64 builds (verify macOS native build still works, pending workflow run)
-- [ ] No regression on darwin-arm64 builds (verify macOS ARM build still works, pending workflow run)
+- [x] No regression on darwin-x64 builds (verify macOS native build still works, v1.3.1 confirmed)
+- [x] No regression on darwin-arm64 builds (verify macOS ARM build still works, v1.3.1 confirmed)
 - [x] Binary size increase is acceptable (vendored OpenSSL adds ~1-2MB) (✓ acceptable for CLI tool)
 - [x] Binary functionality unchanged (maproom commands work identically) (✓ --help and all commands work)
 
