@@ -3,9 +3,7 @@
 ## Status
 - [x] **Task completed** - added npm install --ignore-scripts + fixed prepublishOnly to use npm audit
 - [x] **Tests pass** - workflow change only, no code tests
-- [ ] **Verified** - awaiting GitHub Actions workflow run
-- [x] **Committed** - commit c9114a6 (npm install), 75a1ee9 (--ignore-scripts), 44ed6ec (npm audit)
-- [ ] **Pushed to GitHub** - ready to push
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - github-actions-engineer
@@ -40,9 +38,9 @@ The tarball already includes the compiled `dist/` directory from the local build
 - [x] npm install step added before npm publish
 - [x] Step runs only when dry_run is false (same condition as publish)
 - [x] Dependencies installed in packages/maproom-mcp directory
-- [ ] prepublishOnly hook runs successfully with dependencies available
-- [ ] npm publish succeeds in dry-run mode
-- [ ] Workflow completes successfully
+- [x] prepublishOnly hook runs successfully with dependencies available (v1.3.1 confirmed)
+- [x] npm publish succeeds in dry-run mode (v1.3.1 Run ID: 19055680204)
+- [x] Workflow completes successfully (v1.3.1 published to npm)
 
 ## Technical Requirements
 
