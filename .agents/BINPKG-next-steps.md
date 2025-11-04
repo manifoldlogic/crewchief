@@ -2,24 +2,30 @@
 
 ## Current Status
 
-All four critical fixes have been completed and committed locally:
+All six critical fixes have been completed and committed locally:
 
 1. **BINPKG-1902**: ✅ Removed dead code warning - commit e6f5f34 (PUSHED to GitHub)
 2. **BINPKG-1903**: ✅ Enabled vendored OpenSSL for cross-compilation - commit aa140a6 (PUSHED to GitHub)
 3. **BINPKG-1904**: ✅ Fixed cross-architecture binary validation - commit 8761e49 (PUSHED to GitHub)
-4. **BINPKG-1905**: ✅ Fixed tarball verification wildcard issue - commit 2386df4 (LOCAL ONLY)
+4. **BINPKG-1905**: ✅ Fixed tarball verification wildcard issue - commit 2386df4 (PUSHED to GitHub)
+5. **BINPKG-1906**: ✅ Install dependencies before npm publish - commits c9114a6, 75a1ee9, 44ed6ec (LOCAL ONLY)
 
 ## What Needs to Happen Next
 
-### Step 1: Push the Final Fix (BINPKG-1905)
+### Step 1: Push the Final Fixes (BINPKG-1906)
 
-The BINPKG-1905 fix (commit 2386df4) needs to be pushed to GitHub:
+The BINPKG-1906 fixes (commits c9114a6, 75a1ee9, 44ed6ec, and documentation update 74be385) need to be pushed to GitHub:
 
 ```bash
 git push origin main
 ```
 
-This commit fixes the tarball verification to use a specific filename instead of wildcards, preventing errors when multiple .tgz files exist in the directory.
+These commits fix the npm publish step by:
+1. Installing dependencies before publish (c9114a6)
+2. Using --ignore-scripts to avoid husky prepare hook (75a1ee9)
+3. Changing prepublishOnly to use npm audit instead of pnpm audit (44ed6ec)
+
+Previous fixes (BINPKG-1902 through BINPKG-1905) have already been pushed.
 
 ### Step 2: Trigger Workflow Run
 
@@ -94,14 +100,29 @@ After successful canary testing, execute production release:
 **Solution**: Clean up old tarballs before npm pack + use specific filename from package.json
 **Impact**: Tarball verification now works reliably
 
+### BINPKG-1906: Dependencies for prepublishOnly Hook
+**Problem**: prepublishOnly script runs `tsc && pnpm audit` before publish, but dependencies weren't installed
+**Root Causes Encountered**:
+1. TypeScript and type definitions not installed → npm install
+2. Root workspace prepare hook tries to run husky → npm install --ignore-scripts
+3. prepublishOnly uses pnpm audit but workflow uses npm → change to npm audit
+
+**Solution**:
+- Added `npm install --ignore-scripts` step before npm publish
+- Changed package.json prepublishOnly from `pnpm audit` to `npm audit`
+
+**Impact**: prepublishOnly hook now runs successfully with all dependencies available
+
 ## Risk Assessment
 
-All four fixes are low-risk:
+All six fixes are low-risk:
 
 1. **Dead code removal**: No functional impact (code was unused)
 2. **Vendored OpenSSL**: Standard practice for cross-platform Rust binaries, verified with tests
 3. **Validation logic**: Maintains all safety checks (existence, size, permissions) while only skipping impossible cross-arch execution tests
 4. **Tarball verification**: Simple shell script fix with cleanup to prevent future issues
+5. **Dependency installation**: Standard npm workflow pattern, uses --ignore-scripts to avoid side effects
+6. **npm audit in prepublishOnly**: Simple package.json script change to match package manager used in workflow
 
 The canary release test (BINPKG-1901) will provide real-world validation before production release.
 
