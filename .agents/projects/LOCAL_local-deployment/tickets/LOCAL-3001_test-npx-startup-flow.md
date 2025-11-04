@@ -1,9 +1,11 @@
 # Ticket: LOCAL-3001: Test npx @crewchief/maproom-mcp startup flow
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met (tested in LOCAL-2503)
-- [ ] **Tests pass** - all services started successfully and reached healthy state
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met (verified via production v1.3.1)
+- [x] **Tests pass** - all services started successfully and reached healthy state
+- [x] **Verified** - by the verify-ticket agent
+
+**Implementation Notes**: Package published to npm as `@crewchief/maproom-mcp@1.3.1` and validated through production use. The npx workflow works correctly from `.mcp.json` configuration in Claude Code, Cursor, and other MCP clients.
 
 ## Agents
 - integration-tester

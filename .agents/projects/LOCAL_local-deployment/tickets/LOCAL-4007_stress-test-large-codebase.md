@@ -1,9 +1,18 @@
 # Ticket: LOCAL-4007: Stress test with large codebase (100k chunks)
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [ ] **Task completed** - WONT DO (not practical for Ollama use case)
+- [ ] **Tests pass** - N/A
+- [ ] **Verified** - N/A
+
+**Rationale**: Stress testing with 100k+ chunks on Ollama is not practical or recommended for the LOCAL deployment model. Per project guidance: "Ollama takes much too long to index and is more for hobby projects and niche users requiring local-only."
+
+The documentation already sets appropriate expectations:
+- Ollama is positioned as the local/privacy option
+- Performance warnings are clear (5-10x slower than cloud providers)
+- Recommended for smaller projects or when privacy is paramount
+
+Stress testing would consume significant time for a use case we explicitly don't recommend for large codebases. Users with large codebases should use OpenAI or Google providers, which have been validated in production.
 
 ## Agents
 - performance-engineer

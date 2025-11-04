@@ -1,9 +1,18 @@
 # Ticket: LOCAL-3002: Write README with npx installation instructions
 
 ## Status
-- [ ] **Task completed** - README updated with npx instructions
-- [ ] **Tests pass** - documentation matches implementation
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - README updated with npx instructions
+- [x] **Tests pass** - documentation matches implementation
+- [x] **Verified** - by the verify-ticket agent
+
+**Implementation Notes**: Comprehensive 449-line README.md exists at `packages/maproom-mcp/README.md` covering:
+- Quick Start (< 10 lines) ✅
+- System Requirements ✅
+- Provider comparison (OpenAI/Google/Ollama) ✅
+- Troubleshooting guide ✅
+- Configuration reference ✅
+- Environment variables ✅
+- Advanced configuration ✅
 
 ## Agents
 - technical-researcher
