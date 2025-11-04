@@ -280,16 +280,16 @@ jobs:
             chmod +x "$BINARY_PATH"
             echo "✓ Execute permission set"
 
-            # Test execution (--version should work for Linux binaries on ubuntu runner)
-            # Skip execution test for macOS binaries as they cannot run on Linux runner
-            if [[ "$platform" == linux-* ]]; then
+            # Test execution (--version should work for Linux x64 binaries on ubuntu runner)
+            # Skip execution test for cross-platform and cross-architecture binaries
+            if [[ "$platform" == "linux-x64" ]]; then
               if ! "$BINARY_PATH" --version >/dev/null 2>&1; then
                 echo "ERROR: Binary failed to execute --version"
                 exit 1
               fi
               echo "✓ Binary executes successfully"
             else
-              echo "⊘ Skipping execution test (macOS binary on Linux runner)"
+              echo "⊘ Skipping execution test (cross-platform or cross-architecture binary)"
             fi
 
             echo "✓ $platform validation complete"
