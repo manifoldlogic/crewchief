@@ -329,20 +329,27 @@ jobs:
       # Step 7: Create npm tarball
       - name: Create npm tarball
         working-directory: packages/maproom-mcp
-        run: npm pack
+        run: |
+          # Clean up old tarballs to avoid wildcard issues in verification
+          rm -f *.tgz
+          npm pack
 
       # Step 8: Verify tarball contains all binaries
       - name: Verify tarball contains all binaries
         working-directory: packages/maproom-mcp
         run: |
-          echo "Extracting tarball contents..."
-          tar -tzf *.tgz | grep bin/
+          # Get version from package.json to construct exact tarball filename
+          VERSION=$(node -p "require('./package.json').version")
+          TARBALL="crewchief-maproom-mcp-${VERSION}.tgz"
+
+          echo "Extracting tarball contents from $TARBALL..."
+          tar -tzf "$TARBALL" | grep bin/
 
           echo "Verifying all 4 binaries are present..."
-          tar -tzf *.tgz | grep "package/bin/linux-x64/crewchief-maproom"
-          tar -tzf *.tgz | grep "package/bin/linux-arm64/crewchief-maproom"
-          tar -tzf *.tgz | grep "package/bin/darwin-x64/crewchief-maproom"
-          tar -tzf *.tgz | grep "package/bin/darwin-arm64/crewchief-maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/linux-x64/crewchief-maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/linux-arm64/crewchief-maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/darwin-x64/crewchief-maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/darwin-arm64/crewchief-maproom"
 
           echo "✓ All binaries present in tarball"
 
