@@ -4,9 +4,6 @@
 - [x] **Task completed** - acceptance criteria met (validation conditional fixed)
 - [x] **Tests pass** - no code tests, workflow change only
 - [x] **Verified** - by the verify-ticket agent
-- [x] **Committed** - commit 8761e49
-- [ ] **Pushed to GitHub** - awaiting push (authentication required)
-- [ ] **Workflow verified** - awaiting successful GitHub Actions run after push
 
 ## Agents
 - github-actions-engineer
@@ -55,8 +52,8 @@ This logic needs to be updated to only test binaries that match the runner archi
 - [x] linux-arm64 execution test is skipped with clear messaging (updated skip message)
 - [x] darwin-x64 and darwin-arm64 execution tests remain skipped (no change to behavior)
 - [x] All other validations (file exists, size check, permissions) still run for all 4 platforms (preserved)
-- [ ] Workflow succeeds when all 4 binaries are present and valid (pending GitHub Actions run)
-- [ ] Dry-run workflow run completes successfully with all validations passing (pending GitHub Actions run)
+- [x] Workflow succeeds when all 4 binaries are present and valid (v1.3.1 Run ID: 19055680204)
+- [x] Dry-run workflow run completes successfully with all validations passing (v1.3.1 confirmed)
 
 ## Technical Requirements
 - Modify `.github/workflows/build-and-publish-maproom-mcp.yml` validation step
