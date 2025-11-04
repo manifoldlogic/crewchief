@@ -2,7 +2,7 @@
 
 ## Status
 - [x] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
+- [x] **Tests pass** - related tests pass
 - [x] **Verified** - by the verify-ticket agent
 
 ## Agents
@@ -28,12 +28,12 @@ This dual setup causes confusion because:
 This ticket implements Phase 1 from planning/plan.md: eliminating the devcontainer postgres to use only maproom-postgres as the single source of truth.
 
 ## Acceptance Criteria
-- [ ] postgres service completely removed from `.devcontainer/docker-compose.yml`
-- [ ] postgres-data volume removed from docker-compose.yml
-- [ ] DATABASE_URL environment variable points to maproom-postgres
-- [ ] All unused CREWCHIEF_DB_* environment variables removed
-- [ ] Devcontainer rebuilds successfully without errors
-- [ ] Can connect to maproom-postgres from inside devcontainer
+- [x] postgres service completely removed from `.devcontainer/docker-compose.yml`
+- [x] postgres-data volume removed from docker-compose.yml
+- [x] DATABASE_URL environment variable points to maproom-postgres
+- [x] All unused CREWCHIEF_DB_* environment variables removed
+- [x] Devcontainer rebuilds successfully without errors
+- [x] Can connect to maproom-postgres from inside devcontainer
 
 ## Technical Requirements
 - Remove postgres service definition from `.devcontainer/docker-compose.yml`
