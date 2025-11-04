@@ -357,7 +357,7 @@ jobs:
       - name: Install dependencies
         if: inputs.dry_run != 'true'
         working-directory: packages/maproom-mcp
-        run: npm install
+        run: npm install --ignore-scripts
 
       # Step 10: Publish to npm (conditional)
       - name: Publish to npm

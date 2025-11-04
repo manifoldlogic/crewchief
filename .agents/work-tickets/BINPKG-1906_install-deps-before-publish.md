@@ -1,10 +1,10 @@
 # Ticket: BINPKG-1906: Install dependencies before npm publish for prepublishOnly hook
 
 ## Status
-- [x] **Task completed** - added npm install step before publish
+- [x] **Task completed** - added npm install --ignore-scripts before publish
 - [x] **Tests pass** - workflow change only, no code tests
 - [ ] **Verified** - awaiting GitHub Actions workflow run
-- [ ] **Committed**
+- [x] **Committed** - commit c9114a6 (initial), updated with --ignore-scripts fix
 
 ## Agents
 - github-actions-engineer
@@ -54,11 +54,28 @@ The tarball already includes the compiled `dist/` directory from the local build
 ### Fixed Flow
 1. Create tarball with `npm pack` (works - includes prebuilt dist/)
 2. Verify tarball contents (works - all binaries present)
-3. **Run `npm install` → installs dependencies**
+3. **Run `npm install --ignore-scripts` → installs dependencies, skips prepare hook**
 4. Run `npm publish` → triggers prepublishOnly hook
 5. prepublishOnly runs `tsc` → SUCCESS (dependencies available)
 6. prepublishOnly runs `pnpm audit` → SUCCESS
 7. Publish completes
+
+### Additional Issue Discovered (Workflow Run #19055002462)
+
+After adding `npm install`, a new issue appeared:
+```
+> prepare
+> husky
+
+sh: 1: husky: not found
+npm error code 127
+```
+
+**Root Cause**: The monorepo's root package.json has a "prepare" script that runs "husky" (git hooks tool). When running `npm install` in the packages/maproom-mcp directory within the workspace, npm triggers the root's prepare script, but husky isn't installed in GitHub Actions.
+
+**Solution**: Use `npm install --ignore-scripts` to:
+- Skip the "prepare" hook during dependency installation
+- Still allow "prepublishOnly" to run during publish (publish-specific hooks aren't affected)
 
 ### Solution Implemented
 
@@ -69,10 +86,14 @@ Added Step 9 before the publish step:
 - name: Install dependencies
   if: inputs.dry_run != 'true'
   working-directory: packages/maproom-mcp
-  run: npm install
+  run: npm install --ignore-scripts
 ```
 
-This ensures TypeScript, type definitions, and all dependencies are available when npm runs the prepublishOnly hook.
+The `--ignore-scripts` flag:
+- Skips "prepare", "install", and "postinstall" hooks during dependency installation
+- Prevents the root workspace's "prepare" hook (husky) from running
+- Still allows "prepublishOnly" to run during `npm publish` (publish hooks are separate)
+- Ensures TypeScript, type definitions, and all dependencies are available for prepublishOnly
 
 ## Implementation Notes
 
