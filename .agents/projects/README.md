@@ -48,17 +48,6 @@ This directory contains all currently active projects with their planning docume
 
 ---
 
-### BINPKG_binary-packaging - Binary Packaging
-**Status:** 🔄 In Progress (22 tickets)
-**Goal:** Build and publish cross-platform Rust binaries for @crewchief/maproom-mcp to npm
-
-**Quick Links:**
-- [Project Overview](./BINPKG_binary-packaging/README.md)
-- [Planning Docs](./BINPKG_binary-packaging/planning/)
-- [Active Tickets](./BINPKG_binary-packaging/tickets/)
-
----
-
 ### DOCKER_docker-perl-openssl - Docker Perl OpenSSL Fix
 **Status:** 🔄 In Progress (1 ticket)
 **Goal:** Add Perl to Docker image for vendored OpenSSL compilation
@@ -155,10 +144,9 @@ Update this README to remove the archived project.
 | LOCAL_local-deployment | 21 | 27 | 48 |
 | MCPSTART_mcp-provider-startup-fix | 23 | 0 | 23 |
 | MCP_mcp-core-features | 11 | 4 | 15 |
-| BINPKG_binary-packaging | 22 | 0 | 22 |
 | DOCKER_docker-perl-openssl | 1 | 0 | 1 |
 | MAPROOM_MIGRATIONS_migration-fixes | 2 | 0 | 2 |
-| **Total** | **106** | **31** | **137** |
+| **Total** | **84** | **31** | **115** |
 
 ---
 
