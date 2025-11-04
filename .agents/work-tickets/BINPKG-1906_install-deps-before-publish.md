@@ -4,7 +4,8 @@
 - [x] **Task completed** - added npm install --ignore-scripts + fixed prepublishOnly to use npm audit
 - [x] **Tests pass** - workflow change only, no code tests
 - [ ] **Verified** - awaiting GitHub Actions workflow run
-- [x] **Committed** - commit c9114a6 (initial), 75a1ee9 (--ignore-scripts), pending (npm audit fix)
+- [x] **Committed** - commit c9114a6 (npm install), 75a1ee9 (--ignore-scripts), 44ed6ec (npm audit)
+- [ ] **Pushed to GitHub** - ready to push
 
 ## Agents
 - github-actions-engineer
