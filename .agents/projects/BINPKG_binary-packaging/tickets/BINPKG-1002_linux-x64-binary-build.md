@@ -25,14 +25,14 @@ The workflow structure was created in BINPKG-1001. This ticket implements the ac
 This ticket implements Phase 1, Step 2 of the BINPKG project plan (`.agents/projects/BINPKG_binary-packaging/planning/plan.md`, lines 63-95).
 
 ## Acceptance Criteria
-- [ ] Matrix job builds binary for target `x86_64-unknown-linux-gnu`
-- [ ] Build uses `cross build --release --target x86_64-unknown-linux-gnu`
-- [ ] Binary is stripped to reduce size using `strip` command
-- [ ] Binary is copied to `artifacts/bin/linux-x64/crewchief-maproom` structure
-- [ ] Artifact is uploaded with name `maproom-linux-x64`
-- [ ] Build completes successfully on test tag (manual workflow_dispatch test)
-- [ ] Binary size is reasonable (>1MB, <100MB after stripping)
-- [ ] Build output logs show clear progress indicators
+- [x] Matrix job builds binary for target `x86_64-unknown-linux-gnu`
+- [x] Build uses `cross build --release --target x86_64-unknown-linux-gnu`
+- [x] Binary is stripped to reduce size using `strip` command
+- [x] Binary is copied to `artifacts/bin/linux-x64/crewchief-maproom` structure
+- [x] Artifact is uploaded with name `maproom-linux-x64`
+- [x] Build completes successfully on test tag (manual workflow_dispatch test)
+- [x] Binary size is reasonable (>1MB, <100MB after stripping)
+- [x] Build output logs show clear progress indicators
 
 ## Technical Requirements
 
