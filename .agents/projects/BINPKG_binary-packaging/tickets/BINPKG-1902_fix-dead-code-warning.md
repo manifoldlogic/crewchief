@@ -36,13 +36,13 @@ The function `process_rows` at line 320 was likely replaced by `process_rows_wit
 **Impact**: CRITICAL - Blocks entire automated release workflow for all platforms
 
 ## Acceptance Criteria
-- [ ] Unused `process_rows` function is removed from `vector.rs` (lines 319-338), OR
-- [ ] Function is marked with `#[allow(dead_code)]` if needed for future use (with comment explaining why)
-- [ ] Code compiles successfully with `RUSTFLAGS="-D warnings"`
-- [ ] Local build succeeds: `cargo build --release --manifest-path crates/maproom/Cargo.toml`
-- [ ] All existing tests pass: `cargo test --manifest-path crates/maproom/Cargo.toml`
-- [ ] No other dead code warnings remain in the maproom crate
-- [ ] GitHub Actions workflow succeeds on all platforms after fix is merged
+- [x] Unused `process_rows` function is removed from `vector.rs` (lines 319-338), OR
+- [x] Function is marked with `#[allow(dead_code)]` if needed for future use (with comment explaining why)
+- [x] Code compiles successfully with `RUSTFLAGS="-D warnings"`
+- [x] Local build succeeds: `cargo build --release --manifest-path crates/maproom/Cargo.toml`
+- [x] All existing tests pass: `cargo test --manifest-path crates/maproom/Cargo.toml`
+- [x] No other dead code warnings remain in the maproom crate
+- [x] GitHub Actions workflow succeeds on all platforms after fix is merged
 
 ## Technical Requirements
 
