@@ -1,9 +1,9 @@
 # Ticket: DKRHUB-4001: End-to-End Testing on Linux AMD64
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met (validated via production use)
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - integration-tester
