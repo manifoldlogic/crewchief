@@ -140,22 +140,26 @@ impl ProgressTracker {
             let mut output = String::new();
 
             if let Some(total) = total_files {
-                let pct = self.percentage_files();
-                output.push_str(&format!(
-                    "Processing: {}/{} files ({}%)",
-                    files_processed, total, pct
-                ));
+                if total > 0 {
+                    let pct = self.percentage_files();
+                    output.push_str(&format!(
+                        "Processing: {}/{} files ({}%)",
+                        files_processed, total, pct
+                    ));
+                }
             }
 
             if let Some(total) = total_chunks {
-                let pct = self.percentage_chunks();
-                if !output.is_empty() {
-                    output.push_str(" | ");
+                if total > 0 {
+                    let pct = self.percentage_chunks();
+                    if !output.is_empty() {
+                        output.push_str(" | ");
+                    }
+                    output.push_str(&format!(
+                        "Embeddings: {}/{} ({}%)",
+                        chunks_processed, total, pct
+                    ));
                 }
-                output.push_str(&format!(
-                    "Embeddings: {}/{} ({}%)",
-                    chunks_processed, total, pct
-                ));
             }
 
             if !output.is_empty() {
@@ -173,10 +177,12 @@ impl ProgressTracker {
                 self.last_percentage.store(current_pct, Ordering::Relaxed);
 
                 if let Some(total) = total_files {
-                    println!(
-                        "Progress: {}% complete ({}/{} files)",
-                        current_pct, files_processed, total
-                    );
+                    if total > 0 {
+                        println!(
+                            "Progress: {}% complete ({}/{} files)",
+                            current_pct, files_processed, total
+                        );
+                    }
                 }
             }
         }
