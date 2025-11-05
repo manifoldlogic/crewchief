@@ -1,9 +1,9 @@
 # Ticket: MRPROG-1006: Update scan command help text and documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -21,12 +21,12 @@ This ticket updates the in-CLI help text (--help output) and adds examples to ma
 **Plan Reference**: `.agents/projects/MRPROG_maproom-progress-ux/planning/plan.md` - Phase 1, Task 6: "Update scan command help text"
 
 ## Acceptance Criteria
-- [ ] Scan command help text updated with clear description
-- [ ] Path parameter help text clarifies default behavior: "Path to scan (defaults to current directory)"
-- [ ] --verbose flag help text explains purpose
-- [ ] Command description mentions progress display
-- [ ] `maproom scan --help` shows updated text
-- [ ] Examples in help output demonstrate: `maproom scan` (no path needed)
+- [x] Scan command help text updated with clear description
+- [x] Path parameter help text clarifies default behavior: "Path to scan (defaults to current directory)"
+- [x] --verbose flag help text explains purpose
+- [x] Command description mentions progress display
+- [x] `maproom scan --help` shows updated text
+- [x] Examples in help output demonstrate: `maproom scan` (no path needed)
 
 ## Technical Requirements
 

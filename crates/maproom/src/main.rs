@@ -43,7 +43,15 @@ enum Commands {
         command: crewchief_maproom::cli::CacheCommand,
     },
 
-    /// Scan a worktree and index files into Postgres
+    /// Scan and index a worktree with real-time progress display
+    ///
+    /// By default, scans the current directory and shows progress updates.
+    /// Use --verbose for detailed output (future enhancement).
+    ///
+    /// Examples:
+    ///   maproom scan                    # Scan current directory
+    ///   maproom scan --path /repo       # Scan specific path
+    ///   maproom scan --verbose          # Scan with detailed output
     Scan {
         /// Repository name (defaults to git remote origin name)
         #[arg(long)]
@@ -81,7 +89,7 @@ enum Commands {
         /// Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
         #[arg(long, value_parser = validate_provider)]
         provider: Option<String>,
-        /// Show detailed output (progress shown by default)
+        /// Show detailed output (currently same as default, reserved for future enhancements)
         #[arg(long)]
         verbose: bool,
     },
