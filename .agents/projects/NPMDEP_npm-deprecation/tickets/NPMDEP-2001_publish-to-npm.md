@@ -1,9 +1,19 @@
 # Ticket: NPMDEP-2001: Publish maproom-mcp Version 2.0.0 to npm Registry
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [ ] **Task completed** - BLOCKED: requires user authentication and approval
 - [ ] **Tests pass** - related tests pass
 - [ ] **Verified** - by the verify-ticket agent
+
+## ⚠️ BLOCKER: USER INTERACTION REQUIRED
+
+This ticket cannot be completed autonomously. The user must:
+1. Run `npm login` with credentials for daniel.bushman account
+2. Explicitly approve publishing (irreversible action)
+3. Execute `npm publish` from /tmp/maproom-mcp-deprecated/
+4. Verify publication succeeded
+
+See publish-verification.md for complete instructions.
 
 ## Agents
 - general-purpose (user interaction required)
