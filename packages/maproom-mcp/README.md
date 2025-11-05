@@ -72,8 +72,14 @@ This keeps your index up-to-date as you edit code. Leave it running in a termina
 {
   "mcpServers": {
     "maproom": {
-      "command": "npx",
-      "args": ["-y", "@crewchief/maproom-mcp"],
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "maproom-mcp",
+        "node",
+        "/app/dist/index.js"
+      ],
       "env": {
         "EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
@@ -88,8 +94,14 @@ This keeps your index up-to-date as you edit code. Leave it running in a termina
 {
   "mcpServers": {
     "maproom": {
-      "command": "npx",
-      "args": ["-y", "@crewchief/maproom-mcp"],
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "maproom-mcp",
+        "node",
+        "/app/dist/index.js"
+      ],
       "env": {
         "EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
@@ -108,7 +120,12 @@ For **Google Vertex AI**, use:
 }
 ```
 
-For **Ollama** (local), just omit the `env` field entirely.
+For **Ollama** (local), use:
+```json
+"env": {
+  "EMBEDDING_PROVIDER": "ollama"
+}
+```
 
 ### 4. Restart Your MCP Client
 
@@ -408,8 +425,14 @@ Override the default database connection:
 {
   "mcpServers": {
     "maproom": {
-      "command": "npx",
-      "args": ["-y", "@crewchief/maproom-mcp"],
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "maproom-mcp",
+        "node",
+        "/app/dist/index.js"
+      ],
       "env": {
         "DATABASE_URL": "postgresql://user:pass@custom-host:5432/mydb",
         "EMBEDDING_PROVIDER": "openai",
