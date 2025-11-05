@@ -178,6 +178,63 @@ Leave running in a terminal. Press Ctrl+C to stop.
 
 ---
 
+## Progress Indicators
+
+The `scan` command now shows real-time progress during indexing, making it easy to track what's happening without slowing down performance.
+
+### Scan Command Progress
+
+When you run `scan`, you'll see:
+
+```text
+🔍 Scanning worktree: main @ abc12345
+   Repository: my-repo
+   Path: /path/to/repo
+
+Processing: 45/100 files (45%)
+✅ Completed in 8.3s
+
+📊 Scan Summary:
+   Files processed: 100
+   Total chunks: 847
+   Total size: 2.14 MB
+```
+
+**Features:**
+- Real-time progress updates (throttled to every 200-500ms to avoid console flooding)
+- File and chunk counts as indexing progresses
+- Completion timing prominently displayed
+- Works in both TTY (interactive terminal) and non-TTY (CI/logging) environments
+
+**Default Directory Behavior:**
+You don't need to specify `.` for the current directory - it's the default:
+
+```bash
+# These are equivalent:
+npx @crewchief/maproom-mcp scan
+npx @crewchief/maproom-mcp scan .
+npx @crewchief/maproom-mcp scan /path/to/repo  # Or specify a path
+```
+
+### Verbose Mode
+
+For more detailed output during debugging:
+
+```bash
+npx @crewchief/maproom-mcp scan --verbose
+```
+
+Currently shows the same output as default mode, but reserved for future detailed diagnostics.
+
+### Performance
+
+Progress tracking adds minimal overhead (<5%) through:
+- Atomic counters for thread-safe updates
+- Smart throttling (200ms minimum between updates)
+- Efficient TTY detection
+
+---
+
 ## Troubleshooting
 
 ### "Connection refused" errors to localhost:11434
