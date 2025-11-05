@@ -8,12 +8,10 @@ CrewChief is a CLI tool combining:
 - **Git worktree management** - Create, list, and manage git worktrees
 - **Semantic code search (Maproom)** - Index and search code using PostgreSQL and tree-sitter
 
-## Development Commands
-
-### TypeScript CLI
+## Quick Start
 
 ```bash
-# Install and build
+# Install and build everything
 pnpm install
 pnpm build
 
@@ -24,53 +22,20 @@ pnpm test:watch
 # Code quality
 pnpm lint
 pnpm format
-
-# Development
-pnpm dev                    # Run CLI without building
-tsx src/cli/index.ts --help # Direct execution
 ```
 
-### Maproom MCP Package (`packages/maproom-mcp`)
+## Component-Specific Documentation
 
-MCP server that wraps the Rust indexer binary. Handles Docker orchestration, setup, and MCP protocol.
+Each major component has its own CLAUDE.md with detailed development guidance:
 
-```bash
-cd packages/maproom-mcp
+- **`/packages/cli/CLAUDE.md`** - TypeScript CLI development
+- **`/packages/maproom-mcp/CLAUDE.md`** - MCP server and Docker setup
+- **`/crates/maproom/CLAUDE.md`** - Rust indexer implementation
+- **`.agents/CLAUDE.md`** - Project workflow and ticket system
+- **`.github/CLAUDE.md`** - CI/CD and GitHub Actions
+- **`.devcontainer/CLAUDE.md`** - Development container setup
 
-# Build TypeScript
-pnpm build
-
-# CLI commands
-node bin/cli.cjs setup --provider=openai
-node bin/cli.cjs scan /path/to/repo
-node bin/cli.cjs watch /path/to/repo
-```
-
-**Key Files:**
-- `bin/cli.cjs` - CLI wrapper with Docker orchestration
-- `src/index.ts` - MCP server implementation
-- `config/docker-compose.yml` - Container setup
-- `config/init.sql` - Database schema
-
-### Rust Indexer (`crates/maproom`)
-
-Core indexer that does the actual parsing and indexing work. Called by the MCP package.
-
-```bash
-# Build
-cargo build --release --bin crewchief-maproom
-./scripts/build-and-package.sh  # Build for all platforms
-
-# Test
-cargo test
-
-# Run commands directly
-cargo run --bin crewchief-maproom -- db
-cargo run --bin crewchief-maproom -- scan /path/to/repo
-cargo run --bin crewchief-maproom -- search "query"
-```
-
-**Note**: The MCP package includes pre-built binaries. Rebuild only when changing Rust code.
+**When working in a specific component, read that component's CLAUDE.md first.**
 
 ## Maproom Semantic Search
 
@@ -119,35 +84,27 @@ Long-term codebase documentation. Read by both agents and humans.
 
 ## Architecture
 
+### High-Level Structure
+
+```
+CrewChief/
+├── packages/
+│   ├── cli/           # TypeScript CLI (worktree management, agent orchestration)
+│   └── maproom-mcp/   # MCP server (wraps Rust indexer)
+├── crates/
+│   └── maproom/       # Rust indexer (tree-sitter, embeddings, search)
+├── .agents/           # Project planning and work tickets
+├── .github/           # CI/CD workflows
+├── .devcontainer/     # Development container config
+└── docs/              # Permanent documentation
+```
+
 ### Database
 
 Single PostgreSQL instance: `maproom-postgres:5432/maproom`
 - Connection: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
 - Managed via `packages/maproom-mcp/config/docker-compose.yml`
 - Details: `docs/architecture/DATABASE_ARCHITECTURE.md`
-
-### CLI Structure
-
-```
-packages/cli/src/
-├── agents/        # Agent registry, runner, discovery
-├── bus/           # Inter-agent message bus (JSONL)
-├── cli/           # Command implementations (Commander.js)
-├── config/        # Config loading and validation (Zod)
-├── git/           # Worktree management
-├── iterm/         # iTerm2 integration (macOS)
-├── orchestrator/  # Run management, scheduling
-└── terminal/      # Terminal backend abstraction
-```
-
-### Rust Components
-
-```
-crates/maproom/
-├── src/           # Code indexing and search
-├── migrations/    # PostgreSQL migrations
-└── Cargo.toml     # Rust dependencies
-```
 
 ## Development Practices
 
