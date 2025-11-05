@@ -63,16 +63,9 @@ try {
     stdio: 'inherit'
   });
 
-  // Step 6: Push commit
-  console.log(`⬆️  Pushing commit...`);
-  execSync('git push origin HEAD', {
-    cwd: packageRoot,
-    stdio: 'inherit'
-  });
-
-  // Step 7: Push tag
-  console.log(`⬆️  Pushing tag v${version}...`);
-  execSync(`git push origin v${version}`, {
+  // Step 6: Push commit and tag together
+  console.log(`⬆️  Pushing commit and tag v${version}...`);
+  execSync('git push --follow-tags', {
     cwd: packageRoot,
     stdio: 'inherit'
   });
