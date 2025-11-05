@@ -1,9 +1,9 @@
 # Ticket: MRPROG-1003: Add --verbose flag and wire up ProgressTracker in scan command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -22,13 +22,13 @@ By default, users get progress updates (Minimal mode). The `--verbose` flag prov
 This ticket implements the CLI Argument Parsing section of the architecture document, completing Phase 1 of the Maproom Progress UX Enhancement project.
 
 ## Acceptance Criteria
-- [ ] `--verbose` flag added to `Commands::Scan` in main.rs
-- [ ] OutputMode determined from --verbose flag (false → Minimal, true → Verbose)
-- [ ] ProgressTracker created in scan command handler
-- [ ] ProgressTracker passed to `scan_worktree()` call
-- [ ] `maproom scan` shows real-time progress during indexing
-- [ ] `maproom scan --verbose` works (same output for now, future-proofing)
-- [ ] Help text updated to document --verbose flag
+- [x] `--verbose` flag added to `Commands::Scan` in main.rs
+- [x] OutputMode determined from --verbose flag (false → Minimal, true → Verbose)
+- [x] ProgressTracker created in scan command handler
+- [x] ProgressTracker passed to `scan_worktree()` call
+- [x] `maproom scan` shows real-time progress during indexing
+- [x] `maproom scan --verbose` works (same output for now, future-proofing)
+- [x] Help text updated to document --verbose flag
 
 ## Technical Requirements
 

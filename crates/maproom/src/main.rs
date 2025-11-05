@@ -7,6 +7,7 @@ use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crewchief_maproom::{db, indexer};
+use crewchief_maproom::progress::{ProgressTracker, OutputMode};
 
 /// Validate provider name against supported providers.
 ///
@@ -80,6 +81,9 @@ enum Commands {
         /// Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
         #[arg(long, value_parser = validate_provider)]
         provider: Option<String>,
+        /// Show detailed output (progress shown by default)
+        #[arg(long)]
+        verbose: bool,
     },
 
     /// Upsert a set of files at a given commit
@@ -398,6 +402,7 @@ async fn main() -> anyhow::Result<()> {
             generate_embeddings,
             embedding_batch_size,
             provider,
+            verbose,
         } => {
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
@@ -413,6 +418,14 @@ async fn main() -> anyhow::Result<()> {
                 "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}, generate_embeddings: {}",
                 repo, worktree, commit, parallel, generate_embeddings
             );
+
+            // Create progress tracker
+            let mode = if verbose {
+                OutputMode::Verbose
+            } else {
+                OutputMode::Minimal
+            };
+            let progress = ProgressTracker::new(mode);
 
             if parallel {
                 // Use parallel batch processing pipeline (PERF_OPT-3001)
@@ -436,6 +449,7 @@ async fn main() -> anyhow::Result<()> {
                     languages,
                     exclude,
                     config,
+                    Some(&progress),
                 )
                 .await
                 .with_context(|| format!("parallel scan failed for {}@{}", worktree, commit))?;
@@ -451,7 +465,7 @@ async fn main() -> anyhow::Result<()> {
                     concurrency,
                     languages,
                     exclude,
-                    None, // progress tracker (will be added in MRPROG-1003)
+                    Some(&progress),
                 )
                 .await
                 .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;

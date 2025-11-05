@@ -137,6 +137,7 @@ pub async fn scan_worktree_parallel(
     languages: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
     parallel_config: parallel::ParallelConfig,
+    progress: Option<&crate::progress::ProgressTracker>,
 ) -> anyhow::Result<()> {
     use crate::indexer::parallel::{FileTask, ParallelIndexer};
 
@@ -238,6 +239,11 @@ pub async fn scan_worktree_parallel(
     // Drop client before parallel processing
     drop(client);
 
+    // Set progress totals after file collection
+    if let Some(p) = progress {
+        p.set_totals(file_tasks.len(), None);
+    }
+
     // Process files in parallel
     let indexer = ParallelIndexer::new(pool.clone(), parallel_config);
     let stats = indexer.process_files(file_tasks).await?;
@@ -277,6 +283,11 @@ pub async fn scan_worktree_parallel(
                 },
                 lang, count);
         }
+    }
+
+    // Finish progress tracking
+    if let Some(p) = progress {
+        p.finish();
     }
 
     info!(?repo, ?worktree, ?commit, "parallel scan complete");
