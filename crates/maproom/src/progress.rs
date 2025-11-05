@@ -22,7 +22,7 @@ pub enum OutputMode {
 /// Uses atomic counters for file/chunk counts and throttling to
 /// prevent output flooding.
 pub struct ProgressTracker {
-    mode: OutputMode,
+    _mode: OutputMode,
     is_tty: bool,
     start_time: Instant,
     total_files: Mutex<Option<usize>>,
@@ -50,7 +50,7 @@ impl ProgressTracker {
         let is_tty = atty::is(atty::Stream::Stdout);
 
         Self {
-            mode,
+            _mode: mode,
             is_tty,
             start_time: Instant::now(),
             total_files: Mutex::new(None),
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_new_creates_tracker() {
         let tracker = ProgressTracker::new(OutputMode::Minimal);
-        assert_eq!(tracker.mode, OutputMode::Minimal);
+        assert_eq!(tracker._mode, OutputMode::Minimal);
         assert_eq!(tracker.processed_files.load(Ordering::Relaxed), 0);
         assert_eq!(tracker.processed_chunks.load(Ordering::Relaxed), 0);
     }
@@ -344,13 +344,13 @@ mod tests {
     #[test]
     fn test_output_mode_minimal() {
         let tracker = ProgressTracker::new(OutputMode::Minimal);
-        assert_eq!(tracker.mode, OutputMode::Minimal);
+        assert_eq!(tracker._mode, OutputMode::Minimal);
     }
 
     #[test]
     fn test_output_mode_verbose() {
         let tracker = ProgressTracker::new(OutputMode::Verbose);
-        assert_eq!(tracker.mode, OutputMode::Verbose);
+        assert_eq!(tracker._mode, OutputMode::Verbose);
     }
 
     #[test]
