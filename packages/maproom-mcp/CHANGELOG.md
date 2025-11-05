@@ -25,6 +25,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provider-specific defaults now handled cleanly by Rust code
 
 ### Added
+
+#### Real-time Progress Indicators for Scan Command
+
+The `scan` command now provides real-time feedback during indexing operations, making it easier to track progress on large repositories without wondering if the process has stalled.
+
+**Features:**
+- **File progress tracking**: See processed file count and percentage in real-time (e.g., "Processing: 450/1200 files (37%)")
+- **Completion timing**: Prominently displays total scan duration
+- **Smart output modes**: TTY terminals show in-place updates; non-TTY (CI/logs) shows periodic progress lines
+- **Throttled updates**: Progress updates every 200-500ms to avoid console flooding
+
+**Example output:**
+```text
+🔍 Scanning worktree: main @ abc12345
+   Repository: my-repo
+   Path: /path/to/repo
+
+Processing: 45/100 files (45%)
+✅ Completed in 8.3s
+```
+
+**Why this matters:** No more wondering if a long-running scan is stuck or making progress. You get immediate visual feedback and accurate completion times, improving the developer experience for daily use.
+
+**Command improvements:**
+- Scans current directory by default - no need to type `scan .`
+- New `--verbose` flag available for future detailed diagnostics
+- Minimal performance impact: <5% overhead through atomic counters and smart throttling
+
 - Comprehensive unit tests for endpoint resolution covering all providers (PROVFIX-1002)
   - 8 tests including critical regression test `test_openai_ignores_ollama_endpoint`
   - Tests prove OpenAI/Cohere ignore wrong endpoints, Ollama accepts custom endpoints

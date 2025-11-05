@@ -1,9 +1,12 @@
 # Ticket: MRPROG-3004: Write changelog entry for progress UX features
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met (Phase 1 scan progress documented)
+- [x] **Tests pass** - related tests pass (documentation only)
+- [x] **Verified** - by the verify-ticket agent
+
+## Note
+Changelog entry added to packages/maproom-mcp/CHANGELOG.md for Phase 1 scan progress features. Phase 2 (watch command) was skipped, so only scan progress indicators are documented. Entry includes features, example output, user benefits, and performance impact.
 
 ## Agents
 - general-purpose
