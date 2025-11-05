@@ -451,6 +451,7 @@ async fn main() -> anyhow::Result<()> {
                     concurrency,
                     languages,
                     exclude,
+                    None, // progress tracker (will be added in MRPROG-1003)
                 )
                 .await
                 .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;

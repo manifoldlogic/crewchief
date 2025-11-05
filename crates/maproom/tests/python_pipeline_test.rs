@@ -211,6 +211,7 @@ def hello():
         4,
         None,
         None,
+        None,
     )
     .await?;
 
@@ -265,6 +266,7 @@ def multiply(x, y):
         test_repo.path(),
         "abc123",
         4,
+        None,
         None,
         None,
     )
@@ -340,6 +342,7 @@ async fn test_scanner_includes_python_files() -> Result<()> {
         4,
         None,
         None,
+        None,
     )
     .await?;
 
@@ -394,6 +397,7 @@ class DataProcessor:
         4,
         None,
         None,
+        None,
     )
     .await?;
 
@@ -432,6 +436,7 @@ async fn test_full_pipeline_with_complex_python() -> Result<()> {
         test_repo.path(),
         "abc123",
         4,
+        None,
         None,
         None,
     )
@@ -571,6 +576,7 @@ async fn test_language_filter_for_python() -> Result<()> {
         4,
         Some(vec!["py".to_string()]),
         None,
+        None,
     )
     .await?;
 
@@ -625,6 +631,7 @@ def process_files(files: List[Path]) -> Dict[str, str]:
         4,
         None,
         None,
+        None,
     )
     .await?;
 
@@ -677,6 +684,7 @@ class IncompleteClass
         test_repo.path(),
         "abc123",
         4,
+        None,
         None,
         None,
     )

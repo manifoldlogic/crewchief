@@ -292,7 +292,9 @@ pub async fn scan_worktree(
     _concurrency: usize,
     languages: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
+    progress: Option<&crate::progress::ProgressTracker>,
 ) -> anyhow::Result<()> {
+    let start_time = std::time::Instant::now();
     let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
     let repo_id = crate::db::get_or_create_repo(client, repo, root_abs.to_string_lossy().as_ref()).await?;
     let worktree_id = crate::db::get_or_create_worktree(client, repo_id, worktree, root_abs.to_string_lossy().as_ref()).await?;
@@ -322,22 +324,28 @@ pub async fn scan_worktree(
 
     let allow_langs: Option<Vec<String>> = languages.map(|v| v.into_iter().map(|s| s.to_lowercase()).collect());
 
+    // Collect all file paths first to set progress totals
+    let mut file_paths = Vec::new();
     for dent in walk.build() {
         let dent = match dent { Ok(d) => d, Err(_) => continue };
         if !dent.file_type().map(|t| t.is_file()).unwrap_or(false) { continue; }
         let path = dent.path();
-        let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
         let language = detect_language_from_path(path);
-        if language.is_none() { 
-            files_skipped += 1;
-            continue; 
-        }
+        if language.is_none() { continue; }
         if let Some(ref allow) = allow_langs {
-            if !allow.iter().any(|l| l == language.unwrap()) { 
-                files_skipped += 1;
-                continue; 
-            }
+            if !allow.iter().any(|l| l == language.unwrap()) { continue; }
         }
+        file_paths.push(path.to_path_buf());
+    }
+
+    // Set progress totals now that we know file count
+    if let Some(p) = &progress {
+        p.set_totals(file_paths.len(), None);
+    }
+
+    for (idx, path) in file_paths.iter().enumerate() {
+        let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
+        let language = detect_language_from_path(path).unwrap(); // Already filtered
 
         let content = match fs::read_to_string(path) { 
             Ok(c) => c, 
@@ -354,7 +362,7 @@ pub async fn scan_worktree(
         // Update stats
         files_processed += 1;
         total_bytes += content.len();
-        *language_counts.entry(language.unwrap().to_string()).or_insert(0) += 1;
+        *language_counts.entry(language.to_string()).or_insert(0) += 1;
 
         let file_id = crate::db::upsert_file(
             client,
@@ -362,14 +370,14 @@ pub async fn scan_worktree(
             worktree_id,
             commit_id,
             relpath.to_string_lossy().as_ref(),
-            language,
+            Some(language),
             &content_hash,
             size_bytes,
             last_modified,
         )
         .await?;
 
-        let chunks = parser::extract_chunks(&content, language.unwrap());
+        let chunks = parser::extract_chunks(&content, language);
         if chunks.is_empty() {
             // Fallback: single module chunk
             total_chunks += 1;
@@ -413,12 +421,29 @@ pub async fn scan_worktree(
             }
 
             // Process Python imports and create edges
-            if language.unwrap() == "py" {
+            if language == "py" {
                 if let Err(e) = process_python_imports(client, repo_id, worktree_id, file_id, &chunks).await {
                     warn!("Failed to process Python imports for {}: {}", relpath.display(), e);
                 }
             }
         }
+
+        // Update progress after processing this file
+        if let Some(p) = &progress {
+            p.update_files(idx + 1);
+            if p.should_print() {
+                p.print_progress();
+            }
+        }
+    }
+
+    // Finish progress tracking and show timing
+    if let Some(p) = &progress {
+        p.finish();
+    } else {
+        // If no progress tracker, show timing manually
+        let elapsed = start_time.elapsed();
+        println!("\n✅ Completed in {:.1}s", elapsed.as_secs_f64());
     }
 
     // Print summary
