@@ -1,9 +1,9 @@
 # Ticket: MCPREL-1002: Update package.json release scripts to use new release.js
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -20,14 +20,14 @@ The current release scripts follow this pattern:
 These scripts directly publish to npm, bypassing git commits and tags. With MCPREL-1001 creating the new `release.js` script and GitHub Actions workflows ready to build and publish on tag push, we need to update these scripts to only trigger the git workflow. The new scripts should simply call `release.js`, which handles version bumping, committing, tagging, and pushing.
 
 ## Acceptance Criteria
-- [ ] `release:patch` script updated to: `"node scripts/release.js patch"`
-- [ ] `release:minor` script updated to: `"node scripts/release.js minor"`
-- [ ] `release:major` script updated to: `"node scripts/release.js major"`
-- [ ] All `pnpm publish` commands removed from release scripts
-- [ ] All `--no-git-checks` and `--access public` flags removed
-- [ ] package.json remains valid JSON (no syntax errors)
-- [ ] Scripts execute successfully: `pnpm release:patch` runs without errors
-- [ ] No other scripts in package.json are modified
+- [x] `release:patch` script updated to: `"node scripts/release.js patch"`
+- [x] `release:minor` script updated to: `"node scripts/release.js minor"`
+- [x] `release:major` script updated to: `"node scripts/release.js major"`
+- [x] All `pnpm publish` commands removed from release scripts
+- [x] All `--no-git-checks` and `--access public` flags removed
+- [x] package.json remains valid JSON (no syntax errors)
+- [x] Scripts execute successfully: `pnpm release:patch` runs without errors
+- [x] No other scripts in package.json are modified
 
 ## Technical Requirements
 

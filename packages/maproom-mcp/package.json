@@ -28,9 +28,9 @@
     "dev": "node bin/cli.cjs",
     "prepublishOnly": "tsc && npm audit --audit-level=high --production",
     "security-check": "pnpm audit --audit-level=moderate",
-    "release:patch": "node scripts/bump-version.js patch && pnpm publish --access public --no-git-checks",
-    "release:minor": "node scripts/bump-version.js minor && pnpm publish --access public --no-git-checks",
-    "release:major": "node scripts/bump-version.js major && pnpm publish --access public --no-git-checks"
+    "release:patch": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major"
   },
   "keywords": [
     "mcp",
