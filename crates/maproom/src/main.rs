@@ -303,9 +303,23 @@ async fn auto_generate_embeddings(
 
     println!("   Found {} chunks needing embeddings", chunk_count);
 
-    // Run pipeline
+    // Create progress tracker
+    let progress = crewchief_maproom::progress::ProgressTracker::new(
+        crewchief_maproom::progress::OutputMode::Minimal
+    );
+    progress.set_totals(0, Some(chunk_count as usize));
+
+    // Run pipeline with progress callback
     let pipeline = EmbeddingPipeline::new(service, config);
-    let stats = pipeline.run(&client).await?;
+    let stats = pipeline.run_with_progress(&client, Some(&|processed, _total| {
+        progress.update_chunks(processed);
+        if progress.should_print() {
+            progress.print_progress();
+        }
+    })).await?;
+
+    // Finish progress tracking
+    progress.finish();
 
     Ok(stats)
 }

@@ -157,6 +157,15 @@ impl EmbeddingPipeline {
 
     /// Run the embedding generation pipeline.
     pub async fn run(&self, client: &Client) -> Result<PipelineStats> {
+        self.run_with_progress(client, None).await
+    }
+
+    /// Run the embedding pipeline with optional progress callback
+    pub async fn run_with_progress(
+        &self,
+        client: &Client,
+        progress_callback: Option<&dyn Fn(usize, usize)>,
+    ) -> Result<PipelineStats> {
         let start_time = std::time::Instant::now();
         let mut stats = PipelineStats {
             dimension: self.dimension,
@@ -236,6 +245,12 @@ impl EmbeddingPipeline {
                 "Progress: {}% ({}/{})",
                 progress, batch_num, total_batches
             );
+
+            // Call progress callback if provided
+            if let Some(callback) = progress_callback {
+                let chunks_processed = std::cmp::min(batch_num * self.config.batch_size, chunks.len());
+                callback(chunks_processed, chunks.len());
+            }
         }
 
         // Gather final metrics
