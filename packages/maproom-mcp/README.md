@@ -6,12 +6,12 @@ Semantic code search powered by PostgreSQL, pgvector, and your choice of embeddi
 
 ## Features
 
-✨ **Choice of Providers** - OpenAI (recommended), Google Vertex AI, or local Ollama
-🚀 **Fast Hybrid Search** - Vector similarity + full-text search with PostgreSQL
-🔄 **Auto-Sync** - Watch mode keeps your index up-to-date automatically
-📦 **Fully Containerized** - Everything runs in Docker, isolated and clean
-🌳 **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
-🔒 **Privacy Options** - Use local Ollama for 100% private embeddings (no API keys)
+- ✨ **Choice of Providers** - OpenAI (recommended), Google Vertex AI, or local Ollama
+- 🚀 **Fast Hybrid Search** - Vector similarity + full-text search with PostgreSQL
+- 🔄 **Auto-Sync** - Watch mode keeps your index up-to-date automatically
+- 📦 **Fully Containerized** - Everything runs in Docker, isolated and clean
+- 🌳 **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
+- 🔒 **Privacy Options** - Use local Ollama for 100% private embeddings (no API keys)
 
 ## Quick Start
 
