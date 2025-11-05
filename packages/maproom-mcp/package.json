@@ -1,6 +1,6 @@
 {
   "name": "@crewchief/maproom-mcp",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "type": "module",
   "description": "Maproom MCP server with choice of embedding providers - one setup command, then zero config",
   "main": "dist/index.js",
