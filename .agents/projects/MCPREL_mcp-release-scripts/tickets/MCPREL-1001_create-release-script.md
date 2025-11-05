@@ -1,9 +1,9 @@
 # Ticket: MCPREL-1001: Create release.js script for git-based releases
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -20,16 +20,16 @@ Current release scripts in `packages/maproom-mcp/package.json` call `bump-versio
 This ticket implements the first component of the MCP Release Scripts project, which transitions from manual npm publishing to automated CI/CD-driven releases triggered by git tags.
 
 ## Acceptance Criteria
-- [ ] Script accepts command-line argument: `patch`, `minor`, or `major`
-- [ ] Validates input and exits with error for invalid arguments
-- [ ] Calls existing `bump-version.js` to increment version
-- [ ] Reads new version from package.json after bump
-- [ ] Creates git commit with message format: `chore(release): bump version to X.Y.Z`
-- [ ] Creates annotated git tag with format: `vX.Y.Z` and message: `Release version X.Y.Z`
-- [ ] Pushes commit to origin (current branch)
-- [ ] Pushes tag to origin
-- [ ] Provides clear console output for each step
-- [ ] Exits with non-zero code and clear error message if any operation fails
+- [x] Script accepts command-line argument: `patch`, `minor`, or `major`
+- [x] Validates input and exits with error for invalid arguments
+- [x] Calls existing `bump-version.js` to increment version
+- [x] Reads new version from package.json after bump
+- [x] Creates git commit with message format: `chore(release): bump version to X.Y.Z`
+- [x] Creates annotated git tag with format: `vX.Y.Z` and message: `Release version X.Y.Z`
+- [x] Pushes commit to origin (current branch)
+- [x] Pushes tag to origin
+- [x] Provides clear console output for each step
+- [x] Exits with non-zero code and clear error message if any operation fails
 
 ## Technical Requirements
 1. **File location**: `/workspace/packages/maproom-mcp/scripts/release.js`
