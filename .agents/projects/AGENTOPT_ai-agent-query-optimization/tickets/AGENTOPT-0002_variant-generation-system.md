@@ -1,9 +1,9 @@
 # Ticket: AGENTOPT-0002: Build Variant Generation System
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -26,12 +26,12 @@ The system must support:
 This establishes the foundation for the iterative optimization loop where variants can be tested against the test query set (AGENTOPT-0001) and continuously improved.
 
 ## Acceptance Criteria
-- [ ] Variant data structure implemented matching TypeScript interface in architecture.md lines 841-851
-- [ ] 5 initial manual variants created (detailed, simple, conversational, code-like, control)
-- [ ] Mutation engine implemented with 5 mutation types (crossover, amplification, reduction, reframing, specialization)
-- [ ] Variant storage system created using JSON files in variants/ directory
-- [ ] Variant validator ensures token count <600 and validates against MCP tool schema
-- [ ] All variants have genealogy tracking (generation number, parent_ids, mutation_type)
+- [x] Variant data structure implemented matching TypeScript interface in architecture.md lines 841-851
+- [x] 5 initial manual variants created (detailed, simple, conversational, code-like, control)
+- [x] Mutation engine implemented with 5 mutation types (crossover, amplification, reduction, reframing, specialization)
+- [x] Variant storage system created using JSON files in variants/ directory
+- [x] Variant validator ensures token count <600 and validates against MCP tool schema
+- [x] All variants have genealogy tracking (generation number, parent_ids, mutation_type)
 
 ## Technical Requirements
 - TypeScript variant interface with properties: id, name, description, tokens, generation, parent_ids, mutation_type, created_at

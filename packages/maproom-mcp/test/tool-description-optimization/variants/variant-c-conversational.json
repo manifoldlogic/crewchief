@@ -1,0 +1,10 @@
+{
+  "id": "variant-c-conversational",
+  "name": "Conversational (Friendly)",
+  "description": "Hey! This tool helps you search code by describing what you're looking for, not just exact text.\n\nTHINK OF IT LIKE: Asking a colleague \"where's the authentication code?\" instead of grepping for exact strings.\n\nBEST FOR:\n- Finding code when you know what it does but not what it's called\n- Exploring a new codebase\n- Understanding how different parts connect\n\nUSE WHEN: You want to find code by concept, not exact strings\n\nQUERY TIPS:\nKeep it simple! Just describe what you're looking for:\n- \"authentication\" or \"auth flow\"\n- \"error handling\"\n- \"database connection\"\n- \"cart validation\"\n\nIf you're asking a question, just pull out the key terms:\n- \"How does auth work?\" → try \"authentication\"\n- \"Where are errors handled?\" → try \"error handler\"\n\nEXAMPLES:\n- \"WebSocket disconnect\"\n- \"message bus\"\n- \"state management\"\n- \"processCheckout\"\n\nWHAT THIS ISN'T FOR:\n- Finding exact strings like \"TODO\" or \"FIXME\" (use Grep for that!)\n- File names or paths (use Glob instead)\n- Questions with lots of words (keep it to 1-3 terms)\n\nSEARCH MODES:\n- hybrid (default) - combines keyword + concept matching\n- fts - exact keyword matching\n- vector - pure concept matching\n\nYou can also filter by file type or recency. Set debug=true if you want to see how results are ranked!",
+  "tokens": 350,
+  "generation": 0,
+  "parent_ids": [],
+  "created_at": "2025-11-06T00:00:00.000Z",
+  "notes": "Conversational variant with friendly, approachable tone - uses casual language and analogies to make the tool more accessible"
+}

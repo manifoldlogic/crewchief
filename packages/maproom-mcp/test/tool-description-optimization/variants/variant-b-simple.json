@@ -1,0 +1,10 @@
+{
+  "id": "variant-b-simple",
+  "name": "Simple (Minimal)",
+  "description": "Semantic code search - finds code by concept.\n\nBEST FOR: Finding functions/classes, exploring codebases\n\nUSE WHEN: Searching for functionality rather than exact text\n\nQUERY TIPS:\n- Use 1-3 words: \"error handling\", \"auth\", \"database\"\n- Concepts work best: \"authentication\" not file paths\n- Natural language questions need transformation:\n  \"How does auth work?\" → \"authentication\"\n  \"What handles errors?\" → \"error handler\"\n\nEXAMPLES:\n- \"error handling\"\n- \"database connection\"\n- \"WebSocket disconnect\"\n- \"cart validation\"\n\nAVOID:\n- File paths: \"src/auth.ts\"\n- Full sentences: \"How do I handle errors?\"\n- Exact strings: \"TODO\", \"FIXME\"\n\nSEARCH MODES:\n- hybrid (default): Best overall\n- fts: Exact keywords\n- vector: Concepts\n\nFILTERS: file_type, recency",
+  "tokens": 220,
+  "generation": 0,
+  "parent_ids": [],
+  "created_at": "2025-11-06T00:00:00.000Z",
+  "notes": "Minimal variant focusing on core essentials only - tests if brevity improves or hinders agent understanding"
+}
