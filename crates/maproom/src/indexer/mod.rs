@@ -646,7 +646,7 @@ pub async fn watch_worktree(
 
     // Create change detector and processor
     let detector = Arc::new(Mutex::new(ChangeDetector::with_capacity(pool.clone(), 1000)));
-    let processor = IncrementalProcessor::new(pool.clone());
+    let processor = IncrementalProcessor::new(pool.clone(), root_abs.clone());
     let queue = Arc::new(Mutex::new(UpdateQueue::with_capacity(100)));
 
     // Spawn event processor task

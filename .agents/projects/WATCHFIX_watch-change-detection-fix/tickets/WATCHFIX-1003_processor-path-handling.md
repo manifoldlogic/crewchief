@@ -1,9 +1,9 @@
 # Ticket: WATCHFIX-1003: Fix IncrementalProcessor Path Handling
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -115,3 +115,98 @@ async fn index_new_file(&self, path: &Path, hash: &ContentHash) -> Result<()> {
 - `/workspace/.agents/projects/WATCHFIX_watch-change-detection-fix/planning/analysis.md` - IncrementalProcessor Expectations section (lines 204-223)
 - `/workspace/.agents/projects/WATCHFIX_watch-change-detection-fix/planning/architecture.md` - IncrementalProcessor Path Handling section
 - `/workspace/.agents/projects/WATCHFIX_watch-change-detection-fix/planning/plan.md` - Phase 3 deliverables
+
+## Implementation Notes
+
+**Completed**: 2025-11-06
+
+**Summary**: Successfully updated `IncrementalProcessor` to use robust path normalization for all database operations while maintaining absolute paths for filesystem operations.
+
+**Changes Made**:
+
+1. **Updated struct and constructor** (`crates/maproom/src/incremental/processor.rs`):
+   - Added `repo_root: PathBuf` field to `IncrementalProcessor` struct (line 82)
+   - Updated constructor `new()` to accept `repo_root` parameter (lines 94-100)
+   - Updated documentation examples to reflect new constructor signature
+
+2. **Added imports**:
+   - Imported `PathBuf` from `std::path` (line 34)
+   - Imported `normalize_to_relpath` from `super::path_utils` (line 43)
+
+3. **Fixed `index_new_file()` method** (lines 197-234):
+   - Added comment: "CRITICAL: Read file content using absolute path (filesystem operation)"
+   - Added comment: "CRITICAL: Normalize path for database query (database stores relative paths)"
+   - Uses `normalize_to_relpath(path, &self.repo_root)` to convert absolute path to relative path
+   - Added UTF-8 validation with clear error message
+   - Database query now uses normalized `relpath_str` instead of `path.to_string_lossy()`
+   - Updated error message to include `relpath_str` for better debugging
+
+4. **Fixed `update_file()` method** (lines 286-322):
+   - Same pattern as `index_new_file()`:
+     - Filesystem read uses absolute path
+     - Path normalized for database query
+     - Database query uses `relpath_str`
+   - Enhanced warning log to include both absolute path and relpath
+
+5. **Fixed `remove_file()` method** (lines 379-409):
+   - Same pattern as other methods:
+     - Path normalized at start
+     - Database query uses `relpath_str`
+   - Enhanced debug log to include both absolute path and relpath
+
+6. **Updated call site** (`crates/maproom/src/indexer/mod.rs`, line 649):
+   - Changed `IncrementalProcessor::new(pool.clone())` to `IncrementalProcessor::new(pool.clone(), root_abs.clone())`
+   - Uses existing `root_abs` variable which is already available in `watch_worktree()`
+
+**Key Design Decisions**:
+
+1. **Chose to add `repo_root` parameter**: More robust than hardcoded string trimming, works across environments
+2. **Used `normalize_to_relpath()` from path_utils**: Provides security (prevents path traversal), cross-platform support, and comprehensive error handling
+3. **Added clear comments**: Marked filesystem operations vs database operations with "CRITICAL" prefix to prevent future confusion
+4. **Preserved absolute paths for filesystem ops**: Ensures file reading continues to work correctly
+5. **Enhanced error messages**: Include both absolute and relative paths in logs for easier debugging
+
+**Path Handling Pattern**:
+- Input: Absolute path from filesystem watcher (e.g., `/workspace/packages/cli/src/main.ts`)
+- Filesystem operations: Use absolute path directly
+- Database queries: Normalize to relative path (e.g., `packages/cli/src/main.ts`) using `normalize_to_relpath()`
+- Error messages: Include both formats for clarity
+
+**Testing**:
+- Code compiles successfully: `cargo build --release` (0 errors, 0 warnings in modified files)
+- Clippy passes: `cargo clippy` (no new warnings introduced)
+- Unit tests pass: `cargo test incremental::processor` (4/4 tests passing)
+
+**Acceptance Criteria Status**:
+- [x] `index_new_file()` queries database using relative path (lines 212-223)
+- [x] `update_file()` queries database using relative path (lines 301-314)
+- [x] `remove_file()` queries database using relative path (lines 387-400)
+- [x] Filesystem operations use absolute paths (lines 203, 292)
+- [x] All three methods compile without warnings
+- [x] Existing functionality preserved (same logic, just fixed path handling)
+
+**Code Examples**:
+
+Example from `index_new_file()`:
+```rust
+// CRITICAL: Read file content using absolute path (filesystem operation)
+let content = fs::read_to_string(path)
+    .with_context(|| format!("Failed to read file: {}", path.display()))?;
+
+// CRITICAL: Normalize path for database query (database stores relative paths)
+let relpath = normalize_to_relpath(path, &self.repo_root)
+    .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
+
+let relpath_str = relpath.to_str()
+    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
+
+// Query with relative path
+let file_row = client
+    .query_opt(
+        "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
+        &[&relpath_str],
+    )
+    .await?;
+```
+
+This implementation fixes the "File not found in database" error by ensuring database queries use the same path format (relative) that's stored in the database.

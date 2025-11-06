@@ -45,7 +45,7 @@ async fn test_processor_creation() {
     };
 
     // Should be able to create processor
-    let processor = IncrementalProcessor::new(pool);
+    let processor = IncrementalProcessor::new(pool, PathBuf::from("/workspace"));
 
     // Processor should be ready to use
     assert!(std::mem::size_of_val(&processor) > 0);
@@ -57,7 +57,7 @@ async fn test_process_task_with_no_change() {
         return;
     };
 
-    let processor = IncrementalProcessor::new(pool);
+    let processor = IncrementalProcessor::new(pool, PathBuf::from("/workspace"));
 
     // Create a task with ChangeType::None
     let task = UpdateTask::new(
@@ -148,7 +148,7 @@ async fn test_processor_handles_missing_file() {
         return;
     };
 
-    let processor = IncrementalProcessor::new(pool);
+    let processor = IncrementalProcessor::new(pool, PathBuf::from("/workspace"));
 
     // Create a task for a file that doesn't exist
     let nonexistent_path = PathBuf::from("/nonexistent/file.rs");
@@ -169,7 +169,7 @@ async fn test_processor_handles_invalid_language() {
         return;
     };
 
-    let processor = IncrementalProcessor::new(pool);
+    let _processor = IncrementalProcessor::new(pool, PathBuf::from("/workspace"));
 
     // Create a temporary file with unknown extension
     let mut temp_file = NamedTempFile::new().unwrap();

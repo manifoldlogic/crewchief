@@ -31,7 +31,7 @@
 
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 use crate::db::PgPool;
@@ -40,6 +40,7 @@ use crate::indexer::SymbolChunk;
 use super::detector::ChangeType;
 use super::edge_updater::EdgeUpdater;
 use super::hash::ContentHash;
+use super::path_utils::normalize_to_relpath;
 use super::task::UpdateTask;
 
 /// Incremental processor for atomic file updates.
@@ -58,10 +59,11 @@ use super::task::UpdateTask;
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let pool = create_pool().await?;
-///     let processor = IncrementalProcessor::new(pool);
+///     let repo_root = PathBuf::from("/workspace");
+///     let processor = IncrementalProcessor::new(pool, repo_root);
 ///
 ///     // Process a file update
-///     let path = PathBuf::from("src/main.rs");
+///     let path = PathBuf::from("/workspace/src/main.rs");
 ///     let old_hash = FileHasher::hash_bytes(b"old content");
 ///     let new_hash = FileHasher::hash_bytes(b"new content");
 ///     let task = UpdateTask::new(
@@ -77,6 +79,7 @@ use super::task::UpdateTask;
 pub struct IncrementalProcessor {
     pool: PgPool,
     edge_updater: EdgeUpdater,
+    repo_root: PathBuf,
 }
 
 impl IncrementalProcessor {
@@ -84,13 +87,15 @@ impl IncrementalProcessor {
     ///
     /// # Arguments
     /// * `pool` - Database connection pool
+    /// * `repo_root` - Absolute path to the repository root (used for path normalization)
     ///
     /// # Returns
     /// A new processor ready to handle file updates
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool, repo_root: PathBuf) -> Self {
         Self {
             edge_updater: EdgeUpdater::new(pool.clone()),
             pool,
+            repo_root,
         }
     }
 
@@ -127,9 +132,10 @@ impl IncrementalProcessor {
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;
-    /// let processor = IncrementalProcessor::new(pool);
+    /// let repo_root = PathBuf::from("/workspace");
+    /// let processor = IncrementalProcessor::new(pool, repo_root);
     /// let task = UpdateTask::new(
-    ///     PathBuf::from("src/lib.rs"),
+    ///     PathBuf::from("/workspace/src/lib.rs"),
     ///     ChangeType::New(FileHasher::hash_bytes(b"content")),
     ///     Trigger::Auto
     /// );
@@ -182,7 +188,7 @@ impl IncrementalProcessor {
     /// 4. Update edges for new chunks
     ///
     /// # Arguments
-    /// * `path` - Filesystem path to the new file
+    /// * `path` - Absolute filesystem path to the new file
     /// * `hash` - Content hash of the file
     ///
     /// # Returns
@@ -193,23 +199,27 @@ impl IncrementalProcessor {
         let mut client = self.pool.get().await
             .context("Failed to get database connection from pool")?;
 
-        // Read file content
+        // CRITICAL: Read file content using absolute path (filesystem operation)
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
         // Detect language from file extension
         let language = detect_language_from_path(path);
 
-        // Get or create file record in database
-        // For new files, we need to find the repo/worktree/commit context
-        // For now, we'll look up the file by path to get its ID
-        let relpath = path.to_string_lossy();
+        // CRITICAL: Normalize path for database query (database stores relative paths)
+        // Absolute path example: "/workspace/packages/cli/src/main.ts"
+        // Relative path example: "packages/cli/src/main.ts"
+        let relpath = normalize_to_relpath(path, &self.repo_root)
+            .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
+
+        let relpath_str = relpath.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
         // Query to find the file record (it should exist from the watcher's file creation)
         let file_row = client
             .query_opt(
                 "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
-                &[&relpath.as_ref()],
+                &[&relpath_str],
             )
             .await
             .context("Failed to query file record")?;
@@ -219,7 +229,7 @@ impl IncrementalProcessor {
             None => {
                 // File doesn't exist in DB yet - this is an error condition
                 // The file should have been created by the watcher before queueing the update
-                anyhow::bail!("File not found in database: {}", path.display());
+                anyhow::bail!("File not found in database (relpath={})", relpath_str);
             }
         };
 
@@ -267,7 +277,7 @@ impl IncrementalProcessor {
     /// 6. Update edges (after transaction completes)
     ///
     /// # Arguments
-    /// * `path` - Filesystem path to the modified file
+    /// * `path` - Absolute filesystem path to the modified file
     /// * `new_hash` - New content hash of the file
     ///
     /// # Returns
@@ -278,19 +288,27 @@ impl IncrementalProcessor {
         let mut client = self.pool.get().await
             .context("Failed to get database connection from pool")?;
 
-        // Read file content
+        // CRITICAL: Read file content using absolute path (filesystem operation)
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
         // Detect language from file extension
         let language = detect_language_from_path(path);
 
+        // CRITICAL: Normalize path for database query (database stores relative paths)
+        // Absolute path example: "/workspace/packages/cli/src/main.ts"
+        // Relative path example: "packages/cli/src/main.ts"
+        let relpath = normalize_to_relpath(path, &self.repo_root)
+            .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
+
+        let relpath_str = relpath.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
+
         // Look up file record
-        let relpath = path.to_string_lossy();
         let file_row = client
             .query_opt(
                 "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
-                &[&relpath.as_ref()],
+                &[&relpath_str],
             )
             .await
             .context("Failed to query file record")?;
@@ -298,8 +316,8 @@ impl IncrementalProcessor {
         let file_id = match file_row {
             Some(row) => row.get::<_, i64>(0),
             None => {
-                warn!(path = %path.display(), "File not found in database during update");
-                anyhow::bail!("File not found in database: {}", path.display());
+                warn!(path = %path.display(), relpath = %relpath_str, "File not found in database during update");
+                anyhow::bail!("File not found in database (relpath={})", relpath_str);
             }
         };
 
@@ -353,7 +371,7 @@ impl IncrementalProcessor {
     /// 4. Commit transaction
     ///
     /// # Arguments
-    /// * `path` - Filesystem path to the deleted file
+    /// * `path` - Absolute filesystem path to the deleted file
     ///
     /// # Returns
     /// * `Ok(())` - File removed successfully
@@ -363,12 +381,20 @@ impl IncrementalProcessor {
         let mut client = self.pool.get().await
             .context("Failed to get database connection from pool")?;
 
+        // CRITICAL: Normalize path for database query (database stores relative paths)
+        // Absolute path example: "/workspace/packages/cli/src/main.ts"
+        // Relative path example: "packages/cli/src/main.ts"
+        let relpath = normalize_to_relpath(path, &self.repo_root)
+            .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
+
+        let relpath_str = relpath.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
+
         // Look up file record
-        let relpath = path.to_string_lossy();
         let file_row = client
             .query_opt(
                 "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
-                &[&relpath.as_ref()],
+                &[&relpath_str],
             )
             .await
             .context("Failed to query file record")?;
@@ -377,7 +403,7 @@ impl IncrementalProcessor {
             Some(row) => row.get::<_, i64>(0),
             None => {
                 // File already removed or never existed
-                debug!(path = %path.display(), "File not found in database during deletion");
+                debug!(path = %path.display(), relpath = %relpath_str, "File not found in database during deletion");
                 return Ok(());
             }
         };
