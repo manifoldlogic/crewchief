@@ -10,6 +10,29 @@
 //! - Priority-based update queue with retry logic
 //! - Incremental file processing with atomic updates
 //! - Edge relationship maintenance
+//!
+//! # Path Handling Strategy
+//!
+//! The watch command deals with two path representations:
+//! - **Absolute paths**: From file watcher (e.g., `/workspace/src/main.rs`)
+//! - **Relative paths**: Stored in database (e.g., `src/main.rs`)
+//!
+//! **Critical Rule**: Always normalize to relative paths for database queries using
+//! [`normalize_to_relpath()`](path_utils::normalize_to_relpath). Use absolute paths
+//! only for filesystem operations (reading files, checking metadata).
+//!
+//! **Bug Fixed**: Previously, the watch command passed absolute paths to database
+//! lookup functions that expected relative paths. This caused existing files to be
+//! misclassified as NEW, resulting in "File not found" errors during re-indexing.
+//! See `.agents/projects/WATCHFIX_watch-change-detection-fix/planning/analysis.md`
+//! for detailed root cause analysis.
+//!
+//! # Security Considerations
+//!
+//! - **Path traversal protection**: [`normalize_to_relpath()`](path_utils::normalize_to_relpath)
+//!   rejects paths containing `..` components
+//! - **File size limits**: Files larger than 10MB are skipped to prevent DoS
+//! - **Symlink awareness**: Symlinks are logged but allowed (user responsibility)
 
 pub mod cache;
 pub mod detector;
