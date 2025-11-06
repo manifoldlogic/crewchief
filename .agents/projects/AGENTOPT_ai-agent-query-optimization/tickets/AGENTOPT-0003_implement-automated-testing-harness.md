@@ -1,9 +1,9 @@
 # Ticket: AGENTOPT-0003: Implement Automated Testing Harness
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -23,11 +23,11 @@ Three simulation strategies are supported:
 3. API-based ($1/experiment, 95% accuracy) - for final decisions
 
 ## Acceptance Criteria
-- [ ] Testing harness runs 100 queries per variant in <30 minutes
-- [ ] Agent simulation implemented (start with rule-based, support LLM-based)
-- [ ] Parallel execution for testing multiple variants concurrently
-- [ ] Metrics collector records success_rate, avg_results, transformations
-- [ ] Result formatter outputs both JSON and human-readable reports
+- [x] Testing harness runs 100 queries per variant in <30 minutes
+- [x] Agent simulation implemented (start with rule-based, support LLM-based)
+- [x] Parallel execution for testing multiple variants concurrently
+- [x] Metrics collector records success_rate, avg_results, transformations
+- [x] Result formatter outputs both JSON and human-readable reports
 
 ## Technical Requirements
 - Variant tester executes all queries from AGENTOPT-0001 test set
