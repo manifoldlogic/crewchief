@@ -47,8 +47,8 @@ async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std:
 }
 
 /// Helper to create embedding service from environment.
-fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
-    EmbeddingService::from_env().map_err(|e| e.into())
+async fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+    EmbeddingService::from_env().await.map_err(|e| e.into())
 }
 
 /// Helper to find a test repo ID from the database.
@@ -67,7 +67,7 @@ async fn find_test_repo(
 async fn test_weighted_fusion_default_weights() -> Result<(), Box<dyn std::error::Error>> {
     // Test with default weight configuration
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -111,7 +111,7 @@ async fn test_weighted_fusion_default_weights() -> Result<(), Box<dyn std::error
 async fn test_weighted_fusion_fts_only() -> Result<(), Box<dyn std::error::Error>> {
     // Test with FTS-only weighting (all weight on FTS)
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -146,7 +146,7 @@ async fn test_weighted_fusion_fts_only() -> Result<(), Box<dyn std::error::Error
 async fn test_weighted_fusion_vector_only() -> Result<(), Box<dyn std::error::Error>> {
     // Test with vector-only weighting
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -181,7 +181,7 @@ async fn test_weighted_fusion_vector_only() -> Result<(), Box<dyn std::error::Er
 async fn test_weighted_fusion_balanced() -> Result<(), Box<dyn std::error::Error>> {
     // Test with balanced weights (all signals equal)
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -216,7 +216,7 @@ async fn test_weighted_fusion_balanced() -> Result<(), Box<dyn std::error::Error
 async fn test_weighted_fusion_extreme_fts_heavy() -> Result<(), Box<dyn std::error::Error>> {
     // Test with extreme FTS bias
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -249,7 +249,7 @@ async fn test_weighted_fusion_extreme_fts_heavy() -> Result<(), Box<dyn std::err
 async fn test_weighted_fusion_extreme_vector_heavy() -> Result<(), Box<dyn std::error::Error>> {
     // Test with extreme vector bias
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -284,7 +284,7 @@ async fn test_weighted_fusion_extreme_vector_heavy() -> Result<(), Box<dyn std::
 async fn test_weighted_fusion_unnormalized_weights() -> Result<(), Box<dyn std::error::Error>> {
     // Test with weights that don't sum to 1.0
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -323,7 +323,7 @@ async fn test_weighted_fusion_unnormalized_weights() -> Result<(), Box<dyn std::
 async fn test_weighted_fusion_zero_weights() -> Result<(), Box<dyn std::error::Error>> {
     // Test with all weights set to zero (edge case)
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -359,7 +359,7 @@ async fn test_weighted_fusion_zero_weights() -> Result<(), Box<dyn std::error::E
 #[ignore] // Run only when database is available
 async fn test_weighted_fusion_weight_comparison() -> Result<(), Box<dyn std::error::Error>> {
     // Compare results with different weight configurations
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
 
     // Setup default weights pipeline
     let client1 = create_test_connection().await?;
@@ -426,7 +426,7 @@ async fn test_weighted_fusion_weight_comparison() -> Result<(), Box<dyn std::err
 async fn test_weighted_fusion_performance() -> Result<(), Box<dyn std::error::Error>> {
     // Verify weighted fusion meets <10ms performance requirement
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -479,7 +479,7 @@ async fn test_weighted_fusion_performance() -> Result<(), Box<dyn std::error::Er
 async fn test_weighted_fusion_source_scores() -> Result<(), Box<dyn std::error::Error>> {
     // Verify source scores are tracked correctly
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());

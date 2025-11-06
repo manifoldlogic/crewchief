@@ -315,7 +315,7 @@ use std::sync::Arc;
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_full_pipeline() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let processed = processor.process("authenticate user").await?;
@@ -336,7 +336,7 @@ async fn test_query_processor_full_pipeline() -> Result<(), Box<dyn std::error::
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_code_mode_detection() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     // Code-like queries
@@ -367,7 +367,7 @@ async fn test_query_processor_code_mode_detection() -> Result<(), Box<dyn std::e
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_text_mode_detection() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     // Natural language queries
@@ -397,7 +397,7 @@ async fn test_query_processor_text_mode_detection() -> Result<(), Box<dyn std::e
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_embedding_caching() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let query = "test query for caching";
@@ -432,7 +432,7 @@ async fn test_query_processor_embedding_caching() -> Result<(), Box<dyn std::err
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_embedding_dimensions() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let queries = vec![
@@ -467,7 +467,7 @@ async fn test_query_processor_embedding_dimensions() -> Result<(), Box<dyn std::
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_special_characters() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let queries = vec![
@@ -495,7 +495,7 @@ async fn test_query_processor_special_characters() -> Result<(), Box<dyn std::er
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_empty_query_error() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let result = processor.process("").await;
@@ -511,7 +511,7 @@ async fn test_query_processor_empty_query_error() -> Result<(), Box<dyn std::err
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_expansion_integration() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let processed = processor.process("function auth").await?;
@@ -539,7 +539,7 @@ async fn test_query_processor_expansion_integration() -> Result<(), Box<dyn std:
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_parallel_performance() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let start = std::time::Instant::now();
@@ -566,7 +566,7 @@ async fn test_query_processor_parallel_performance() -> Result<(), Box<dyn std::
 #[tokio::test]
 #[ignore] // Requires embedding service configured
 async fn test_query_processor_whitespace_query() -> Result<(), Box<dyn std::error::Error>> {
-    let embedder = Arc::new(EmbeddingService::from_env()?);
+    let embedder = Arc::new(EmbeddingService::from_env().await?);
     let processor = QueryProcessor::new(embedder);
 
     let result = processor.process("   \t\n  ").await;

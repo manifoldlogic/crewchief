@@ -6,6 +6,8 @@ use ignore::WalkBuilder;
 use tokio_postgres::Client;
 use tracing::{info, warn};
 
+use crate::incremental::path_utils::normalize_to_relpath;
+
 pub mod parallel;
 pub mod parser;
 
@@ -657,6 +659,34 @@ pub async fn watch_worktree(
 
     let processor_task = tokio::spawn(async move {
         while let Some(indexing_event) = event_rx.recv().await {
+            // CRITICAL FIX (WATCHFIX-1002): Normalize path ONCE at event entry
+            // The database stores relative paths (e.g., "packages/cli/src/main.ts")
+            // but events arrive with absolute paths (e.g., "/workspace/packages/cli/src/main.ts").
+            // We must normalize to relpath for database lookups, then use absolute path for filesystem ops.
+            let relpath = match normalize_to_relpath(&indexing_event.path, &root_clone) {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!(
+                        path = %indexing_event.path.display(),
+                        error = %e,
+                        "Path normalization failed - path outside repository, skipping event"
+                    );
+                    continue; // Skip this event
+                }
+            };
+
+            // Convert relpath to string for database queries
+            let relpath_str = match relpath.to_str() {
+                Some(s) => s,
+                None => {
+                    warn!(
+                        path = %relpath.display(),
+                        "Path contains invalid UTF-8, skipping event"
+                    );
+                    continue;
+                }
+            };
+
             // Convert IndexingEvent to FileEvent
             let file_event = match indexing_event.event_type {
                 crate::incremental::EventType::Modified => FileEvent::Modified(indexing_event.path.clone()),
@@ -670,34 +700,59 @@ pub async fn watch_worktree(
                 }
             };
 
-            // Get file_id from database (simplified - assumes file exists)
-            // In production, we'd handle file creation here
-            let relpath = indexing_event.path.strip_prefix(&root_clone).unwrap_or(&indexing_event.path);
-
             // Detect change type
             let change_type = match file_event {
                 FileEvent::Modified(ref path) => {
-                    // Try to get file_id from database
-                    if let Ok(Some(file_id)) = get_file_id_by_path(&pool_clone, &repo_clone, &worktree_clone, relpath.to_str().unwrap()).await {
-                        detector_clone.lock().await.detect_change(file_id, path).await.ok()
-                    } else {
-                        // New file - compute hash
-                        if path.exists() {
-                            if let Ok(hash) = crate::incremental::FileHasher::hash_file(path) {
-                                Some(crate::incremental::ChangeType::New(hash))
+                    // CRITICAL FIX (WATCHFIX-1002): Use normalized relpath for database lookup
+                    // Previously this used absolute path, causing lookups to fail and files
+                    // to be misclassified as NEW when they were actually MODIFIED.
+                    match get_file_id_by_path(&pool_clone, &repo_clone, &worktree_clone, relpath_str).await {
+                        Ok(Some(file_id)) => {
+                            // File exists in database - ALWAYS call ChangeDetector
+                            // This is the key fix: we must use ChangeDetector to determine
+                            // if content actually changed (Modified vs None).
+                            detector_clone.lock().await.detect_change(file_id, path).await.ok()
+                        }
+                        Ok(None) => {
+                            // File not in database - truly a new file
+                            // Compute hash directly since there's no existing record to compare against
+                            if path.exists() {
+                                if let Ok(hash) = crate::incremental::FileHasher::hash_file(path) {
+                                    Some(crate::incremental::ChangeType::New(hash))
+                                } else {
+                                    None
+                                }
                             } else {
                                 None
                             }
-                        } else {
+                        }
+                        Err(e) => {
+                            warn!(
+                                path = %path.display(),
+                                relpath = %relpath.display(),
+                                error = %e,
+                                "Database lookup failed, skipping event"
+                            );
                             None
                         }
                     }
                 }
                 FileEvent::Deleted(ref path) => {
-                    if let Ok(Some(file_id)) = get_file_id_by_path(&pool_clone, &repo_clone, &worktree_clone, relpath.to_str().unwrap()).await {
-                        detector_clone.lock().await.detect_deletion(file_id, path).await.ok().flatten()
-                    } else {
-                        None
+                    // Use normalized relpath for database lookup
+                    match get_file_id_by_path(&pool_clone, &repo_clone, &worktree_clone, relpath_str).await {
+                        Ok(Some(file_id)) => {
+                            detector_clone.lock().await.detect_deletion(file_id, path).await.ok().flatten()
+                        }
+                        Ok(None) => None,
+                        Err(e) => {
+                            warn!(
+                                path = %path.display(),
+                                relpath = %relpath.display(),
+                                error = %e,
+                                "Database lookup failed for deletion, skipping event"
+                            );
+                            None
+                        }
                     }
                 }
                 FileEvent::Renamed(ref _old_path, ref new_path) => {
