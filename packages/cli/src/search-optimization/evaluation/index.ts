@@ -30,6 +30,11 @@ export {
   extractSearchTimes,
   formatAdvantageMetrics,
   formatAggregatedMetrics,
+  // Cross-codebase generalization metrics (TESTDES-5003)
+  GeneralizationMetrics,
+  calculateCrossCodebaseMetrics,
+  calculateAdvantageConsistency,
+  formatGeneralizationMetrics,
 } from './metrics.js'
 
 // Statistical analysis

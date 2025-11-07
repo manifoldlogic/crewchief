@@ -71,3 +71,23 @@ export type {
   RecommendationSection,
   FailurePattern,
 } from './reporter.js'
+
+// Cross-project validation exports (TESTDES-5003)
+export {
+  runCrossProjectValidation,
+  calculateGeneralizationMetrics,
+  calculateTransferabilityScore,
+  formatCrossProjectSummary,
+  SAMPLE_CODEBASES,
+} from './cross-project.js'
+
+export type {
+  CodebaseConfig,
+  AdaptedTask,
+  TaskAdaptation,
+  CrossProjectTaskResult,
+  CodebaseResults,
+  GeneralizationMetrics as CrossProjectGeneralizationMetrics,
+  CrossProjectValidationResult,
+  CrossProjectValidationConfig,
+} from './cross-project.js'

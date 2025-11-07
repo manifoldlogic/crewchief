@@ -285,3 +285,230 @@ export function formatAggregatedMetrics(label: string, metrics: AggregatedMetric
 
   return lines.join('\n')
 }
+
+/**
+ * Cross-codebase generalization metrics
+ *
+ * Measures how well a task or suite generalizes across different codebases.
+ * Used by cross-project validation (TESTDES-5003).
+ */
+export interface GeneralizationMetrics {
+  /** Task success rate across codebases */
+  taskSuccessRate: AggregatedMetrics
+
+  /** Grep vs search advantage consistency */
+  advantageConsistency: {
+    /** Mean advantage across codebases */
+    mean: number
+
+    /** Variance in advantage (low = consistent) */
+    variance: number
+
+    /** Whether advantage is consistent (variance < threshold) */
+    isConsistent: boolean
+  }
+
+  /** Transferability scores per task */
+  transferability: {
+    /** Task ID */
+    taskId: string
+
+    /** Score (0-1, higher = better generalization) */
+    score: number
+
+    /** Number of codebases where task succeeded */
+    successCount: number
+
+    /** Total codebases tested */
+    totalCount: number
+  }[]
+}
+
+/**
+ * Calculate generalization metrics from cross-codebase results
+ *
+ * Measures consistency and transferability of tasks across different codebases.
+ *
+ * @param taskResults - Map of task IDs to arrays of success rates (one per codebase)
+ * @returns Generalization metrics
+ *
+ * @example
+ * ```typescript
+ * const results = {
+ *   'task-1': [0.8, 0.75, 0.85], // Success rates across 3 codebases
+ *   'task-2': [0.9, 0.88, 0.92]
+ * }
+ * const metrics = calculateGeneralizationMetrics(results)
+ * console.log('Task success:', metrics.taskSuccessRate.mean)
+ * console.log('Consistent advantage:', metrics.advantageConsistency.isConsistent)
+ * ```
+ */
+export function calculateCrossCodebaseMetrics(taskResults: Map<string, number[]>): GeneralizationMetrics {
+  if (taskResults.size === 0) {
+    throw new Error('Need at least one task with results')
+  }
+
+  // Calculate task success rates
+  const allSuccessRates: number[] = []
+  for (const rates of taskResults.values()) {
+    allSuccessRates.push(...rates)
+  }
+  const taskSuccessRate = aggregateMetrics(allSuccessRates)
+
+  // Calculate transferability scores
+  const transferability: GeneralizationMetrics['transferability'] = []
+  for (const [taskId, rates] of taskResults) {
+    const successCount = rates.filter((r) => r > 0.7).length
+    const totalCount = rates.length
+    const score = successCount / totalCount
+
+    transferability.push({
+      taskId,
+      score,
+      successCount,
+      totalCount,
+    })
+  }
+
+  // Calculate advantage consistency (if grep/search data provided)
+  // For now, use a simplified measure based on variance across codebases
+  const taskVariances: number[] = []
+  for (const rates of taskResults.values()) {
+    if (rates.length > 1) {
+      const mean = rates.reduce((sum, r) => sum + r, 0) / rates.length
+      const variance = rates.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (rates.length - 1)
+      taskVariances.push(variance)
+    }
+  }
+
+  const meanVariance =
+    taskVariances.length > 0 ? taskVariances.reduce((sum, v) => sum + v, 0) / taskVariances.length : 0
+  const isConsistent = meanVariance < 0.05 // Variance < 5% is considered consistent
+
+  return {
+    taskSuccessRate,
+    advantageConsistency: {
+      mean: taskSuccessRate.mean,
+      variance: meanVariance,
+      isConsistent,
+    },
+    transferability,
+  }
+}
+
+/**
+ * Calculate consistency of grep vs search advantage across codebases
+ *
+ * Measures whether the search advantage (search - grep) is similar across
+ * different codebases. High consistency means the task generalizes well.
+ *
+ * @param grepResults - Map of codebase IDs to grep success rates
+ * @param searchResults - Map of codebase IDs to search success rates
+ * @returns Consistency metrics
+ *
+ * @example
+ * ```typescript
+ * const grep = new Map([
+ *   ['codebase1', 0.2],
+ *   ['codebase2', 0.25],
+ *   ['codebase3', 0.22]
+ * ])
+ * const search = new Map([
+ *   ['codebase1', 0.8],
+ *   ['codebase2', 0.75],
+ *   ['codebase3', 0.82]
+ * ])
+ * const consistency = calculateAdvantageConsistency(grep, search)
+ * console.log('Advantage is consistent:', consistency.isConsistent)
+ * console.log('Mean gap:', consistency.meanGap)
+ * ```
+ */
+export function calculateAdvantageConsistency(
+  grepResults: Map<string, number>,
+  searchResults: Map<string, number>,
+): {
+  meanGap: number
+  variance: number
+  isConsistent: boolean
+  perCodebase: Array<{ codebase: string; gap: number }>
+} {
+  const gaps: number[] = []
+  const perCodebase: Array<{ codebase: string; gap: number }> = []
+
+  for (const [codebase, grepRate] of grepResults) {
+    const searchRate = searchResults.get(codebase)
+    if (searchRate !== undefined) {
+      const gap = searchRate - grepRate
+      gaps.push(gap)
+      perCodebase.push({ codebase, gap })
+    }
+  }
+
+  if (gaps.length === 0) {
+    throw new Error('No matching codebase results between grep and search')
+  }
+
+  const meanGap = gaps.reduce((sum, g) => sum + g, 0) / gaps.length
+  const variance = gaps.reduce((sum, g) => sum + Math.pow(g - meanGap, 2), 0) / gaps.length
+  const isConsistent = variance < 0.05 // Variance < 5% is considered consistent
+
+  return {
+    meanGap,
+    variance,
+    isConsistent,
+    perCodebase,
+  }
+}
+
+/**
+ * Format generalization metrics as human-readable text
+ *
+ * @param metrics - Generalization metrics to format
+ * @returns Formatted text description
+ */
+export function formatGeneralizationMetrics(metrics: GeneralizationMetrics): string {
+  const lines: string[] = []
+
+  lines.push('GENERALIZATION METRICS')
+  lines.push('-'.repeat(60))
+  lines.push('')
+
+  // Task success rates
+  lines.push('Task Success Rate Across Codebases:')
+  lines.push(`  Mean: ${(metrics.taskSuccessRate.mean * 100).toFixed(1)}%`)
+  lines.push(`  Std Dev: ${(metrics.taskSuccessRate.stdDev * 100).toFixed(1)}%`)
+  lines.push(
+    `  Range: ${(metrics.taskSuccessRate.min * 100).toFixed(1)}% - ${(metrics.taskSuccessRate.max * 100).toFixed(1)}%`,
+  )
+  lines.push('')
+
+  // Advantage consistency
+  lines.push('Advantage Consistency:')
+  lines.push(`  Mean: ${(metrics.advantageConsistency.mean * 100).toFixed(1)}%`)
+  lines.push(`  Variance: ${(metrics.advantageConsistency.variance * 100).toFixed(2)}%`)
+  lines.push(`  Consistent: ${metrics.advantageConsistency.isConsistent ? 'YES' : 'NO'}`)
+  lines.push('')
+
+  // Transferability
+  lines.push('Task Transferability:')
+  const universal = metrics.transferability.filter((t) => t.score >= 0.8)
+  const partial = metrics.transferability.filter((t) => t.score >= 0.4 && t.score < 0.8)
+  const limited = metrics.transferability.filter((t) => t.score < 0.4)
+
+  lines.push(`  Universal (≥80%): ${universal.length} tasks`)
+  for (const t of universal) {
+    lines.push(`    - ${t.taskId}: ${(t.score * 100).toFixed(0)}% (${t.successCount}/${t.totalCount})`)
+  }
+
+  lines.push(`  Partial (40-80%): ${partial.length} tasks`)
+  for (const t of partial) {
+    lines.push(`    - ${t.taskId}: ${(t.score * 100).toFixed(0)}% (${t.successCount}/${t.totalCount})`)
+  }
+
+  lines.push(`  Limited (<40%): ${limited.length} tasks`)
+  for (const t of limited) {
+    lines.push(`    - ${t.taskId}: ${(t.score * 100).toFixed(0)}% (${t.successCount}/${t.totalCount})`)
+  }
+
+  return lines.join('\n')
+}
