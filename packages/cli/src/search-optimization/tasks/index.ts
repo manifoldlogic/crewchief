@@ -8,6 +8,11 @@ import { TASK_FIND_CLI_ENTRY, TASK_FIND_SDK_CONFIG } from './config.js'
 import { TASK_FIND_CLI_ERROR_HANDLING, TASK_FIND_WORKTREE_ERRORS, TASK_FIND_SDK_ERRORS } from './errors.js'
 import { TASK_FIND_WORKTREE_CREATION, TASK_FIND_AGENT_SPAWNING, TASK_FIND_VARIANT_INJECTION } from './implementation.js'
 import { TASK_FIND_RELATED_TESTS, TASK_FIND_RELATED_TYPES } from './related.js'
+import {
+  TASK_TRANSITIVE_DEPENDENCIES,
+  TASK_CALL_CHAIN_TRACING,
+  TASK_API_IMPACT_ANALYSIS,
+} from './relationship-discovery/index.js'
 
 /**
  * All available search tasks
@@ -34,6 +39,11 @@ export const ALL_TASKS: SearchTask[] = [
   // Type 4: Finding Related (2 tasks - easy/medium)
   TASK_FIND_RELATED_TESTS,
   TASK_FIND_RELATED_TYPES,
+
+  // Type 6: Relationship Discovery (3 tasks - hard/grep-impossible)
+  TASK_TRANSITIVE_DEPENDENCIES,
+  TASK_CALL_CHAIN_TRACING,
+  TASK_API_IMPACT_ANALYSIS,
 ]
 
 /**
@@ -86,4 +96,7 @@ export {
   TASK_FIND_SDK_CONFIG,
   TASK_FIND_RELATED_TESTS,
   TASK_FIND_RELATED_TYPES,
+  TASK_TRANSITIVE_DEPENDENCIES,
+  TASK_CALL_CHAIN_TRACING,
+  TASK_API_IMPACT_ANALYSIS,
 }
