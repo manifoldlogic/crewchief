@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { loadConfig } from '../config/loader'
+import type { SearchTask, TaskScore } from '../search-optimization/types.js'
 import { runCommand } from '../utils/exec'
 
 export interface CheckResult {
@@ -12,6 +13,39 @@ export interface CheckResult {
 export interface EvaluationSummary {
   results: CheckResult[]
   score: number // 0..1
+}
+
+/**
+ * Extended evaluation summary for search tasks
+ */
+export interface SearchEvaluationSummary extends EvaluationSummary {
+  task: SearchTask
+  taskScore: TaskScore
+
+  // Search-specific metrics
+  searchMetrics: {
+    searchCount: number
+    avgResultsPerSearch: number
+    queriesIssued: string[]
+    targetFound: boolean
+    targetFoundInTop: number | null // null if not found, else rank (1-20)
+  }
+
+  // Tool usage
+  toolUsage: {
+    totalToolCalls: number
+    searchToolCalls: number
+    otherToolCalls: Record<string, number>
+  }
+
+  // Timing
+  timing: {
+    totalSeconds: number
+    timeToTarget: number | null // null if not found
+  }
+
+  // Overall
+  compositeScore: number // 0-1 (from task validator)
 }
 
 export async function runDefaultChecks(worktreePath: string, runDir: string): Promise<EvaluationSummary> {

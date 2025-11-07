@@ -251,7 +251,7 @@ export function createTaskValidator(task: {
 
     const efficiency = calculateEfficiency(result.searchCount, result.toolCallCount, result.durationSeconds)
 
-    const total = searchQuality * 0.4 + taskCompletion * 0.4 + efficiency * 0.2
+    const total = Math.min(1, Math.max(0, searchQuality * 0.4 + taskCompletion * 0.4 + efficiency * 0.2))
 
     const details = [
       `Search quality: ${(searchQuality * 100).toFixed(0)}% (target ${searchQuality >= 0.7 ? 'found' : 'not found well'})`,
