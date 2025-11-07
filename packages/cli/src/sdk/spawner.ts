@@ -4,7 +4,8 @@
 
 import { query, type Options, type Query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { getSDKConfig } from './config.js'
-import type { AgentSpawnOptions, AgentResult, ToolUseEvent, ToolResultEvent } from './types.js'
+import type { AgentSpawnOptions, AgentResult, ToolUseEvent, ToolResultEvent, Variant } from './types.js'
+import { createVariantWorktree } from './variant-injection.js'
 
 /**
  * Spawn an agent using the Claude Code Agents SDK
@@ -231,4 +232,74 @@ function buildSDKHooks(agentHooks: AgentSpawnOptions['hooks']): Options['hooks']
   }
 
   return hooks
+}
+
+/**
+ * Spawn an agent with a specific tool description variant
+ *
+ * This function:
+ * 1. Creates a variant worktree with modified tool description
+ * 2. Spawns an agent in that worktree
+ * 3. Cleans up the variant worktree after completion
+ *
+ * @param task - Task/prompt for the agent to execute
+ * @param variant - Tool description variant to use
+ * @param hooks - Optional lifecycle hooks
+ * @param options - Additional agent spawn options
+ * @returns Agent execution result
+ *
+ * @example
+ * ```typescript
+ * const variant = {
+ *   id: 'variant-a-detailed',
+ *   name: 'Detailed',
+ *   description: 'Enhanced search description...',
+ * }
+ *
+ * const result = await spawnAgentWithVariant(
+ *   'Find authentication implementation',
+ *   variant,
+ *   {
+ *     onToolUse: (event) => console.log('Tool:', event.tool_name),
+ *     onComplete: (result) => console.log('Done:', result.success),
+ *   }
+ * )
+ * ```
+ */
+export async function spawnAgentWithVariant(
+  task: string,
+  variant: Variant,
+  hooks?: AgentSpawnOptions['hooks'],
+  options?: Partial<AgentSpawnOptions>,
+): Promise<AgentResult> {
+  const config = getSDKConfig()
+
+  if (config.verbose) {
+    console.log('[SDK] Creating variant worktree:', variant.id)
+  }
+
+  // Create variant worktree
+  const { path: variantWorktreePath, cleanup } = await createVariantWorktree(variant)
+
+  try {
+    if (config.verbose) {
+      console.log('[SDK] Spawning agent in variant worktree:', variantWorktreePath)
+    }
+
+    // Spawn agent in variant worktree
+    const result = await spawnAgent({
+      task,
+      worktreePath: variantWorktreePath,
+      hooks,
+      ...options,
+    })
+
+    return result
+  } finally {
+    // Always cleanup variant worktree
+    if (config.verbose) {
+      console.log('[SDK] Cleaning up variant worktree:', variantWorktreePath)
+    }
+    await cleanup()
+  }
 }

@@ -78,13 +78,30 @@ crewchief agent message <name> <message>
 - Need to integrate `@anthropic-ai/claude-agent-sdk` for programmatic control
 - SDK provides `query()` with custom tool configurations
 
-### 2. Tool Description Variant Injection
-- Need mechanism to swap MCP tool description per agent/worktree
-- Each agent should get different variant without code changes
-- Possible approaches:
-  - Environment variables
-  - Per-worktree config files
-  - Runtime MCP server customization
+### 2. Tool Description Variant Injection ✅ SOLVED
+
+**Solution**: Worktree-based source code modification
+
+**Key Insight**: This repo IS the maproom-mcp repo! We can create worktrees of crewchief itself and modify the tool description source code directly.
+
+**Approach**:
+1. Create worktree of crewchief repo (contains `packages/maproom-mcp/`)
+2. Modify `packages/maproom-mcp/src/tools/search.ts` directly in that worktree
+3. Agent running in that worktree uses its local MCP server with variant
+
+**Benefits**:
+- ✅ No SDK limitations (SDK doesn't support tool description overrides)
+- ✅ No config file complexity
+- ✅ Simple source code changes
+- ✅ True isolation via worktrees (existing infrastructure)
+- ✅ Easy to reproduce and debug
+- ✅ Transparent - variant visible in source code
+
+**Alternative Approaches Discarded**:
+- ❌ SDK tool description overrides - NOT SUPPORTED by SDK (verified in AGENTOPT-1001)
+- ❌ Environment variables - Requires MCP server changes
+- ❌ Per-worktree config files - Requires MCP server changes, adds complexity
+- ❌ Runtime MCP server customization - Too complex
 
 ### 3. Search-Specific Evaluation
 - Current checks are generic (env, events)
@@ -200,33 +217,49 @@ interface SearchTask {
 }
 ```
 
-#### B. SDK-Based Agent Spawner
+#### B. SDK-Based Agent Spawner with Worktree Variant Injection
 ```typescript
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { WorktreeService } from './git/worktree'
+import { writeFileSync, readFileSync } from 'fs'
 
 async function spawnAgentWithVariant(
   task: SearchTask,
-  variant: Variant,
-  worktreePath: string
+  variant: Variant
 ) {
-  return query({
-    prompt: task.description,
-    options: {
-      // Inject variant as custom tool description
-      mcpServers: {
-        maproom: {
-          toolDescriptionOverrides: {
-            search: variant.description
-          }
+  // 1. Create worktree with modified tool description
+  const worktreeService = new WorktreeService(process.cwd())
+  const branchName = `variant-${variant.id}-${Date.now()}`
+  const worktree = await worktreeService.create(branchName)
+
+  // 2. Modify tool description in worktree's MCP server source
+  const toolFile = join(worktree.path, 'packages/maproom-mcp/src/tools/search.ts')
+  let content = readFileSync(toolFile, 'utf-8')
+  content = content.replace(
+    /description:\s*`[^`]+`/,
+    `description: \`${variant.description}\``
+  )
+  writeFileSync(toolFile, content)
+
+  try {
+    // 3. Spawn agent in variant worktree
+    return query({
+      prompt: task.description,
+      options: {
+        // Agent uses local MCP server from this worktree
+        workingDirectory: worktree.path,
+        // Hooks for capturing behavior
+        hooks: {
+          PostToolUse: [{
+            hooks: [(event) => logToolUse(event)]
+          }]
         }
-      },
-      // Hooks for capturing behavior
-      hooks: {
-        PostToolUse: (event) => logToolUse(event)
-      },
-      workingDirectory: worktreePath
-    }
-  })
+      }
+    })
+  } finally {
+    // 4. Cleanup variant worktree
+    await worktreeService.remove(branchName)
+  }
 }
 ```
 

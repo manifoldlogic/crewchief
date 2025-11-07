@@ -1,9 +1,9 @@
 # Ticket: AGENTOPT-1003 - Extend Competition Framework for Search Tasks
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -30,12 +30,12 @@ The crewchief CLI already has a competition framework at `packages/cli/src/orche
 
 ## Acceptance Criteria
 
-- [ ] Extend `Competition` interface for search tasks
-- [ ] Integrate with SDK spawner (from AGENTOPT-1001)
-- [ ] Support variant assignment per participant
-- [ ] Capture search tool usage metrics
-- [ ] Update `CompetitionManager` to handle search competitions
-- [ ] Verification test with 2 agents on same search task
+- [x] Extend `Competition` interface for search tasks
+- [x] Integrate with SDK spawner (from AGENTOPT-1001)
+- [x] Support variant assignment per participant
+- [x] Capture search tool usage metrics
+- [x] Update `CompetitionManager` to handle search competitions
+- [x] Verification test with 2 agents on same search task
 
 ## Technical Requirements
 
@@ -80,10 +80,11 @@ export class SearchCompetitionManager extends CompetitionManager {
       const worktree = await this.createWorktree(participant.id)
 
       // Spawn SDK agent with variant
+      // Note: spawnAgentWithVariant creates its own variant worktree
+      // and modifies the tool description source code
       const agent = await spawnAgentWithVariant(
         task.description,
         participant.variant!,
-        worktree.path,
         {
           onToolUse: (event) => this.recordToolUse(participant.id, event),
           onComplete: (result) => this.recordCompletion(participant.id, result)

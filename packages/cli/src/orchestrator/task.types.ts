@@ -23,3 +23,18 @@ export interface TaskAssignment {
   status: 'assigned' | 'in-progress' | 'complete' | 'failed'
   runId?: string
 }
+
+/**
+ * Search-specific task for agent competitions
+ * Used to test tool description variants
+ */
+export interface SearchTask extends Task {
+  /** Target files/functions/classes the agent should find */
+  targets: string[]
+
+  /** Validation function to check if agent succeeded */
+  validate?: (result: any) => boolean
+
+  /** Additional context provided to the agent */
+  context?: string
+}

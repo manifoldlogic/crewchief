@@ -114,3 +114,27 @@ export interface SDKConfig {
   /** Enable verbose logging */
   verbose?: boolean
 }
+
+/**
+ * Represents a tool description variant for competitive testing
+ * (simplified from maproom-mcp variant type)
+ */
+export interface Variant {
+  /** Unique identifier (e.g., "variant-a-detailed") */
+  id: string
+
+  /** Human-readable name */
+  name: string
+
+  /** The full tool description text */
+  description: string
+
+  /** Token count (optional, for validation) */
+  tokens?: number
+
+  /** Generation number (optional) */
+  generation?: number
+
+  /** Optional notes */
+  notes?: string
+}

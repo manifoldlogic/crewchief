@@ -1258,3 +1258,234 @@ function detectConvergence(history: Experiment[]): boolean {
 2. **Custom query language**: Adds complexity for marginal benefit
 3. **Per-user models**: Too expensive, poor ROI
 4. **Interactive refinement**: Breaks agent flow
+
+---
+
+## Updated Architecture: SDK-Based Agent Competition Testing (2025)
+
+**Date**: November 2025
+**Status**: CURRENT APPROACH
+
+### Strategic Pivot
+
+**FROM**: Live user A/B testing with production traffic  
+**TO**: Automated SDK-based agent competitions
+
+**Rationale**:
+- User requested automated testing, not production A/B tests
+- SDK provides programmatic agent control
+- Existing crewchief competition framework provides infrastructure
+- Faster iteration, no production risk
+- Reproducible, deterministic testing
+
+### Worktree-Based Variant Injection Architecture
+
+```
+┌───────────────────────────────────────────────────────┐
+│                 Competition Manager                    │
+│                                                        │
+│  For each variant (A, B, C...):                       │
+│  1. Create worktree of crewchief repo                 │
+│  2. Modify packages/maproom-mcp/src/tools/search.ts  │
+│  3. Spawn SDK agent in that worktree                  │
+└─────────────┬─────────────────────────────────────────┘
+              │
+              │ Creates multiple worktrees in parallel
+              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Variant Worktrees (Isolated Git Worktrees)                 │
+│                                                              │
+│  worktree-variant-A/             worktree-variant-B/        │
+│  └─ packages/maproom-mcp/        └─ packages/maproom-mcp/   │
+│     └─ src/tools/search.ts           └─ src/tools/search.ts│
+│        description: "Variant A"        description: "..."   │
+└──────────┬──────────────────────────┬─────────────────────┘
+           │                          │
+           │ Each agent uses          │
+           │ local MCP server         │
+           ↓                          ↓
+   ┌──────────────┐          ┌──────────────┐
+   │  SDK Agent A │          │  SDK Agent B │
+   │              │          │              │
+   │  Uses local  │          │  Uses local  │
+   │  MCP server  │          │  MCP server  │
+   │  (Variant A) │          │  (Variant B) │
+   └──────┬───────┘          └──────┬───────┘
+          │                         │
+          │  Search tasks           │  Search tasks
+          │                         │
+          ↓                         ↓
+   ┌────────────────────────────────────────┐
+   │        Task Completion Metrics         │
+   │  - Success rate                        │
+   │  - Search efficiency                   │
+   │  - Result relevance                    │
+   │  - Query quality                       │
+   └────────────────────────────────────────┘
+```
+
+### Key Insight: Self-Modifying Repo
+
+**This repo IS the MCP server repo!**
+
+The crewchief repository contains:
+- `packages/cli/` - Competition framework, SDK integration
+- `packages/maproom-mcp/` - MCP server with search tool
+
+**Implication**: We can create worktrees and modify the MCP server source code directly.
+
+**Before** (assumed SDK supported overrides):
+```typescript
+query({
+  mcpServers: {
+    maproom: {
+      toolOverrides: { search: variant.description } // ❌ NOT SUPPORTED
+    }
+  }
+})
+```
+
+**After** (worktree source modification):
+```typescript
+// 1. Create worktree
+const worktree = await worktreeService.create(`variant-${variantId}`)
+
+// 2. Modify source code in worktree
+const toolFile = join(worktree.path, 'packages/maproom-mcp/src/tools/search.ts')
+let content = readFileSync(toolFile, 'utf-8')
+content = content.replace(/description:\s*`[^`]+`/, `description: \`${variant.description}\``)
+writeFileSync(toolFile, content)
+
+// 3. Spawn agent in variant worktree
+query({ workingDirectory: worktree.path })
+```
+
+### Benefits Over Alternative Approaches
+
+| Approach | SDK Support | Complexity | Transparency | Isolation |
+|----------|-------------|------------|--------------|-----------|
+| SDK tool overrides | ❌ No | Low | High | Perfect |
+| Config files | N/A | Medium | Medium | Perfect |
+| Environment vars | N/A | Medium | Low | Perfect |
+| **Worktree source mod** | ✅ Yes | **Low** | **High** | **Perfect** |
+
+**Winner**: Worktree source modification
+- ✅ Works with SDK as-is (no unsupported features)
+- ✅ Simple: direct source code changes
+- ✅ Transparent: variant visible in code, easy to debug
+- ✅ Leverages existing worktree infrastructure
+- ✅ No MCP server changes required
+
+### Competition Flow
+
+1. **Define Search Tasks** (AGENTOPT-1004)
+   - Real-world scenarios ("Find authentication code")
+   - Clear success criteria (must find file X or function Y)
+   - Verifiable outcomes (check if agent modified correct files)
+
+2. **Generate Variants** (AGENTOPT-0002)
+   - Manual variants (detailed, minimal, structured, etc.)
+   - Genetic mutations for iteration
+
+3. **Create Variant Worktrees** (AGENTOPT-1002)
+   ```typescript
+   for (const variant of variants) {
+     const worktree = await createVariantWorktree(variant)
+     worktrees.push(worktree)
+   }
+   ```
+
+4. **Spawn SDK Agents** (AGENTOPT-1001 + 1003)
+   ```typescript
+   const results = await Promise.all(
+     worktrees.map(wt => 
+       spawnAgent({ 
+         task: searchTask.description,
+         worktreePath: wt.path,
+         hooks: { onToolUse: captureMetrics }
+       })
+     )
+   )
+   ```
+
+5. **Evaluate Results** (AGENTOPT-1005)
+   - Task completion: Did agent succeed?
+   - Search efficiency: How many searches?
+   - Result quality: Were results relevant?
+   - Composite score: 0-1 scale
+
+6. **Select Winner** (AGENTOPT-1006)
+   - Highest score wins
+   - Winner becomes baseline for next generation
+
+7. **Iterate** (AGENTOPT-1007, optional)
+   - Mutate winner to create new variants
+   - Run new competition
+
+### Parallel Execution Model
+
+**Each agent runs in isolated worktree**:
+- Separate git worktree (existing feature)
+- Modified MCP server source (variant-specific)
+- Independent SDK query process
+- Isolated file system changes
+
+**No interference**:
+- Git worktrees prevent conflicts
+- SDK manages separate sessions
+- Each agent sees only its variant
+
+**Cleanup**:
+```typescript
+try {
+  const result = await spawnAgentWithVariant(task, variant)
+  return result
+} finally {
+  await worktree.cleanup()  // Remove variant worktree
+}
+```
+
+### Integration with Existing Infrastructure
+
+**Leverages**:
+- ✅ WorktreeService (`packages/cli/src/git/worktree.ts`)
+- ✅ CompetitionManager (`packages/cli/src/orchestrator/competition.ts`)
+- ✅ Evaluation framework (`packages/cli/src/evaluation/checks.ts`)
+- ✅ Message bus (`packages/cli/src/bus/`)
+
+**Extends**:
+- SearchCompetitionManager (subclass of CompetitionManager)
+- Search-specific evaluation checks
+- SDK agent spawning (instead of iTerm2)
+
+**Adds**:
+- Variant worktree creation (`packages/cli/src/sdk/variant-injection.ts`)
+- Tool description modification utilities
+- Search task definitions (`packages/cli/src/search-optimization/tasks/`)
+
+### Cost Model
+
+**Infrastructure**: $0 (uses existing crewchief CLI)  
+**Agent execution**: ~$0.01-0.10 per agent per task (Claude API)  
+**Competition**: ~$0.50-5.00 per competition (5-10 agents × 5-10 tasks)
+
+**Total per iteration**: ~$5-10 for full evaluation cycle
+
+**Comparison to production A/B testing**:
+- No production risk
+- No user impact
+- No statistical wait time
+- Instant feedback
+- Reproducible results
+
+### Next Steps (Ticket Sequence)
+
+1. ✅ **AGENTOPT-1001**: SDK Integration (COMPLETE)
+2. 🔄 **AGENTOPT-1002**: Worktree Variant Injection
+3. **AGENTOPT-1003**: Competition Framework Extension
+4. **AGENTOPT-1004**: Search Task Library
+5. **AGENTOPT-1005**: Evaluation Framework
+6. **AGENTOPT-1006**: Competition Runner
+7. **AGENTOPT-1007**: Genetic Iteration (Optional)
+
+---

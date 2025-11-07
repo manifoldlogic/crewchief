@@ -3,8 +3,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { evaluateAndMaybeMerge } from './autoMerge'
 import { RunManager } from './runManager'
-import { Task } from './task.types'
+import { Task, SearchTask } from './task.types'
 import { runDefaultChecks } from '../evaluation/checks'
+import type { Variant } from '../sdk/types'
 import { ensureDirSync, writeJsonSync, readJsonSync } from '../utils/fs'
 
 export interface CompetitionParticipant {
@@ -21,6 +22,31 @@ export interface Competition {
   winner?: string // agentId
   createdAt: string
   evaluatedAt?: string
+}
+
+/**
+ * Search-specific competition participant with variant and metrics
+ */
+export interface SearchCompetitionParticipant extends CompetitionParticipant {
+  /** Tool description variant assigned to this participant */
+  variant?: Variant
+
+  /** Search tool usage metrics */
+  searchMetrics?: {
+    searchCount: number
+    avgResultsPerSearch: number
+    queriesIssued: string[]
+    toolCallCount: number
+    durationSeconds: number
+  }
+}
+
+/**
+ * Search-specific competition with search task and metrics
+ */
+export interface SearchCompetition extends Competition {
+  task: SearchTask
+  participants: SearchCompetitionParticipant[]
 }
 
 export class CompetitionManager {
