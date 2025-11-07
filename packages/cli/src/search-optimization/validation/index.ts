@@ -48,3 +48,26 @@ export type {
   ScenarioType,
   TaskFrequency,
 } from './ecological.js'
+
+// Report generation exports
+export {
+  ReportGenerator,
+  generateSummary,
+  generatePerTaskResults,
+  identifyPatterns,
+  generateRecommendations,
+  formatMarkdown,
+  formatJSON,
+  formatConsole,
+} from './reporter.js'
+
+export type {
+  ReportConfig,
+  Report,
+  ReportMetadata,
+  SummarySection,
+  TaskResultSection,
+  PatternSection,
+  RecommendationSection,
+  FailurePattern,
+} from './reporter.js'

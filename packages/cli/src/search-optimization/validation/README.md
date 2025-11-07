@@ -1,10 +1,16 @@
-# Task Validator
+# Task Validation Infrastructure
 
 Validates search tasks across 5 quality dimensions to ensure benchmark suite reliability and validity.
 
 ## Overview
 
 This is **validation infrastructure** for task design quality, not for running expensive LLM benchmarks. By default, it operates in **mock mode**, using expected metrics from task definitions to validate design quality without API costs.
+
+The framework includes three major components:
+
+- **Task Validator** (`task-validator.ts`) - Core validation logic across 5 dimensions
+- **Ecological Validator** (`ecological.ts`) - Real-world scenario validation
+- **Report Generator** (`reporter.ts`) - Comprehensive validation reports
 
 ## The 5 Validation Dimensions
 
@@ -100,6 +106,46 @@ const failedTasks = result.taskResults.filter((r) => !r.passed)
 for (const task of failedTasks) {
   console.log(`${task.task.id}: ${task.recommendations.join(', ')}`)
 }
+```
+
+### Generate Validation Reports
+
+```typescript
+import { ReportGenerator } from './validation'
+import { validateSuite } from './validation'
+import { TIER1_SUITE } from '../benchmarks/tier1-impossible'
+
+// Validate suite
+const suiteResult = await validateSuite(TIER1_SUITE)
+
+// Generate markdown report
+const generator = new ReportGenerator({
+  format: 'markdown',
+  includePatterns: true,
+  includeRecommendations: true,
+})
+
+const report = generator.generate(suiteResult.taskResults, 'tier1-impossible', 'tier1')
+
+// Save to file
+await generator.save(report)
+// Output: ./reports/validation-report-tier1-impossible-2025-01-01T00-00-00.md
+
+// Or print to console
+generator.print(report)
+
+// Analyze patterns programmatically
+if (report.patterns) {
+  const tooEasy = report.patterns.find((p) => p.pattern === 'too-easy')
+  if (tooEasy) {
+    console.log(`${tooEasy.count} tasks are too easy for grep`)
+    console.log(`Affected tasks: ${tooEasy.taskIds.join(', ')}`)
+  }
+}
+
+// Get high priority recommendations
+const highPriority = report.recommendations?.filter((r) => r.priority === 'high')
+console.log(`${highPriority?.length} tasks need immediate attention`)
 ```
 
 ### Custom Thresholds
@@ -251,6 +297,117 @@ npx tsx src/search-optimization/validation/example.ts
 3. **Fix Issues**: Address failed dimensions based on recommendations
 4. **Add to Suite**: Once validated, add to benchmark suite
 5. **Real Validation** (manual): Eventually run baseline-runner for actual metrics
+
+## Report Formats
+
+The Report Generator supports three output formats:
+
+### Markdown (Primary)
+
+Human-readable reports with:
+
+- Summary statistics and pass/fail counts
+- Dimension breakdown table
+- Per-task results with status indicators (✅/❌)
+- Failure pattern analysis
+- Prioritized recommendations
+
+Example output structure:
+
+```markdown
+# Validation Report
+
+**Generated:** 2025-01-01T00:00:00.000Z
+**Total Tasks:** 10
+
+## Summary
+
+✅ **Overall:** 8/10 tasks passed (80.0%)
+
+## Per-Task Results
+
+### ✅ TASK-001: Find transitive dependencies
+
+| Dimension             | Status | Actual        | Expected |
+| --------------------- | ------ | ------------- | -------- |
+| Construct Validity    | ✅     | 25%           | ≤ 30%    |
+| Discriminant Validity | ✅     | 75% (Δ +50pp) | ≥ 70%    |
+
+...
+
+## Failure Patterns
+
+### Tasks that are too easy for grep
+
+**Count:** 2 tasks
+**Affected Tasks:** TASK-002, TASK-005
+```
+
+### JSON (Structured Data)
+
+Machine-readable format for:
+
+- Programmatic analysis
+- CI/CD integration
+- External reporting tools
+- Data pipelines
+
+```json
+{
+  "metadata": {
+    "timestamp": "2025-01-01T00:00:00.000Z",
+    "version": "1.0.0",
+    "totalTasks": 10
+  },
+  "summary": {
+    "total": 10,
+    "passed": 8,
+    "failed": 2,
+    "passRate": 80,
+    "dimensionBreakdown": { ... }
+  },
+  "patterns": [ ... ],
+  "recommendations": [ ... ]
+}
+```
+
+### Console (Quick View)
+
+Terminal-friendly output for:
+
+- Quick validation checks
+- Development workflow
+- CI/CD status summaries
+
+```
+════════════════════════════════════════════════════════════════════════════════
+VALIDATION REPORT: tier1-impossible
+════════════════════════════════════════════════════════════════════════════════
+
+✅ Overall: 8/10 passed (80.0%)
+
+Dimension Status:
+  ✅ Construct Validity: 9/10 (90%)
+  ⚠️  Discriminant Validity: 8/10 (80%)
+  ✅ Ecological Validity: 10/10 (100%)
+
+Failed Tasks (2):
+  ❌ TASK-002: Find code patterns
+     Failed: Construct Validity, Discriminant Validity
+```
+
+## Report Files
+
+Generated reports are saved to:
+
+```
+src/search-optimization/validation/reports/
+├── validation-report-tier1-impossible-2025-01-01T00-00-00.md
+├── validation-report-tier2-hard-2025-01-01T12-30-00.md
+└── ...
+```
+
+File naming: `validation-report-{suite-name}-{timestamp}.{md|json}`
 
 ## API Reference
 
