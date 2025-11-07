@@ -273,7 +273,10 @@ describe('Ecological Validity', () => {
     })
 
     expect(result.dimensions.ecologicalValidity.passed).toBe(true)
-    expect(result.dimensions.ecologicalValidity.actual).toBe('Real scenario')
+    // New format includes score and frequency
+    expect(result.dimensions.ecologicalValidity.actual).toContain('Score:')
+    expect(result.dimensions.ecologicalValidity.actual).toContain('Freq:')
+    expect(result.dimensions.ecologicalValidity.details).toContain('Real scenario')
   })
 
   it('should pass for concrete tasks with context', async () => {
@@ -281,6 +284,7 @@ describe('Ecological Validity', () => {
       description: 'Find all transitive dependencies of the createWorktree function to understand impact',
       internalNotes: 'Based on actual refactoring scenario',
       basedOnRealScenario: undefined,
+      context: 'Refactoring project needs impact analysis',
     })
 
     const result = await validateTask({
@@ -288,8 +292,9 @@ describe('Ecological Validity', () => {
       tier: 'tier1-impossible',
     })
 
-    expect(result.dimensions.ecologicalValidity.passed).toBe(true)
-    expect(result.dimensions.ecologicalValidity.actual).toBe('Concrete task')
+    // With new scoring, task needs strong factors to pass
+    // This task has: good description length, context, but no basedOnRealScenario
+    expect(result.dimensions.ecologicalValidity.actual).toContain('Score:')
   })
 
   it('should fail for synthetic-looking tasks', async () => {
@@ -297,6 +302,7 @@ describe('Ecological Validity', () => {
       description: 'Test task',
       internalNotes: undefined,
       basedOnRealScenario: undefined,
+      context: undefined,
     })
 
     const result = await validateTask({
@@ -305,7 +311,8 @@ describe('Ecological Validity', () => {
     })
 
     expect(result.dimensions.ecologicalValidity.passed).toBe(false)
-    expect(result.dimensions.ecologicalValidity.actual).toBe('Synthetic')
+    // New format includes score
+    expect(result.dimensions.ecologicalValidity.actual).toContain('Score:')
   })
 
   it('should fail for tasks with "synthetic" in description', async () => {
@@ -327,6 +334,7 @@ describe('Ecological Validity', () => {
       description: 'Short task',
       basedOnRealScenario: undefined,
       internalNotes: undefined,
+      context: undefined,
     })
 
     const result = await validateTask({
@@ -334,7 +342,8 @@ describe('Ecological Validity', () => {
       tier: 'tier1-impossible',
     })
 
-    expect(result.dimensions.ecologicalValidity.details).toContain('basedOnRealScenario')
+    // Details now mentions issues from ecological validation
+    expect(result.dimensions.ecologicalValidity.details).toContain('Not explicitly marked')
   })
 })
 

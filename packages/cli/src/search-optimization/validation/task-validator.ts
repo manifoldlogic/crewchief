@@ -26,6 +26,7 @@
 
 import type { BenchmarkSuite } from '../benchmarks/tier1-impossible.js'
 import type { SearchTask } from '../types.js'
+import { validateEcologicalValidity as validateEcologicalValidityFull } from './ecological.js'
 
 /**
  * Configuration for task validation
@@ -198,7 +199,7 @@ export interface SuiteValidationResult {
  */
 function validateConstructValidity(task: SearchTask, thresholds: TierThresholds, useMockData = true): DimensionResult {
   // In mock mode, use expected success rate from task definition
-  const grepSuccess = useMockData ? ((task as any).expectedGrepSuccess ?? 0.5) : 0.5 // Real mode not implemented
+  const grepSuccess = useMockData ? ((task as SearchTask & Record<string, unknown>).expectedGrepSuccess ?? 0.5) : 0.5 // Real mode not implemented
 
   const passed = grepSuccess <= thresholds.grepMaxSuccess
 
@@ -229,9 +230,11 @@ function validateDiscriminantValidity(
   useMockData = true,
 ): DimensionResult {
   // In mock mode, use expected success rates
-  const searchSuccess = useMockData ? ((task as any).expectedSearchSuccess ?? 0.5) : 0.5 // Real mode not implemented
+  const searchSuccess = useMockData
+    ? ((task as SearchTask & Record<string, unknown>).expectedSearchSuccess ?? 0.5)
+    : 0.5 // Real mode not implemented
 
-  const grepSuccess = useMockData ? ((task as any).expectedGrepSuccess ?? 0.5) : 0.5
+  const grepSuccess = useMockData ? ((task as SearchTask & Record<string, unknown>).expectedGrepSuccess ?? 0.5) : 0.5
 
   const advantage = searchSuccess - grepSuccess
 
@@ -278,29 +281,23 @@ function validateDiscriminantValidity(
  * Validate Dimension 3: Ecological Validity (Realism)
  *
  * Ensures the task reflects realistic developer scenarios.
- * This dimension requires human judgment and cannot be fully automated.
+ * Uses comprehensive ecological validation module.
  * In mock mode: Checks for realism indicators in task definition.
  *
  * @param task - The task to validate
  */
 function validateEcologicalValidity(task: SearchTask): DimensionResult {
-  // Check for realism indicators
-  const hasRealScenario = (task as any).basedOnRealScenario === true
-  const hasInternalNotes = !!(task as any).internalNotes
-  const descriptionLength = task.description.length
-  const isConcreteTask = descriptionLength > 50 && !task.description.includes('synthetic')
-
-  // At least one strong indicator of realism
-  const passed = hasRealScenario || (isConcreteTask && hasInternalNotes)
+  // Use comprehensive ecological validation module
+  const ecologicalResult = validateEcologicalValidityFull(task)
 
   return {
     dimension: 'Ecological Validity (Realism)',
-    passed,
-    actual: hasRealScenario ? 'Real scenario' : isConcreteTask ? 'Concrete task' : 'Synthetic',
-    expected: 'Based on real developer scenarios',
-    details: passed
-      ? `Task appears realistic: ${hasRealScenario ? 'explicitly marked as real scenario' : 'concrete description with context'}. Represents genuine developer needs.`
-      : "Task may lack ecological validity. Consider: Is this based on a real scenario? Would developers actually need to do this? Add 'basedOnRealScenario: true' if applicable.",
+    passed: ecologicalResult.passed,
+    actual: `Score: ${(ecologicalResult.score * 100).toFixed(0)}%, Freq: ${ecologicalResult.checks.frequency}`,
+    expected: 'Score ≥ 60%, realistic scenario',
+    details: ecologicalResult.passed
+      ? `Task passed ecological validation (${(ecologicalResult.score * 100).toFixed(0)}%). ${ecologicalResult.checks.basedOnRealScenario ? 'Real scenario' : 'Concrete task'}, ${ecologicalResult.checks.frequency} frequency, ${ecologicalResult.checks.objectiveSuccessCriteria ? 'objective criteria' : 'some subjectivity'}.`
+      : `Task failed ecological validation (${(ecologicalResult.score * 100).toFixed(0)}%). Issues: ${ecologicalResult.failureReasons?.join(', ')}.`,
   }
 }
 

@@ -25,3 +25,26 @@ export type {
   ValidationResult,
   SuiteValidationResult,
 } from './task-validator.js'
+
+// Ecological validation exports
+export {
+  validateEcologicalValidity,
+  classifyTaskFrequency,
+  validateRealism,
+  calculateEcologicalScore,
+  generateEcologicalRecommendations,
+  formatEcologicalReport,
+  createSurveyTemplate,
+  aggregateSurveyResults,
+  analyzeSurveyFeedback,
+} from './ecological.js'
+
+export type {
+  EcologicalChecks,
+  EcologicalValidationResult,
+  FrequencyClassification,
+  DeveloperSurvey,
+  SurveyResults,
+  ScenarioType,
+  TaskFrequency,
+} from './ecological.js'
