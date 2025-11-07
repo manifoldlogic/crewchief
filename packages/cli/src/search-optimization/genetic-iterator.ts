@@ -295,8 +295,10 @@ export async function loadVariant(idOrPath: string): Promise<Variant> {
     variantPath = idOrPath
   } else {
     // Look in standard variant directory
+    // Navigate from packages/cli to workspace root, then to maproom-mcp
+    const workspaceRoot = join(process.cwd(), '..', '..')
     variantPath = join(
-      process.cwd(),
+      workspaceRoot,
       'packages',
       'maproom-mcp',
       'test',
@@ -320,9 +322,15 @@ export async function loadVariant(idOrPath: string): Promise<Variant> {
  * Save variant to JSON file
  */
 export async function saveVariant(variant: Variant, baseDir?: string): Promise<void> {
-  const variantDir = baseDir
-    ? join(baseDir, 'variants')
-    : join(process.cwd(), 'packages', 'maproom-mcp', 'test', 'tool-description-optimization', 'variants')
+  let variantDir: string
+
+  if (baseDir) {
+    variantDir = join(baseDir, 'variants')
+  } else {
+    // Navigate from packages/cli to workspace root, then to maproom-mcp
+    const workspaceRoot = join(process.cwd(), '..', '..')
+    variantDir = join(workspaceRoot, 'packages', 'maproom-mcp', 'test', 'tool-description-optimization', 'variants')
+  }
 
   mkdirSync(variantDir, { recursive: true })
 

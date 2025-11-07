@@ -4,8 +4,13 @@
 
 import { execSync } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import type { Variant } from './types.js'
+
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 /**
  * Creates a git worktree with a modified tool description variant
