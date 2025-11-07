@@ -49,6 +49,15 @@ export {
   getSuiteStatistics as getTier2SuiteStatistics,
 } from './tier2-hard.js'
 
+// Tier 3 suite (real-world)
+export {
+  TIER3_REALWORLD_SUITE,
+  getTasksByCategory as getTier3TasksByCategory,
+  getTasksByDifficulty as getTier3TasksByDifficulty,
+  getTasksByFrequency as getTier3TasksByFrequency,
+  getSuiteStatistics as getTier3SuiteStatistics,
+} from './tier3-realworld.js'
+
 // Validation
 export {
   validateSuiteComposition,
