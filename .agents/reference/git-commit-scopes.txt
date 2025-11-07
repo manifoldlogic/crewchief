@@ -19,6 +19,7 @@ deps
 embedding
 perf
 release
+research
 search
 tests
 tools
