@@ -23,13 +23,13 @@ This follows the CrewChief workflow: active work in `.agents/`, finalized knowle
 
 ## Acceptance Criteria
 
-- [ ] `docs/architecture/SEARCH_EVALUATION.md` updated with grep-impossible task framework section
-- [ ] Workspace root `README.md` updated with TESTDES framework feature
-- [ ] Project archived to `.agents/archive/projects/TESTDES_grep-impossible-task-design/`
-- [ ] Archive README created with project summary and outcomes
-- [ ] All documentation links verified and working
-- [ ] Handoff document created explaining how to extend/maintain framework
-- [ ] Outstanding issues and future work documented
+- [x] `docs/architecture/SEARCH_EVALUATION.md` updated with grep-impossible task framework section
+- [x] Workspace root `README.md` updated with TESTDES framework feature
+- [x] Project archived to `.agents/archive/projects/TESTDES_grep-impossible-task-design/`
+- [x] Archive README created with project summary and outcomes
+- [x] All documentation links verified and working
+- [x] Handoff document created explaining how to extend/maintain framework
+- [x] Outstanding issues and future work documented
 
 ## Technical Requirements
 
@@ -236,11 +236,11 @@ Verify these links work in final documentation:
 
 ## Success Metrics
 
-- [ ] Framework discoverable from workspace root README
-- [ ] Complete knowledge transfer to permanent docs (no information loss)
-- [ ] Archive properly structured with metadata
-- [ ] Handoff documentation enables future maintenance
-- [ ] All links functional and tested
+- [x] Framework discoverable from workspace root README
+- [x] Complete knowledge transfer to permanent docs (no information loss)
+- [x] Archive properly structured with metadata
+- [x] Handoff documentation enables future maintenance
+- [x] All links functional and tested
 
 ## References
 

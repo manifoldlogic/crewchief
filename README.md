@@ -9,11 +9,12 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 
 ## What's Working
 
-✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees  
-✅ **Semantic Code Search** - Index and search code, docs, and configs using PostgreSQL  
-✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)  
-✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML  
-✅ **Agent Orchestration** - Spawn AI agents in iTerm2 panes with isolated worktrees  
+✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees
+✅ **Semantic Code Search** - Index and search code, docs, and configs using PostgreSQL
+✅ **Grep-Impossible Task Framework** - Scientific validation framework for semantic search value
+✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)
+✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML
+✅ **Agent Orchestration** - Spawn AI agents in iTerm2 panes with isolated worktrees
 ✅ **Agent Communication** - Send messages to agents with proper text submission (chr(13) for Claude)
 
 ## What's In Progress
@@ -109,6 +110,39 @@ crewchief agent message fix-bug__claude --file prompt.md  # Send file contents a
 crewchief agent message fix-bug --all "Update approach"  # Send to ALL agents working on fix-bug
 crewchief agent message "*" --all "Status update"  # Broadcast to ALL running agents
 ```
+
+## Grep-Impossible Task Framework
+
+Scientific validation framework for semantic code search. Provides rigorous, objective proof that semantic search delivers measurable value over traditional grep-based tools through 30+ benchmark tasks across three tiers.
+
+### Three-Tier Validation
+
+**Tier 1: Grep-Impossible** - Tasks grep fundamentally cannot solve (<30% success rate)
+- Transitive dependency analysis
+- Architectural flow tracing
+- Negative space detection (finding code that lacks properties)
+- **Proves**: Semantic search can solve problems grep cannot
+
+**Tier 2: Grep-Hard** - Tasks where semantic search is significantly more efficient
+- Conceptual similarity (finding patterns across different naming)
+- Ambiguity resolution (disambiguating through context)
+- Cross-cutting concerns (scattered functionality)
+- **Proves**: 30-50% faster and more accurate than grep
+
+**Tier 3: Real-World** - Natural developer scenarios without tool coercion
+- Code review, debugging, refactoring tasks
+- Voluntary tool selection based on task characteristics
+- **Proves**: Developers naturally adopt when appropriate
+
+### Key Features
+
+- **Objective Validation**: Binary pass/fail criteria, no subjective judgment
+- **Natural Selection**: Agents choose tools organically—no coercion
+- **Ecological Validity**: All tasks based on real development workflows
+- **Statistical Rigor**: p < 0.05 significance testing, cross-project validation
+- **Integration Ready**: Works with genetic optimization for tool description evolution
+
+See [Search Evaluation Architecture](docs/architecture/SEARCH_EVALUATION.md) for comprehensive details and [Search Optimization Framework](docs/search-optimization/) for implementation guides.
 
 ## Project Structure
 
