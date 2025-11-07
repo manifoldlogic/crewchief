@@ -1,0 +1,11 @@
+{
+  "id": "variant-amplification-gen2-mhoemkia68me",
+  "name": "Amplification Mutation (Gen 2)",
+  "description": "Semantic code search optimized for AI agents - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.\n\n⚠️ NOT FOR:\n- Exact string matching: \"TODO\", \"FIXME\", \"⚠️\", \"console.log\"\n- Special characters or symbols in the query\n- File paths or file names (use Glob instead)\n- Very long queries (>4 words) or implementation-specific names\n\nTransform natural language questions into optimal search queries:\n\n✅ USE GLOB WHEN:\n- Finding files by name pattern: \"*.test.ts\", \"components/**/*.tsx\"\n- Discovering files in specific directories\n- File extension or path-based searches\n\nEXAMPLES:\n  \"How does authentication work?\" → \"authentication\"\n  \"What handles errors?\" → \"error handler\"\n  \"Find auth logic\" → \"authentication\"\n  \"Where is WebSocket disconnect?\" → \"WebSocket disconnect\"\n  - \"function definition\"\n  - \"class implementation\"\n  - \"module exports\"\n\nQUERY BEST PRACTICES:\n- Keep it simple: 1-3 words works best\n- Use concepts: \"auth\" not \"authentication_service_implementation_v2\"\n- Think \"what does this do\" not \"what is it called\"\n- Good: \"error handling\", \"message bus\", \"state management\"\n- Avoid: \"TODO comments\", \"find all ⚠️ markers\", \"src/components/Button.tsx\"\n\n❌ Avoid: Full sentences, questions, special chars\n  - \"How do I handle errors in the checkout?\"\n  - \"function_that_validates_cart_items\"\n  - \"src/cart/checkout.ts\"\n\nSEARCH MODES:\n- \"fts\" (full-text search): Best for exact keyword matches, identifiers\n- \"vector\" (semantic search): Best for conceptual queries, similar code\n- \"hybrid\" (default): Combines both for optimal results\n\nFILTERS: Narrow by file_type, recency, repo_id, worktree_id\nDEBUG: Set debug=true to see score breakdowns",
+  "tokens": 390,
+  "generation": 2,
+  "parent_ids": ["variant-crossover-gen1-mhoeg68ex61i"],
+  "mutation_type": "amplification",
+  "created_at": "2025-11-07T05:17:45.682Z",
+  "notes": "Generated via amplification mutation from 1 parent(s)"
+}

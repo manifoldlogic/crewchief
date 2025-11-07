@@ -1,0 +1,11 @@
+{
+  "id": "variant-amplification-gen1-mhoeg68edtl4",
+  "name": "Amplification Mutation (Gen 1)",
+  "description": "search(query: string, mode?: 'fts' | 'vector' | 'hybrid'): Chunk[]\n\nSemantic code search using hybrid FTS + vector embeddings.\n\nBEST FOR: Finding functions/classes by concept, exploring architecture\n\nUSE WHEN:\n- query describes functionality: \"authentication\", \"error handler\"\n- exploring codebase architecture\n- finding similar implementations\n\nNOT FOR:\n- exact string literals: \"TODO\", \"console.log\" → use grep\n- file paths: \"src/auth.ts\" → use glob\n- regex patterns → use grep\n\nQUERY SYNTAX:\nstring: 1-3 technical terms describing code behavior\n\nEXAMPLES:\n```typescript\nsearch(\"authentication\")        // finds auth-related code\nsearch(\"error handling\")        // finds error handlers\nsearch(\"database connection\")   // finds DB logic\nsearch(\"processCheckout\")       // finds specific functions\n```\n  - \"function definition\"\n  - \"class implementation\"\n  - \"module exports\"\n\nMODE:\n- fts: full-text keyword matching (fast, exact)\n- vector: semantic similarity (flexible, conceptual)\n- hybrid: combined approach (default, balanced)\n\nFILTERS:\n{\n  file_type?: string      // \"ts\", \"rs\", \"md\"\n  recency?: string        // \"7 days\", \"1 month\"\n  repo_id?: number\n  worktree_id?: number\n  debug?: boolean         // show score breakdown\n}\n\nRETURNS:\nChunk[] ranked by relevance (FTS + vector + graph signals)\n\nNOTES:\n- Check status() first to see indexed repos\n- Simple queries outperform complex ones\n- Use concepts not implementation names",
+  "tokens": 302,
+  "generation": 1,
+  "parent_ids": ["variant-d-code-like"],
+  "mutation_type": "amplification",
+  "created_at": "2025-11-07T05:12:47.246Z",
+  "notes": "Generated via amplification mutation from 1 parent(s)"
+}

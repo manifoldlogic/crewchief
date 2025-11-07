@@ -1,0 +1,10 @@
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Glob","tool_input":{"pattern":"**/*worktree*"},"timestamp":1762492241898}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches"},"timestamp":1762492241901}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Grep","tool_input":{"pattern":"git worktree add","output_mode":"files_with_matches"},"timestamp":1762492241902}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762492247427}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762492247428}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Glob","tool_input":{"pattern":"packages/cli/src/git/worktrees.ts"},"timestamp":1762492253184}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Glob","tool_input":{"pattern":"packages/cli/src/cli/worktree.ts"},"timestamp":1762492253186}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-control-1762492225145/packages/cli/src/git/worktrees.ts"},"timestamp":1762492258592}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-control-1762492225145/packages/cli/src/cli/worktree.ts"},"timestamp":1762492258593}
+{"session_id":"564843d1-637d-4ffa-8340-4ef56f3cdd51","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-control-1762492225145/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762492258593}

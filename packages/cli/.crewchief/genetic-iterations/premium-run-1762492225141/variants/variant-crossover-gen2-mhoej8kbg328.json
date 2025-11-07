@@ -1,0 +1,11 @@
+{
+  "id": "variant-crossover-gen2-mhoej8kbg328",
+  "name": "Crossover Mutation (Gen 2)",
+  "description": "Semantic code search optimized for AI agents - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.\n\n🤖 AI AGENT QUERY FORMULATION:\n\nTransform natural language questions into optimal search queries:\n\nTRANSFORMATION PATTERNS:\n1. Extract 2-3 core technical terms\n2. Remove: how, what, where, when, why, does, is, are, the, a, an\n3. Prefer code-like terminology\n\nEXAMPLES:\n  \"How does authentication work?\" → \"authentication\"\n  \"What handles errors?\" → \"error handler\"\n  \"Find auth logic\" → \"authentication\"\n  \"Where is WebSocket disconnect?\" → \"WebSocket disconnect\"\n\nQUERY BEST PRACTICES:\n✅ Good: 2-3 words, concepts, code terms\n  - \"error handling\"\n  - \"cart validation\"\n  - \"WebSocket disconnect\"\n  - \"processCheckout\"\n\n❌ Avoid: Full sentences, questions, special chars\n  - \"How do I handle errors in the checkout?\"\n  - \"function_that_validates_cart_items\"\n  - \"src/cart/checkout.ts\"\n\nMULTI-QUERY STRATEGY:\nIf first query returns <3 results, try variations:\n  Query 1: \"error handling\"\n  → <3 results?\n  Query 2: \"exception handler\"\n  → <3 results?\n  Query 3: \"try catch error\"\n\nFILTERS: Narrow by file_type, recency, repo_id, worktree_id\nDEBUG: Set debug=true to see score breakdowns\n\n⚠️ NOT FOR:\n- Exact string matching: \"TODO\", \"FIXME\"\n- File paths (use Glob instead)\n- Very long queries (>4 words)",
+  "tokens": 318,
+  "generation": 2,
+  "parent_ids": ["variant-crossover-gen1-mhoeg68ex61i", "variant-reduction-gen1-mhoeg68fl0te"],
+  "mutation_type": "crossover",
+  "created_at": "2025-11-07T05:15:10.235Z",
+  "notes": "Generated via crossover mutation from 2 parent(s)"
+}

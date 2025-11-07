@@ -1,0 +1,40 @@
+GENERATION 4 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Amplification Mutation (Gen 2)
+   ID: variant-amplification-gen2-mhoemkia68me
+   Score: 19.8%
+   Generation: 2
+   Mutation: amplification
+
+2. Crossover Mutation (Gen 1)
+   ID: variant-crossover-gen1-mhoeg68ex61i
+   Score: 19.5%
+   Generation: 1
+   Mutation: crossover
+
+3. Specialization Mutation (Gen 2)
+   ID: variant-specialization-gen2-mhoemkiarxd6
+   Score: 19.2%
+   Generation: 2
+   Mutation: specialization
+
+4. Crossover Mutation (Gen 3)
+   ID: variant-crossover-gen3-mhoemki95908
+   Score: 19.1%
+   Generation: 3
+   Mutation: crossover
+
+5. Reduction Mutation (Gen 2)
+   ID: variant-reduction-gen2-mhoemkia3cfp
+   Score: 18.8%
+   Generation: 2
+   Mutation: reduction
+
+SUMMARY
+------------------------------------------------------------
+Best: Amplification Mutation (Gen 2) - 19.8%
+Average: 19.3%
+Improvement: -0.44%

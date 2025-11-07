@@ -1,0 +1,40 @@
+GENERATION 3 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Crossover Mutation (Gen 1)
+   ID: variant-crossover-gen1-mhoeg68ex61i
+   Score: 20.2%
+   Generation: 1
+   Mutation: crossover
+
+2. Specialization Mutation (Gen 2)
+   ID: variant-specialization-gen2-mhoej8kc6m79
+   Score: 19.3%
+   Generation: 2
+   Mutation: specialization
+
+3. Crossover Mutation (Gen 2)
+   ID: variant-crossover-gen2-mhoej8kbg328
+   Score: 18.8%
+   Generation: 2
+   Mutation: crossover
+
+4. Reduction Mutation (Gen 2)
+   ID: variant-reduction-gen2-mhoej8kbu2iq
+   Score: 18.7%
+   Generation: 2
+   Mutation: reduction
+
+5. Amplification Mutation (Gen 2)
+   ID: variant-amplification-gen2-mhoej8kbnt9h
+   Score: 18.5%
+   Generation: 2
+   Mutation: amplification
+
+SUMMARY
+------------------------------------------------------------
+Best: Crossover Mutation (Gen 1) - 20.2%
+Average: 19.1%
+Improvement: -0.09%
