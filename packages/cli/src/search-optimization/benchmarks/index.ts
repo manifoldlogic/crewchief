@@ -8,6 +8,7 @@
  * ```typescript
  * import {
  *   TIER1_GREP_IMPOSSIBLE_SUITE,
+ *   TIER2_GREP_HARD_SUITE,
  *   validateSuiteComposition,
  *   generateSuiteReport,
  *   formatReportMarkdown
@@ -27,18 +28,26 @@
  * ```
  */
 
-// Suite definition
+// Tier 1 suite (grep-impossible)
 export {
   TIER1_GREP_IMPOSSIBLE_SUITE,
-  getTasksByCategory,
-  getTasksByDifficulty,
-  getSuiteStatistics,
+  getTasksByCategory as getTier1TasksByCategory,
+  getTasksByDifficulty as getTier1TasksByDifficulty,
+  getSuiteStatistics as getTier1SuiteStatistics,
   type BenchmarkSuite,
   type SuiteMetadata,
   type CategoryStatistics,
   type DifficultyStatistics,
   type SuiteStatistics,
 } from './tier1-impossible.js'
+
+// Tier 2 suite (grep-hard)
+export {
+  TIER2_GREP_HARD_SUITE,
+  getTasksByCategory as getTier2TasksByCategory,
+  getTasksByDifficulty as getTier2TasksByDifficulty,
+  getSuiteStatistics as getTier2SuiteStatistics,
+} from './tier2-hard.js'
 
 // Validation
 export {
