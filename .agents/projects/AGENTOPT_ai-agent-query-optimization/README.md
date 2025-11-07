@@ -18,32 +18,44 @@ The maproom semantic search MCP tool experiences poor query quality when used by
 
 ## Solution
 
-**Approach**: Data-driven optimization through competitive testing and genetic algorithm iterations.
+**Approach**: Automated agent-based testing with genetic algorithm for continuous optimization.
 
-**Phase 0: Testing Infrastructure** (Foundational)
-- Create 100-query test set with gold standards
-- Build variant generation system with genetic mutations
-- Implement automated testing harness with agent simulation
-- Deploy production A/B testing infrastructure
-- Enable continuous improvement pipeline
+**STRATEGIC PIVOT** (January 2025): Changed from live user A/B testing to SDK-driven agent competitions.
 
-**Phase 1: Enhanced Tool Description**
-- Deploy empirically-validated optimal variant from Phase 0 testing
+**Phase 0: Testing Infrastructure** (Complete)
+- ✅ Create test query set with representative queries (AGENTOPT-0001)
+- ✅ Build variant generation system with genetic mutations (AGENTOPT-0002)
+- ✅ Implement automated testing harness (AGENTOPT-0003)
+- ✅ Statistical analysis framework (AGENTOPT-0004)
+- ❌ A/B testing infrastructure (AGENTOPT-0005) - removed, replaced with SDK approach
+
+**Phase 1: Agent SDK Integration** (NEW - Current Focus)
+- Install and configure Claude Code Agents SDK (AGENTOPT-1001)
+- Implement tool description variant injection (AGENTOPT-1002)
+- Extend existing competition framework for search tasks (AGENTOPT-1003)
+- Build search task library with validators (AGENTOPT-1004)
+- Extend evaluation framework with search metrics (AGENTOPT-1005)
+- Create competition runner orchestrator (AGENTOPT-1006)
+- Build genetic iteration framework (AGENTOPT-1007)
+
+**Phase 2: Deployment** (Future)
+- Deploy empirically-validated optimal variant from competitions
 - Zero infrastructure changes, zero latency, zero cost
 - Expected +40-60 percentage point improvement
 
-**Key Insight**: The user is an AI agent, not a human. AI agents can be taught to formulate better queries through enhanced tool descriptions. **We discover the optimal description through data, not "vibes".**
+**Key Insight**: The user is an AI agent, not a human. AI agents can be taught to formulate better queries through enhanced tool descriptions. **We discover the optimal description through automated agent competitions, not guesswork.**
 
-**Testing Methodology**:
+**Testing Methodology** (Revised):
 ```
-Experiment Cycle:
-  1. Generate variants (manual or genetic mutations)
-  2. Test each variant with 100 queries
-  3. Simulate agent behavior with each description
-  4. Statistical analysis (t-tests, p<0.05)
-  5. Deploy winner to production A/B test
-  6. Iterate weekly, genetic mutations from winners
-  7. Converge when improvements <2%
+Agent Competition Cycle:
+  1. Generate variants (genetic mutations from winners)
+  2. Spawn N agents with SDK, each using different variant
+  3. Agents execute real search tasks in isolated worktrees
+  4. Capture all tool usage metrics
+  5. Evaluate: search quality (40%) + task completion (40%) + efficiency (20%)
+  6. Winner becomes new baseline
+  7. Iterate: mutate winner, run next competition
+  8. Converge when improvements <1%
 ```
 
 **Example**:
@@ -299,8 +311,15 @@ Minimal security risk assessment:
 
 ---
 
-**Project Status**: PLANNING COMPLETE
-**Ready for**: Ticket creation and implementation
-**Owner**: MCP development team
-**Priority**: HIGH (low effort, high impact)
-**Complexity**: LOW (single file, string modification)
+**Project Status**: PHASE 0 COMPLETE → PHASE 1 PLANNING COMPLETE
+**Strategic Pivot**: January 2025 - From production A/B testing to SDK-driven agent competitions
+**Ready for**: Phase 1 implementation (tickets AGENTOPT-1001 through 1007)
+**Owner**: Crewchief CLI + MCP development team
+**Priority**: HIGH (reuses 80% of existing infrastructure)
+**Complexity**: MEDIUM (SDK integration, competition extension)
+
+**Key Documents**:
+- Replan Analysis: `./replan-analysis.md`
+- Search Tasks Research: `./search-tasks-analysis.md`
+- Ticket Summary: `./ticket-summary.md`
+- Phase 1 Tickets: `./tickets/AGENTOPT-1001` through `AGENTOPT-1007`
