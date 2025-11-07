@@ -4,6 +4,7 @@
 maproom
 maproom-mcp
 ab-testing
+agentopt
 api
 build
 cache
