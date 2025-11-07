@@ -1,9 +1,9 @@
 # Ticket: TESTDES-5001: Implement Multi-Tier Optimizer
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -31,13 +31,13 @@ The weighted scoring ensures we optimize for both capability and real-world adop
 - Quality-strategy.md Tier weightings (40% T1 + 40% T2 + 20% T3)
 
 ## Acceptance Criteria
-- [ ] Genetic optimizer runs all 3 benchmark suites (30+ tasks total) per generation
-- [ ] Scoring formula implemented: 40% Tier 1 + 40% Tier 2 + 20% Tier 3
-- [ ] Tool selection tracking: records when search was used appropriately vs inappropriately
-- [ ] Multi-tier scoring module created with tier-weighted aggregation logic
-- [ ] Optimization improves all 3 tiers, not just one (validated via generation reports)
-- [ ] Reports show per-tier breakdown and tool selection patterns
-- [ ] Integration tests validate multi-tier evaluation with sample tasks
+- [x] Genetic optimizer runs all 3 benchmark suites (30+ tasks total) per generation
+- [x] Scoring formula implemented: 40% Tier 1 + 40% Tier 2 + 20% Tier 3
+- [x] Tool selection tracking: records when search was used appropriately vs inappropriately
+- [x] Multi-tier scoring module created with tier-weighted aggregation logic
+- [x] Optimization improves all 3 tiers, not just one (validated via generation reports)
+- [x] Reports show per-tier breakdown and tool selection patterns
+- [x] Integration tests validate multi-tier evaluation with sample tasks
 
 ## Technical Requirements
 - TypeScript implementation extending existing `genetic-iterator.ts`

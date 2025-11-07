@@ -44,6 +44,10 @@ export interface ParticipantResult {
   score: number
   evaluation: SearchEvaluationSummary
   agentResult: AgentResult
+  toolsUsed?: string[] // Tool names used during task execution
+  searchCount: number // Number of searches performed
+  toolCallCount: number // Total tool calls made
+  durationSeconds: number // Time taken to complete task
 }
 
 /**
@@ -168,12 +172,32 @@ async function executeParticipant(
 
   console.log(`  Completed: ${variant.name} - Score: ${(evaluation.compositeScore * 100).toFixed(1)}%`)
 
+  // Extract tool usage from messages
+  const toolsUsed = new Set<string>()
+  let toolCallCount = 0
+  for (const message of agentResult.messages) {
+    if (message.content) {
+      for (const block of Array.isArray(message.content) ? message.content : [message.content]) {
+        if (typeof block === 'object' && block !== null && 'type' in block && block.type === 'tool_use') {
+          toolCallCount++
+          if ('name' in block && typeof block.name === 'string') {
+            toolsUsed.add(block.name)
+          }
+        }
+      }
+    }
+  }
+
   return {
     variantId: variant.id,
     variantName: variant.name,
     score: evaluation.compositeScore,
     evaluation,
     agentResult,
+    toolsUsed: Array.from(toolsUsed),
+    searchCount: evaluation.searchUsageScore || 0,
+    toolCallCount,
+    durationSeconds: (agentResult.performance?.durationMs || 0) / 1000,
   }
 }
 

@@ -58,6 +58,11 @@ export interface SearchTask {
   // Metadata
   difficulty: 'easy' | 'medium' | 'hard'
   category: string // Which of the 5 types
+  tier?: 'tier1-impossible' | 'tier2-hard' | 'tier3-realworld' // Benchmark tier classification
+
+  // Expected performance baselines (for Tier 1 and 2)
+  expectedGrepSuccess?: number // 0-1: Expected grep baseline success rate
+  expectedSearchSuccess?: number // 0-1: Expected search success rate
 
   // Success validation
   successValidator: (result: AgentOutput) => TaskScore
@@ -83,6 +88,7 @@ export interface AgentOutput {
   searchCount: number // Number of searches performed
   toolCallCount: number // Total tool calls made
   durationSeconds: number // Time taken to complete task
+  toolsUsed?: string[] // Tools used during execution (for tool selection tracking)
 }
 
 /**

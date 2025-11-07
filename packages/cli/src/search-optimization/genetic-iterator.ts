@@ -10,8 +10,17 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
+import type { BenchmarkSuite } from './benchmarks/types.js'
 import type { CompetitionResult } from './competition-runner.js'
 import { runCompetition } from './competition-runner.js'
+import {
+  type MultiTierScore,
+  type TierSuiteResult,
+  type TierWeights,
+  aggregateMultiTierScores,
+  checkMultiTierConvergence,
+  DEFAULT_TIER_WEIGHTS,
+} from './multi-tier-scoring.js'
 import type { SearchTask } from './types.js'
 import { mutate, generateCrossover } from '../../../maproom-mcp/test/tool-description-optimization/mutator.js'
 import type { Variant, MutationType } from '../../../maproom-mcp/test/tool-description-optimization/types.js'
@@ -21,12 +30,21 @@ import type { Variant, MutationType } from '../../../maproom-mcp/test/tool-descr
  */
 export interface IterationConfig {
   initialVariants: string[] // Variant IDs to start with
-  tasks: SearchTask[] // Tasks to run each iteration
+  tasks: SearchTask[] // Tasks to run each iteration (single-tier mode)
   maxIterations: number // Stop after N iterations
   convergenceThreshold: number // Stop if improvement < threshold (e.g., 0.01 = 1%)
   mutationRate: number // Probability of mutation (0-1)
   populationSize: number // Variants per generation
   baseDir?: string // Base directory for iteration runs
+
+  // Multi-tier evaluation mode
+  multiTier?: {
+    enabled: boolean
+    tier1Suite: BenchmarkSuite // Grep-impossible tasks
+    tier2Suite: BenchmarkSuite // Grep-hard tasks
+    tier3Suite: BenchmarkSuite // Real-world tasks
+    weights?: TierWeights // Tier weights (defaults to 40/40/20)
+  }
 }
 
 /**
@@ -50,6 +68,74 @@ export interface Generation {
   bestVariant: Variant
   bestScore: number
   improvement: number // vs previous generation
+
+  // Multi-tier specific
+  multiTierScores?: Map<string, MultiTierScore> // variantId -> multi-tier score
+  tier1Results?: TierSuiteResult
+  tier2Results?: TierSuiteResult
+  tier3Results?: TierSuiteResult
+}
+
+/**
+ * Run a benchmark suite and return tier results
+ */
+async function runBenchmarkSuite(
+  suite: BenchmarkSuite,
+  variants: Variant[],
+  tier: 1 | 2 | 3,
+  baseDir: string,
+): Promise<TierSuiteResult> {
+  const competitionResults = new Map<string, CompetitionResult>()
+  const scores: number[] = []
+  let searchUsedCount = 0
+  let appropriateUsageCount = 0
+  let completedCount = 0
+
+  console.log(`\nRunning ${suite.name} (${suite.tasks.length} tasks)...`)
+
+  for (const task of suite.tasks) {
+    const result = await runCompetition({
+      task,
+      variants,
+      parallelExecution: true,
+      timeout: task.maxTimeSeconds || 300,
+      baseDir: join(baseDir, `tier${tier}`, `task-${task.id}`),
+    })
+
+    competitionResults.set(task.id, result)
+
+    // Track metrics
+    for (const participant of result.participants) {
+      scores.push(participant.score)
+
+      const usedSearch = participant.toolsUsed?.includes('search') || false
+      if (usedSearch) {
+        searchUsedCount++
+      }
+
+      // For Tier 1 and 2, search is appropriate
+      // For Tier 3, both tools are appropriate
+      if (tier === 3 || usedSearch) {
+        appropriateUsageCount++
+      }
+
+      if (participant.score >= 0.6) {
+        completedCount++
+      }
+    }
+  }
+
+  const totalParticipants = scores.length || 1
+
+  return {
+    tier,
+    tasks: suite.tasks,
+    competitionResults,
+    avgScore: scores.reduce((sum, s) => sum + s, 0) / scores.length || 0,
+    searchUsageRate: searchUsedCount / totalParticipants,
+    appropriateUsage: appropriateUsageCount / totalParticipants,
+    taskCompletionRate: completedCount / totalParticipants,
+  }
 }
 
 /**
@@ -64,6 +150,18 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
   console.log(`Max Iterations: ${config.maxIterations}`)
   console.log(`Convergence Threshold: ${(config.convergenceThreshold * 100).toFixed(1)}%`)
 
+  // Multi-tier mode info
+  if (config.multiTier?.enabled) {
+    console.log('\n[MULTI-TIER MODE ENABLED]')
+    const weights = config.multiTier.weights || DEFAULT_TIER_WEIGHTS
+    console.log(`Tier 1 Weight: ${(weights.tier1 * 100).toFixed(0)}%`)
+    console.log(`Tier 2 Weight: ${(weights.tier2 * 100).toFixed(0)}%`)
+    console.log(`Tier 3 Weight: ${(weights.tier3 * 100).toFixed(0)}%`)
+    console.log(
+      `Total Tasks: ${config.multiTier.tier1Suite.tasks.length + config.multiTier.tier2Suite.tasks.length + config.multiTier.tier3Suite.tasks.length}`,
+    )
+  }
+
   const history: Generation[] = []
   let currentVariants = await Promise.all(config.initialVariants.map((id) => loadVariant(id)))
 
@@ -75,37 +173,84 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
     console.log(`GENERATION ${i + 1}`)
     console.log('='.repeat(60))
 
-    // Run competitions on all tasks
     const taskResults = new Map<string, CompetitionResult>()
-    const variantScores = new Map<string, number[]>()
-
-    for (const task of config.tasks) {
-      console.log(`\nRunning task: ${task.name}`)
-
-      const result = await runCompetition({
-        task,
-        variants: currentVariants,
-        parallelExecution: true,
-        timeout: task.maxTimeSeconds || 300,
-        baseDir: join(baseDir, `gen-${i + 1}`, `task-${task.id}`),
-      })
-
-      taskResults.set(task.id, result)
-
-      // Aggregate scores for each variant
-      for (const participant of result.participants) {
-        if (!variantScores.has(participant.variantId)) {
-          variantScores.set(participant.variantId, [])
-        }
-        variantScores.get(participant.variantId)!.push(participant.score)
-      }
-    }
-
-    // Calculate average score per variant across all tasks
     const variantAvgScores = new Map<string, number>()
-    for (const [variantId, scores] of variantScores) {
-      const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length
-      variantAvgScores.set(variantId, avg)
+    let multiTierScores: Map<string, MultiTierScore> | undefined
+    let tier1Results: TierSuiteResult | undefined
+    let tier2Results: TierSuiteResult | undefined
+    let tier3Results: TierSuiteResult | undefined
+
+    if (config.multiTier?.enabled) {
+      // MULTI-TIER MODE: Run all 3 benchmark suites
+      const genDir = join(baseDir, `gen-${i + 1}`)
+
+      console.log('\n[RUNNING MULTI-TIER EVALUATION]')
+
+      // Run Tier 1 (Grep-Impossible)
+      tier1Results = await runBenchmarkSuite(config.multiTier.tier1Suite, currentVariants, 1, genDir)
+
+      // Run Tier 2 (Grep-Hard)
+      tier2Results = await runBenchmarkSuite(config.multiTier.tier2Suite, currentVariants, 2, genDir)
+
+      // Run Tier 3 (Real-World)
+      tier3Results = await runBenchmarkSuite(config.multiTier.tier3Suite, currentVariants, 3, genDir)
+
+      // Combine all task results for recording
+      for (const [taskId, result] of tier1Results.competitionResults) {
+        taskResults.set(taskId, result)
+      }
+      for (const [taskId, result] of tier2Results.competitionResults) {
+        taskResults.set(taskId, result)
+      }
+      for (const [taskId, result] of tier3Results.competitionResults) {
+        taskResults.set(taskId, result)
+      }
+
+      // Calculate multi-tier scores
+      const variantIds = currentVariants.map((v) => v.id)
+      const weights = config.multiTier.weights || DEFAULT_TIER_WEIGHTS
+      multiTierScores = aggregateMultiTierScores(variantIds, tier1Results, tier2Results, tier3Results, weights)
+
+      // Extract composite scores for selection
+      for (const [variantId, score] of multiTierScores) {
+        variantAvgScores.set(variantId, score.composite)
+      }
+
+      console.log('\n[MULTI-TIER RESULTS]')
+      console.log(`Tier 1 Avg: ${(tier1Results.avgScore * 100).toFixed(1)}%`)
+      console.log(`Tier 2 Avg: ${(tier2Results.avgScore * 100).toFixed(1)}%`)
+      console.log(`Tier 3 Avg: ${(tier3Results.avgScore * 100).toFixed(1)}%`)
+    } else {
+      // SINGLE-TIER MODE: Run tasks from config.tasks
+      const variantScores = new Map<string, number[]>()
+
+      for (const task of config.tasks) {
+        console.log(`\nRunning task: ${task.name}`)
+
+        const result = await runCompetition({
+          task,
+          variants: currentVariants,
+          parallelExecution: true,
+          timeout: task.maxTimeSeconds || 300,
+          baseDir: join(baseDir, `gen-${i + 1}`, `task-${task.id}`),
+        })
+
+        taskResults.set(task.id, result)
+
+        // Aggregate scores for each variant
+        for (const participant of result.participants) {
+          if (!variantScores.has(participant.variantId)) {
+            variantScores.set(participant.variantId, [])
+          }
+          variantScores.get(participant.variantId)!.push(participant.score)
+        }
+      }
+
+      // Calculate average score per variant across all tasks
+      for (const [variantId, scores] of variantScores) {
+        const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length
+        variantAvgScores.set(variantId, avg)
+      }
     }
 
     // Find best variant of this generation
@@ -136,6 +281,10 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
       bestVariant,
       bestScore,
       improvement,
+      multiTierScores,
+      tier1Results,
+      tier2Results,
+      tier3Results,
     }
 
     history.push(generation)
@@ -144,6 +293,18 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
     console.log(`Best: ${bestVariant.name} (${(bestScore * 100).toFixed(1)}%)`)
     console.log(`Avg: ${(avgScore * 100).toFixed(1)}%`)
     console.log(`Improvement: ${improvement > 0 ? '+' : ''}${(improvement * 100).toFixed(2)}%`)
+
+    // Show multi-tier breakdown if available
+    if (multiTierScores && bestVariant) {
+      const bestMultiTierScore = multiTierScores.get(bestVariant.id)
+      if (bestMultiTierScore) {
+        console.log('\nMulti-Tier Breakdown (Best Variant):')
+        console.log(`  Tier 1 (40%): ${(bestMultiTierScore.tierMetrics.tier1.avgScore * 100).toFixed(1)}%`)
+        console.log(`  Tier 2 (40%): ${(bestMultiTierScore.tierMetrics.tier2.avgScore * 100).toFixed(1)}%`)
+        console.log(`  Tier 3 (20%): ${(bestMultiTierScore.tierMetrics.tier3.avgScore * 100).toFixed(1)}%`)
+        console.log(`Tool Selection Accuracy: ${(bestMultiTierScore.toolSelection.overallAccuracy * 100).toFixed(0)}%`)
+      }
+    }
 
     // Save generation report
     const genDir = join(baseDir, `gen-${i + 1}`)
@@ -156,7 +317,24 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
       .slice(-3)
       .filter((g) => Math.abs(g.improvement) < config.convergenceThreshold).length
 
-    if (Math.abs(improvement) < config.convergenceThreshold && noImprovementCount >= 3) {
+    // For multi-tier, also check tier stability
+    let multiTierConvergence: ReturnType<typeof checkMultiTierConvergence> | undefined
+    if (config.multiTier?.enabled && multiTierScores && history.length >= 2) {
+      const prevGen = history[history.length - 2]
+      const prevBestScore = prevGen.multiTierScores?.get(prevGen.bestVariant.id)
+      const currentBestScore = multiTierScores.get(bestVariant.id)
+
+      if (prevBestScore && currentBestScore) {
+        multiTierConvergence = checkMultiTierConvergence(currentBestScore, prevBestScore, config.convergenceThreshold)
+      }
+    }
+
+    const hasConverged =
+      Math.abs(improvement) < config.convergenceThreshold &&
+      noImprovementCount >= 3 &&
+      (!multiTierConvergence || multiTierConvergence.converged)
+
+    if (hasConverged) {
       console.log(`\n${'='.repeat(60)}`)
       console.log('CONVERGENCE REACHED')
       console.log('='.repeat(60))
@@ -164,6 +342,20 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
         `Improvement: ${(improvement * 100).toFixed(2)}% (threshold: ${(config.convergenceThreshold * 100).toFixed(1)}%)`,
       )
       console.log(`Consecutive no-improvement generations: ${noImprovementCount}/3`)
+
+      // Show multi-tier convergence details
+      if (multiTierConvergence) {
+        console.log('\nMulti-Tier Convergence:')
+        console.log(
+          `  Tier 1: ${multiTierConvergence.tier1Stable ? '✓' : '✗'} (${(multiTierConvergence.tier1Improvement * 100).toFixed(2)}%)`,
+        )
+        console.log(
+          `  Tier 2: ${multiTierConvergence.tier2Stable ? '✓' : '✗'} (${(multiTierConvergence.tier2Improvement * 100).toFixed(2)}%)`,
+        )
+        console.log(
+          `  Tier 3: ${multiTierConvergence.tier3Stable ? '✓' : '✗'} (${(multiTierConvergence.tier3Improvement * 100).toFixed(2)}%)`,
+        )
+      }
 
       const finalHistory: IterationHistory = {
         generations: history,
@@ -363,6 +555,18 @@ function generateGenerationReport(generation: Generation, scores: Map<string, nu
     if (variant.mutation_type) {
       lines.push(`   Mutation: ${variant.mutation_type}`)
     }
+
+    // Show multi-tier breakdown if available
+    if (generation.multiTierScores) {
+      const multiTierScore = generation.multiTierScores.get(variant.id)
+      if (multiTierScore) {
+        lines.push(`   Tier 1: ${(multiTierScore.tierMetrics.tier1.avgScore * 100).toFixed(1)}%`)
+        lines.push(`   Tier 2: ${(multiTierScore.tierMetrics.tier2.avgScore * 100).toFixed(1)}%`)
+        lines.push(`   Tier 3: ${(multiTierScore.tierMetrics.tier3.avgScore * 100).toFixed(1)}%`)
+        lines.push(`   Tool Accuracy: ${(multiTierScore.toolSelection.overallAccuracy * 100).toFixed(0)}%`)
+      }
+    }
+
     lines.push('')
   })
 
@@ -371,6 +575,28 @@ function generateGenerationReport(generation: Generation, scores: Map<string, nu
   lines.push(`Best: ${generation.bestVariant.name} - ${(generation.bestScore * 100).toFixed(1)}%`)
   lines.push(`Average: ${(generation.avgScore * 100).toFixed(1)}%`)
   lines.push(`Improvement: ${generation.improvement > 0 ? '+' : ''}${(generation.improvement * 100).toFixed(2)}%`)
+
+  // Show multi-tier summary if available
+  if (generation.multiTierScores && generation.tier1Results && generation.tier2Results && generation.tier3Results) {
+    lines.push('')
+    lines.push('MULTI-TIER BREAKDOWN')
+    lines.push('-'.repeat(60))
+    lines.push(`Tier 1 (Grep-Impossible): ${(generation.tier1Results.avgScore * 100).toFixed(1)}%`)
+    lines.push(`  Tasks: ${generation.tier1Results.tasks.length}`)
+    lines.push(`  Search Usage: ${(generation.tier1Results.searchUsageRate * 100).toFixed(0)}%`)
+    lines.push(`  Completion Rate: ${(generation.tier1Results.taskCompletionRate * 100).toFixed(0)}%`)
+    lines.push('')
+    lines.push(`Tier 2 (Grep-Hard): ${(generation.tier2Results.avgScore * 100).toFixed(1)}%`)
+    lines.push(`  Tasks: ${generation.tier2Results.tasks.length}`)
+    lines.push(`  Search Usage: ${(generation.tier2Results.searchUsageRate * 100).toFixed(0)}%`)
+    lines.push(`  Completion Rate: ${(generation.tier2Results.taskCompletionRate * 100).toFixed(0)}%`)
+    lines.push('')
+    lines.push(`Tier 3 (Real-World): ${(generation.tier3Results.avgScore * 100).toFixed(1)}%`)
+    lines.push(`  Tasks: ${generation.tier3Results.tasks.length}`)
+    lines.push(`  Voluntary Search Adoption: ${(generation.tier3Results.searchUsageRate * 100).toFixed(0)}%`)
+    lines.push(`  Completion Rate: ${(generation.tier3Results.taskCompletionRate * 100).toFixed(0)}%`)
+  }
+
   lines.push('')
 
   return lines.join('\n')
