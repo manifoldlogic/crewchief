@@ -22,7 +22,7 @@ For agent competitions to produce meaningful results, we need realistic search t
 3. Can be validated programmatically
 4. Cover diverse search scenarios
 
-See `.agents/work-in-progress/search-tasks-deep-thinking.md` for full analysis of task types and validation approach.
+See `../search-tasks-analysis.md` for full analysis of task types and validation approach.
 
 **Top 5 Task Types** (from deep thinking):
 1. Finding Feature Implementation
@@ -103,6 +103,27 @@ export interface TaskScore {
   efficiency: number          // 0-1: How efficiently?
   total: number               // Composite: 0-1
   details: string             // Explanation
+}
+
+export interface AgentOutput {
+  searchResults: SearchResult[]  // All search results from agent
+  workResult: WorkResult         // Files changed, explanations written, etc.
+  searchCount: number            // Number of searches performed
+  toolCallCount: number          // Total tool calls made
+  durationSeconds: number        // Time taken to complete task
+}
+
+export interface SearchResult {
+  query: string
+  results: any[]  // Maproom search results
+  rank?: number   // Where target was found (if applicable)
+}
+
+export interface WorkResult {
+  filesChanged?: string[]
+  filesCreated?: string[]
+  explanationText?: string
+  success: boolean
 }
 ```
 
@@ -301,5 +322,5 @@ None - foundational ticket
 
 ## Planning References
 
-- Deep Thinking: `.agents/work-in-progress/search-tasks-deep-thinking.md`
-- Replan Analysis: `.agents/work-in-progress/AGENTOPT-replan-analysis.md`
+- Deep Thinking: `../search-tasks-analysis.md`
+- Replan Analysis: `../replan-analysis.md`

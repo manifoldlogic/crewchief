@@ -241,6 +241,16 @@ NEXT STEPS
 
 ## Implementation Notes
 
+**Phased Approach** (Recommended):
+- **Phase A (MVP)**: Sequential execution only
+  - Run one agent at a time, wait for completion
+  - Simpler debugging, lower resource usage
+  - Implement `executeParticipant()` as blocking
+- **Phase B (Optimization)**: Add parallel execution
+  - After Phase A working and tested
+  - Requires resource monitoring
+  - May need process pooling or rate limiting
+
 **CLI Integration** (Optional - can be done later):
 ```bash
 # Run single competition

@@ -156,9 +156,15 @@ export async function runGeneticIterations(
     console.log(`Avg: ${(generation.avgScore * 100).toFixed(1)}%`)
     console.log(`Improvement: ${improvement > 0 ? '+' : ''}${(improvement * 100).toFixed(2)}%`)
 
-    // Check convergence
-    if (Math.abs(improvement) < config.convergenceThreshold) {
-      console.log(`\nConvergence reached (improvement < ${config.convergenceThreshold})`)
+    // Check convergence (multiple criteria)
+    const noImprovementCount = history.slice(-3).filter(g =>
+      Math.abs(g.improvement) < config.convergenceThreshold
+    ).length
+
+    if (Math.abs(improvement) < config.convergenceThreshold || noImprovementCount >= 3) {
+      console.log(`\nConvergence reached`)
+      console.log(`Improvement: ${(improvement * 100).toFixed(2)}% (threshold: ${config.convergenceThreshold})`)
+      console.log(`Consecutive no-improvement generations: ${noImprovementCount}/3`)
       return {
         generations: history,
         bestOverall: bestVariant,
@@ -210,13 +216,22 @@ async function generateNextGeneration(
     nextGen.push(crossed)
   }
 
-  // 3. Mutate best variant
+  // 3. Mutate best variant (with diversity mechanism)
   const mutationTypes = ['amplification', 'reduction', 'reframing', 'specialization'] as const
 
   for (let i = 0; i < config.populationSize - nextGen.length; i++) {
-    const mutationType = mutationTypes[i % mutationTypes.length]
-    const mutated = await mutate(sorted[0], mutationType)
-    nextGen.push(mutated)
+    // Add random variant every 5th generation to maintain diversity
+    if (i === 0 && Math.random() < 0.2) {
+      // Random mutation from random parent (not just best)
+      const randomParent = sorted[Math.floor(Math.random() * Math.min(3, sorted.length))]
+      const randomMutationType = mutationTypes[Math.floor(Math.random() * mutationTypes.length)]
+      const randomVariant = await mutate(randomParent, randomMutationType)
+      nextGen.push(randomVariant)
+    } else {
+      const mutationType = mutationTypes[i % mutationTypes.length]
+      const mutated = await mutate(sorted[0], mutationType)
+      nextGen.push(mutated)
+    }
   }
 
   // Save new variants
@@ -288,10 +303,16 @@ packages/cli/src/search-optimization/
 └── generation-history.ts (new - history tracking)
 ```
 
-**Convergence Criteria**:
+**Convergence Criteria** (Multiple conditions):
 - Improvement < threshold (e.g., 0.01 = 1%)
-- OR No improvement for N consecutive generations
+- OR No improvement for 3 consecutive generations (prevents premature stopping)
+- OR Max iterations reached (safety limit)
 - OR Manual stop
+
+**Recommended Thresholds for MVP**:
+- `convergenceThreshold`: 0.01 (1% improvement)
+- `maxIterations`: 10 (prevent runaway iterations)
+- `populationSize`: 5 (manageable for testing)
 
 **Population Management**:
 - Keep best (elitism)

@@ -121,11 +121,16 @@ packages/cli/src/orchestrator/
 - Create `SearchCompetitionManager` that extends it
 - Reuse worktree management, scoring, merging logic
 
-**Metrics Capture**:
-- Hook into SDK's `PostToolUse` event
+**Metrics Capture** (Depends on SDK event model from AGENTOPT-1001):
+- Hook into SDK's tool use events (verify event name/structure)
 - Track all maproom tool calls
 - Store in participant's `searchMetrics`
 - Feed into evaluation (AGENTOPT-1005)
+
+**NOTE**: The exact event hook mechanism depends on SDK capabilities researched in AGENTOPT-1001.
+- If SDK provides `PostToolUse`: use that
+- If SDK provides generic message stream: filter for tool use events
+- If SDK doesn't provide events: may need to parse agent logs
 
 **Parallel Execution**:
 - Each agent runs in isolated worktree (existing capability)
@@ -159,4 +164,4 @@ packages/cli/src/orchestrator/
 ## Planning References
 
 - Existing Competition: `packages/cli/src/orchestrator/competition.ts`
-- Replan Analysis: `.agents/work-in-progress/AGENTOPT-replan-analysis.md`
+- Replan Analysis: `../replan-analysis.md`

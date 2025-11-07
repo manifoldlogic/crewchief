@@ -23,7 +23,7 @@ The Agents SDK provides programmatic control over Claude Code agents with featur
 - Hook into agent lifecycle events
 - Streaming message handling
 
-This is Phase 1 of the pivot from live user A/B testing to automated agent-based testing. See `.agents/work-in-progress/AGENTOPT-replan-analysis.md` for full context.
+This is Phase 1 of the pivot from live user A/B testing to automated agent-based testing. See `../replan-analysis.md` for full context.
 
 ## Acceptance Criteria
 
@@ -32,6 +32,7 @@ This is Phase 1 of the pivot from live user A/B testing to automated agent-based
 - [ ] Implement basic agent spawner with SDK
 - [ ] Verify SDK can spawn agent and execute simple task
 - [ ] Document SDK configuration and usage
+- [ ] **SDK RESEARCH**: Document SDK capabilities for tool overrides, event hooks, and async patterns
 
 ## Technical Requirements
 
@@ -107,6 +108,21 @@ Create a simple test that:
 - Don't implement tool description injection yet
 - Just get SDK working and verified
 
+**SDK Capabilities to Verify** (Critical for downstream tickets):
+1. **Tool Description Overrides**: Can SDK override MCP tool descriptions at runtime?
+   - Check if `mcpServers.toolOverrides` or similar is supported
+   - Document alternative approaches if not supported
+2. **Event Hooks**: What lifecycle events are available?
+   - `PreToolUse`, `PostToolUse`, `SessionStart`, `SessionEnd`?
+   - Document exact event structure and data available
+3. **Async Patterns**: How does SDK handle agent execution?
+   - Async iterable (`for await (const message of agent)`)?
+   - Callbacks, promises, or event emitters?
+   - Single agent per process or multiple concurrent?
+4. **Tool Usage Logging**: Does SDK automatically log tool calls?
+   - If yes: document log format and location
+   - If no: plan custom logging in hooks
+
 ## Dependencies
 
 None - foundational ticket
@@ -127,5 +143,5 @@ None - foundational ticket
 
 ## Planning References
 
-- Replan Analysis: `.agents/work-in-progress/AGENTOPT-replan-analysis.md`
+- Replan Analysis: `../replan-analysis.md`
 - SDK Docs: https://docs.claude.com/en/api/agent-sdk/typescript

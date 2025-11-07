@@ -33,6 +33,7 @@ For agent competitions to test tool description variants, each agent needs to se
 - [ ] Multiple agents can run simultaneously with different variants
 - [ ] Verification test showing 2 agents with different descriptions
 - [ ] Documentation of injection mechanism
+- [ ] **SDK LIMITATION ACKNOWLEDGED**: Document if MCP server changes are required (if SDK doesn't support overrides)
 
 ## Technical Requirements
 
@@ -94,10 +95,23 @@ const agent = await spawnAgentWithVariant(task, variant, worktreePath)
 
 ## Implementation Notes
 
-**Research Required**:
+**Research Required** (Depends on AGENTOPT-1001 SDK research):
 1. Check SDK docs for tool description override capabilities
 2. Test if MCP servers can be customized per query
 3. Fallback to config file approach if SDK doesn't support
+
+**IMPORTANT**: If SDK doesn't support runtime tool description overrides:
+- **Option A (Config File)**: Write per-worktree MCP config files
+  - Requires MCP server to read config at startup
+  - May need MCP server code changes in `packages/maproom-mcp/src/index.ts`
+- **Option B (Environment Variables)**: Pass variant via ENV
+  - MCP server reads `MAPROOM_SEARCH_DESCRIPTION` env var
+  - Requires MCP server code changes
+- **Option C (Multiple MCP Instances)**: Spawn separate MCP server per variant
+  - More complex, but cleanest separation
+  - May require SDK support for custom MCP server paths
+
+**Recommendation**: Start with Option A (config file), as it requires minimal MCP server changes
 
 **Key Files**:
 - `packages/cli/src/sdk/variant-injection.ts` - Injection logic
@@ -134,5 +148,5 @@ const agent = await spawnAgentWithVariant(task, variant, worktreePath)
 
 ## Planning References
 
-- Replan Analysis: `.agents/work-in-progress/AGENTOPT-replan-analysis.md`
+- Replan Analysis: `../replan-analysis.md`
 - Variant System: AGENTOPT-0002
