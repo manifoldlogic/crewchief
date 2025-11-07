@@ -127,6 +127,7 @@ crewchief/
 - [CLI README](packages/cli/README.md) - Detailed command reference
 - [Architecture Spec](.agents/knowledge/cli/specification.md) - Full vision with implementation status
 - [Testing Report](TESTING_REPORT.md) - Features that need verification
+- **[Search Optimization Framework](docs/search-optimization/)** - Grep-impossible task design and validation
 
 ## Embedding Configuration
 
