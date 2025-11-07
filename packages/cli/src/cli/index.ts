@@ -9,6 +9,7 @@ import { registerAgentCommands } from './agent'
 import { registerCompetitionCommands } from './competition'
 import { registerDoctorCommand } from './doctor'
 import { registerMaproomCommands } from './maproom'
+import { registerOptimizationCommands } from './optimization'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerSpawnCommand } from './spawn'
 import { registerWorktreeCommands } from './worktree'
@@ -46,6 +47,7 @@ registerSpawnCommand(program)
 registerAgentCommands(program)
 registerCompetitionCommands(program)
 registerMaproomCommands(program)
+registerOptimizationCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
 

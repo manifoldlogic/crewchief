@@ -21,6 +21,7 @@ import {
   checkMultiTierConvergence,
   DEFAULT_TIER_WEIGHTS,
 } from './multi-tier-scoring.js'
+import { registerRun, updateRunStatus, saveToLeaderboard } from './tracking/index.js'
 import type { SearchTask } from './types.js'
 import { mutate, generateCrossover } from '../../../maproom-mcp/test/tool-description-optimization/mutator.js'
 import type { Variant, MutationType } from '../../../maproom-mcp/test/tool-description-optimization/types.js'
@@ -167,6 +168,10 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
 
   const baseDir = config.baseDir || join('.crewchief', 'genetic-iterations', `run-${Date.now()}`)
   mkdirSync(baseDir, { recursive: true })
+
+  // Register run in tracking system
+  const runId = baseDir.split('/').pop() || `run-${Date.now()}`
+  registerRun(runId, config, '.crewchief')
 
   for (let i = 0; i < config.maxIterations; i++) {
     console.log(`\n${'='.repeat(60)}`)
@@ -368,6 +373,17 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
       const finalReport = generateIterationReport(finalHistory)
       writeFileSync(join(baseDir, 'final-report.txt'), finalReport)
 
+      // Update run status and save to leaderboard
+      updateRunStatus(runId, 'completed', finalHistory, '.crewchief')
+
+      // Save best variant to leaderboard if multi-tier enabled
+      if (config.multiTier?.enabled && multiTierScores) {
+        const bestMultiTierScore = multiTierScores.get(bestVariant.id)
+        if (bestMultiTierScore) {
+          saveToLeaderboard(bestVariant, bestMultiTierScore, runId, true, '.crewchief')
+        }
+      }
+
       return finalHistory
     }
 
@@ -400,6 +416,18 @@ export async function runGeneticIterations(config: IterationConfig): Promise<Ite
   console.log(`\n${'='.repeat(60)}`)
   console.log('MAX ITERATIONS REACHED')
   console.log('='.repeat(60))
+
+  // Update run status and save to leaderboard
+  updateRunStatus(runId, 'completed', finalHistory, '.crewchief')
+
+  // Save best variant to leaderboard if multi-tier enabled
+  const lastGen = history[history.length - 1]
+  if (config.multiTier?.enabled && lastGen?.multiTierScores) {
+    const bestMultiTierScore = lastGen.multiTierScores.get(bestOverall.id)
+    if (bestMultiTierScore) {
+      saveToLeaderboard(bestOverall, bestMultiTierScore, runId, false, '.crewchief')
+    }
+  }
 
   return finalHistory
 }
