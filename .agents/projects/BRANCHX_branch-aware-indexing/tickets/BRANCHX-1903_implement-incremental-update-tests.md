@@ -265,10 +265,11 @@ Total: 5 files, ~930 bytes, ~10-15 chunks expected
 - BRANCHX-1006 complete (git integration functions) ✅ PASSING
 - BRANCHX-1009 complete (incremental update functions implemented)
 - BRANCHX-1010 complete (test framework file created with TODO stubs)
+- **BRANCHX-1904 complete (schema migration)** ⚠️ REQUIRED - Tests cannot run without relpath/content columns
 - Database accessible with DATABASE_URL ✅ VERIFIED
-- Migrations 001-004 applied ✅ VERIFIED
+- Migrations 001-005 applied (including complete BRANCHX schema)
 
-All prerequisites are met. Tests just need implementation.
+**BLOCKED until BRANCHX-1904 completes schema migration**.
 
 ## Risk Assessment
 - **Risk**: Tests flaky due to timing dependencies
