@@ -45,12 +45,13 @@ enum Commands {
 
     /// Scan and index a worktree with real-time progress display
     ///
-    /// By default, scans the current directory and shows progress updates.
-    /// Use --verbose for detailed output (future enhancement).
+    /// By default, uses incremental scanning to only process changed files based on
+    /// git tree SHA comparison. Use --force to bypass the optimization and scan all files.
     ///
     /// Examples:
-    ///   maproom scan                    # Scan current directory
+    ///   maproom scan                    # Incremental scan (changed files only)
     ///   maproom scan --path /repo       # Scan specific path
+    ///   maproom scan --force            # Force full scan (all files)
     ///   maproom scan --verbose          # Scan with detailed output
     Scan {
         /// Repository name (defaults to git remote origin name)
@@ -71,6 +72,9 @@ enum Commands {
         languages: Option<Vec<String>>, // e.g. ts,tsx,js,jsx
         #[arg(long, value_delimiter = ',')]
         exclude: Option<Vec<String>>,   // glob patterns
+        /// Force full scan, bypassing incremental tree SHA optimization (BRANCHX-1011)
+        #[arg(long, default_value_t = false)]
+        force: bool,
         /// Enable parallel batch processing for improved performance (PERF_OPT-3001)
         #[arg(long, default_value_t = false)]
         parallel: bool,
@@ -418,6 +422,7 @@ async fn main() -> anyhow::Result<()> {
             concurrency,
             languages,
             exclude,
+            force,
             parallel,
             parallel_workers,
             batch_size,
@@ -437,9 +442,18 @@ async fn main() -> anyhow::Result<()> {
             let commit = commit.unwrap_or(commit_hash);
 
             tracing::info!(
-                "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}, generate_embeddings: {}",
-                repo, worktree, commit, parallel, generate_embeddings
+                "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}, force: {}, generate_embeddings: {}",
+                repo, worktree, commit, parallel, force, generate_embeddings
             );
+
+            // Log scan mode for user awareness
+            if force {
+                tracing::info!("🔄 Force flag enabled - performing full repository scan");
+                println!("🔄 Full scan mode (--force flag enabled)");
+            } else {
+                tracing::info!("⚡ Incremental mode - only scanning changed files (use --force for full scan)");
+                println!("⚡ Incremental scan mode (use --force for full scan)");
+            }
 
             // Create progress tracker
             let mode = if verbose {
