@@ -20,3 +20,4 @@ pub mod migrate;
 pub mod profiling;
 pub mod progress;
 pub mod search;
+pub mod upsert;
