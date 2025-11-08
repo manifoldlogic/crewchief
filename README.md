@@ -27,24 +27,24 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 
 ```bash
 # Run directly with npx (downloads and runs temporarily)
-npx crewchief --help
+npx @crewchief/cli --help
 
 # Or with pnpm dlx
-pnpm dlx crewchief --help
+pnpm dlx @crewchief/cli --help
 
 # Or with yarn dlx
-yarn dlx crewchief --help
+yarn dlx @crewchief/cli --help
 ```
 
 ### Option 2: Install in Your Project
 
 ```bash
 # Install as a project dependency
-npm install crewchief
+npm install @crewchief/cli
 # or
-pnpm add crewchief
+pnpm add @crewchief/cli
 # or
-yarn add crewchief
+yarn add @crewchief/cli
 
 # Run with npx/pnpm/yarn
 npx crewchief --help
@@ -52,21 +52,45 @@ pnpm crewchief --help
 yarn crewchief --help
 ```
 
-### Option 3: Install Globally
+### Option 3: Install Globally (Recommended)
 
 ```bash
 # Install globally via npm
-npm install -g crewchief
+npm install -g @crewchief/cli
 
 # Or with pnpm
-pnpm add -g crewchief
+pnpm add -g @crewchief/cli
 
 # Or with yarn
-yarn global add crewchief
+yarn global add @crewchief/cli
 
 # Now use directly
 crewchief --help
+crewchief --version
 ```
+
+### Migrating from Old `crewchief` Package
+
+If you previously installed the unscoped `crewchief` package (v0.x), you'll need to migrate to the new `@crewchief/cli` package:
+
+```bash
+# Uninstall old package
+npm uninstall -g crewchief
+
+# Install new scoped package
+npm install -g @crewchief/cli
+
+# Verify installation
+crewchief --version  # Should show 1.0.0 or higher
+```
+
+**What changed in v1.0.0:**
+- Package renamed from `crewchief` → `@crewchief/cli`
+- All 4 platforms now supported (linux-x64, linux-arm64, darwin-x64, darwin-arm64)
+- Automated GitHub Actions releases
+- No breaking functionality changes
+
+See [MIGRATION.md](MIGRATION.md) for full migration guide.
 
 ## Quick Start
 
