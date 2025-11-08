@@ -237,7 +237,7 @@ describe('Search Tool - Integration Tests', () => {
   it.skipIf(!testClient)('should check for embeddings', async () => {
     if (!testClient) return
 
-    const query = 'SELECT COUNT(*) as count FROM maproom.chunks WHERE code_embedding IS NOT NULL LIMIT 1'
+    const query = 'SELECT COUNT(*) as count FROM maproom.code_embeddings LIMIT 1'
     try {
       const result = await testClient.query(query)
       expect(result.rows[0]).toHaveProperty('count')

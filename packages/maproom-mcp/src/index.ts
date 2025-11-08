@@ -506,9 +506,9 @@ async function executeVectorSearch(
   // For vector search, we need to generate an embedding for the query
   // Since we don't have an embedding service integrated yet, we'll return an informative error
 
-  // Check if any embeddings exist
+  // Check if any embeddings exist in code_embeddings table
   const { rows: embeddingCheck } = await client.query(
-    'SELECT COUNT(*) as count FROM maproom.chunks WHERE code_embedding IS NOT NULL LIMIT 1'
+    'SELECT COUNT(*) as count FROM maproom.code_embeddings LIMIT 1'
   )
 
   if (embeddingCheck[0].count === '0') {
