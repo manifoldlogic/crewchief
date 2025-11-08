@@ -31,7 +31,11 @@ prometheus = { version = "0.13", features = ["process"] }
 lazy_static = "1.4"
 base64ct = "1.8.0"
 globset = "0.4.18"
-notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
+
+# BRWATCH: File watching and signal handling for automatic branch switch detection
+notify = { version = "6", default-features = false, features = ["macos_kqueue"] }  # Cross-platform file system watcher for detecting .git/HEAD changes
+ctrlc = "3.2"  # Graceful shutdown handling for Ctrl+C signals
+
 humantime = "2.3"
 config = "0.14"
 
