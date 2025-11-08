@@ -7,6 +7,7 @@ pub mod ab_testing;
 pub mod cache;
 pub mod cli;
 pub mod config;
+pub mod content_hash;
 pub mod context;
 pub mod db;
 pub mod embedding;
