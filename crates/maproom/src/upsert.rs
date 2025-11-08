@@ -340,7 +340,7 @@ pub async fn upsert_chunk_with_worktree(
     chunk: &ParsedChunk,
     worktree_id: i64,
     metrics: &CacheMetrics,
-) -> Result<Uuid> {
+) -> Result<i64> {
     // Step 1: Compute blob SHA from chunk content
     let blob_sha = compute_blob_sha(&chunk.content);
 
@@ -376,12 +376,12 @@ pub async fn upsert_chunk_with_worktree(
             r#"
             INSERT INTO maproom.chunks
                 (blob_sha, relpath, symbol_name, content, start_line, end_line, kind, worktree_ids, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, jsonb_build_array($8), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7::TEXT::maproom.symbol_kind, jsonb_build_array($8::BIGINT), NOW())
             ON CONFLICT (blob_sha, relpath)
             DO UPDATE SET
                 worktree_ids = CASE
-                    WHEN maproom.chunks.worktree_ids ? $8::TEXT THEN maproom.chunks.worktree_ids
-                    ELSE maproom.chunks.worktree_ids || jsonb_build_array($8)
+                    WHEN maproom.chunks.worktree_ids @> jsonb_build_array($8::BIGINT) THEN maproom.chunks.worktree_ids
+                    ELSE maproom.chunks.worktree_ids || jsonb_build_array($8::BIGINT)
                 END,
                 updated_at = NOW()
             RETURNING id
@@ -400,10 +400,10 @@ pub async fn upsert_chunk_with_worktree(
         .await
         .context("Failed to upsert chunk with worktree tracking")?;
 
-    let chunk_id: Uuid = row.get(0);
+    let chunk_id: i64 = row.get(0);
 
     debug!(
-        chunk_id = %chunk_id,
+        chunk_id = chunk_id,
         blob_sha = %blob_sha,
         relpath = %chunk.relpath,
         worktree_id = worktree_id,

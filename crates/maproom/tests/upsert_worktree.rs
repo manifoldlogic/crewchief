@@ -91,7 +91,7 @@ async fn test_insert_creates_single_worktree_array() {
         content: "fn test_insert() { println!(\"test\"); }".to_string(),
         start_line: 1,
         end_line: 1,
-        kind: "function".to_string(),
+        kind: "func".to_string(),
     };
 
     let metrics = CacheMetrics::new();
@@ -141,7 +141,7 @@ async fn test_upsert_is_idempotent() {
         content: "fn test_fn() { }".to_string(),
         start_line: 5,
         end_line: 5,
-        kind: "function".to_string(),
+        kind: "func".to_string(),
     };
 
     let metrics = CacheMetrics::new();
@@ -209,7 +209,7 @@ async fn test_multi_worktree_scenario() {
         content: "fn common_fn() { println!(\"shared code\"); }".to_string(),
         start_line: 10,
         end_line: 12,
-        kind: "function".to_string(),
+        kind: "func".to_string(),
     };
 
     let metrics = CacheMetrics::new();
@@ -284,7 +284,7 @@ async fn test_different_content_creates_separate_chunks() {
         content: "fn fn_v1() { return 1; }".to_string(),
         start_line: 1,
         end_line: 1,
-        kind: "function".to_string(),
+        kind: "func".to_string(),
     };
 
     let chunk2 = ParsedChunk {
@@ -293,7 +293,7 @@ async fn test_different_content_creates_separate_chunks() {
         content: "fn fn_v2() { return 2; }".to_string(), // DIFFERENT content
         start_line: 5,
         end_line: 5,
-        kind: "function".to_string(),
+        kind: "func".to_string(),
     };
 
     // Upsert both chunks
@@ -354,7 +354,7 @@ async fn test_cache_metrics_integration() {
         content: "fn test_metrics() { }".to_string(),
         start_line: 1,
         end_line: 1,
-        kind: "function".to_string(),
+        kind: "func".to_string(),
     };
 
     // First upsert: should be cache miss (new blob_sha)
