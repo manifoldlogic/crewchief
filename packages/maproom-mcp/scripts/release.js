@@ -56,16 +56,23 @@ try {
     stdio: 'inherit'
   });
 
-  // Step 5: Git tag (annotated)
-  console.log(`🏷️  Creating tag v${version}...`);
-  execSync(`git tag -a v${version} -m "Release version ${version}"`, {
+  // Step 5: Git tag (annotated) with package-scoped name
+  const tag = `${packageJson.name}@v${version}`;
+  console.log(`🏷️  Creating tag ${tag}...`);
+  execSync(`git tag -a ${tag} -m "Release version ${version}"`, {
     cwd: packageRoot,
     stdio: 'inherit'
   });
 
-  // Step 6: Push commit and tag together
-  console.log(`⬆️  Pushing commit and tag v${version}...`);
-  execSync('git push --follow-tags', {
+  // Step 6: Two-step push to avoid race condition
+  console.log(`\n⬆️  Pushing commit...`);
+  execSync('git push', {
+    cwd: packageRoot,
+    stdio: 'inherit'
+  });
+
+  console.log(`\n⬆️  Pushing tag ${tag}...`);
+  execSync(`git push origin ${tag}`, {
     cwd: packageRoot,
     stdio: 'inherit'
   });

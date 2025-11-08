@@ -1,9 +1,9 @@
 # Ticket: CLIREL-3001: Update Release Scripts and Fix Race Condition
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (CLI script test confirmed correct tag format)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -33,13 +33,13 @@ Both packages need consistent, non-conflicting tag formats:
 This allows independent releases and prevents accidental cross-triggering of workflows.
 
 ## Acceptance Criteria
-- [ ] CLI release script creates `@crewchief/cli@v{version}` tags
-- [ ] MCP release script creates `@crewchief/maproom-mcp@v{version}` tags
-- [ ] Both scripts use two-step push (commits first, then tags)
-- [ ] Both scripts remove `pnpm publish` / `npm publish` commands
-- [ ] Scripts print clear instructions explaining the process
-- [ ] Test run confirms commits arrive before tags on GitHub
-- [ ] No `--follow-tags` usage remains in either script
+- [x] CLI release script creates `@crewchief/cli@v{version}` tags
+- [x] MCP release script creates `@crewchief/maproom-mcp@v{version}` tags
+- [x] Both scripts use two-step push (commits first, then tags)
+- [x] Both scripts remove `pnpm publish` / `npm publish` commands
+- [x] Scripts print clear instructions explaining the process
+- [x] Test run confirms commits arrive before tags on GitHub
+- [x] No `--follow-tags` usage remains in either script
 
 ## Technical Requirements
 

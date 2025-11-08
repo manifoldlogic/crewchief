@@ -43,19 +43,20 @@ async function main() {
   // Commit and tag
   execSync('git add package.json', { stdio: 'inherit' })
   execSync(`git commit -m "chore(release): ${next}"`, { stdio: 'inherit' })
-  execSync(`git tag ${pkg.name}@v${next}`, { stdio: 'inherit' })
-  execSync('git push --follow-tags', { stdio: 'inherit' })
 
-  // Publish (suppress npm warnings about env configs)
-  execSync('pnpm publish --access public', { 
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      // Filter out npm env configs that cause warnings
-      npm_config_verify_deps_before_run: undefined,
-      npm_config__jsr_registry: undefined,
-    }
-  })
+  const tag = `${pkg.name}@v${next}`
+  execSync(`git tag ${tag}`, { stdio: 'inherit' })
+
+  // Two-step push to avoid race condition
+  console.log('\nPushing commit...')
+  execSync('git push', { stdio: 'inherit' })
+
+  console.log('\nPushing tag...')
+  execSync(`git push origin ${tag}`, { stdio: 'inherit' })
+
+  console.log(`\n✓ Tagged and pushed ${tag}`)
+  console.log('  GitHub Actions will build and publish automatically')
+  console.log('  Monitor workflow: https://github.com/CrewChiefAI/crewchief/actions\n')
 }
 
 main().catch((err) => {
