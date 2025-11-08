@@ -18,6 +18,7 @@ docs
 deps
 embedding
 git
+incremental
 perf
 release
 research

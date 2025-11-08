@@ -88,6 +88,93 @@ impl Default for UpdateStats {
     }
 }
 
+/// Remove a worktree from chunks when files are deleted.
+///
+/// This function:
+/// 1. Removes `worktree_id` from the `worktree_ids` JSONB array for all chunks in `relpath`
+/// 2. Deletes chunks that have empty `worktree_ids` arrays (garbage collection)
+///
+/// # Arguments
+///
+/// * `client` - Database client
+/// * `worktree_id` - ID of the worktree to remove
+/// * `relpath` - Relative path of the deleted file
+///
+/// # Returns
+///
+/// * `Ok(affected)` - Number of chunks affected (had worktree removed)
+/// * `Err` - Database errors
+///
+/// # Idempotency
+///
+/// Calling this function multiple times with the same arguments is safe (no-op if worktree already removed).
+///
+/// # Example
+///
+/// ```no_run
+/// # use crewchief_maproom::incremental::remove_worktree_from_chunks;
+/// # use crewchief_maproom::db;
+/// # async fn example() -> anyhow::Result<()> {
+/// let client = db::connect().await?;
+/// let affected = remove_worktree_from_chunks(&client, 1, "src/deleted.rs").await?;
+/// println!("Removed worktree from {} chunks", affected);
+/// # Ok(())
+/// # }
+/// ```
+pub async fn remove_worktree_from_chunks(
+    client: &Client,
+    worktree_id: i64,
+    relpath: &str,
+) -> Result<i64> {
+    // Remove worktree_id from JSONB array using `-` operator
+    let result = client
+        .execute(
+            r#"
+            UPDATE maproom.chunks
+            SET worktree_ids = worktree_ids - $1::TEXT,
+                updated_at = NOW()
+            WHERE relpath = $2
+            "#,
+            &[&worktree_id.to_string(), &relpath],
+        )
+        .await
+        .context("Failed to remove worktree from chunks")?;
+
+    let affected = result as i64;
+
+    // Garbage collection: Delete chunks with empty worktree_ids arrays
+    let deleted = client
+        .execute(
+            r#"
+            DELETE FROM maproom.chunks
+            WHERE jsonb_array_length(worktree_ids) = 0
+            "#,
+            &[],
+        )
+        .await
+        .context("Failed to delete orphan chunks")?;
+
+    if deleted > 0 {
+        debug!(
+            deleted = deleted,
+            relpath = relpath,
+            "Deleted orphan chunks with no worktrees"
+        );
+    }
+
+    if affected > 0 {
+        debug!(
+            affected = affected,
+            deleted = deleted,
+            relpath = relpath,
+            worktree_id = worktree_id,
+            "Removed worktree from chunks"
+        );
+    }
+
+    Ok(affected)
+}
+
 /// Perform incremental update based on git tree SHA comparison.
 ///
 /// This is the core function that implements the 5-10x performance improvement
@@ -206,9 +293,22 @@ pub async fn incremental_update(
             FileStatus::Deleted => {
                 debug!(
                     path = ?file_change.path,
-                    "Skipping deleted file (handled in BRANCHX-1009)"
+                    "Removing deleted file from worktree"
                 );
-                // TODO (BRANCHX-1009): Remove worktree_id from chunks.worktree_ids array
+
+                // Convert PathBuf to string
+                let path_str = file_change
+                    .path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in file path"))?;
+
+                let affected = remove_worktree_from_chunks(client, worktree_id, path_str)
+                    .await
+                    .context("Failed to remove worktree from chunks")?;
+
+                if affected > 0 {
+                    stats.files_processed += 1;
+                }
             }
         }
     }
@@ -295,4 +395,7 @@ mod tests {
         assert_eq!(stats.chunks_processed, 0);
         assert_eq!(stats.embeddings_generated, 0);
     }
+
+    // Note: remove_worktree_from_chunks requires database integration tests
+    // See tests/incremental_deletions.rs for comprehensive testing
 }
