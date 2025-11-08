@@ -35,29 +35,31 @@ macro_rules! skip_if_no_db {
 
 /// Helper to create a test worktree in the database.
 async fn create_test_worktree(client: &tokio_postgres::Client, branch: &str) -> anyhow::Result<i64> {
-    // First, ensure we have a repo
+    // First, ensure we have a repo (using actual schema: name, root_path)
     let repo_id: i64 = client
         .query_one(
             r#"
-            INSERT INTO maproom.repos (url, name, primary_language)
-            VALUES ($1, $2, 'rust')
-            ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
+            INSERT INTO maproom.repos (name, root_path)
+            VALUES ($1, $2)
+            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
             RETURNING id
             "#,
-            &[&format!("test://repo-{}", branch), &format!("test_repo_{}", branch)],
+            &[&format!("test_repo_{}", branch), &format!("/tmp/test-repo-{}", branch)],
         )
         .await?
         .get(0);
 
-    // Create a worktree
+    // Create a worktree (using actual schema: name, abs_path)
+    // Use ON CONFLICT to handle test re-runs without cleanup
     let worktree_id: i64 = client
         .query_one(
             r#"
-            INSERT INTO maproom.worktrees (repo_id, branch, root_path)
+            INSERT INTO maproom.worktrees (repo_id, name, abs_path)
             VALUES ($1, $2, $3)
+            ON CONFLICT (repo_id, name) DO UPDATE SET abs_path = EXCLUDED.abs_path
             RETURNING id
             "#,
-            &[&repo_id, &branch, &format!("/tmp/test-{}", branch)],
+            &[&repo_id, &branch, &format!("/tmp/test-worktree-{}", branch)],
         )
         .await?
         .get(0);
