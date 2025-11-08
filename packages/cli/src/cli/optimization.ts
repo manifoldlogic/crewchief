@@ -13,9 +13,8 @@ import {
 import { logger } from '../utils/logger.js'
 
 export function registerOptimizationCommands(program: Command): void {
-  const optimization = new Command('optimization')
-    .alias('opt')
-    .description('Manage genetic optimization tracking and production variants')
+  // Internal tool - no description to keep it less discoverable
+  const optimization = new Command('optimization').alias('opt')
 
   // Leaderboard command
   optimization
