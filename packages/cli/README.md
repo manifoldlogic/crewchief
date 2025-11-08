@@ -6,10 +6,10 @@ A powerful command-line tool for git worktree management, semantic code search, 
 
 ```bash
 # Check compatibility before installing
-npx crewchief doctor
+npx @crewchief/cli doctor
 
 # Install globally
-npm install -g crewchief
+npm install -g @crewchief/cli
 
 # Now use directly
 crewchief --help
@@ -107,6 +107,7 @@ crewchief setup
 ```
 
 This will guide you through:
+
 - Repository type (standard or monorepo)
 - Main branch name
 - Files to copy to new worktrees (.env files, etc.)
@@ -124,7 +125,7 @@ You can also manually create `crewchief.config.js`:
 export default {
   repository: {
     mainBranch: 'main',
-    worktreeBasePath: '.crewchief/worktrees'
+    worktreeBasePath: '.crewchief/worktrees',
   },
   worktree: {
     // Auto-copy .env files to new worktrees
@@ -135,14 +136,14 @@ export default {
   terminal: {
     backend: 'iterm',
     iterm: {
-      sessionName: 'crewchief'
-    }
+      sessionName: 'crewchief',
+    },
   },
   evaluation: {
     autoMergeThreshold: 0.95,
     requireTestsPass: true,
-    requireReview: false
-  }
+    requireReview: false,
+  },
 }
 ```
 
@@ -152,42 +153,42 @@ All commands below should be prefixed with `crewchief`. For example: `crewchief 
 
 ### Worktree Commands
 
-| Command | Description |
-|---------|-------------|
-| `worktree create <name>` | Create a new worktree |
-| `worktree list` | List all worktrees |
-| `worktree use <name>` | Switch to worktree (creates if needed) |
-| `worktree merge <name>` | Merge worktree changes back |
-| `worktree clean` | Remove worktrees |
-| `worktree copy-ignored <name>` | Copy .env files to worktree |
+| Command                        | Description                            |
+| ------------------------------ | -------------------------------------- |
+| `worktree create <name>`       | Create a new worktree                  |
+| `worktree list`                | List all worktrees                     |
+| `worktree use <name>`          | Switch to worktree (creates if needed) |
+| `worktree merge <name>`        | Merge worktree changes back            |
+| `worktree clean`               | Remove worktrees                       |
+| `worktree copy-ignored <name>` | Copy .env files to worktree            |
 
 ### Maproom Commands (Semantic Search)
 
-| Command | Description |
-|---------|-------------|
-| `maproom:db` | Initialize PostgreSQL database |
-| `maproom:scan` | Index your codebase |
-| `maproom:search <query>` | Search code semantically |
-| `maproom:watch` | Auto-index on file changes |
-| `maproom:upsert [files...]` | Update specific files |
+| Command                     | Description                    |
+| --------------------------- | ------------------------------ |
+| `maproom:db`                | Initialize PostgreSQL database |
+| `maproom:scan`              | Index your codebase            |
+| `maproom:search <query>`    | Search code semantically       |
+| `maproom:watch`             | Auto-index on file changes     |
+| `maproom:upsert [files...]` | Update specific files          |
 
 **Note:** For AI assistant integration, install [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) instead of using these commands directly.
 
 ### Agent Commands (iTerm2 Required)
 
-| Command | Description |
-|---------|-------------|
-| `spawn <agents> [task]` | Spawn AI agents |
-| `agent list` | List running agents |
+| Command                      | Description           |
+| ---------------------------- | --------------------- |
+| `spawn <agents> [task]`      | Spawn AI agents       |
+| `agent list`                 | List running agents   |
 | `agent message <name> <msg>` | Send message to agent |
-| `agent close <id>` | Close agent pane |
+| `agent close <id>`           | Close agent pane      |
 
 ### System Commands
 
-| Command | Description |
-|---------|-------------|
-| `setup` | Interactive configuration wizard |
-| `doctor` | Check dependencies |
+| Command  | Description                      |
+| -------- | -------------------------------- |
+| `setup`  | Interactive configuration wizard |
+| `doctor` | Check dependencies               |
 
 ## PostgreSQL Setup for Semantic Search
 
@@ -239,13 +240,13 @@ Use any PostgreSQL provider (Supabase, Neon, etc.) and set the connection string
 ### Run without installing
 
 ```bash
-npx crewchief --help
+npx @crewchief/cli --help
 ```
 
 ### Install in a project
 
 ```bash
-npm install crewchief
+npm install @crewchief/cli
 # Then run with:
 npx crewchief --help
 ```
@@ -253,6 +254,7 @@ npx crewchief --help
 ## Troubleshooting
 
 ### Check system dependencies
+
 ```bash
 crewchief doctor
 ```

@@ -1,9 +1,9 @@
 # Ticket: CLIREL-2001: Reconfigure CLI Package for @crewchief/cli Scoped Name
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (npm pack validation successful)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -23,14 +23,14 @@ The CLI package is being renamed from `crewchief` to `@crewchief/cli` to:
 This ticket focuses on package configuration only - no workflow automation yet. The package should be ready for local `npm pack` testing to validate structure before workflows are created in Phase 4.
 
 ## Acceptance Criteria
-- [ ] package.json name changed to `@crewchief/cli`
-- [ ] package.json version set to `1.0.0`
-- [ ] publishConfig added with `{ "access": "public" }`
-- [ ] prepublishOnly hook removed from package.json
-- [ ] .npmignore created (exclude sources, include dist/ and bin/)
-- [ ] README.md updated with new package name
-- [ ] Local `npm pack` produces correctly structured tarball
-- [ ] Tarball inspection shows all expected files included
+- [x] package.json name changed to `@crewchief/cli`
+- [x] package.json version set to `1.0.0`
+- [x] publishConfig added with `{ "access": "public" }`
+- [x] prepublishOnly hook removed from package.json
+- [x] .npmignore created (exclude sources, include dist/ and bin/)
+- [x] README.md updated with new package name
+- [x] Local `npm pack` produces correctly structured tarball
+- [x] Tarball inspection shows all expected files included
 
 ## Technical Requirements
 

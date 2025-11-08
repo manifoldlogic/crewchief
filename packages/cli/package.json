@@ -1,6 +1,6 @@
 {
-  "name": "crewchief",
-  "version": "0.1.23",
+  "name": "@crewchief/cli",
+  "version": "1.0.0",
   "private": false,
   "description": "CrewChief: Multi-agent orchestration CLI for coordinating AI agents via git worktrees and tmux.",
   "license": "MIT",
@@ -33,7 +33,6 @@
     "format:check": "prettier --check .",
     "check": "pnpm lint && pnpm format:check",
     "fix": "pnpm lint:fix && pnpm format",
-    "prepublishOnly": "pnpm build:all",
     "postinstall": "node ./dist/postinstall.js || true",
     "release:patch": "node ./scripts/release.mjs patch",
     "release:minor": "node ./scripts/release.mjs minor",

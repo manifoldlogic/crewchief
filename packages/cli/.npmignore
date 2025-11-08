@@ -1,0 +1,19 @@
+# Exclude source files
+src/
+tsconfig.json
+*.test.ts
+__tests__/
+
+# Exclude development files
+.git
+.github
+node_modules
+.DS_Store
+
+# Exclude CI/build artifacts
+*.log
+coverage/
+
+# Include built artifacts (explicit)
+!dist/
+!bin/
