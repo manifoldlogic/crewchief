@@ -436,3 +436,85 @@ describe('Blob SHA Migration - Database Integration', () => {
     expect(result.rows[0].indexdef).toContain('blob_sha')
   })
 })
+
+describe('Blob SHA Migration - Migration Validation Tests', () => {
+  it.skipIf(!testClient)('migration 001 executed successfully', async () => {
+    if (!testClient) return
+
+    // Verify migration 001 was applied by checking:
+    // 1. Function exists
+    // 2. Column exists
+    // 3. Index exists
+
+    // Check function exists
+    const funcResult = await testClient.query(`
+      SELECT proname
+      FROM pg_proc
+      WHERE proname = 'compute_git_blob_sha'
+        AND pronamespace = 'maproom'::regnamespace
+    `)
+    expect(funcResult.rows.length).toBeGreaterThan(0)
+
+    // Check column exists
+    const colResult = await testClient.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'maproom'
+        AND table_name = 'chunks'
+        AND column_name = 'blob_sha'
+    `)
+    expect(colResult.rows.length).toBe(1)
+
+    // Check index exists
+    const idxResult = await testClient.query(`
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'maproom'
+        AND tablename = 'chunks'
+        AND indexname = 'idx_chunks_blob_sha'
+    `)
+    expect(idxResult.rows.length).toBe(1)
+  })
+
+  it.skipIf(!testClient)('all chunks have blob_sha values (no NULLs)', async () => {
+    if (!testClient) return
+
+    // Verify no NULL values in blob_sha column
+    const result = await testClient.query(`
+      SELECT COUNT(*) as null_count
+      FROM maproom.chunks
+      WHERE blob_sha IS NULL
+    `)
+
+    expect(result.rows[0].null_count).toBe('0')
+  })
+
+  it.skipIf(!testClient)('deduplication metrics can be calculated', async () => {
+    if (!testClient) return
+
+    // Calculate deduplication metrics
+    const result = await testClient.query(`
+      SELECT
+        COUNT(*) AS total_chunks,
+        COUNT(DISTINCT blob_sha) AS unique_blobs,
+        ROUND(100.0 * (COUNT(*) - COUNT(DISTINCT blob_sha)) / NULLIF(COUNT(*), 0), 2) AS dedup_pct
+      FROM maproom.chunks
+    `)
+
+    const row = result.rows[0]
+
+    // Verify metrics are defined
+    expect(row.total_chunks).toBeDefined()
+    expect(row.unique_blobs).toBeDefined()
+    expect(row.dedup_pct).toBeDefined()
+
+    // Unique blobs cannot exceed total chunks
+    expect(parseInt(row.unique_blobs)).toBeLessThanOrEqual(parseInt(row.total_chunks))
+
+    // If there are chunks, dedup_pct should be a valid number >= 0
+    if (parseInt(row.total_chunks) > 0) {
+      expect(parseFloat(row.dedup_pct)).toBeGreaterThanOrEqual(0)
+      expect(parseFloat(row.dedup_pct)).toBeLessThanOrEqual(100)
+    }
+  })
+})

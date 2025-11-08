@@ -16,5 +16,8 @@
     "release:minor": "node packages/cli/dist/cli/index.js release --type minor",
     "release:major": "node packages/cli/dist/cli/index.js release --type major",
     "release:dry": "node packages/cli/dist/cli/index.js release --dry-run"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.1"
   }
 }
