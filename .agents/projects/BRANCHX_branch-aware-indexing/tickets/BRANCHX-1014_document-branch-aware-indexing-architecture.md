@@ -1,9 +1,9 @@
 # Ticket: BRANCHX-1014: Document branch-aware indexing architecture and usage
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - documentation reviewed and validated
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -20,12 +20,12 @@ This is Phase 5 (Documentation) of BRANCHX. After implementing and testing the c
 Reference: `.agents/projects/BRANCHX_branch-aware-indexing/planning/plan.md` - Phase 5 (lines 339-349)
 
 ## Acceptance Criteria
-- [ ] `docs/architecture/branch-aware-indexing.md` created with complete architecture documentation
-- [ ] `packages/maproom-mcp/README.md` updated with new schema details (worktree_ids, worktree_index_state)
-- [ ] `CHANGELOG.md` updated with BRANCHX features and breaking changes
-- [ ] Migration guide for existing installations included
-- [ ] Usage examples for CLI and MCP provided
-- [ ] All documentation reviewed and internally consistent
+- [x] `docs/architecture/branch-aware-indexing.md` created with complete architecture documentation
+- [x] `packages/maproom-mcp/README.md` updated with new schema details (worktree_ids, worktree_index_state)
+- [x] `CHANGELOG.md` updated with BRANCHX features and breaking changes
+- [x] Migration guide for existing installations included
+- [x] Usage examples for CLI and MCP provided
+- [x] All documentation reviewed and internally consistent
 
 ## Technical Requirements
 

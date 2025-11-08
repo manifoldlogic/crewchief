@@ -349,6 +349,57 @@ docker volume rm maproom-data ollama-models maproom-logs
 
 ---
 
+## Database Schema
+
+### Core Tables
+
+**chunks table** - Code chunks with worktree tracking
+- `chunk_id` - UUID primary key
+- `blob_sha` - Content-addressed SHA (links to embeddings)
+- `relpath` - File path relative to repository root
+- `symbol_name` - Function/class/symbol name
+- `content` - Source code text
+- `worktree_ids` - **JSONB array** of worktree IDs containing this chunk
+- `start_line`, `end_line` - Line range in file
+- `created_at`, `updated_at` - Timestamps
+
+**worktree_index_state table** - Tracks last indexed git tree SHA per worktree
+- `worktree_id` - Foreign key to worktrees table
+- `last_tree_sha` - Git tree SHA from `git rev-parse HEAD^{tree}`
+- `last_indexed` - Timestamp of last successful scan
+- `chunks_processed` - Cumulative count for monitoring
+- `embeddings_generated` - Cost tracking metric
+
+**code_embeddings table** - Cached embeddings for content deduplication
+- `blob_sha` - Primary key (content-addressed)
+- `embedding` - Vector embedding (pgvector type)
+- `model` - Embedding model name
+- `dimension` - Vector dimension
+
+### Indexes
+
+**GIN index on worktree_ids** - Enables efficient worktree filtering
+```sql
+CREATE INDEX idx_chunks_worktree_ids
+ON maproom.chunks USING gin(worktree_ids);
+```
+
+Supports JSONB operators:
+- `WHERE worktree_ids ? '2'` - Find chunks in worktree 2
+- `WHERE worktree_ids ?| ARRAY['2', '5']` - Find chunks in any of multiple worktrees
+
+### Branch-Aware Features
+
+**Content deduplication**: Same code across branches shares single embedding (via blob_sha)
+
+**Incremental updates**: Tree SHA comparison enables instant "no changes" detection (<100ms)
+
+**Worktree filtering**: Search code from specific branch/worktree
+
+**See also**: [Branch-Aware Indexing Architecture](/docs/architecture/branch-aware-indexing.md) for complete technical details
+
+---
+
 ## Database Connection
 
 The Maproom MCP server uses intelligent connection fallback to detect and connect to the PostgreSQL database automatically.
