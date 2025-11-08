@@ -1,10 +1,10 @@
 dist/
 target/
 
-.cursor/
-.claude/
-.gemini/
-.codex/
+# .cursor/
+# .claude/
+# .gemini/
+# .codex/
 
 .obsidian/
 
@@ -17,6 +17,8 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+
+*.local*
 
 .DS_Store
 

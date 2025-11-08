@@ -1,0 +1,5 @@
+---
+description: Use pnpm as the node package manager.
+alwaysApply: false
+---
+Use pnpm as the node package manager.
