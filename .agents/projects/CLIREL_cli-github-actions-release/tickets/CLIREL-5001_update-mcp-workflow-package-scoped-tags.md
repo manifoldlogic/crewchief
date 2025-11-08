@@ -1,9 +1,9 @@
 # Ticket: CLIREL-5001: Update MCP Workflow for Package-Scoped Tags
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (YAML syntax validated)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -33,12 +33,12 @@ The MCP workflow currently triggers on simple `v*.*.*` tags. This creates ambigu
 **Only the trigger changes.**
 
 ## Acceptance Criteria
-- [ ] MCP workflow trigger updated to `@crewchief/maproom-mcp@v*.*.*`
-- [ ] MCP workflow does NOT trigger on `@crewchief/cli@v*` tags
-- [ ] CLI workflow does NOT trigger on `@crewchief/maproom-mcp@v*` tags
-- [ ] Tag isolation test passes (synthetic tags created and verified)
-- [ ] workflow_dispatch trigger remains unchanged (manual testing still works)
-- [ ] No other workflow changes made (only trigger modification)
+- [x] MCP workflow trigger updated to `@crewchief/maproom-mcp@v*.*.*`
+- [x] MCP workflow does NOT trigger on `@crewchief/cli@v*` tags
+- [x] CLI workflow does NOT trigger on `@crewchief/maproom-mcp@v*` tags
+- [x] Tag isolation test passes (synthetic tags created and verified)
+- [x] workflow_dispatch trigger remains unchanged (manual testing still works)
+- [x] No other workflow changes made (only trigger modification)
 
 ## Technical Requirements
 

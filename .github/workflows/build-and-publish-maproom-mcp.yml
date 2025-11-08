@@ -1,10 +1,10 @@
 name: Build and Publish Maproom MCP
 
-# Trigger on version tags (v1.2.3, v2.0.0, etc.) and manual dispatch
+# Trigger on package-scoped version tags and manual dispatch
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - '@crewchief/maproom-mcp@v*.*.*'
   # Allow manual triggering with dry-run option
   workflow_dispatch:
     inputs:
