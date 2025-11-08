@@ -45,6 +45,7 @@ pub mod path_utils;
 pub mod processor;
 pub mod queue;
 pub mod task;
+pub mod tree_sha_update;
 pub mod watcher;
 pub mod worktree_watcher;
 
@@ -59,5 +60,6 @@ pub use path_utils::normalize_to_relpath;
 pub use processor::IncrementalProcessor;
 pub use queue::{QueueStats, UpdateQueue};
 pub use task::{Priority, Trigger, UpdateTask};
+pub use tree_sha_update::incremental_update;
 pub use watcher::{FileWatcher, WatcherConfig};
 pub use worktree_watcher::{WatcherStatus, WorktreeWatcher};
