@@ -17,6 +17,7 @@ docker
 docs
 deps
 embedding
+git
 perf
 release
 research
