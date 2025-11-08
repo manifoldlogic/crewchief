@@ -21,6 +21,7 @@ perf
 release
 research
 search
+security
 tests
 tools
 ui

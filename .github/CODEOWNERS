@@ -1,0 +1,12 @@
+# CODEOWNERS file for required reviews
+
+# GitHub Actions workflows require security review
+/.github/workflows/ @danielbushman
+
+# Release scripts require review
+/packages/cli/scripts/release.mjs @danielbushman
+/packages/maproom-mcp/scripts/release.js @danielbushman
+
+# Package.json changes require review (prevent accidental renames)
+/packages/cli/package.json @danielbushman
+/packages/maproom-mcp/package.json @danielbushman
