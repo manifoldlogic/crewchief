@@ -4,6 +4,7 @@
 //! - Compute blob SHA from chunk content
 //! - Check if embedding exists in code_embeddings table
 //! - Track cache hits/misses for cost analysis
+//! - Track worktree membership via JSONB arrays (BRANCHX)
 //!
 //! This is the core implementation of BLOBSHA Phase 3 (planning/plan.md lines 331-439).
 
@@ -12,6 +13,7 @@ use crate::metrics::CacheMetrics;
 use anyhow::{Context, Result};
 use tokio_postgres::Client;
 use tracing::{debug, info};
+use uuid::Uuid;
 
 /// Check if an embedding exists for a given blob SHA.
 ///
@@ -265,6 +267,152 @@ pub async fn upsert_chunks_batch_with_cache(
     Ok(chunk_ids)
 }
 
+/// Simplified chunk representation for worktree-aware upsert.
+///
+/// This struct contains the minimal information needed to upsert a chunk
+/// with worktree tracking. Used by the incremental update algorithm (BRANCHX-1007).
+#[derive(Debug, Clone)]
+pub struct ParsedChunk {
+    /// Relative path to file containing this chunk
+    pub relpath: String,
+    /// Optional symbol name (function, class, etc.)
+    pub symbol_name: Option<String>,
+    /// Full chunk content (for blob SHA computation)
+    pub content: String,
+    /// Starting line number in file
+    pub start_line: i32,
+    /// Ending line number in file
+    pub end_line: i32,
+    /// Chunk type/kind (function, class, module, etc.)
+    pub kind: String,
+}
+
+/// Upsert a chunk with worktree tracking.
+///
+/// This function implements the core BRANCHX upsert logic:
+/// 1. Compute blob_sha from content
+/// 2. Check if embedding exists for this blob_sha (cache check)
+/// 3. INSERT chunk with worktree_ids = [worktree_id]
+/// 4. ON CONFLICT: append worktree_id to array if not already present
+/// 5. Return chunk_id (UUID)
+///
+/// The function is idempotent: calling twice with the same worktree_id will not
+/// create duplicate entries in the worktree_ids array.
+///
+/// # Arguments
+///
+/// * `client` - Database client
+/// * `chunk` - Parsed chunk data
+/// * `worktree_id` - ID of worktree containing this chunk
+/// * `metrics` - Cache metrics tracker (for recording cache hits/misses)
+///
+/// # Returns
+///
+/// * `Ok(Uuid)` - The chunk_id of the inserted/updated chunk
+/// * `Err` - Database errors or processing errors
+///
+/// # Example
+///
+/// ```no_run
+/// # use crewchief_maproom::upsert::{ParsedChunk, upsert_chunk_with_worktree};
+/// # use crewchief_maproom::metrics::CacheMetrics;
+/// # use crewchief_maproom::db;
+/// # async fn example() -> anyhow::Result<()> {
+/// let client = db::connect().await?;
+/// let metrics = CacheMetrics::new();
+///
+/// let chunk = ParsedChunk {
+///     relpath: "src/main.rs".to_string(),
+///     symbol_name: Some("main".to_string()),
+///     content: "fn main() { println!(\"Hello\"); }".to_string(),
+///     start_line: 1,
+///     end_line: 3,
+///     kind: "function".to_string(),
+/// };
+///
+/// let chunk_id = upsert_chunk_with_worktree(&client, &chunk, 1, &metrics).await?;
+/// println!("Chunk ID: {}", chunk_id);
+/// # Ok(())
+/// # }
+/// ```
+pub async fn upsert_chunk_with_worktree(
+    client: &Client,
+    chunk: &ParsedChunk,
+    worktree_id: i64,
+    metrics: &CacheMetrics,
+) -> Result<Uuid> {
+    // Step 1: Compute blob SHA from chunk content
+    let blob_sha = compute_blob_sha(&chunk.content);
+
+    // Step 2: Check if embedding exists (cache check)
+    let embedding_exists = check_embedding_exists(client, &blob_sha)
+        .await
+        .context("Failed to check embedding cache")?;
+
+    // Step 3: Record cache hit or miss
+    if embedding_exists {
+        metrics.record_hit();
+        debug!(
+            blob_sha = %blob_sha,
+            symbol = ?chunk.symbol_name,
+            worktree_id = worktree_id,
+            "Cache hit: reusing existing embedding"
+        );
+    } else {
+        metrics.record_miss();
+        debug!(
+            blob_sha = %blob_sha,
+            symbol = ?chunk.symbol_name,
+            worktree_id = worktree_id,
+            "Cache miss: new embedding needed"
+        );
+    }
+
+    // Step 4: Upsert chunk with worktree tracking
+    // Use ON CONFLICT to handle both INSERT (new chunk) and UPDATE (existing chunk)
+    // The CASE statement ensures idempotency: only append worktree_id if not already present
+    let row = client
+        .query_one(
+            r#"
+            INSERT INTO maproom.chunks
+                (blob_sha, relpath, symbol_name, content, start_line, end_line, kind, worktree_ids, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, jsonb_build_array($8), NOW())
+            ON CONFLICT (blob_sha, relpath)
+            DO UPDATE SET
+                worktree_ids = CASE
+                    WHEN maproom.chunks.worktree_ids ? $8::TEXT THEN maproom.chunks.worktree_ids
+                    ELSE maproom.chunks.worktree_ids || jsonb_build_array($8)
+                END,
+                updated_at = NOW()
+            RETURNING id
+            "#,
+            &[
+                &blob_sha,
+                &chunk.relpath,
+                &chunk.symbol_name,
+                &chunk.content,
+                &chunk.start_line,
+                &chunk.end_line,
+                &chunk.kind,
+                &worktree_id,
+            ],
+        )
+        .await
+        .context("Failed to upsert chunk with worktree tracking")?;
+
+    let chunk_id: Uuid = row.get(0);
+
+    debug!(
+        chunk_id = %chunk_id,
+        blob_sha = %blob_sha,
+        relpath = %chunk.relpath,
+        worktree_id = worktree_id,
+        "Chunk upserted with worktree tracking"
+    );
+
+    Ok(chunk_id)
+}
+
 /// Print cache metrics summary after scan completion.
 ///
 /// Format matches specification from planning/architecture.md lines 457-465.
@@ -345,5 +493,61 @@ mod tests {
         // Cost: 2 embeddings × $0.00002 = $0.00004
         let cost = metrics.estimated_cost_usd();
         assert!((cost - 0.00004).abs() < 0.000001);
+    }
+
+    #[test]
+    fn test_parsed_chunk_creation() {
+        let chunk = ParsedChunk {
+            relpath: "src/main.rs".to_string(),
+            symbol_name: Some("main".to_string()),
+            content: "fn main() {}".to_string(),
+            start_line: 1,
+            end_line: 1,
+            kind: "function".to_string(),
+        };
+
+        assert_eq!(chunk.relpath, "src/main.rs");
+        assert_eq!(chunk.symbol_name, Some("main".to_string()));
+        assert_eq!(chunk.content, "fn main() {}");
+        assert_eq!(chunk.start_line, 1);
+        assert_eq!(chunk.end_line, 1);
+        assert_eq!(chunk.kind, "function");
+    }
+
+    #[test]
+    fn test_parsed_chunk_clone() {
+        let chunk = ParsedChunk {
+            relpath: "src/lib.rs".to_string(),
+            symbol_name: None,
+            content: "mod test;".to_string(),
+            start_line: 5,
+            end_line: 5,
+            kind: "module".to_string(),
+        };
+
+        let cloned = chunk.clone();
+        assert_eq!(cloned.relpath, chunk.relpath);
+        assert_eq!(cloned.symbol_name, chunk.symbol_name);
+        assert_eq!(cloned.content, chunk.content);
+        assert_eq!(cloned.start_line, chunk.start_line);
+        assert_eq!(cloned.end_line, chunk.end_line);
+        assert_eq!(cloned.kind, chunk.kind);
+    }
+
+    #[test]
+    fn test_parsed_chunk_debug() {
+        let chunk = ParsedChunk {
+            relpath: "test.rs".to_string(),
+            symbol_name: Some("test_fn".to_string()),
+            content: "test content".to_string(),
+            start_line: 10,
+            end_line: 20,
+            kind: "function".to_string(),
+        };
+
+        let debug_str = format!("{:?}", chunk);
+        assert!(debug_str.contains("ParsedChunk"));
+        assert!(debug_str.contains("test.rs"));
+        assert!(debug_str.contains("test_fn"));
     }
 }

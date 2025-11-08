@@ -41,7 +41,7 @@
 //! # }
 //! ```
 
-use crate::db::index_state::{get_last_indexed_tree, update_index_state, UpdateStats};
+use crate::db::index_state::{get_last_indexed_tree, UpdateStats};
 use crate::git::{get_git_tree_sha, git_diff_tree, FileStatus};
 use anyhow::{Context, Result};
 use std::path::Path;

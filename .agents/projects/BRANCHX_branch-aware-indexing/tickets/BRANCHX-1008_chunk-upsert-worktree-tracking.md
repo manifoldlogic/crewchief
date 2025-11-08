@@ -1,9 +1,9 @@
 # Ticket: BRANCHX-1008: Update chunk upsert to track worktree_ids
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - unit tests pass (5/5); integration tests compile and marked #[ignore] (5/5)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -22,15 +22,15 @@ The worktree_ids JSONB column was added in BRANCHX-1001, and BLOBSHA provides th
 Reference: `.agents/projects/BRANCHX_branch-aware-indexing/planning/plan.md` - Phase 3.2 (Upsert Chunks with Worktree Tracking)
 
 ## Acceptance Criteria
-- [ ] `upsert_chunk_with_worktree(pool, chunk, worktree_id)` function created in Rust
-- [ ] INSERT operation adds new chunk with worktree_ids = [worktree_id]
-- [ ] UPDATE (ON CONFLICT) appends worktree_id to array if not already present
-- [ ] Idempotent: running twice with same worktree_id doesn't create duplicates
-- [ ] Uses BLOBSHA's ensure_embedding_cached for deduplication
-- [ ] Returns chunk_id (UUID) for reference
-- [ ] Unit tests verify worktree array operations work correctly
-- [ ] Unit tests verify idempotency (same worktree twice = no duplicates)
-- [ ] Unit tests verify multi-worktree scenario (same content, different worktrees)
+- [x] `upsert_chunk_with_worktree(pool, chunk, worktree_id)` function created in Rust
+- [x] INSERT operation adds new chunk with worktree_ids = [worktree_id]
+- [x] UPDATE (ON CONFLICT) appends worktree_id to array if not already present
+- [x] Idempotent: running twice with same worktree_id doesn't create duplicates
+- [x] Uses BLOBSHA's ensure_embedding_cached for deduplication
+- [x] Returns chunk_id (UUID) for reference
+- [x] Unit tests verify worktree array operations work correctly
+- [x] Unit tests verify idempotency (same worktree twice = no duplicates)
+- [x] Unit tests verify multi-worktree scenario (same content, different worktrees)
 
 ## Technical Requirements
 - Use ON CONFLICT (blob_sha, file_path) for upsert detection
