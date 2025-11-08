@@ -7,6 +7,8 @@ import {
   exportLearnings,
   rollbackProduction,
   getLeaderboardEntry,
+  deployVariant,
+  getCurrentProduction,
 } from '../search-optimization/tracking/index.js'
 import { logger } from '../utils/logger.js'
 
@@ -95,10 +97,11 @@ export function registerOptimizationCommands(program: Command): void {
     .option('--deployed-by <name>', 'Name of person deploying')
     .action(async (variantId: string, opts: { reason?: string; deployedBy?: string }) => {
       try {
-        await promoteToProduction(variantId, {
-          reason: opts.reason,
-          deployedBy: opts.deployedBy,
-        })
+        // Load the variant first
+        const { loadVariant } = await import('../search-optimization/genetic-iterator.js')
+        const variant = await loadVariant(variantId)
+
+        await promoteToProduction(variant, opts.reason, opts.deployedBy)
 
         logger.info(`✓ Variant ${variantId} promoted to production`)
         logger.info(`  Reason: ${opts.reason || 'Not specified'}`)
@@ -146,12 +149,9 @@ export function registerOptimizationCommands(program: Command): void {
     .option('--deployed-by <name>', 'Name of person performing rollback')
     .action(async (opts: { reason?: string; deployedBy?: string }) => {
       try {
-        const result = await rollbackProduction({
-          reason: opts.reason,
-          deployedBy: opts.deployedBy,
-        })
+        const result = await rollbackProduction(opts.reason, opts.deployedBy)
 
-        logger.info(`✓ Rolled back to variant ${result.currentVariant?.variantId}`)
+        logger.info(`✓ Rolled back to variant ${result.currentVariantId}`)
         logger.info(`  Reason: ${opts.reason || 'Not specified'}`)
 
         // Show updated production status
@@ -234,6 +234,98 @@ export function registerOptimizationCommands(program: Command): void {
         process.exitCode = 1
       }
     })
+
+  // Deploy variant command
+  optimization
+    .command('deploy')
+    .description('Deploy a variant to the live MCP server')
+    .argument('[variantId]', 'Variant ID to deploy')
+    .option('--production', 'Deploy current production variant')
+    .option('--dry-run', 'Preview changes without applying')
+    .option('--skip-build', 'Skip rebuild step')
+    .option('--auto-restart', 'Automatically restart server if running')
+    .action(
+      async (
+        variantId: string | undefined,
+        opts: {
+          production?: boolean
+          dryRun?: boolean
+          skipBuild?: boolean
+          autoRestart?: boolean
+        },
+      ) => {
+        try {
+          let targetVariantId = variantId
+
+          // If --production flag, use current production variant
+          if (opts.production) {
+            const current = await getCurrentProduction()
+            if (!current) {
+              logger.error('No production variant currently deployed')
+              logger.info('Use "crewchief optimization promote <variantId>" to set a production variant first')
+              process.exitCode = 1
+              return
+            }
+            targetVariantId = current.currentVariantId
+            logger.info(`Deploying current production variant: ${targetVariantId}`)
+          }
+
+          if (!targetVariantId) {
+            logger.error('Variant ID is required')
+            logger.info('Usage: crewchief optimization deploy <variantId>')
+            logger.info('   or: crewchief optimization deploy --production')
+            process.exitCode = 1
+            return
+          }
+
+          // Show deployment plan
+          console.log('\n=== DEPLOYMENT PLAN ===')
+          console.log(`Variant ID: ${targetVariantId}`)
+          console.log(`Dry Run: ${opts.dryRun ? 'Yes' : 'No'}`)
+          console.log(`Skip Build: ${opts.skipBuild ? 'Yes' : 'No'}`)
+          console.log(`Auto Restart: ${opts.autoRestart ? 'Yes' : 'No'}`)
+          console.log('=======================\n')
+
+          // Execute deployment
+          const result = await deployVariant(targetVariantId, {
+            dryRun: opts.dryRun,
+            skipBuild: opts.skipBuild,
+            autoRestart: opts.autoRestart,
+          })
+
+          if (!result.success) {
+            logger.error('\n✗ Deployment failed!')
+            if (result.errors && result.errors.length > 0) {
+              console.error('\nErrors:')
+              for (const error of result.errors) {
+                console.error(`  - ${error}`)
+              }
+            }
+            process.exitCode = 1
+            return
+          }
+
+          // Success!
+          if (!opts.dryRun) {
+            console.log('\n✓ Deployment completed successfully!')
+            console.log('\nNext steps:')
+            if (result.serverRestarted) {
+              console.log('  1. ✓ Server has been restarted')
+              console.log('  2. Verify the deployment in your AI assistant')
+            } else {
+              console.log('  1. Restart the MCP server if running')
+              console.log('  2. Verify the deployment in your AI assistant')
+            }
+            console.log('  3. Monitor performance and user feedback')
+            console.log('\nRollback:')
+            console.log('  If needed: crewchief optimization rollback')
+          }
+        } catch (error) {
+          logger.error(`Failed to deploy variant: ${error instanceof Error ? error.message : String(error)}`)
+          process.exitCode = 1
+        }
+      },
+    )
 
   program.addCommand(optimization)
 }

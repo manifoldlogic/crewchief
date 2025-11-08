@@ -4,11 +4,12 @@ Architecture documentation for the genetic optimization winner tracking and lead
 
 ## Overview
 
-The optimization tracking system provides comprehensive infrastructure for tracking, comparing, and managing variants across multiple genetic optimization runs. It consists of three main components:
+The optimization tracking system provides comprehensive infrastructure for tracking, comparing, and managing variants across multiple genetic optimization runs. It consists of four main components:
 
 1. **Leaderboard** - Global top 10 variants across all runs
 2. **Production Variant System** - Deployment management and rollback
 3. **Run Registry** - Historical tracking and learnings extraction
+4. **Automated Deployment** - Deploy variants to live MCP server with backup and rollback
 
 ## Architecture
 
@@ -35,13 +36,34 @@ The optimization tracking system provides comprehensive infrastructure for track
 │  │ • Top 10     │  │ • Current    │  │ • All runs   │      │
 │  │ • Ranking    │  │ • History    │  │ • Learnings  │      │
 │  │ • Scores     │  │ • Rollback   │  │ • Comparison │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│                                                               │
+│  └──────────────┘  └──────┬───────┘  └──────────────┘      │
+│                            │                                  │
+│                            │ used by                          │
+│                            ▼                                  │
+│                    ┌──────────────┐                          │
+│                    │  Deployment  │                          │
+│                    │              │                          │
+│                    │ • Backup     │                          │
+│                    │ • Patch      │                          │
+│                    │ • Build      │                          │
+│                    │ • Rollback   │                          │
+│                    └──────┬───────┘                          │
+│                           │                                   │
+└───────────────────────────┼───────────────────────────────────┘
+                            │
+                            │ modifies
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│              MCP Server Source Code                          │
+│  packages/maproom-mcp/src/index.ts                           │
+│  • Tool description                                          │
+│  • Semantic search configuration                             │
 └─────────────────────────────────────────────────────────────┘
-                 │
-                 │ writes to
-                 │
-                 ▼
+                            │
+                            │ writes to
+                            │
+                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              File System                                     │
 │  .crewchief/                                                 │
@@ -51,6 +73,8 @@ The optimization tracking system provides comprehensive infrastructure for track
 │  └── production/                                             │
 │      ├── current.json                                        │
 │      ├── deployment-log.md                                   │
+│      ├── backups/                                            │
+│      │   └── description-{timestamp}.txt                     │
 │      └── variants/                                           │
 │          └── {id}.json                                       │
 └─────────────────────────────────────────────────────────────┘
@@ -182,6 +206,9 @@ interface RunLearnings {
 └── production/
     ├── current.json              # Current production pointer
     ├── deployment-log.md         # Historical deployments
+    ├── backups/                  # Tool description backups
+    │   ├── description-{timestamp}.txt
+    │   └── ... (keeps 10 most recent)
     └── variants/
         ├── {variant-id-1}.json   # Production variant copies
         └── {variant-id-2}.json
@@ -268,7 +295,7 @@ const pointer = promoteToProduction(
 - **Deployed By**: alice@example.com
 ```
 
-#### Rollback Production
+##### Rollback Production
 ```typescript
 const pointer = rollbackProduction(
   reason,
@@ -284,6 +311,194 @@ const pointer = rollbackProduction(
 4. Create new pointer with swapped IDs
 5. Update leaderboard.productionVariant
 6. Append rollback entry to deployment log
+
+### Automated Deployment
+
+The deployment system automates the process of taking a winning variant and deploying it to the live MCP server.
+
+#### Deploy Variant
+```typescript
+const result = await deployVariant(
+  variantId,
+  {
+    dryRun: false,
+    skipBuild: false,
+    autoRestart: false
+  },
+  baseDir
+)
+```
+
+**Deployment Workflow:**
+
+1. **Load Variant**
+   - Load variant from tracking system (production variants or leaderboard)
+   - Validate description is non-empty
+   - Verify variant exists
+
+2. **Auto-Promotion** (if needed)
+   - Check if variant is already marked as production
+   - If not, automatically promote to production tracking
+   - Updates production pointer and deployment log
+
+3. **Create Backup**
+   - Read current tool description from `packages/maproom-mcp/src/index.ts`
+   - Save to `.crewchief/production/backups/description-{timestamp}.txt`
+   - Include metadata header (timestamp, variant ID, backup path)
+   - Enables rollback on build failure
+
+4. **Patch Source Code**
+   - Find search tool definition using regex pattern
+   - Extract current description (with unescaping)
+   - Escape new description for TypeScript source
+   - Replace description in source file
+   - Validate replacement succeeded
+
+5. **Build MCP Server**
+   - Execute `pnpm build` in `packages/maproom-mcp`
+   - Capture stdout and stderr
+   - On build failure: automatic rollback from backup
+   - Return build success status
+
+6. **Server Detection**
+   - Check if MCP server process is running
+   - Display restart instructions if needed
+   - Optional auto-restart (placeholder for future implementation)
+
+7. **Backup Maintenance**
+   - Prune old backups, keeping only 10 most recent
+   - Prevents unlimited growth of backup directory
+
+8. **Success Reporting**
+   - Display deployment summary
+   - Show next steps (restart server, verify deployment)
+   - Provide rollback command if needed
+
+**Regex Pattern for Tool Description:**
+```typescript
+const toolSchemaRegex = /{\s*name:\s*'search',\s*description:\s*'([^']*(?:\\'[^']*)*)'/s
+```
+
+**Escape String for TypeScript:**
+```typescript
+function escapeForTypeScript(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+}
+```
+
+**Dry-Run Mode:**
+- Previews changes without modifying files
+- Shows previous vs new description lengths
+- Displays first 200 chars of new description
+- No build step executed
+- Useful for validation before deployment
+
+**Build Integration:**
+```typescript
+const buildProcess = spawn('pnpm', ['build'], {
+  cwd: mcpDir,
+  stdio: 'pipe',
+})
+```
+
+**Rollback on Failure:**
+```typescript
+if (!buildResult.success) {
+  // Restore from backup
+  await rollbackFromBackup(backupPath)
+
+  return {
+    success: false,
+    errors: [buildResult.stderr]
+  }
+}
+```
+
+#### Deployment Result Schema
+
+```typescript
+interface DeploymentResult {
+  success: boolean
+  variantId: string
+  previousDescription: string
+  newDescription: string
+  backupPath: string
+  buildSuccess: boolean
+  serverRestarted: boolean
+  errors?: string[]
+}
+```
+
+#### Backup System
+
+**Directory Structure:**
+```
+.crewchief/production/backups/
+├── description-2025-11-07T12-34-56-789Z.txt
+├── description-2025-11-07T13-45-12-123Z.txt
+└── ... (keeps 10 most recent)
+```
+
+**Backup File Format:**
+```
+# Tool Description Backup
+Timestamp: 2025-11-07T12:34:56.789Z
+Variant ID: variant-abc123
+Backup Path: .crewchief/production/backups/description-2025-11-07T12-34-56-789Z.txt
+
+---
+
+[Original tool description content here]
+```
+
+**Pruning Strategy:**
+- Keep 10 most recent backups by default
+- Sort by filename (timestamp) descending
+- Delete older backups automatically
+- Prevents unbounded growth
+
+#### CLI Commands
+
+```bash
+# Basic deployment
+crewchief optimization deploy variant-abc123
+
+# Deploy current production variant
+crewchief optimization deploy --production
+
+# Dry run (preview changes)
+crewchief optimization deploy variant-abc123 --dry-run
+
+# Skip rebuild (for testing)
+crewchief optimization deploy variant-abc123 --skip-build
+
+# Auto-restart server if running (future)
+crewchief optimization deploy variant-abc123 --auto-restart
+```
+
+**Command Options:**
+- `[variantId]` - Variant ID to deploy (optional with --production)
+- `--production` - Deploy current production variant from tracking system
+- `--dry-run` - Preview changes without applying
+- `--skip-build` - Skip rebuild step (useful for testing)
+- `--auto-restart` - Automatically restart server if running (placeholder)
+
+**Error Messages:**
+- **Variant not found**: "Variant {id} not found. Run 'crewchief optimization leaderboard' to see available variants."
+- **Build failure**: "Build failed. Changes have been rolled back. Build errors: {errors}"
+- **Source patching failed**: "Failed to update tool description. File structure may have changed."
+- **No production variant**: "No production variant currently deployed. Use 'crewchief optimization promote <variantId>' first."
+
+**Safety Checks:**
+- Verify `packages/maproom-mcp/` exists before deployment
+- Verify variant description is non-empty
+- Create backup before any source modifications
+- Validate source code structure before patching
+- Automatic rollback on build failure
+- No modifications in dry-run mode
 
 ### Run Registry
 

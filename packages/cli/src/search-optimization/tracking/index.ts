@@ -55,3 +55,17 @@ export {
   getRunRegistryDir,
   getRunRegistryPath,
 } from './run-registry.js'
+
+// Deployment
+export {
+  type DeploymentResult,
+  type DeploymentOptions,
+  deployVariant,
+  backupCurrentDescription,
+  patchToolDescription,
+  buildMCPServer,
+  detectRunningServer,
+  pruneOldBackups,
+  readCurrentDescription,
+  getBackupsDir,
+} from './deployment.js'
