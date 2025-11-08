@@ -1,36 +1,94 @@
 ---
 argument-hint: [project description]
-description: Create initial project documents based on analysis, design, and planning framework.
+description: Create initial project documents based on analysis, design, and planning framework
 ---
 
 # Context
 
-Based on user input: "$ARGUMENTS" (if provided and not just ""), and/or current conversation context
+User input: "$ARGUMENTS"
+Additional context from current conversation as available
 
 # Task
 
-Create project in .agents/projects/:
+Create comprehensive project structure in `.agents/projects/` following analysis → design → planning workflow.
 
-1. Review .agents/reference/project-boundry-evaluation.md to determine if this should be multiple projects. If so, create each separately following this same process.
+## Project Setup
 
-2. Generate PROJECT_NAME and SLUG (max 8 chars, unique, representative)
+1. **Evaluate scope:** Review .agents/reference/project-boundry-evaluation.md to determine if this should be multiple projects. If so, create each separately.
 
-3. Create folder: `.agents/projects/{SLUG}_{project-name}/` with subdirectories `planning/` and `tickets/`
+2. **Generate identifiers:**
+   - PROJECT_NAME: Descriptive, clear name
+   - SLUG: Max 8 characters, unique, representative
 
-4. Generate documents in `planning/` subdirectory:
+3. **Create structure:** `.agents/projects/{SLUG}_{project-name}/`
+   - `planning/` subdirectory for all planning documents
+   - `tickets/` subdirectory for future tickets
+   - `README.md` in project root
 
-   **analysis.md**: Think deeply about problem space, existing industry solutions, current project state, and research to demonstrate full understanding.
+## Planning Documents
 
-   **architecture.md**: Think deeply about best solution. Avoid enterprise mindset - focus on MVP that performs well while showing good judgement about architecture and long-term maintainability.
+Generate in `planning/` subdirectory:
 
-   **quality-strategy.md**: Think deeply about testing strategy. Avoid enterprise mindset - use shrewd judgement for pragmatic MVP approach. Tests should provide confidence and prevent backtracking/rework, not be exhaustive or ceremonial. No tests for their own sake.
+### analysis.md
+Deep understanding of problem space:
+- Problem definition and context
+- Existing industry solutions and approaches
+- Current project state (if applicable)
+- Research findings and insights
 
-   **security-review.md**: Think deeply about architecture and security gaps. Consider enterprise expectations and mention them, but focus on shipping MVP without meaningful security concerns. Use shrewd judgement - cover bases pragmatically, avoid pitfalls, not perfectly iron-clad. No elite security signalling for show.
+### architecture.md
+MVP-focused solution design:
+- Architecture decisions and rationale
+- Technology choices and constraints
+- Performance considerations
+- Long-term maintainability without over-engineering
+- Focus on shipping value, not enterprise complexity
 
-   **agent-suggestions.md** (if applicable): List undefined agents that would help complete this project, with brief descriptions.
+### quality-strategy.md
+Pragmatic testing approach:
+- Test strategy focused on confidence, not coverage
+- Critical paths and integration points
+- Risk mitigation through targeted testing
+- MVP mindset: tests prevent rework, not ceremonial checkboxes
 
-   **plan.md**: Break into phases and deliverables based on architecture, testing strategy, and security review. Reference best-suited agents (existing + suggested). High-level only, not individual tickets.
+### security-review.md
+Practical security assessment:
+- Architecture security analysis
+- Known gaps and risk evaluation
+- MVP-appropriate mitigations
+- Enterprise considerations mentioned, not implemented exhaustively
+- Ship without meaningful security concerns
 
-5. Generate **README.md** in project root: Project summary with problem, solution, relevant agents, and links to planning documents.
+### agent-suggestions.md (if needed)
+Undefined agents that would benefit this project:
+- Agent name and brief description
+- Specific capabilities needed
+- How they fit the workflow
 
-Think sequentially and work systematically to thoroughly complete this large task.
+### plan.md
+High-level execution plan:
+- Phases and deliverables based on architecture
+- Testing milestones from quality strategy
+- Security checkpoints from security review
+- Agent assignments (existing + suggested)
+- Phase-based organization (not individual tickets)
+
+## Project README
+
+Create `README.md` in project root:
+- Project summary and objectives
+- Problem statement and proposed solution
+- Relevant agents for execution
+- Links to all planning documents
+
+## Execution
+
+Work systematically through document creation:
+1. Start with analysis to establish understanding
+2. Design architecture based on analysis insights
+3. Define quality and security strategies aligned with architecture
+4. Identify agent needs
+5. Create comprehensive plan synthesizing all inputs
+6. Summarize in README
+
+Think sequentially and complete thoroughly.
