@@ -168,18 +168,18 @@ Store your API key securely using environment variables.
 
 **Option A: Shell configuration file (persistent)**
 
-Add to `~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`:
+Add to `~/.bashrc` (adjust if your shell uses a different startup file):
 
 ```bash
 # Open your shell config
-nano ~/.bashrc  # or ~/.zshrc
+nano ~/.bashrc
 
 # Add these lines:
 export OPENAI_API_KEY="sk-proj-abc123...xyz789"
 export EMBEDDING_PROVIDER="openai"
 
 # Save and reload
-source ~/.bashrc  # or source ~/.zshrc
+source ~/.bashrc
 ```
 
 **Option B: Project-specific `.env` file**

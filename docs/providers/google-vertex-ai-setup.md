@@ -270,9 +270,7 @@ export GOOGLE_VERTEX_REGION="us-central1"
 
 ### Persistent Configuration
 
-Add these to your shell profile to persist across sessions:
-
-**For Bash** (`~/.bashrc` or `~/.bash_profile`):
+Add these to your shell profile to persist across sessions (example shows Bash `~/.bashrc`; adjust if your shell uses a different startup file):
 ```bash
 echo 'export GOOGLE_PROJECT_ID="your-project-id"' >> ~/.bashrc
 echo 'export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcp/maproom-sa-key.json"' >> ~/.bashrc
@@ -281,17 +279,6 @@ echo 'export GOOGLE_VERTEX_REGION="us-central1"' >> ~/.bashrc
 
 # Reload shell configuration
 source ~/.bashrc
-```
-
-**For Zsh** (`~/.zshrc`):
-```bash
-echo 'export GOOGLE_PROJECT_ID="your-project-id"' >> ~/.zshrc
-echo 'export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcp/maproom-sa-key.json"' >> ~/.zshrc
-echo 'export EMBEDDING_PROVIDER="google"' >> ~/.zshrc
-echo 'export GOOGLE_VERTEX_REGION="us-central1"' >> ~/.zshrc
-
-# Reload shell configuration
-source ~/.zshrc
 ```
 
 ### Project-Specific Configuration

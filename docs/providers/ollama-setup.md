@@ -255,13 +255,13 @@ If Ollama is running on `http://localhost:11434`, Maproom will automatically use
 If you want to explicitly set Ollama as your provider:
 
 ```bash
-# Add to ~/.bashrc or ~/.zshrc
+# Add to ~/.bashrc (update the path if your shell uses a different startup file)
 export EMBEDDING_PROVIDER=ollama
 ```
 
 **Apply changes:**
 ```bash
-source ~/.bashrc  # or source ~/.zshrc
+source ~/.bashrc
 ```
 
 ### Verify Configuration

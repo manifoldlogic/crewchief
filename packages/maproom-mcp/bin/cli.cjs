@@ -1325,7 +1325,7 @@ function showCompletionMessage(provider) {
         }
       }
     }, null, 2));
-    console.error('\n💡 Set OPENAI_API_KEY in your shell profile (~/.zshrc or ~/.bashrc)\n');
+    console.error('\n💡 Set OPENAI_API_KEY in your shell profile (e.g. ~/.bashrc)\n');
   } else if (provider === 'google') {
     console.error('📝 Add this to your MCP configuration:\n');
     console.error('Claude Code (.claude/mcp.json):');
@@ -1356,7 +1356,7 @@ function showCompletionMessage(provider) {
         }
       }
     }, null, 2));
-    console.error('\n💡 Set env vars in your shell profile (~/.zshrc or ~/.bashrc)\n');
+    console.error('\n💡 Set env vars in your shell profile (e.g. ~/.bashrc)\n');
   } else {  // ollama
     console.error('📝 Add this to your MCP configuration:\n');
     console.error('Claude Code (.claude/mcp.json):');
