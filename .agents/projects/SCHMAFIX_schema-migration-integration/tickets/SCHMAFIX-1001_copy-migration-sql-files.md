@@ -1,9 +1,9 @@
 # Ticket: SCHMAFIX-1001: Copy and Adapt Migration SQL Files
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (SQL file creation only, compilation verified with cargo check)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,14 +32,14 @@ The Rust binary is the single source of truth for migrations because it runs sta
 This ticket implements **Phase 1: Migration File Preparation** from the SCHMAFIX project plan.
 
 ## Acceptance Criteria
-- [ ] File `crates/maproom/migrations/0018_add_blob_sha.sql` exists (adapted from MCP 001)
-- [ ] File `crates/maproom/migrations/0019_create_code_embeddings.sql` exists (copied from MCP 002)
-- [ ] File `crates/maproom/migrations/0020_add_worktree_tracking.sql` exists (copied from MCP 004)
-- [ ] Migration 0018 simplified: `CREATE INDEX CONCURRENTLY` removed (use regular CREATE INDEX)
-- [ ] Migration 0018 simplified: Batched backfill with explicit COMMIT statements removed (use single UPDATE)
-- [ ] All SQL files use `IF NOT EXISTS` or `IF EXISTS` clauses for idempotency
-- [ ] All files have headers referencing SCHMAFIX-1001 ticket
-- [ ] Files compile successfully with Rust's `include_str!` macro (no syntax errors)
+- [x] File `crates/maproom/migrations/0018_add_blob_sha.sql` exists (adapted from MCP 001)
+- [x] File `crates/maproom/migrations/0019_create_code_embeddings.sql` exists (copied from MCP 002)
+- [x] File `crates/maproom/migrations/0020_add_worktree_tracking.sql` exists (copied from MCP 004)
+- [x] Migration 0018 simplified: `CREATE INDEX CONCURRENTLY` removed (use regular CREATE INDEX)
+- [x] Migration 0018 simplified: Batched backfill with explicit COMMIT statements removed (use single UPDATE)
+- [x] All SQL files use `IF NOT EXISTS` or `IF EXISTS` clauses for idempotency
+- [x] All files have headers referencing SCHMAFIX-1001 ticket
+- [x] Files compile successfully with Rust's `include_str!` macro (no syntax errors)
 
 ## Technical Requirements
 
