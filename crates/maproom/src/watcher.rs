@@ -9,15 +9,18 @@ use notify::{Event, RecursiveMode, Watcher};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
+use std::time::Instant;
 use tokio_postgres::Client;
 use tracing::{error, info};
+
+use crate::db::{get_or_create_repo, get_or_create_worktree};
+use crate::incremental::incremental_update;
 
 /// Watches .git/HEAD for branch switches and triggers automatic indexing
 pub struct BranchWatcher {
     /// Path to the git repository root
     repo_path: PathBuf,
     /// Database client for indexing operations
-    #[allow(dead_code)] // Will be used in BRWATCH-2001 (handle_branch_switch implementation)
     client: Client,
     /// File system watcher
     watcher: notify::RecommendedWatcher,
@@ -119,11 +122,52 @@ impl BranchWatcher {
 
     /// Handles a detected branch switch by triggering incremental update
     ///
-    /// This method will be implemented in BRWATCH-2001 to integrate with
-    /// the incremental_update function from BRANCHX.
+    /// Extracts the current branch name, gets or creates the worktree record,
+    /// and triggers an incremental update to sync the index with the new branch.
     async fn handle_branch_switch(&self) -> Result<()> {
-        // TODO: Implement in BRWATCH-2001
-        // Will extract branch name, get/create worktree, and trigger incremental update
+        // Extract current branch name
+        let current_branch = get_current_branch(&self.repo_path)?;
+
+        info!("Branch switch detected: {}", current_branch);
+
+        // Extract repo name from path
+        let repo_name = self
+            .repo_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        // Get or create repo record
+        let repo_id = get_or_create_repo(
+            &self.client,
+            repo_name,
+            &self.repo_path.to_string_lossy(),
+        )
+        .await?;
+
+        // Get or create worktree record
+        let worktree_id = get_or_create_worktree(
+            &self.client,
+            repo_id,
+            &current_branch,
+            &self.repo_path.to_string_lossy(),
+        )
+        .await?;
+
+        // Trigger incremental update with timing
+        let start = Instant::now();
+        let stats = incremental_update(&self.client, worktree_id, &self.repo_path).await?;
+        let duration = start.elapsed();
+
+        // Log results
+        info!(
+            "Index updated in {:.1}s: {} files, {} chunks, {} embeddings",
+            duration.as_secs_f64(),
+            stats.files_processed,
+            stats.chunks_processed,
+            stats.embeddings_generated
+        );
+
         Ok(())
     }
 }
