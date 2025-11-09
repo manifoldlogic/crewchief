@@ -13,7 +13,6 @@ use crate::metrics::CacheMetrics;
 use anyhow::{Context, Result};
 use tokio_postgres::Client;
 use tracing::{debug, info};
-use uuid::Uuid;
 
 /// Check if an embedding exists for a given blob SHA.
 ///
