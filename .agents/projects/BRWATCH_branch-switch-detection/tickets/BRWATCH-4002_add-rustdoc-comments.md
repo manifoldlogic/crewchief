@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-4002: Add Rustdoc comments to watcher code
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - `cargo doc` builds without warnings
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - `cargo doc` builds without warnings
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose

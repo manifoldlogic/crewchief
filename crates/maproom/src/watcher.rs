@@ -3,6 +3,60 @@
 //! This module implements automatic detection of git branch switches by monitoring
 //! the `.git/HEAD` file for changes. When a branch switch is detected, it triggers
 //! incremental indexing to keep the search index synchronized with the current branch.
+//!
+//! # Architecture
+//!
+//! The watcher uses the [`notify`](https://docs.rs/notify) crate to monitor `.git/HEAD`
+//! for file system events. When a write event occurs (indicating a branch switch), the
+//! watcher:
+//!
+//! 1. Extracts the new branch name from `.git/HEAD`
+//! 2. Gets or creates a worktree record in the database
+//! 3. Triggers incremental update for the new branch via [`incremental_update`]
+//! 4. Logs indexing metrics (files processed, cache hit rate, cost)
+//!
+//! # Performance
+//!
+//! - **Detection latency**: <1 second (OS file events)
+//! - **CPU usage while idle**: <5%
+//! - **Memory usage**: ~15-20MB
+//! - **Update time**: Depends on changed files (typically 30-60s for medium changes)
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use crewchief_maproom::watcher::BranchWatcher;
+//! use crewchief_maproom::db;
+//! use std::path::PathBuf;
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let database_url = std::env::var("DATABASE_URL")?;
+//!     let client = db::connect(&database_url).await?;
+//!     let repo_path = PathBuf::from("/workspace/myproject");
+//!
+//!     let mut watcher = BranchWatcher::new(repo_path, client)?;
+//!
+//!     // Blocks until Ctrl+C or error
+//!     watcher.start().await?;
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # CLI Integration
+//!
+//! This module is used by the `maproom branch-watch` CLI command:
+//!
+//! ```bash
+//! maproom branch-watch --repo /workspace/myproject
+//! ```
+//!
+//! # Related
+//!
+//! - [`incremental_update`] - The BRANCHX function called on branch switches
+//! - [`get_or_create_worktree`] - Database function for worktree records
+//! - [`get_current_branch`] - Branch name extraction from .git/HEAD
 
 use anyhow::{bail, Result};
 use notify::{Event, RecursiveMode, Watcher};
@@ -18,12 +72,58 @@ use crate::db::{get_or_create_repo, get_or_create_worktree};
 use crate::incremental::incremental_update;
 
 /// Debouncer to prevent rapid successive branch switch handling
+///
+/// Implements time-based debouncing to avoid triggering indexing operations
+/// too frequently. This prevents issues with:
+/// - Multiple rapid branch switches
+/// - Git operations that modify `.git/HEAD` multiple times
+/// - File system noise (duplicate events from the OS)
+///
+/// # Debouncing Strategy
+///
+/// Events that occur within the debounce duration (default: 2 seconds) of the
+/// previous event are ignored. This ensures at most one indexing operation
+/// per debounce window.
+///
+/// # Thread Safety
+///
+/// The last event timestamp is protected by a `Mutex` to allow safe access
+/// from the event handler thread.
 struct DebouncedHandler {
+    /// Timestamp of the last processed event, protected by mutex for thread safety
     last_event: Mutex<Instant>,
+    /// Minimum duration between processed events
     debounce_duration: Duration,
 }
 
 impl DebouncedHandler {
+    /// Creates a new debounced handler with the specified duration
+    ///
+    /// # Arguments
+    ///
+    /// * `debounce_duration` - Minimum time between processed events
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::time::Duration;
+    /// # use std::sync::Mutex;
+    /// # use std::time::Instant;
+    /// # struct DebouncedHandler {
+    /// #     last_event: Mutex<Instant>,
+    /// #     debounce_duration: Duration,
+    /// # }
+    /// # impl DebouncedHandler {
+    /// #     fn new(debounce_duration: Duration) -> Self {
+    /// #         Self {
+    /// #             last_event: Mutex::new(Instant::now()),
+    /// #             debounce_duration,
+    /// #         }
+    /// #     }
+    /// # }
+    ///
+    /// let debouncer = DebouncedHandler::new(Duration::from_secs(2));
+    /// ```
     fn new(debounce_duration: Duration) -> Self {
         Self {
             last_event: Mutex::new(Instant::now()),
@@ -31,6 +131,20 @@ impl DebouncedHandler {
         }
     }
 
+    /// Checks if an event should be processed or debounced
+    ///
+    /// Returns `true` if sufficient time has passed since the last event,
+    /// `false` if the event should be debounced (ignored).
+    ///
+    /// # Thread Safety
+    ///
+    /// This method acquires a lock on the last event timestamp. If the lock
+    /// is poisoned (due to a panic while holding the lock), this will panic.
+    ///
+    /// # Returns
+    ///
+    /// - `true` - Process the event (>= debounce_duration since last event)
+    /// - `false` - Ignore the event (< debounce_duration since last event)
     fn should_handle(&self) -> bool {
         let mut last = self.last_event.lock().unwrap();
         let now = Instant::now();
@@ -45,17 +159,61 @@ impl DebouncedHandler {
     }
 }
 
-/// Watches .git/HEAD for branch switches and triggers automatic indexing
+/// Watches `.git/HEAD` for branch switches and triggers automatic indexing
+///
+/// The `BranchWatcher` uses OS-level file system events to detect when a developer
+/// switches branches. This avoids polling and ensures minimal resource usage while idle.
+///
+/// # Lifecycle
+///
+/// 1. Create watcher with [`BranchWatcher::new`]
+/// 2. Start watching with [`BranchWatcher::start`]
+/// 3. Watcher runs until error or shutdown signal (Ctrl+C)
+///
+/// # Error Handling
+///
+/// The watcher is designed to be fault-tolerant. Errors during indexing (database
+/// connection failures, git errors) are logged but don't crash the watcher. Transient
+/// errors trigger retry logic with exponential backoff (2s, 4s, 8s delays).
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use crewchief_maproom::watcher::BranchWatcher;
+/// use crewchief_maproom::db;
+/// use std::path::PathBuf;
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let database_url = std::env::var("DATABASE_URL")?;
+///     let client = db::connect(&database_url).await?;
+///     let repo_path = PathBuf::from("/workspace/myproject");
+///
+///     let mut watcher = BranchWatcher::new(repo_path, client)?;
+///
+///     // Runs until Ctrl+C or error
+///     watcher.start().await?;
+///
+///     Ok(())
+/// }
+/// ```
+///
+/// # Resource Usage
+///
+/// - **CPU (idle)**: <5% (file watcher sleeps until events)
+/// - **Memory**: ~15-20 MB (watcher state + buffers)
+/// - **CPU (indexing)**: 50-80% (embedding generation, parsing)
+/// - **Memory (indexing)**: 50-100 MB (tree-sitter parsers, buffers)
 pub struct BranchWatcher {
     /// Path to the git repository root
     repo_path: PathBuf,
     /// Database client for indexing operations
     client: Client,
-    /// File system watcher
+    /// File system watcher from notify crate
     watcher: notify::RecommendedWatcher,
-    /// Event receiver channel
+    /// Event receiver channel from file watcher
     rx: Receiver<Result<Event, notify::Error>>,
-    /// Debouncer to prevent rapid successive indexing
+    /// Debouncer to prevent rapid successive indexing operations
     debouncer: DebouncedHandler,
 }
 
@@ -119,6 +277,25 @@ impl BranchWatcher {
     }
 
     /// Main event loop processing file system changes
+    ///
+    /// Continuously receives events from the file watcher and processes branch
+    /// switches. This method blocks until:
+    /// - A channel error occurs (watcher disconnected)
+    /// - The watcher is explicitly stopped
+    ///
+    /// # Event Processing
+    ///
+    /// For each file system event:
+    /// 1. Check if it's a modify or create event (branch switch)
+    /// 2. Apply debouncing to prevent rapid triggers
+    /// 3. Call [`handle_branch_switch_with_retry`] to process the switch
+    /// 4. Log any errors but continue watching (fault-tolerant)
+    ///
+    /// # Error Handling
+    ///
+    /// - **File watcher errors**: Logged and ignored, watching continues
+    /// - **Indexing errors**: Logged and ignored after retry attempts
+    /// - **Channel errors**: Cause the loop to exit
     async fn watch_loop(&mut self) -> Result<()> {
         loop {
             match self.rx.recv() {
@@ -150,6 +327,15 @@ impl BranchWatcher {
     }
 
     /// Indexes the current branch on watcher startup
+    ///
+    /// Called once when the watcher starts to ensure the current branch is
+    /// indexed before monitoring for switches. This provides immediate search
+    /// functionality even if the branch hasn't been indexed before.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the initial indexing fails. This is a hard failure
+    /// that prevents the watcher from starting.
     async fn index_current_branch(&self) -> Result<()> {
         info!("Indexing current branch...");
         self.handle_branch_switch().await
