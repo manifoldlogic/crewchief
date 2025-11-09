@@ -1,9 +1,9 @@
 # Ticket: BRANCHX-1003: Test worktree tracking schema and JSONB queries
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - unit-test-runner
@@ -23,13 +23,13 @@ This is Phase 1, Step 1.3 of BRANCHX. After implementing the schema changes in B
 Reference: `.agents/projects/BRANCHX_branch-aware-indexing/planning/plan.md` - Phase 1.3
 
 ## Acceptance Criteria
-- [ ] Migration 004 test passes (schema created correctly)
-- [ ] Test JSONB contains query (`worktree_ids ? '2'`)
-- [ ] Test JSONB overlaps query (`worktree_ids ?| ARRAY['1', '3']`)
-- [ ] Test worktree_ids has no duplicates after multiple upserts
-- [ ] Test removing worktree from array (`worktree_ids - '2'`)
-- [ ] Test GIN index exists and is used (EXPLAIN output verification)
-- [ ] All tests pass in CI
+- [x] Migration 004 test passes (schema created correctly)
+- [x] Test JSONB contains query (`worktree_ids ? '2'`)
+- [x] Test JSONB overlaps query (`worktree_ids ?| ARRAY['1', '3']`)
+- [x] Test worktree_ids has no duplicates after multiple upserts
+- [x] Test removing worktree from array (`worktree_ids - '2'`)
+- [x] Test GIN index exists and is used (EXPLAIN output verification)
+- [x] All tests pass in CI
 
 ## Technical Requirements
 - Tests must run against test database with migration 004 applied
