@@ -110,6 +110,10 @@ uuid = { version = "1", features = ["v4"] }
 serial_test = "3"
 wiremock = "0.6"
 proptest = "1.4"
+sysinfo = "0.32"
+
+[target.'cfg(unix)'.dev-dependencies]
+nix = { version = "0.29", features = ["signal"] }
 
 [features]
 profiling = ["puffin"]

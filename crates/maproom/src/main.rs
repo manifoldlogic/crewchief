@@ -7,8 +7,8 @@ use dotenvy::dotenv;
 use tokio::sync::oneshot;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{db, indexer};
-use crewchief_maproom::progress::{ProgressTracker, OutputMode};
 
 /// Validate provider name against supported providers.
 ///
@@ -72,7 +72,7 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         languages: Option<Vec<String>>, // e.g. ts,tsx,js,jsx
         #[arg(long, value_delimiter = ',')]
-        exclude: Option<Vec<String>>,   // glob patterns
+        exclude: Option<Vec<String>>, // glob patterns
         /// Force full scan, bypassing incremental tree SHA optimization (BRANCHX-1011)
         #[arg(long, default_value_t = false)]
         force: bool,
@@ -254,9 +254,7 @@ async fn auto_generate_embeddings(
     batch_size: usize,
     provider: Option<String>,
 ) -> anyhow::Result<crewchief_maproom::embedding::PipelineStats> {
-    use crewchief_maproom::embedding::{
-        EmbeddingService, EmbeddingPipeline, PipelineConfig,
-    };
+    use crewchief_maproom::embedding::{EmbeddingPipeline, EmbeddingService, PipelineConfig};
 
     tracing::info!("Starting auto-embedding generation");
     println!("\n🔄 Generating embeddings for new chunks...");
@@ -266,14 +264,18 @@ async fn auto_generate_embeddings(
         tracing::info!("Using provider from CLI flag: {}", provider_name);
         std::env::set_var("EMBEDDING_PROVIDER", provider_name);
     } else {
-        let env_provider = std::env::var("EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
+        let env_provider =
+            std::env::var("EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
         tracing::info!("Using provider from environment: {}", env_provider);
     }
 
     // Try to create embedding service from environment
     let service = match EmbeddingService::from_env().await {
         Ok(s) => {
-            tracing::info!("Created embedding service with provider: {}", s.provider_name());
+            tracing::info!(
+                "Created embedding service with provider: {}",
+                s.provider_name()
+            );
             s
         }
         Err(e) => {
@@ -321,18 +323,23 @@ async fn auto_generate_embeddings(
 
     // Create progress tracker
     let progress = crewchief_maproom::progress::ProgressTracker::new(
-        crewchief_maproom::progress::OutputMode::Minimal
+        crewchief_maproom::progress::OutputMode::Minimal,
     );
     progress.set_totals(0, Some(chunk_count as usize));
 
     // Run pipeline with progress callback
     let pipeline = EmbeddingPipeline::new(service, config);
-    let stats = pipeline.run_with_progress(&client, Some(&|processed, _total| {
-        progress.update_chunks(processed);
-        if progress.should_print() {
-            progress.print_progress();
-        }
-    })).await?;
+    let stats = pipeline
+        .run_with_progress(
+            &client,
+            Some(&|processed, _total| {
+                progress.update_chunks(processed);
+                if progress.should_print() {
+                    progress.print_progress();
+                }
+            }),
+        )
+        .await?;
 
     // Finish progress tracking
     progress.finish();
@@ -373,7 +380,8 @@ async fn branch_watch_command(repo: Option<PathBuf>, verbose: bool) -> anyhow::R
     tracing::info!("Starting branch watcher for {}", repo_path.display());
 
     // Connect to database
-    let client = db::connect().await
+    let client = db::connect()
+        .await
         .context("Failed to connect to database")?;
 
     tracing::info!("Connected to database");
@@ -399,21 +407,16 @@ async fn branch_watch_command(repo: Option<PathBuf>, verbose: bool) -> anyhow::R
         }
     })?;
 
-    // Run watcher until shutdown signal
-    tokio::select! {
-        result = watcher.start() => {
-            match result {
-                Ok(_) => {
-                    tracing::info!("Watcher stopped normally");
-                }
-                Err(e) => {
-                    tracing::error!("Watcher error: {}", e);
-                    return Err(e);
-                }
-            }
+    // Run watcher with shutdown signal
+    let result = watcher.start(Some(shutdown_rx)).await;
+
+    match result {
+        Ok(_) => {
+            tracing::info!("Watcher stopped normally");
         }
-        _ = shutdown_rx => {
-            tracing::info!("Shutdown signal received");
+        Err(e) => {
+            tracing::error!("Watcher error: {}", e);
+            return Err(e);
         }
     }
 
@@ -425,7 +428,13 @@ async fn branch_watch_command(repo: Option<PathBuf>, verbose: bool) -> anyhow::R
 fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     // Get the repository name from remote origin
     let repo_name = Command::new("git")
-        .args(&["-C", path.to_str().unwrap_or("."), "remote", "get-url", "origin"])
+        .args(&[
+            "-C",
+            path.to_str().unwrap_or("."),
+            "remote",
+            "get-url",
+            "origin",
+        ])
         .output()
         .ok()
         .and_then(|output| {
@@ -454,12 +463,20 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
 
     // Get the current branch name
     let branch_name = Command::new("git")
-        .args(&["-C", path.to_str().unwrap_or("."), "rev-parse", "--abbrev-ref", "HEAD"])
+        .args(&[
+            "-C",
+            path.to_str().unwrap_or("."),
+            "rev-parse",
+            "--abbrev-ref",
+            "HEAD",
+        ])
         .output()
         .ok()
         .and_then(|output| {
             if output.status.success() {
-                String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
             } else {
                 None
             }
@@ -473,7 +490,9 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
         .ok()
         .and_then(|output| {
             if output.status.success() {
-                String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
             } else {
                 None
             }
@@ -505,7 +524,7 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Cache { command } => {
             command.execute().await?;
-        },
+        }
 
         Commands::Scan {
             repo,
@@ -544,7 +563,9 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("🔄 Force flag enabled - performing full repository scan");
                 println!("🔄 Full scan mode (--force flag enabled)");
             } else {
-                tracing::info!("⚡ Incremental mode - only scanning changed files (use --force for full scan)");
+                tracing::info!(
+                    "⚡ Incremental mode - only scanning changed files (use --force for full scan)"
+                );
                 println!("⚡ Incremental scan mode (use --force for full scan)");
             }
 
@@ -619,7 +640,16 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::Upsert { paths, commit, repo, worktree, root, generate_embeddings, embedding_batch_size, provider } => {
+        Commands::Upsert {
+            paths,
+            commit,
+            repo,
+            worktree,
+            root,
+            generate_embeddings,
+            embedding_batch_size,
+            provider,
+        } => {
             let client = db::connect().await?;
             indexer::upsert_files(&client, &repo, &worktree, &root, &commit, &paths)
                 .await
@@ -644,7 +674,12 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::Watch { repo, worktree, path, throttle } => {
+        Commands::Watch {
+            repo,
+            worktree,
+            path,
+            throttle,
+        } => {
             // Default path to current directory if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
 
@@ -669,10 +704,19 @@ async fn main() -> anyhow::Result<()> {
             branch_watch_command(repo, verbose).await?;
         }
 
-        Commands::Search { repo, worktree, query, k } => {
+        Commands::Search {
+            repo,
+            worktree,
+            query,
+            k,
+        } => {
             let client = db::connect().await?;
-            let hits = db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k).await?;
-            println!("{}", serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?);
+            let hits =
+                db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k).await?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
+            );
         }
 
         Commands::GenerateEmbeddings {
@@ -685,13 +729,14 @@ async fn main() -> anyhow::Result<()> {
             force,
         } => {
             use crewchief_maproom::embedding::{
-                EmbeddingService, EmbeddingPipeline, PipelineConfig, CostEstimator,
+                CostEstimator, EmbeddingPipeline, EmbeddingService, PipelineConfig,
             };
 
             tracing::info!("Initializing embedding generation pipeline");
 
             // Create embedding service from environment
-            let service = EmbeddingService::from_env().await
+            let service = EmbeddingService::from_env()
+                .await
                 .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
 
             // Configure pipeline
@@ -753,7 +798,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Migrate { command } => {
-            use crewchief_maproom::migrate::{MarkdownMigrator, verify_migration};
+            use crewchief_maproom::migrate::{verify_migration, MarkdownMigrator};
 
             let client = db::connect().await?;
 
@@ -778,7 +823,10 @@ async fn main() -> anyhow::Result<()> {
                     println!("Backup table: {}", result.backup_table);
 
                     if let Some(duration) = result.stats.duration() {
-                        println!("Duration: {:.2}s", duration.num_milliseconds() as f64 / 1000.0);
+                        println!(
+                            "Duration: {:.2}s",
+                            duration.num_milliseconds() as f64 / 1000.0
+                        );
                     }
 
                     println!("{}", "=".repeat(60));
@@ -833,5 +881,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-

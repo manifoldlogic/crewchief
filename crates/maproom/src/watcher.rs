@@ -37,8 +37,8 @@
 //!
 //!     let mut watcher = BranchWatcher::new(repo_path, client)?;
 //!
-//!     // Blocks until Ctrl+C or error
-//!     watcher.start().await?;
+//!     // Blocks until Ctrl+C or error (no shutdown signal)
+//!     watcher.start(None).await?;
 //!
 //!     Ok(())
 //! }
@@ -182,6 +182,7 @@ impl DebouncedHandler {
 /// use crewchief_maproom::watcher::BranchWatcher;
 /// use crewchief_maproom::db;
 /// use std::path::PathBuf;
+/// use tokio::sync::oneshot;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -191,8 +192,16 @@ impl DebouncedHandler {
 ///
 ///     let mut watcher = BranchWatcher::new(repo_path, client)?;
 ///
-///     // Runs until Ctrl+C or error
-///     watcher.start().await?;
+///     // Create shutdown channel for graceful shutdown
+///     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+///
+///     // Setup Ctrl+C handler
+///     ctrlc::set_handler(move || {
+///         let _ = shutdown_tx.send(());
+///     })?;
+///
+///     // Runs until shutdown signal or error
+///     watcher.start(Some(shutdown_rx)).await?;
 ///
 ///     Ok(())
 /// }
@@ -250,13 +259,21 @@ impl BranchWatcher {
     /// 3. Indexes the current branch initially
     /// 4. Enters the watch loop (blocks until error/shutdown)
     ///
+    /// # Arguments
+    ///
+    /// * `shutdown_rx` - Optional shutdown signal receiver. When the sender is dropped or sends,
+    ///                   the watcher will exit cleanly.
+    ///
     /// # Errors
     ///
     /// Returns error if:
     /// - Not a git repository (no `.git/HEAD`)
     /// - File watcher fails to start
     /// - Initial indexing fails
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(
+        &mut self,
+        shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    ) -> Result<()> {
         let git_head = self.repo_path.join(".git/HEAD");
 
         if !git_head.exists() {
@@ -264,14 +281,13 @@ impl BranchWatcher {
         }
 
         info!("Watching {} for branch switches", git_head.display());
-        self.watcher
-            .watch(&git_head, RecursiveMode::NonRecursive)?;
+        self.watcher.watch(&git_head, RecursiveMode::NonRecursive)?;
 
         // Initial index of current branch
         self.index_current_branch().await?;
 
         // Watch loop
-        self.watch_loop().await?;
+        self.watch_loop(shutdown_rx).await?;
 
         Ok(())
     }
@@ -281,7 +297,12 @@ impl BranchWatcher {
     /// Continuously receives events from the file watcher and processes branch
     /// switches. This method blocks until:
     /// - A channel error occurs (watcher disconnected)
+    /// - A shutdown signal is received
     /// - The watcher is explicitly stopped
+    ///
+    /// # Arguments
+    ///
+    /// * `shutdown_rx` - Optional shutdown signal receiver. When triggered, the loop exits cleanly.
     ///
     /// # Event Processing
     ///
@@ -296,9 +317,28 @@ impl BranchWatcher {
     /// - **File watcher errors**: Logged and ignored, watching continues
     /// - **Indexing errors**: Logged and ignored after retry attempts
     /// - **Channel errors**: Cause the loop to exit
-    async fn watch_loop(&mut self) -> Result<()> {
+    async fn watch_loop(
+        &mut self,
+        mut shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    ) -> Result<()> {
         loop {
-            match self.rx.recv() {
+            // Check shutdown signal if provided
+            if let Some(ref mut rx) = shutdown_rx {
+                tokio::select! {
+                    // Check for shutdown signal
+                    _ = rx => {
+                        info!("Shutdown signal received, exiting watch loop");
+                        break;
+                    }
+                    // Process file watcher events
+                    _ = tokio::time::sleep(Duration::from_millis(0)) => {
+                        // Fall through to event processing below
+                    }
+                }
+            }
+
+            // Use recv_timeout to allow cooperative cancellation
+            match self.rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(event_result) => match event_result {
                     Ok(event) => {
                         // Process modify events (branch switch changes .git/HEAD content)
@@ -316,8 +356,12 @@ impl BranchWatcher {
                         // Continue watching despite error
                     }
                 },
-                Err(e) => {
-                    error!("Channel error: {}", e);
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // Timeout is normal, allows checking shutdown signal
+                    tokio::task::yield_now().await;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    error!("Channel disconnected");
                     break;
                 }
             }
@@ -403,12 +447,8 @@ impl BranchWatcher {
             .unwrap_or("unknown");
 
         // Get or create repo record
-        let repo_id = get_or_create_repo(
-            &self.client,
-            repo_name,
-            &self.repo_path.to_string_lossy(),
-        )
-        .await?;
+        let repo_id =
+            get_or_create_repo(&self.client, repo_name, &self.repo_path.to_string_lossy()).await?;
 
         // Get or create worktree record
         let worktree_id = get_or_create_worktree(
