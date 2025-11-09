@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-1901: Unit tests for file watcher
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - unit-test-runner
@@ -26,12 +26,12 @@ This ticket executes tests created in BRWATCH-1003 and validates BRWATCH-1002 fu
 **Planning Reference**: `/workspace/.agents/projects/BRWATCH_branch-switch-detection/planning/quality-strategy.md` - Lines 26-82 (Unit Tests)
 
 ## Acceptance Criteria
-- [ ] All branch parsing tests pass (test_parse_branch_ref, test_parse_feature_branch, test_parse_detached_head)
-- [ ] Error handling tests pass (test_parse_invalid_format, test_parse_empty_sha)
-- [ ] File watcher event detection test passes (if implemented in BRWATCH-1002)
-- [ ] Test execution completes without panics
-- [ ] All tests documented with clear failure messages
-- [ ] No test failures or compilation errors
+- [x] All branch parsing tests pass (test_parse_branch_ref, test_parse_feature_branch, test_parse_detached_head)
+- [x] Error handling tests pass (test_parse_invalid_format, test_parse_empty_sha)
+- [x] File watcher event detection test passes (if implemented in BRWATCH-1002)
+- [x] Test execution completes without panics
+- [x] All tests documented with clear failure messages
+- [x] No test failures or compilation errors
 
 ## Technical Requirements
 - Run tests with: `cargo test --lib watcher -- --nocapture`
