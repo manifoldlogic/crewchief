@@ -1,9 +1,12 @@
 # Ticket: BRWATCH-3901: E2E tests for CLI command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Binary compilation** - PASS - Release build successful
+- [x] **CLI command available** - PASS - branch-watch command present and functional
+- [x] **Help text correct** - PASS - Shows correct options and description
+- [x] **CLI unit tests pass** - PASS - 17/17 CLI tests pass
+- [ ] **E2E test file** - NOT CREATED - Requires integration-tester agent
+- [ ] **Verified** - PENDING - Awaiting integration-tester completion
 
 ## Agents
 - unit-test-runner
@@ -206,3 +209,101 @@ impl Drop for TestRunner {
 
 ## Files/Packages Affected
 - `/workspace/crates/maproom/tests/cli_e2e.rs` (new file with E2E tests)
+
+## Test Execution Report
+
+### Summary
+Date: 2025-11-09
+Test Runner: unit-test-runner
+Scope: Binary validation, CLI functionality, existing unit tests
+
+### Binary Compilation
+- Command: `cargo build --release --bin crewchief-maproom`
+- Status: **PASS**
+- Duration: 0.49s
+- Output: Binary successfully compiled to `/workspace/target/release/crewchief-maproom`
+
+### CLI Command Availability
+- Command: `cargo run --bin crewchief-maproom -- branch-watch --help`
+- Status: **PASS**
+- Output:
+  ```
+  Watch for branch switches and auto-index
+
+  Usage: crewchief-maproom branch-watch [OPTIONS]
+
+  Options:
+        --repo <REPO>  Path to git repository (defaults to current directory)
+    -v, --verbose      Show verbose logging
+    -h, --help         Print help
+  ```
+- Validation: Command appears in main help menu with correct description
+
+### CLI Unit Tests
+- Command: `cargo test --test cli_test`
+- Status: **PASS - 17/17 tests passed**
+- Duration: 1.72s
+- Test Results:
+  - test_provider_normalization - ok
+  - test_error_message_quality - ok
+  - test_validate_provider_google - ok
+  - test_validate_provider_empty - ok
+  - test_validate_provider_case_insensitive - ok
+  - test_scan_without_provider - ok
+  - test_scan_with_valid_provider - ok
+  - test_upsert_with_valid_provider - ok
+  - test_scan_with_google_provider - ok
+  - test_upsert_without_provider - ok
+  - test_scan_with_openai_provider - ok
+  - test_upsert_with_invalid_provider - ok
+  - test_validate_provider_invalid - ok
+  - test_scan_with_invalid_provider - ok
+  - test_validate_provider_openai - ok
+  - test_validate_provider_ollama - ok
+  - test_validate_provider_typo - ok
+
+### CLI Library Tests
+- Command: `cargo test --lib cli`
+- Status: **PASS - 12/12 tests passed**
+- Duration: 0.40s
+- Tests cover embedding client and cache layer functionality
+
+### Watcher Integration Tests
+- Command: `cargo test --test watcher_integration`
+- Status: **6/6 IGNORED (requires database)**
+- Note: These are marked #[ignore] and require PostgreSQL database
+- Tests validate BranchWatcher functionality:
+  - test_auto_update_on_switch - ignored
+  - test_branch_watcher_creation - ignored
+  - test_get_current_branch_helper - ignored
+  - test_rapid_branch_switching - ignored
+  - test_retry_on_transient_error - ignored
+  - test_watcher_continues_after_db_error - ignored
+
+### Key Findings
+
+**What Works:**
+1. Binary compiles successfully in release mode
+2. branch-watch command is properly registered in CLI
+3. Help text shows correct options: --repo, --verbose, --help
+4. Command handler properly validates repository path
+5. Graceful shutdown mechanism implemented (Ctrl+C handling)
+6. Database connection and logging properly configured
+7. All existing CLI tests pass without issues
+8. Related watcher integration tests exist (but require DB setup)
+
+**What's Missing:**
+The ticket requests E2E tests in `/workspace/crates/maproom/tests/cli_e2e.rs` that:
+- Spawn the actual maproom binary using Command::new()
+- Switch branches via git commands
+- Verify graceful shutdown (SIGINT handling)
+- Validate branch switch detection (via logs or database)
+
+This test file has NOT been created. The ticket description indicates this is the responsibility of an integration-tester agent, not the unit-test-runner.
+
+**Architecture Observations:**
+- BranchWatcher struct exists at `/workspace/crates/maproom/src/watcher.rs`
+- branch_watch_command handler exists in main.rs
+- Shutdown channel properly configured using tokio::sync::oneshot
+- Signal handling implemented with ctrlc crate
+- Logging uses tracing with RUST_LOG environment variable support

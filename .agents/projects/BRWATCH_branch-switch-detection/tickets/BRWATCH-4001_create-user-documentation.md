@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-4001: Create user documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
