@@ -95,49 +95,17 @@ git config --global --add safe.directory /workspace
 git config --global core.editor "code --wait"
 print_success "Git configured"
 
-# Create useful aliases
-print_step "Setting up shell aliases..."
-cat >> ~/.bashrc << 'EOF'
-
-# CrewChief aliases
-alias cc='node /workspace/packages/cli/dist/cli/index.js'
-alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
-alias maproom='crewchief-maproom'
-alias claude='claude --dangerous-mode'
-alias ll='ls -la'
-alias gs='git status'
-alias gd='git diff'
-alias gc='git commit'
-alias gp='git push'
-alias gl='git log --oneline --graph --decorate'
-
-# Docker aliases
-alias dps='docker ps'
-alias dlog='docker logs -f'
-alias dexec='docker exec -it'
-
-# tmux aliases
-alias ta='tmux attach -t'
-alias tl='tmux list-sessions'
-alias tn='tmux new -s'
-
-# Navigation
-alias ..='cd ..'
-alias ...='cd ../..'
-alias ....='cd ../../..'
-
-# Ensure we start in workspace (for Cursor compatibility)
-if [ -z "$IN_WORKSPACE_CHECK" ]; then
-    export IN_WORKSPACE_CHECK=1
-    if [ "$(pwd)" != "/workspace" ] && [ -d "/workspace" ]; then
-        cd /workspace
-    fi
+# Link repository-managed Bash configuration
+print_step "Linking repo-managed .bashrc..."
+BASHRC_SOURCE="/workspace/.devcontainer/.bashrc"
+if [ -f "$BASHRC_SOURCE" ]; then
+    ln -sf "$BASHRC_SOURCE" "$HOME/.bashrc"
+    print_success ".bashrc linked to repository version"
+else
+    print_error "Missing $BASHRC_SOURCE - update or recreate this file"
 fi
 
-EOF
-
-print_success "Shell aliases configured"
-print_step "Note: Using host .zshrc - add CrewChief aliases to your host .zshrc if needed"
+print_step "Note: .zshrc is still sourced from the host environment if you switch shells"
 
 # Install tmux plugins
 print_step "Installing tmux plugins..."

@@ -84,15 +84,3 @@ if ! tmux has-session -t crewchief 2>/dev/null; then
     echo "  ${GREEN}tmux new -s crewchief -c /workspace${NC}"
     echo ""
 fi
-
-# For Cursor: Ensure shell prompt starts in workspace
-if [ "$TERM_PROGRAM" = "Cursor" ] || [ -n "$CURSOR_IDE" ]; then
-    # Force the shell to use workspace as default directory
-    echo "cd /workspace" >> ~/.bashrc.tmp
-    echo "export WORKSPACE_DIR=/workspace" >> ~/.bashrc.tmp
-    cat ~/.bashrc >> ~/.bashrc.tmp 2>/dev/null || true
-    mv ~/.bashrc.tmp ~/.bashrc
-
-    # Note: .zshrc is mounted from host, so not modifying it here
-    # Add 'cd /workspace' to your host .zshrc if needed for Cursor compatibility
-fi

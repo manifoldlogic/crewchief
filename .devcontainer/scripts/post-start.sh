@@ -3,6 +3,17 @@ set -e
 
 echo "🔄 Running post-start setup..."
 
+# Ensure .bashrc points to the repository-managed configuration
+BASHRC_SOURCE="/workspace/.devcontainer/.bashrc"
+if [ -f "$BASHRC_SOURCE" ]; then
+    if [ ! -L "$HOME/.bashrc" ] || [ "$(readlink -f "$HOME/.bashrc" 2>/dev/null)" != "$BASHRC_SOURCE" ]; then
+        ln -sf "$BASHRC_SOURCE" "$HOME/.bashrc"
+        echo "✓ Updated ~/.bashrc to use repository configuration"
+    fi
+else
+    echo "⚠️  Repository .bashrc not found at $BASHRC_SOURCE"
+fi
+
 # Fix Docker socket permissions for docker-in-docker
 if [ -S /var/run/docker.sock ]; then
     sudo chown root:docker /var/run/docker.sock 2>/dev/null || true
