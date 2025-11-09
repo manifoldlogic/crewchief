@@ -820,7 +820,7 @@ Claude: [Explains the code]
 ### Team Collaboration
 
 1. **Share configurations**: Commit .vscode/settings.json (without credentials)
-2. **Document environment variables**: README with DATABASE_URL setup
+2. **Document environment variables**: README with MAPROOM_DATABASE_URL setup
 3. **Use shared database**: Team-wide PostgreSQL instance
 4. **Index main branches**: Keep primary branches indexed
 5. **Standardize queries**: Document common search patterns
@@ -849,13 +849,13 @@ Claude: [Explains the code]
 ### Server Connection Issues
 
 **Possible Causes**:
-1. DATABASE_URL incorrect
+1. MAPROOM_DATABASE_URL incorrect
 2. PostgreSQL not running
 3. Network connectivity
 4. Server not started
 
 **Solutions**:
-1. Verify DATABASE_URL format
+1. Verify MAPROOM_DATABASE_URL format
 2. Check PostgreSQL is running (`pg_isready`)
 3. Test database connection (`psql`)
 4. Check server logs (MAPROOM_MCP_LOG_FILE)

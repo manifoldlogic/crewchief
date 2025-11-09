@@ -53,10 +53,10 @@ describe('VS Code MCP Extension Integration - Manual Test Scenarios', () => {
       expect(true).toBe(true); // Placeholder for manual test
     });
 
-    it('[MANUAL] should show error if DATABASE_URL is invalid', () => {
+    it('[MANUAL] should show error if MAPROOM_DATABASE_URL is invalid', () => {
       /**
        * Test Steps:
-       * 1. Set invalid DATABASE_URL in config
+       * 1. Set invalid MAPROOM_DATABASE_URL in config
        * 2. Reload VS Code
        * 3. Check MCP output panel
        *
@@ -65,7 +65,7 @@ describe('VS Code MCP Extension Integration - Manual Test Scenarios', () => {
        *
        * Verification:
        * - Error message in output panel
-       * - Suggests checking DATABASE_URL
+       * - Suggests checking MAPROOM_DATABASE_URL
        * - Server status shows "disconnected" or "error"
        */
       expect(true).toBe(true); // Placeholder for manual test
@@ -636,7 +636,7 @@ describe('VS Code MCP Extension Integration - Manual Test Scenarios', () => {
       /**
        * Test Steps:
        * 1. Create .vscode/settings.json in workspace
-       * 2. Add MCP config with workspace-specific DATABASE_URL
+       * 2. Add MCP config with workspace-specific MAPROOM_DATABASE_URL
        * 3. Reload window
        *
        * Expected Result:
@@ -845,7 +845,7 @@ describe('VS Code MCP Extension Integration - Manual Test Scenarios', () => {
        * Test Steps:
        * 1. Commit .vscode/settings.json (without secrets)
        * 2. Clone repo on different machine
-       * 3. Set up local DATABASE_URL in environment
+       * 3. Set up local MAPROOM_DATABASE_URL in environment
        *
        * Expected Result:
        * MCP server works with team-shared config

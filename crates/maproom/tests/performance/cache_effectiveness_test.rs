@@ -50,7 +50,7 @@
 // # Requirements
 //
 // - PostgreSQL with test dataset
-// - DATABASE_URL environment variable
+// - MAPROOM_DATABASE_URL environment variable
 // - Caching enabled in configuration
 //
 // # Architecture Reference

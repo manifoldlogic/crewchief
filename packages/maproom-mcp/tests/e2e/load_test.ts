@@ -47,7 +47,7 @@ const fixturesPath = path.join(__dirname, '..', 'fixtures')
 
 describe('E2E Load Tests', () => {
   beforeAll(async () => {
-    if (!process.env.DATABASE_URL && !process.env.TEST_DATABASE_URL) {
+    if (!process.env.MAPROOM_DATABASE_URL && !process.env.TEST_DATABASE_URL) {
       console.warn('No TEST_DATABASE_URL set, skipping load tests')
       return
     }

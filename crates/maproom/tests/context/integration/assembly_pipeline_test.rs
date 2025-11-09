@@ -25,13 +25,13 @@ use tokio::fs;
 
 /// Helper to check if we should skip database integration tests.
 fn should_skip_db_test() -> bool {
-    env::var("DATABASE_URL").is_err()
+    env::var("MAPROOM_DATABASE_URL").is_err()
 }
 
 /// Helper to check if an error indicates we should skip the test.
 fn is_skip_error(e: &anyhow::Error) -> bool {
     let err_str = e.to_string();
-    err_str.contains("DATABASE_URL not set")
+    err_str.contains("MAPROOM_DATABASE_URL not set")
         || err_str.contains("Connection refused")
         || err_str.contains("connection")
 }
@@ -57,7 +57,7 @@ impl PipelineTestFixture {
     /// - test.rs: test_main() (tests main)
     async fn setup() -> Result<Self> {
         if should_skip_db_test() {
-            return Err(anyhow::anyhow!("DATABASE_URL not set, skipping test setup"));
+            return Err(anyhow::anyhow!("MAPROOM_DATABASE_URL not set, skipping test setup"));
         }
 
         let temp_dir = TempDir::new()?;
@@ -279,7 +279,7 @@ mod tests {
 #[tokio::test]
 async fn test_complete_assembly_pipeline_primary_only() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -330,7 +330,7 @@ async fn test_complete_assembly_pipeline_primary_only() -> Result<()> {
 #[tokio::test]
 async fn test_complete_assembly_pipeline_with_callees() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -389,7 +389,7 @@ async fn test_complete_assembly_pipeline_with_callees() -> Result<()> {
 #[tokio::test]
 async fn test_complete_assembly_pipeline_with_callers() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -453,7 +453,7 @@ async fn test_complete_assembly_pipeline_with_callers() -> Result<()> {
 #[tokio::test]
 async fn test_complete_assembly_pipeline_with_tests() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -507,7 +507,7 @@ async fn test_complete_assembly_pipeline_with_tests() -> Result<()> {
 #[tokio::test]
 async fn test_complete_assembly_pipeline_all_relationships() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -583,7 +583,7 @@ async fn test_complete_assembly_pipeline_all_relationships() -> Result<()> {
 #[tokio::test]
 async fn test_budget_allocation_and_truncation() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -663,7 +663,7 @@ async fn test_budget_allocation_and_truncation() -> Result<()> {
 #[tokio::test]
 async fn test_relevance_scoring_order() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -722,7 +722,7 @@ async fn test_relevance_scoring_order() -> Result<()> {
 #[tokio::test]
 async fn test_token_sum_consistency() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -777,7 +777,7 @@ async fn test_token_sum_consistency() -> Result<()> {
 #[tokio::test]
 async fn test_no_duplicate_chunks() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 

@@ -8,7 +8,7 @@
 //! - Timestamps are updated on each update
 //!
 //! Requirements:
-//! - PostgreSQL with DATABASE_URL environment variable
+//! - PostgreSQL with MAPROOM_DATABASE_URL environment variable
 //! - Migration 004 applied (worktree_index_state table exists)
 //!
 //! Run with: cargo test --test index_state -- --ignored --nocapture
@@ -28,7 +28,7 @@ macro_rules! skip_if_no_db {
         match test_db().await {
             Some(client) => client,
             None => {
-                eprintln!("Skipping test: DATABASE_URL not set or connection failed");
+                eprintln!("Skipping test: MAPROOM_DATABASE_URL not set or connection failed");
                 return;
             }
         }

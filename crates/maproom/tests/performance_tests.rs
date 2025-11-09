@@ -6,7 +6,7 @@
 //! # Running
 //!
 //! ```bash
-//! # Run all performance tests (requires DATABASE_URL)
+//! # Run all performance tests (requires MAPROOM_DATABASE_URL)
 //! cargo test --test performance_tests -- --ignored --nocapture
 //!
 //! # Run specific test module

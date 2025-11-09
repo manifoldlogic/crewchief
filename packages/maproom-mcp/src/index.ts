@@ -47,8 +47,7 @@ log.info(serverInfoProbe, 'server-info')
 // Log startup environment for debugging
 log.debug({
   env: {
-    DATABASE_URL: process.env.DATABASE_URL ? '[SET]' : '[NOT SET]',
-    PG_DATABASE_URL: process.env.PG_DATABASE_URL ? '[SET]' : '[NOT SET]',
+    MAPROOM_DATABASE_URL: process.env.MAPROOM_DATABASE_URL ? '[SET]' : '[NOT SET]',
     LOG_LEVEL: process.env.LOG_LEVEL,
     MAPROOM_MCP_LOG_FILE: process.env.MAPROOM_MCP_LOG_FILE,
     NODE_ENV: process.env.NODE_ENV,
@@ -266,7 +265,7 @@ const toolSchemas = [
 async function getPg(): Promise<Client> {
   // Default to maproom-postgres connection for zero-config experience
   const DEFAULT_DATABASE_URL = 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
-  const connectionString = process.env.DATABASE_URL || process.env.PG_DATABASE_URL || DEFAULT_DATABASE_URL
+  const connectionString = process.env.MAPROOM_DATABASE_URL || process.env.PG_DATABASE_URL || DEFAULT_DATABASE_URL
 
   log.debug({ connectionString: connectionString.replace(/:[^@]+@/, ':***@') }, 'Connecting to database')
   const client = new Client({ connectionString })

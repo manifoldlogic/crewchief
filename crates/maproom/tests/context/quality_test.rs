@@ -23,12 +23,12 @@ use tempfile::TempDir;
 use tokio::fs;
 
 fn should_skip_db_test() -> bool {
-    env::var("DATABASE_URL").is_err()
+    env::var("MAPROOM_DATABASE_URL").is_err()
 }
 
 fn is_skip_error(e: &anyhow::Error) -> bool {
     let err_str = e.to_string();
-    err_str.contains("DATABASE_URL not set")
+    err_str.contains("MAPROOM_DATABASE_URL not set")
         || err_str.contains("Connection refused")
         || err_str.contains("connection")
 }
@@ -50,7 +50,7 @@ impl QualityTestFixture {
     /// Set up fixture with clearly defined relationships for validation.
     async fn setup() -> Result<Self> {
         if should_skip_db_test() {
-            return Err(anyhow::anyhow!("DATABASE_URL not set"));
+            return Err(anyhow::anyhow!("MAPROOM_DATABASE_URL not set"));
         }
 
         let temp_dir = TempDir::new()?;
@@ -280,7 +280,7 @@ fn test_primary() {
 #[tokio::test]
 async fn test_quality_no_unrelated_chunks() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -334,7 +334,7 @@ async fn test_quality_no_unrelated_chunks() -> Result<()> {
 #[tokio::test]
 async fn test_quality_all_direct_dependencies_included() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -397,7 +397,7 @@ async fn test_quality_all_direct_dependencies_included() -> Result<()> {
 #[tokio::test]
 async fn test_quality_relationship_types_correct() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -462,7 +462,7 @@ async fn test_quality_relationship_types_correct() -> Result<()> {
 #[tokio::test]
 async fn test_quality_budget_efficiency() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -530,7 +530,7 @@ async fn test_quality_budget_efficiency() -> Result<()> {
 #[tokio::test]
 async fn test_quality_deterministic_results() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -604,7 +604,7 @@ async fn test_quality_deterministic_results() -> Result<()> {
 #[tokio::test]
 async fn test_quality_no_duplicate_chunks() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -658,7 +658,7 @@ async fn test_quality_no_duplicate_chunks() -> Result<()> {
 #[tokio::test]
 async fn test_quality_importance_ordering() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -726,7 +726,7 @@ async fn test_quality_importance_ordering() -> Result<()> {
 #[tokio::test]
 async fn test_quality_content_extraction_accuracy() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -779,7 +779,7 @@ async fn test_quality_content_extraction_accuracy() -> Result<()> {
 #[tokio::test]
 async fn test_quality_reason_explanations() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 

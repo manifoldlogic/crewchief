@@ -372,7 +372,7 @@ impl ContextAssemblyConfig {
     pub async fn create_assembler(&self) -> Result<ParallelContextAssembler> {
         let pool = PgPoolOptions::new()
             .max_connections(10)
-            .connect(&std::env::var("DATABASE_URL")?)
+            .connect(&std::env::var("MAPROOM_DATABASE_URL")?)
             .await?;
 
         Ok(ParallelContextAssembler::new(
@@ -410,7 +410,7 @@ Recommended environment variables for configuration:
 
 ```bash
 # Required
-DATABASE_URL=postgresql://user:pass@localhost:5432/maproom
+MAPROOM_DATABASE_URL=postgresql://user:pass@localhost:5432/maproom
 
 # Optional tuning
 CONTEXT_CACHE_ENABLED=true

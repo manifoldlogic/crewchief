@@ -760,9 +760,9 @@ pub async fn watch_worktree(
     println!("🔌 Validating database connection...");
 
     // Create connection pool and validate connection BEFORE starting watcher
-    // This ensures we fail fast if DATABASE_URL is misconfigured
+    // This ensures we fail fast if MAPROOM_DATABASE_URL is misconfigured
     let pool = crate::db::pool::create_pool().await.with_context(|| {
-        "Failed to connect to database. Please check your DATABASE_URL configuration."
+        "Failed to connect to database. Please check your MAPROOM_DATABASE_URL configuration."
     })?;
 
     // Test the connection by getting a client from the pool
@@ -791,7 +791,7 @@ pub async fn watch_worktree(
         Err(e) => {
             anyhow::bail!(
                 "Failed to verify database schema: {}\n\
-                 Check that DATABASE_URL is correct and database is accessible.",
+                 Check that MAPROOM_DATABASE_URL is correct and database is accessible.",
                 e
             );
         }

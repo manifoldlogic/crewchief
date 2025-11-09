@@ -21,7 +21,7 @@ services:
     working_dir: /workspace
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      - MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
       # Claude Code environment
       - CLAUDE_CONFIG_DIR=/home/vscode/.claude
       - CLAUDE_DANGEROUS_MODE=true

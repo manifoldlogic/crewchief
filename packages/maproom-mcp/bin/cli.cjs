@@ -22,7 +22,7 @@ const DIAGNOSTIC_MODE = process.env.MAPROOM_MCP_DEBUG === 'true';
 const SENSITIVE_ENV_VARS = [
   'GOOGLE_APPLICATION_CREDENTIALS',
   'OPENAI_API_KEY',
-  'DATABASE_URL',
+  'MAPROOM_DATABASE_URL',
   'POSTGRES_PASSWORD'
 ];
 
@@ -64,7 +64,7 @@ function redactSensitive(data) {
 }
 
 /**
- * Sanitize DATABASE_URL for logging by masking password
+ * Sanitize MAPROOM_DATABASE_URL for logging by masking password
  * @param {string} url - The database URL to sanitize
  * @returns {string} - URL with password replaced by asterisks
  */
@@ -815,7 +815,7 @@ async function startDockerCompose() {
         GOOGLE_PROJECT_ID: env.GOOGLE_PROJECT_ID,
         GOOGLE_APPLICATION_CREDENTIALS: env.GOOGLE_APPLICATION_CREDENTIALS,
         OPENAI_API_KEY: env.OPENAI_API_KEY,
-        DATABASE_URL: env.DATABASE_URL
+        MAPROOM_DATABASE_URL: env.MAPROOM_DATABASE_URL
       })
     });
 
@@ -1227,7 +1227,7 @@ async function initializeDatabaseSchema() {
       encoding: 'utf-8',
       env: {
         ...process.env,
-        DATABASE_URL: connectionString
+        MAPROOM_DATABASE_URL: connectionString
       }
     });
 
@@ -1549,12 +1549,12 @@ async function runScan() {
     ...providerEnv
   };
 
-  // Only set DATABASE_URL if not already set
-  if (!env.DATABASE_URL) {
-    env.DATABASE_URL = getDatabaseConnectionString();
+  // Only set MAPROOM_DATABASE_URL if not already set
+  if (!env.MAPROOM_DATABASE_URL) {
+    env.MAPROOM_DATABASE_URL = getDatabaseConnectionString();
     console.error('🔗 Auto-detected database connection');
   } else {
-    console.error('🔗 Using explicit DATABASE_URL from environment');
+    console.error('🔗 Using explicit MAPROOM_DATABASE_URL from environment');
   }
 
   // Note: EMBEDDING_API_ENDPOINT is now explicitly set for all providers in providerEnv
@@ -1565,7 +1565,7 @@ async function runScan() {
   console.error(`   EMBEDDING_MODEL: ${env.EMBEDDING_MODEL}`);
   console.error(`   EMBEDDING_DIMENSION: ${env.EMBEDDING_DIMENSION}`);
   console.error(`   EMBEDDING_API_ENDPOINT: ${env.EMBEDDING_API_ENDPOINT || '(not set)'}`);
-  console.error(`   DATABASE_URL: ${sanitizeDatabaseUrl(env.DATABASE_URL)}`);
+  console.error(`   MAPROOM_DATABASE_URL: ${sanitizeDatabaseUrl(env.MAPROOM_DATABASE_URL)}`);
   console.error(`   OPENAI_API_KEY: ${env.OPENAI_API_KEY ? '(set)' : '(NOT SET)'}\n`);
 
   const result = spawnSync(binPath, args, {
@@ -1709,17 +1709,17 @@ async function upsertFiles(rootPath, repoInfo, provider, files) {
     ...providerEnv
   };
 
-  // Only set DATABASE_URL if not already set
-  if (!env.DATABASE_URL) {
-    env.DATABASE_URL = getDatabaseConnectionString();
+  // Only set MAPROOM_DATABASE_URL if not already set
+  if (!env.MAPROOM_DATABASE_URL) {
+    env.MAPROOM_DATABASE_URL = getDatabaseConnectionString();
     console.error('🔗 Auto-detected database connection');
   } else {
-    console.error('🔗 Using explicit DATABASE_URL from environment');
+    console.error('🔗 Using explicit MAPROOM_DATABASE_URL from environment');
   }
 
   // Debug: Show database connection
   console.error('🔍 [DEBUG] Database connection:');
-  console.error(`   DATABASE_URL: ${sanitizeDatabaseUrl(env.DATABASE_URL)}\n`);
+  console.error(`   MAPROOM_DATABASE_URL: ${sanitizeDatabaseUrl(env.MAPROOM_DATABASE_URL)}\n`);
 
   // Note: EMBEDDING_API_ENDPOINT is now explicitly set for all providers in providerEnv
 

@@ -86,7 +86,7 @@ describe('Docker Compose Verification', () => {
 services:
   maproom-mcp:
     environment:
-      DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      MAPROOM_DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
       EMBEDDING_PROVIDER: \${EMBEDDING_PROVIDER:-ollama}
       EMBEDDING_MODEL: \${EMBEDDING_MODEL:-nomic-embed-text}
       EMBEDDING_DIMENSION: \${EMBEDDING_DIMENSION:-768}
@@ -99,7 +99,7 @@ services:
 services:
   maproom-mcp:
     environment:
-      DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      MAPROOM_DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: nomic-embed-text
       EMBEDDING_DIMENSION: 768

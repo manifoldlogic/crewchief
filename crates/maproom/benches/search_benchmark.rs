@@ -38,7 +38,7 @@
 //! # Requirements
 //!
 //! - PostgreSQL database with test data (10,000+ chunks)
-//! - DATABASE_URL environment variable set
+//! - MAPROOM_DATABASE_URL environment variable set
 //! - Representative query corpus in fixtures/query_corpus.txt
 //!
 //! # Architecture Reference
@@ -52,7 +52,7 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use std::time::Duration;
 
 // Note: These benchmarks use synthetic data for CI/local testing.
-// For production benchmarks with real database, set DATABASE_URL and use integration tests.
+// For production benchmarks with real database, set MAPROOM_DATABASE_URL and use integration tests.
 
 /// Query corpus representing realistic search patterns.
 ///
@@ -150,7 +150,7 @@ impl LatencyStats {
 
 /// Simulated search execution for benchmarking.
 ///
-/// In real benchmarks with DATABASE_URL, this would execute actual searches.
+/// In real benchmarks with MAPROOM_DATABASE_URL, this would execute actual searches.
 /// For criterion benchmarks without database, we simulate realistic latencies.
 fn simulate_search(query: &str, mode: SearchMode) -> SearchResult {
     // Simulate query processing overhead (1-3ms)

@@ -54,7 +54,7 @@ Database: maproom
 
 **Connection String**:
 ```bash
-DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
+MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
 ```
 
 ## Connection Fallback System
@@ -63,9 +63,9 @@ Both Rust binary and Node.js CLI use intelligent fallback to automatically detec
 
 ### Connection Priority (4-tier fallback)
 
-1. **DATABASE_URL** environment variable (explicit configuration)
+1. **MAPROOM_DATABASE_URL** environment variable (explicit configuration)
    ```bash
-   export DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
+   export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
    ```
    - Highest priority
    - Recommended for production
@@ -98,11 +98,11 @@ Both Rust binary and Node.js CLI use intelligent fallback to automatically detec
 
 **Devcontainer** (auto-detection works automatically):
 ```bash
-# No DATABASE_URL needed - auto-detects maproom-postgres
+# No MAPROOM_DATABASE_URL needed - auto-detects maproom-postgres
 cargo run --bin crewchief-maproom -- scan /workspace
 
 # Or set explicitly
-export DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
 ```
 
 **MCP Service**:
@@ -112,7 +112,7 @@ npx @crewchief/maproom-mcp
 
 # Or set explicitly in docker-compose
 environment:
-  - DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
+  - MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
 ```
 
 **Custom Setup**:
@@ -273,7 +273,7 @@ See `crates/maproom/migrations/` for all migration SQL files.
 
 **To view applied migrations**:
 ```bash
-psql $DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migrations ORDER BY version DESC LIMIT 10;"
+psql $MAPROOM_DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migrations ORDER BY version DESC LIMIT 10;"
 ```
 
 ## Troubleshooting
@@ -310,9 +310,9 @@ psql $DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migrations O
 **Solutions**:
 1. Verify you're in the correct Docker network
 2. Check that maproom-postgres container is running
-3. Set DATABASE_URL explicitly as a workaround:
+3. Set MAPROOM_DATABASE_URL explicitly as a workaround:
    ```bash
-   export DATABASE_URL="postgresql://maproom:maproom@127.0.0.1:5433/maproom"
+   export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@127.0.0.1:5433/maproom"
    ```
 
 ### Authentication Failed
@@ -328,9 +328,9 @@ psql $DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migrations O
 2. Check you're connecting to the right host:
    - Should be `maproom-postgres` not `postgres`
 
-3. Verify DATABASE_URL format:
+3. Verify MAPROOM_DATABASE_URL format:
    ```bash
-   echo $DATABASE_URL
+   echo $MAPROOM_DATABASE_URL
    # Should be: postgresql://maproom:maproom@maproom-postgres:5432/maproom
    ```
 
@@ -430,7 +430,7 @@ docker exec maproom-postgres psql -U maproom -d maproom \
 
 1. **Use Auto-detection**: In most cases, just ensure maproom-postgres is running - the connection fallback handles the rest
 
-2. **Explicit for Production**: Set DATABASE_URL explicitly in production environments for reliability
+2. **Explicit for Production**: Set MAPROOM_DATABASE_URL explicitly in production environments for reliability
 
 3. **Regular Backups**: Back up the database before major changes or schema migrations
 
@@ -459,7 +459,7 @@ docker exec maproom-postgres psql -U maproom -d maproom \
 | **Image** | `pgvector/pgvector:pg16` |
 | **Data** | Persistent via Docker volumes |
 | **Use Cases** | Development, MCP service, testing, production |
-| **Connection** | Auto-detected (fallback to DATABASE_URL) |
+| **Connection** | Auto-detected (fallback to MAPROOM_DATABASE_URL) |
 
 ---
 

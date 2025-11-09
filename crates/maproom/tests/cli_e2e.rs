@@ -9,7 +9,7 @@
 //! Tests spawn the actual `maproom` binary and use real git repositories.
 //! All tests are marked with #[ignore] and require:
 //! - Compiled maproom binary (cargo build --release)
-//! - DATABASE_URL environment variable
+//! - MAPROOM_DATABASE_URL environment variable
 //! - git installed
 //!
 //! Run with: cargo test --test cli_e2e -- --ignored --nocapture
@@ -171,10 +171,10 @@ impl CliTestFixture {
         Ok(())
     }
 
-    /// Get DATABASE_URL for tests.
+    /// Get MAPROOM_DATABASE_URL for tests.
     fn get_database_url() -> Result<String> {
-        std::env::var("DATABASE_URL")
-            .context("DATABASE_URL must be set for E2E tests. Example: postgresql://maproom:maproom@localhost:5432/maproom")
+        std::env::var("MAPROOM_DATABASE_URL")
+            .context("MAPROOM_DATABASE_URL must be set for E2E tests. Example: postgresql://maproom:maproom@localhost:5432/maproom")
     }
 }
 
@@ -190,7 +190,7 @@ impl CliTestFixture {
 ///
 /// This is the primary acceptance test for ticket BRWATCH-3901.
 #[tokio::test]
-#[ignore = "Requires compiled binary, DATABASE_URL, and is slow (~10s)"]
+#[ignore = "Requires compiled binary, MAPROOM_DATABASE_URL, and is slow (~10s)"]
 async fn test_watch_command_lifecycle() -> Result<()> {
     let fixture = CliTestFixture::new()?;
     let database_url = CliTestFixture::get_database_url()?;
@@ -214,7 +214,7 @@ async fn test_watch_command_lifecycle() -> Result<()> {
             "--repo",
             fixture.repo_path.to_str().unwrap(),
         ])
-        .env("DATABASE_URL", &database_url)
+        .env("MAPROOM_DATABASE_URL", &database_url)
         .env("RUST_LOG", "crewchief_maproom=info")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -297,7 +297,7 @@ async fn test_watch_command_lifecycle() -> Result<()> {
 /// - Branch detection is logged
 /// - Shutdown is logged gracefully
 #[tokio::test]
-#[ignore = "Requires compiled binary, DATABASE_URL, and is slow (~10s)"]
+#[ignore = "Requires compiled binary, MAPROOM_DATABASE_URL, and is slow (~10s)"]
 async fn test_watch_command_logging() -> Result<()> {
     let fixture = CliTestFixture::new()?;
     let database_url = CliTestFixture::get_database_url()?;
@@ -313,7 +313,7 @@ async fn test_watch_command_logging() -> Result<()> {
             fixture.repo_path.to_str().unwrap(),
             "--verbose",
         ])
-        .env("DATABASE_URL", &database_url)
+        .env("MAPROOM_DATABASE_URL", &database_url)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -409,7 +409,7 @@ async fn test_binary_help_output() -> Result<()> {
 /// - Child processes are killed when test ends
 /// - No zombie processes remain
 #[tokio::test]
-#[ignore = "Requires compiled binary, DATABASE_URL"]
+#[ignore = "Requires compiled binary, MAPROOM_DATABASE_URL"]
 async fn test_process_cleanup() -> Result<()> {
     let fixture = CliTestFixture::new()?;
     let database_url = CliTestFixture::get_database_url()?;
@@ -424,7 +424,7 @@ async fn test_process_cleanup() -> Result<()> {
             "--repo",
             fixture.repo_path.to_str().unwrap(),
         ])
-        .env("DATABASE_URL", &database_url)
+        .env("MAPROOM_DATABASE_URL", &database_url)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -468,7 +468,7 @@ async fn test_process_cleanup() -> Result<()> {
 /// - No crashes or hangs during stress
 /// - Process remains stable
 #[tokio::test]
-#[ignore = "Requires compiled binary, DATABASE_URL, and is slow (~15s)"]
+#[ignore = "Requires compiled binary, MAPROOM_DATABASE_URL, and is slow (~15s)"]
 async fn test_rapid_branch_switching() -> Result<()> {
     let fixture = CliTestFixture::new()?;
     let database_url = CliTestFixture::get_database_url()?;
@@ -483,7 +483,7 @@ async fn test_rapid_branch_switching() -> Result<()> {
             "--repo",
             fixture.repo_path.to_str().unwrap(),
         ])
-        .env("DATABASE_URL", &database_url)
+        .env("MAPROOM_DATABASE_URL", &database_url)
         .env("RUST_LOG", "crewchief_maproom=info")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -20,7 +20,7 @@
 //!
 //! # Requirements
 //!
-//! - PostgreSQL running with DATABASE_URL set
+//! - PostgreSQL running with MAPROOM_DATABASE_URL set
 //! - Release build of crewchief-maproom binary
 //! - Test should run on relatively idle system for accurate measurements
 

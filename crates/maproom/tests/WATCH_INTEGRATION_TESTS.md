@@ -69,14 +69,14 @@ Contains 5 comprehensive integration tests:
 
 ### Environment Variables
 
-Set `DATABASE_URL` if not using default:
+Set `MAPROOM_DATABASE_URL` if not using default:
 ```bash
-export DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
 ```
 
 Or for custom PostgreSQL setup:
 ```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+export MAPROOM_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
 ```
 
 ## Running the Tests
@@ -259,7 +259,7 @@ jobs:
       - name: Run watch integration tests
         run: cargo test --test watch_integration -- --ignored
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maproom
+          MAPROOM_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maproom
 ```
 
 ## Related Files

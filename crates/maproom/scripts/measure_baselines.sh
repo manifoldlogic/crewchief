@@ -6,13 +6,13 @@
 # 2. Vector index sizes using PostgreSQL system catalogs
 # 3. Database and system statistics
 #
-# Usage: ./scripts/measure_baselines.sh [DATABASE_URL]
+# Usage: ./scripts/measure_baselines.sh [MAPROOM_DATABASE_URL]
 # Example: ./scripts/measure_baselines.sh "postgresql://maproom:maproom@maproom-postgres:5432/maproom"
 
 set -euo pipefail
 
 # Configuration
-DATABASE_URL="${1:-postgresql://maproom:maproom@maproom-postgres:5432/maproom}"
+MAPROOM_DATABASE_URL="${1:-postgresql://maproom:maproom@maproom-postgres:5432/maproom}"
 OUTPUT_DIR="/workspace/benchmarks"
 OUTPUT_FILE="$OUTPUT_DIR/mpembed_baseline.md"
 TEMP_DIR="/tmp/maproom_baselines"
@@ -54,7 +54,7 @@ log_error() {
 mkdir -p "$OUTPUT_DIR" "$TEMP_DIR"
 
 log_info "Starting baseline measurements..."
-log_info "Database: $DATABASE_URL"
+log_info "Database: $MAPROOM_DATABASE_URL"
 log_info "Output: $OUTPUT_FILE"
 
 # ============================================================================
@@ -72,17 +72,17 @@ CPU_THREADS=$(lscpu | grep "Thread(s) per core:" | awk '{print $4}' || echo "Unk
 RAM_TOTAL=$(free -h | awk '/^Mem:/ {print $2}')
 
 # Get PostgreSQL version
-PG_VERSION=$(psql "$DATABASE_URL" -tAc "SELECT version();" | head -1)
+PG_VERSION=$(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT version();" | head -1)
 
 # Get pgvector version
-PGVECTOR_VERSION=$(psql "$DATABASE_URL" -tAc "SELECT extversion FROM pg_extension WHERE extname = 'vector';" | head -1)
+PGVECTOR_VERSION=$(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT extversion FROM pg_extension WHERE extname = 'vector';" | head -1)
 
 # Get chunk count
-CHUNK_COUNT=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunks;")
+CHUNK_COUNT=$(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunks;")
 
 # Get chunks with embeddings
-CODE_EMBED_COUNT=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NOT NULL;")
-TEXT_EMBED_COUNT=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunks WHERE text_embedding IS NOT NULL;")
+CODE_EMBED_COUNT=$(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NOT NULL;")
+TEXT_EMBED_COUNT=$(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunks WHERE text_embedding IS NOT NULL;")
 
 # ============================================================================
 # DATABASE INDEX STATISTICS
@@ -91,7 +91,7 @@ TEXT_EMBED_COUNT=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM maproom.chunk
 log_info "Collecting index statistics..."
 
 # Get vector index sizes and usage
-INDEX_STATS=$(psql "$DATABASE_URL" -c "
+INDEX_STATS=$(psql "$MAPROOM_DATABASE_URL" -c "
 SELECT
     indexrelid::regclass AS index_name,
     pg_size_pretty(pg_relation_size(indexrelid)) AS index_size,
@@ -106,7 +106,7 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 ")
 
 # Get table size
-TABLE_SIZE=$(psql "$DATABASE_URL" -tAc "SELECT pg_size_pretty(pg_relation_size('maproom.chunks'));")
+TABLE_SIZE=$(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT pg_size_pretty(pg_relation_size('maproom.chunks'));")
 
 # ============================================================================
 # SEARCH LATENCY BENCHMARKS
@@ -127,7 +127,7 @@ for query in "${QUERIES[@]}"; do
         start_time=$(date +%s.%N)
 
         # Execute hybrid search query (simplified version for benchmarking)
-        psql "$DATABASE_URL" -tAc "
+        psql "$MAPROOM_DATABASE_URL" -tAc "
         WITH fts_results AS (
             SELECT id, ts_rank_cd(ts_doc, websearch_to_tsquery('english', '$query')) as fts_score
             FROM maproom.chunks
@@ -243,7 +243,7 @@ for query in "${QUERIES[@]:0:3}"; do
     echo "Query: $query" >> "$QUERY_PLAN_FILE"
     echo "========================================" >> "$QUERY_PLAN_FILE"
 
-    psql "$DATABASE_URL" -c "
+    psql "$MAPROOM_DATABASE_URL" -c "
     EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
     SELECT id, ts_rank_cd(ts_doc, websearch_to_tsquery('english', '$query')) as score
     FROM maproom.chunks
@@ -265,7 +265,7 @@ cat > "$OUTPUT_FILE" <<EOF
 # MPEMBED Baseline Performance Report
 
 **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-**Database**: \`${DATABASE_URL}\`
+**Database**: \`${MAPROOM_DATABASE_URL}\`
 **Purpose**: Baseline measurements for MPEMBED multi-provider embedding migration
 
 ---
@@ -355,7 +355,7 @@ Both vector indexes use **IVFFlat** with the following parameters:
 - **Dimensions**: 1536 (OpenAI text-embedding-3-small)
 
 **Expected Size**: For 23K chunks × 1536 dimensions × 4 bytes (float32) ≈ 141MB raw data
-**Actual Size**: $(psql "$DATABASE_URL" -tAc "SELECT pg_size_pretty(SUM(pg_relation_size(indexrelid))) FROM pg_stat_user_indexes WHERE schemaname = 'maproom' AND indexrelid::regclass::text LIKE '%vec%';")
+**Actual Size**: $(psql "$MAPROOM_DATABASE_URL" -tAc "SELECT pg_size_pretty(SUM(pg_relation_size(indexrelid))) FROM pg_stat_user_indexes WHERE schemaname = 'maproom' AND indexrelid::regclass::text LIKE '%vec%';")
 
 ---
 
@@ -408,7 +408,7 @@ This benchmark can be re-run after migration changes using:
 
 \`\`\`bash
 # Run baseline measurement script
-./crates/maproom/scripts/measure_baselines.sh "$DATABASE_URL"
+./crates/maproom/scripts/measure_baselines.sh "$MAPROOM_DATABASE_URL"
 
 # Compare with previous baseline
 diff benchmarks/mpembed_baseline.md benchmarks/mpembed_baseline_previous.md

@@ -456,7 +456,7 @@ Most integration tests require PostgreSQL:
 
 ```bash
 # Set database URL
-export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test
+export MAPROOM_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test
 
 # Run all integration tests
 cargo test --test '*'

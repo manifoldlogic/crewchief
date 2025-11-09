@@ -24,7 +24,7 @@ impl TestDb {
         let db_name = format!("maproom_test_{}", uuid::Uuid::new_v4().simple());
 
         // Connect to postgres database to create test db
-        let postgres_url = env::var("DATABASE_URL")
+        let postgres_url = env::var("MAPROOM_DATABASE_URL")
             .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
 
         let (client, connection) = tokio_postgres::connect(&postgres_url, NoTls)
@@ -182,7 +182,7 @@ impl Drop for TestDb {
         // In a real scenario, we'd use async Drop when stable
         let db_name = self.db_name.clone();
         tokio::spawn(async move {
-            let postgres_url = env::var("DATABASE_URL")
+            let postgres_url = env::var("MAPROOM_DATABASE_URL")
                 .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
 
             if let Ok((client, connection)) = tokio_postgres::connect(&postgres_url, NoTls).await {

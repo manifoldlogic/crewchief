@@ -50,7 +50,7 @@ Start the branch watcher to automatically index as you switch branches:
 
 ```bash
 # Set database URL
-export DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
 
 # Start watcher (Terminal 1)
 maproom branch-watch --repo /path/to/your/repo
@@ -430,12 +430,12 @@ The Maproom MCP server uses intelligent connection fallback to detect and connec
 
 The system tries these methods in order:
 
-1. **DATABASE_URL** (explicit config) - If set, uses this connection string exactly
+1. **MAPROOM_DATABASE_URL** (explicit config) - If set, uses this connection string exactly
    ```bash
-   export DATABASE_URL="postgresql://user:pass@host:port/dbname"
+   export MAPROOM_DATABASE_URL="postgresql://user:pass@host:port/dbname"
    ```
 
-2. **MAPROOM_DB_HOST** (component override) - If DATABASE_URL not set, constructs connection from parts
+2. **MAPROOM_DB_HOST** (component override) - If MAPROOM_DATABASE_URL not set, constructs connection from parts
    ```bash
    export MAPROOM_DB_HOST="custom-host"
    export MAPROOM_DB_PORT="5432"  # optional, defaults to 5432
@@ -475,15 +475,15 @@ The system tries these methods in order:
 
 **Hostname not found:**
 - Verify you're in correct Docker network
-- Try setting DATABASE_URL explicitly:
+- Try setting MAPROOM_DATABASE_URL explicitly:
   ```bash
-  export DATABASE_URL="postgresql://maproom:maproom@127.0.0.1:5433/maproom"
+  export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@127.0.0.1:5433/maproom"
   ```
 
 **Custom database setup:**
 If you want to use your own PostgreSQL instance instead of the bundled one:
 ```bash
-export DATABASE_URL="postgresql://myuser:mypass@myhost:5432/mydb"
+export MAPROOM_DATABASE_URL="postgresql://myuser:mypass@myhost:5432/mydb"
 npx @crewchief/maproom-mcp scan /path/to/code
 ```
 
@@ -507,7 +507,7 @@ Override the default database connection:
         "/app/dist/index.js"
       ],
       "env": {
-        "DATABASE_URL": "postgresql://user:pass@custom-host:5432/mydb",
+        "MAPROOM_DATABASE_URL": "postgresql://user:pass@custom-host:5432/mydb",
         "EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       }

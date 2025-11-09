@@ -6,7 +6,7 @@
 //! 3. Error resilience (watcher continues despite failures)
 //! 4. Retry logic with exponential backoff
 //!
-//! Tests require a running PostgreSQL database (DATABASE_URL environment variable).
+//! Tests require a running PostgreSQL database (MAPROOM_DATABASE_URL environment variable).
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -182,9 +182,9 @@ impl BranchWatcherFixture {
 
         // We need to create a new client connection for BranchWatcher
         // since it takes ownership of the Client
-        let db_url = std::env::var("DATABASE_URL")
+        let db_url = std::env::var("MAPROOM_DATABASE_URL")
             .or_else(|_| crewchief_maproom::db::connection::get_database_url())
-            .context("Failed to get DATABASE_URL")?;
+            .context("Failed to get MAPROOM_DATABASE_URL")?;
 
         let (client, connection) = tokio_postgres::connect(&db_url, tokio_postgres::NoTls)
             .await

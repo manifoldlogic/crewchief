@@ -430,10 +430,10 @@ cargo bench --bench multi_provider_performance -- search_latency
 ### Verify Database Schema
 ```bash
 # Check columns exist
-psql $DATABASE_URL -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='chunks' AND column_name LIKE '%embedding%';"
+psql $MAPROOM_DATABASE_URL -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='chunks' AND column_name LIKE '%embedding%';"
 
 # Check embedding distribution
-psql $DATABASE_URL -c "SELECT
+psql $MAPROOM_DATABASE_URL -c "SELECT
   COUNT(*) FILTER (WHERE code_embedding IS NOT NULL) AS openai_count,
   COUNT(*) FILTER (WHERE code_embedding_ollama IS NOT NULL) AS ollama_count,
   COUNT(*) FILTER (WHERE code_embedding IS NOT NULL AND code_embedding_ollama IS NOT NULL) AS both_count

@@ -403,7 +403,7 @@ To integrate the maproom subcommand:
 **Env**
 
 ```
-DATABASE_URL=postgres://maproom_writer:***@localhost:5432/maproom
+MAPROOM_DATABASE_URL=postgres://maproom_writer:***@localhost:5432/maproom
 EMBEDDINGS_MODEL=text-embedding-3-large
 EMBEDDINGS_DIM=1536
 INDEX_LANGUAGES=ts,tsx,js,jsx

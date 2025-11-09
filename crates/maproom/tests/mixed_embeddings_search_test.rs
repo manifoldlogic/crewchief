@@ -38,7 +38,7 @@ use tokio_postgres::NoTls;
 
 /// Helper to create a database connection for testing.
 async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std::error::Error>> {
-    let database_url = std::env::var("DATABASE_URL")
+    let database_url = std::env::var("MAPROOM_DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://postgres:postgres@postgres:5432/crewchief".to_string());
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;

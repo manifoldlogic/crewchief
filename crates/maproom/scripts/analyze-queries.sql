@@ -2,7 +2,7 @@
 -- Query performance analysis and optimization verification
 --
 -- Usage:
---   psql $DATABASE_URL -f analyze-queries.sql
+--   psql $MAPROOM_DATABASE_URL -f analyze-queries.sql
 --
 -- This script helps verify that query optimizations are working correctly
 -- by analyzing actual query plans and performance characteristics.

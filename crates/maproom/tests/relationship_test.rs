@@ -153,7 +153,7 @@ async fn setup_relationship_graph(client: &Client) -> Result<Vec<i64>> {
 
 #[tokio::test]
 async fn test_find_test_files() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -190,7 +190,7 @@ async fn test_find_test_files() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_callers() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -235,7 +235,7 @@ async fn test_find_callers() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_callees() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -275,7 +275,7 @@ async fn test_find_callees() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_imports() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -307,7 +307,7 @@ async fn test_find_imports() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_exports() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -334,7 +334,7 @@ async fn test_find_exports() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_routes() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -374,7 +374,7 @@ async fn test_find_routes() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_all_relationships() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -407,7 +407,7 @@ async fn test_find_all_relationships() -> Result<()> {
 
 #[tokio::test]
 async fn test_multi_hop_traversal() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 
@@ -445,7 +445,7 @@ async fn test_multi_hop_traversal() -> Result<()> {
 
 #[tokio::test]
 async fn test_no_relationships() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
     });
 

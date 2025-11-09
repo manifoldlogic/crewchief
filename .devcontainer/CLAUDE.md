@@ -70,7 +70,7 @@ docker compose -f .devcontainer/docker-compose.yml up --build
 
 ```bash
 NODE_ENV=development
-DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
+MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
 CLAUDE_DANGEROUS_MODE=true
 ```
 

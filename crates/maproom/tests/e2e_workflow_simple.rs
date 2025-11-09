@@ -69,7 +69,7 @@ async fn postgres_available_and_configure() -> bool {
     // Use Docker network hostname (works inside dev container)
     // User/pass/db all 'maproom' as configured in docker-compose.yml
     std::env::set_var(
-        "DATABASE_URL",
+        "MAPROOM_DATABASE_URL",
         "postgresql://maproom:maproom@maproom-postgres:5432/maproom",
     );
     tokio_postgres::connect(

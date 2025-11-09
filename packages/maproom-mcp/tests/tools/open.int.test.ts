@@ -27,7 +27,7 @@ let testRepoPath: string
 
 beforeAll(async () => {
   // Setup test database connection
-  const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
+  const connectionString = process.env.TEST_DATABASE_URL || process.env.MAPROOM_DATABASE_URL
   if (!connectionString) {
     console.warn('No TEST_DATABASE_URL set, skipping integration tests')
     return

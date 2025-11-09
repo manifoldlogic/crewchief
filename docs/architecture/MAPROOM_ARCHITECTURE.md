@@ -986,7 +986,7 @@ FusionWeights {
 
 1. **Database Credentials**:
    - Never commit credentials to version control
-   - Use environment variables (`DATABASE_URL`)
+   - Use environment variables (`MAPROOM_DATABASE_URL`)
    - Rotate passwords regularly
 
 2. **Embedding Provider Keys**:

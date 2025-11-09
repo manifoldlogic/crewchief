@@ -7,7 +7,7 @@
 //! - Multi-worktree: same content tracked across multiple worktrees
 //!
 //! Requirements:
-//! - PostgreSQL with DATABASE_URL environment variable
+//! - PostgreSQL with MAPROOM_DATABASE_URL environment variable
 //! - Migration 004 applied (worktree_ids column exists)
 //!
 //! Run with: cargo test --test upsert_worktree -- --ignored --nocapture
@@ -30,7 +30,7 @@ macro_rules! skip_if_no_db {
         match test_db().await {
             Some(client) => client,
             None => {
-                eprintln!("Skipping test: DATABASE_URL not set or connection failed");
+                eprintln!("Skipping test: MAPROOM_DATABASE_URL not set or connection failed");
                 return;
             }
         }

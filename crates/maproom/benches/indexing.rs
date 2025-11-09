@@ -54,7 +54,7 @@
 //! # Requirements
 //!
 //! - No database required (uses in-memory parsing benchmarks)
-//! - For end-to-end benchmarks with database, set DATABASE_URL
+//! - For end-to-end benchmarks with database, set MAPROOM_DATABASE_URL
 //!
 //! # Architecture Reference
 //!

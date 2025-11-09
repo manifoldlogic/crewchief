@@ -16,7 +16,7 @@
 #   ./scripts/load-test.sh --targets-only     # Run only target validation
 #
 # Environment Variables:
-#   DATABASE_URL            - PostgreSQL connection string (required)
+#   MAPROOM_DATABASE_URL            - PostgreSQL connection string (required)
 #   INDEXING_TARGET         - Minimum indexing throughput (default: 150 files/min)
 #   SEARCH_P95_TARGET       - Maximum search p95 latency (default: 50ms)
 #   CONTEXT_P95_TARGET      - Maximum context p95 latency (default: 120ms)
@@ -24,7 +24,7 @@
 #   CACHE_HIT_TARGET        - Minimum cache hit rate (default: 0.6)
 #
 # Requirements:
-#   - PostgreSQL database with DATABASE_URL set
+#   - PostgreSQL database with MAPROOM_DATABASE_URL set
 #   - Cargo and Rust toolchain
 #   - At least 2GB RAM and 4 CPU cores recommended
 
@@ -77,15 +77,15 @@ done
 echo -e "${BLUE}=== Maproom Load Testing ===${NC}"
 echo ""
 
-# Check DATABASE_URL
-if [ -z "${DATABASE_URL:-}" ]; then
-    echo -e "${RED}ERROR: DATABASE_URL environment variable is not set${NC}"
-    echo "Please set DATABASE_URL to your PostgreSQL connection string"
-    echo "Example: export DATABASE_URL='postgresql://user:pass@localhost/maproom'"
+# Check MAPROOM_DATABASE_URL
+if [ -z "${MAPROOM_DATABASE_URL:-}" ]; then
+    echo -e "${RED}ERROR: MAPROOM_DATABASE_URL environment variable is not set${NC}"
+    echo "Please set MAPROOM_DATABASE_URL to your PostgreSQL connection string"
+    echo "Example: export MAPROOM_DATABASE_URL='postgresql://user:pass@localhost/maproom'"
     exit 1
 fi
 
-echo -e "${GREEN}✓ DATABASE_URL is set${NC}"
+echo -e "${GREEN}✓ MAPROOM_DATABASE_URL is set${NC}"
 
 # Check cargo
 if ! command -v cargo &> /dev/null; then

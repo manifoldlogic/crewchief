@@ -8,7 +8,7 @@
 //! - Edge consistency after updates
 //!
 //! **Note**: These tests require a PostgreSQL database with the maproom schema.
-//! They will be skipped if DATABASE_URL is not set.
+//! They will be skipped if MAPROOM_DATABASE_URL is not set.
 
 use crewchief_maproom::db::{create_pool, PgPool};
 use crewchief_maproom::incremental::{
@@ -17,15 +17,15 @@ use crewchief_maproom::incremental::{
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
-/// Helper to check if tests should run (DATABASE_URL is set)
+/// Helper to check if tests should run (MAPROOM_DATABASE_URL is set)
 fn should_run_db_tests() -> bool {
-    std::env::var("DATABASE_URL").is_ok()
+    std::env::var("MAPROOM_DATABASE_URL").is_ok()
 }
 
-/// Create a test pool or skip test if DATABASE_URL not set
+/// Create a test pool or skip test if MAPROOM_DATABASE_URL not set
 async fn get_test_pool() -> Option<PgPool> {
     if !should_run_db_tests() {
-        println!("Skipping test: DATABASE_URL not set");
+        println!("Skipping test: MAPROOM_DATABASE_URL not set");
         return None;
     }
 

@@ -78,7 +78,7 @@ pub type PgPool = Pool;
 ///
 /// # Configuration
 ///
-/// Reads DATABASE_URL from environment and configures pool with:
+/// Reads MAPROOM_DATABASE_URL from environment and configures pool with:
 /// - Max connections: 10
 /// - Connection timeout: 100ms
 /// - Query timeout: 5s
@@ -95,7 +95,7 @@ pub type PgPool = Pool;
 /// # Errors
 ///
 /// Returns error if:
-/// - DATABASE_URL environment variable is missing
+/// - MAPROOM_DATABASE_URL environment variable is missing
 /// - Database connection fails
 /// - Pool configuration is invalid
 ///
@@ -106,7 +106,7 @@ pub type PgPool = Pool;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     // Set DATABASE_URL in environment or .env file
+///     // Set MAPROOM_DATABASE_URL in environment or .env file
 ///     let pool = create_pool().await?;
 ///
 ///     // Pool is ready for use
@@ -127,7 +127,7 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
     // Parse PostgreSQL config from connection string
     let pg_config = database_url
         .parse::<tokio_postgres::Config>()
-        .context("Failed to parse DATABASE_URL")?;
+        .context("Failed to parse MAPROOM_DATABASE_URL")?;
 
     // Configure connection pool
     let mut config = Config::new();
@@ -165,12 +165,12 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
 
     // Test connection and configure ivfflat.probes
     let client = pool.get().await.map_err(|e| {
-        // Sanitize DATABASE_URL to hide password
+        // Sanitize MAPROOM_DATABASE_URL to hide password
         let sanitized_url = sanitize_database_url(&database_url);
 
         // Build helpful error message
         let mut error_msg = format!(
-            "Failed to connect to database\n  DATABASE_URL: {}\n  Error: {}",
+            "Failed to connect to database\n  MAPROOM_DATABASE_URL: {}\n  Error: {}",
             sanitized_url, e
         );
 
@@ -187,7 +187,7 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
                 .push_str("\n    Example: postgresql://postgres:postgres@postgres:5432/crewchief");
         }
 
-        error_msg.push_str("\n  - Check that DATABASE_URL points to the correct hostname and port");
+        error_msg.push_str("\n  - Check that MAPROOM_DATABASE_URL points to the correct hostname and port");
         error_msg.push_str("\n  - Verify database credentials are correct");
 
         anyhow::anyhow!(error_msg)

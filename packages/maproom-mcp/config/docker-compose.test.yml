@@ -22,7 +22,7 @@
 #   - Builds maproom-mcp service from source using Dockerfile.combined
 #   - Tags the built image as "maproom-mcp:test" (avoids conflicts with production tags)
 #   - Inherits ALL other configuration from docker-compose.yml:
-#     * Environment variables (DATABASE_URL, EMBEDDING_PROVIDER, etc.)
+#     * Environment variables (MAPROOM_DATABASE_URL, EMBEDDING_PROVIDER, etc.)
 #     * Service dependencies (depends_on with health checks)
 #     * Volumes (maproom-logs)
 #     * Networks (maproom-network)
@@ -110,7 +110,7 @@ services:
     # All other configuration inherited from docker-compose.yml:
     # - container_name: maproom-mcp
     # - depends_on: postgres (condition: service_healthy)
-    # - environment: DATABASE_URL, EMBEDDING_PROVIDER, LOG_LEVEL, etc.
+    # - environment: MAPROOM_DATABASE_URL, EMBEDDING_PROVIDER, LOG_LEVEL, etc.
     # - volumes: maproom-logs:/app/logs
     # - networks: maproom-network
     # - stdin_open: true

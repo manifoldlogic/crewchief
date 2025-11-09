@@ -11,7 +11,7 @@
 # - New Ollama columns are NULL (no data yet)
 #
 # Usage:
-#   DATABASE_URL=postgresql://... ./verify_migration_0015.sh
+#   MAPROOM_DATABASE_URL=postgresql://... ./verify_migration_0015.sh
 #
 # Exit codes:
 #   0: All checks passed
@@ -19,7 +19,7 @@
 
 set -e
 
-DB_URL="${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/crewchief}"
+DB_URL="${MAPROOM_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/crewchief}"
 
 echo "============================================"
 echo "Verifying migration 0015..."

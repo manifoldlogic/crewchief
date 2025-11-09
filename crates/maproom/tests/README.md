@@ -48,7 +48,7 @@ Tests for vector database operations:
 - ✅ Cosine distance operator (<=>)
 - ✅ Index usage verification
 
-**Run with (requires DATABASE_URL):**
+**Run with (requires MAPROOM_DATABASE_URL):**
 ```bash
 cargo test --test vector_db_test -- --ignored
 ```
@@ -90,7 +90,7 @@ cargo test -- --ignored
 
 ### Database Integration Tests
 ```bash
-export DATABASE_URL=postgresql://localhost:5432/maproom_test
+export MAPROOM_DATABASE_URL=postgresql://localhost:5432/maproom_test
 cargo test --test vector_db_test -- --ignored
 ```
 
@@ -109,7 +109,7 @@ cargo test --test integration
 ### Environment Variables
 
 - `OPENAI_API_KEY` (optional): Required for real API tests (marked with `#[ignore]`)
-- `DATABASE_URL` (optional): Required for database tests (marked with `#[ignore]`)
+- `MAPROOM_DATABASE_URL` (optional): Required for database tests (marked with `#[ignore]`)
 - `RUST_LOG` (optional): Set to `debug` for verbose logging
 
 ### Database Setup
@@ -125,8 +125,8 @@ docker run -d \
   -p 5432:5432 \
   pgvector/pgvector:pg16
 
-# Set DATABASE_URL
-export DATABASE_URL=postgresql://postgres:test@localhost:5432/maproom_test
+# Set MAPROOM_DATABASE_URL
+export MAPROOM_DATABASE_URL=postgresql://postgres:test@localhost:5432/maproom_test
 ```
 
 ### Running Migrations
@@ -213,7 +213,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/maproom_test
+          MAPROOM_DATABASE_URL: postgresql://postgres:test@localhost:5432/maproom_test
         run: cargo test -- --ignored --test-threads=1
 ```
 
@@ -221,7 +221,7 @@ jobs:
 
 ### Tests Fail with "connection refused"
 - Ensure PostgreSQL is running
-- Check DATABASE_URL is correct
+- Check MAPROOM_DATABASE_URL is correct
 - Verify pgvector extension is installed
 
 ### Tests Fail with "API key not found"

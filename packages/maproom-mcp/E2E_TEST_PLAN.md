@@ -347,7 +347,7 @@ jobs:
           pnpm install
           pnpm test:e2e
         env:
-          DATABASE_URL: postgresql://maproom:maproom@localhost:5432/maproom
+          MAPROOM_DATABASE_URL: postgresql://maproom:maproom@localhost:5432/maproom
 ```
 
 ## Running Tests Locally

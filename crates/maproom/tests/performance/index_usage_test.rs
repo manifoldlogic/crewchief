@@ -55,7 +55,7 @@
 // # Requirements
 //
 // - PostgreSQL with pgvector extension
-// - DATABASE_URL environment variable
+// - MAPROOM_DATABASE_URL environment variable
 // - Indices created by migrations 0004-0006
 // - Test dataset with >10,000 chunks
 //
@@ -138,7 +138,7 @@ impl ExplainPlan {
 
 /// Simulate EXPLAIN ANALYZE for testing.
 ///
-/// In real tests with DATABASE_URL, this would execute actual EXPLAIN ANALYZE queries.
+/// In real tests with MAPROOM_DATABASE_URL, this would execute actual EXPLAIN ANALYZE queries.
 fn simulate_explain_analyze(query_type: &str) -> ExplainPlan {
     match query_type {
         "vector_search" => ExplainPlan {

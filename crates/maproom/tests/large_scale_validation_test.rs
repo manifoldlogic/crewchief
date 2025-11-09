@@ -338,7 +338,7 @@ def app_config():
     return {
         'TESTING': True,
         'DEBUG': False,
-        'DATABASE_URL': 'sqlite:///:memory:'
+        'MAPROOM_DATABASE_URL': 'sqlite:///:memory:'
     }
 
 class TestUserService:

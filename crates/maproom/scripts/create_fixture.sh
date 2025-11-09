@@ -135,7 +135,7 @@ cat > "$OUTPUT_FILE" << 'EOF'
 --   - All FK relationships (chunks → files → commits → repos/worktrees)
 --
 -- Usage:
---   psql $DATABASE_URL < tests/fixtures/mpembed_baseline_100.sql
+--   psql $MAPROOM_DATABASE_URL < tests/fixtures/mpembed_baseline_100.sql
 
 BEGIN;
 
@@ -296,5 +296,5 @@ echo "  - Chunks exported: $SELECTED_COUNT"
 echo "  - Files required: $FILE_COUNT"
 echo ""
 echo "To load fixture:"
-echo "  psql \$DATABASE_URL < $OUTPUT_FILE"
+echo "  psql \$MAPROOM_DATABASE_URL < $OUTPUT_FILE"
 echo ""

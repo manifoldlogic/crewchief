@@ -10,7 +10,7 @@
 //! # Running
 //!
 //! ```bash
-//! # Run performance validation (requires DATABASE_URL)
+//! # Run performance validation (requires MAPROOM_DATABASE_URL)
 //! cargo test --test performance_targets -- --ignored --nocapture
 //!
 //! # Run with custom thresholds via environment variables
@@ -20,7 +20,7 @@
 //! # Requirements
 //!
 //! - PostgreSQL with test dataset (10,000+ chunks)
-//! - DATABASE_URL environment variable
+//! - MAPROOM_DATABASE_URL environment variable
 //! - Sufficient system resources (4+ CPU cores, 2GB+ RAM)
 //!
 //! # Performance Targets (PERF_OPT_PLAN.md lines 121-126)
@@ -351,7 +351,7 @@ mod tests {
     }
 
     // Integration test that validates all performance targets
-    // This test is ignored by default and requires DATABASE_URL
+    // This test is ignored by default and requires MAPROOM_DATABASE_URL
     #[test]
     #[ignore]
     fn test_validate_all_performance_targets() {

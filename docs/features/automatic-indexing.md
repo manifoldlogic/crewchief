@@ -24,7 +24,7 @@ Before using automatic branch switch detection:
 
 3. **Environment Setup**:
    ```bash
-   export DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
+   export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
    ```
 
 4. **Git Repository**: Your project must be a git repository with `.git/` directory
@@ -337,10 +337,10 @@ ref: refs/heads/main
 
 ```bash
 # Check database connection
-psql $DATABASE_URL -c "SELECT 1"
+psql $MAPROOM_DATABASE_URL -c "SELECT 1"
 
-# Verify DATABASE_URL is set
-echo $DATABASE_URL
+# Verify MAPROOM_DATABASE_URL is set
+echo $MAPROOM_DATABASE_URL
 
 # Check watcher logs for errors
 maproom branch-watch --verbose 2>&1 | grep ERROR
@@ -385,7 +385,7 @@ maproom branch-watch --verbose 2>&1 | grep -E "ERROR|Retrying"
 ```
 
 **Possible Causes**:
-1. DATABASE_URL not set or incorrect
+1. MAPROOM_DATABASE_URL not set or incorrect
 2. PostgreSQL not running
 3. Wrong credentials or database name
 4. Network/firewall issues
@@ -393,12 +393,12 @@ maproom branch-watch --verbose 2>&1 | grep -E "ERROR|Retrying"
 **Solutions**:
 
 ```bash
-# 1. Verify DATABASE_URL is set
-echo $DATABASE_URL
+# 1. Verify MAPROOM_DATABASE_URL is set
+echo $MAPROOM_DATABASE_URL
 # Should output: postgresql://user:pass@host:port/dbname
 
 # 2. Test database connection directly
-psql $DATABASE_URL -c "SELECT version()"
+psql $MAPROOM_DATABASE_URL -c "SELECT version()"
 
 # 3. Check PostgreSQL is running
 # Docker:
@@ -409,11 +409,11 @@ sudo systemctl status postgresql
 # 4. Verify credentials
 psql -U maproom -h localhost -d maproom -c "SELECT 1"
 
-# 5. Set DATABASE_URL if missing
-export DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
+# 5. Set MAPROOM_DATABASE_URL if missing
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
 
 # 6. Add to shell profile for persistence
-echo 'export DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"' >> ~/.bashrc
+echo 'export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -518,9 +518,9 @@ tail -f watcher.log
 ### Environment Variables
 
 **Required**:
-- `DATABASE_URL`: PostgreSQL connection string
+- `MAPROOM_DATABASE_URL`: PostgreSQL connection string
   ```bash
-  export DATABASE_URL="postgresql://user:pass@host:port/dbname"
+  export MAPROOM_DATABASE_URL="postgresql://user:pass@host:port/dbname"
   ```
 
 **Optional**:
@@ -551,7 +551,7 @@ After=network.target postgresql.service
 Type=simple
 User=developer
 WorkingDirectory=/workspace/myproject
-Environment="DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom"
+Environment="MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom"
 Environment="RUST_LOG=info"
 ExecStart=/usr/local/bin/maproom branch-watch --repo /workspace/myproject
 Restart=on-failure
@@ -583,7 +583,7 @@ CMD ["maproom", "branch-watch", "--repo", "/workspace"]
 docker run -d \
   --name maproom-watcher \
   -v /workspace/myproject:/workspace \
-  -e DATABASE_URL="postgresql://maproom:maproom@postgres:5432/maproom" \
+  -e MAPROOM_DATABASE_URL="postgresql://maproom:maproom@postgres:5432/maproom" \
   --network maproom-net \
   maproom-watcher
 ```

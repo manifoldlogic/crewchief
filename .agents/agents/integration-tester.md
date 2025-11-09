@@ -121,13 +121,13 @@ describe('Search E2E Workflow', () => {
     await dbClient.connect();
 
     // Run migrations
-    execSync('DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test ' +
+    execSync('MAPROOM_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test ' +
              'cargo run --bin crewchief-maproom -- db migrate',
       { cwd: process.cwd() }
     );
 
     // Index test fixture
-    execSync('DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test ' +
+    execSync('MAPROOM_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test ' +
              'cargo run --bin crewchief-maproom -- scan ' +
              '--repo test-repo --worktree main --path ./tests/fixtures/sample-repo',
       { cwd: process.cwd() }
@@ -264,15 +264,15 @@ docker-compose -f docker-compose.test.yml exec -T postgres \
   pg_isready -U postgres
 
 # Run migrations
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test" \
+MAPROOM_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test" \
   cargo run --bin crewchief-maproom -- db migrate
 
 # Run integration tests
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test" \
+MAPROOM_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test" \
   cargo test --test integration_test
 
 # Run E2E tests
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test" \
+MAPROOM_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test" \
   pnpm --filter maproom-mcp test:e2e
 
 # Cleanup

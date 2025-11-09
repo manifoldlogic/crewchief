@@ -10,7 +10,7 @@
 //!
 //! Requirements:
 //! - PostgreSQL with pgvector extension
-//! - DATABASE_URL environment variable
+//! - MAPROOM_DATABASE_URL environment variable
 //!
 //! Run with: cargo test --test vector_db_test -- --ignored --nocapture
 
@@ -29,7 +29,7 @@ macro_rules! skip_if_no_db {
         match test_db().await {
             Some(client) => client,
             None => {
-                eprintln!("Skipping test: DATABASE_URL not set or connection failed");
+                eprintln!("Skipping test: MAPROOM_DATABASE_URL not set or connection failed");
                 return;
             }
         }

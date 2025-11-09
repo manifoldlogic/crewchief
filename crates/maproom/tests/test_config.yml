@@ -22,7 +22,7 @@ embedding:
 
 # Database Configuration for Tests
 database:
-  # Use DATABASE_URL environment variable
+  # Use MAPROOM_DATABASE_URL environment variable
   # Example: postgresql://localhost:5432/maproom_test
   migration_path: ./migrations
 

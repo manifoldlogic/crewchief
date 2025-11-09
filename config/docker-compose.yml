@@ -78,7 +78,7 @@ services:
       ollama:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      MAPROOM_DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: nomic-embed-text
       EMBEDDING_DIMENSION: 768

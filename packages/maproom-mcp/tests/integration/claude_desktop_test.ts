@@ -51,10 +51,10 @@ describe('Claude Desktop Integration - Manual Test Scenarios', () => {
       expect(true).toBe(true); // Placeholder for manual test
     });
 
-    it('[MANUAL] should show helpful error message if DATABASE_URL is missing', () => {
+    it('[MANUAL] should show helpful error message if MAPROOM_DATABASE_URL is missing', () => {
       /**
        * Test Steps:
-       * 1. Remove DATABASE_URL from MCP server config
+       * 1. Remove MAPROOM_DATABASE_URL from MCP server config
        * 2. Restart Claude Desktop
        * 3. Try to use any MCP tool
        *
@@ -63,7 +63,7 @@ describe('Claude Desktop Integration - Manual Test Scenarios', () => {
        *
        * Verification:
        * - Error message is user-friendly
-       * - Suggests checking DATABASE_URL
+       * - Suggests checking MAPROOM_DATABASE_URL
        * - Server logs contain details
        */
       expect(true).toBe(true); // Placeholder for manual test

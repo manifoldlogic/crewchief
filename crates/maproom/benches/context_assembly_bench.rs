@@ -36,7 +36,7 @@ use std::time::Duration;
 
 /// Simulated chunk metadata for benchmarking (without database).
 ///
-/// In real benchmarks with DATABASE_URL, this would use actual database queries.
+/// In real benchmarks with MAPROOM_DATABASE_URL, this would use actual database queries.
 #[derive(Debug, Clone)]
 struct SimulatedChunk {
     id: i64,

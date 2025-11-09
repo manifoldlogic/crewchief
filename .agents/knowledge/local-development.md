@@ -183,10 +183,10 @@ If you get "crewchief-maproom not found" errors:
 
 ### Database Connection Issues
 
-For maproom commands, ensure PostgreSQL is running and set DATABASE_URL:
+For maproom commands, ensure PostgreSQL is running and set MAPROOM_DATABASE_URL:
 
 ```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/crewchief"
+export MAPROOM_DATABASE_URL="postgresql://user:password@localhost:5432/crewchief"
 # Or use a .env file in the project root
 ```
 
@@ -226,7 +226,7 @@ Add to `.vscode/launch.json` for debugging:
   "args": ["maproom:scan"],
   "env": {
     "CREWCHIEF_MAPROOM_BIN": "${workspaceFolder}/packages/cli/bin/darwin-arm64/crewchief-maproom",
-    "DATABASE_URL": "postgresql://localhost:5432/crewchief"
+    "MAPROOM_DATABASE_URL": "postgresql://localhost:5432/crewchief"
   },
   "cwd": "${workspaceFolder}",
   "console": "integratedTerminal"

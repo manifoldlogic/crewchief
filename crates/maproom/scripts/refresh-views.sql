@@ -2,7 +2,7 @@
 -- Manual script for refreshing materialized views
 --
 -- Usage:
---   psql $DATABASE_URL -f refresh-views.sql
+--   psql $MAPROOM_DATABASE_URL -f refresh-views.sql
 --
 -- This script provides three options:
 -- 1. Refresh all views (recommended after bulk operations)

@@ -45,7 +45,7 @@ To run migrations manually using psql:
 
 ```bash
 # Connect to database
-psql $DATABASE_URL
+psql $MAPROOM_DATABASE_URL
 
 # Run specific migration
 \i crates/maproom/migrations/0001_init.sql

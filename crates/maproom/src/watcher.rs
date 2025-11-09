@@ -31,7 +31,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let database_url = std::env::var("DATABASE_URL")?;
+//!     let database_url = std::env::var("MAPROOM_DATABASE_URL")?;
 //!     let client = db::connect(&database_url).await?;
 //!     let repo_path = PathBuf::from("/workspace/myproject");
 //!
@@ -186,7 +186,7 @@ impl DebouncedHandler {
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let database_url = std::env::var("DATABASE_URL")?;
+///     let database_url = std::env::var("MAPROOM_DATABASE_URL")?;
 ///     let client = db::connect(&database_url).await?;
 ///     let repo_path = PathBuf::from("/workspace/myproject");
 ///

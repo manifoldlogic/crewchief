@@ -16,12 +16,12 @@ use std::path::PathBuf;
 use tokio::fs;
 
 fn should_skip_db_test() -> bool {
-    env::var("DATABASE_URL").is_err()
+    env::var("MAPROOM_DATABASE_URL").is_err()
 }
 
 fn is_skip_error(e: &anyhow::Error) -> bool {
     let err_str = e.to_string();
-    err_str.contains("DATABASE_URL not set")
+    err_str.contains("MAPROOM_DATABASE_URL not set")
         || err_str.contains("Connection refused")
         || err_str.contains("connection")
 }
@@ -50,7 +50,7 @@ impl RealDataFixture {
     /// Index the sample repository into the database.
     async fn setup() -> Result<Self> {
         if should_skip_db_test() {
-            return Err(anyhow::anyhow!("DATABASE_URL not set"));
+            return Err(anyhow::anyhow!("MAPROOM_DATABASE_URL not set"));
         }
 
         let fixture_path = get_fixture_path();
@@ -248,7 +248,7 @@ impl RealDataFixture {
 #[tokio::test]
 async fn test_real_data_lib_run_with_callees() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -314,7 +314,7 @@ async fn test_real_data_lib_run_with_callees() -> Result<()> {
 #[tokio::test]
 async fn test_real_data_api_process_with_multi_level_callees() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -373,7 +373,7 @@ async fn test_real_data_api_process_with_multi_level_callees() -> Result<()> {
 #[tokio::test]
 async fn test_real_data_content_matches_files() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -455,7 +455,7 @@ async fn test_real_data_content_matches_files() -> Result<()> {
 #[tokio::test]
 async fn test_real_data_multi_file_context() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -518,7 +518,7 @@ async fn test_real_data_multi_file_context() -> Result<()> {
 #[tokio::test]
 async fn test_real_data_realistic_budget_usage() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 

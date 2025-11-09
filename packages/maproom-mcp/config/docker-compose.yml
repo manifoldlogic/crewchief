@@ -99,7 +99,7 @@ services:
       # Note: Ollama dependency removed - only required if EMBEDDING_PROVIDER=ollama
       # CLI ensures Ollama is started when needed via conditional service startup
     environment:
-      DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
+      MAPROOM_DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
       # Pass through provider from environment, default to ollama for zero-config
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}

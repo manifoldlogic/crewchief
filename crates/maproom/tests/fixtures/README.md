@@ -24,7 +24,7 @@ This directory contains test fixtures for the Maproom database migration and tes
 ### Load fixture into a database:
 
 ```bash
-psql $DATABASE_URL < tests/fixtures/mpembed_baseline_100.sql
+psql $MAPROOM_DATABASE_URL < tests/fixtures/mpembed_baseline_100.sql
 ```
 
 ### Regenerate fixture:

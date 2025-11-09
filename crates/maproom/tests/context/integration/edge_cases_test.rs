@@ -24,12 +24,12 @@ use tempfile::TempDir;
 use tokio::fs;
 
 fn should_skip_db_test() -> bool {
-    env::var("DATABASE_URL").is_err()
+    env::var("MAPROOM_DATABASE_URL").is_err()
 }
 
 fn is_skip_error(e: &anyhow::Error) -> bool {
     let err_str = e.to_string();
-    err_str.contains("DATABASE_URL not set")
+    err_str.contains("MAPROOM_DATABASE_URL not set")
         || err_str.contains("Connection refused")
         || err_str.contains("connection")
 }
@@ -37,7 +37,7 @@ fn is_skip_error(e: &anyhow::Error) -> bool {
 #[tokio::test]
 async fn test_missing_chunk_id() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -72,7 +72,7 @@ async fn test_missing_chunk_id() -> Result<()> {
 #[tokio::test]
 async fn test_empty_file_handling() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -155,7 +155,7 @@ async fn test_empty_file_handling() -> Result<()> {
 #[tokio::test]
 async fn test_missing_file_on_disk() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -229,7 +229,7 @@ async fn test_missing_file_on_disk() -> Result<()> {
 #[tokio::test]
 async fn test_invalid_line_range() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -312,7 +312,7 @@ async fn test_invalid_line_range() -> Result<()> {
 #[tokio::test]
 async fn test_circular_dependencies() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -455,7 +455,7 @@ async fn test_circular_dependencies() -> Result<()> {
 #[tokio::test]
 async fn test_zero_budget() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -534,7 +534,7 @@ async fn test_zero_budget() -> Result<()> {
 #[tokio::test]
 async fn test_very_large_file() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -621,7 +621,7 @@ async fn test_very_large_file() -> Result<()> {
 #[tokio::test]
 async fn test_malformed_chunk_data() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 
@@ -701,7 +701,7 @@ async fn test_malformed_chunk_data() -> Result<()> {
 #[tokio::test]
 async fn test_concurrent_assembly_same_chunk() -> Result<()> {
     if should_skip_db_test() {
-        eprintln!("Skipping integration test: DATABASE_URL not set");
+        eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
         return Ok(());
     }
 

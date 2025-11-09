@@ -140,7 +140,7 @@ services:
     networks:
       - ${DOCKER_NETWORK:-maproom-network}
     environment:
-      DATABASE_URL: postgresql://maproom:maproom@${POSTGRES_HOST:-postgres}:5432/maproom
+      MAPROOM_DATABASE_URL: postgresql://maproom:maproom@${POSTGRES_HOST:-postgres}:5432/maproom
 
 networks:
   maproom-network:

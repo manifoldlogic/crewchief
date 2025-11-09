@@ -22,7 +22,7 @@ import { Client } from 'pg'
 let testClient: Client | null = null
 
 beforeAll(async () => {
-  const connectionString = process.env.DATABASE_URL || 'postgresql://maproom:maproom@localhost:5432/maproom'
+  const connectionString = process.env.MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@localhost:5432/maproom'
 
   try {
     testClient = new Client({ connectionString })

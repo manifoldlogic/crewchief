@@ -12,7 +12,7 @@ use tokio_postgres::{Client, NoTls};
 
 /// Helper function to establish database connection.
 async fn get_test_client() -> Result<Client, Box<dyn std::error::Error>> {
-    let db_url = std::env::var("DATABASE_URL")
+    let db_url = std::env::var("MAPROOM_DATABASE_URL")
         .unwrap_or_else(|_| "host=localhost user=postgres dbname=maproom_test".to_string());
 
     let (client, connection) = tokio_postgres::connect(&db_url, NoTls).await?;

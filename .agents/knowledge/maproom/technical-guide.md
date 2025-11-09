@@ -817,7 +817,7 @@ CI Environment:
 
 **Environment Variables:**
 ```bash
-DATABASE_URL=postgres://maproom_writer@localhost/maproom
+MAPROOM_DATABASE_URL=postgres://maproom_writer@localhost/maproom
 EMBEDDINGS_MODEL=text-embedding-3-small
 EMBEDDINGS_DIM=1536
 INDEX_LANGUAGES=ts,tsx,js,jsx,py,rs,go

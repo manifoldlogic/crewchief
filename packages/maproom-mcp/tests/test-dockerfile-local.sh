@@ -68,7 +68,7 @@ echo "Step 12: Testing database connectivity with pg_isready..."
 docker run --rm \
   --network maproom-test-network \
   --entrypoint pg_isready \
-  -e DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
+  -e MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
   maproom-test:local \
   -h maproom-test-postgres -U maproom
 
@@ -92,7 +92,7 @@ echo ""
 echo "Step 15: Testing MCP server with database connection..."
 timeout 5 docker run --rm -i \
   --network maproom-test-network \
-  -e DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
+  -e MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
   -e EMBEDDING_PROVIDER=ollama \
   -e LOG_LEVEL=info \
   maproom-test:local <<EOF || true
@@ -105,10 +105,10 @@ echo "Step 16: Verifying environment variables are passed correctly..."
 docker run --rm \
   --network maproom-test-network \
   --entrypoint sh \
-  -e DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
+  -e MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
   -e TEST_VAR=test123 \
   maproom-test:local \
-  -c 'echo "DATABASE_URL is set: $(echo $DATABASE_URL | grep -o "maproom")"'
+  -c 'echo "MAPROOM_DATABASE_URL is set: $(echo $MAPROOM_DATABASE_URL | grep -o "maproom")"'
 
 echo ""
 echo "Step 17: Cleaning up test containers..."

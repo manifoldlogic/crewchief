@@ -46,10 +46,10 @@ export interface TestChunk {
  * Get database connection from environment
  */
 export function getDatabaseUrl(): string {
-  const dbUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
+  const dbUrl = process.env.TEST_DATABASE_URL || process.env.MAPROOM_DATABASE_URL
   if (!dbUrl) {
     throw new Error(
-      'No TEST_DATABASE_URL or DATABASE_URL environment variable set. ' +
+      'No TEST_DATABASE_URL or MAPROOM_DATABASE_URL environment variable set. ' +
       'Set TEST_DATABASE_URL to run E2E tests with a test database.'
     )
   }

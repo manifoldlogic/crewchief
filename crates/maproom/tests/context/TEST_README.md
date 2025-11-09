@@ -134,7 +134,7 @@ Located in `fixtures/sample-repo/`, this is a realistic Rust codebase with:
 ### Prerequisites
 Set up a PostgreSQL test database:
 ```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test"
+export MAPROOM_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/maproom_test"
 ```
 
 ### Run All Integration Tests
@@ -173,12 +173,12 @@ cargo test --package crewchief-maproom real_data
 Tests use helper functions for database access:
 ```rust
 fn should_skip_db_test() -> bool {
-    env::var("DATABASE_URL").is_err()
+    env::var("MAPROOM_DATABASE_URL").is_err()
 }
 
 fn is_skip_error(e: &anyhow::Error) -> bool {
     let err_str = e.to_string();
-    err_str.contains("DATABASE_URL not set")
+    err_str.contains("MAPROOM_DATABASE_URL not set")
         || err_str.contains("Connection refused")
 }
 ```
@@ -246,10 +246,10 @@ Tests are designed to run in CI with:
 
 ## Troubleshooting
 
-### Tests Skip with "DATABASE_URL not set"
-**Solution**: Set the DATABASE_URL environment variable:
+### Tests Skip with "MAPROOM_DATABASE_URL not set"
+**Solution**: Set the MAPROOM_DATABASE_URL environment variable:
 ```bash
-export DATABASE_URL="postgresql://user:pass@localhost:5432/maproom_test"
+export MAPROOM_DATABASE_URL="postgresql://user:pass@localhost:5432/maproom_test"
 ```
 
 ### Connection Refused Errors

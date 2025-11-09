@@ -3,8 +3,8 @@ use crewchief_maproom::db::pool::create_pool;
 
 #[tokio::test]
 async fn test_pool_creation_with_fallback_url() {
-    // Remove DATABASE_URL to test fallback logic
-    std::env::remove_var("DATABASE_URL");
+    // Remove MAPROOM_DATABASE_URL to test fallback logic
+    std::env::remove_var("MAPROOM_DATABASE_URL");
 
     // Get the database URL using the fallback logic
     let url = get_database_url().expect("Should be able to determine database URL");
@@ -16,9 +16,9 @@ async fn test_pool_creation_with_fallback_url() {
         url
     );
 
-    // Set the resolved URL as DATABASE_URL for pool creation
+    // Set the resolved URL as MAPROOM_DATABASE_URL for pool creation
     // (pool creation still expects it via env var internally)
-    std::env::set_var("DATABASE_URL", &url);
+    std::env::set_var("MAPROOM_DATABASE_URL", &url);
 
     // Try to create a connection pool with the fallback URL
     let pool_result = create_pool().await;
@@ -58,5 +58,5 @@ async fn test_pool_creation_with_fallback_url() {
     }
 
     // Clean up
-    std::env::remove_var("DATABASE_URL");
+    std::env::remove_var("MAPROOM_DATABASE_URL");
 }

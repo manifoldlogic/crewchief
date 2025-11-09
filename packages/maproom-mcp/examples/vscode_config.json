@@ -6,7 +6,7 @@
         "/absolute/path/to/maproom-mcp/dist/index.js"
       ],
       "env": {
-        "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
+        "MAPROOM_DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
         "LOG_LEVEL": "info",
         "MAPROOM_MCP_LOG_FILE": "/tmp/maproom-mcp-vscode.log"
       }
@@ -18,7 +18,7 @@
       "1. Install the MCP extension for VS Code from the marketplace",
       "2. Build the Maproom MCP server: cd packages/maproom-mcp && pnpm build",
       "3. Replace '/absolute/path/to/maproom-mcp' with the actual absolute path to your maproom-mcp package",
-      "4. Update DATABASE_URL with your PostgreSQL connection string",
+      "4. Update MAPROOM_DATABASE_URL with your PostgreSQL connection string",
       "5. Ensure PostgreSQL is running and the maproom database is initialized",
       "6. Index your repository using the maproom CLI before using the MCP server",
       "7. Save this configuration to your VS Code MCP settings"
@@ -43,9 +43,11 @@
       "mcp.servers": {
         "maproom": {
           "command": "node",
-          "args": ["/absolute/path/to/maproom-mcp/dist/index.js"],
+          "args": [
+            "/absolute/path/to/maproom-mcp/dist/index.js"
+          ],
           "env": {
-            "DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
+            "MAPROOM_DATABASE_URL": "postgresql://user:password@localhost:5432/maproom",
             "LOG_LEVEL": "info"
           }
         }
@@ -54,7 +56,7 @@
       "mcp.logLevel": "info"
     },
     "environment_variables": {
-      "DATABASE_URL": {
+      "MAPROOM_DATABASE_URL": {
         "description": "PostgreSQL connection string for Maproom database",
         "required": true,
         "example": "postgresql://user:password@localhost:5432/maproom"
@@ -63,7 +65,13 @@
         "description": "Logging level for MCP server (trace, debug, info, warn, error)",
         "required": false,
         "default": "info",
-        "options": ["trace", "debug", "info", "warn", "error"]
+        "options": [
+          "trace",
+          "debug",
+          "info",
+          "warn",
+          "error"
+        ]
       },
       "MAPROOM_MCP_LOG_FILE": {
         "description": "Path to log file for debugging (optional)",
@@ -143,7 +151,7 @@
         "Try reloading VS Code window (Cmd/Ctrl+Shift+P > Reload Window)"
       ],
       "connection_errors": [
-        "Verify DATABASE_URL is correct",
+        "Verify MAPROOM_DATABASE_URL is correct",
         "Ensure PostgreSQL is running and accessible",
         "Check firewall settings for database connections",
         "Test database connection outside VS Code first"
@@ -165,7 +173,7 @@
       "workspace_configuration": [
         "Use .vscode/settings.json for project-specific MCP servers",
         "Commit .vscode/settings.json (without sensitive credentials) to share with team",
-        "Use environment variables for sensitive data like DATABASE_URL"
+        "Use environment variables for sensitive data like MAPROOM_DATABASE_URL"
       ],
       "development_workflow": [
         "Start with 'status' tool to verify what's indexed",

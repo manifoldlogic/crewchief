@@ -178,7 +178,7 @@ COMMIT;
 
 set -e
 
-DB_URL="${DATABASE_URL:-postgresql://localhost/db}"
+DB_URL="${MAPROOM_DATABASE_URL:-postgresql://localhost/db}"
 
 echo "Verifying migration 0010..."
 
@@ -394,7 +394,7 @@ $$ LANGUAGE plpgsql;
 
 ### Step 1: Run Forward Migration
 ```bash
-psql $DATABASE_URL -f migrations/0010_add_metadata_column.up.sql
+psql $MAPROOM_DATABASE_URL -f migrations/0010_add_metadata_column.up.sql
 ```
 
 Expected output:
@@ -437,10 +437,10 @@ EXPLAIN SELECT * FROM chunks WHERE metadata @> '{"key": "value"}';
 ```bash
 # 1. Stop application (prevent writes to new column)
 # 2. Run rollback script
-psql $DATABASE_URL -f migrations/0010_add_metadata_column.down.sql
+psql $MAPROOM_DATABASE_URL -f migrations/0010_add_metadata_column.down.sql
 
 # 3. Verify rollback
-psql $DATABASE_URL -c "SELECT metadata FROM chunks LIMIT 1"
+psql $MAPROOM_DATABASE_URL -c "SELECT metadata FROM chunks LIMIT 1"
 # Should fail with "column does not exist"
 
 # 4. Restart application (old code doesn't use metadata column)

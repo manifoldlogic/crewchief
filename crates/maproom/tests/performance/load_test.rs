@@ -42,7 +42,7 @@
 //! Tests are marked #[ignore] due to database requirement and long duration:
 //!
 //! ```bash
-//! # Run all load tests (requires DATABASE_URL)
+//! # Run all load tests (requires MAPROOM_DATABASE_URL)
 //! cargo test --test load_test -- --ignored --nocapture --test-threads=1
 //!
 //! # Run specific test
@@ -55,7 +55,7 @@
 //! # Requirements
 //!
 //! - PostgreSQL with test dataset (10,000+ chunks)
-//! - DATABASE_URL environment variable
+//! - MAPROOM_DATABASE_URL environment variable
 //! - Sufficient system resources (4+ CPU cores, 2GB+ RAM)
 //! - Long test duration: 10+ minutes for full suite
 //!
@@ -251,7 +251,7 @@ impl LoadTestResults {
 
 /// Simulate a search query execution.
 ///
-/// In real tests with DATABASE_URL, this would execute actual searches.
+/// In real tests with MAPROOM_DATABASE_URL, this would execute actual searches.
 /// For demonstration, we simulate realistic latencies.
 async fn execute_search_query(query: &str) -> QueryResult {
     let start = Instant::now();

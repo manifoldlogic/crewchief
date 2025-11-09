@@ -21,7 +21,7 @@
 //! # Requirements
 //!
 //! - PostgreSQL with pgvector extension
-//! - DATABASE_URL environment variable set
+//! - MAPROOM_DATABASE_URL environment variable set
 //! - Representative dataset: 10,000+ embeddings in maproom.chunks table
 //! - Ground truth data: Pre-computed exact nearest neighbors for test queries
 //!

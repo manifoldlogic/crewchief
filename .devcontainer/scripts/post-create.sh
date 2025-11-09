@@ -79,16 +79,6 @@ until pg_isready -h postgres -p 5432 -U postgres; do
 done
 print_success "PostgreSQL is ready"
 
-# Run database migrations for Maproom
-print_step "Running Maproom database migrations..."
-if [ -f "/usr/local/bin/crewchief-maproom" ]; then
-    DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief" \
-    /usr/local/bin/crewchief-maproom db migrate || true
-    print_success "Maproom database migrations complete"
-else
-    print_error "Maproom binary not found, skipping migrations"
-fi
-
 # Set up git configuration
 print_step "Configuring Git..."
 git config --global --add safe.directory /workspace

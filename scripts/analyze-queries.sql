@@ -7,7 +7,7 @@
 --   - Run: CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 --
 -- Usage:
---   psql $DATABASE_URL -f scripts/analyze-queries.sql
+--   psql $MAPROOM_DATABASE_URL -f scripts/analyze-queries.sql
 --
 -- Sections:
 --   1. Slow Queries - Find queries exceeding latency targets

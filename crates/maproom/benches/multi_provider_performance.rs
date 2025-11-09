@@ -29,7 +29,7 @@
 //!
 //! ```bash
 //! # Prerequisites: Database with test data
-//! export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
+//! export MAPROOM_DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
 //!
 //! # Run all multi-provider benchmarks
 //! cargo bench --bench multi_provider_performance
@@ -47,7 +47,7 @@
 //!
 //! # Environment Variables
 //!
-//! - `DATABASE_URL`: PostgreSQL connection (required)
+//! - `MAPROOM_DATABASE_URL`: PostgreSQL connection (required)
 //! - `TEST_OLLAMA`: Set to enable Ollama benchmarks (optional, requires Ollama running)
 //! - `OPENAI_API_KEY`: Set to enable OpenAI benchmarks (optional)
 //! - `GOOGLE_PROJECT_ID`: Set to enable Google benchmarks (optional)
@@ -172,7 +172,7 @@ struct RegressionStatus {
 
 /// Simulated search execution for database-free benchmarks
 ///
-/// When DATABASE_URL is available, integration tests should use real queries.
+/// When MAPROOM_DATABASE_URL is available, integration tests should use real queries.
 /// For criterion benchmarks, we simulate realistic latencies based on mode.
 fn simulate_search(query: &str, mode: SearchMode, provider_mix: ProviderMix) -> SearchResult {
     // Simulate query processing overhead (1-3ms)
