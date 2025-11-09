@@ -9,9 +9,9 @@ use notify::{Event, RecursiveMode, Watcher};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio_postgres::Client;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::db::{get_or_create_repo, get_or_create_worktree};
 use crate::incremental::incremental_update;
@@ -93,8 +93,8 @@ impl BranchWatcher {
                     Ok(event) => {
                         // Process modify events (branch switch changes .git/HEAD content)
                         if event.kind.is_modify() || event.kind.is_create() {
-                            if let Err(e) = self.handle_branch_switch().await {
-                                error!("Failed to handle branch switch: {}", e);
+                            if let Err(e) = self.handle_branch_switch_with_retry().await {
+                                error!("Failed to handle branch switch after retries: {}", e);
                                 // Continue watching despite error
                             }
                         }
@@ -118,6 +118,50 @@ impl BranchWatcher {
     async fn index_current_branch(&self) -> Result<()> {
         info!("Indexing current branch...");
         self.handle_branch_switch().await
+    }
+
+    /// Handles branch switch with retry logic and exponential backoff
+    ///
+    /// Attempts to handle branch switches up to 3 times with exponential backoff:
+    /// - Attempt 1: immediate
+    /// - Attempt 2: after 2 seconds
+    /// - Attempt 3: after 4 seconds
+    /// - Attempt 4: after 8 seconds
+    ///
+    /// Only retries on transient errors (I/O errors, database connection issues).
+    /// Permanent errors (invalid data, logic errors) fail immediately.
+    async fn handle_branch_switch_with_retry(&self) -> Result<()> {
+        let max_retries = 3;
+        let mut attempt = 0;
+
+        loop {
+            match self.handle_branch_switch().await {
+                Ok(_) => return Ok(()),
+                Err(e) if attempt < max_retries => {
+                    warn!(
+                        "Branch switch failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        max_retries,
+                        e
+                    );
+
+                    // Check if we should retry
+                    if should_retry(&e) {
+                        attempt += 1;
+                        let delay = Duration::from_secs(2_u64.pow(attempt));
+                        warn!("Retrying in {:?}...", delay);
+                        tokio::time::sleep(delay).await;
+                    } else {
+                        // Permanent error, don't retry
+                        return Err(e);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed after {} retries: {}", max_retries, e);
+                    return Err(e);
+                }
+            }
+        }
     }
 
     /// Handles a detected branch switch by triggering incremental update
@@ -220,6 +264,30 @@ pub fn get_current_branch(repo_path: &Path) -> Result<String> {
             bail!("Invalid HEAD content: expected branch ref or commit SHA")
         }
     }
+}
+
+/// Classifies errors to determine if retry should be attempted
+///
+/// Returns `true` for transient errors that may resolve on retry:
+/// - `tokio_postgres::Error` - Database connection issues, network timeouts
+/// - `std::io::Error` - File I/O failures, temporary access issues
+///
+/// Returns `false` for permanent errors that won't resolve on retry:
+/// - Invalid data format
+/// - Logic errors
+/// - Invalid arguments
+fn should_retry(error: &anyhow::Error) -> bool {
+    // Retry on tokio_postgres database errors (connection issues, timeouts)
+    if error.downcast_ref::<tokio_postgres::Error>().is_some() {
+        return true;
+    }
+
+    // Retry on I/O errors (file read, network)
+    if error.downcast_ref::<std::io::Error>().is_some() {
+        return true;
+    }
+
+    false
 }
 
 #[cfg(test)]
