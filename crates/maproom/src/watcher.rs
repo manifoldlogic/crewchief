@@ -246,6 +246,9 @@ impl BranchWatcher {
             stats.chunks_processed,
             stats.embeddings_generated
         );
+        info!("  Cache hit rate: {:.1}%", stats.cache_hit_rate() * 100.0);
+        info!("  Estimated cost: ${:.4}", stats.cost());
+        info!("Waiting for changes...");
 
         Ok(())
     }
