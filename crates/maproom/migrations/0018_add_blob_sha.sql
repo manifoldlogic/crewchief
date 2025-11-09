@@ -59,9 +59,10 @@ ON maproom.chunks(blob_sha);
 -- ============================================================================
 -- Simplified backfill - single UPDATE statement
 -- Migration runner handles transaction management and error reporting
+-- Handle NULL previews by using empty string (produces valid SHA for empty content)
 
 UPDATE maproom.chunks
-SET blob_sha = maproom.compute_git_blob_sha(preview)
+SET blob_sha = maproom.compute_git_blob_sha(COALESCE(preview, ''))
 WHERE blob_sha IS NULL;
 
 

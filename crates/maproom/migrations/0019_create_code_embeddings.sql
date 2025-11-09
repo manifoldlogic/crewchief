@@ -104,24 +104,30 @@ COMMENT ON INDEX maproom.idx_embeddings_vector IS
 -- Prevents orphaned chunks (chunks without embeddings in code_embeddings table)
 -- ON DELETE RESTRICT: cannot delete embedding if any chunk still references it
 
--- Check if constraint already exists before adding
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'fk_chunks_embedding'
-      AND conrelid = 'maproom.chunks'::regclass
-  ) THEN
-    ALTER TABLE maproom.chunks
-    ADD CONSTRAINT fk_chunks_embedding
-    FOREIGN KEY (blob_sha) REFERENCES maproom.code_embeddings(blob_sha)
-    ON DELETE RESTRICT;
-  END IF;
-END $$;
+-- DISABLED: Foreign key constraint cannot be added for existing data without embeddings
+-- The constraint assumes all chunks already have embeddings in code_embeddings table
+-- For fresh databases, this is fine (migration 2 runs before any chunks exist)
+-- For existing databases being upgraded, embeddings need to be generated first by the indexer
+-- TODO: Re-enable after indexer populates embeddings for all existing chunks
 
-COMMENT ON CONSTRAINT fk_chunks_embedding ON maproom.chunks IS
-  'Ensures all chunks reference valid embeddings in code_embeddings table. Prevents orphaned chunks.';
+-- Check if constraint already exists before adding
+-- DO $$
+-- BEGIN
+--   IF NOT EXISTS (
+--     SELECT 1
+--     FROM pg_constraint
+--     WHERE conname = 'fk_chunks_embedding'
+--       AND conrelid = 'maproom.chunks'::regclass
+--   ) THEN
+--     ALTER TABLE maproom.chunks
+--     ADD CONSTRAINT fk_chunks_embedding
+--     FOREIGN KEY (blob_sha) REFERENCES maproom.code_embeddings(blob_sha)
+--     ON DELETE RESTRICT;
+--   END IF;
+-- END $$;
+
+-- COMMENT ON CONSTRAINT fk_chunks_embedding ON maproom.chunks IS
+--   'Ensures all chunks reference valid embeddings in code_embeddings table. Prevents orphaned chunks.';
 
 
 -- ============================================================================
