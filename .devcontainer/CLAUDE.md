@@ -34,7 +34,7 @@ Working with the development container at `/.devcontainer`.
 - **Languages**: Node.js 20, Rust, Python
 - **Features**: Git, GitHub CLI, Docker-in-Docker
 - **Database**: PostgreSQL via maproom-mcp network
-- **Tools**: zsh, tmux, ripgrep, fd
+- **Tools**: bash, tmux, ripgrep, fd
 
 ## Database Access
 

@@ -7,8 +7,8 @@
   // Features to add to the dev container
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
-      "installZsh": true,
-      "configureZshAsDefaultShell": true,
+      "installZsh": false,
+      "configureZshAsDefaultShell": false,
       "username": "vscode",
       "userUid": "1000",
       "userGid": "1000"
@@ -42,9 +42,9 @@
       "settings": {
         "git.enabled": true,
         "scm.alwaysShowProviders": true,
-        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.defaultProfile.linux": "bash",
         "terminal.integrated.cwd": "/workspace",
-        "terminal.integrated.shell.linux": "/bin/zsh",
+        "terminal.integrated.shell.linux": "/bin/bash",
         "terminal.integrated.env.linux": {
           "WORKSPACE_FOLDER": "/workspace",
           "IN_DEVCONTAINER": "true"
@@ -124,7 +124,7 @@
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.zshrc,target=/home/vscode/.zshrc,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.bashrc,target=/home/vscode/.bashrc,type=bind,consistency=cached",
     "source=crewchief-cargo-cache,target=/home/vscode/.cargo,type=volume",
     "source=crewchief-pnpm-cache,target=/home/vscode/.pnpm-store,type=volume"
   ],
