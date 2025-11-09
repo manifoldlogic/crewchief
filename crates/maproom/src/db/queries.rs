@@ -137,6 +137,12 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
             include_str!("./../../migrations/0016_add_updated_at_to_chunks.sql"),
             false,
         ),
+        (
+            17,
+            "0017_fix_index_size_limits.sql",
+            include_str!("./../../migrations/0017_fix_index_size_limits.sql"),
+            true,
+        ),
     ];
 
     // Step 4: Apply each unapplied migration

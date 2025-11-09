@@ -24,7 +24,7 @@ COMMIT;
 
 -- Partial covering index for small previews (95% of data)
 -- This enables index-only scans for the vast majority of chunks
-CREATE INDEX CONCURRENTLY idx_chunks_search_small_preview
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_search_small_preview
   ON maproom.chunks (file_id, kind, start_line)
   INCLUDE (symbol_name, preview)
   WHERE LENGTH(preview) <= 2000;
@@ -34,7 +34,7 @@ COMMENT ON INDEX maproom.idx_chunks_search_small_preview IS
 
 -- Basic non-covering index as universal fallback (100% of data)
 -- Handles large previews with heap lookup (slightly slower but works for all data)
-CREATE INDEX CONCURRENTLY idx_chunks_search_basic
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_search_basic
   ON maproom.chunks (file_id, kind, start_line);
 
 COMMENT ON INDEX maproom.idx_chunks_search_basic IS
