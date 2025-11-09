@@ -18,9 +18,7 @@
 //! cargo bench --bench concurrent_operations_bench
 //! ```
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Simulates concurrent search execution (FTS + Vector + Graph + Signals).

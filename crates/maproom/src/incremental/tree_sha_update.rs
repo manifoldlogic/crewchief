@@ -236,8 +236,7 @@ pub async fn incremental_update(
     );
 
     // Step 1: Get current git tree SHA
-    let current_tree = get_git_tree_sha(repo_path)
-        .context("Failed to get current git tree SHA")?;
+    let current_tree = get_git_tree_sha(repo_path).context("Failed to get current git tree SHA")?;
     debug!(tree_sha = %current_tree, "Current tree SHA retrieved");
 
     // Step 2: Get last indexed tree SHA from database

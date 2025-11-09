@@ -105,9 +105,7 @@ impl ReactAssemblyStrategy {
     /// Check if a chunk is a React component.
     async fn is_component(&self, metadata: &ChunkMetadata) -> Result<bool> {
         // Quick check: file extension
-        if !metadata.file_relpath.ends_with(".tsx")
-            && !metadata.file_relpath.ends_with(".jsx")
-        {
+        if !metadata.file_relpath.ends_with(".tsx") && !metadata.file_relpath.ends_with(".jsx") {
             return Ok(false);
         }
 
@@ -123,10 +121,7 @@ impl ReactAssemblyStrategy {
         let file_loader = FileLoader::new(&metadata.worktree_path);
         let range = LineRange::new(metadata.start_line, metadata.end_line);
 
-        match file_loader
-            .load_range(&metadata.file_relpath, range)
-            .await
-        {
+        match file_loader.load_range(&metadata.file_relpath, range).await {
             Ok(content) => Ok(self.component_detector.has_jsx_return(&content)),
             Err(_) => {
                 // If we can't load content, rely on file path heuristics
@@ -205,7 +200,10 @@ impl ReactAssemblyStrategy {
             id: row.get(0),
             file_relpath: row.get(1),
             worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!("Chunk {} has no worktree_path, using empty string", chunk_id);
+                warn!(
+                    "Chunk {} has no worktree_path, using empty string",
+                    chunk_id
+                );
                 String::new()
             }),
             symbol_name: row.get(3),
@@ -283,7 +281,10 @@ impl ReactAssemblyStrategy {
             .await
             .context("Failed to get database connection")?;
 
-        let hooks = self.hook_detector.find_used_hooks(&client, chunk_id).await?;
+        let hooks = self
+            .hook_detector
+            .find_used_hooks(&client, chunk_id)
+            .await?;
 
         for (idx, hook) in hooks.into_iter().enumerate() {
             if idx >= self.config.max_hooks {
@@ -302,10 +303,7 @@ impl ReactAssemblyStrategy {
 
             let metadata = self.get_chunk_metadata(hook.id).await?;
 
-            let reason = format!(
-                "Custom hook: {} (used by component)",
-                hook.symbol_name
-            );
+            let reason = format!("Custom hook: {} (used by component)", hook.symbol_name);
 
             match self.create_context_item(metadata, "hook", &reason).await {
                 Ok(item) => {
@@ -315,7 +313,10 @@ impl ReactAssemblyStrategy {
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to create hook context item for {}: {}", hook.symbol_name, e);
+                    warn!(
+                        "Failed to create hook context item for {}: {}",
+                        hook.symbol_name, e
+                    );
                 }
             }
         }
@@ -348,7 +349,10 @@ impl ReactAssemblyStrategy {
 
         for (idx, parent) in parents.into_iter().enumerate() {
             if idx >= self.config.max_jsx_parents {
-                debug!("Reached max JSX parents limit ({})", self.config.max_jsx_parents);
+                debug!(
+                    "Reached max JSX parents limit ({})",
+                    self.config.max_jsx_parents
+                );
                 break;
             }
 
@@ -360,10 +364,15 @@ impl ReactAssemblyStrategy {
 
             let reason = format!(
                 "Parent component: {} (renders this component)",
-                parent.symbol_name.unwrap_or_else(|| "component".to_string())
+                parent
+                    .symbol_name
+                    .unwrap_or_else(|| "component".to_string())
             );
 
-            match self.create_context_item(metadata, "jsx_parent", &reason).await {
+            match self
+                .create_context_item(metadata, "jsx_parent", &reason)
+                .await
+            {
                 Ok(item) => {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding JSX parent: {} tokens", item.tokens);
@@ -403,7 +412,10 @@ impl ReactAssemblyStrategy {
 
         for (idx, child) in children.into_iter().enumerate() {
             if idx >= self.config.max_jsx_children {
-                debug!("Reached max JSX children limit ({})", self.config.max_jsx_children);
+                debug!(
+                    "Reached max JSX children limit ({})",
+                    self.config.max_jsx_children
+                );
                 break;
             }
 
@@ -418,7 +430,10 @@ impl ReactAssemblyStrategy {
                 child.symbol_name.unwrap_or_else(|| "component".to_string())
             );
 
-            match self.create_context_item(metadata, "jsx_child", &reason).await {
+            match self
+                .create_context_item(metadata, "jsx_child", &reason)
+                .await
+            {
                 Ok(item) => {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding JSX child: {} tokens", item.tokens);
@@ -482,9 +497,7 @@ impl ContextAssembler for ReactAssemblyStrategy {
         }
 
         // Add React-specific context items
-        let symbol_name = metadata
-            .symbol_name.as_deref()
-            .unwrap_or("Component");
+        let symbol_name = metadata.symbol_name.as_deref().unwrap_or("Component");
 
         // Priority order: routes → hooks → jsx_parents → jsx_children
         if config.include_routes {
@@ -501,8 +514,7 @@ impl ContextAssembler for ReactAssemblyStrategy {
         }
 
         if config.include_jsx_children {
-            self.add_jsx_children(&mut bundle, chunk_id, budget)
-                .await?;
+            self.add_jsx_children(&mut bundle, chunk_id, budget).await?;
         }
 
         debug!(

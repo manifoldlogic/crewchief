@@ -231,7 +231,10 @@ def simple_function():
     let func = &chunks[0];
     let docstring = func.docstring.as_ref().unwrap();
 
-    assert_eq!(docstring, "This is just a simple docstring with no special sections.");
+    assert_eq!(
+        docstring,
+        "This is just a simple docstring with no special sections."
+    );
 }
 
 /// Test class with Google-style docstring
@@ -305,7 +308,9 @@ class DataProcessor:
     let chunks = parser::extract_chunks(source, "py");
     assert!(chunks.len() >= 2);
 
-    let method = chunks.iter().find(|c| c.symbol_name == Some("transform".to_string()));
+    let method = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("transform".to_string()));
     assert!(method.is_some());
 
     let method = method.unwrap();

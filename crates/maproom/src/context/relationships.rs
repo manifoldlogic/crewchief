@@ -9,9 +9,9 @@
 //! These functions build on the core graph traversal in graph.rs but provide
 //! semantic meaning and specialized handling for each relationship type.
 
-use tokio_postgres::Client;
+use super::graph::{find_related_chunks_directional, EdgeType, RelatedChunk};
 use anyhow::{Context as AnyhowContext, Result};
-use super::graph::{EdgeType, RelatedChunk, find_related_chunks_directional};
+use tokio_postgres::Client;
 
 /// Find test files that test the given chunk.
 ///
@@ -53,7 +53,9 @@ pub async fn find_test_files(client: &Client, chunk_id: i64) -> Result<Vec<Relat
         ORDER BY relevance DESC;
     "#;
 
-    let rows = client.query(query, &[&chunk_id]).await
+    let rows = client
+        .query(query, &[&chunk_id])
+        .await
         .context("Failed to query test_links table")?;
 
     let mut tests: Vec<RelatedChunk> = rows
@@ -79,7 +81,8 @@ pub async fn find_test_files(client: &Client, chunk_id: i64) -> Result<Vec<Relat
         1, // Only direct tests (depth 1)
         Some(vec![EdgeType::TestOf]),
         false, // Backward: find chunks where dst_chunk_id = chunk_id
-    ).await?;
+    )
+    .await?;
 
     // Merge results, avoiding duplicates
     for edge_test in edge_tests {
@@ -127,7 +130,8 @@ pub async fn find_callers(
         max_depth,
         Some(vec![EdgeType::Calls]),
         false, // Backward: find src where dst = this chunk
-    ).await
+    )
+    .await
 }
 
 /// Find callees of the given chunk (what this function/method calls).
@@ -163,7 +167,8 @@ pub async fn find_callees(
         max_depth,
         Some(vec![EdgeType::Calls]),
         true, // Forward: find dst where src = this chunk
-    ).await
+    )
+    .await
 }
 
 /// Find imports (dependencies) of the given chunk.
@@ -193,7 +198,8 @@ pub async fn find_imports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedC
         1, // Only direct imports
         Some(vec![EdgeType::Imports]),
         true, // Forward: find what this imports
-    ).await
+    )
+    .await
 }
 
 /// Find exports (what exports this chunk).
@@ -223,7 +229,8 @@ pub async fn find_exports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedC
         1, // Only direct exports
         Some(vec![EdgeType::Exports]),
         false, // Backward: find what exports this
-    ).await
+    )
+    .await
 }
 
 /// Find route definitions that use the given component chunk.
@@ -253,7 +260,8 @@ pub async fn find_routes(client: &Client, chunk_id: i64) -> Result<Vec<RelatedCh
         1, // Only direct routes
         Some(vec![EdgeType::RouteOf]),
         false, // Backward: find routes where dst = this component
-    ).await
+    )
+    .await
 }
 
 /// Find all relationship types for a chunk (comprehensive).

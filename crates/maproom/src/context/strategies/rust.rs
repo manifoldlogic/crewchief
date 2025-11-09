@@ -13,8 +13,8 @@ use tracing::{debug, warn};
 use crate::context::{
     assembler::ChunkMetadata,
     file_loader::FileLoader,
-    strategy::AssemblyStrategy,
     strategies::default::DefaultAssemblyStrategy,
+    strategy::AssemblyStrategy,
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
@@ -298,13 +298,11 @@ impl AssemblyStrategy for RustAssemblyStrategy {
         // Priority order: Cargo.toml → trait impls → module files
 
         // 1. Include Cargo.toml for crate metadata
-        self.add_cargo_toml(&mut bundle, &metadata, budget)
-            .await?;
+        self.add_cargo_toml(&mut bundle, &metadata, budget).await?;
 
         // 2. Include trait implementations if this is a type or impl
         if self.is_rust_type(&metadata) || self.is_rust_impl(&metadata) {
-            self.add_trait_impls(&mut bundle, chunk_id, budget)
-                .await?;
+            self.add_trait_impls(&mut bundle, chunk_id, budget).await?;
         }
 
         // 3. Include module files for structure context

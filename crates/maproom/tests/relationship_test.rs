@@ -8,7 +8,9 @@ use tokio_postgres::{Client, NoTls};
 
 /// Setup helper functions (same as graph_test.rs)
 async fn run_migrations(client: &Client) -> Result<()> {
-    client.batch_execute(include_str!("../migrations/0001_init.sql")).await?;
+    client
+        .batch_execute(include_str!("../migrations/0001_init.sql"))
+        .await?;
     Ok(())
 }
 
@@ -110,13 +112,15 @@ async fn setup_relationship_graph(client: &Client) -> Result<Vec<i64>> {
     // Create files
     let impl_file = create_file(client, repo_id, worktree_id, commit_id, "src/auth.ts").await?;
     let util_file = create_file(client, repo_id, worktree_id, commit_id, "src/utils.ts").await?;
-    let test_file = create_file(client, repo_id, worktree_id, commit_id, "test/auth.test.ts").await?;
+    let test_file =
+        create_file(client, repo_id, worktree_id, commit_id, "test/auth.test.ts").await?;
 
     // Create chunks
     let authenticate = create_chunk(client, impl_file, "authenticate", "func", 1, 20).await?;
     let validate_user = create_chunk(client, util_file, "validateUser", "func", 1, 10).await?;
     let hash_password = create_chunk(client, util_file, "hashPassword", "func", 12, 20).await?;
-    let test_authenticate = create_chunk(client, test_file, "testAuthenticate", "func", 1, 30).await?;
+    let test_authenticate =
+        create_chunk(client, test_file, "testAuthenticate", "func", 1, 30).await?;
     let test_validate = create_chunk(client, test_file, "testValidate", "func", 32, 50).await?;
 
     // Create relationships:
@@ -138,13 +142,20 @@ async fn setup_relationship_graph(client: &Client) -> Result<Vec<i64>> {
     create_test_link(client, test_authenticate, authenticate).await?;
     create_test_link(client, test_validate, validate_user).await?;
 
-    Ok(vec![authenticate, validate_user, hash_password, test_authenticate, test_validate])
+    Ok(vec![
+        authenticate,
+        validate_user,
+        hash_password,
+        test_authenticate,
+        test_validate,
+    ])
 }
 
 #[tokio::test]
 async fn test_find_test_files() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -162,19 +173,26 @@ async fn test_find_test_files() -> Result<()> {
 
     // Verify test_authenticate is in the results
     let found_test = tests.iter().any(|t| t.id == test_authenticate);
-    assert!(found_test, "Should find testAuthenticate as a test for authenticate");
+    assert!(
+        found_test,
+        "Should find testAuthenticate as a test for authenticate"
+    );
 
     // Verify relevance is 1.0 for direct test
     let test_chunk = tests.iter().find(|t| t.id == test_authenticate).unwrap();
-    assert_eq!(test_chunk.relevance, 1.0, "Direct test should have relevance 1.0");
+    assert_eq!(
+        test_chunk.relevance, 1.0,
+        "Direct test should have relevance 1.0"
+    );
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_find_callers() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -199,20 +217,27 @@ async fn test_find_callers() -> Result<()> {
     let hash_callers = find_callers(&client, hash_password, 2).await?;
 
     // Should find both authenticate and validate_user
-    assert!(hash_callers.len() >= 2, "hash_password should have multiple callers");
+    assert!(
+        hash_callers.len() >= 2,
+        "hash_password should have multiple callers"
+    );
 
     let has_authenticate = hash_callers.iter().any(|c| c.id == authenticate);
     let has_validate = hash_callers.iter().any(|c| c.id == validate_user);
 
-    assert!(has_authenticate || has_validate, "Should find callers of hash_password");
+    assert!(
+        has_authenticate || has_validate,
+        "Should find callers of hash_password"
+    );
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_find_callees() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -239,7 +264,10 @@ async fn test_find_callees() -> Result<()> {
     // Verify depth 1 callees have relevance 0.7
     let direct_callees: Vec<_> = callees.iter().filter(|c| c.depth == 1).collect();
     for callee in direct_callees {
-        assert!((callee.relevance - 0.7).abs() < 0.01, "Depth 1 callee should have relevance 0.7");
+        assert!(
+            (callee.relevance - 0.7).abs() < 0.01,
+            "Depth 1 callee should have relevance 0.7"
+        );
     }
 
     Ok(())
@@ -247,8 +275,9 @@ async fn test_find_callees() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_imports() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -278,8 +307,9 @@ async fn test_find_imports() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_exports() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -294,15 +324,19 @@ async fn test_find_exports() -> Result<()> {
     let exports = find_exports(&client, validate_user).await?;
 
     // May be empty if no export edges are defined
-    assert!(exports.is_empty() || !exports.is_empty(), "Function should complete");
+    assert!(
+        exports.is_empty() || !exports.is_empty(),
+        "Function should complete"
+    );
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_find_routes() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -314,8 +348,10 @@ async fn test_find_routes() -> Result<()> {
     let worktree_id = create_worktree(&client, repo_id, "main", "/tmp/test-routes").await?;
     let commit_id = create_commit(&client, repo_id, "abc123").await?;
 
-    let component_file = create_file(&client, repo_id, worktree_id, commit_id, "src/Home.tsx").await?;
-    let routes_file = create_file(&client, repo_id, worktree_id, commit_id, "src/routes.tsx").await?;
+    let component_file =
+        create_file(&client, repo_id, worktree_id, commit_id, "src/Home.tsx").await?;
+    let routes_file =
+        create_file(&client, repo_id, worktree_id, commit_id, "src/routes.tsx").await?;
 
     let home_component = create_chunk(&client, component_file, "Home", "component", 1, 30).await?;
     let route_def = create_chunk(&client, routes_file, "homeRoute", "var", 5, 10).await?;
@@ -338,8 +374,9 @@ async fn test_find_routes() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_all_relationships() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -370,8 +407,9 @@ async fn test_find_all_relationships() -> Result<()> {
 
 #[tokio::test]
 async fn test_multi_hop_traversal() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -407,8 +445,9 @@ async fn test_multi_hop_traversal() -> Result<()> {
 
 #[tokio::test]
 async fn test_no_relationships() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -431,8 +470,14 @@ async fn test_no_relationships() -> Result<()> {
     let callees = find_callees(&client, isolated_chunk, 2).await?;
 
     assert!(tests.is_empty(), "Isolated chunk should have no tests");
-    assert!(callers.is_empty() || callers.len() == 1, "Should only contain itself or be empty");
-    assert!(callees.is_empty() || callees.len() == 1, "Should only contain itself or be empty");
+    assert!(
+        callers.is_empty() || callers.len() == 1,
+        "Should only contain itself or be empty"
+    );
+    assert!(
+        callees.is_empty() || callees.len() == 1,
+        "Should only contain itself or be empty"
+    );
 
     Ok(())
 }

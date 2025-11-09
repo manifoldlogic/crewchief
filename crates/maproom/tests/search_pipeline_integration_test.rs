@@ -97,11 +97,11 @@ async fn test_search_pipeline_basic_query() -> Result<(), Box<dyn std::error::Er
 
         println!("Top result: {} (score: {:.4})", first.relpath, first.score);
         println!("  Symbol: {:?}", first.symbol_name);
+        println!("  Lines: {}-{}", first.start_line, first.end_line);
         println!(
-            "  Lines: {}-{}",
-            first.start_line, first.end_line
+            "  Preview: {}",
+            &first.preview[..first.preview.len().min(80)]
         );
-        println!("  Preview: {}", &first.preview[..first.preview.len().min(80)]);
     }
 
     Ok(())
@@ -212,10 +212,7 @@ async fn test_search_pipeline_code_query() -> Result<(), Box<dyn std::error::Err
     assert_eq!(results.query, "async fn search");
 
     // Check that mode detection worked
-    println!(
-        "Query mode: {:?}",
-        results.metadata.query_processing.mode
-    );
+    println!("Query mode: {:?}", results.metadata.query_processing.mode);
 
     Ok(())
 }
@@ -241,9 +238,18 @@ async fn test_search_pipeline_performance() -> Result<(), Box<dyn std::error::Er
     let results = pipeline.search("search function", options).await?;
     let elapsed = start.elapsed();
 
-    println!("Search completed in {:.2}ms", elapsed.as_secs_f64() * 1000.0);
-    println!("  Query processing: {:.2}ms", results.metadata.timing.query_processing_ms);
-    println!("  Search execution: {:.2}ms", results.metadata.timing.search_execution_ms);
+    println!(
+        "Search completed in {:.2}ms",
+        elapsed.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  Query processing: {:.2}ms",
+        results.metadata.timing.query_processing_ms
+    );
+    println!(
+        "  Search execution: {:.2}ms",
+        results.metadata.timing.search_execution_ms
+    );
     println!("  Fusion: {:.2}ms", results.metadata.timing.fusion_ms);
     println!("  Assembly: {:.2}ms", results.metadata.timing.assembly_ms);
 
@@ -318,10 +324,7 @@ async fn test_search_pipeline_with_worktree_filter() -> Result<(), Box<dyn std::
     // Find a repo and worktree using the pipeline's client
     let row = pipeline
         .client()
-        .query_opt(
-            "SELECT repo_id, id FROM maproom.worktrees LIMIT 1",
-            &[],
-        )
+        .query_opt("SELECT repo_id, id FROM maproom.worktrees LIMIT 1", &[])
         .await?;
 
     if let Some(row) = row {
@@ -331,10 +334,7 @@ async fn test_search_pipeline_with_worktree_filter() -> Result<(), Box<dyn std::
         let options = SearchOptions::new(repo_id, Some(worktree_id), 10);
         let results = pipeline.search("function", options).await?;
 
-        println!(
-            "Search with worktree filter: {} results",
-            results.len()
-        );
+        println!("Search with worktree filter: {} results", results.len());
 
         Ok(())
     } else {
@@ -363,10 +363,7 @@ async fn test_search_pipeline_custom_fusion_strategy() -> Result<(), Box<dyn std
     let options = SearchOptions::new(repo_id, None, 10);
     let results = pipeline.search("search test", options).await?;
 
-    println!(
-        "Custom fusion search: {} results",
-        results.len()
-    );
+    println!("Custom fusion search: {} results", results.len());
 
     Ok(())
 }
@@ -390,9 +387,9 @@ async fn test_search_pipeline_malformed_query() -> Result<(), Box<dyn std::error
 
     // Test various malformed queries
     let malformed_queries = vec![
-        "",                           // Empty
-        "   ",                        // Whitespace only
-        "\t\n",                       // Tabs and newlines
+        "",     // Empty
+        "   ",  // Whitespace only
+        "\t\n", // Tabs and newlines
     ];
 
     for query in malformed_queries {
@@ -402,11 +399,19 @@ async fn test_search_pipeline_malformed_query() -> Result<(), Box<dyn std::error
         // Should handle gracefully (error or empty results)
         match result {
             Ok(results) => {
-                println!("Malformed query '{}' returned {} results", query.escape_debug(), results.len());
+                println!(
+                    "Malformed query '{}' returned {} results",
+                    query.escape_debug(),
+                    results.len()
+                );
                 assert!(results.is_empty() || results.len() == 0);
             }
             Err(e) => {
-                println!("Malformed query '{}' returned error: {}", query.escape_debug(), e);
+                println!(
+                    "Malformed query '{}' returned error: {}",
+                    query.escape_debug(),
+                    e
+                );
             }
         }
     }
@@ -478,7 +483,11 @@ async fn test_search_pipeline_very_long_query() -> Result<(), Box<dyn std::error
     let options = SearchOptions::new(repo_id, None, 10);
     let results = pipeline.search(long_query, options).await?;
 
-    println!("Long query ({} chars): {} results", long_query.len(), results.len());
+    println!(
+        "Long query ({} chars): {} results",
+        long_query.len(),
+        results.len()
+    );
     // Should handle without errors
     assert!(results.metadata.total_time_ms() > 0.0);
 
@@ -499,11 +508,11 @@ async fn test_search_pipeline_unicode_query() -> Result<(), Box<dyn std::error::
         .expect("No repos found in database");
 
     let unicode_queries = vec![
-        "函数 function",           // Chinese
-        "función búsqueda",        // Spanish
-        "поиск функция",           // Russian
-        "検索 機能",              // Japanese
-        "🔍 search emoji",         // Emoji
+        "函数 function",    // Chinese
+        "función búsqueda", // Spanish
+        "поиск функция",    // Russian
+        "検索 機能",        // Japanese
+        "🔍 search emoji",  // Emoji
     ];
 
     for query in unicode_queries {
@@ -548,7 +557,10 @@ async fn test_search_pipeline_ranking_order() -> Result<(), Box<dyn std::error::
 
         println!("✓ Results are properly ranked by score");
         println!("  Top score: {:.4}", results.results[0].score);
-        println!("  Bottom score: {:.4}", results.results.last().unwrap().score);
+        println!(
+            "  Bottom score: {:.4}",
+            results.results.last().unwrap().score
+        );
     }
 
     Ok(())
@@ -580,7 +592,10 @@ async fn test_search_pipeline_score_range() -> Result<(), Box<dyn std::error::Er
         );
     }
 
-    println!("✓ All {} results have valid scores [0.0, 1.0]", results.len());
+    println!(
+        "✓ All {} results have valid scores [0.0, 1.0]",
+        results.len()
+    );
 
     Ok(())
 }
@@ -626,7 +641,10 @@ async fn test_search_pipeline_invalid_repo_id() -> Result<(), Box<dyn std::error
     let results = pipeline.search("test", options).await?;
 
     // Should return empty results or handle gracefully
-    assert!(results.is_empty(), "Invalid repo_id should return no results");
+    assert!(
+        results.is_empty(),
+        "Invalid repo_id should return no results"
+    );
     println!("✓ Invalid repo_id handled gracefully: 0 results");
 
     Ok(())
@@ -659,12 +677,21 @@ async fn test_search_pipeline_metadata_completeness() -> Result<(), Box<dyn std:
     assert!(results.metadata.query_processing.expanded_term_count >= 0);
 
     // result_counts is a HashMap<SearchSource, usize>
-    assert!(!results.metadata.result_counts.is_empty(), "Should have result counts");
+    assert!(
+        !results.metadata.result_counts.is_empty(),
+        "Should have result counts"
+    );
 
     println!("✓ Metadata is complete and valid");
     println!("  Total time: {:.2}ms", results.metadata.total_time_ms());
-    println!("  Tokens: {}", results.metadata.query_processing.token_count);
-    println!("  Total unique chunks: {}", results.metadata.total_unique_chunks);
+    println!(
+        "  Tokens: {}",
+        results.metadata.query_processing.token_count
+    );
+    println!(
+        "  Total unique chunks: {}",
+        results.metadata.total_unique_chunks
+    );
     println!("  Returned results: {}", results.metadata.returned_results);
 
     Ok(())
@@ -696,11 +723,17 @@ async fn test_search_pipeline_result_fields_populated() -> Result<(), Box<dyn st
         assert!(!first.kind.is_empty(), "kind should not be empty");
         assert!(first.score > 0.0, "score should be positive");
         assert!(first.start_line > 0, "start_line should be positive");
-        assert!(first.end_line >= first.start_line, "end_line should be >= start_line");
+        assert!(
+            first.end_line >= first.start_line,
+            "end_line should be >= start_line"
+        );
         assert!(!first.preview.is_empty(), "preview should not be empty");
 
         // source_scores should have at least one entry
-        assert!(!first.source_scores.is_empty(), "source_scores should not be empty");
+        assert!(
+            !first.source_scores.is_empty(),
+            "source_scores should not be empty"
+        );
 
         println!("✓ All required fields are populated");
         println!("  Chunk: {}", first.chunk_id);

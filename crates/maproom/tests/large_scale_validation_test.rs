@@ -36,8 +36,7 @@ impl LanguageMetrics {
             self.failed_parses += 1;
         }
         self.processing_time_ms += duration_ms;
-        self.error_rate_percent =
-            (self.failed_parses as f64 / self.files_processed as f64) * 100.0;
+        self.error_rate_percent = (self.failed_parses as f64 / self.files_processed as f64) * 100.0;
     }
 
     fn files_per_minute(&self) -> f64 {
@@ -61,7 +60,9 @@ mod python_validation {
 
     pub fn get_samples() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("django_model.py", r#"
+            (
+                "django_model.py",
+                r#"
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -95,8 +96,11 @@ class Article(models.Model):
         from datetime import timedelta
         from django.utils import timezone
         return self.published_date >= timezone.now() - timedelta(days=7)
-"#),
-            ("flask_app.py", r#"
+"#,
+            ),
+            (
+                "flask_app.py",
+                r#"
 from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_required, current_user
@@ -146,8 +150,11 @@ def users_api():
 def load_user(user_id):
     """Load user by ID for Flask-Login."""
     return User.query.get(int(user_id))
-"#),
-            ("numpy_style.py", r#"
+"#,
+            ),
+            (
+                "numpy_style.py",
+                r#"
 import numpy as np
 from typing import Optional, Tuple, Union
 
@@ -232,8 +239,11 @@ class DataProcessor:
     def fit_transform(self, data: np.ndarray) -> np.ndarray:
         """Fit and transform in one step."""
         return self.fit(data).transform(data)
-"#),
-            ("async_python.py", r#"
+"#,
+            ),
+            (
+                "async_python.py",
+                r#"
 import asyncio
 import aiohttp
 from typing import List, Dict, Any
@@ -296,8 +306,11 @@ class AsyncTaskQueue:
     async def run_all(self):
         """Run all queued tasks."""
         return await asyncio.gather(*self.tasks)
-"#),
-            ("pytest_fixtures.py", r#"
+"#,
+            ),
+            (
+                "pytest_fixtures.py",
+                r#"
 import pytest
 from typing import Generator
 from unittest.mock import Mock, patch
@@ -354,7 +367,8 @@ class TestUserService:
         """Test email validation with various inputs."""
         from app.validators import validate_email
         assert validate_email(input_val) == expected
-"#),
+"#,
+            ),
         ]
     }
 }
@@ -365,7 +379,9 @@ mod rust_validation {
 
     pub fn get_samples() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("tokio_async.rs", r#"
+            (
+                "tokio_async.rs",
+                r#"
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use std::error::Error;
@@ -418,8 +434,11 @@ async fn fetch_urls(urls: Vec<&str>) -> Vec<Result<String, reqwest::Error>> {
 
     futures::future::join_all(futures).await
 }
-"#),
-            ("serde_serialization.rs", r#"
+"#,
+            ),
+            (
+                "serde_serialization.rs",
+                r#"
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -489,8 +508,11 @@ impl User {
         serde_json::from_str(s)
     }
 }
-"#),
-            ("trait_patterns.rs", r#"
+"#,
+            ),
+            (
+                "trait_patterns.rs",
+                r#"
 use std::fmt::{self, Display};
 
 /// Trait for cacheable items
@@ -581,8 +603,11 @@ impl QueryBuilder {
         query
     }
 }
-"#),
-            ("error_handling.rs", r#"
+"#,
+            ),
+            (
+                "error_handling.rs",
+                r#"
 use std::fmt;
 use std::error::Error as StdError;
 
@@ -654,8 +679,11 @@ pub struct User {
     pub id: i64,
     pub username: String,
 }
-"#),
-            ("macro_usage.rs", r#"
+"#,
+            ),
+            (
+                "macro_usage.rs",
+                r#"
 /// Declarative macro for creating configuration
 #[macro_export]
 macro_rules! config {
@@ -698,7 +726,8 @@ pub fn create_settings() -> std::collections::HashMap<String, String> {
         debug => "true",
     }
 }
-"#),
+"#,
+            ),
         ]
     }
 }
@@ -709,7 +738,9 @@ mod go_validation {
 
     pub fn get_samples() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("kubernetes_style.go", r#"
+            (
+                "kubernetes_style.go",
+                r#"
 package controller
 
 import (
@@ -785,8 +816,11 @@ func (c *PodController) WatchPods(ctx context.Context) error {
         }
     }
 }
-"#),
-            ("interface_patterns.go", r#"
+"#,
+            ),
+            (
+                "interface_patterns.go",
+                r#"
 package storage
 
 import (
@@ -866,8 +900,11 @@ type StorageError struct {
 func (e *StorageError) Error() string {
     return e.Code + ": " + e.Message
 }
-"#),
-            ("embedded_structs.go", r#"
+"#,
+            ),
+            (
+                "embedded_structs.go",
+                r#"
 package models
 
 import (
@@ -965,8 +1002,11 @@ func (r *Repository) FindUser(id int64) (*User, error) {
 
     return user, nil
 }
-"#),
-            ("concurrency.go", r#"
+"#,
+            ),
+            (
+                "concurrency.go",
+                r#"
 package worker
 
 import (
@@ -1092,8 +1132,11 @@ func (p *Pool) Shutdown() {
 func (p *Pool) Results() <-chan Result {
     return p.results
 }
-"#),
-            ("http_server.go", r#"
+"#,
+            ),
+            (
+                "http_server.go",
+                r#"
 package server
 
 import (
@@ -1198,7 +1241,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
     s.logger.Info("Shutting down server")
     return s.server.Shutdown(ctx)
 }
-"#),
+"#,
+            ),
         ]
     }
 }
@@ -1229,19 +1273,32 @@ fn test_python_validation_suite() {
     println!("Failed parses: {}", metrics.failed_parses);
     println!("Total chunks extracted: {}", metrics.total_chunks);
     println!("Error rate: {:.2}%", metrics.error_rate_percent);
-    println!("Average chunks per file: {:.2}", metrics.avg_chunks_per_file());
-    println!("Processing speed: {:.2} files/min", metrics.files_per_minute());
+    println!(
+        "Average chunks per file: {:.2}",
+        metrics.avg_chunks_per_file()
+    );
+    println!(
+        "Processing speed: {:.2} files/min",
+        metrics.files_per_minute()
+    );
 
     // Acceptance criteria validation
-    assert!(metrics.error_rate_percent < 1.0,
-        "Python error rate {:.2}% exceeds 1% threshold", metrics.error_rate_percent);
-    assert!(metrics.total_chunks > 0,
-        "Python parser should extract chunks from sample code");
+    assert!(
+        metrics.error_rate_percent < 1.0,
+        "Python error rate {:.2}% exceeds 1% threshold",
+        metrics.error_rate_percent
+    );
+    assert!(
+        metrics.total_chunks > 0,
+        "Python parser should extract chunks from sample code"
+    );
 
     // Performance validation - should be well above 150 files/min for small samples
-    assert!(metrics.files_per_minute() > 150.0,
+    assert!(
+        metrics.files_per_minute() > 150.0,
         "Python processing speed {:.2} files/min is below 150 threshold",
-        metrics.files_per_minute());
+        metrics.files_per_minute()
+    );
 }
 
 #[test]
@@ -1255,19 +1312,32 @@ fn test_rust_validation_suite() {
     println!("Failed parses: {}", metrics.failed_parses);
     println!("Total chunks extracted: {}", metrics.total_chunks);
     println!("Error rate: {:.2}%", metrics.error_rate_percent);
-    println!("Average chunks per file: {:.2}", metrics.avg_chunks_per_file());
-    println!("Processing speed: {:.2} files/min", metrics.files_per_minute());
+    println!(
+        "Average chunks per file: {:.2}",
+        metrics.avg_chunks_per_file()
+    );
+    println!(
+        "Processing speed: {:.2} files/min",
+        metrics.files_per_minute()
+    );
 
     // Acceptance criteria validation
-    assert!(metrics.error_rate_percent < 1.0,
-        "Rust error rate {:.2}% exceeds 1% threshold", metrics.error_rate_percent);
-    assert!(metrics.total_chunks > 0,
-        "Rust parser should extract chunks from sample code");
+    assert!(
+        metrics.error_rate_percent < 1.0,
+        "Rust error rate {:.2}% exceeds 1% threshold",
+        metrics.error_rate_percent
+    );
+    assert!(
+        metrics.total_chunks > 0,
+        "Rust parser should extract chunks from sample code"
+    );
 
     // Performance validation
-    assert!(metrics.files_per_minute() > 150.0,
+    assert!(
+        metrics.files_per_minute() > 150.0,
         "Rust processing speed {:.2} files/min is below 150 threshold",
-        metrics.files_per_minute());
+        metrics.files_per_minute()
+    );
 }
 
 #[test]
@@ -1281,19 +1351,32 @@ fn test_go_validation_suite() {
     println!("Failed parses: {}", metrics.failed_parses);
     println!("Total chunks extracted: {}", metrics.total_chunks);
     println!("Error rate: {:.2}%", metrics.error_rate_percent);
-    println!("Average chunks per file: {:.2}", metrics.avg_chunks_per_file());
-    println!("Processing speed: {:.2} files/min", metrics.files_per_minute());
+    println!(
+        "Average chunks per file: {:.2}",
+        metrics.avg_chunks_per_file()
+    );
+    println!(
+        "Processing speed: {:.2} files/min",
+        metrics.files_per_minute()
+    );
 
     // Acceptance criteria validation
-    assert!(metrics.error_rate_percent < 1.0,
-        "Go error rate {:.2}% exceeds 1% threshold", metrics.error_rate_percent);
-    assert!(metrics.total_chunks > 0,
-        "Go parser should extract chunks from sample code");
+    assert!(
+        metrics.error_rate_percent < 1.0,
+        "Go error rate {:.2}% exceeds 1% threshold",
+        metrics.error_rate_percent
+    );
+    assert!(
+        metrics.total_chunks > 0,
+        "Go parser should extract chunks from sample code"
+    );
 
     // Performance validation
-    assert!(metrics.files_per_minute() > 150.0,
+    assert!(
+        metrics.files_per_minute() > 150.0,
         "Go processing speed {:.2} files/min is below 150 threshold",
-        metrics.files_per_minute());
+        metrics.files_per_minute()
+    );
 }
 
 #[test]
@@ -1335,10 +1418,16 @@ fn test_batch_processing_performance() {
     println!("Overall speed: {:.2} files/min", overall_speed);
 
     // Acceptance criteria
-    assert!(overall_error_rate < 1.0,
-        "Overall error rate {:.2}% exceeds 1% threshold", overall_error_rate);
-    assert!(overall_speed > 150.0,
-        "Overall processing speed {:.2} files/min is below 150 threshold", overall_speed);
+    assert!(
+        overall_error_rate < 1.0,
+        "Overall error rate {:.2}% exceeds 1% threshold",
+        overall_error_rate
+    );
+    assert!(
+        overall_speed > 150.0,
+        "Overall processing speed {:.2} files/min is below 150 threshold",
+        overall_speed
+    );
 }
 
 #[test]
@@ -1382,16 +1471,26 @@ fn test_memory_usage_batch_processing() {
     let duration = start.elapsed();
     let files_per_min = (large_batch.len() as f64 / duration.as_secs_f64()) * 60.0;
 
-    println!("Processed {} files in {:.2}s", large_batch.len(), duration.as_secs_f64());
-    println!("Success rate: {}/{} ({:.2}%)",
-        successful, large_batch.len(),
-        (successful as f64 / large_batch.len() as f64) * 100.0);
+    println!(
+        "Processed {} files in {:.2}s",
+        large_batch.len(),
+        duration.as_secs_f64()
+    );
+    println!(
+        "Success rate: {}/{} ({:.2}%)",
+        successful,
+        large_batch.len(),
+        (successful as f64 / large_batch.len() as f64) * 100.0
+    );
     println!("Total chunks: {}", total_chunks);
     println!("Throughput: {:.2} files/min", files_per_min);
 
     // Verify performance targets
-    assert!(files_per_min > 150.0,
-        "Batch processing speed {:.2} files/min is below 150 threshold", files_per_min);
+    assert!(
+        files_per_min > 150.0,
+        "Batch processing speed {:.2} files/min is below 150 threshold",
+        files_per_min
+    );
 
     // Memory usage note: In a production environment, this would be monitored
     // using tools like valgrind, heaptrack, or cargo-instruments
@@ -1484,12 +1583,19 @@ fn test_multi_language_accuracy() {
         }
 
         let accuracy = (correct as f64 / total as f64) * 100.0;
-        println!("{}: {}/{} correct ({:.2}% accuracy)", lang, correct, total, accuracy);
+        println!(
+            "{}: {}/{} correct ({:.2}% accuracy)",
+            lang, correct, total, accuracy
+        );
         results.insert(lang, accuracy);
 
         // Should have >99% accuracy (allowing for edge cases)
-        assert!(accuracy > 99.0,
-            "{} accuracy {:.2}% is below 99% threshold", lang, accuracy);
+        assert!(
+            accuracy > 99.0,
+            "{} accuracy {:.2}% is below 99% threshold",
+            lang,
+            accuracy
+        );
     }
 
     println!("All languages meet accuracy requirements");

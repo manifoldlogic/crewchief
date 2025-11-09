@@ -45,13 +45,20 @@ async fn test_single_embedding_generation() {
     let text = "This is a test sentence for embedding generation.";
     let embedding = service.embed_text(text).await;
 
-    assert!(embedding.is_ok(), "Embedding generation failed: {:?}", embedding.err());
+    assert!(
+        embedding.is_ok(),
+        "Embedding generation failed: {:?}",
+        embedding.err()
+    );
 
     let embedding = embedding.unwrap();
     assert_eq!(embedding.len(), 1536, "Expected 1536-dimensional embedding");
 
     // Check that embedding values are reasonable
-    assert!(embedding.iter().all(|&v| v.is_finite()), "Embedding contains non-finite values");
+    assert!(
+        embedding.iter().all(|&v| v.is_finite()),
+        "Embedding contains non-finite values"
+    );
 }
 
 #[tokio::test]
@@ -69,7 +76,11 @@ async fn test_batch_embedding_generation() {
 
     let embeddings = service.embed_batch(texts.clone()).await;
 
-    assert!(embeddings.is_ok(), "Batch embedding failed: {:?}", embeddings.err());
+    assert!(
+        embeddings.is_ok(),
+        "Batch embedding failed: {:?}",
+        embeddings.err()
+    );
 
     let embeddings = embeddings.unwrap();
     assert_eq!(embeddings.len(), 3, "Expected 3 embeddings");
@@ -98,14 +109,23 @@ async fn test_caching_behavior() {
     let embedding1 = service.embed_text(text).await.unwrap();
     let after_first = service.cost_metrics().total_requests();
 
-    assert!(after_first > initial_requests, "Expected API call for first embedding");
+    assert!(
+        after_first > initial_requests,
+        "Expected API call for first embedding"
+    );
 
     // Second call - should use cache
     let embedding2 = service.embed_text(text).await.unwrap();
     let after_second = service.cost_metrics().total_requests();
 
-    assert_eq!(after_second, after_first, "Expected cache hit for second embedding");
-    assert_eq!(embedding1, embedding2, "Cached embedding should match original");
+    assert_eq!(
+        after_second, after_first,
+        "Expected cache hit for second embedding"
+    );
+    assert_eq!(
+        embedding1, embedding2,
+        "Cached embedding should match original"
+    );
 
     // Check cache metrics
     let cache_metrics = service.cache_metrics().await;
@@ -133,7 +153,10 @@ async fn test_cache_hit_rate() {
     assert_eq!(stats.cache_hit_rate, 1.0, "Cache hit rate should be 100%");
 
     let cache_metrics = service.cache_metrics().await;
-    assert!(cache_metrics.hit_rate() > 0.5, "Overall cache hit rate should be > 50%");
+    assert!(
+        cache_metrics.hit_rate() > 0.5,
+        "Overall cache hit rate should be > 50%"
+    );
 }
 
 #[tokio::test]
@@ -148,7 +171,11 @@ async fn test_large_batch_processing() {
 
     let embeddings = service.embed_large_batch(texts.clone()).await;
 
-    assert!(embeddings.is_ok(), "Large batch processing failed: {:?}", embeddings.err());
+    assert!(
+        embeddings.is_ok(),
+        "Large batch processing failed: {:?}",
+        embeddings.err()
+    );
 
     let embeddings = embeddings.unwrap();
     assert_eq!(embeddings.len(), 25, "Expected all 25 embeddings");
@@ -186,7 +213,10 @@ async fn test_cost_tracking() {
     // Cost should be reasonable (text-embedding-3-small is $0.02 per 1M tokens)
     let tokens_used = final_tokens - initial_tokens;
     assert!(tokens_used > 0, "Should have used some tokens");
-    assert!(tokens_used < 1000, "Should not use excessive tokens for 2 short texts");
+    assert!(
+        tokens_used < 1000,
+        "Should not use excessive tokens for 2 short texts"
+    );
 }
 
 #[tokio::test]
@@ -220,7 +250,11 @@ async fn test_service_from_env() {
     }
 
     let service = EmbeddingService::from_env();
-    assert!(service.is_ok(), "Failed to create service from env: {:?}", service.err());
+    assert!(
+        service.is_ok(),
+        "Failed to create service from env: {:?}",
+        service.err()
+    );
 
     let service = service.unwrap();
     assert_eq!(service.dimension(), 1536);

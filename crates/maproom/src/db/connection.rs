@@ -60,9 +60,7 @@ pub fn get_database_url() -> Result<String> {
 /// Times out after 1 second to avoid hanging.
 fn can_resolve_hostname(hostname: &str) -> bool {
     // Try getent hosts first (works on Linux)
-    let getent_result = Command::new("getent")
-        .args(&["hosts", hostname])
-        .output();
+    let getent_result = Command::new("getent").args(&["hosts", hostname]).output();
 
     if let Ok(output) = getent_result {
         if output.status.success() {

@@ -138,7 +138,10 @@ fn test_clear() {
 
     // Add multiple entries
     let entries = vec![
-        (PathBuf::from("src/main.rs"), FileHasher::hash_bytes(b"main")),
+        (
+            PathBuf::from("src/main.rs"),
+            FileHasher::hash_bytes(b"main"),
+        ),
         (PathBuf::from("src/lib.rs"), FileHasher::hash_bytes(b"lib")),
         (
             PathBuf::from("tests/test.rs"),
@@ -167,7 +170,10 @@ fn test_multiple_entries() {
     let mut cache = HashCache::new();
 
     let entries = vec![
-        (PathBuf::from("src/main.rs"), FileHasher::hash_bytes(b"main")),
+        (
+            PathBuf::from("src/main.rs"),
+            FileHasher::hash_bytes(b"main"),
+        ),
         (PathBuf::from("src/lib.rs"), FileHasher::hash_bytes(b"lib")),
         (
             PathBuf::from("src/utils.rs"),
@@ -212,7 +218,10 @@ fn test_iter() {
     let mut cache = HashCache::new();
 
     let entries = vec![
-        (PathBuf::from("src/main.rs"), FileHasher::hash_bytes(b"main")),
+        (
+            PathBuf::from("src/main.rs"),
+            FileHasher::hash_bytes(b"main"),
+        ),
         (PathBuf::from("src/lib.rs"), FileHasher::hash_bytes(b"lib")),
         (
             PathBuf::from("tests/test.rs"),

@@ -8,9 +8,8 @@ use tiktoken_rs::CoreBPE;
 ///
 /// This encoding is the most common for modern LLMs and provides accurate
 /// token counts for TypeScript, JavaScript, Rust, and other languages.
-static TOKENIZER: Lazy<CoreBPE> = Lazy::new(|| {
-    tiktoken_rs::cl100k_base().expect("Failed to initialize cl100k_base tokenizer")
-});
+static TOKENIZER: Lazy<CoreBPE> =
+    Lazy::new(|| tiktoken_rs::cl100k_base().expect("Failed to initialize cl100k_base tokenizer"));
 
 /// Token counter for accurate estimation of LLM token consumption.
 ///
@@ -55,9 +54,7 @@ impl TokenCounter {
     /// assert_eq!(counter.count("hello world").unwrap(), 2);
     /// ```
     pub fn count(&self, text: &str) -> Result<usize> {
-        let tokens = TOKENIZER
-            .encode_with_special_tokens(text)
-            .len();
+        let tokens = TOKENIZER.encode_with_special_tokens(text).len();
         Ok(tokens)
     }
 
@@ -140,10 +137,18 @@ mod tests {
 
         // Simple English words
         let count = counter.count("hello").unwrap();
-        assert!(count > 0 && count < 3, "Expected 1-2 tokens for 'hello', got {}", count);
+        assert!(
+            count > 0 && count < 3,
+            "Expected 1-2 tokens for 'hello', got {}",
+            count
+        );
 
         let count = counter.count("hello world").unwrap();
-        assert!(count > 0 && count < 5, "Expected 2-4 tokens for 'hello world', got {}", count);
+        assert!(
+            count > 0 && count < 5,
+            "Expected 2-4 tokens for 'hello world', got {}",
+            count
+        );
     }
 
     #[test]
@@ -153,7 +158,11 @@ mod tests {
         // Simple function
         let code = "fn main() { println!(\"Hello\"); }";
         let count = counter.count(code).unwrap();
-        assert!(count > 5, "Expected >5 tokens for simple function, got {}", count);
+        assert!(
+            count > 5,
+            "Expected >5 tokens for simple function, got {}",
+            count
+        );
     }
 
     #[test]
@@ -170,7 +179,11 @@ fn fibonacci(n: u32) -> u32 {
 }
 "#;
         let count = counter.count(code).unwrap();
-        assert!(count > 20, "Expected >20 tokens for fibonacci function, got {}", count);
+        assert!(
+            count > 20,
+            "Expected >20 tokens for fibonacci function, got {}",
+            count
+        );
     }
 
     #[test]
@@ -205,10 +218,7 @@ fn fibonacci(n: u32) -> u32 {
         assert!(total > 0);
 
         // Total should be approximately sum of individual counts
-        let sum: usize = segments
-            .iter()
-            .map(|s| counter.count(s).unwrap())
-            .sum();
+        let sum: usize = segments.iter().map(|s| counter.count(s).unwrap()).sum();
         assert_eq!(total, sum);
     }
 

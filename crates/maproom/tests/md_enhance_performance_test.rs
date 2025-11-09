@@ -2,7 +2,6 @@
 ///
 /// Standalone performance tests that validate parsing performance
 /// without dependencies on other integration tests.
-
 use crewchief_maproom::indexer::parser;
 use std::fs;
 use std::time::Instant;
@@ -38,8 +37,11 @@ More content.
     println!("  Chunks: {}", chunks.len());
     println!("  Parse time: {:?}", duration);
 
-    assert!(duration.as_millis() < 50,
-        "Small document should parse < 50ms: {:?}", duration);
+    assert!(
+        duration.as_millis() < 50,
+        "Small document should parse < 50ms: {:?}",
+        duration
+    );
 }
 
 #[test]
@@ -67,11 +69,17 @@ fn test_performance_large_document() {
     println!("  Lines: {}", line_count);
     println!("  Chunks: {}", chunks.len());
     println!("  Parse time: {:?}", duration);
-    println!("  Lines/sec: {:.0}", line_count as f64 / duration.as_secs_f64());
+    println!(
+        "  Lines/sec: {:.0}",
+        line_count as f64 / duration.as_secs_f64()
+    );
 
     // Should parse within reasonable time
-    assert!(duration.as_millis() < 500,
-        "Large document should parse < 500ms: {:?}", duration);
+    assert!(
+        duration.as_millis() < 500,
+        "Large document should parse < 500ms: {:?}",
+        duration
+    );
 }
 
 #[test]
@@ -92,8 +100,11 @@ fn test_performance_real_readme() {
         println!("  Chunks: {}", chunks.len());
         println!("  Parse time: {:?}", duration);
 
-        assert!(duration.as_millis() < 200,
-            "README parsing should be < 200ms: {:?}", duration);
+        assert!(
+            duration.as_millis() < 200,
+            "README parsing should be < 200ms: {:?}",
+            duration
+        );
     }
 }
 
@@ -115,8 +126,11 @@ fn test_performance_real_claude_md() {
         println!("  Chunks: {}", chunks.len());
         println!("  Parse time: {:?}", duration);
 
-        assert!(duration.as_millis() < 300,
-            "CLAUDE.md parsing should be < 300ms: {:?}", duration);
+        assert!(
+            duration.as_millis() < 300,
+            "CLAUDE.md parsing should be < 300ms: {:?}",
+            duration
+        );
     }
 }
 
@@ -155,8 +169,11 @@ fn test() {
     println!("  Total time: {:?}", duration);
     println!("  Avg time per parse: {:?}", avg_time);
 
-    assert!(avg_time.as_micros() < 5000,
-        "Average parse time should be < 5ms: {:?}", avg_time);
+    assert!(
+        avg_time.as_micros() < 5000,
+        "Average parse time should be < 5ms: {:?}",
+        avg_time
+    );
 }
 
 #[test]
@@ -164,7 +181,10 @@ fn test_performance_code_block_heavy() {
     let mut content = String::from("# Code Examples\n\n");
 
     for i in 1..=100 {
-        content.push_str(&format!("## Example {}\n\n```typescript\nconst x{}  = 1;\n```\n\n", i, i));
+        content.push_str(&format!(
+            "## Example {}\n\n```typescript\nconst x{}  = 1;\n```\n\n",
+            i, i
+        ));
     }
 
     let start = Instant::now();
@@ -178,8 +198,11 @@ fn test_performance_code_block_heavy() {
     println!("  Parse time: {:?}", duration);
 
     assert_eq!(code_blocks, 100, "Should detect all code blocks");
-    assert!(duration.as_millis() < 300,
-        "Code block heavy should parse < 300ms: {:?}", duration);
+    assert!(
+        duration.as_millis() < 300,
+        "Code block heavy should parse < 300ms: {:?}",
+        duration
+    );
 }
 
 #[test]
@@ -209,8 +232,22 @@ fn test_performance_summary() {
     println!();
 
     println!("Target Metrics:");
-    println!("  Small doc: < 50ms {}", if small_time.as_millis() < 50 { "✓" } else { "✗" });
-    println!("  Large doc: < 500ms {}", if large_time.as_millis() < 500 { "✓" } else { "✗" });
+    println!(
+        "  Small doc: < 50ms {}",
+        if small_time.as_millis() < 50 {
+            "✓"
+        } else {
+            "✗"
+        }
+    );
+    println!(
+        "  Large doc: < 500ms {}",
+        if large_time.as_millis() < 500 {
+            "✓"
+        } else {
+            "✗"
+        }
+    );
     println!();
 
     if small_time.as_millis() < 50 && large_time.as_millis() < 500 {

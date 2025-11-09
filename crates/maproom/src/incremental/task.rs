@@ -186,7 +186,10 @@ impl UpdateTask {
 
             // Modified + Modified → Modified (chain the changes)
             (ChangeType::Modified { old, .. }, ChangeType::Modified { new, .. }) => {
-                ChangeType::Modified { old: *old, new: *new }
+                ChangeType::Modified {
+                    old: *old,
+                    new: *new,
+                }
             }
 
             // Modified + Deleted → Deleted
@@ -302,7 +305,8 @@ mod tests {
         let hash2 = FileHasher::hash_bytes(b"content2");
 
         // New + Deleted → None (cancel out)
-        let result = UpdateTask::merge_change_types(&ChangeType::New(hash1), &ChangeType::Deleted(hash2));
+        let result =
+            UpdateTask::merge_change_types(&ChangeType::New(hash1), &ChangeType::Deleted(hash2));
         assert_eq!(result, ChangeType::None);
     }
 
@@ -356,7 +360,8 @@ mod tests {
         let hash2 = FileHasher::hash_bytes(b"v2");
 
         // Deleted + New → Modified (file recreated)
-        let result = UpdateTask::merge_change_types(&ChangeType::Deleted(hash1), &ChangeType::New(hash2));
+        let result =
+            UpdateTask::merge_change_types(&ChangeType::Deleted(hash1), &ChangeType::New(hash2));
 
         match result {
             ChangeType::Modified { old, new } => {

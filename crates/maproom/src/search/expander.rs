@@ -32,59 +32,143 @@ impl QueryExpander {
         let mut synonyms = HashMap::new();
 
         // Function-related terms
-        synonyms.insert("function".to_string(), vec!["fn".to_string(), "func".to_string(), "method".to_string()]);
-        synonyms.insert("fn".to_string(), vec!["function".to_string(), "func".to_string(), "method".to_string()]);
-        synonyms.insert("method".to_string(), vec!["function".to_string(), "fn".to_string(), "func".to_string()]);
+        synonyms.insert(
+            "function".to_string(),
+            vec!["fn".to_string(), "func".to_string(), "method".to_string()],
+        );
+        synonyms.insert(
+            "fn".to_string(),
+            vec![
+                "function".to_string(),
+                "func".to_string(),
+                "method".to_string(),
+            ],
+        );
+        synonyms.insert(
+            "method".to_string(),
+            vec!["function".to_string(), "fn".to_string(), "func".to_string()],
+        );
 
         // Class/object-related terms
-        synonyms.insert("class".to_string(), vec!["type".to_string(), "struct".to_string(), "object".to_string()]);
-        synonyms.insert("struct".to_string(), vec!["class".to_string(), "type".to_string()]);
-        synonyms.insert("interface".to_string(), vec!["trait".to_string(), "protocol".to_string()]);
+        synonyms.insert(
+            "class".to_string(),
+            vec![
+                "type".to_string(),
+                "struct".to_string(),
+                "object".to_string(),
+            ],
+        );
+        synonyms.insert(
+            "struct".to_string(),
+            vec!["class".to_string(), "type".to_string()],
+        );
+        synonyms.insert(
+            "interface".to_string(),
+            vec!["trait".to_string(), "protocol".to_string()],
+        );
         synonyms.insert("trait".to_string(), vec!["interface".to_string()]);
 
         // Variable-related terms
-        synonyms.insert("variable".to_string(), vec!["var".to_string(), "let".to_string(), "const".to_string()]);
-        synonyms.insert("var".to_string(), vec!["variable".to_string(), "let".to_string()]);
+        synonyms.insert(
+            "variable".to_string(),
+            vec!["var".to_string(), "let".to_string(), "const".to_string()],
+        );
+        synonyms.insert(
+            "var".to_string(),
+            vec!["variable".to_string(), "let".to_string()],
+        );
         synonyms.insert("const".to_string(), vec!["constant".to_string()]);
         synonyms.insert("constant".to_string(), vec!["const".to_string()]);
 
         // Authentication/authorization terms
-        synonyms.insert("auth".to_string(), vec!["authentication".to_string(), "authorize".to_string(), "login".to_string()]);
-        synonyms.insert("authentication".to_string(), vec!["auth".to_string(), "login".to_string()]);
-        synonyms.insert("login".to_string(), vec!["signin".to_string(), "auth".to_string()]);
+        synonyms.insert(
+            "auth".to_string(),
+            vec![
+                "authentication".to_string(),
+                "authorize".to_string(),
+                "login".to_string(),
+            ],
+        );
+        synonyms.insert(
+            "authentication".to_string(),
+            vec!["auth".to_string(), "login".to_string()],
+        );
+        synonyms.insert(
+            "login".to_string(),
+            vec!["signin".to_string(), "auth".to_string()],
+        );
         synonyms.insert("logout".to_string(), vec!["signout".to_string()]);
 
         // Component-related terms (React/UI)
-        synonyms.insert("component".to_string(), vec!["comp".to_string(), "widget".to_string()]);
+        synonyms.insert(
+            "component".to_string(),
+            vec!["comp".to_string(), "widget".to_string()],
+        );
         synonyms.insert("hook".to_string(), vec!["usehook".to_string()]);
 
         // API/network terms
-        synonyms.insert("api".to_string(), vec!["endpoint".to_string(), "service".to_string()]);
+        synonyms.insert(
+            "api".to_string(),
+            vec!["endpoint".to_string(), "service".to_string()],
+        );
         synonyms.insert("request".to_string(), vec!["req".to_string()]);
-        synonyms.insert("response".to_string(), vec!["resp".to_string(), "res".to_string()]);
+        synonyms.insert(
+            "response".to_string(),
+            vec!["resp".to_string(), "res".to_string()],
+        );
 
         // Database terms
-        synonyms.insert("database".to_string(), vec!["db".to_string(), "store".to_string()]);
-        synonyms.insert("query".to_string(), vec!["search".to_string(), "find".to_string()]);
+        synonyms.insert(
+            "database".to_string(),
+            vec!["db".to_string(), "store".to_string()],
+        );
+        synonyms.insert(
+            "query".to_string(),
+            vec!["search".to_string(), "find".to_string()],
+        );
 
         // Error handling terms
-        synonyms.insert("error".to_string(), vec!["err".to_string(), "exception".to_string()]);
-        synonyms.insert("exception".to_string(), vec!["error".to_string(), "err".to_string()]);
+        synonyms.insert(
+            "error".to_string(),
+            vec!["err".to_string(), "exception".to_string()],
+        );
+        synonyms.insert(
+            "exception".to_string(),
+            vec!["error".to_string(), "err".to_string()],
+        );
 
         // Configuration terms
-        synonyms.insert("config".to_string(), vec!["configuration".to_string(), "settings".to_string()]);
-        synonyms.insert("configuration".to_string(), vec!["config".to_string(), "settings".to_string()]);
+        synonyms.insert(
+            "config".to_string(),
+            vec!["configuration".to_string(), "settings".to_string()],
+        );
+        synonyms.insert(
+            "configuration".to_string(),
+            vec!["config".to_string(), "settings".to_string()],
+        );
 
         // Test terms
-        synonyms.insert("test".to_string(), vec!["spec".to_string(), "unittest".to_string()]);
-        synonyms.insert("mock".to_string(), vec!["stub".to_string(), "fake".to_string()]);
+        synonyms.insert(
+            "test".to_string(),
+            vec!["spec".to_string(), "unittest".to_string()],
+        );
+        synonyms.insert(
+            "mock".to_string(),
+            vec!["stub".to_string(), "fake".to_string()],
+        );
 
         // Async/concurrency terms
-        synonyms.insert("async".to_string(), vec!["asynchronous".to_string(), "await".to_string()]);
+        synonyms.insert(
+            "async".to_string(),
+            vec!["asynchronous".to_string(), "await".to_string()],
+        );
         synonyms.insert("promise".to_string(), vec!["future".to_string()]);
 
         // Module/import terms
-        synonyms.insert("import".to_string(), vec!["require".to_string(), "use".to_string()]);
+        synonyms.insert(
+            "import".to_string(),
+            vec!["require".to_string(), "use".to_string()],
+        );
         synonyms.insert("export".to_string(), vec!["expose".to_string()]);
 
         synonyms
@@ -218,7 +302,10 @@ mod tests {
     #[test]
     fn test_custom_synonyms() {
         let mut synonyms = HashMap::new();
-        synonyms.insert("custom".to_string(), vec!["synonym1".to_string(), "synonym2".to_string()]);
+        synonyms.insert(
+            "custom".to_string(),
+            vec!["synonym1".to_string(), "synonym2".to_string()],
+        );
 
         let expander = QueryExpander::with_synonyms(synonyms);
         let expanded = expander.expand(&["custom".to_string()]);
@@ -231,7 +318,10 @@ mod tests {
     #[test]
     fn test_add_synonym() {
         let mut expander = QueryExpander::new();
-        expander.add_synonym("newterm".to_string(), vec!["related1".to_string(), "related2".to_string()]);
+        expander.add_synonym(
+            "newterm".to_string(),
+            vec!["related1".to_string(), "related2".to_string()],
+        );
 
         let expanded = expander.expand(&["newterm".to_string()]);
         assert!(expanded.contains(&"related1".to_string()));

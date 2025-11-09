@@ -2,8 +2,11 @@ use crewchief_maproom::indexer::parser;
 use serde_json::Value;
 
 // Helper function to extract imports from metadata
-fn extract_imports_from_chunks(chunks: &[crewchief_maproom::indexer::SymbolChunk]) -> Option<&Value> {
-    chunks.iter()
+fn extract_imports_from_chunks(
+    chunks: &[crewchief_maproom::indexer::SymbolChunk],
+) -> Option<&Value> {
+    chunks
+        .iter()
         .find(|c| c.kind == "imports")
         .and_then(|c| c.metadata.as_ref())
         .and_then(|m| m.get("imports"))
@@ -25,16 +28,24 @@ import json
     assert_eq!(imports_array.len(), 3);
 
     // Check os import
-    let os_import = imports_array.iter()
+    let os_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"))
         .expect("Should find os import");
-    assert_eq!(os_import.get("import_type").and_then(|t| t.as_str()), Some("standard"));
+    assert_eq!(
+        os_import.get("import_type").and_then(|t| t.as_str()),
+        Some("standard")
+    );
 
     // Check sys import
-    let sys_import = imports_array.iter()
+    let sys_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("sys"))
         .expect("Should find sys import");
-    assert_eq!(sys_import.get("import_type").and_then(|t| t.as_str()), Some("standard"));
+    assert_eq!(
+        sys_import.get("import_type").and_then(|t| t.as_str()),
+        Some("standard")
+    );
 }
 
 #[test]
@@ -51,16 +62,24 @@ import xml.etree.ElementTree
     assert_eq!(imports_array.len(), 2);
 
     // Check os.path import
-    let os_path = imports_array.iter()
+    let os_path = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os.path"))
         .expect("Should find os.path import");
-    assert_eq!(os_path.get("import_type").and_then(|t| t.as_str()), Some("standard"));
+    assert_eq!(
+        os_path.get("import_type").and_then(|t| t.as_str()),
+        Some("standard")
+    );
 
     // Check xml.etree.ElementTree import
-    let xml_import = imports_array.iter()
+    let xml_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("xml.etree.ElementTree"))
         .expect("Should find xml.etree.ElementTree import");
-    assert_eq!(xml_import.get("import_type").and_then(|t| t.as_str()), Some("standard"));
+    assert_eq!(
+        xml_import.get("import_type").and_then(|t| t.as_str()),
+        Some("standard")
+    );
 }
 
 #[test]
@@ -78,10 +97,14 @@ import tensorflow as tf
     assert_eq!(imports_array.len(), 3);
 
     // Check numpy as np
-    let numpy = imports_array.iter()
+    let numpy = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("numpy"))
         .expect("Should find numpy import");
-    let aliases = numpy.get("aliases").and_then(|a| a.as_array()).expect("Should have aliases");
+    let aliases = numpy
+        .get("aliases")
+        .and_then(|a| a.as_array())
+        .expect("Should have aliases");
     assert_eq!(aliases.len(), 1);
     assert_eq!(aliases[0].as_array().unwrap()[0].as_str(), Some("numpy"));
     assert_eq!(aliases[0].as_array().unwrap()[1].as_str(), Some("np"));
@@ -102,11 +125,18 @@ from sys import argv
     assert_eq!(imports_array.len(), 2);
 
     // Check from os import path
-    let os_import = imports_array.iter()
+    let os_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"))
         .expect("Should find os import");
-    assert_eq!(os_import.get("import_type").and_then(|t| t.as_str()), Some("from"));
-    let names = os_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    assert_eq!(
+        os_import.get("import_type").and_then(|t| t.as_str()),
+        Some("from")
+    );
+    let names = os_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 1);
     assert_eq!(names[0].as_str(), Some("path"));
 }
@@ -125,20 +155,28 @@ from typing import List, Dict, Optional
     assert_eq!(imports_array.len(), 2);
 
     // Check from os import path, environ, getcwd
-    let os_import = imports_array.iter()
+    let os_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"))
         .expect("Should find os import");
-    let names = os_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    let names = os_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 3);
     assert!(names.iter().any(|n| n.as_str() == Some("path")));
     assert!(names.iter().any(|n| n.as_str() == Some("environ")));
     assert!(names.iter().any(|n| n.as_str() == Some("getcwd")));
 
     // Check from typing import List, Dict, Optional
-    let typing_import = imports_array.iter()
+    let typing_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("typing"))
         .expect("Should find typing import");
-    let names = typing_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    let names = typing_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 3);
     assert!(names.iter().any(|n| n.as_str() == Some("List")));
     assert!(names.iter().any(|n| n.as_str() == Some("Dict")));
@@ -160,24 +198,41 @@ from collections import OrderedDict as ODict, defaultdict as ddict
     assert_eq!(imports_array.len(), 3);
 
     // Check from os.path import join as path_join
-    let os_path_import = imports_array.iter()
+    let os_path_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os.path"))
         .expect("Should find os.path import");
-    let names = os_path_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    let names = os_path_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 1);
     assert_eq!(names[0].as_str(), Some("join"));
-    let aliases = os_path_import.get("aliases").and_then(|a| a.as_array()).expect("Should have aliases");
+    let aliases = os_path_import
+        .get("aliases")
+        .and_then(|a| a.as_array())
+        .expect("Should have aliases");
     assert_eq!(aliases.len(), 1);
     assert_eq!(aliases[0].as_array().unwrap()[0].as_str(), Some("join"));
-    assert_eq!(aliases[0].as_array().unwrap()[1].as_str(), Some("path_join"));
+    assert_eq!(
+        aliases[0].as_array().unwrap()[1].as_str(),
+        Some("path_join")
+    );
 
     // Check from collections import OrderedDict as ODict, defaultdict as ddict
-    let collections_import = imports_array.iter()
+    let collections_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("collections"))
         .expect("Should find collections import");
-    let names = collections_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    let names = collections_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 2);
-    let aliases = collections_import.get("aliases").and_then(|a| a.as_array()).expect("Should have aliases");
+    let aliases = collections_import
+        .get("aliases")
+        .and_then(|a| a.as_array())
+        .expect("Should have aliases");
     assert_eq!(aliases.len(), 2);
 }
 
@@ -195,16 +250,24 @@ from typing import *
     assert_eq!(imports_array.len(), 2);
 
     // Check from os import *
-    let os_import = imports_array.iter()
+    let os_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"))
         .expect("Should find os import");
-    assert_eq!(os_import.get("is_wildcard").and_then(|w| w.as_bool()), Some(true));
+    assert_eq!(
+        os_import.get("is_wildcard").and_then(|w| w.as_bool()),
+        Some(true)
+    );
 
     // Check from typing import *
-    let typing_import = imports_array.iter()
+    let typing_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("typing"))
         .expect("Should find typing import");
-    assert_eq!(typing_import.get("is_wildcard").and_then(|w| w.as_bool()), Some(true));
+    assert_eq!(
+        typing_import.get("is_wildcard").and_then(|w| w.as_bool()),
+        Some(true)
+    );
 }
 
 // Test relative imports
@@ -223,22 +286,44 @@ from .constants import API_KEY
     assert_eq!(imports_array.len(), 3);
 
     // Check from . import utils
-    let dot_import = imports_array.iter()
+    let dot_import = imports_array
+        .iter()
         .find(|i| {
-            i.get("module").and_then(|m| m.as_str()) == Some("") &&
-            i.get("names").and_then(|n| n.as_array()).map(|a| a.iter().any(|v| v.as_str() == Some("utils"))).unwrap_or(false)
+            i.get("module").and_then(|m| m.as_str()) == Some("")
+                && i.get("names")
+                    .and_then(|n| n.as_array())
+                    .map(|a| a.iter().any(|v| v.as_str() == Some("utils")))
+                    .unwrap_or(false)
         })
         .expect("Should find . import utils");
-    assert_eq!(dot_import.get("import_type").and_then(|t| t.as_str()), Some("relative"));
-    assert_eq!(dot_import.get("relative_depth").and_then(|d| d.as_u64()), Some(1));
+    assert_eq!(
+        dot_import.get("import_type").and_then(|t| t.as_str()),
+        Some("relative")
+    );
+    assert_eq!(
+        dot_import.get("relative_depth").and_then(|d| d.as_u64()),
+        Some(1)
+    );
 
     // Check from .helpers import format_string
-    let helpers_import = imports_array.iter()
+    let helpers_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("helpers"))
         .expect("Should find .helpers import");
-    assert_eq!(helpers_import.get("import_type").and_then(|t| t.as_str()), Some("relative"));
-    assert_eq!(helpers_import.get("relative_depth").and_then(|d| d.as_u64()), Some(1));
-    let names = helpers_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    assert_eq!(
+        helpers_import.get("import_type").and_then(|t| t.as_str()),
+        Some("relative")
+    );
+    assert_eq!(
+        helpers_import
+            .get("relative_depth")
+            .and_then(|d| d.as_u64()),
+        Some(1)
+    );
+    let names = helpers_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 1);
     assert_eq!(names[0].as_str(), Some("format_string"));
 }
@@ -258,28 +343,42 @@ from ...grandparent import aunt_module
     assert_eq!(imports_array.len(), 3);
 
     // Check from .. import parent_module
-    let parent_import = imports_array.iter()
+    let parent_import = imports_array
+        .iter()
         .find(|i| {
-            i.get("relative_depth").and_then(|d| d.as_u64()) == Some(2) &&
-            i.get("module").and_then(|m| m.as_str()) == Some("")
+            i.get("relative_depth").and_then(|d| d.as_u64()) == Some(2)
+                && i.get("module").and_then(|m| m.as_str()) == Some("")
         })
         .expect("Should find .. import");
-    assert_eq!(parent_import.get("import_type").and_then(|t| t.as_str()), Some("relative"));
+    assert_eq!(
+        parent_import.get("import_type").and_then(|t| t.as_str()),
+        Some("relative")
+    );
 
     // Check from ..parent import sibling_module
-    let sibling_import = imports_array.iter()
+    let sibling_import = imports_array
+        .iter()
         .find(|i| {
-            i.get("relative_depth").and_then(|d| d.as_u64()) == Some(2) &&
-            i.get("module").and_then(|m| m.as_str()) == Some("parent")
+            i.get("relative_depth").and_then(|d| d.as_u64()) == Some(2)
+                && i.get("module").and_then(|m| m.as_str()) == Some("parent")
         })
         .expect("Should find ..parent import");
-    assert_eq!(sibling_import.get("import_type").and_then(|t| t.as_str()), Some("relative"));
+    assert_eq!(
+        sibling_import.get("import_type").and_then(|t| t.as_str()),
+        Some("relative")
+    );
 
     // Check from ...grandparent import aunt_module
-    let grandparent_import = imports_array.iter()
+    let grandparent_import = imports_array
+        .iter()
         .find(|i| i.get("relative_depth").and_then(|d| d.as_u64()) == Some(3))
         .expect("Should find ...grandparent import");
-    assert_eq!(grandparent_import.get("import_type").and_then(|t| t.as_str()), Some("relative"));
+    assert_eq!(
+        grandparent_import
+            .get("import_type")
+            .and_then(|t| t.as_str()),
+        Some("relative")
+    );
 }
 
 // Test dynamic imports
@@ -299,14 +398,19 @@ imported = __import__('os')
     let imports_array = imports.as_array().expect("Imports should be an array");
 
     // Should detect at least one __import__ call
-    let dynamic_imports: Vec<_> = imports_array.iter()
+    let dynamic_imports: Vec<_> = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("dynamic"))
         .collect();
 
-    assert!(dynamic_imports.len() >= 1, "Should find at least one dynamic import");
+    assert!(
+        dynamic_imports.len() >= 1,
+        "Should find at least one dynamic import"
+    );
 
     // Check for 'os' import
-    let os_import = dynamic_imports.iter()
+    let os_import = dynamic_imports
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"));
     assert!(os_import.is_some(), "Should find dynamic import of 'os'");
 }
@@ -329,22 +433,32 @@ json_module = importlib.import_module('json')
     let imports_array = imports.as_array().expect("Imports should be an array");
 
     // Check for standard import of importlib
-    let importlib_import = imports_array.iter()
+    let importlib_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("importlib"))
         .expect("Should find importlib import");
-    assert_eq!(importlib_import.get("import_type").and_then(|t| t.as_str()), Some("standard"));
+    assert_eq!(
+        importlib_import.get("import_type").and_then(|t| t.as_str()),
+        Some("standard")
+    );
 
     // Check for dynamic imports
-    let dynamic_imports: Vec<_> = imports_array.iter()
+    let dynamic_imports: Vec<_> = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("dynamic"))
         .collect();
 
-    assert!(dynamic_imports.len() >= 2, "Should find at least 2 dynamic imports");
+    assert!(
+        dynamic_imports.len() >= 2,
+        "Should find at least 2 dynamic imports"
+    );
 
     // Check for 'requests' and 'json' dynamic imports
-    let has_requests = dynamic_imports.iter()
+    let has_requests = dynamic_imports
+        .iter()
         .any(|i| i.get("module").and_then(|m| m.as_str()) == Some("requests"));
-    let has_json = dynamic_imports.iter()
+    let has_json = dynamic_imports
+        .iter()
         .any(|i| i.get("module").and_then(|m| m.as_str()) == Some("json"));
 
     assert!(has_requests, "Should find dynamic import of 'requests'");
@@ -371,8 +485,14 @@ from typing import (
     assert_eq!(imports_array.len(), 1);
 
     let typing_import = &imports_array[0];
-    assert_eq!(typing_import.get("module").and_then(|m| m.as_str()), Some("typing"));
-    let names = typing_import.get("names").and_then(|n| n.as_array()).expect("Should have names");
+    assert_eq!(
+        typing_import.get("module").and_then(|m| m.as_str()),
+        Some("typing")
+    );
+    let names = typing_import
+        .get("names")
+        .and_then(|n| n.as_array())
+        .expect("Should have names");
     assert_eq!(names.len(), 5);
     assert!(names.iter().any(|n| n.as_str() == Some("List")));
     assert!(names.iter().any(|n| n.as_str() == Some("Dict")));
@@ -399,23 +519,30 @@ mod = __import__('datetime')
     let imports_array = imports.as_array().expect("Imports should be an array");
 
     // Count import types
-    let standard_imports = imports_array.iter()
+    let standard_imports = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("standard"))
         .count();
-    let from_imports = imports_array.iter()
+    let from_imports = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("from"))
         .count();
-    let relative_imports = imports_array.iter()
+    let relative_imports = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("relative"))
         .count();
-    let dynamic_imports = imports_array.iter()
+    let dynamic_imports = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("dynamic"))
         .count();
 
     assert_eq!(standard_imports, 3, "Should have 3 standard imports");
     assert_eq!(from_imports, 2, "Should have 2 from imports");
     assert_eq!(relative_imports, 2, "Should have 2 relative imports");
-    assert!(dynamic_imports >= 1, "Should have at least 1 dynamic import");
+    assert!(
+        dynamic_imports >= 1,
+        "Should have at least 1 dynamic import"
+    );
 }
 
 // Comprehensive real-world example
@@ -466,33 +593,45 @@ class DataProcessor:
     let imports_array = imports.as_array().expect("Imports should be an array");
 
     // Verify we extracted a comprehensive set of imports
-    assert!(imports_array.len() >= 15, "Should extract many imports from real code");
+    assert!(
+        imports_array.len() >= 15,
+        "Should extract many imports from real code"
+    );
 
     // Verify standard library imports
-    let has_os = imports_array.iter()
+    let has_os = imports_array
+        .iter()
         .any(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"));
     assert!(has_os, "Should find os import");
 
-    let has_pathlib = imports_array.iter()
+    let has_pathlib = imports_array
+        .iter()
         .any(|i| i.get("module").and_then(|m| m.as_str()) == Some("pathlib"));
     assert!(has_pathlib, "Should find pathlib import");
 
     // Verify third-party imports with aliases
-    let numpy_import = imports_array.iter()
+    let numpy_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("numpy"));
     assert!(numpy_import.is_some(), "Should find numpy import");
 
     // Verify relative imports
-    let relative_imports: Vec<_> = imports_array.iter()
+    let relative_imports: Vec<_> = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("relative"))
         .collect();
-    assert!(relative_imports.len() >= 4, "Should find at least 4 relative imports");
+    assert!(
+        relative_imports.len() >= 4,
+        "Should find at least 4 relative imports"
+    );
 
     // Verify different relative depths
-    let single_dot = relative_imports.iter()
+    let single_dot = relative_imports
+        .iter()
         .filter(|i| i.get("relative_depth").and_then(|d| d.as_u64()) == Some(1))
         .count();
-    let double_dot = relative_imports.iter()
+    let double_dot = relative_imports
+        .iter()
         .filter(|i| i.get("relative_depth").and_then(|d| d.as_u64()) == Some(2))
         .count();
 
@@ -500,7 +639,8 @@ class DataProcessor:
     assert!(double_dot >= 2, "Should find double-dot relative imports");
 
     // Verify dynamic imports
-    let dynamic_imports: Vec<_> = imports_array.iter()
+    let dynamic_imports: Vec<_> = imports_array
+        .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("dynamic"))
         .collect();
     assert!(dynamic_imports.len() >= 0, "May find dynamic imports"); // Dynamic imports in function bodies might not be detected
@@ -523,7 +663,10 @@ class Greeter:
 
     // Should not have an imports chunk
     let has_imports = chunks.iter().any(|c| c.kind == "imports");
-    assert!(!has_imports, "Should not have imports chunk when no imports exist");
+    assert!(
+        !has_imports,
+        "Should not have imports chunk when no imports exist"
+    );
 }
 
 #[test]
@@ -550,13 +693,15 @@ def foo():
     }
 
     // Check os import is on line 2
-    let os_import = imports_array.iter()
+    let os_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("os"))
         .expect("Should find os import");
     assert_eq!(os_import.get("line").and_then(|l| l.as_i64()), Some(2));
 
     // Check typing import is on line 5
-    let typing_import = imports_array.iter()
+    let typing_import = imports_array
+        .iter()
         .find(|i| i.get("module").and_then(|m| m.as_str()) == Some("typing"))
         .expect("Should find typing import");
     assert_eq!(typing_import.get("line").and_then(|l| l.as_i64()), Some(5));

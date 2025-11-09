@@ -63,9 +63,7 @@
 //! - Parser benchmarks (lines 116-134)
 //! - Throughput targets (lines 21-26)
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Simulated file content for benchmarking different languages.
@@ -441,16 +439,12 @@ fn bench_parse_single_file(c: &mut Criterion) {
 
     for (name, file) in test_files {
         group.throughput(Throughput::Bytes(file.size_bytes as u64));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(name),
-            &file,
-            |b, file| {
-                b.iter(|| {
-                    let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
-                    black_box(chunks)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(name), &file, |b, file| {
+            b.iter(|| {
+                let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                black_box(chunks)
+            });
+        });
     }
 
     group.finish();
@@ -476,7 +470,8 @@ fn bench_parse_throughput(c: &mut Criterion) {
                 b.iter(|| {
                     let mut total_chunks = 0;
                     for file in files {
-                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let chunks =
+                            extract_chunks(black_box(&file.content), black_box(file.language));
                         total_chunks += chunks.len();
                     }
                     black_box(total_chunks)
@@ -484,7 +479,11 @@ fn bench_parse_throughput(c: &mut Criterion) {
             },
         );
 
-        println!("\nDataset: {} files, {:.2} MB", size, total_bytes as f64 / 1_048_576.0);
+        println!(
+            "\nDataset: {} files, {:.2} MB",
+            size,
+            total_bytes as f64 / 1_048_576.0
+        );
     }
 
     group.finish();
@@ -510,7 +509,8 @@ fn bench_files_per_minute(c: &mut Criterion) {
                     let mut total_chunks = 0;
 
                     for file in files {
-                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let chunks =
+                            extract_chunks(black_box(&file.content), black_box(file.language));
                         total_chunks += chunks.len();
                     }
 
@@ -548,20 +548,16 @@ fn bench_by_language(c: &mut Criterion) {
         }
 
         group.throughput(Throughput::Elements(100));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(lang),
-            &files,
-            |b, files| {
-                b.iter(|| {
-                    let mut total_chunks = 0;
-                    for file in files {
-                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
-                        total_chunks += chunks.len();
-                    }
-                    black_box(total_chunks)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(lang), &files, |b, files| {
+            b.iter(|| {
+                let mut total_chunks = 0;
+                for file in files {
+                    let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                    total_chunks += chunks.len();
+                }
+                black_box(total_chunks)
+            });
+        });
     }
 
     group.finish();
@@ -592,8 +588,8 @@ impl Clone for TestFile {
 /// Database benchmarks require a live database environment.
 fn bench_parallel_processing(c: &mut Criterion) {
     use crewchief_maproom::indexer::parser::extract_chunks;
-    use rayon::prelude::*;
     use crossbeam::channel;
+    use rayon::prelude::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -612,7 +608,8 @@ fn bench_parallel_processing(c: &mut Criterion) {
                 b.iter(|| {
                     let mut total_chunks = 0;
                     for file in files {
-                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let chunks =
+                            extract_chunks(black_box(&file.content), black_box(file.language));
                         total_chunks += chunks.len();
                     }
                     black_box(total_chunks)
@@ -629,7 +626,8 @@ fn bench_parallel_processing(c: &mut Criterion) {
                     let total_chunks: usize = files
                         .par_iter()
                         .map(|file| {
-                            let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                            let chunks =
+                                extract_chunks(black_box(&file.content), black_box(file.language));
                             chunks.len()
                         })
                         .sum();
@@ -659,7 +657,8 @@ fn bench_parallel_processing(c: &mut Criterion) {
 
                     // Parse in parallel and send to worker
                     files.par_iter().for_each(|file| {
-                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let chunks =
+                            extract_chunks(black_box(&file.content), black_box(file.language));
                         let _ = tx.send(chunks.len());
                     });
 
@@ -705,7 +704,8 @@ fn bench_parallel_processing(c: &mut Criterion) {
 
                     // Parse in parallel
                     files.par_iter().for_each(|file| {
-                        let chunks = extract_chunks(black_box(&file.content), black_box(file.language));
+                        let chunks =
+                            extract_chunks(black_box(&file.content), black_box(file.language));
                         let _ = tx.send(chunks.len());
                     });
 

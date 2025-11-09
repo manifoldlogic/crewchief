@@ -4,7 +4,99 @@ This directory contains completed projects and historical records. Projects are 
 
 ## Archived Projects
 
-### HYBRID_SEARCH_hybrid-retrieval-system - Hybrid Retrieval System
+### Recently Archived (2025-11-09)
+
+#### AGENTOPT_ai-agent-query-optimization - AI Agent Query Optimization
+**Completed:** 14 tickets
+**Summary:** Optimized agent query performance and search efficiency
+
+**Contents:**
+- [Planning Docs](./projects/AGENTOPT_ai-agent-query-optimization/planning/)
+- [Tickets](./projects/AGENTOPT_ai-agent-query-optimization/tickets/) (14 completed)
+
+---
+
+#### BLOBSHA_content-addressed-chunk-storage - Content-Addressed Chunk Storage
+**Completed:** 11 tickets
+**Summary:** Blob SHA computation and embedding deduplication for 70-90% cost savings
+
+**Contents:**
+- [Planning Docs](./projects/BLOBSHA_content-addressed-chunk-storage/planning/)
+- [Tickets](./projects/BLOBSHA_content-addressed-chunk-storage/tickets/) (11 completed)
+
+**Key Achievements:**
+- Zero data loss during migration
+- 70-90% embedding cost savings via deduplication
+- HNSW index on code_embeddings table
+
+---
+
+#### BRANCHX_branch-aware-indexing - Branch-Aware Indexing
+**Completed:** 18 tickets
+**Summary:** Worktree tracking and incremental updates (5-10x faster than full scans)
+
+**Contents:**
+- [Planning Docs](./projects/BRANCHX_branch-aware-indexing/planning/)
+- [Tickets](./projects/BRANCHX_branch-aware-indexing/tickets/) (18 completed)
+
+**Key Achievements:**
+- Incremental updates 5-10x faster than full scans
+- Tree SHA optimization <100ms for unchanged repos
+- JSONB worktree_ids with GIN index
+- Query filtering by worktree
+
+---
+
+#### BRWATCH_branch-switch-detection - Branch Switch Detection
+**Completed:** 16 tickets
+**Summary:** Automatic branch switch detection and re-indexing (<1s detection latency)
+
+**Contents:**
+- [Planning Docs](./projects/BRWATCH_branch-switch-detection/planning/)
+- [Tickets](./projects/BRWATCH_branch-switch-detection/tickets/) (16 completed)
+
+**Key Achievements:**
+- 100% branch switch detection reliability
+- Auto-triggering incremental updates
+- Resource usage <5% CPU, <20MB RAM
+- Graceful shutdown
+
+---
+
+#### MCPREL_mcp-release-scripts - MCP Release Scripts
+**Completed:** 4 tickets
+**Summary:** Automated MCP server release and publishing workflows
+
+**Contents:**
+- [Planning Docs](./projects/MCPREL_mcp-release-scripts/planning/)
+- [Tickets](./projects/MCPREL_mcp-release-scripts/tickets/) (4 completed)
+
+---
+
+#### MRPROG_maproom-progress-ux - Maproom Progress UX
+**Completed:** 17 tickets
+**Summary:** Enhanced user experience for maproom indexing progress
+
+**Contents:**
+- [Planning Docs](./projects/MRPROG_maproom-progress-ux/planning/)
+- [Tickets](./projects/MRPROG_maproom-progress-ux/tickets/) (17 completed)
+
+---
+
+#### TESTDES_test-design-framework - Test Design Framework (Stub)
+**Completed:** 0/1 tickets (orphaned stub)
+**Summary:** Contained ecological validation implementation summary (part of TESTDES_grep-impossible-task-design)
+
+**Contents:**
+- [Ticket](./projects/TESTDES_test-design-framework/tickets/) (1 implementation summary)
+
+**Note:** This was an orphaned project stub. The actual test design work was completed in the archived TESTDES_grep-impossible-task-design project.
+
+---
+
+### Previously Archived
+
+#### HYBRID_SEARCH_hybrid-retrieval-system - Hybrid Retrieval System
 **Completed:** Phase 1 (22 tickets)
 **Summary:** Combined FTS (full-text search) and vector similarity for semantic code search
 
@@ -121,19 +213,27 @@ Historical session summaries and progress reports:
 
 ## Statistics
 
-| Project | Tickets | Status |
-|---------|---------|--------|
-| HYBRID_SEARCH_hybrid-retrieval-system | 22 | ✅ Complete |
-| MPEMBED_multi-provider-embeddings | 33 | ✅ Complete |
-| CONTEXT_ASM_context-assembly-engine | 14 | ✅ Complete |
-| INC_INDEX_incremental-indexing | 8 | ✅ Complete |
-| LANG_PARSE_multi-language-support | 20 | ✅ Complete |
-| MCP_CORE_mcp-server-core | 6 | ✅ Complete |
-| MD_ENHANCE_markdown-enhancement | 8 | ✅ Complete |
-| PERF_OPT_performance-optimization | 10 | ✅ Complete |
-| MAPROOM_misc-fixes | 3 | ✅ Complete |
-| CODE_QUALITY_code-quality-improvements | 1 | ✅ Complete |
-| **Total** | **125** | **All Complete** |
+| Project | Tickets | Archived | Status |
+|---------|---------|----------|--------|
+| AGENTOPT_ai-agent-query-optimization | 14 | 2025-11-09 | ✅ Complete |
+| BLOBSHA_content-addressed-chunk-storage | 11 | 2025-11-09 | ✅ Complete |
+| BRANCHX_branch-aware-indexing | 18 | 2025-11-09 | ✅ Complete |
+| BRWATCH_branch-switch-detection | 16 | 2025-11-09 | ✅ Complete |
+| MCPREL_mcp-release-scripts | 4 | 2025-11-09 | ✅ Complete |
+| MRPROG_maproom-progress-ux | 17 | 2025-11-09 | ✅ Complete |
+| TESTDES_test-design-framework | 0 | 2025-11-09 | ✅ Archived (stub) |
+| TESTDES_grep-impossible-task-design | 21 | 2025-11-07 | ✅ Complete |
+| HYBRID_SEARCH_hybrid-retrieval-system | 22 | (earlier) | ✅ Complete |
+| MPEMBED_multi-provider-embeddings | 33 | (earlier) | ✅ Complete |
+| CONTEXT_ASM_context-assembly-engine | 14 | (earlier) | ✅ Complete |
+| INC_INDEX_incremental-indexing | 8 | (earlier) | ✅ Complete |
+| LANG_PARSE_multi-language-support | 20 | (earlier) | ✅ Complete |
+| MCP_CORE_mcp-server-core | 6 | (earlier) | ✅ Complete |
+| MD_ENHANCE_markdown-enhancement | 8 | (earlier) | ✅ Complete |
+| PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
+| MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
+| CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
+| **Total** | **226** | | **All Complete** |
 
 ## Archive Structure
 

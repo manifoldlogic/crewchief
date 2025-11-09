@@ -277,11 +277,7 @@ fn test_load_golden_test_data() {
     assert_eq!(queries.len(), 100, "Expected 100 test queries");
 
     let ground_truth = load_ground_truth().expect("Failed to load ground truth");
-    assert_eq!(
-        ground_truth.len(),
-        100,
-        "Expected 100 ground truth entries"
-    );
+    assert_eq!(ground_truth.len(), 100, "Expected 100 ground truth entries");
 
     // Verify all queries have corresponding ground truth
     for query in &queries {
@@ -293,7 +289,10 @@ fn test_load_golden_test_data() {
     }
 
     println!("✓ Successfully loaded {} test queries", queries.len());
-    println!("✓ Successfully loaded {} ground truth entries", ground_truth.len());
+    println!(
+        "✓ Successfully loaded {} ground truth entries",
+        ground_truth.len()
+    );
 }
 
 #[test]
@@ -333,11 +332,7 @@ fn test_all_queries() {
     let ndcg10 = aggregated.ndcg_at_k.get(&10).copied().unwrap_or(0.0);
     let mrr = aggregated.mrr;
 
-    assert!(
-        p10 > 0.7,
-        "Precision@10 ({:.4}) below target (0.7)",
-        p10
-    );
+    assert!(p10 > 0.7, "Precision@10 ({:.4}) below target (0.7)", p10);
     assert!(ndcg10 > 0.65, "NDCG@10 ({:.4}) below target (0.65)", ndcg10);
     assert!(mrr > 0.8, "MRR ({:.4}) below target (0.8)", mrr);
 }

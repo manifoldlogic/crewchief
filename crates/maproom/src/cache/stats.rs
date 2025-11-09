@@ -87,7 +87,8 @@ impl CacheStats {
         if delta >= 0 {
             self.total_size.fetch_add(delta as usize, Ordering::Relaxed);
         } else {
-            self.total_size.fetch_sub((-delta) as usize, Ordering::Relaxed);
+            self.total_size
+                .fetch_sub((-delta) as usize, Ordering::Relaxed);
         }
     }
 

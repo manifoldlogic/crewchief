@@ -79,7 +79,10 @@ impl DefaultAssemblyStrategy {
             id: row.get(0),
             file_relpath: row.get(1),
             worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!("Chunk {} has no worktree_path, using empty string", chunk_id);
+                warn!(
+                    "Chunk {} has no worktree_path, using empty string",
+                    chunk_id
+                );
                 String::new()
             }),
             symbol_name: row.get(3),
@@ -250,10 +253,7 @@ impl DefaultAssemblyStrategy {
                 caller.symbol_name.unwrap_or_else(|| "caller".to_string())
             );
 
-            match self
-                .create_context_item(metadata, "caller", &reason)
-                .await
-            {
+            match self.create_context_item(metadata, "caller", &reason).await {
                 Ok(item) => {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding caller: {} tokens", item.tokens);
@@ -304,10 +304,7 @@ impl DefaultAssemblyStrategy {
                 callee.symbol_name.unwrap_or_else(|| "callee".to_string())
             );
 
-            match self
-                .create_context_item(metadata, "callee", &reason)
-                .await
-            {
+            match self.create_context_item(metadata, "callee", &reason).await {
                 Ok(item) => {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding callee: {} tokens", item.tokens);

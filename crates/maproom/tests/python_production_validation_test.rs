@@ -51,7 +51,10 @@ fn test_production_scale_django_models_batch() {
     println!("Total chunks extracted: {}", total_chunks);
     println!("Total time: {:?}", duration);
     println!("Average per file: {:?}", avg_per_file);
-    println!("Files per second: {:.2}", iterations as f64 / duration.as_secs_f64());
+    println!(
+        "Files per second: {:.2}",
+        iterations as f64 / duration.as_secs_f64()
+    );
 
     // Should complete within reasonable time (less than 5 seconds for 100 files)
     assert!(
@@ -93,7 +96,10 @@ fn test_production_scale_django_views_batch() {
     println!("Total chunks extracted: {}", total_chunks);
     println!("Total time: {:?}", duration);
     println!("Average per file: {:?}", avg_per_file);
-    println!("Files per second: {:.2}", iterations as f64 / duration.as_secs_f64());
+    println!(
+        "Files per second: {:.2}",
+        iterations as f64 / duration.as_secs_f64()
+    );
 
     // Should complete within reasonable time
     assert!(
@@ -133,7 +139,10 @@ fn test_production_scale_flask_batch() {
     println!("Total files parsed: {}", iterations);
     println!("Total chunks extracted: {}", total_chunks);
     println!("Total time: {:?}", duration);
-    println!("Files per second: {:.2}", iterations as f64 / duration.as_secs_f64());
+    println!(
+        "Files per second: {:.2}",
+        iterations as f64 / duration.as_secs_f64()
+    );
 
     assert!(
         duration.as_secs() < 5,
@@ -154,7 +163,15 @@ fn test_django_symbol_extraction_accuracy() {
     let mut found_symbols = vec![];
 
     // Expected Django model patterns
-    let expected_classes = vec!["User", "Category", "Product", "Tag", "Review", "Order", "OrderItem"];
+    let expected_classes = vec![
+        "User",
+        "Category",
+        "Product",
+        "Tag",
+        "Review",
+        "Order",
+        "OrderItem",
+    ];
     let expected_methods = vec![
         "get_full_name",
         "get_absolute_url",
@@ -168,14 +185,13 @@ fn test_django_symbol_extraction_accuracy() {
     ];
 
     // Check class extraction
-    let class_chunks: Vec<_> = chunks
-        .iter()
-        .filter(|c| c.kind == "class")
-        .collect();
+    let class_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "class").collect();
 
     for expected_class in &expected_classes {
         let found = class_chunks.iter().any(|c| {
-            c.symbol_name.as_ref().map_or(false, |name| name == expected_class)
+            c.symbol_name
+                .as_ref()
+                .map_or(false, |name| name == expected_class)
         });
 
         if found {
@@ -197,7 +213,9 @@ fn test_django_symbol_extraction_accuracy() {
 
     for expected_method in &expected_methods {
         let found = method_chunks.iter().any(|c| {
-            c.symbol_name.as_ref().map_or(false, |name| name == expected_method)
+            c.symbol_name
+                .as_ref()
+                .map_or(false, |name| name == expected_method)
         });
 
         if found {
@@ -220,7 +238,10 @@ fn test_django_symbol_extraction_accuracy() {
         .iter()
         .filter(|c| c.symbol_name == Some("Meta".to_string()) && c.kind == "class")
         .count();
-    assert!(meta_count >= 5, "Should extract multiple Meta nested classes");
+    assert!(
+        meta_count >= 5,
+        "Should extract multiple Meta nested classes"
+    );
 
     // Check for __str__ methods
     let str_methods = chunks
@@ -233,16 +254,20 @@ fn test_django_symbol_extraction_accuracy() {
     let properties = chunks
         .iter()
         .filter(|c| {
-            c.symbol_name
-                .as_ref()
-                .map_or(false, |name| name.starts_with("is_") || name.starts_with("get_"))
+            c.symbol_name.as_ref().map_or(false, |name| {
+                name.starts_with("is_") || name.starts_with("get_")
+            })
         })
         .count();
     assert!(properties >= 4, "Should extract property methods");
 
     println!("\n=== Symbol Extraction Accuracy ===");
     println!("Total symbols extracted: {}", chunks.len());
-    println!("Classes found: {}/{}", class_chunks.len(), expected_classes.len());
+    println!(
+        "Classes found: {}/{}",
+        class_chunks.len(),
+        expected_classes.len()
+    );
     println!("Methods found: {}", method_chunks.len());
     println!("Meta classes: {}", meta_count);
     println!("Magic methods: {}", str_methods);
@@ -308,9 +333,9 @@ fn test_django_views_symbol_extraction() {
 
     // Check view functions
     for func in &expected_functions {
-        let found = chunks.iter().any(|c| {
-            c.kind == "func" && c.symbol_name.as_ref().map_or(false, |name| name == func)
-        });
+        let found = chunks
+            .iter()
+            .any(|c| c.kind == "func" && c.symbol_name.as_ref().map_or(false, |name| name == func));
 
         if found {
             found_count += 1;
@@ -337,8 +362,16 @@ fn test_django_views_symbol_extraction() {
     );
 
     println!("\n=== Django Views Symbol Extraction ===");
-    println!("View classes: {}/{}", expected_views.len(), expected_views.len());
-    println!("View functions: {}/{}", expected_functions.len(), expected_functions.len());
+    println!(
+        "View classes: {}/{}",
+        expected_views.len(),
+        expected_views.len()
+    );
+    println!(
+        "View functions: {}/{}",
+        expected_functions.len(),
+        expected_functions.len()
+    );
     println!("View methods: {}", view_methods);
     println!("Total chunks: {}", chunks.len());
 
@@ -370,8 +403,8 @@ fn test_production_scale_mixed_batch() {
     let mut file_stats = std::collections::HashMap::new();
 
     for (file_type, path) in &files {
-        let source = fs::read_to_string(path)
-            .unwrap_or_else(|_| panic!("Failed to read fixture: {}", path));
+        let source =
+            fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read fixture: {}", path));
 
         let mut chunks_for_type = 0;
         let type_start = Instant::now();
@@ -396,7 +429,10 @@ fn test_production_scale_mixed_batch() {
     println!("Total files parsed: {}", total_files);
     println!("Total chunks extracted: {}", total_chunks);
     println!("Total time: {:?}", duration);
-    println!("Files per second: {:.2}", total_files as f64 / duration.as_secs_f64());
+    println!(
+        "Files per second: {:.2}",
+        total_files as f64 / duration.as_secs_f64()
+    );
     println!("\nPer-file-type stats:");
 
     for (file_type, (avg_chunks, type_duration)) in &file_stats {
@@ -504,8 +540,7 @@ fn test_production_scale_edge_cases() {
 
     // Should complete without panicking
     assert_eq!(
-        successful_parses,
-        100,
+        successful_parses, 100,
         "Should successfully parse all edge case files"
     );
 
@@ -548,10 +583,7 @@ fn test_production_scale_import_extraction() {
 
             if let Some(metadata) = &imports_chunk.metadata {
                 if let Some(imports) = metadata.get("imports") {
-                    assert!(
-                        imports.is_array(),
-                        "Imports metadata should be an array"
-                    );
+                    assert!(imports.is_array(), "Imports metadata should be an array");
 
                     let import_count = imports.as_array().unwrap().len();
                     assert!(
@@ -567,10 +599,7 @@ fn test_production_scale_import_extraction() {
     println!("Files with imports: {}", files_with_imports);
     println!("Total import chunks: {}", total_import_chunks);
 
-    assert_eq!(
-        files_with_imports, 3,
-        "All test files should have imports"
-    );
+    assert_eq!(files_with_imports, 3, "All test files should have imports");
 }
 
 /// Performance comparison: Python vs TypeScript parsing
@@ -670,8 +699,16 @@ class Calculator {
 
     println!("\n=== Python vs TypeScript Performance ===");
     println!("Iterations: {}", iterations);
-    println!("Python total: {:?} (avg: {:?})", py_duration, py_duration / iterations);
-    println!("TypeScript total: {:?} (avg: {:?})", ts_duration, ts_duration / iterations);
+    println!(
+        "Python total: {:?} (avg: {:?})",
+        py_duration,
+        py_duration / iterations
+    );
+    println!(
+        "TypeScript total: {:?} (avg: {:?})",
+        ts_duration,
+        ts_duration / iterations
+    );
     println!("Python/TypeScript ratio: {:.2}x", ratio);
 
     // Python should be within 2x of TypeScript (acceptance criteria)
@@ -715,7 +752,12 @@ fn test_stress_1000_files() {
         if (i + 1) % 100 == 0 {
             let elapsed = start.elapsed();
             let rate = (i + 1) as f64 / elapsed.as_secs_f64();
-            println!("Parsed {} files in {:?} ({:.1} files/sec)", i + 1, elapsed, rate);
+            println!(
+                "Parsed {} files in {:?} ({:.1} files/sec)",
+                i + 1,
+                elapsed,
+                rate
+            );
         }
     }
 
@@ -757,7 +799,8 @@ fn test_search_quality_context_with_docstrings() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // Find a well-documented class
-    let user_class = chunks.iter()
+    let user_class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("User".to_string()) && c.kind == "class")
         .expect("Should find User class");
 
@@ -774,7 +817,8 @@ fn test_search_quality_context_with_docstrings() {
     );
 
     // Find a method with docstring
-    let get_full_name = chunks.iter()
+    let get_full_name = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("get_full_name".to_string()))
         .expect("Should find get_full_name method");
 
@@ -785,22 +829,29 @@ fn test_search_quality_context_with_docstrings() {
 
     println!("\n=== Search Context Quality ===");
     println!("Class docstring length: {} chars", docstring.len());
-    println!("Method docstring present: {}", get_full_name.docstring.is_some());
+    println!(
+        "Method docstring present: {}",
+        get_full_name.docstring.is_some()
+    );
 
     // Count how many symbols have docstrings for search context
-    let symbols_with_docs = chunks.iter()
+    let symbols_with_docs = chunks
+        .iter()
         .filter(|c| {
-            (c.kind == "class" || c.kind == "func" || c.kind == "method")
-                && c.docstring.is_some()
+            (c.kind == "class" || c.kind == "func" || c.kind == "method") && c.docstring.is_some()
         })
         .count();
 
-    let total_symbols = chunks.iter()
+    let total_symbols = chunks
+        .iter()
         .filter(|c| c.kind == "class" || c.kind == "func" || c.kind == "method")
         .count();
 
     let doc_coverage = (symbols_with_docs as f64 / total_symbols as f64) * 100.0;
-    println!("Symbols with docstrings: {}/{} ({:.1}%)", symbols_with_docs, total_symbols, doc_coverage);
+    println!(
+        "Symbols with docstrings: {}/{} ({:.1}%)",
+        symbols_with_docs, total_symbols, doc_coverage
+    );
 
     assert!(
         doc_coverage >= 50.0,
@@ -819,11 +870,11 @@ fn test_search_quality_symbol_names() {
 
     // Simulate searching for "ProductListView"
     let search_term = "ProductListView";
-    let found = chunks.iter()
-        .any(|c| {
-            c.symbol_name.as_ref()
-                .map_or(false, |name| name.contains(search_term))
-        });
+    let found = chunks.iter().any(|c| {
+        c.symbol_name
+            .as_ref()
+            .map_or(false, |name| name.contains(search_term))
+    });
 
     assert!(
         found,
@@ -833,9 +884,11 @@ fn test_search_quality_symbol_names() {
 
     // Simulate searching for "get_queryset" method
     let search_term = "get_queryset";
-    let found_methods = chunks.iter()
+    let found_methods = chunks
+        .iter()
         .filter(|c| {
-            c.symbol_name.as_ref()
+            c.symbol_name
+                .as_ref()
                 .map_or(false, |name| name == search_term)
         })
         .count();
@@ -850,16 +903,18 @@ fn test_search_quality_symbol_names() {
     println!("Found get_queryset methods: {}", found_methods);
 
     // Verify all chunks with symbols have searchable names
-    let chunks_with_names = chunks.iter()
+    let chunks_with_names = chunks
+        .iter()
         .filter(|c| c.kind != "imports" && c.symbol_name.is_some())
         .count();
 
-    let total_chunks = chunks.iter()
-        .filter(|c| c.kind != "imports")
-        .count();
+    let total_chunks = chunks.iter().filter(|c| c.kind != "imports").count();
 
     let name_coverage = (chunks_with_names as f64 / total_chunks as f64) * 100.0;
-    println!("Chunks with symbol names: {}/{} ({:.1}%)", chunks_with_names, total_chunks, name_coverage);
+    println!(
+        "Chunks with symbol names: {}/{} ({:.1}%)",
+        chunks_with_names, total_chunks, name_coverage
+    );
 
     assert!(
         name_coverage >= 80.0,
@@ -877,7 +932,8 @@ fn test_search_quality_signature_context() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // Find methods with parameters
-    let search_method = chunks.iter()
+    let search_method = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("search".to_string()) && c.kind == "method")
         .expect("Should find search classmethod");
 
@@ -896,16 +952,21 @@ fn test_search_quality_signature_context() {
     }
 
     // Count methods with signatures
-    let methods_with_sig = chunks.iter()
+    let methods_with_sig = chunks
+        .iter()
         .filter(|c| (c.kind == "method" || c.kind == "func") && c.signature.is_some())
         .count();
 
-    let total_methods = chunks.iter()
+    let total_methods = chunks
+        .iter()
         .filter(|c| c.kind == "method" || c.kind == "func")
         .count();
 
     println!("\n=== Signature Extraction Quality ===");
-    println!("Methods with signatures: {}/{}", methods_with_sig, total_methods);
+    println!(
+        "Methods with signatures: {}/{}",
+        methods_with_sig, total_methods
+    );
 
     let sig_coverage = (methods_with_sig as f64 / total_methods as f64) * 100.0;
     println!("Signature coverage: {:.1}%", sig_coverage);
@@ -991,17 +1052,15 @@ fn test_search_quality_kind_classification() {
     }
 
     // Verify expected kinds are present
-    assert!(
-        kind_counts.contains_key("class"),
-        "Should classify classes"
-    );
+    assert!(kind_counts.contains_key("class"), "Should classify classes");
     assert!(
         kind_counts.contains_key("method"),
         "Should classify methods"
     );
 
     // Verify no unknown/unclassified chunks
-    let unknown_chunks = chunks.iter()
+    let unknown_chunks = chunks
+        .iter()
         .filter(|c| c.kind.is_empty() || c.kind == "unknown")
         .count();
 

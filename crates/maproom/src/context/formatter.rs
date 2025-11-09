@@ -111,9 +111,11 @@ impl ContentFormatter {
                     "Truncating {} from {} to {} tokens",
                     relpath, current_tokens, budget
                 );
-                let result = self
-                    .truncator
-                    .truncate(content, budget, TruncationStrategy::PreserveSignature)?;
+                let result = self.truncator.truncate(
+                    content,
+                    budget,
+                    TruncationStrategy::PreserveSignature,
+                )?;
                 (result.content, result.tokens)
             } else {
                 (content.to_string(), current_tokens)
@@ -467,12 +469,7 @@ mod tests {
     fn test_get_reason_config() {
         let formatter = ContentFormatter::new();
 
-        let reason = formatter.get_reason(
-            "config",
-            None,
-            "tsconfig.json",
-            LineRange::new(1, 50),
-        );
+        let reason = formatter.get_reason("config", None, "tsconfig.json", LineRange::new(1, 50));
 
         assert!(reason.contains("Configuration file"));
         assert!(reason.contains("tsconfig.json"));
@@ -542,12 +539,8 @@ mod tests {
     fn test_get_reason_no_symbol_name() {
         let formatter = ContentFormatter::new();
 
-        let reason = formatter.get_reason(
-            "primary",
-            None,
-            "src/anonymous.rs",
-            LineRange::new(1, 10),
-        );
+        let reason =
+            formatter.get_reason("primary", None, "src/anonymous.rs", LineRange::new(1, 10));
 
         assert!(reason.contains("Primary implementation"));
         assert!(!reason.contains("<unknown>"));
@@ -596,8 +589,8 @@ mod tests {
         let range = LineRange::new(1, 1);
 
         let roles = vec![
-            "primary", "test", "caller", "callee", "config", "hook", "route", "neighbor",
-            "import", "export", "doc",
+            "primary", "test", "caller", "callee", "config", "hook", "route", "neighbor", "import",
+            "export", "doc",
         ];
 
         for role in roles {

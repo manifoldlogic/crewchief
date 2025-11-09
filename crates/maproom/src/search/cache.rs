@@ -585,11 +585,7 @@ mod tests {
     fn test_cache_basic_operations() {
         let cache = SearchCache::new(2);
         let key1 = CacheKey::new("test", 1, None, 10);
-        let results = FinalSearchResults::new(
-            "test".to_string(),
-            vec![],
-            create_test_metadata(),
-        );
+        let results = FinalSearchResults::new("test".to_string(), vec![], create_test_metadata());
 
         // Initially empty
         assert!(cache.get(&key1).is_none());
@@ -611,11 +607,7 @@ mod tests {
         let key1 = CacheKey::new("query1", 1, None, 10);
         let key2 = CacheKey::new("query2", 1, None, 10);
         let key3 = CacheKey::new("query3", 1, None, 10);
-        let results = FinalSearchResults::new(
-            "test".to_string(),
-            vec![],
-            create_test_metadata(),
-        );
+        let results = FinalSearchResults::new("test".to_string(), vec![], create_test_metadata());
 
         // Fill cache
         cache.put(key1.clone(), results.clone());
@@ -660,11 +652,7 @@ mod tests {
         // Cache with 0 second TTL (never expire)
         let cache = SearchCache::with_ttl(100, 0);
         let key = CacheKey::new("test", 1, None, 10);
-        let results = FinalSearchResults::new(
-            "test".to_string(),
-            vec![],
-            create_test_metadata(),
-        );
+        let results = FinalSearchResults::new("test".to_string(), vec![], create_test_metadata());
 
         cache.put(key.clone(), results);
 
@@ -681,11 +669,7 @@ mod tests {
         let key1 = CacheKey::new("test1", 1, None, 10);
         let key2 = CacheKey::new("test2", 2, None, 10);
         let key3 = CacheKey::new("test3", 1, None, 10);
-        let results = FinalSearchResults::new(
-            "test".to_string(),
-            vec![],
-            create_test_metadata(),
-        );
+        let results = FinalSearchResults::new("test".to_string(), vec![], create_test_metadata());
 
         cache.put(key1.clone(), results.clone());
         cache.put(key2.clone(), results.clone());
@@ -708,11 +692,7 @@ mod tests {
         let key1 = CacheKey::new("test1", 1, Some(1), 10);
         let key2 = CacheKey::new("test2", 1, Some(2), 10);
         let key3 = CacheKey::new("test3", 1, None, 10);
-        let results = FinalSearchResults::new(
-            "test".to_string(),
-            vec![],
-            create_test_metadata(),
-        );
+        let results = FinalSearchResults::new("test".to_string(), vec![], create_test_metadata());
 
         cache.put(key1.clone(), results.clone());
         cache.put(key2.clone(), results.clone());
@@ -734,11 +714,7 @@ mod tests {
         let cache2 = cache1.clone();
 
         let key = CacheKey::new("test", 1, None, 10);
-        let results = FinalSearchResults::new(
-            "test".to_string(),
-            vec![],
-            create_test_metadata(),
-        );
+        let results = FinalSearchResults::new("test".to_string(), vec![], create_test_metadata());
 
         // Put in cache1
         cache1.put(key.clone(), results);

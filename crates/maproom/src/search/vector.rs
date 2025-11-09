@@ -119,8 +119,14 @@ impl VectorExecutor {
                     .await?
             }
             SearchMode::Auto => {
-                Self::execute_hybrid_mode(client, query_embedding, repo_id, worktree_id, fetch_limit)
-                    .await?
+                Self::execute_hybrid_mode(
+                    client,
+                    query_embedding,
+                    repo_id,
+                    worktree_id,
+                    fetch_limit,
+                )
+                .await?
             }
         };
 

@@ -19,11 +19,17 @@ fn private_function() {
     assert_eq!(chunks.len(), 2);
 
     // Check first function (public)
-    let add_fn = chunks.iter().find(|c| c.symbol_name == Some("add".to_string())).unwrap();
+    let add_fn = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("add".to_string()))
+        .unwrap();
     assert_eq!(add_fn.kind, "func");
     assert!(add_fn.signature.as_ref().unwrap().contains("pub"));
     assert!(add_fn.signature.as_ref().unwrap().contains("i32"));
-    assert_eq!(add_fn.docstring, Some("This is a doc comment for a function".to_string()));
+    assert_eq!(
+        add_fn.docstring,
+        Some("This is a doc comment for a function".to_string())
+    );
 
     // Check metadata
     let metadata = add_fn.metadata.as_ref().unwrap();
@@ -31,7 +37,10 @@ fn private_function() {
     assert_eq!(metadata["is_async"].as_bool(), Some(false));
 
     // Check second function (private)
-    let private_fn = chunks.iter().find(|c| c.symbol_name == Some("private_function".to_string())).unwrap();
+    let private_fn = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("private_function".to_string()))
+        .unwrap();
     assert_eq!(private_fn.kind, "func");
     let private_metadata = private_fn.metadata.as_ref().unwrap();
     assert_eq!(private_metadata["visibility"].as_str(), Some("private"));
@@ -58,14 +67,20 @@ struct Container<T> {
     assert_eq!(chunks.len(), 2);
 
     // Check Point struct
-    let point = chunks.iter().find(|c| c.symbol_name == Some("Point".to_string())).unwrap();
+    let point = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Point".to_string()))
+        .unwrap();
     assert_eq!(point.kind, "struct");
     assert_eq!(point.docstring, Some("A simple struct".to_string()));
     let point_metadata = point.metadata.as_ref().unwrap();
     assert_eq!(point_metadata["visibility"].as_str(), Some("pub"));
 
     // Check Container struct (with generics)
-    let container = chunks.iter().find(|c| c.symbol_name == Some("Container".to_string())).unwrap();
+    let container = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Container".to_string()))
+        .unwrap();
     assert_eq!(container.kind, "struct");
     assert!(container.signature.is_some());
     assert!(container.signature.as_ref().unwrap().contains("T"));
@@ -93,13 +108,22 @@ enum Color {
     assert_eq!(chunks.len(), 2);
 
     // Check Option enum
-    let option = chunks.iter().find(|c| c.symbol_name == Some("Option".to_string())).unwrap();
+    let option = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Option".to_string()))
+        .unwrap();
     assert_eq!(option.kind, "enum");
-    assert_eq!(option.docstring, Some("An enum representing options".to_string()));
+    assert_eq!(
+        option.docstring,
+        Some("An enum representing options".to_string())
+    );
     assert!(option.signature.is_some());
 
     // Check Color enum
-    let color = chunks.iter().find(|c| c.symbol_name == Some("Color".to_string())).unwrap();
+    let color = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Color".to_string()))
+        .unwrap();
     assert_eq!(color.kind, "enum");
 }
 
@@ -123,12 +147,21 @@ trait Clone<T> {
     assert_eq!(chunks.len(), 2);
 
     // Check Draw trait
-    let draw = chunks.iter().find(|c| c.symbol_name == Some("Draw".to_string())).unwrap();
+    let draw = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Draw".to_string()))
+        .unwrap();
     assert_eq!(draw.kind, "trait");
-    assert_eq!(draw.docstring, Some("A trait for things that can be drawn".to_string()));
+    assert_eq!(
+        draw.docstring,
+        Some("A trait for things that can be drawn".to_string())
+    );
 
     // Check Clone trait (with generics)
-    let clone_trait = chunks.iter().find(|c| c.symbol_name == Some("Clone".to_string())).unwrap();
+    let clone_trait = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Clone".to_string()))
+        .unwrap();
     assert_eq!(clone_trait.kind, "trait");
     assert!(clone_trait.signature.is_some());
 }
@@ -161,14 +194,26 @@ impl Draw for Point {
     assert_eq!(impl_blocks.len(), 2);
 
     // Check inherent impl
-    let inherent_impl = impl_blocks.iter()
-        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("impl Point")).unwrap_or(false))
+    let inherent_impl = impl_blocks
+        .iter()
+        .find(|c| {
+            c.symbol_name
+                .as_ref()
+                .map(|s| s.contains("impl Point"))
+                .unwrap_or(false)
+        })
         .unwrap();
     assert_eq!(inherent_impl.kind, "impl");
 
     // Check trait impl
-    let trait_impl = impl_blocks.iter()
-        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("Draw")).unwrap_or(false))
+    let trait_impl = impl_blocks
+        .iter()
+        .find(|c| {
+            c.symbol_name
+                .as_ref()
+                .map(|s| s.contains("Draw"))
+                .unwrap_or(false)
+        })
         .unwrap();
     assert_eq!(trait_impl.kind, "impl");
     assert!(trait_impl.symbol_name.as_ref().unwrap().contains("Draw"));
@@ -189,14 +234,20 @@ static COUNTER: i32 = 0;
     assert_eq!(chunks.len(), 2);
 
     // Check const
-    let max_val = chunks.iter().find(|c| c.symbol_name == Some("MAX_VALUE".to_string())).unwrap();
+    let max_val = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("MAX_VALUE".to_string()))
+        .unwrap();
     assert_eq!(max_val.kind, "constant");
     assert_eq!(max_val.docstring, Some("Maximum value".to_string()));
     assert!(max_val.signature.is_some());
     assert!(max_val.signature.as_ref().unwrap().contains("i32"));
 
     // Check static
-    let counter = chunks.iter().find(|c| c.symbol_name == Some("COUNTER".to_string())).unwrap();
+    let counter = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("COUNTER".to_string()))
+        .unwrap();
     assert_eq!(counter.kind, "static");
 }
 
@@ -281,7 +332,8 @@ mod private_mod {
     assert_eq!(modules.len(), 2);
 
     // Check public module
-    let utils = modules.iter()
+    let utils = modules
+        .iter()
         .find(|c| c.symbol_name == Some("utils".to_string()))
         .unwrap();
     assert_eq!(utils.docstring, Some("Public module".to_string()));
@@ -330,10 +382,14 @@ impl Configurable for Config {
     assert!(chunks.len() >= 4);
 
     // Verify struct
-    assert!(chunks.iter().any(|c| c.kind == "struct" && c.symbol_name == Some("Config".to_string())));
+    assert!(chunks
+        .iter()
+        .any(|c| c.kind == "struct" && c.symbol_name == Some("Config".to_string())));
 
     // Verify trait
-    assert!(chunks.iter().any(|c| c.kind == "trait" && c.symbol_name == Some("Configurable".to_string())));
+    assert!(chunks
+        .iter()
+        .any(|c| c.kind == "trait" && c.symbol_name == Some("Configurable".to_string())));
 
     // Verify impl blocks
     let impl_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "impl").collect();
@@ -367,7 +423,9 @@ fn main() {
     let chunks = parser::extract_chunks(source, "rs");
 
     // Should extract the main function
-    assert!(chunks.iter().any(|c| c.kind == "func" && c.symbol_name == Some("main".to_string())));
+    assert!(chunks
+        .iter()
+        .any(|c| c.kind == "func" && c.symbol_name == Some("main".to_string())));
 }
 
 #[test]
@@ -390,17 +448,23 @@ fn combine<T, U>(a: T, b: U) -> (T, U) {
     assert_eq!(chunks.len(), 2);
 
     // Check first function with generic bounds
-    let process_fn = chunks.iter()
+    let process_fn = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("process".to_string()))
         .unwrap();
     assert_eq!(process_fn.kind, "func");
-    assert!(process_fn.signature.as_ref().unwrap().contains("<T: Clone + Send>"));
+    assert!(process_fn
+        .signature
+        .as_ref()
+        .unwrap()
+        .contains("<T: Clone + Send>"));
 
     let metadata = process_fn.metadata.as_ref().unwrap();
     assert_eq!(metadata["generics"].as_str(), Some("<T: Clone + Send>"));
 
     // Check second function with multiple type parameters
-    let combine_fn = chunks.iter()
+    let combine_fn = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("combine".to_string()))
         .unwrap();
     assert_eq!(combine_fn.kind, "func");
@@ -437,7 +501,8 @@ where
     assert_eq!(chunks.len(), 2);
 
     // Check first function with where clause
-    let compare_fn = chunks.iter()
+    let compare_fn = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("compare".to_string()))
         .unwrap();
     assert_eq!(compare_fn.kind, "func");
@@ -448,7 +513,8 @@ where
     assert!(where_clause.contains("T: PartialEq + Clone"));
 
     // Check second function with complex where clause
-    let process_fn = chunks.iter()
+    let process_fn = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("process_data".to_string()))
         .unwrap();
     assert_eq!(process_fn.kind, "func");
@@ -488,7 +554,8 @@ where
     assert_eq!(chunks.len(), 2);
 
     // Check first struct with where clause
-    let container = chunks.iter()
+    let container = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Container".to_string()))
         .unwrap();
     assert_eq!(container.kind, "struct");
@@ -498,7 +565,8 @@ where
     assert!(metadata.get("where_clause").is_some());
 
     // Check second struct with multiple constraints
-    let pair = chunks.iter()
+    let pair = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Pair".to_string()))
         .unwrap();
     assert_eq!(pair.kind, "struct");
@@ -526,29 +594,57 @@ fn test_function() {}
     assert_eq!(use_statements.len(), 4);
 
     // Check simple use statement
-    let hashmap_use = use_statements.iter()
-        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("HashMap")).unwrap_or(false))
+    let hashmap_use = use_statements
+        .iter()
+        .find(|c| {
+            c.symbol_name
+                .as_ref()
+                .map(|s| s.contains("HashMap"))
+                .unwrap_or(false)
+        })
         .unwrap();
     assert_eq!(hashmap_use.kind, "use");
-    assert!(hashmap_use.signature.as_ref().unwrap().contains("std::collections::HashMap"));
+    assert!(hashmap_use
+        .signature
+        .as_ref()
+        .unwrap()
+        .contains("std::collections::HashMap"));
 
     // Check use with braces
-    let io_use = use_statements.iter()
-        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("{Read, Write}")).unwrap_or(false))
+    let io_use = use_statements
+        .iter()
+        .find(|c| {
+            c.symbol_name
+                .as_ref()
+                .map(|s| s.contains("{Read, Write}"))
+                .unwrap_or(false)
+        })
         .unwrap();
     assert_eq!(io_use.kind, "use");
 
     // Check pub use
-    let pub_use = use_statements.iter()
-        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("super::*")).unwrap_or(false))
+    let pub_use = use_statements
+        .iter()
+        .find(|c| {
+            c.symbol_name
+                .as_ref()
+                .map(|s| s.contains("super::*"))
+                .unwrap_or(false)
+        })
         .unwrap();
     assert_eq!(pub_use.kind, "use");
     let pub_use_metadata = pub_use.metadata.as_ref().unwrap();
     assert_eq!(pub_use_metadata["visibility"].as_str(), Some("pub"));
 
     // Check crate use
-    let config_use = use_statements.iter()
-        .find(|c| c.symbol_name.as_ref().map(|s| s.contains("config::Config")).unwrap_or(false))
+    let config_use = use_statements
+        .iter()
+        .find(|c| {
+            c.symbol_name
+                .as_ref()
+                .map(|s| s.contains("config::Config"))
+                .unwrap_or(false)
+        })
         .unwrap();
     assert_eq!(config_use.kind, "use");
 }
@@ -658,7 +754,8 @@ where
     assert_eq!(use_statements.len(), 2);
 
     // Verify struct with generics and where clause
-    let struct_chunk = chunks.iter()
+    let struct_chunk = chunks
+        .iter()
         .find(|c| c.kind == "struct" && c.symbol_name == Some("Container".to_string()))
         .unwrap();
     let struct_metadata = struct_chunk.metadata.as_ref().unwrap();
@@ -673,7 +770,8 @@ where
     assert_eq!(impl_chunks.len(), 1);
 
     // Verify function with where clause inside impl
-    let process_fn = chunks.iter()
+    let process_fn = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("process".to_string()))
         .unwrap();
     assert_eq!(process_fn.kind, "func");
@@ -682,7 +780,8 @@ where
     assert!(process_metadata.get("where_clause").is_some());
 
     // Verify new function
-    let new_fn = chunks.iter()
+    let new_fn = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("new".to_string()))
         .unwrap();
     assert_eq!(new_fn.kind, "func");

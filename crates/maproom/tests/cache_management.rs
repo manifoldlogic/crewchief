@@ -67,10 +67,14 @@ async fn test_ttl_configuration_per_layer() {
     let cache = CacheSystem::new(config);
 
     // Add entries to each layer
-    cache.put_query("test_query", create_test_results("test_query")).await;
+    cache
+        .put_query("test_query", create_test_results("test_query"))
+        .await;
     cache.put_embedding("test_text", vec![0.1, 0.2, 0.3]).await;
     cache.put_context(&[1, 2, 3], ContextBundle::new()).await;
-    cache.put_parse_tree("test.rs", "hash123", vec![1, 2, 3]).await;
+    cache
+        .put_parse_tree("test.rs", "hash123", vec![1, 2, 3])
+        .await;
 
     // All should be available immediately
     assert!(cache.get_query("test_query").await.is_some());
@@ -104,9 +108,15 @@ async fn test_lru_eviction_policy() {
     let cache = CacheSystem::new(config);
 
     // Add 3 entries (at capacity)
-    cache.put_query("query1", create_test_results("query1")).await;
-    cache.put_query("query2", create_test_results("query2")).await;
-    cache.put_query("query3", create_test_results("query3")).await;
+    cache
+        .put_query("query1", create_test_results("query1"))
+        .await;
+    cache
+        .put_query("query2", create_test_results("query2"))
+        .await;
+    cache
+        .put_query("query3", create_test_results("query3"))
+        .await;
 
     // All should be present
     assert!(cache.get_query("query1").await.is_some());
@@ -114,7 +124,9 @@ async fn test_lru_eviction_policy() {
     assert!(cache.get_query("query3").await.is_some());
 
     // Add a 4th entry, should evict the LRU entry
-    cache.put_query("query4", create_test_results("query4")).await;
+    cache
+        .put_query("query4", create_test_results("query4"))
+        .await;
 
     // Check statistics show an eviction occurred
     let stats = cache.stats().await;
@@ -177,11 +189,8 @@ async fn test_cache_warming_manual() {
     let cache = Arc::new(CacheSystem::new(CacheConfig::default()));
     let queries = vec!["query1".to_string(), "query2".to_string()];
 
-    let warmer = CacheWarmer::with_queries(
-        Arc::clone(&cache),
-        WarmingStrategy::Manual,
-        queries.clone(),
-    );
+    let warmer =
+        CacheWarmer::with_queries(Arc::clone(&cache), WarmingStrategy::Manual, queries.clone());
 
     assert_eq!(warmer.query_count(), 2);
 
@@ -271,7 +280,9 @@ async fn test_cache_invalidation_pattern() {
     let invalidator = CacheInvalidator::new(Arc::clone(&cache));
 
     // Add cache entry
-    cache.put_query("search term", create_test_results("search term")).await;
+    cache
+        .put_query("search term", create_test_results("search term"))
+        .await;
 
     // Invalidate by pattern
     let stats = invalidator.on_pattern("search").await.unwrap();
@@ -365,7 +376,11 @@ async fn test_cache_effectiveness_monitoring() {
     assert!(stats.l1_query.misses >= 3);
 
     let hit_rate = stats.l1_query.hit_rate();
-    assert!(hit_rate >= 0.6, "Hit rate should be >60%, got {:.1}%", hit_rate * 100.0);
+    assert!(
+        hit_rate >= 0.6,
+        "Hit rate should be >60%, got {:.1}%",
+        hit_rate * 100.0
+    );
 
     // Check if cache is effective
     assert!(stats.l1_query.is_effective());
@@ -376,7 +391,10 @@ async fn test_cache_layer_parsing() {
     assert_eq!(CacheLayer::from_str("l1"), Some(CacheLayer::L1Query));
     assert_eq!(CacheLayer::from_str("query"), Some(CacheLayer::L1Query));
     assert_eq!(CacheLayer::from_str("l2"), Some(CacheLayer::L2Embedding));
-    assert_eq!(CacheLayer::from_str("embedding"), Some(CacheLayer::L2Embedding));
+    assert_eq!(
+        CacheLayer::from_str("embedding"),
+        Some(CacheLayer::L2Embedding)
+    );
     assert_eq!(CacheLayer::from_str("l3"), Some(CacheLayer::L3Context));
     assert_eq!(CacheLayer::from_str("context"), Some(CacheLayer::L3Context));
     assert_eq!(CacheLayer::from_str("parse"), Some(CacheLayer::ParseTree));
@@ -401,7 +419,9 @@ async fn test_cache_memory_tracking() {
 
     // Add some entries
     for i in 0..10 {
-        cache.put_query(&format!("q{}", i), create_test_results(&format!("q{}", i))).await;
+        cache
+            .put_query(&format!("q{}", i), create_test_results(&format!("q{}", i)))
+            .await;
     }
 
     let stats = cache.stats().await;

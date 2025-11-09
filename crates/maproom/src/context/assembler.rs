@@ -170,7 +170,10 @@ impl BasicContextAssembler {
             id: row.get(0),
             file_relpath: row.get(1),
             worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!("Chunk {} has no worktree_path, using empty string", chunk_id);
+                warn!(
+                    "Chunk {} has no worktree_path, using empty string",
+                    chunk_id
+                );
                 String::new()
             }),
             symbol_name: row.get(3),
@@ -403,7 +406,10 @@ impl ParallelContextAssembler {
             id: row.get(0),
             file_relpath: row.get(1),
             worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!("Chunk {} has no worktree_path, using empty string", chunk_id);
+                warn!(
+                    "Chunk {} has no worktree_path, using empty string",
+                    chunk_id
+                );
                 String::new()
             }),
             symbol_name: row.get(3),
@@ -490,7 +496,10 @@ impl ParallelContextAssembler {
                 role, name, chunk.depth, chunk.relevance
             )
         } else {
-            format!("{} (depth {}, relevance {:.2})", role, chunk.depth, chunk.relevance)
+            format!(
+                "{} (depth {}, relevance {:.2})",
+                role, chunk.depth, chunk.relevance
+            )
         };
 
         // Try to create the item
@@ -505,7 +514,10 @@ impl ParallelContextAssembler {
                 }
             }
             Err(e) => {
-                warn!("Failed to create context item for chunk {}: {}", chunk.id, e);
+                warn!(
+                    "Failed to create context item for chunk {}: {}",
+                    chunk.id, e
+                );
                 None
             }
         }
@@ -588,7 +600,10 @@ impl ContextAssembler for ParallelContextAssembler {
             return Ok(cached_bundle);
         }
 
-        debug!("Cache miss for chunk {}, assembling in parallel...", chunk_id);
+        debug!(
+            "Cache miss for chunk {}, assembling in parallel...",
+            chunk_id
+        );
 
         // Create shared budget manager
         let budget_mgr = SharedBudgetManager::new(budget);
@@ -601,16 +616,14 @@ impl ContextAssembler for ParallelContextAssembler {
             .await
             .context("Failed to get database connection")?;
 
-        let (metadata_result, relationships) = tokio::join!(
-            self.get_chunk_metadata(chunk_id),
-            async {
+        let (metadata_result, relationships) =
+            tokio::join!(self.get_chunk_metadata(chunk_id), async {
                 if options.callers || options.callees || options.tests {
                     load_relationships_parallel(&client, chunk_id, options.max_depth).await
                 } else {
                     (Vec::new(), Vec::new(), Vec::new())
                 }
-            }
-        );
+            });
 
         let metadata = metadata_result.context("Failed to retrieve chunk metadata")?;
         let (callers, callees, tests) = relationships;

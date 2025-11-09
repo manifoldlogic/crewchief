@@ -12,7 +12,11 @@
 //!
 //! Run with: cargo test --test upsert_worktree -- --ignored --nocapture
 
-use crewchief_maproom::{db, metrics::CacheMetrics, upsert::{ParsedChunk, upsert_chunk_with_worktree}};
+use crewchief_maproom::{
+    db,
+    metrics::CacheMetrics,
+    upsert::{upsert_chunk_with_worktree, ParsedChunk},
+};
 
 /// Helper function to connect to the test database.
 async fn test_db() -> Option<tokio_postgres::Client> {
@@ -34,7 +38,10 @@ macro_rules! skip_if_no_db {
 }
 
 /// Helper to create a test worktree in the database.
-async fn create_test_worktree(client: &tokio_postgres::Client, branch: &str) -> anyhow::Result<i64> {
+async fn create_test_worktree(
+    client: &tokio_postgres::Client,
+    branch: &str,
+) -> anyhow::Result<i64> {
     // First, ensure we have a repo (using actual schema: name, root_path)
     let repo_id: i64 = client
         .query_one(
@@ -44,7 +51,10 @@ async fn create_test_worktree(client: &tokio_postgres::Client, branch: &str) -> 
             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
             RETURNING id
             "#,
-            &[&format!("test_repo_{}", branch), &format!("/tmp/test-repo-{}", branch)],
+            &[
+                &format!("test_repo_{}", branch),
+                &format!("/tmp/test-repo-{}", branch),
+            ],
         )
         .await?
         .get(0);
@@ -77,7 +87,9 @@ async fn test_insert_creates_single_worktree_array() {
     let client = skip_if_no_db!();
 
     // Run migrations
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Create test worktree
     let worktree_id = create_test_worktree(&client, "test-insert")
@@ -111,7 +123,9 @@ async fn test_insert_creates_single_worktree_array() {
         .expect("Failed to query chunk");
 
     let worktree_ids: serde_json::Value = row.get(0);
-    let ids_array = worktree_ids.as_array().expect("worktree_ids should be array");
+    let ids_array = worktree_ids
+        .as_array()
+        .expect("worktree_ids should be array");
 
     assert_eq!(ids_array.len(), 1, "Should have exactly one worktree_id");
     assert_eq!(
@@ -127,7 +141,9 @@ async fn test_upsert_is_idempotent() {
     let client = skip_if_no_db!();
 
     // Run migrations
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Create test worktree
     let worktree_id = create_test_worktree(&client, "test-idempotent")
@@ -157,7 +173,10 @@ async fn test_upsert_is_idempotent() {
         .expect("Failed to upsert chunk second time");
 
     // Should return same chunk_id
-    assert_eq!(chunk_id_1, chunk_id_2, "Chunk ID should be same for idempotent upsert");
+    assert_eq!(
+        chunk_id_1, chunk_id_2,
+        "Chunk ID should be same for idempotent upsert"
+    );
 
     // Verify worktree_ids array has NO duplicates
     let row = client
@@ -169,7 +188,9 @@ async fn test_upsert_is_idempotent() {
         .expect("Failed to query chunk");
 
     let worktree_ids: serde_json::Value = row.get(0);
-    let ids_array = worktree_ids.as_array().expect("worktree_ids should be array");
+    let ids_array = worktree_ids
+        .as_array()
+        .expect("worktree_ids should be array");
 
     assert_eq!(
         ids_array.len(),
@@ -189,7 +210,9 @@ async fn test_multi_worktree_scenario() {
     let client = skip_if_no_db!();
 
     // Run migrations
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Create three test worktrees (simulating main, feature-a, feature-b)
     let wt_main = create_test_worktree(&client, "main")
@@ -230,8 +253,14 @@ async fn test_multi_worktree_scenario() {
         .expect("Failed to upsert from feature-b");
 
     // All should return SAME chunk_id (blob_sha + relpath conflict)
-    assert_eq!(chunk_id_main, chunk_id_a, "main and feature-a should get same chunk");
-    assert_eq!(chunk_id_main, chunk_id_b, "main and feature-b should get same chunk");
+    assert_eq!(
+        chunk_id_main, chunk_id_a,
+        "main and feature-a should get same chunk"
+    );
+    assert_eq!(
+        chunk_id_main, chunk_id_b,
+        "main and feature-b should get same chunk"
+    );
 
     // Verify worktree_ids array contains all three worktrees
     let row = client
@@ -243,7 +272,9 @@ async fn test_multi_worktree_scenario() {
         .expect("Failed to query chunk");
 
     let worktree_ids: serde_json::Value = row.get(0);
-    let ids_array = worktree_ids.as_array().expect("worktree_ids should be array");
+    let ids_array = worktree_ids
+        .as_array()
+        .expect("worktree_ids should be array");
 
     assert_eq!(
         ids_array.len(),
@@ -252,14 +283,17 @@ async fn test_multi_worktree_scenario() {
     );
 
     // Convert to i64 vec for easier checking
-    let ids: Vec<i64> = ids_array
-        .iter()
-        .map(|v| v.as_i64().unwrap())
-        .collect();
+    let ids: Vec<i64> = ids_array.iter().map(|v| v.as_i64().unwrap()).collect();
 
     assert!(ids.contains(&wt_main), "Array should contain main worktree");
-    assert!(ids.contains(&wt_feature_a), "Array should contain feature-a worktree");
-    assert!(ids.contains(&wt_feature_b), "Array should contain feature-b worktree");
+    assert!(
+        ids.contains(&wt_feature_a),
+        "Array should contain feature-a worktree"
+    );
+    assert!(
+        ids.contains(&wt_feature_b),
+        "Array should contain feature-b worktree"
+    );
 }
 
 #[tokio::test]
@@ -268,7 +302,9 @@ async fn test_different_content_creates_separate_chunks() {
     let client = skip_if_no_db!();
 
     // Run migrations
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Create test worktree
     let worktree_id = create_test_worktree(&client, "test-different")
@@ -322,7 +358,9 @@ async fn test_different_content_creates_separate_chunks() {
             .expect("Failed to query chunk");
 
         let worktree_ids: serde_json::Value = row.get(0);
-        let ids_array = worktree_ids.as_array().expect("worktree_ids should be array");
+        let ids_array = worktree_ids
+            .as_array()
+            .expect("worktree_ids should be array");
 
         assert_eq!(ids_array.len(), 1, "Each chunk should have one worktree_id");
         assert_eq!(
@@ -339,7 +377,9 @@ async fn test_cache_metrics_integration() {
     let client = skip_if_no_db!();
 
     // Run migrations
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Create test worktree
     let worktree_id = create_test_worktree(&client, "test-metrics")

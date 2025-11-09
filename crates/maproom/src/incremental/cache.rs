@@ -280,7 +280,10 @@ mod tests {
     fn test_multiple_paths() {
         let mut cache = HashCache::new();
         let paths_and_hashes: Vec<(PathBuf, ContentHash)> = vec![
-            (PathBuf::from("src/main.rs"), FileHasher::hash_bytes(b"main")),
+            (
+                PathBuf::from("src/main.rs"),
+                FileHasher::hash_bytes(b"main"),
+            ),
             (PathBuf::from("src/lib.rs"), FileHasher::hash_bytes(b"lib")),
             (
                 PathBuf::from("tests/test.rs"),

@@ -129,10 +129,7 @@ impl GraphExecutor {
             })
             .collect();
 
-        let max_score = raw_results
-            .iter()
-            .map(|(_, s)| *s)
-            .fold(0.0f64, f64::max);
+        let max_score = raw_results.iter().map(|(_, s)| *s).fold(0.0f64, f64::max);
 
         // Normalize scores to 0.0-1.0 range
         let ranked_results: Vec<RankedResult> = raw_results
@@ -232,10 +229,7 @@ impl GraphExecutor {
             })
             .collect();
 
-        let max_score = raw_results
-            .iter()
-            .map(|(_, s)| *s)
-            .fold(0.0f64, f64::max);
+        let max_score = raw_results.iter().map(|(_, s)| *s).fold(0.0f64, f64::max);
 
         let ranked_results: Vec<RankedResult> = raw_results
             .iter()

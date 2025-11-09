@@ -311,10 +311,10 @@ mod tests {
         let targets = PerformanceTargets::default();
         let metrics = PerformanceMetrics {
             indexing_files_per_min: 200.0, // Above target
-            search_p95_ms: 40.0,            // Below target
-            context_p95_ms: 100.0,          // Below target
-            memory_mb: 400.0,               // Below target
-            cache_hit_rate: 0.7,            // Above target
+            search_p95_ms: 40.0,           // Below target
+            context_p95_ms: 100.0,         // Below target
+            memory_mb: 400.0,              // Below target
+            cache_hit_rate: 0.7,           // Above target
         };
 
         let validation = targets.validate(&metrics);
@@ -327,10 +327,10 @@ mod tests {
         let targets = PerformanceTargets::default();
         let metrics = PerformanceMetrics {
             indexing_files_per_min: 100.0, // Below target - FAIL
-            search_p95_ms: 60.0,            // Above target - FAIL
-            context_p95_ms: 100.0,          // Below target - PASS
-            memory_mb: 400.0,               // Below target - PASS
-            cache_hit_rate: 0.7,            // Above target - PASS
+            search_p95_ms: 60.0,           // Above target - FAIL
+            context_p95_ms: 100.0,         // Below target - PASS
+            memory_mb: 400.0,              // Below target - PASS
+            cache_hit_rate: 0.7,           // Above target - PASS
         };
 
         let validation = targets.validate(&metrics);
@@ -366,11 +366,17 @@ mod tests {
 
         let targets = PerformanceTargets::from_env();
         println!("Active targets:");
-        println!("  Indexing: ≥{:.1} files/min", targets.indexing_files_per_min);
+        println!(
+            "  Indexing: ≥{:.1} files/min",
+            targets.indexing_files_per_min
+        );
         println!("  Search p95: <{:.1}ms", targets.search_p95_ms);
         println!("  Context p95: <{:.1}ms", targets.context_p95_ms);
         println!("  Memory: <{:.1}MB", targets.memory_mb);
-        println!("  Cache hit rate: >{:.1}%\n", targets.cache_hit_rate * 100.0);
+        println!(
+            "  Cache hit rate: >{:.1}%\n",
+            targets.cache_hit_rate * 100.0
+        );
 
         // TODO: Measure actual performance metrics
         // This is a placeholder that demonstrates the validation structure
@@ -387,10 +393,10 @@ mod tests {
         // Example of how metrics would be collected and validated:
         let example_metrics = PerformanceMetrics {
             indexing_files_per_min: 180.0, // Would come from indexing benchmark
-            search_p95_ms: 45.0,            // Would come from search benchmark
-            context_p95_ms: 110.0,          // Would come from context benchmark
-            memory_mb: 450.0,               // Would come from memory profiling
-            cache_hit_rate: 0.65,           // Would come from cache stats
+            search_p95_ms: 45.0,           // Would come from search benchmark
+            context_p95_ms: 110.0,         // Would come from context benchmark
+            memory_mb: 450.0,              // Would come from memory profiling
+            cache_hit_rate: 0.65,          // Would come from cache stats
         };
 
         let validation = targets.validate(&example_metrics);
@@ -410,6 +416,9 @@ mod tests {
         println!("Current memory usage: {:.1}MB", memory_mb);
 
         #[cfg(target_os = "linux")]
-        assert!(memory_mb > 0.0, "Memory measurement should return non-zero value");
+        assert!(
+            memory_mb > 0.0,
+            "Memory measurement should return non-zero value"
+        );
     }
 }

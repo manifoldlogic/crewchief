@@ -236,10 +236,10 @@ fn test_budget_allocation_percentages() {
 
     // Verify percentages
     assert_eq!(allocation.primary, 4000); // 40%
-    assert_eq!(allocation.tests, 2000);   // 20%
+    assert_eq!(allocation.tests, 2000); // 20%
     assert_eq!(allocation.callers, 1500); // 15%
     assert_eq!(allocation.callees, 1500); // 15%
-    assert_eq!(allocation.config, 1000);  // 10%
+    assert_eq!(allocation.config, 1000); // 10%
     assert_eq!(allocation.total(), 10000);
 }
 

@@ -92,10 +92,7 @@ impl ConfigReloader {
     ///
     /// # Errors
     /// Returns error if file watcher cannot be created.
-    pub fn new<P: AsRef<Path>>(
-        config: Arc<RwLock<SearchConfig>>,
-        config_path: P,
-    ) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(config: Arc<RwLock<SearchConfig>>, config_path: P) -> Result<Self> {
         let config_path = config_path.as_ref().to_path_buf();
 
         if !config_path.exists() {
@@ -168,10 +165,7 @@ impl ConfigReloader {
         match event.kind {
             EventKind::Modify(_) | EventKind::Create(_) => {
                 // Check if the event is for our config file
-                event
-                    .paths
-                    .iter()
-                    .any(|p| p.ends_with(&self.config_path))
+                event.paths.iter().any(|p| p.ends_with(&self.config_path))
             }
             _ => false,
         }
@@ -179,7 +173,10 @@ impl ConfigReloader {
 
     /// Reload configuration from file.
     async fn reload_config(&self) -> Result<()> {
-        info!("Reloading configuration from: {}", self.config_path.display());
+        info!(
+            "Reloading configuration from: {}",
+            self.config_path.display()
+        );
 
         // Load new configuration
         let new_config = SearchConfig::load_from_file(&self.config_path).await?;
@@ -204,13 +201,22 @@ impl ConfigReloader {
 
         if weights_changed {
             info!("Fusion weights changed:");
-            info!("  Old weights: fts={:.3}, vector={:.3}, graph={:.3}, recency={:.3}, churn={:.3}",
-                old_weights.fts, old_weights.vector, old_weights.graph,
-                old_weights.recency, old_weights.churn);
-            info!("  New weights: fts={:.3}, vector={:.3}, graph={:.3}, recency={:.3}, churn={:.3}",
-                new_config.fusion.weights.fts, new_config.fusion.weights.vector,
-                new_config.fusion.weights.graph, new_config.fusion.weights.recency,
-                new_config.fusion.weights.churn);
+            info!(
+                "  Old weights: fts={:.3}, vector={:.3}, graph={:.3}, recency={:.3}, churn={:.3}",
+                old_weights.fts,
+                old_weights.vector,
+                old_weights.graph,
+                old_weights.recency,
+                old_weights.churn
+            );
+            info!(
+                "  New weights: fts={:.3}, vector={:.3}, graph={:.3}, recency={:.3}, churn={:.3}",
+                new_config.fusion.weights.fts,
+                new_config.fusion.weights.vector,
+                new_config.fusion.weights.graph,
+                new_config.fusion.weights.recency,
+                new_config.fusion.weights.churn
+            );
         }
 
         // Update configuration

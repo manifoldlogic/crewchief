@@ -139,8 +139,10 @@ impl ScoreFusion for RRFFusion {
         let num_result_sets = results.len();
 
         // Also track source scores for transparency
-        let mut chunk_source_scores: HashMap<i64, HashMap<crate::search::executor_types::SearchSource, f32>> =
-            HashMap::new();
+        let mut chunk_source_scores: HashMap<
+            i64,
+            HashMap<crate::search::executor_types::SearchSource, f32>,
+        > = HashMap::new();
 
         // Accumulate RRF scores from each result set
         for result_set in results {
@@ -172,9 +174,7 @@ impl ScoreFusion for RRFFusion {
         let mut fused_results: Vec<FusedResult> = chunk_scores
             .into_iter()
             .map(|(chunk_id, score)| {
-                let source_scores = chunk_source_scores
-                    .remove(&chunk_id)
-                    .unwrap_or_default();
+                let source_scores = chunk_source_scores.remove(&chunk_id).unwrap_or_default();
                 FusedResult::new(chunk_id, score, source_scores)
             })
             .collect();
@@ -265,15 +265,10 @@ mod tests {
         let fusion = RRFFusion::default();
         let weights = FusionWeights::default();
 
-        let fts_results = RankedResults::new(
-            vec![RankedResult::new(1, 0.9, 1)],
-            SearchSource::FTS,
-        );
+        let fts_results = RankedResults::new(vec![RankedResult::new(1, 0.9, 1)], SearchSource::FTS);
 
-        let vector_results = RankedResults::new(
-            vec![RankedResult::new(1, 0.8, 1)],
-            SearchSource::Vector,
-        );
+        let vector_results =
+            RankedResults::new(vec![RankedResult::new(1, 0.8, 1)], SearchSource::Vector);
 
         let fused = fusion.fuse(vec![fts_results, vector_results], &weights, 10);
 
@@ -459,7 +454,7 @@ mod tests {
 
         let vector_results = RankedResults::new(
             vec![
-                RankedResult::new(2, 0.8, 1), // array position 0
+                RankedResult::new(2, 0.8, 1),  // array position 0
                 RankedResult::new(3, 0.75, 2), // array position 1
             ],
             SearchSource::Vector,

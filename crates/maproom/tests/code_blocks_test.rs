@@ -66,12 +66,17 @@ key: value
     let chunks = parser::extract_chunks(source, "md");
 
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
-    assert_eq!(code_blocks.len(), 6, "Should extract 6 code blocks with different languages");
+    assert_eq!(
+        code_blocks.len(),
+        6,
+        "Should extract 6 code blocks with different languages"
+    );
 
     // Verify each language was extracted correctly
     let languages = vec!["typescript", "rust", "python", "bash", "json", "yaml"];
     for lang in languages {
-        let block = chunks.iter()
+        let block = chunks
+            .iter()
             .find(|c| c.symbol_name == Some(format!("Code: {}", lang)))
             .expect(&format!("Should find {} code block", lang));
 
@@ -100,7 +105,11 @@ no language specified
     let chunks = parser::extract_chunks(source, "md");
 
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
-    assert_eq!(code_blocks.len(), 1, "Should extract code block without language");
+    assert_eq!(
+        code_blocks.len(),
+        1,
+        "Should extract code block without language"
+    );
 
     let code_block = code_blocks[0];
     assert_eq!(code_block.symbol_name, Some("Code: plain".to_string()));
@@ -129,13 +138,17 @@ npm install package
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
     if let Some(metadata) = &code_block.metadata {
         let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
-        assert_eq!(parent_path, "Installation", "Code block should be linked to Installation heading");
+        assert_eq!(
+            parent_path, "Installation",
+            "Code block should be linked to Installation heading"
+        );
     } else {
         panic!("Code block should have metadata with parent_path");
     }
@@ -161,15 +174,15 @@ const oauth = {
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
     if let Some(metadata) = &code_block.metadata {
         let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
         assert_eq!(
-            parent_path,
-            "API Guide > Authentication > OAuth Setup",
+            parent_path, "API Guide > Authentication > OAuth Setup",
             "Code block should have full breadcrumb to parent section"
         );
     } else {
@@ -237,13 +250,17 @@ print("hello")
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
     if let Some(metadata) = &code_block.metadata {
         let parent_path = metadata.get("parent_path").unwrap().as_str().unwrap();
-        assert_eq!(parent_path, "", "Code block without heading should have empty parent_path");
+        assert_eq!(
+            parent_path, "",
+            "Code block without heading should have empty parent_path"
+        );
     } else {
         panic!("Code block should have metadata");
     }
@@ -265,7 +282,8 @@ function calculate(a: number, b: number): number {
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
@@ -306,13 +324,17 @@ echo "Hello, World!"
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
     if let Some(metadata) = &code_block.metadata {
         let lines_of_code = metadata.get("lines_of_code").unwrap().as_u64().unwrap();
-        assert_eq!(lines_of_code, 1, "Single line code block should have 1 line");
+        assert_eq!(
+            lines_of_code, 1,
+            "Single line code block should have 1 line"
+        );
     }
 }
 
@@ -340,7 +362,10 @@ fn main() {}
     let ts_block = &code_blocks[0];
     assert_eq!(ts_block.symbol_name, Some("Code: typescript".to_string()));
     if let Some(metadata) = &ts_block.metadata {
-        assert_eq!(metadata.get("language").unwrap().as_str().unwrap(), "typescript");
+        assert_eq!(
+            metadata.get("language").unwrap().as_str().unwrap(),
+            "typescript"
+        );
     }
 
     // Second block should extract "rust" from "rust copy"
@@ -365,13 +390,20 @@ Line 8
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
     // Code block starts at line 4 (```python) and ends at line 7 (```)
-    assert!(code_block.start_line >= 4, "Code block should start around line 4");
-    assert!(code_block.end_line >= code_block.start_line, "End line should be >= start line");
+    assert!(
+        code_block.start_line >= 4,
+        "Code block should start around line 4"
+    );
+    assert!(
+        code_block.end_line >= code_block.start_line,
+        "End line should be >= start line"
+    );
 }
 
 #[test]
@@ -400,7 +432,11 @@ console.log(3);
     let chunks = parser::extract_chunks(source, "md");
 
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
-    assert_eq!(code_blocks.len(), 3, "Should detect and extract all 3 code blocks");
+    assert_eq!(
+        code_blocks.len(),
+        3,
+        "Should detect and extract all 3 code blocks"
+    );
 
     // All should have same parent
     for block in &code_blocks {
@@ -425,7 +461,11 @@ def final():
     let chunks = parser::extract_chunks(source, "md");
 
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
-    assert_eq!(code_blocks.len(), 1, "Should extract code block at end of file");
+    assert_eq!(
+        code_blocks.len(),
+        1,
+        "Should extract code block at end of file"
+    );
 
     let code_block = code_blocks[0];
     assert_eq!(code_block.symbol_name, Some("Code: python".to_string()));
@@ -451,18 +491,34 @@ const headers = {
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let code_block = chunks.iter()
+    let code_block = chunks
+        .iter()
         .find(|c| c.kind == "code_block")
         .expect("Should find code block");
 
     // Verify all required metadata fields are present
     if let Some(metadata) = &code_block.metadata {
-        assert!(metadata.get("language").is_some(), "Should have language field");
-        assert!(metadata.get("parent_path").is_some(), "Should have parent_path field");
-        assert!(metadata.get("lines_of_code").is_some(), "Should have lines_of_code field");
+        assert!(
+            metadata.get("language").is_some(),
+            "Should have language field"
+        );
+        assert!(
+            metadata.get("parent_path").is_some(),
+            "Should have parent_path field"
+        );
+        assert!(
+            metadata.get("lines_of_code").is_some(),
+            "Should have lines_of_code field"
+        );
 
-        assert_eq!(metadata.get("language").unwrap().as_str().unwrap(), "typescript");
-        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "API > Authentication");
+        assert_eq!(
+            metadata.get("language").unwrap().as_str().unwrap(),
+            "typescript"
+        );
+        assert_eq!(
+            metadata.get("parent_path").unwrap().as_str().unwrap(),
+            "API > Authentication"
+        );
         assert_eq!(metadata.get("lines_of_code").unwrap().as_u64().unwrap(), 4);
     } else {
         panic!("Code block must have metadata");
@@ -480,12 +536,18 @@ fn test() {}
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let headings: Vec<_> = chunks.iter().filter(|c| c.kind.starts_with("heading_")).collect();
+    let headings: Vec<_> = chunks
+        .iter()
+        .filter(|c| c.kind.starts_with("heading_"))
+        .collect();
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
 
     assert_eq!(headings.len(), 1, "Should have 1 heading chunk");
     assert_eq!(code_blocks.len(), 1, "Should have 1 code block chunk");
-    assert_ne!(headings[0].start_line, code_blocks[0].start_line, "Heading and code block should be separate chunks");
+    assert_ne!(
+        headings[0].start_line, code_blocks[0].start_line,
+        "Heading and code block should be separate chunks"
+    );
 }
 
 #[test]
@@ -553,32 +615,48 @@ npm install
     let chunks = parser::extract_chunks(source, "md");
 
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
-    assert_eq!(code_blocks.len(), 4, "Should extract all 4 code blocks from README");
+    assert_eq!(
+        code_blocks.len(),
+        4,
+        "Should extract all 4 code blocks from README"
+    );
 
     // Verify first bash block
     let bash_block1 = &code_blocks[0];
     assert_eq!(bash_block1.symbol_name, Some("Code: bash".to_string()));
     if let Some(metadata) = &bash_block1.metadata {
-        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "Installation Guide > Quick Start");
+        assert_eq!(
+            metadata.get("parent_path").unwrap().as_str().unwrap(),
+            "Installation Guide > Quick Start"
+        );
     }
 
     // Verify first typescript block (config)
     let ts_block1 = &code_blocks[1];
     assert_eq!(ts_block1.symbol_name, Some("Code: typescript".to_string()));
     if let Some(metadata) = &ts_block1.metadata {
-        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "Installation Guide > Configuration");
+        assert_eq!(
+            metadata.get("parent_path").unwrap().as_str().unwrap(),
+            "Installation Guide > Configuration"
+        );
     }
 
     // Verify second typescript block (usage)
     let ts_block2 = &code_blocks[2];
     if let Some(metadata) = &ts_block2.metadata {
-        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "Installation Guide > Usage Example");
+        assert_eq!(
+            metadata.get("parent_path").unwrap().as_str().unwrap(),
+            "Installation Guide > Usage Example"
+        );
     }
 
     // Verify second bash block (troubleshooting)
     let bash_block2 = &code_blocks[3];
     if let Some(metadata) = &bash_block2.metadata {
-        assert_eq!(metadata.get("parent_path").unwrap().as_str().unwrap(), "Installation Guide > Troubleshooting");
+        assert_eq!(
+            metadata.get("parent_path").unwrap().as_str().unwrap(),
+            "Installation Guide > Troubleshooting"
+        );
     }
 }
 
@@ -614,5 +692,9 @@ Final text.
     let chunks = parser::extract_chunks(source, "md");
 
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
-    assert_eq!(code_blocks.len(), 4, "Should detect 100% of code blocks (4 total)");
+    assert_eq!(
+        code_blocks.len(),
+        4,
+        "Should detect 100% of code blocks (4 total)"
+    );
 }

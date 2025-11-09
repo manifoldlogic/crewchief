@@ -129,7 +129,10 @@ impl EvictionStats {
     /// Record an access-count-based eviction.
     pub fn record_access_eviction(&mut self) {
         self.access_evictions += 1;
-        debug!("Recorded access eviction (total: {})", self.access_evictions);
+        debug!(
+            "Recorded access eviction (total: {})",
+            self.access_evictions
+        );
     }
 
     /// Record an LRU eviction.

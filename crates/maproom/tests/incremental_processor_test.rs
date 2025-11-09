@@ -200,10 +200,7 @@ fn test_file_hasher_consistency() {
     let different_content = b"different content";
     let hash3 = FileHasher::hash_bytes(different_content);
 
-    assert_ne!(
-        hash1, hash3,
-        "Hash should differ for different content"
-    );
+    assert_ne!(hash1, hash3, "Hash should differ for different content");
 }
 
 #[test]

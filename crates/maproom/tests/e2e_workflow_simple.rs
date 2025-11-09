@@ -68,10 +68,16 @@ async fn ollama_available() -> bool {
 async fn postgres_available_and_configure() -> bool {
     // Use Docker network hostname (works inside dev container)
     // User/pass/db all 'maproom' as configured in docker-compose.yml
-    std::env::set_var("DATABASE_URL", "postgresql://maproom:maproom@maproom-postgres:5432/maproom");
-    tokio_postgres::connect("postgresql://maproom:maproom@maproom-postgres:5432/maproom", NoTls)
-        .await
-        .is_ok()
+    std::env::set_var(
+        "DATABASE_URL",
+        "postgresql://maproom:maproom@maproom-postgres:5432/maproom",
+    );
+    tokio_postgres::connect(
+        "postgresql://maproom:maproom@maproom-postgres:5432/maproom",
+        NoTls,
+    )
+    .await
+    .is_ok()
 }
 
 async fn skip_if_services_unavailable() -> Option<()> {
@@ -82,7 +88,10 @@ async fn skip_if_services_unavailable() -> Option<()> {
     }
 
     if !ollama_available().await {
-        eprintln!("WARNING: Skipping E2E test - Ollama not available at {}", OLLAMA_ENDPOINT);
+        eprintln!(
+            "WARNING: Skipping E2E test - Ollama not available at {}",
+            OLLAMA_ENDPOINT
+        );
         eprintln!("  Start with: docker compose --project-directory ~/.maproom-mcp up -d");
         return None;
     }
@@ -176,14 +185,21 @@ async fn test_02_indexed_data_validation() {
 
     // Check repos
     let row = client
-        .query_one("SELECT COUNT(*), string_agg(name, ', ') FROM maproom.repos", &[])
+        .query_one(
+            "SELECT COUNT(*), string_agg(name, ', ') FROM maproom.repos",
+            &[],
+        )
         .await
         .expect("Failed to query repos");
 
     let repo_count: i64 = row.get(0);
     let repo_names: Option<String> = row.get(1);
 
-    println!("Repositories: {} ({})", repo_count, repo_names.unwrap_or_default());
+    println!(
+        "Repositories: {} ({})",
+        repo_count,
+        repo_names.unwrap_or_default()
+    );
     assert!(repo_count > 0, "Should have at least 1 repo indexed");
 
     // Check worktrees
@@ -198,7 +214,11 @@ async fn test_02_indexed_data_validation() {
     let worktree_count: i64 = row.get(0);
     let worktree_names: Option<String> = row.get(1);
 
-    println!("Worktrees: {} ({})", worktree_count, worktree_names.unwrap_or_default());
+    println!(
+        "Worktrees: {} ({})",
+        worktree_count,
+        worktree_names.unwrap_or_default()
+    );
     assert!(worktree_count > 0, "Should have at least 1 worktree");
 
     // Check chunks (query both embedding columns)
@@ -273,7 +293,12 @@ async fn test_03_fts_search_functionality() {
 
         let duration = start.elapsed();
 
-        println!("Query '{}': {} results in {:?}", query, rows.len(), duration);
+        println!(
+            "Query '{}': {} results in {:?}",
+            query,
+            rows.len(),
+            duration
+        );
 
         if !rows.is_empty() {
             let top_path: String = rows[0].get(1);
@@ -358,18 +383,18 @@ async fn test_04_embedding_quality() {
         let non_zero_count = embedding.iter().filter(|&&v| v != 0.0).count();
         let finite_count = embedding.iter().filter(|&&v| v.is_finite()).count();
 
-        println!("  Non-zero values: {} / {}", non_zero_count, embedding.len());
+        println!(
+            "  Non-zero values: {} / {}",
+            non_zero_count,
+            embedding.len()
+        );
         println!("  Finite values: {} / {}", finite_count, embedding.len());
 
         assert!(
             non_zero_count > 700,
             "Embedding should have mostly non-zero values"
         );
-        assert_eq!(
-            finite_count,
-            768,
-            "All embedding values should be finite"
-        );
+        assert_eq!(finite_count, 768, "All embedding values should be finite");
     }
 
     // Validate text embeddings
@@ -393,18 +418,18 @@ async fn test_04_embedding_quality() {
         let non_zero_count = embedding.iter().filter(|&&v| v != 0.0).count();
         let finite_count = embedding.iter().filter(|&&v| v.is_finite()).count();
 
-        println!("  Non-zero values: {} / {}", non_zero_count, embedding.len());
+        println!(
+            "  Non-zero values: {} / {}",
+            non_zero_count,
+            embedding.len()
+        );
         println!("  Finite values: {} / {}", finite_count, embedding.len());
 
         assert!(
             non_zero_count > 700,
             "Embedding should have mostly non-zero values"
         );
-        assert_eq!(
-            finite_count,
-            768,
-            "All embedding values should be finite"
-        );
+        assert_eq!(finite_count, 768, "All embedding values should be finite");
     }
 
     println!("\n✓ Embedding quality check passed\n");
@@ -507,7 +532,11 @@ async fn test_06_embedding_service_integration() {
     assert!(embedding.is_ok(), "Embedding generation should succeed");
 
     let embedding = embedding.unwrap();
-    assert_eq!(embedding.len(), 768, "Should generate 768-dimensional embedding");
+    assert_eq!(
+        embedding.len(),
+        768,
+        "Should generate 768-dimensional embedding"
+    );
 
     println!("Single embedding:");
     println!("  Time: {:?}", duration);
@@ -540,7 +569,12 @@ async fn test_06_embedding_service_integration() {
     println!("  Batch size: {}", embeddings.len());
 
     for (i, embedding) in embeddings.iter().enumerate() {
-        assert_eq!(embedding.len(), 768, "Embedding {} should have 768 dimensions", i);
+        assert_eq!(
+            embedding.len(),
+            768,
+            "Embedding {} should have 768 dimensions",
+            i
+        );
     }
 
     println!("\n✓ Embedding service integration passed\n");
@@ -564,7 +598,9 @@ async fn test_00_run_all_tests() {
     println!();
     println!("Prerequisites:");
     println!("  - Docker stack running: docker compose --project-directory ~/.maproom-mcp up -d");
-    println!("  - Repository indexed: npx crewchief maproom scan --repo crewchief --root /workspace");
+    println!(
+        "  - Repository indexed: npx crewchief maproom scan --repo crewchief --root /workspace"
+    );
     println!();
     println!("Run tests:");
     println!("  cargo test --test e2e_workflow_simple -- --nocapture --test-threads=1");

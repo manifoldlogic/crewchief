@@ -120,7 +120,11 @@ impl CodeTruncator {
     /// 2. Identifies the docstring (leading comment block)
     /// 3. Keeps a sample of the body if budget allows
     /// 4. Adds truncation markers
-    fn truncate_preserve_signature(&self, content: &str, budget: usize) -> Result<TruncationResult> {
+    fn truncate_preserve_signature(
+        &self,
+        content: &str,
+        budget: usize,
+    ) -> Result<TruncationResult> {
         let lines: Vec<&str> = content.lines().collect();
         if lines.is_empty() {
             return Ok(TruncationResult {
@@ -327,10 +331,7 @@ impl CodeTruncator {
         // Look for opening brace, arrow, or first non-comment line
         for (i, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            if trimmed.contains('{')
-                || trimmed.contains("=>")
-                || trimmed.ends_with(':')
-            {
+            if trimmed.contains('{') || trimmed.contains("=>") || trimmed.ends_with(':') {
                 return i;
             }
             // If we hit a non-comment, non-empty line without signature markers,

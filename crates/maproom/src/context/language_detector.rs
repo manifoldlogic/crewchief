@@ -183,7 +183,8 @@ impl LanguageDetector {
         }
 
         // TypeScript patterns
-        if content.contains("interface ") || content.contains(": string")
+        if content.contains("interface ")
+            || content.contains(": string")
             || content.contains(": number")
         {
             return Language::TypeScript;
@@ -275,10 +276,7 @@ mod tests {
             detector.detect_from_path("src/Component.tsx"),
             Language::TypeScript
         );
-        assert_eq!(
-            detector.detect_from_path("index.mts"),
-            Language::TypeScript
-        );
+        assert_eq!(detector.detect_from_path("index.mts"), Language::TypeScript);
     }
 
     #[test]

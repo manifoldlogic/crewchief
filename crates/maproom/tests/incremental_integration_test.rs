@@ -302,7 +302,9 @@ async fn test_cache_detects_modification() -> Result<()> {
 
     // First detection: populate cache
     let hash1 = FileHasher::hash_bytes(content1);
-    detector.cache_mut().insert(temp_file.path().to_path_buf(), hash1);
+    detector
+        .cache_mut()
+        .insert(temp_file.path().to_path_buf(), hash1);
 
     // Modify file content
     temp_file.rewind()?;
@@ -371,9 +373,7 @@ async fn test_clear_cache() -> Result<()> {
 
     // Manually populate cache
     let hash = FileHasher::hash_bytes(b"test");
-    detector
-        .cache_mut()
-        .insert("/test/path.rs".into(), hash);
+    detector.cache_mut().insert("/test/path.rs".into(), hash);
 
     assert_eq!(detector.cache().len(), 1);
 
@@ -410,15 +410,9 @@ async fn test_multiple_files_with_cache() -> Result<()> {
     let mut detector = ChangeDetector::new(pool.clone());
 
     // First pass: all new files
-    let change1 = detector
-        .detect_change(file_id1, temp_file1.path())
-        .await?;
-    let change2 = detector
-        .detect_change(file_id2, temp_file2.path())
-        .await?;
-    let change3 = detector
-        .detect_change(file_id3, temp_file3.path())
-        .await?;
+    let change1 = detector.detect_change(file_id1, temp_file1.path()).await?;
+    let change2 = detector.detect_change(file_id2, temp_file2.path()).await?;
+    let change3 = detector.detect_change(file_id3, temp_file3.path()).await?;
 
     assert!(matches!(change1, ChangeType::New(_)));
     assert!(matches!(change2, ChangeType::New(_)));
@@ -428,15 +422,9 @@ async fn test_multiple_files_with_cache() -> Result<()> {
     assert_eq!(detector.cache().len(), 3);
 
     // Second pass: all unchanged (cache hits)
-    let change1 = detector
-        .detect_change(file_id1, temp_file1.path())
-        .await?;
-    let change2 = detector
-        .detect_change(file_id2, temp_file2.path())
-        .await?;
-    let change3 = detector
-        .detect_change(file_id3, temp_file3.path())
-        .await?;
+    let change1 = detector.detect_change(file_id1, temp_file1.path()).await?;
+    let change2 = detector.detect_change(file_id2, temp_file2.path()).await?;
+    let change3 = detector.detect_change(file_id3, temp_file3.path()).await?;
 
     assert_eq!(change1, ChangeType::None);
     assert_eq!(change2, ChangeType::None);
@@ -530,9 +518,13 @@ async fn test_delete_never_tracked_file() -> Result<()> {
     let pool = setup_pool().await?;
 
     // Create test file without hash (never tracked)
-    let file_id =
-        insert_test_file(&pool, "test_repo_never_tracked", "main", "test_never_tracked.rs")
-            .await?;
+    let file_id = insert_test_file(
+        &pool,
+        "test_repo_never_tracked",
+        "main",
+        "test_never_tracked.rs",
+    )
+    .await?;
 
     // Create a path that doesn't exist
     let nonexistent_path = std::path::PathBuf::from("/tmp/never_existed_12345.rs");
@@ -715,7 +707,10 @@ async fn test_batch_change_detection_with_modifications() -> Result<()> {
             let expected_new = FileHasher::hash_bytes(new_content1);
             assert_eq!(*new, expected_new);
         }
-        _ => panic!("Expected ChangeType::Modified for file 1, got {:?}", changes[0].1),
+        _ => panic!(
+            "Expected ChangeType::Modified for file 1, got {:?}",
+            changes[0].1
+        ),
     }
 
     // File 2: should be None (unchanged)

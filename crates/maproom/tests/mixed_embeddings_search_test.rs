@@ -290,7 +290,10 @@ async fn cleanup_fixture(
 
     // Delete repo
     client
-        .execute("DELETE FROM maproom.repos WHERE id = $1", &[&fixture.repo_id])
+        .execute(
+            "DELETE FROM maproom.repos WHERE id = $1",
+            &[&fixture.repo_id],
+        )
         .await?;
 
     println!("✓ Cleaned up test fixture");
@@ -324,7 +327,10 @@ async fn test_hybrid_search_finds_both_embedding_types() -> Result<(), Box<dyn s
     println!("Found {} results", results.len());
 
     // Verify we found results
-    assert!(!results.is_empty(), "Should find results from mixed embeddings");
+    assert!(
+        !results.is_empty(),
+        "Should find results from mixed embeddings"
+    );
 
     // Track which chunk types we found
     let mut found_openai = false;
@@ -351,14 +357,20 @@ async fn test_hybrid_search_finds_both_embedding_types() -> Result<(), Box<dyn s
 
     // The test is successful if we find results from different embedding types
     // Note: We don't require all types because relevance may vary
-    let types_found = [found_openai, found_ollama, found_both].iter().filter(|&&x| x).count();
+    let types_found = [found_openai, found_ollama, found_both]
+        .iter()
+        .filter(|&&x| x)
+        .count();
     assert!(
         types_found >= 1,
         "Should find results from at least one embedding type, found {}",
         types_found
     );
 
-    println!("✓ Hybrid search successfully found results from {} embedding type(s)", types_found);
+    println!(
+        "✓ Hybrid search successfully found results from {} embedding type(s)",
+        types_found
+    );
 
     // Cleanup
     cleanup_fixture(pipeline.client(), &fixture).await?;
@@ -408,7 +420,10 @@ async fn test_coalesce_prefers_ollama_over_openai() -> Result<(), Box<dyn std::e
         println!("  ✓ Chunk {} uses 768-dim (Ollama)", chunk_id);
     }
 
-    println!("✓ COALESCE correctly prefers Ollama over OpenAI for all {} chunks", row_count);
+    println!(
+        "✓ COALESCE correctly prefers Ollama over OpenAI for all {} chunks",
+        row_count
+    );
 
     // Cleanup
     cleanup_fixture(&client, &fixture).await?;
@@ -521,7 +536,10 @@ async fn test_search_performance_with_mixed_embeddings() -> Result<(), Box<dyn s
     println!("\nPerformance summary:");
     println!("  Total searches: {}", queries.len());
     println!("  Average duration: {:?}", avg_duration);
-    println!("  Average results per query: {:.1}", total_results as f64 / queries.len() as f64);
+    println!(
+        "  Average results per query: {:.1}",
+        total_results as f64 / queries.len() as f64
+    );
     println!("  Total corpus: 110 chunks (50 OpenAI + 50 Ollama + 10 both)");
 
     assert!(
@@ -643,8 +661,14 @@ async fn test_metadata_tracking_with_mixed_embeddings() -> Result<(), Box<dyn st
     // Verify metadata is complete
     println!("Metadata:");
     println!("  Total time: {:.2}ms", results.metadata.total_time_ms());
-    println!("  Query processing: {:.2}ms", results.metadata.timing.query_processing_ms);
-    println!("  Search execution: {:.2}ms", results.metadata.timing.search_execution_ms);
+    println!(
+        "  Query processing: {:.2}ms",
+        results.metadata.timing.query_processing_ms
+    );
+    println!(
+        "  Search execution: {:.2}ms",
+        results.metadata.timing.search_execution_ms
+    );
     println!("  Fusion: {:.2}ms", results.metadata.timing.fusion_ms);
     println!("  Assembly: {:.2}ms", results.metadata.timing.assembly_ms);
 
@@ -656,10 +680,16 @@ async fn test_metadata_tracking_with_mixed_embeddings() -> Result<(), Box<dyn st
 
     // Verify result counts
     println!("  Result counts: {:?}", results.metadata.result_counts);
-    println!("  Total unique chunks: {}", results.metadata.total_unique_chunks);
+    println!(
+        "  Total unique chunks: {}",
+        results.metadata.total_unique_chunks
+    );
     println!("  Returned results: {}", results.metadata.returned_results);
 
-    assert!(!results.metadata.result_counts.is_empty(), "Should have result counts");
+    assert!(
+        !results.metadata.result_counts.is_empty(),
+        "Should have result counts"
+    );
 
     println!("✓ Metadata is complete and valid");
 

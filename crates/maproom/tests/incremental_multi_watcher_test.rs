@@ -1,8 +1,7 @@
 //! Unit tests for multi-worktree watcher functionality.
 
 use crewchief_maproom::incremental::{
-    EventType, MultiWatcher, WatcherConfig, WatcherStatus,
-    WorktreeWatcher,
+    EventType, MultiWatcher, WatcherConfig, WatcherStatus, WorktreeWatcher,
 };
 use std::time::Duration;
 use tempfile::TempDir;
@@ -10,7 +9,6 @@ use tokio::fs;
 
 /// Helper to create a test directory structure.
 async fn create_test_dir() -> TempDir {
-    
     TempDir::new().expect("Failed to create temp dir")
 }
 
@@ -248,8 +246,14 @@ async fn test_event_isolation() {
         .collect();
 
     // Each worktree should have at least one event
-    assert!(!worktree1_events.is_empty(), "Should have events from worktree 1");
-    assert!(!worktree2_events.is_empty(), "Should have events from worktree 2");
+    assert!(
+        !worktree1_events.is_empty(),
+        "Should have events from worktree 1"
+    );
+    assert!(
+        !worktree2_events.is_empty(),
+        "Should have events from worktree 2"
+    );
 
     // Events should be properly tagged with their worktree IDs
     for event in &worktree1_events {
@@ -293,9 +297,8 @@ async fn test_worktree_watcher_creation() {
     let path = temp_dir.path().to_path_buf();
     let config = WatcherConfig::default();
 
-    let (mut watcher, _rx) =
-        WorktreeWatcher::new(worktree_id.clone(), path.clone(), config)
-            .expect("Failed to create WorktreeWatcher");
+    let (mut watcher, _rx) = WorktreeWatcher::new(worktree_id.clone(), path.clone(), config)
+        .expect("Failed to create WorktreeWatcher");
 
     assert_eq!(watcher.worktree_id(), &worktree_id);
     assert_eq!(watcher.path(), path.as_path());
@@ -321,9 +324,8 @@ async fn test_worktree_watcher_event_tagging() {
         channel_capacity: 100,
     };
 
-    let (mut watcher, mut rx) =
-        WorktreeWatcher::new(worktree_id.clone(), path, config)
-            .expect("Failed to create WorktreeWatcher");
+    let (mut watcher, mut rx) = WorktreeWatcher::new(worktree_id.clone(), path, config)
+        .expect("Failed to create WorktreeWatcher");
 
     watcher.start().expect("Failed to start watcher");
 
@@ -334,9 +336,7 @@ async fn test_worktree_watcher_event_tagging() {
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     // Receive event
-    if let Ok(Some(event)) =
-        tokio::time::timeout(Duration::from_millis(200), rx.recv()).await
-    {
+    if let Ok(Some(event)) = tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
         // Event should be tagged with correct worktree_id
         assert_eq!(event.worktree_id, worktree_id);
         assert_eq!(event.event_type, EventType::Modified);

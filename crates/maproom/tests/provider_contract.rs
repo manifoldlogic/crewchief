@@ -217,7 +217,10 @@ mod contract_tests {
                 dimension
             );
 
-            println!("✓ {} dimension consistency verified: {} dims", name, dimension);
+            println!(
+                "✓ {} dimension consistency verified: {} dims",
+                name, dimension
+            );
         }
     }
 
@@ -306,10 +309,9 @@ mod contract_tests {
             println!("Testing empty input handling: {}", name);
 
             let texts: Vec<String> = vec![];
-            let embeddings = provider
-                .embed_batch(texts)
-                .await
-                .unwrap_or_else(|e| panic!("{} should handle empty input without error: {}", name, e));
+            let embeddings = provider.embed_batch(texts).await.unwrap_or_else(|e| {
+                panic!("{} should handle empty input without error: {}", name, e)
+            });
 
             assert_eq!(
                 embeddings.len(),
@@ -343,17 +345,11 @@ mod contract_tests {
             println!("Testing single text embedding: {}", name);
 
             let text = "fn main() { println!(\"Hello, world!\"); }".to_string();
-            let embeddings = provider
-                .embed_batch(vec![text])
-                .await
-                .unwrap_or_else(|e| panic!("{} should embed single text without error: {}", name, e));
+            let embeddings = provider.embed_batch(vec![text]).await.unwrap_or_else(|e| {
+                panic!("{} should embed single text without error: {}", name, e)
+            });
 
-            assert_eq!(
-                embeddings.len(),
-                1,
-                "{}: should return 1 embedding",
-                name
-            );
+            assert_eq!(embeddings.len(), 1, "{}: should return 1 embedding", name);
 
             assert_eq!(
                 embeddings[0].len(),
@@ -372,11 +368,7 @@ mod contract_tests {
             );
 
             // Verify embedding values are reasonable (not constant, not extreme)
-            let magnitude: f32 = embeddings[0]
-                .iter()
-                .map(|x| x * x)
-                .sum::<f32>()
-                .sqrt();
+            let magnitude: f32 = embeddings[0].iter().map(|x| x * x).sum::<f32>().sqrt();
             assert!(
                 magnitude > 0.5 && magnitude < 2.0,
                 "{}: embedding magnitude {} seems abnormal (expected 0.5-2.0 for normalized embeddings)",
@@ -384,7 +376,10 @@ mod contract_tests {
                 magnitude
             );
 
-            println!("✓ {} single text embedding verified (magnitude: {:.3})", name, magnitude);
+            println!(
+                "✓ {} single text embedding verified (magnitude: {:.3})",
+                name, magnitude
+            );
         }
     }
 
@@ -416,7 +411,9 @@ mod contract_tests {
             let embeddings = provider
                 .embed_batch(texts.clone())
                 .await
-                .unwrap_or_else(|e| panic!("{} should handle large batch without error: {}", name, e));
+                .unwrap_or_else(|e| {
+                    panic!("{} should handle large batch without error: {}", name, e)
+                });
 
             assert_eq!(
                 embeddings.len(),
@@ -667,7 +664,11 @@ mod contract_tests {
             // Either is acceptable; the key is that Result type allows error handling
             match result {
                 Ok(embeddings) => {
-                    println!("  ✓ {} handles empty strings (returned {} embeddings)", name, embeddings.len());
+                    println!(
+                        "  ✓ {} handles empty strings (returned {} embeddings)",
+                        name,
+                        embeddings.len()
+                    );
                 }
                 Err(e) => {
                     println!("  ✓ {} propagates errors for empty strings: {}", name, e);

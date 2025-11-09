@@ -4,8 +4,8 @@
 //! into ProcessedQuery structures containing all representations needed for
 //! hybrid search (tokens, embeddings, expanded terms, and mode detection).
 
-use crate::embedding::EmbeddingService;
 use crate::embedding::error::EmbeddingError;
+use crate::embedding::EmbeddingService;
 use crate::search::expander::QueryExpander;
 use crate::search::tokenizer::Tokenizer;
 use crate::search::types::{ProcessedQuery, SearchMode};
@@ -152,14 +152,14 @@ impl QueryProcessor {
     pub fn detect_mode(&self, query: &str) -> SearchMode {
         // Code pattern indicators
         let code_patterns = [
-            "::",  // Rust, C++ namespace
-            "->",  // Arrow/pointer
-            "=>",  // Fat arrow
-            "<-",  // R assignment
-            "!=",  // Not equal
-            "==",  // Equality
-            "<=",  // Less than or equal
-            ">=",  // Greater than or equal
+            "::", // Rust, C++ namespace
+            "->", // Arrow/pointer
+            "=>", // Fat arrow
+            "<-", // R assignment
+            "!=", // Not equal
+            "==", // Equality
+            "<=", // Less than or equal
+            ">=", // Greater than or equal
         ];
 
         // Check for code operators
@@ -225,7 +225,10 @@ impl QueryProcessor {
     }
 
     /// Process a query with validation.
-    pub async fn process_validated(&self, query: &str) -> Result<ProcessedQuery, QueryProcessorError> {
+    pub async fn process_validated(
+        &self,
+        query: &str,
+    ) -> Result<ProcessedQuery, QueryProcessorError> {
         self.validate_query(query)?;
         self.process(query).await
     }
@@ -285,7 +288,10 @@ mod tests {
         let processor = QueryProcessor::new(test_embedder());
 
         // Code operators
-        assert_eq!(processor.detect_mode("User::authenticate"), SearchMode::Code);
+        assert_eq!(
+            processor.detect_mode("User::authenticate"),
+            SearchMode::Code
+        );
         assert_eq!(processor.detect_mode("array->length"), SearchMode::Code);
         assert_eq!(processor.detect_mode("a => b"), SearchMode::Code);
         assert_eq!(processor.detect_mode("x != y"), SearchMode::Code);
@@ -304,9 +310,18 @@ mod tests {
         let processor = QueryProcessor::new(test_embedder());
 
         // Natural language queries
-        assert_eq!(processor.detect_mode("how to authenticate a user"), SearchMode::Text);
-        assert_eq!(processor.detect_mode("find all authentication functions"), SearchMode::Text);
-        assert_eq!(processor.detect_mode("what is the login process"), SearchMode::Text);
+        assert_eq!(
+            processor.detect_mode("how to authenticate a user"),
+            SearchMode::Text
+        );
+        assert_eq!(
+            processor.detect_mode("find all authentication functions"),
+            SearchMode::Text
+        );
+        assert_eq!(
+            processor.detect_mode("what is the login process"),
+            SearchMode::Text
+        );
     }
 
     #[test]
@@ -314,8 +329,14 @@ mod tests {
         let processor = QueryProcessor::new(test_embedder());
 
         // Ambiguous queries (2-3 words)
-        assert_eq!(processor.detect_mode("user authentication"), SearchMode::Auto);
-        assert_eq!(processor.detect_mode("login error handler"), SearchMode::Auto);
+        assert_eq!(
+            processor.detect_mode("user authentication"),
+            SearchMode::Auto
+        );
+        assert_eq!(
+            processor.detect_mode("login error handler"),
+            SearchMode::Auto
+        );
     }
 
     #[test]

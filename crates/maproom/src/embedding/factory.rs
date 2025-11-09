@@ -76,12 +76,12 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::embedding::error::{ConfigError, EmbeddingError};
-use crate::embedding::provider::EmbeddingProvider;
-use crate::embedding::ollama::OllamaProvider;
 use crate::embedding::client::OpenAIClient;
 use crate::embedding::config::EmbeddingConfig;
+use crate::embedding::error::{ConfigError, EmbeddingError};
 use crate::embedding::google::GoogleProvider;
+use crate::embedding::ollama::OllamaProvider;
+use crate::embedding::provider::EmbeddingProvider;
 
 /// Create embedding provider from environment configuration.
 ///
@@ -182,10 +182,14 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
         "ollama" => {
             let endpoint = env::var("EMBEDDING_API_ENDPOINT")
                 .unwrap_or_else(|_| "http://localhost:11434/api/embed".to_string());
-            let model = env::var("EMBEDDING_MODEL")
-                .unwrap_or_else(|_| "nomic-embed-text".to_string());
+            let model =
+                env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
 
-            tracing::info!("Using provider: ollama (model: {}, endpoint: {})", model, endpoint);
+            tracing::info!(
+                "Using provider: ollama (model: {}, endpoint: {})",
+                model,
+                endpoint
+            );
 
             let provider = OllamaProvider::new(endpoint, model)?;
             Ok(Box::new(provider))
@@ -402,11 +406,7 @@ async fn is_ollama_available() -> bool {
     };
 
     // Check Ollama API endpoint
-    match client
-        .get("http://localhost:11434/api/tags")
-        .send()
-        .await
-    {
+    match client.get("http://localhost:11434/api/tags").send().await {
         Ok(response) => {
             let is_success = response.status().is_success();
             tracing::debug!(
@@ -479,7 +479,11 @@ mod tests {
         env::remove_var("EMBEDDING_MODEL");
         env::remove_var("EMBEDDING_API_ENDPOINT");
 
-        assert!(result.is_ok(), "Failed to create Ollama provider: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to create Ollama provider: {:?}",
+            result.err()
+        );
         let provider = result.unwrap();
         assert_eq!(provider.provider_name(), "ollama");
         assert_eq!(provider.dimension(), 768);
@@ -501,7 +505,10 @@ mod tests {
         // Clean up
         env::remove_var("EMBEDDING_PROVIDER");
 
-        assert!(result.is_err(), "Expected error when OPENAI_API_KEY is missing");
+        assert!(
+            result.is_err(),
+            "Expected error when OPENAI_API_KEY is missing"
+        );
         if let Err(err) = result {
             assert!(
                 matches!(err, EmbeddingError::Config(ConfigError::MissingConfig(_))),
@@ -537,7 +544,10 @@ mod tests {
         assert!(result.is_err(), "Expected error for unknown provider");
         if let Err(err) = result {
             assert!(
-                matches!(err, EmbeddingError::Config(ConfigError::InvalidValue { .. })),
+                matches!(
+                    err,
+                    EmbeddingError::Config(ConfigError::InvalidValue { .. })
+                ),
                 "Expected InvalidValue error, got: {:?}",
                 err
             );
@@ -568,7 +578,10 @@ mod tests {
         // Clean up
         env::remove_var("EMBEDDING_PROVIDER");
 
-        assert!(result.is_err(), "Expected error when GOOGLE_PROJECT_ID is missing");
+        assert!(
+            result.is_err(),
+            "Expected error when GOOGLE_PROJECT_ID is missing"
+        );
         if let Err(err) = result {
             assert!(
                 matches!(err, EmbeddingError::Config(ConfigError::MissingConfig(_))),
@@ -643,7 +656,10 @@ mod tests {
 
         env::set_var("EMBEDDING_PROVIDER", "google");
         env::set_var("GOOGLE_PROJECT_ID", "test-project");
-        env::set_var("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent/path/key.json");
+        env::set_var(
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "/nonexistent/path/key.json",
+        );
 
         let result = create_provider_from_env().await;
 
@@ -652,7 +668,10 @@ mod tests {
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
-        assert!(result.is_err(), "Expected error when credentials file doesn't exist");
+        assert!(
+            result.is_err(),
+            "Expected error when credentials file doesn't exist"
+        );
         if let Err(err) = result {
             assert!(
                 matches!(err, EmbeddingError::Config(ConfigError::FileError(_))),
@@ -724,7 +743,10 @@ mod tests {
         // Clean up
         let _ = fs::remove_file(&temp_file);
 
-        assert!(result.is_err(), "Expected error for missing required fields");
+        assert!(
+            result.is_err(),
+            "Expected error for missing required fields"
+        );
         if let Err(err) = result {
             assert!(
                 matches!(err, EmbeddingError::Config(ConfigError::FileError(_))),
@@ -813,7 +835,11 @@ mod tests {
         // Clean up
         let _ = fs::remove_file(&temp_file);
 
-        assert!(result.is_ok(), "Expected success for valid service account JSON: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Expected success for valid service account JSON: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
@@ -873,9 +899,8 @@ mod tests {
     #[test]
     fn test_error_messages_are_actionable() {
         // Verify error messages provide clear next steps
-        let missing_key_error = ConfigError::MissingConfig(
-            "OPENAI_API_KEY environment variable required".to_string()
-        );
+        let missing_key_error =
+            ConfigError::MissingConfig("OPENAI_API_KEY environment variable required".to_string());
         let err_msg = missing_key_error.to_string();
         assert!(!err_msg.is_empty());
 

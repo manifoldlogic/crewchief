@@ -180,6 +180,8 @@ mod tests {
         assert!(err_msg.contains("1536"));
 
         // Error message should mention providers
-        assert!(err_msg.contains("Ollama") || err_msg.contains("Google") || err_msg.contains("OpenAI"));
+        assert!(
+            err_msg.contains("Ollama") || err_msg.contains("Google") || err_msg.contains("OpenAI")
+        );
     }
 }

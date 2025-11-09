@@ -359,8 +359,7 @@ fn test_cache_warming_improves_performance() {
     println!("  Hit rate: {:.2}%", warm_cache.hit_rate() * 100.0);
 
     // Calculate improvement
-    let improvement_pct =
-        (1.0 - warm_duration.as_secs_f64() / cold_duration.as_secs_f64()) * 100.0;
+    let improvement_pct = (1.0 - warm_duration.as_secs_f64() / cold_duration.as_secs_f64()) * 100.0;
     println!("\nPerformance improvement: {:.1}%", improvement_pct);
 
     assert!(
@@ -497,11 +496,7 @@ fn test_cache_memory_usage_validation() {
         cache.put(key, value);
 
         if (i + 1) % 1000 == 0 {
-            println!(
-                "  {} entries: {:.2}MB",
-                i + 1,
-                cache.estimated_memory_mb()
-            );
+            println!("  {} entries: {:.2}MB", i + 1, cache.estimated_memory_mb());
         }
     }
 
@@ -543,7 +538,11 @@ fn test_concurrent_cache_access() {
                 cache.put(query.to_string(), format!("result_{}", query));
             }
         }
-        println!("  Round {}: hit rate = {:.2}%", round + 1, cache.hit_rate() * 100.0);
+        println!(
+            "  Round {}: hit rate = {:.2}%",
+            round + 1,
+            cache.hit_rate() * 100.0
+        );
     }
 
     println!("\nFinal statistics:");

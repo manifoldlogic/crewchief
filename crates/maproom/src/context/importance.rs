@@ -355,9 +355,18 @@ mod tests {
         assert!(config.include_churn);
 
         // Check relationship weights
-        assert_eq!(config.relationship_weights.get(&EdgeType::TestOf), Some(&1.5));
-        assert_eq!(config.relationship_weights.get(&EdgeType::Calls), Some(&1.2));
-        assert_eq!(config.relationship_weights.get(&EdgeType::Imports), Some(&1.1));
+        assert_eq!(
+            config.relationship_weights.get(&EdgeType::TestOf),
+            Some(&1.5)
+        );
+        assert_eq!(
+            config.relationship_weights.get(&EdgeType::Calls),
+            Some(&1.2)
+        );
+        assert_eq!(
+            config.relationship_weights.get(&EdgeType::Imports),
+            Some(&1.1)
+        );
     }
 
     #[test]
@@ -390,7 +399,11 @@ mod tests {
         // With TestOf (1.5x), distance 1 (0.7x), base 1.0, importance 1.0, recency 1.0, churn 0.0
         // Expected: 1.0 * 1.5 * 0.7 * 1.0 * 1.0 * 1.0 * 1.3 (same dir)
         // = 1.365
-        assert!((score - 1.365).abs() < 0.01, "Expected ~1.365, got {}", score);
+        assert!(
+            (score - 1.365).abs() < 0.01,
+            "Expected ~1.365, got {}",
+            score
+        );
     }
 
     #[test]
@@ -405,21 +418,33 @@ mod tests {
         let score_0 = scorer.score(&chunk, &rel_0, &target);
         // base=1.0, calls=1.2, dist=0 (no decay), importance=1.0, recency=1.0, churn=1.0, same_dir=1.3
         // = 1.0 * 1.2 * 1.0 * 1.0 * 1.0 * 1.0 * 1.3 = 1.56
-        assert!((score_0 - 1.56).abs() < 0.01, "Expected ~1.56, got {}", score_0);
+        assert!(
+            (score_0 - 1.56).abs() < 0.01,
+            "Expected ~1.56, got {}",
+            score_0
+        );
 
         // Distance 1
         let rel_1 = create_test_relationship(EdgeType::Calls, 1);
         let score_1 = scorer.score(&chunk, &rel_1, &target);
         // base=1.0, calls=1.2, dist=1 (0.7), importance=1.0, recency=1.0, churn=1.0, same_dir=1.3
         // = 1.0 * 1.2 * 0.7 * 1.0 * 1.0 * 1.0 * 1.3 = 1.092
-        assert!((score_1 - 1.092).abs() < 0.01, "Expected ~1.092, got {}", score_1);
+        assert!(
+            (score_1 - 1.092).abs() < 0.01,
+            "Expected ~1.092, got {}",
+            score_1
+        );
 
         // Distance 2
         let rel_2 = create_test_relationship(EdgeType::Calls, 2);
         let score_2 = scorer.score(&chunk, &rel_2, &target);
         // base=1.0, calls=1.2, dist=2 (0.49), importance=1.0, recency=1.0, churn=1.0, same_dir=1.3
         // = 1.0 * 1.2 * 0.49 * 1.0 * 1.0 * 1.0 * 1.3 = 0.7644
-        assert!((score_2 - 0.7644).abs() < 0.01, "Expected ~0.7644, got {}", score_2);
+        assert!(
+            (score_2 - 0.7644).abs() < 0.01,
+            "Expected ~0.7644, got {}",
+            score_2
+        );
 
         // Verify decay: score_1 < score_0 and score_2 < score_1
         assert!(score_1 < score_0);
@@ -508,7 +533,11 @@ mod tests {
         // Same directory should get 1.3x bonus
         assert!(score_same > score_diff);
         let ratio = score_same / score_diff;
-        assert!((ratio - 1.3).abs() < 0.01, "Expected ratio ~1.3, got {}", ratio);
+        assert!(
+            (ratio - 1.3).abs() < 0.01,
+            "Expected ratio ~1.3, got {}",
+            ratio
+        );
     }
 
     #[test]

@@ -284,7 +284,10 @@ def multiply(x, y):
     let calculator_class = chunks
         .iter()
         .find(|c| c.symbol_name == Some("Calculator".to_string()));
-    assert!(calculator_class.is_some(), "Should extract Calculator class");
+    assert!(
+        calculator_class.is_some(),
+        "Should extract Calculator class"
+    );
     let calculator_class = calculator_class.unwrap();
     assert_eq!(calculator_class.kind, "class");
     assert!(calculator_class.docstring.is_some());
@@ -356,7 +359,10 @@ async fn test_scanner_includes_python_files() -> Result<()> {
     assert_eq!(module2_meta.unwrap().language.as_deref(), Some("py"));
 
     let module3_meta = test_repo.get_file_metadata("subdir/module3.py").await?;
-    assert!(module3_meta.is_some(), "subdir/module3.py should be indexed");
+    assert!(
+        module3_meta.is_some(),
+        "subdir/module3.py should be indexed"
+    );
     assert_eq!(module3_meta.unwrap().language.as_deref(), Some("py"));
 
     // Verify markdown was also indexed (we support markdown)
@@ -490,10 +496,7 @@ async fn test_full_pipeline_with_complex_python() -> Result<()> {
     let api_exception = chunks
         .iter()
         .find(|c| c.symbol_name == Some("APIException".to_string()));
-    assert!(
-        api_exception.is_some(),
-        "Should extract APIException class"
-    );
+    assert!(api_exception.is_some(), "Should extract APIException class");
 
     // 4. Check for abstract base class
     let base_client = chunks
@@ -652,7 +655,10 @@ def process_files(files: List[Path]) -> Dict[str, str]:
     let func_chunk = chunks
         .iter()
         .find(|c| c.symbol_name == Some("process_files".to_string()));
-    assert!(func_chunk.is_some(), "Should extract process_files function");
+    assert!(
+        func_chunk.is_some(),
+        "Should extract process_files function"
+    );
 
     Ok(())
 }
@@ -691,7 +697,10 @@ class IncompleteClass
     .await;
 
     // Should complete successfully even with malformed file
-    assert!(result.is_ok(), "Scan should handle malformed Python gracefully");
+    assert!(
+        result.is_ok(),
+        "Scan should handle malformed Python gracefully"
+    );
 
     // File should still be indexed (even if chunks are minimal/empty)
     let file_metadata = test_repo.get_file_metadata("malformed.py").await?;

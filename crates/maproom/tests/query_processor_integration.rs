@@ -82,8 +82,14 @@ async fn test_query_expander_async() {
 #[test]
 fn test_custom_query_expander() {
     let mut synonyms = HashMap::new();
-    synonyms.insert("api".to_string(), vec!["endpoint".to_string(), "service".to_string()]);
-    synonyms.insert("test".to_string(), vec!["spec".to_string(), "unittest".to_string()]);
+    synonyms.insert(
+        "api".to_string(),
+        vec!["endpoint".to_string(), "service".to_string()],
+    );
+    synonyms.insert(
+        "test".to_string(),
+        vec!["spec".to_string(), "unittest".to_string()],
+    );
 
     let expander = QueryExpander::with_synonyms(synonyms);
 
@@ -100,14 +106,14 @@ fn test_mode_detection_code_patterns() {
     // We can't create a full QueryProcessor without embeddings,
     // but we can test the detection heuristics directly
     let test_cases = vec![
-        ("User::authenticate", true),  // :: operator -> code
-        ("array->length", true),       // -> operator -> code
-        ("x => y", true),              // => operator -> code
-        ("x != y", true),              // != operator -> code
-        ("getValue()", true),          // () pattern -> code
-        ("authenticate", true),        // single word -> code
-        ("user_name", true),           // snake_case -> code
-        ("UserAuth", true),            // CamelCase -> code
+        ("User::authenticate", true), // :: operator -> code
+        ("array->length", true),      // -> operator -> code
+        ("x => y", true),             // => operator -> code
+        ("x != y", true),             // != operator -> code
+        ("getValue()", true),         // () pattern -> code
+        ("authenticate", true),       // single word -> code
+        ("user_name", true),          // snake_case -> code
+        ("UserAuth", true),           // CamelCase -> code
     ];
 
     for (query, should_be_code) in test_cases {
@@ -130,8 +136,8 @@ fn test_mode_detection_code_patterns() {
 #[test]
 fn test_mode_detection_text_patterns() {
     let test_cases = vec![
-        ("how to authenticate a user", true),      // 5 words -> text
-        ("what is the login process", true),       // 5 words -> text
+        ("how to authenticate a user", true),        // 5 words -> text
+        ("what is the login process", true),         // 5 words -> text
         ("find all authentication functions", true), // 4 words -> text
     ];
 
@@ -139,7 +145,11 @@ fn test_mode_detection_text_patterns() {
         let word_count = query.split_whitespace().count();
         let is_text = word_count > 3;
 
-        assert_eq!(is_text, should_be_text, "Query '{}' should be text mode", query);
+        assert_eq!(
+            is_text, should_be_text,
+            "Query '{}' should be text mode",
+            query
+        );
     }
 }
 
@@ -240,7 +250,11 @@ fn test_expander_deduplication() {
     let mut sorted = expanded.clone();
     sorted.sort();
     sorted.dedup();
-    assert_eq!(expanded.len(), sorted.len(), "Expanded terms should be deduplicated");
+    assert_eq!(
+        expanded.len(),
+        sorted.len(),
+        "Expanded terms should be deduplicated"
+    );
 }
 
 #[test]
@@ -259,7 +273,12 @@ fn test_tokenizer_edge_cases() {
 
     // Special characters only
     let tokens = tokenizer.tokenize("!@#$%");
-    assert!(tokens.is_empty() || tokens.iter().all(|t| !t.chars().any(|c| c.is_alphanumeric())));
+    assert!(
+        tokens.is_empty()
+            || tokens
+                .iter()
+                .all(|t| !t.chars().any(|c| c.is_alphanumeric()))
+    );
 }
 
 #[test]
@@ -308,8 +327,8 @@ fn test_synchronized_expansion() {
 // Full QueryProcessor Integration Tests with Embedding Generation
 //
 
-use crewchief_maproom::search::QueryProcessor;
 use crewchief_maproom::embedding::EmbeddingService;
+use crewchief_maproom::search::QueryProcessor;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -324,8 +343,15 @@ async fn test_query_processor_full_pipeline() -> Result<(), Box<dyn std::error::
     assert_eq!(processed.original, "authenticate user");
     assert!(!processed.tokens.is_empty(), "Should have tokens");
     assert!(!processed.embedding.is_empty(), "Should have embedding");
-    assert_eq!(processed.embedding.len(), 1536, "OpenAI embeddings are 1536 dimensions");
-    assert!(!processed.expanded_terms.is_empty(), "Should have expanded terms");
+    assert_eq!(
+        processed.embedding.len(),
+        1536,
+        "OpenAI embeddings are 1536 dimensions"
+    );
+    assert!(
+        !processed.expanded_terms.is_empty(),
+        "Should have expanded terms"
+    );
 
     // Verify mode detection
     println!("Detected mode: {:?}", processed.mode);
@@ -354,7 +380,11 @@ async fn test_query_processor_code_mode_detection() -> Result<(), Box<dyn std::e
 
         // Should detect as Code or Auto (implementation dependent)
         assert!(
-            matches!(processed.mode, crewchief_maproom::search::SearchMode::Code | crewchief_maproom::search::SearchMode::Auto),
+            matches!(
+                processed.mode,
+                crewchief_maproom::search::SearchMode::Code
+                    | crewchief_maproom::search::SearchMode::Auto
+            ),
             "Query '{}' should be detected as Code mode, got {:?}",
             query,
             processed.mode
@@ -384,7 +414,11 @@ async fn test_query_processor_text_mode_detection() -> Result<(), Box<dyn std::e
 
         // Should detect as Text or Auto
         assert!(
-            matches!(processed.mode, crewchief_maproom::search::SearchMode::Text | crewchief_maproom::search::SearchMode::Auto),
+            matches!(
+                processed.mode,
+                crewchief_maproom::search::SearchMode::Text
+                    | crewchief_maproom::search::SearchMode::Auto
+            ),
             "Query '{}' should be detected as Text mode, got {:?}",
             query,
             processed.mode
@@ -453,7 +487,12 @@ async fn test_query_processor_embedding_dimensions() -> Result<(), Box<dyn std::
         );
 
         // Embeddings should be normalized (cosine similarity friendly)
-        let magnitude: f32 = processed.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let magnitude: f32 = processed
+            .embedding
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
         assert!(
             (magnitude - 1.0).abs() < 0.1,
             "Embedding magnitude should be close to 1.0 (normalized), got {}",
@@ -482,11 +521,24 @@ async fn test_query_processor_special_characters() -> Result<(), Box<dyn std::er
         let processed = processor.process(query).await?;
 
         // Should handle special characters without errors
-        assert!(!processed.tokens.is_empty(), "Query '{}' should produce tokens", query);
-        assert_eq!(processed.embedding.len(), 1536, "Query '{}' should produce embedding", query);
+        assert!(
+            !processed.tokens.is_empty(),
+            "Query '{}' should produce tokens",
+            query
+        );
+        assert_eq!(
+            processed.embedding.len(),
+            1536,
+            "Query '{}' should produce embedding",
+            query
+        );
 
-        println!("Query '{}' -> {} tokens, mode: {:?}",
-                 query, processed.tokens.len(), processed.mode);
+        println!(
+            "Query '{}' -> {} tokens, mode: {:?}",
+            query,
+            processed.tokens.len(),
+            processed.mode
+        );
     }
 
     Ok(())
@@ -546,7 +598,10 @@ async fn test_query_processor_parallel_performance() -> Result<(), Box<dyn std::
     let processed = processor.process("search test query").await?;
     let elapsed = start.elapsed();
 
-    println!("Query processing time: {:.2}ms", elapsed.as_secs_f64() * 1000.0);
+    println!(
+        "Query processing time: {:.2}ms",
+        elapsed.as_secs_f64() * 1000.0
+    );
     println!("  Tokens: {}", processed.tokens.len());
     println!("  Expanded terms: {}", processed.expanded_terms.len());
     println!("  Embedding dims: {}", processed.embedding.len());

@@ -68,8 +68,10 @@ impl CacheInvalidator {
         self.cache.clear_l1().await;
         stats.query_invalidated = 1; // Conservative: cleared all
 
-        info!("File change invalidation complete: parse_tree={}, context={}, query={}",
-              stats.parse_tree_invalidated, stats.context_invalidated, stats.query_invalidated);
+        info!(
+            "File change invalidation complete: parse_tree={}, context={}, query={}",
+            stats.parse_tree_invalidated, stats.context_invalidated, stats.query_invalidated
+        );
 
         Ok(stats)
     }
@@ -355,7 +357,10 @@ mod tests {
         assert_eq!(CacheLayer::from_str("l1"), Some(CacheLayer::L1Query));
         assert_eq!(CacheLayer::from_str("query"), Some(CacheLayer::L1Query));
         assert_eq!(CacheLayer::from_str("l2"), Some(CacheLayer::L2Embedding));
-        assert_eq!(CacheLayer::from_str("embedding"), Some(CacheLayer::L2Embedding));
+        assert_eq!(
+            CacheLayer::from_str("embedding"),
+            Some(CacheLayer::L2Embedding)
+        );
         assert_eq!(CacheLayer::from_str("l3"), Some(CacheLayer::L3Context));
         assert_eq!(CacheLayer::from_str("context"), Some(CacheLayer::L3Context));
         assert_eq!(CacheLayer::from_str("parse"), Some(CacheLayer::ParseTree));

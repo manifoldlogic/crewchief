@@ -231,14 +231,12 @@ impl GoogleProvider {
         std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", &credentials_path);
 
         // Create token provider (will use GOOGLE_APPLICATION_CREDENTIALS)
-        let token_provider = gcp_auth::provider()
-            .await
-            .map_err(|e| {
-                EmbeddingError::Config(ConfigError::InvalidValue {
-                    field: "credentials".to_string(),
-                    reason: format!("Failed to create token provider: {}", e),
-                })
-            })?;
+        let token_provider = gcp_auth::provider().await.map_err(|e| {
+            EmbeddingError::Config(ConfigError::InvalidValue {
+                field: "credentials".to_string(),
+                reason: format!("Failed to create token provider: {}", e),
+            })
+        })?;
 
         // Create HTTP client with appropriate timeout
         let client = Client::builder()
@@ -288,13 +286,13 @@ impl GoogleProvider {
         })?;
 
         let project_id = std::env::var("GOOGLE_PROJECT_ID").map_err(|_| {
-            EmbeddingError::Config(ConfigError::EnvVarNotFound(
-                "GOOGLE_PROJECT_ID".to_string(),
-            ))
+            EmbeddingError::Config(ConfigError::EnvVarNotFound("GOOGLE_PROJECT_ID".to_string()))
         })?;
 
-        let region = std::env::var("GOOGLE_REGION").unwrap_or_else(|_| Self::DEFAULT_REGION.to_string());
-        let model = std::env::var("GOOGLE_MODEL").unwrap_or_else(|_| Self::DEFAULT_MODEL.to_string());
+        let region =
+            std::env::var("GOOGLE_REGION").unwrap_or_else(|_| Self::DEFAULT_REGION.to_string());
+        let model =
+            std::env::var("GOOGLE_MODEL").unwrap_or_else(|_| Self::DEFAULT_MODEL.to_string());
 
         Self::new(project_id, PathBuf::from(credentials_path), region, model).await
     }
@@ -331,18 +329,14 @@ impl GoogleProvider {
         let scopes = &["https://www.googleapis.com/auth/cloud-platform"];
 
         // Get token from provider (automatically cached and refreshed by gcp_auth)
-        let token: Arc<Token> = self
-            .token_provider
-            .token(scopes)
-            .await
-            .map_err(|e| {
-                EmbeddingError::Api(ApiError::Authentication(format!(
-                    "Failed to obtain access token: {}. Ensure GOOGLE_APPLICATION_CREDENTIALS \
+        let token: Arc<Token> = self.token_provider.token(scopes).await.map_err(|e| {
+            EmbeddingError::Api(ApiError::Authentication(format!(
+                "Failed to obtain access token: {}. Ensure GOOGLE_APPLICATION_CREDENTIALS \
                      points to a valid service account key and the service account has \
                      roles/aiplatform.user role.",
-                    e
-                )))
-            })?;
+                e
+            )))
+        })?;
 
         Ok(token.as_str().to_string())
     }
@@ -398,9 +392,8 @@ impl GoogleProvider {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            EmbeddingError::Other("All retry attempts failed".to_string())
-        }))
+        Err(last_error
+            .unwrap_or_else(|| EmbeddingError::Other("All retry attempts failed".to_string())))
     }
 
     /// Make a single predict request to Vertex AI.
@@ -626,10 +619,7 @@ mod tests {
     fn test_task_type_as_str() {
         assert_eq!(TaskType::RetrievalDocument.as_str(), "RETRIEVAL_DOCUMENT");
         assert_eq!(TaskType::RetrievalQuery.as_str(), "RETRIEVAL_QUERY");
-        assert_eq!(
-            TaskType::SemanticSimilarity.as_str(),
-            "SEMANTIC_SIMILARITY"
-        );
+        assert_eq!(TaskType::SemanticSimilarity.as_str(), "SEMANTIC_SIMILARITY");
     }
 
     // Note: AccessToken tests removed - gcp_auth handles token caching and expiry internally

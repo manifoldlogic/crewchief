@@ -318,7 +318,8 @@ fn test_custom_heuristic_weights() {
         .with_test_weight(3.0) // Very high test weight
         .with_config_weight(2.0); // High config weight
 
-    let scorer = ImportanceScorer::with_heuristics(config, HeuristicScorer::with_config(heuristic_config));
+    let scorer =
+        ImportanceScorer::with_heuristics(config, HeuristicScorer::with_config(heuristic_config));
     let target = create_chunk(100, "src/handler.ts");
 
     let test_chunk = create_chunk(1, "src/handler.test.ts");
@@ -337,7 +338,11 @@ fn test_custom_heuristic_weights() {
 
     // Verify approximate ratios
     let test_ratio = test_score / regular_score;
-    assert!(test_ratio > 2.5, "Test ratio should be > 2.5, got {}", test_ratio);
+    assert!(
+        test_ratio > 2.5,
+        "Test ratio should be > 2.5, got {}",
+        test_ratio
+    );
 }
 
 #[test]
@@ -450,7 +455,10 @@ fn test_high_test_inclusion_rate() {
         test_count >= 9,
         "Expected at least 9 tests in top 10, got {}. Top 10: {:?}",
         test_count,
-        top_10.iter().map(|(t, i, s)| format!("{}-{}: {:.2}", t, i, s)).collect::<Vec<_>>()
+        top_10
+            .iter()
+            .map(|(t, i, s)| format!("{}-{}: {:.2}", t, i, s))
+            .collect::<Vec<_>>()
     );
 
     // All 10 tests should be in the top 15 (showing very high priority)
@@ -550,9 +558,18 @@ fn test_acceptance_criteria_test_inclusion_rate() {
 
         // Various competing chunks
         let competing_chunks = vec![
-            (create_chunk(i + 1000, &format!("src/caller{}.ts", i)), create_relationship(EdgeType::Calls, 1)),
-            (create_chunk(i + 2000, &format!("src/utils/helper{}.ts", i)), create_relationship(EdgeType::Calls, 2)),
-            (create_chunk(i + 3000, &format!("src/import{}.ts", i)), create_relationship(EdgeType::Imports, 1)),
+            (
+                create_chunk(i + 1000, &format!("src/caller{}.ts", i)),
+                create_relationship(EdgeType::Calls, 1),
+            ),
+            (
+                create_chunk(i + 2000, &format!("src/utils/helper{}.ts", i)),
+                create_relationship(EdgeType::Calls, 2),
+            ),
+            (
+                create_chunk(i + 3000, &format!("src/import{}.ts", i)),
+                create_relationship(EdgeType::Imports, 1),
+            ),
         ];
 
         let mut all_scores = vec![("test", test_score)];
@@ -578,5 +595,8 @@ fn test_acceptance_criteria_test_inclusion_rate() {
         inclusion_rate
     );
 
-    println!("✓ Test inclusion rate: {:.1}% (target: >=90%)", inclusion_rate);
+    println!(
+        "✓ Test inclusion rate: {:.1}% (target: >=90%)",
+        inclusion_rate
+    );
 }

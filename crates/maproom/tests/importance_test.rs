@@ -3,8 +3,10 @@
 //! These tests verify that the scoring system correctly combines multiple
 //! factors and produces expected results in realistic scenarios.
 
-use crewchief_maproom::context::importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 use crewchief_maproom::context::graph::EdgeType;
+use crewchief_maproom::context::importance::{
+    ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig,
+};
 
 #[test]
 fn test_integration_basic_scoring() {
@@ -35,7 +37,11 @@ fn test_integration_basic_scoring() {
 
     // Base=1.0, Calls=1.2, Distance=0.7, Importance=1.0, Recency=1.0, Churn=1.0, SameDir=1.3
     // = 1.0 * 1.2 * 0.7 * 1.0 * 1.0 * 1.0 * 1.3 = 1.092
-    assert!((score - 1.092).abs() < 0.01, "Expected ~1.092, got {}", score);
+    assert!(
+        (score - 1.092).abs() < 0.01,
+        "Expected ~1.092, got {}",
+        score
+    );
 }
 
 #[test]
@@ -506,9 +512,7 @@ fn test_integration_custom_config() {
 #[test]
 fn test_integration_disabled_recency_and_churn() {
     // Config with recency and churn disabled
-    let config = ScoringConfig::new()
-        .with_recency(false)
-        .with_churn(false);
+    let config = ScoringConfig::new().with_recency(false).with_churn(false);
 
     let scorer = ImportanceScorer::with_config(config);
 

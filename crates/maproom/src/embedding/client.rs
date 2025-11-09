@@ -7,8 +7,8 @@ use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics};
 use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
 
@@ -163,7 +163,9 @@ impl OpenAIClient {
                     );
                     return Ok(embeddings);
                 }
-                Err(EmbeddingError::Api(api_err)) if api_err.is_retryable() && attempt < max_attempts - 1 => {
+                Err(EmbeddingError::Api(api_err))
+                    if api_err.is_retryable() && attempt < max_attempts - 1 =>
+                {
                     attempt += 1;
                     let delay = api_err
                         .retry_delay_ms()
@@ -302,14 +304,12 @@ impl OpenAIClient {
         let expected_dim = self.config.dimension;
         for (idx, embedding) in embeddings.iter().enumerate() {
             if embedding.len() != expected_dim {
-                return Err(EmbeddingError::Api(ApiError::InvalidResponse(
-                    format!(
-                        "Dimension mismatch at index {}: expected {} dimensions but got {}",
-                        idx,
-                        expected_dim,
-                        embedding.len()
-                    ),
-                )));
+                return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                    "Dimension mismatch at index {}: expected {} dimensions but got {}",
+                    idx,
+                    expected_dim,
+                    embedding.len()
+                ))));
             }
         }
 
@@ -444,9 +444,11 @@ impl OpenAIClient {
 
         for (batch_idx, sub_batch) in sub_batches.into_iter().enumerate() {
             let client = self.clone();
-            let permit = semaphore.clone().acquire_owned().await.map_err(|e| {
-                EmbeddingError::Other(format!("Semaphore error: {}", e))
-            })?;
+            let permit = semaphore
+                .clone()
+                .acquire_owned()
+                .await
+                .map_err(|e| EmbeddingError::Other(format!("Semaphore error: {}", e)))?;
 
             let handle = tokio::spawn(async move {
                 let result = client.embed_batch(sub_batch).await;
@@ -460,9 +462,9 @@ impl OpenAIClient {
         // Collect results in order
         let mut results: Vec<(usize, Result<Vec<Vector>, EmbeddingError>)> = Vec::new();
         for handle in handles {
-            let (idx, result) = handle.await.map_err(|e| {
-                EmbeddingError::Other(format!("Task join error: {}", e))
-            })?;
+            let (idx, result) = handle
+                .await
+                .map_err(|e| EmbeddingError::Other(format!("Task join error: {}", e)))?;
             results.push((idx, result));
         }
 
@@ -595,7 +597,10 @@ mod tests {
         let client = client.unwrap();
         assert_eq!(client.config().provider, Provider::Ollama);
         assert_eq!(client.config().model, "nomic-embed-text");
-        assert_eq!(client.config().api_endpoint_url(), "http://localhost:11434/api/embed");
+        assert_eq!(
+            client.config().api_endpoint_url(),
+            "http://localhost:11434/api/embed"
+        );
     }
 
     #[test]

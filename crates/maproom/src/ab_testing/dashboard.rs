@@ -234,7 +234,10 @@ impl Dashboard {
         // Group by user_id
         let mut segments: HashMap<String, Vec<ShadowResult>> = HashMap::new();
         for result in shadow_results {
-            let segment_key = result.user_id.clone().unwrap_or_else(|| "anonymous".to_string());
+            let segment_key = result
+                .user_id
+                .clone()
+                .unwrap_or_else(|| "anonymous".to_string());
             segments.entry(segment_key).or_default().push(result);
         }
 
@@ -354,7 +357,9 @@ impl Dashboard {
             .iter()
             .map(|r| RankedResult {
                 id: r.chunk_id,
-                relevant: ground_truth_map.get(&r.chunk_id).is_some_and(|&rel| rel > 0),
+                relevant: ground_truth_map
+                    .get(&r.chunk_id)
+                    .is_some_and(|&rel| rel > 0),
                 relevance_grade: ground_truth_map.get(&r.chunk_id).copied().unwrap_or(0),
             })
             .collect();
@@ -421,9 +426,8 @@ impl Dashboard {
         let latency_delta_ms = new.avg_latency_ms - old.avg_latency_ms;
 
         // Simple significance test: improvement > 2 percentage points
-        let is_significant = recall_delta.abs() > 0.02
-            || precision_delta.abs() > 0.02
-            || ndcg_delta.abs() > 0.02;
+        let is_significant =
+            recall_delta.abs() > 0.02 || precision_delta.abs() > 0.02 || ndcg_delta.abs() > 0.02;
 
         // Simple confidence based on magnitude of change
         let max_delta = recall_delta

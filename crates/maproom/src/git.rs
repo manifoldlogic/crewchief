@@ -135,9 +135,9 @@ pub fn git_diff_tree(old_tree: &str, new_tree: &str, repo_path: &Path) -> Result
     let output = Command::new("git")
         .args([
             "diff-tree",
-            "-r",              // Recursive
-            "--no-commit-id",  // Don't show commit hash
-            "--name-status",   // Show status (A/M/D) and filename
+            "-r",                // Recursive
+            "--no-commit-id",    // Don't show commit hash
+            "--name-status",     // Show status (A/M/D) and filename
             "--diff-filter=AMD", // Only Added, Modified, Deleted
             old_tree,
             new_tree,
@@ -238,7 +238,11 @@ mod tests {
         let output = "";
         let result = parse_diff_tree_output(output);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 0, "Empty output should yield no changes");
+        assert_eq!(
+            result.unwrap().len(),
+            0,
+            "Empty output should yield no changes"
+        );
     }
 
     #[test]

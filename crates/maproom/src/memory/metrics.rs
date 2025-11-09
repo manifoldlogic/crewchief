@@ -385,7 +385,8 @@ impl MemorySnapshot {
 
     /// Get number of live allocations.
     pub fn live_allocations(&self) -> usize {
-        self.allocation_count.saturating_sub(self.deallocation_count)
+        self.allocation_count
+            .saturating_sub(self.deallocation_count)
     }
 
     /// Check if within memory target.

@@ -156,10 +156,7 @@ fn test_hash_whitespace_sensitive() {
     let hash1 = FileHasher::hash_bytes(content1);
     let hash2 = FileHasher::hash_bytes(content2);
 
-    assert_ne!(
-        hash1, hash2,
-        "Hashes should differ when whitespace changes"
-    );
+    assert_ne!(hash1, hash2, "Hashes should differ when whitespace changes");
 }
 
 #[test]

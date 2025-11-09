@@ -11,10 +11,10 @@ struct SymbolQualityMetrics {
     symbols_with_metadata: usize,
 
     // Quality percentages
-    name_completeness: f64,       // % symbols with names
-    signature_coverage: f64,      // % symbols with signatures (applicable types)
-    documentation_coverage: f64,  // % symbols with documentation
-    metadata_richness: f64,       // % symbols with metadata
+    name_completeness: f64,      // % symbols with names
+    signature_coverage: f64,     // % symbols with signatures (applicable types)
+    documentation_coverage: f64, // % symbols with documentation
+    metadata_richness: f64,      // % symbols with metadata
 
     // Search-relevant metrics
     unique_symbols: usize,
@@ -115,18 +115,29 @@ impl SymbolQualityMetrics {
     }
 
     fn print_report(&self) {
-        println!("\n=== {} Symbol Quality Report ===", self.language.to_uppercase());
+        println!(
+            "\n=== {} Symbol Quality Report ===",
+            self.language.to_uppercase()
+        );
         println!("Total symbols extracted: {}", self.total_symbols);
         println!("Unique symbols: {}", self.unique_symbols);
         println!("\nCompleteness:");
-        println!("  Symbols with names: {} ({:.1}%)",
-            self.symbols_with_names, self.name_completeness);
-        println!("  Symbols with signatures: {} ({:.1}%)",
-            self.symbols_with_signatures, self.signature_coverage);
-        println!("  Symbols with documentation: {} ({:.1}%)",
-            self.symbols_with_docstrings, self.documentation_coverage);
-        println!("  Symbols with metadata: {} ({:.1}%)",
-            self.symbols_with_metadata, self.metadata_richness);
+        println!(
+            "  Symbols with names: {} ({:.1}%)",
+            self.symbols_with_names, self.name_completeness
+        );
+        println!(
+            "  Symbols with signatures: {} ({:.1}%)",
+            self.symbols_with_signatures, self.signature_coverage
+        );
+        println!(
+            "  Symbols with documentation: {} ({:.1}%)",
+            self.symbols_with_docstrings, self.documentation_coverage
+        );
+        println!(
+            "  Symbols with metadata: {} ({:.1}%)",
+            self.symbols_with_metadata, self.metadata_richness
+        );
         println!("\nAverage lengths (search relevance):");
         println!("  Symbol name: {:.1} chars", self.avg_symbol_name_length);
         println!("  Signature: {:.1} chars", self.avg_signature_length);
@@ -145,19 +156,26 @@ struct CrossLanguageMetrics {
 
 impl CrossLanguageMetrics {
     fn calculate(metrics: &[SymbolQualityMetrics]) -> Self {
-        let languages: Vec<String> = metrics.iter()
-            .map(|m| m.language.clone())
-            .collect();
+        let languages: Vec<String> = metrics.iter().map(|m| m.language.clone()).collect();
 
         // Calculate coefficient of variation for key metrics
         let name_cv = Self::coefficient_of_variation(
-            &metrics.iter().map(|m| m.name_completeness).collect::<Vec<_>>()
+            &metrics
+                .iter()
+                .map(|m| m.name_completeness)
+                .collect::<Vec<_>>(),
         );
         let doc_cv = Self::coefficient_of_variation(
-            &metrics.iter().map(|m| m.documentation_coverage).collect::<Vec<_>>()
+            &metrics
+                .iter()
+                .map(|m| m.documentation_coverage)
+                .collect::<Vec<_>>(),
         );
         let sig_cv = Self::coefficient_of_variation(
-            &metrics.iter().map(|m| m.signature_coverage).collect::<Vec<_>>()
+            &metrics
+                .iter()
+                .map(|m| m.signature_coverage)
+                .collect::<Vec<_>>(),
         );
 
         // Lower CV = higher consistency (invert for score)
@@ -183,9 +201,7 @@ impl CrossLanguageMetrics {
             return 0.0;
         }
 
-        let variance = values.iter()
-            .map(|v| (v - mean).powi(2))
-            .sum::<f64>() / values.len() as f64;
+        let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64;
         let std_dev = variance.sqrt();
 
         std_dev / mean
@@ -195,9 +211,18 @@ impl CrossLanguageMetrics {
         println!("\n=== Cross-Language Consistency Report ===");
         println!("Languages analyzed: {}", self.languages.join(", "));
         println!("\nConsistency scores (0-100, higher is better):");
-        println!("  Symbol extraction: {:.1}%", self.symbol_extraction_consistency);
-        println!("  Documentation coverage: {:.1}%", self.documentation_consistency);
-        println!("  Signature completeness: {:.1}%", self.signature_consistency);
+        println!(
+            "  Symbol extraction: {:.1}%",
+            self.symbol_extraction_consistency
+        );
+        println!(
+            "  Documentation coverage: {:.1}%",
+            self.documentation_consistency
+        );
+        println!(
+            "  Signature completeness: {:.1}%",
+            self.signature_consistency
+        );
     }
 }
 
@@ -205,7 +230,9 @@ impl CrossLanguageMetrics {
 mod python_samples {
     pub fn get_samples() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("django_model.py", r#"
+            (
+                "django_model.py",
+                r#"
 from django.db import models
 
 class Article(models.Model):
@@ -221,8 +248,11 @@ class Article(models.Model):
     def get_absolute_url(self):
         """Return the URL to access this article."""
         return f'/articles/{self.id}'
-"#),
-            ("flask_api.py", r#"
+"#,
+            ),
+            (
+                "flask_api.py",
+                r#"
 from flask import Flask, jsonify
 
 app = Flask(__name__)
@@ -239,8 +269,11 @@ def process_data(items: list) -> dict:
         'count': len(items),
         'total': sum(items),
     }
-"#),
-            ("type_hints.py", r#"
+"#,
+            ),
+            (
+                "type_hints.py",
+                r#"
 from typing import Optional, List, Dict
 
 def find_user(user_id: int) -> Optional[Dict[str, str]]:
@@ -264,7 +297,8 @@ class DataProcessor:
     def validate(self, data: List[str]) -> bool:
         """Validate input data."""
         return all(isinstance(x, str) for x in data)
-"#),
+"#,
+            ),
         ]
     }
 }
@@ -272,7 +306,9 @@ class DataProcessor:
 mod rust_samples {
     pub fn get_samples() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("traits.rs", r#"
+            (
+                "traits.rs",
+                r#"
 /// Trait for cacheable items
 pub trait Cacheable {
     type Key: Display;
@@ -299,8 +335,11 @@ impl<T: Cacheable> Cache<T> {
         self.items.get(key)
     }
 }
-"#),
-            ("error_handling.rs", r#"
+"#,
+            ),
+            (
+                "error_handling.rs",
+                r#"
 use std::fmt;
 
 /// Custom error types
@@ -344,8 +383,11 @@ impl UserService {
         Ok(User { id, username: format!("user_{}", id) })
     }
 }
-"#),
-            ("async_tokio.rs", r#"
+"#,
+            ),
+            (
+                "async_tokio.rs",
+                r#"
 use tokio::net::TcpListener;
 
 /// Handles a client connection asynchronously
@@ -376,7 +418,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 }
-"#),
+"#,
+            ),
         ]
     }
 }
@@ -384,7 +427,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 mod go_samples {
     pub fn get_samples() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("interfaces.go", r#"
+            (
+                "interfaces.go",
+                r#"
 package storage
 
 import "context"
@@ -415,8 +460,11 @@ func (s *MemoryStorage) Get(ctx context.Context, key string) ([]byte, error) {
     }
     return nil, ErrNotFound
 }
-"#),
-            ("structs.go", r#"
+"#,
+            ),
+            (
+                "structs.go",
+                r#"
 package models
 
 import "time"
@@ -457,8 +505,11 @@ func (r *Repository) FindUser(id int64) (*User, error) {
     }
     return user, nil
 }
-"#),
-            ("concurrency.go", r#"
+"#,
+            ),
+            (
+                "concurrency.go",
+                r#"
 package worker
 
 import (
@@ -507,7 +558,8 @@ func (w *Worker) processTask(task Task) Result {
         Data:   task.Data,
     }
 }
-"#),
+"#,
+            ),
         ]
     }
 }
@@ -520,21 +572,30 @@ fn test_python_symbol_extraction_quality() {
     metrics.print_report();
 
     // Quality assertions
-    assert!(metrics.total_symbols > 0,
-        "Should extract symbols from Python code");
+    assert!(
+        metrics.total_symbols > 0,
+        "Should extract symbols from Python code"
+    );
 
-    assert!(metrics.name_completeness >= 90.0,
+    assert!(
+        metrics.name_completeness >= 90.0,
         "Python symbol name completeness {:.1}% should be >= 90%",
-        metrics.name_completeness);
+        metrics.name_completeness
+    );
 
-    assert!(metrics.documentation_coverage >= 60.0,
+    assert!(
+        metrics.documentation_coverage >= 60.0,
         "Python documentation coverage {:.1}% should be >= 60% (many samples have docstrings)",
-        metrics.documentation_coverage);
+        metrics.documentation_coverage
+    );
 
     // Python should have good unique symbol ratio
     let uniqueness_ratio = metrics.unique_symbols as f64 / metrics.total_symbols as f64;
-    assert!(uniqueness_ratio >= 0.7,
-        "Python uniqueness ratio {:.2} should be >= 0.7", uniqueness_ratio);
+    assert!(
+        uniqueness_ratio >= 0.7,
+        "Python uniqueness ratio {:.2} should be >= 0.7",
+        uniqueness_ratio
+    );
 }
 
 #[test]
@@ -545,21 +606,29 @@ fn test_rust_symbol_extraction_quality() {
     metrics.print_report();
 
     // Quality assertions
-    assert!(metrics.total_symbols > 0,
-        "Should extract symbols from Rust code");
+    assert!(
+        metrics.total_symbols > 0,
+        "Should extract symbols from Rust code"
+    );
 
-    assert!(metrics.name_completeness >= 90.0,
+    assert!(
+        metrics.name_completeness >= 90.0,
         "Rust symbol name completeness {:.1}% should be >= 90%",
-        metrics.name_completeness);
+        metrics.name_completeness
+    );
 
-    assert!(metrics.documentation_coverage >= 60.0,
+    assert!(
+        metrics.documentation_coverage >= 60.0,
         "Rust documentation coverage {:.1}% should be >= 60% (many samples have doc comments)",
-        metrics.documentation_coverage);
+        metrics.documentation_coverage
+    );
 
     // Rust typically has good signature coverage
-    assert!(metrics.signature_coverage >= 50.0,
+    assert!(
+        metrics.signature_coverage >= 50.0,
         "Rust signature coverage {:.1}% should be >= 50%",
-        metrics.signature_coverage);
+        metrics.signature_coverage
+    );
 }
 
 #[test]
@@ -570,36 +639,40 @@ fn test_go_symbol_extraction_quality() {
     metrics.print_report();
 
     // Quality assertions
-    assert!(metrics.total_symbols > 0,
-        "Should extract symbols from Go code");
+    assert!(
+        metrics.total_symbols > 0,
+        "Should extract symbols from Go code"
+    );
 
-    assert!(metrics.name_completeness >= 90.0,
+    assert!(
+        metrics.name_completeness >= 90.0,
         "Go symbol name completeness {:.1}% should be >= 90%",
-        metrics.name_completeness);
+        metrics.name_completeness
+    );
 
-    assert!(metrics.documentation_coverage >= 50.0,
+    assert!(
+        metrics.documentation_coverage >= 50.0,
         "Go documentation coverage {:.1}% should be >= 50% (Go conventions)",
-        metrics.documentation_coverage);
+        metrics.documentation_coverage
+    );
 
     // Go should have good signature coverage
-    assert!(metrics.signature_coverage >= 50.0,
+    assert!(
+        metrics.signature_coverage >= 50.0,
         "Go signature coverage {:.1}% should be >= 50%",
-        metrics.signature_coverage);
+        metrics.signature_coverage
+    );
 }
 
 #[test]
 fn test_cross_language_consistency() {
     println!("\n=== Cross-Language Consistency Validation ===");
 
-    let py_metrics = SymbolQualityMetrics::calculate_from_samples(
-        "py", python_samples::get_samples()
-    );
-    let rs_metrics = SymbolQualityMetrics::calculate_from_samples(
-        "rs", rust_samples::get_samples()
-    );
-    let go_metrics = SymbolQualityMetrics::calculate_from_samples(
-        "go", go_samples::get_samples()
-    );
+    let py_metrics =
+        SymbolQualityMetrics::calculate_from_samples("py", python_samples::get_samples());
+    let rs_metrics =
+        SymbolQualityMetrics::calculate_from_samples("rs", rust_samples::get_samples());
+    let go_metrics = SymbolQualityMetrics::calculate_from_samples("go", go_samples::get_samples());
 
     let all_metrics = vec![py_metrics, rs_metrics, go_metrics];
     let cross_lang = CrossLanguageMetrics::calculate(&all_metrics);
@@ -607,17 +680,23 @@ fn test_cross_language_consistency() {
     cross_lang.print_report();
 
     // Consistency assertions
-    assert!(cross_lang.symbol_extraction_consistency >= 70.0,
+    assert!(
+        cross_lang.symbol_extraction_consistency >= 70.0,
         "Symbol extraction consistency {:.1}% should be >= 70%",
-        cross_lang.symbol_extraction_consistency);
+        cross_lang.symbol_extraction_consistency
+    );
 
-    assert!(cross_lang.documentation_consistency >= 60.0,
+    assert!(
+        cross_lang.documentation_consistency >= 60.0,
         "Documentation consistency {:.1}% should be >= 60%",
-        cross_lang.documentation_consistency);
+        cross_lang.documentation_consistency
+    );
 
-    assert!(cross_lang.signature_consistency >= 60.0,
+    assert!(
+        cross_lang.signature_consistency >= 60.0,
         "Signature consistency {:.1}% should be >= 60%",
-        cross_lang.signature_consistency);
+        cross_lang.signature_consistency
+    );
 }
 
 #[test]
@@ -640,15 +719,17 @@ async def async_function():
 "#;
 
     let py_chunks = parser::extract_chunks(py_source, "py");
-    let py_kinds: Vec<String> = py_chunks.iter()
-        .map(|c| c.kind.clone())
-        .collect();
+    let py_kinds: Vec<String> = py_chunks.iter().map(|c| c.kind.clone()).collect();
 
     println!("Python kinds: {:?}", py_kinds);
-    assert!(py_kinds.contains(&"class".to_string()),
-        "Should detect Python classes");
-    assert!(py_kinds.iter().any(|k| k.contains("func")),
-        "Should detect Python functions");
+    assert!(
+        py_kinds.contains(&"class".to_string()),
+        "Should detect Python classes"
+    );
+    assert!(
+        py_kinds.iter().any(|k| k.contains("func")),
+        "Should detect Python functions"
+    );
 
     // Test Rust categorization
     let rs_source = r#"
@@ -672,18 +753,21 @@ pub trait MyTrait {
 "#;
 
     let rs_chunks = parser::extract_chunks(rs_source, "rs");
-    let rs_kinds: Vec<String> = rs_chunks.iter()
-        .map(|c| c.kind.clone())
-        .collect();
+    let rs_kinds: Vec<String> = rs_chunks.iter().map(|c| c.kind.clone()).collect();
 
     println!("Rust kinds: {:?}", rs_kinds);
-    assert!(rs_kinds.contains(&"struct".to_string()),
-        "Should detect Rust structs");
-    assert!(rs_kinds.contains(&"impl".to_string()) ||
-            rs_kinds.iter().any(|k| k.contains("method")),
-        "Should detect Rust impl blocks or methods");
-    assert!(rs_kinds.contains(&"trait".to_string()),
-        "Should detect Rust traits");
+    assert!(
+        rs_kinds.contains(&"struct".to_string()),
+        "Should detect Rust structs"
+    );
+    assert!(
+        rs_kinds.contains(&"impl".to_string()) || rs_kinds.iter().any(|k| k.contains("method")),
+        "Should detect Rust impl blocks or methods"
+    );
+    assert!(
+        rs_kinds.contains(&"trait".to_string()),
+        "Should detect Rust traits"
+    );
 
     // Test Go categorization
     let go_source = r#"
@@ -707,19 +791,23 @@ type MyInterface interface {
 "#;
 
     let go_chunks = parser::extract_chunks(go_source, "go");
-    let go_kinds: Vec<String> = go_chunks.iter()
-        .map(|c| c.kind.clone())
-        .collect();
+    let go_kinds: Vec<String> = go_chunks.iter().map(|c| c.kind.clone()).collect();
 
     println!("Go kinds: {:?}", go_kinds);
-    assert!(go_kinds.contains(&"struct".to_string()) ||
-            go_kinds.contains(&"type".to_string()),
-        "Should detect Go structs/types");
-    assert!(go_kinds.iter().any(|k| k.contains("func") || k.contains("method")),
-        "Should detect Go functions/methods");
-    assert!(go_kinds.contains(&"interface".to_string()) ||
-            go_kinds.contains(&"type".to_string()),
-        "Should detect Go interfaces");
+    assert!(
+        go_kinds.contains(&"struct".to_string()) || go_kinds.contains(&"type".to_string()),
+        "Should detect Go structs/types"
+    );
+    assert!(
+        go_kinds
+            .iter()
+            .any(|k| k.contains("func") || k.contains("method")),
+        "Should detect Go functions/methods"
+    );
+    assert!(
+        go_kinds.contains(&"interface".to_string()) || go_kinds.contains(&"type".to_string()),
+        "Should detect Go interfaces"
+    );
 }
 
 #[test]
@@ -747,8 +835,10 @@ def complex_function(
 
     // Should capture parameters
     if let Some(sig) = py_sig {
-        assert!(sig.contains("name") || sig.len() > 10,
-            "Python signature should capture parameters or be substantive");
+        assert!(
+            sig.contains("name") || sig.len() > 10,
+            "Python signature should capture parameters or be substantive"
+        );
     }
 
     // Rust function with signature
@@ -769,8 +859,10 @@ pub async fn fetch_user(
     println!("Rust signature: {:?}", rs_sig);
 
     if let Some(sig) = rs_sig {
-        assert!(sig.len() > 10,
-            "Rust signature should capture function parameters");
+        assert!(
+            sig.len() > 10,
+            "Rust signature should capture function parameters"
+        );
     }
 
     // Go function with signature
@@ -791,8 +883,10 @@ func ProcessData(
     println!("Go signature: {:?}", go_sig);
 
     if let Some(sig) = go_sig {
-        assert!(sig.len() > 10,
-            "Go signature should capture function parameters");
+        assert!(
+            sig.len() > 10,
+            "Go signature should capture function parameters"
+        );
     }
 }
 
@@ -839,13 +933,17 @@ class WithClassDoc:
 "#;
 
     let py_chunks = parser::extract_chunks(py_source, "py");
-    let py_doc_count = py_chunks.iter()
-        .filter(|c| c.docstring.is_some())
-        .count();
+    let py_doc_count = py_chunks.iter().filter(|c| c.docstring.is_some()).count();
 
-    println!("Python chunks with docs: {}/{}", py_doc_count, py_chunks.len());
-    assert!(py_doc_count >= 3,
-        "Should extract documentation from multiple Python docstrings");
+    println!(
+        "Python chunks with docs: {}/{}",
+        py_doc_count,
+        py_chunks.len()
+    );
+    assert!(
+        py_doc_count >= 3,
+        "Should extract documentation from multiple Python docstrings"
+    );
 
     // Rust with doc comments
     let rs_source = r#"
@@ -870,13 +968,17 @@ impl MyStruct {
 "#;
 
     let rs_chunks = parser::extract_chunks(rs_source, "rs");
-    let rs_doc_count = rs_chunks.iter()
-        .filter(|c| c.docstring.is_some())
-        .count();
+    let rs_doc_count = rs_chunks.iter().filter(|c| c.docstring.is_some()).count();
 
-    println!("Rust chunks with docs: {}/{}", rs_doc_count, rs_chunks.len());
-    assert!(rs_doc_count >= 1,
-        "Should extract documentation from Rust doc comments");
+    println!(
+        "Rust chunks with docs: {}/{}",
+        rs_doc_count,
+        rs_chunks.len()
+    );
+    assert!(
+        rs_doc_count >= 1,
+        "Should extract documentation from Rust doc comments"
+    );
 
     // Go with comments
     let go_source = r#"
@@ -900,13 +1002,13 @@ func NewUser(id int64, name string) *User {
 "#;
 
     let go_chunks = parser::extract_chunks(go_source, "go");
-    let go_doc_count = go_chunks.iter()
-        .filter(|c| c.docstring.is_some())
-        .count();
+    let go_doc_count = go_chunks.iter().filter(|c| c.docstring.is_some()).count();
 
     println!("Go chunks with docs: {}/{}", go_doc_count, go_chunks.len());
-    assert!(go_doc_count >= 1,
-        "Should extract documentation from Go comments");
+    assert!(
+        go_doc_count >= 1,
+        "Should extract documentation from Go comments"
+    );
 }
 
 #[test]
@@ -925,21 +1027,26 @@ def example():
 "#;
 
     let py_chunks = parser::extract_chunks(py_source, "py");
-    let py_metadata_count = py_chunks.iter()
-        .filter(|c| c.metadata.is_some())
-        .count();
+    let py_metadata_count = py_chunks.iter().filter(|c| c.metadata.is_some()).count();
 
-    println!("Python chunks with metadata: {}/{}", py_metadata_count, py_chunks.len());
+    println!(
+        "Python chunks with metadata: {}/{}",
+        py_metadata_count,
+        py_chunks.len()
+    );
 
     // Check for imports chunk with metadata
-    let imports_chunk = py_chunks.iter()
-        .find(|c| c.kind == "imports");
+    let imports_chunk = py_chunks.iter().find(|c| c.kind == "imports");
 
     if let Some(chunk) = imports_chunk {
-        println!("Found imports chunk with metadata: {:?}",
-            chunk.metadata.is_some());
-        assert!(chunk.metadata.is_some(),
-            "Python imports chunk should have metadata");
+        println!(
+            "Found imports chunk with metadata: {:?}",
+            chunk.metadata.is_some()
+        );
+        assert!(
+            chunk.metadata.is_some(),
+            "Python imports chunk should have metadata"
+        );
     }
 
     // Rust typically has less structured metadata but might have attributes
@@ -969,11 +1076,13 @@ func main() {}
 "#;
 
     let go_chunks = parser::extract_chunks(go_source, "go");
-    let go_metadata_count = go_chunks.iter()
-        .filter(|c| c.metadata.is_some())
-        .count();
+    let go_metadata_count = go_chunks.iter().filter(|c| c.metadata.is_some()).count();
 
-    println!("Go chunks with metadata: {}/{}", go_metadata_count, go_chunks.len());
+    println!(
+        "Go chunks with metadata: {}/{}",
+        go_metadata_count,
+        go_chunks.len()
+    );
 }
 
 #[test]
@@ -994,43 +1103,62 @@ fn test_search_relevance_metrics() {
         all_metrics.push(metrics.clone());
 
         println!("\n{} Search Relevance:", lang_name);
-        println!("  Searchable symbols (with names): {}", metrics.symbols_with_names);
-        println!("  Avg name length: {:.1} chars (good for exact matching)",
-            metrics.avg_symbol_name_length);
-        println!("  Documentation coverage: {:.1}% (for semantic search)",
-            metrics.documentation_coverage);
-        println!("  Avg doc length: {:.1} chars", metrics.avg_docstring_length);
-        println!("  Signature coverage: {:.1}% (for type-aware search)",
-            metrics.signature_coverage);
+        println!(
+            "  Searchable symbols (with names): {}",
+            metrics.symbols_with_names
+        );
+        println!(
+            "  Avg name length: {:.1} chars (good for exact matching)",
+            metrics.avg_symbol_name_length
+        );
+        println!(
+            "  Documentation coverage: {:.1}% (for semantic search)",
+            metrics.documentation_coverage
+        );
+        println!(
+            "  Avg doc length: {:.1} chars",
+            metrics.avg_docstring_length
+        );
+        println!(
+            "  Signature coverage: {:.1}% (for type-aware search)",
+            metrics.signature_coverage
+        );
     }
 
     // Overall quality assessment
     println!("\n=== Overall Search Quality Assessment ===");
 
-    let avg_name_completeness: f64 = all_metrics.iter()
-        .map(|m| m.name_completeness)
-        .sum::<f64>() / all_metrics.len() as f64;
+    let avg_name_completeness: f64 =
+        all_metrics.iter().map(|m| m.name_completeness).sum::<f64>() / all_metrics.len() as f64;
 
-    let avg_doc_coverage: f64 = all_metrics.iter()
+    let avg_doc_coverage: f64 = all_metrics
+        .iter()
         .map(|m| m.documentation_coverage)
-        .sum::<f64>() / all_metrics.len() as f64;
+        .sum::<f64>()
+        / all_metrics.len() as f64;
 
-    let avg_sig_coverage: f64 = all_metrics.iter()
+    let avg_sig_coverage: f64 = all_metrics
+        .iter()
         .map(|m| m.signature_coverage)
-        .sum::<f64>() / all_metrics.len() as f64;
+        .sum::<f64>()
+        / all_metrics.len() as f64;
 
     println!("Average name completeness: {:.1}%", avg_name_completeness);
     println!("Average documentation coverage: {:.1}%", avg_doc_coverage);
     println!("Average signature coverage: {:.1}%", avg_sig_coverage);
 
     // Production readiness thresholds
-    assert!(avg_name_completeness >= 85.0,
+    assert!(
+        avg_name_completeness >= 85.0,
         "Average name completeness {:.1}% should be >= 85% for production",
-        avg_name_completeness);
+        avg_name_completeness
+    );
 
-    assert!(avg_doc_coverage >= 50.0,
+    assert!(
+        avg_doc_coverage >= 50.0,
         "Average documentation coverage {:.1}% should be >= 50% for good semantic search",
-        avg_doc_coverage);
+        avg_doc_coverage
+    );
 
     println!("\n✓ All languages meet production readiness thresholds for search quality");
 }
@@ -1041,15 +1169,11 @@ fn test_production_readiness_report() {
     println!("║           SEARCH QUALITY VALIDATION REPORT                   ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
 
-    let py_metrics = SymbolQualityMetrics::calculate_from_samples(
-        "py", python_samples::get_samples()
-    );
-    let rs_metrics = SymbolQualityMetrics::calculate_from_samples(
-        "rs", rust_samples::get_samples()
-    );
-    let go_metrics = SymbolQualityMetrics::calculate_from_samples(
-        "go", go_samples::get_samples()
-    );
+    let py_metrics =
+        SymbolQualityMetrics::calculate_from_samples("py", python_samples::get_samples());
+    let rs_metrics =
+        SymbolQualityMetrics::calculate_from_samples("rs", rust_samples::get_samples());
+    let go_metrics = SymbolQualityMetrics::calculate_from_samples("go", go_samples::get_samples());
 
     py_metrics.print_report();
     rs_metrics.print_report();
@@ -1061,20 +1185,38 @@ fn test_production_readiness_report() {
 
     println!("\n=== Production Readiness Assessment ===");
 
-    let all_pass_name_completeness = all_metrics.iter()
-        .all(|m| m.name_completeness >= 85.0);
-    let all_pass_doc_coverage = all_metrics.iter()
-        .all(|m| m.documentation_coverage >= 40.0);
+    let all_pass_name_completeness = all_metrics.iter().all(|m| m.name_completeness >= 85.0);
+    let all_pass_doc_coverage = all_metrics.iter().all(|m| m.documentation_coverage >= 40.0);
 
-    println!("✓ Symbol name completeness: {}",
-        if all_pass_name_completeness { "PASS" } else { "FAIL" });
-    println!("✓ Documentation coverage: {}",
-        if all_pass_doc_coverage { "PASS" } else { "FAIL" });
-    println!("✓ Cross-language consistency: {}",
-        if cross_lang.symbol_extraction_consistency >= 60.0 { "PASS" } else { "FAIL" });
+    println!(
+        "✓ Symbol name completeness: {}",
+        if all_pass_name_completeness {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    println!(
+        "✓ Documentation coverage: {}",
+        if all_pass_doc_coverage {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    println!(
+        "✓ Cross-language consistency: {}",
+        if cross_lang.symbol_extraction_consistency >= 60.0 {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
 
-    assert!(all_pass_name_completeness && all_pass_doc_coverage,
-        "All languages should meet production readiness criteria");
+    assert!(
+        all_pass_name_completeness && all_pass_doc_coverage,
+        "All languages should meet production readiness criteria"
+    );
 
     println!("\n╔══════════════════════════════════════════════════════════════╗");
     println!("║  ✓ ALL LANGUAGES READY FOR PRODUCTION                        ║");

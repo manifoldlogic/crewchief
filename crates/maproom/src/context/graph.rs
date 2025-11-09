@@ -7,8 +7,8 @@
 //! - Relevance decay (0.7 per hop)
 //! - Multiple relationship types filtering
 
-use tokio_postgres::Client;
 use anyhow::{Context as AnyhowContext, Result};
+use tokio_postgres::Client;
 
 /// Represents a related chunk discovered through graph traversal
 #[derive(Debug, Clone)]
@@ -104,8 +104,11 @@ pub async fn find_related_chunks(
     // Build edge type filter clause
     let edge_filter = if let Some(types) = &edge_types {
         let type_list: Vec<&str> = types.iter().map(|t| t.as_db_str()).collect();
-        format!("AND e.type IN ({})",
-            type_list.iter().enumerate()
+        format!(
+            "AND e.type IN ({})",
+            type_list
+                .iter()
+                .enumerate()
                 .map(|(i, _)| format!("${}::maproom.edge_type", i + 3))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -191,7 +194,9 @@ pub async fn find_related_chunks(
         }
     }
 
-    let rows = client.query(&query, &params).await
+    let rows = client
+        .query(&query, &params)
+        .await
         .context("Failed to execute graph traversal query")?;
 
     let chunks = rows
@@ -237,8 +242,11 @@ pub async fn find_related_chunks_directional(
     // Build edge type filter clause
     let edge_filter = if let Some(types) = &edge_types {
         let type_list: Vec<&str> = types.iter().map(|t| t.as_db_str()).collect();
-        format!("AND e.type IN ({})",
-            type_list.iter().enumerate()
+        format!(
+            "AND e.type IN ({})",
+            type_list
+                .iter()
+                .enumerate()
                 .map(|(i, _)| format!("${}::maproom.edge_type", i + 3))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -301,7 +309,9 @@ pub async fn find_related_chunks_directional(
         }
     }
 
-    let rows = client.query(&query, &params).await
+    let rows = client
+        .query(&query, &params)
+        .await
         .context("Failed to execute directional graph traversal query")?;
 
     let chunks = rows

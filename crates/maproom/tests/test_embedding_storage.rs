@@ -29,7 +29,10 @@ async fn test_embedding_storage_with_pgvector() {
 
     match result {
         Ok(_) => {
-            println!("✅ SUCCESS! Embeddings stored successfully for chunk {}", chunk_id);
+            println!(
+                "✅ SUCCESS! Embeddings stored successfully for chunk {}",
+                chunk_id
+            );
 
             // Verify embeddings were actually stored
             let row = client
@@ -45,7 +48,10 @@ async fn test_embedding_storage_with_pgvector() {
             let code_dim: Option<i32> = row.get(0);
             let text_dim: Option<i32> = row.get(1);
 
-            println!("✅ Verified: code_dim={:?}, text_dim={:?}", code_dim, text_dim);
+            println!(
+                "✅ Verified: code_dim={:?}, text_dim={:?}",
+                code_dim, text_dim
+            );
             assert_eq!(code_dim, Some(768));
             assert_eq!(text_dim, Some(768));
         }

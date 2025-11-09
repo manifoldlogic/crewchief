@@ -338,14 +338,8 @@ fn test_materialized_view_performance() {
         (1.0 - plan_with_view.total_time_ms() / plan_baseline.total_time_ms()) * 100.0;
 
     println!("\nPerformance comparison:");
-    println!(
-        "  With view: {:.2}ms",
-        plan_with_view.total_time_ms()
-    );
-    println!(
-        "  Without view: {:.2}ms",
-        plan_baseline.total_time_ms()
-    );
+    println!("  With view: {:.2}ms", plan_with_view.total_time_ms());
+    println!("  Without view: {:.2}ms", plan_baseline.total_time_ms());
     println!("  Improvement: {:.1}%", improvement_pct);
 
     // Assertions
@@ -378,7 +372,10 @@ fn test_no_sequential_scans_on_large_tables() {
         ("materialized_view", "Importance score lookup"),
     ];
 
-    println!("\nTesting {} query types for sequential scans\n", query_types.len());
+    println!(
+        "\nTesting {} query types for sequential scans\n",
+        query_types.len()
+    );
 
     for (query_type, description) in query_types {
         println!("Query: {}", description);
@@ -388,10 +385,7 @@ fn test_no_sequential_scans_on_large_tables() {
             println!("  ⚠️  WARNING: Sequential scan detected!");
             for node in &plan.nodes {
                 if node.node_type == "Seq Scan" {
-                    println!(
-                        "    Table: {:?}, Rows: {}",
-                        node.relation_name, node.rows
-                    );
+                    println!("    Table: {:?}, Rows: {}", node.relation_name, node.rows);
                 }
             }
         } else {
@@ -424,11 +418,7 @@ fn test_index_selectivity() {
 
     for (query_type, _expected_rows, table_size) in test_cases {
         let plan = simulate_explain_analyze(query_type);
-        let returned_rows = plan
-            .nodes
-            .first()
-            .map(|node| node.rows)
-            .unwrap_or(0);
+        let returned_rows = plan.nodes.first().map(|node| node.rows).unwrap_or(0);
 
         let selectivity = returned_rows as f64 / table_size as f64;
 

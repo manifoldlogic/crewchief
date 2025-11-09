@@ -60,10 +60,7 @@ async fn test_python_strategy_includes_init_py() {
     match result {
         Ok(bundle) => {
             // Verify Python-specific items are included
-            let has_package_init = bundle
-                .items
-                .iter()
-                .any(|item| item.role == "package_init");
+            let has_package_init = bundle.items.iter().any(|item| item.role == "package_init");
 
             // Note: This would only be true if the test fixture has __init__.py
             println!("Has package_init: {}", has_package_init);

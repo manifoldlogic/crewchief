@@ -89,7 +89,10 @@ impl CacheCommand {
                 pattern,
                 layer,
                 file,
-            } => self.invalidate_cache(*all, pattern.as_deref(), layer.as_deref(), file.as_deref()).await,
+            } => {
+                self.invalidate_cache(*all, pattern.as_deref(), layer.as_deref(), file.as_deref())
+                    .await
+            }
             Self::Maintenance {
                 continuous,
                 interval,
@@ -108,13 +111,29 @@ impl CacheCommand {
 
         // Overall statistics
         println!("Overall:");
-        println!("  Hit Rate:       {:.1}% ({} ops)",
-                 stats.overall_hit_rate() * 100.0,
-                 stats.total_operations());
+        println!(
+            "  Hit Rate:       {:.1}% ({} ops)",
+            stats.overall_hit_rate() * 100.0,
+            stats.total_operations()
+        );
         println!("  Total Size:     {:.1} MB", stats.total_size_mb());
         println!("  Total Evictions: {}", stats.total_evictions());
-        println!("  Effectiveness:  {}", if stats.is_effective() { "✓ YES" } else { "✗ NO" });
-        println!("  Memory Target:  {}", if stats.is_within_memory_target() { "✓ OK" } else { "✗ EXCEEDED" });
+        println!(
+            "  Effectiveness:  {}",
+            if stats.is_effective() {
+                "✓ YES"
+            } else {
+                "✗ NO"
+            }
+        );
+        println!(
+            "  Memory Target:  {}",
+            if stats.is_within_memory_target() {
+                "✓ OK"
+            } else {
+                "✗ EXCEEDED"
+            }
+        );
 
         if detailed {
             println!("\n{}", "-".repeat(80));
@@ -122,10 +141,12 @@ impl CacheCommand {
 
             // L1 Query Cache
             println!("L1 Query Cache:");
-            println!("  Hit Rate:    {:.1}% ({} hits / {} ops)",
-                     stats.l1_query.hit_rate() * 100.0,
-                     stats.l1_query.hits,
-                     stats.l1_query.total_operations());
+            println!(
+                "  Hit Rate:    {:.1}% ({} hits / {} ops)",
+                stats.l1_query.hit_rate() * 100.0,
+                stats.l1_query.hits,
+                stats.l1_query.total_operations()
+            );
             println!("  Size:        {:.1} MB", stats.l1_query.size_mb());
             println!("  Evictions:   {}", stats.l1_query.evictions);
             println!("  Expirations: {}", stats.l1_query.expirations);
@@ -133,10 +154,12 @@ impl CacheCommand {
 
             // L2 Embedding Cache
             println!("\nL2 Embedding Cache:");
-            println!("  Hit Rate:    {:.1}% ({} hits / {} ops)",
-                     stats.l2_embedding.hit_rate() * 100.0,
-                     stats.l2_embedding.hits,
-                     stats.l2_embedding.total_operations());
+            println!(
+                "  Hit Rate:    {:.1}% ({} hits / {} ops)",
+                stats.l2_embedding.hit_rate() * 100.0,
+                stats.l2_embedding.hits,
+                stats.l2_embedding.total_operations()
+            );
             println!("  Size:        {:.1} MB", stats.l2_embedding.size_mb());
             println!("  Evictions:   {}", stats.l2_embedding.evictions);
             println!("  Expirations: {}", stats.l2_embedding.expirations);
@@ -144,10 +167,12 @@ impl CacheCommand {
 
             // L3 Context Cache
             println!("\nL3 Context Cache:");
-            println!("  Hit Rate:    {:.1}% ({} hits / {} ops)",
-                     stats.l3_context.hit_rate() * 100.0,
-                     stats.l3_context.hits,
-                     stats.l3_context.total_operations());
+            println!(
+                "  Hit Rate:    {:.1}% ({} hits / {} ops)",
+                stats.l3_context.hit_rate() * 100.0,
+                stats.l3_context.hits,
+                stats.l3_context.total_operations()
+            );
             println!("  Size:        {:.1} MB", stats.l3_context.size_mb());
             println!("  Evictions:   {}", stats.l3_context.evictions);
             println!("  Expirations: {}", stats.l3_context.expirations);
@@ -155,10 +180,12 @@ impl CacheCommand {
 
             // Parse Tree Cache
             println!("\nParse Tree Cache:");
-            println!("  Hit Rate:    {:.1}% ({} hits / {} ops)",
-                     stats.parse_tree.hit_rate() * 100.0,
-                     stats.parse_tree.hits,
-                     stats.parse_tree.total_operations());
+            println!(
+                "  Hit Rate:    {:.1}% ({} hits / {} ops)",
+                stats.parse_tree.hit_rate() * 100.0,
+                stats.parse_tree.hits,
+                stats.parse_tree.total_operations()
+            );
             println!("  Size:        {:.1} MB", stats.parse_tree.size_mb());
             println!("  Evictions:   {}", stats.parse_tree.evictions);
             println!("  Expirations: {}", stats.parse_tree.expirations);
@@ -223,7 +250,14 @@ impl CacheCommand {
         println!("  Errors:         {}", stats.errors);
         println!("  Total processed: {}", stats.total_processed());
         println!("  Effectiveness:  {:.1}%", stats.effectiveness() * 100.0);
-        println!("  Status:         {}", if stats.is_successful() { "✓ SUCCESS" } else { "✗ ERRORS" });
+        println!(
+            "  Status:         {}",
+            if stats.is_successful() {
+                "✓ SUCCESS"
+            } else {
+                "✗ ERRORS"
+            }
+        );
 
         Ok(())
     }
@@ -242,11 +276,17 @@ impl CacheCommand {
         if all {
             println!("Invalidating all caches...");
             let stats = invalidator.on_manual().await?;
-            println!("All caches invalidated: {} layers", stats.total_invalidated());
+            println!(
+                "All caches invalidated: {} layers",
+                stats.total_invalidated()
+            );
         } else if let Some(pattern_str) = pattern {
             println!("Invalidating by pattern: {}", pattern_str);
             let stats = invalidator.on_pattern(pattern_str).await?;
-            println!("Pattern invalidation complete: {} entries", stats.total_invalidated());
+            println!(
+                "Pattern invalidation complete: {} entries",
+                stats.total_invalidated()
+            );
         } else if let Some(layer_str) = layer {
             let cache_layer = CacheLayer::from_str(layer_str)
                 .with_context(|| format!("Invalid cache layer: {}", layer_str))?;
@@ -256,9 +296,14 @@ impl CacheCommand {
         } else if let Some(file_path) = file {
             println!("Invalidating for file change: {}", file_path.display());
             let stats = invalidator.on_file_changed(file_path).await?;
-            println!("File change invalidation complete: {} entries", stats.total_invalidated());
+            println!(
+                "File change invalidation complete: {} entries",
+                stats.total_invalidated()
+            );
         } else {
-            println!("No invalidation criteria specified. Use --all, --pattern, --layer, or --file.");
+            println!(
+                "No invalidation criteria specified. Use --all, --pattern, --layer, or --file."
+            );
         }
 
         Ok(())
@@ -277,7 +322,10 @@ impl CacheCommand {
         let maintenance = CacheMaintenance::new(Arc::clone(&cache), config);
 
         if continuous {
-            println!("Running cache maintenance continuously (interval: {}s)", interval);
+            println!(
+                "Running cache maintenance continuously (interval: {}s)",
+                interval
+            );
             println!("Press Ctrl+C to stop");
             maintenance.run().await?;
         } else {

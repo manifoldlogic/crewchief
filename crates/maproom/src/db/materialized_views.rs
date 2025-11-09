@@ -95,17 +95,10 @@ pub async fn refresh_all(client: &Client) -> Result<Vec<RefreshStats>> {
         .collect();
 
     let total_time: u64 = stats.iter().map(|s| s.refresh_time_ms).sum();
-    info!(
-        "Refreshed {} views in {}ms total",
-        stats.len(),
-        total_time
-    );
+    info!("Refreshed {} views in {}ms total", stats.len(), total_time);
 
     for stat in &stats {
-        debug!(
-            "  - {}: {}ms",
-            stat.view_name, stat.refresh_time_ms
-        );
+        debug!("  - {}: {}ms", stat.view_name, stat.refresh_time_ms);
     }
 
     Ok(stats)
@@ -154,10 +147,7 @@ pub async fn refresh_one(client: &Client, view_name: &str) -> Result<RefreshStat
 
     match result {
         Ok(_) => {
-            info!(
-                "Refreshed {} in {}ms",
-                view_name, refresh_time_ms
-            );
+            info!("Refreshed {} in {}ms", view_name, refresh_time_ms);
 
             // Update statistics after refresh
             let analyze_sql = format!("ANALYZE maproom.{}", view_name);
@@ -328,9 +318,7 @@ fn parse_postgres_interval(interval: &str) -> Option<std::time::Duration> {
 
     // Handle simple time formats: "HH:MM:SS" or "HH:MM:SS.microseconds"
     if let Some((hours, rest)) = interval.split_once(':') {
-        if let (Ok(h), Some((minutes, seconds))) =
-            (hours.parse::<u64>(), rest.split_once(':'))
-        {
+        if let (Ok(h), Some((minutes, seconds))) = (hours.parse::<u64>(), rest.split_once(':')) {
             if let (Ok(m), Ok(s)) = (minutes.parse::<u64>(), seconds.parse::<f64>()) {
                 let total_secs = h * 3600 + m * 60 + s as u64;
                 return Some(std::time::Duration::from_secs(total_secs));
@@ -343,8 +331,7 @@ fn parse_postgres_interval(interval: &str) -> Option<std::time::Duration> {
         if let Ok(days) = days_part.trim().parse::<u64>() {
             let time_part = time_part.trim();
             if let Some(time_duration) = parse_postgres_interval(time_part) {
-                let total_duration = std::time::Duration::from_secs(days * 86400)
-                    + time_duration;
+                let total_duration = std::time::Duration::from_secs(days * 86400) + time_duration;
                 return Some(total_duration);
             }
         }

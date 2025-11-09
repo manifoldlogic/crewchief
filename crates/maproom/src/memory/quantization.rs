@@ -170,11 +170,7 @@ pub fn dequantize_embedding(quantized: &[i8]) -> Vec<f32> {
 /// assert!(similarity >= -1.0 && similarity <= 1.0);
 /// ```
 pub fn cosine_similarity_quantized(a: &[i8], b: &[i8]) -> f32 {
-    assert_eq!(
-        a.len(),
-        b.len(),
-        "Embeddings must have the same dimension"
-    );
+    assert_eq!(a.len(), b.len(), "Embeddings must have the same dimension");
 
     if a.is_empty() {
         return 0.0;

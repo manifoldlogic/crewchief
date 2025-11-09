@@ -13,13 +13,21 @@ fn test_incomplete_syntax_no_panic() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // We should still extract valid symbols that come after errors
-    let valid_function = chunks.iter()
+    let valid_function = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("valid_function_after_errors".to_string()));
-    assert!(valid_function.is_some(), "Should recover and extract valid symbols after syntax errors");
+    assert!(
+        valid_function.is_some(),
+        "Should recover and extract valid symbols after syntax errors"
+    );
 
-    let valid_class = chunks.iter()
+    let valid_class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("ValidClassAfterErrors".to_string()));
-    assert!(valid_class.is_some(), "Should extract valid class after syntax errors");
+    assert!(
+        valid_class.is_some(),
+        "Should extract valid class after syntax errors"
+    );
 }
 
 /// Test malformed decorators don't crash the parser
@@ -31,32 +39,49 @@ fn test_malformed_decorators_no_panic() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // Should still extract functions despite decorator issues
-    assert!(!chunks.is_empty(), "Should extract some symbols despite malformed decorators");
+    assert!(
+        !chunks.is_empty(),
+        "Should extract some symbols despite malformed decorators"
+    );
 
     // Check for complex decorated functions
-    let nested_decorated = chunks.iter()
+    let nested_decorated = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("nested_decorated_function".to_string()));
     if let Some(func) = nested_decorated {
-        assert!(func.metadata.is_some(), "Decorated function should have metadata");
+        assert!(
+            func.metadata.is_some(),
+            "Decorated function should have metadata"
+        );
         if let Some(metadata) = &func.metadata {
             if let Some(has_decorators) = metadata.get("has_decorators") {
-                assert!(has_decorators.as_bool().unwrap_or(false),
-                       "Should detect decorators on nested_decorated_function");
+                assert!(
+                    has_decorators.as_bool().unwrap_or(false),
+                    "Should detect decorators on nested_decorated_function"
+                );
             }
         }
     }
 
     // Check for multiline decorator args
-    let multiline_decorator = chunks.iter()
+    let multiline_decorator = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("multiline_decorator_args".to_string()));
-    assert!(multiline_decorator.is_some(), "Should handle multiline decorator arguments");
+    assert!(
+        multiline_decorator.is_some(),
+        "Should handle multiline decorator arguments"
+    );
 
     // Check for property decorators
-    let property_chunks: Vec<_> = chunks.iter()
+    let property_chunks: Vec<_> = chunks
+        .iter()
         .filter(|c| c.symbol_name == Some("complex_property".to_string()))
         .collect();
     // Should find getter, setter, and deleter (tree-sitter may capture all three)
-    assert!(!property_chunks.is_empty(), "Should extract property methods");
+    assert!(
+        !property_chunks.is_empty(),
+        "Should extract property methods"
+    );
 }
 
 /// Test unusual class patterns are handled correctly
@@ -68,63 +93,88 @@ fn test_unusual_classes_extraction() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // Metaclass
-    let custom_meta = chunks.iter()
+    let custom_meta = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("CustomMeta".to_string()) && c.kind == "class");
     assert!(custom_meta.is_some(), "Should extract metaclass");
 
-    let metaclass_user = chunks.iter()
+    let metaclass_user = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("MetaclassUser".to_string()) && c.kind == "class");
-    assert!(metaclass_user.is_some(), "Should extract class using metaclass");
+    assert!(
+        metaclass_user.is_some(),
+        "Should extract class using metaclass"
+    );
 
     // Diamond inheritance
-    let diamond_class = chunks.iter()
+    let diamond_class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("D".to_string()) && c.kind == "class");
-    assert!(diamond_class.is_some(), "Should extract diamond inheritance class");
+    assert!(
+        diamond_class.is_some(),
+        "Should extract diamond inheritance class"
+    );
 
     // Nested classes
-    let outer = chunks.iter()
+    let outer = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Outer".to_string()) && c.kind == "class");
     assert!(outer.is_some(), "Should extract outer class");
 
-    let middle = chunks.iter()
+    let middle = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Middle".to_string()) && c.kind == "class");
     assert!(middle.is_some(), "Should extract middle nested class");
 
-    let inner = chunks.iter()
+    let inner = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Inner".to_string()) && c.kind == "class");
     assert!(inner.is_some(), "Should extract inner nested class");
 
     // Generic classes
-    let generic_class = chunks.iter()
+    let generic_class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("GenericClass".to_string()) && c.kind == "class");
-    assert!(generic_class.is_some(), "Should extract generic class with type parameters");
+    assert!(
+        generic_class.is_some(),
+        "Should extract generic class with type parameters"
+    );
 
     // Protocol
-    let drawable = chunks.iter()
+    let drawable = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Drawable".to_string()) && c.kind == "class");
     assert!(drawable.is_some(), "Should extract Protocol class");
 
     // Dataclass with features
-    let complex_dataclass = chunks.iter()
+    let complex_dataclass = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("ComplexDataclass".to_string()) && c.kind == "class");
     if let Some(dc) = complex_dataclass {
         assert!(dc.metadata.is_some(), "Dataclass should have metadata");
         if let Some(metadata) = &dc.metadata {
             if let Some(has_decorators) = metadata.get("has_decorators") {
-                assert!(has_decorators.as_bool().unwrap_or(false),
-                       "Dataclass should have decorator");
+                assert!(
+                    has_decorators.as_bool().unwrap_or(false),
+                    "Dataclass should have decorator"
+                );
             }
         }
     }
 
     // Context managers
-    let ctx_mgr = chunks.iter()
+    let ctx_mgr = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("ContextManager".to_string()) && c.kind == "class");
     assert!(ctx_mgr.is_some(), "Should extract context manager class");
 
-    let async_ctx_mgr = chunks.iter()
+    let async_ctx_mgr = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("AsyncContextManager".to_string()) && c.kind == "class");
-    assert!(async_ctx_mgr.is_some(), "Should extract async context manager class");
+    assert!(
+        async_ctx_mgr.is_some(),
+        "Should extract async context manager class"
+    );
 }
 
 /// Test mixed indentation doesn't crash parser
@@ -136,35 +186,59 @@ fn test_mixed_indentation_tolerance() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // Should extract functions despite indentation issues
-    assert!(!chunks.is_empty(), "Should extract symbols despite mixed indentation");
+    assert!(
+        !chunks.is_empty(),
+        "Should extract symbols despite mixed indentation"
+    );
 
     // Check for specific functions
-    let spaces_func = chunks.iter()
+    let spaces_func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("function_with_spaces".to_string()));
-    assert!(spaces_func.is_some(), "Should extract function with space indentation");
+    assert!(
+        spaces_func.is_some(),
+        "Should extract function with space indentation"
+    );
 
-    let mixed_func = chunks.iter()
+    let mixed_func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("function_mixed_indent".to_string()));
-    assert!(mixed_func.is_some(), "Should handle mixed tab/space indentation");
+    assert!(
+        mixed_func.is_some(),
+        "Should handle mixed tab/space indentation"
+    );
 
     // Unicode function names
-    let unicode_func = chunks.iter()
+    let unicode_func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("функция_unicode".to_string()));
-    assert!(unicode_func.is_some(), "Should extract Unicode function names");
+    assert!(
+        unicode_func.is_some(),
+        "Should extract Unicode function names"
+    );
 
-    let spanish_func = chunks.iter()
+    let spanish_func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("función_española".to_string()));
-    assert!(spanish_func.is_some(), "Should extract function names with special characters");
+    assert!(
+        spanish_func.is_some(),
+        "Should extract function names with special characters"
+    );
 
     // Emoji handling
-    let emoji_func = chunks.iter()
+    let emoji_func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("emoji_function".to_string()));
     if let Some(func) = emoji_func {
-        assert!(func.docstring.is_some(), "Should extract docstring with emoji");
+        assert!(
+            func.docstring.is_some(),
+            "Should extract docstring with emoji"
+        );
     }
 
     // Final valid function should be extracted
-    let final_func = chunks.iter()
+    let final_func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("final_valid_function".to_string()));
     assert!(final_func.is_some(), "Should extract final valid function");
 }
@@ -194,7 +268,11 @@ fn test_comments_only_file() {
 fn test_whitespace_only_file() {
     let source = "    \n\n   \t\t\n    ";
     let chunks = parser::extract_chunks(source, "py");
-    assert_eq!(chunks.len(), 0, "Whitespace-only file should yield no chunks");
+    assert_eq!(
+        chunks.len(),
+        0,
+        "Whitespace-only file should yield no chunks"
+    );
 }
 
 /// Test very large decorator stack
@@ -244,9 +322,13 @@ def function_after():
     let chunks = parser::extract_chunks(source, "py");
 
     // Should recover and extract the function
-    let func = chunks.iter()
+    let func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("function_after".to_string()));
-    assert!(func.is_some(), "Should recover from incomplete class and extract following function");
+    assert!(
+        func.is_some(),
+        "Should recover from incomplete class and extract following function"
+    );
 }
 
 /// Test incomplete function parameters
@@ -265,9 +347,13 @@ def complete_function():
     let chunks = parser::extract_chunks(source, "py");
 
     // Should extract the complete function
-    let func = chunks.iter()
+    let func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("complete_function".to_string()));
-    assert!(func.is_some(), "Should extract complete function after incomplete params");
+    assert!(
+        func.is_some(),
+        "Should extract complete function after incomplete params"
+    );
 }
 
 /// Test nested incomplete structures
@@ -287,11 +373,16 @@ class Outer:
     let chunks = parser::extract_chunks(source, "py");
 
     // Should extract the class and the complete method
-    let outer_class = chunks.iter()
+    let outer_class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Outer".to_string()));
-    assert!(outer_class.is_some(), "Should extract outer class despite incomplete method");
+    assert!(
+        outer_class.is_some(),
+        "Should extract outer class despite incomplete method"
+    );
 
-    let complete_method = chunks.iter()
+    let complete_method = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("complete".to_string()));
     assert!(complete_method.is_some(), "Should extract complete method");
 }
@@ -330,7 +421,11 @@ def string_test():
 "#;
 
     let chunks = parser::extract_chunks(source, "py");
-    assert_eq!(chunks.len(), 1, "Should handle various string literal types");
+    assert_eq!(
+        chunks.len(),
+        1,
+        "Should handle various string literal types"
+    );
 
     let func = &chunks[0];
     assert_eq!(func.symbol_name, Some("string_test".to_string()));
@@ -352,12 +447,16 @@ async def complete_async():
     let chunks = parser::extract_chunks(source, "py");
 
     // Should extract the complete async function
-    let func = chunks.iter()
+    let func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("complete_async".to_string()));
     assert!(func.is_some(), "Should extract complete async function");
 
     if let Some(f) = func {
-        assert_eq!(f.kind, "async_func", "Should correctly identify as async function");
+        assert_eq!(
+            f.kind, "async_func",
+            "Should correctly identify as async function"
+        );
     }
 }
 
@@ -375,7 +474,11 @@ def with_comprehensions():
 "#;
 
     let chunks = parser::extract_chunks(source, "py");
-    assert_eq!(chunks.len(), 1, "Should handle comprehensions in function body");
+    assert_eq!(
+        chunks.len(),
+        1,
+        "Should handle comprehensions in function body"
+    );
 
     let func = &chunks[0];
     assert_eq!(func.symbol_name, Some("with_comprehensions".to_string()));
@@ -419,7 +522,8 @@ class A:
     // Should extract all nested classes
     assert!(!chunks.is_empty(), "Should handle deep nesting");
 
-    let deep_method = chunks.iter()
+    let deep_method = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("deep_method".to_string()));
     assert!(deep_method.is_some(), "Should extract deeply nested method");
 }
@@ -446,7 +550,11 @@ def valid_function():
     let chunks = parser::extract_chunks(source, "py");
 
     // Should recover and extract the valid function
-    let valid = chunks.iter()
+    let valid = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("valid_function".to_string()));
-    assert!(valid.is_some(), "Should recover from multiple consecutive errors");
+    assert!(
+        valid.is_some(),
+        "Should recover from multiple consecutive errors"
+    );
 }

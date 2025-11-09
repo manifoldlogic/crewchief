@@ -63,7 +63,10 @@ async fn create_test_git_repo(files: Vec<(&str, &str)>) -> anyhow::Result<TempRe
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!("Failed to init git repo: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "Failed to init git repo: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Configure git user (required for commits)
@@ -96,7 +99,10 @@ async fn create_test_git_repo(files: Vec<(&str, &str)>) -> anyhow::Result<TempRe
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!("Failed to add files: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "Failed to add files: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let output = Command::new("git")
@@ -105,7 +111,10 @@ async fn create_test_git_repo(files: Vec<(&str, &str)>) -> anyhow::Result<TempRe
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!("Failed to commit: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "Failed to commit: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     Ok(TempRepo {
@@ -122,12 +131,8 @@ async fn create_test_worktree(
     repo_path: &Path,
 ) -> anyhow::Result<i64> {
     // Create or get repo
-    let repo_id = db::get_or_create_repo(
-        client,
-        repo_name,
-        repo_path.to_string_lossy().as_ref(),
-    )
-    .await?;
+    let repo_id =
+        db::get_or_create_repo(client, repo_name, repo_path.to_string_lossy().as_ref()).await?;
 
     // Create or get worktree
     let worktree_id = db::get_or_create_worktree(
@@ -158,10 +163,7 @@ async fn _get_worktree_chunk_shas(
         )
         .await?;
 
-    let shas = rows
-        .iter()
-        .map(|row| row.get::<_, String>(0))
-        .collect();
+    let shas = rows.iter().map(|row| row.get::<_, String>(0)).collect();
 
     Ok(shas)
 }
@@ -220,10 +222,7 @@ async fn cleanup_test_data(client: &Client, repo_id: i64) -> anyhow::Result<()> 
 
     // Repos
     client
-        .execute(
-            "DELETE FROM maproom.repos WHERE id = $1",
-            &[&repo_id],
-        )
+        .execute("DELETE FROM maproom.repos WHERE id = $1", &[&repo_id])
         .await?;
 
     Ok(())
@@ -293,7 +292,10 @@ async fn test_incremental_equals_full_scan() {
 
     // 4. Verify both runs detected the same tree state
     let tree_sha2 = get_git_tree_sha(&repo.path).expect("Failed to get tree SHA");
-    assert_eq!(tree_sha1, tree_sha2, "Tree SHAs should match for same content");
+    assert_eq!(
+        tree_sha1, tree_sha2,
+        "Tree SHAs should match for same content"
+    );
 
     // Both should have same stats (both see 'init' state)
     assert_eq!(
@@ -474,8 +476,8 @@ async fn test_incremental_only_scans_changed_files() {
     assert_ne!(tree_sha1, tree_sha2, "Tree SHA should change after commit");
 
     // Use git_diff_tree to find changes
-    let changes = git_diff_tree(&tree_sha1, &tree_sha2, &repo.path)
-        .expect("Failed to get diff-tree");
+    let changes =
+        git_diff_tree(&tree_sha1, &tree_sha2, &repo.path).expect("Failed to get diff-tree");
 
     // Verify only file2.rs detected as changed
     assert_eq!(changes.len(), 1, "Should detect exactly one changed file");
@@ -609,7 +611,10 @@ async fn test_deleted_file_removes_worktree() {
         .expect("Failed to git commit");
 
     let tree_sha2 = get_git_tree_sha(&repo.path).expect("Failed to get tree SHA");
-    assert_ne!(tree_sha1, tree_sha2, "Tree SHA should change after deletion");
+    assert_ne!(
+        tree_sha1, tree_sha2,
+        "Tree SHA should change after deletion"
+    );
 
     // Manually update index state to enable diff detection
     db::index_state::update_index_state(
@@ -643,7 +648,10 @@ async fn test_deleted_file_removes_worktree() {
         .expect("Failed to count chunks")
         .get(0);
 
-    assert_eq!(count, 0, "Chunk should be garbage collected after worktree removal");
+    assert_eq!(
+        count, 0,
+        "Chunk should be garbage collected after worktree removal"
+    );
 
     println!("✓ Deletion handling verified: chunk garbage collected");
 
@@ -801,11 +809,17 @@ async fn test_same_content_multiple_worktrees() {
         .expect("Failed to get worktree_ids")
         .get(0);
 
-    let ids_array = worktree_ids.as_array().expect("worktree_ids should be array");
+    let ids_array = worktree_ids
+        .as_array()
+        .expect("worktree_ids should be array");
     assert_eq!(ids_array.len(), 2, "Should have both worktree IDs");
 
-    let contains_wt1 = ids_array.iter().any(|v| v.as_str() == Some(&worktree1_id.to_string()));
-    let contains_wt2 = ids_array.iter().any(|v| v.as_str() == Some(&worktree2_id.to_string()));
+    let contains_wt1 = ids_array
+        .iter()
+        .any(|v| v.as_str() == Some(&worktree1_id.to_string()));
+    let contains_wt2 = ids_array
+        .iter()
+        .any(|v| v.as_str() == Some(&worktree2_id.to_string()));
 
     assert!(contains_wt1, "Should contain worktree1_id");
     assert!(contains_wt2, "Should contain worktree2_id");
@@ -980,9 +994,10 @@ async fn test_empty_repository() {
     println!("✓ Empty repository handled gracefully");
 
     // Cleanup
-    let repo_id = db::get_or_create_repo(&client, "empty-repo", repo_path.to_string_lossy().as_ref())
-        .await
-        .expect("Failed to get repo_id");
+    let repo_id =
+        db::get_or_create_repo(&client, "empty-repo", repo_path.to_string_lossy().as_ref())
+            .await
+            .expect("Failed to get repo_id");
     cleanup_test_data(&client, repo_id)
         .await
         .expect("Failed to cleanup test data");
@@ -1098,5 +1113,8 @@ async fn test_first_time_index_init_state() {
 #[test]
 fn test_documentation() {
     // This test always passes - it exists to document the test suite
-    assert!(true, "See test file documentation for implementation status");
+    assert!(
+        true,
+        "See test file documentation for implementation status"
+    );
 }

@@ -34,9 +34,8 @@ impl Tokenizer {
     /// Default stop words for English.
     fn default_stop_words() -> HashSet<String> {
         [
-            "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-            "has", "he", "in", "is", "it", "its", "of", "on", "that", "the",
-            "to", "was", "will", "with",
+            "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he", "in",
+            "is", "it", "its", "of", "on", "that", "the", "to", "was", "will", "with",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -85,8 +84,14 @@ impl Tokenizer {
                         let next = chars[i + 1];
                         // Check for multi-character operators
                         match (ch, next) {
-                            (':', ':') | ('-', '>') | ('=', '>') | ('<', '-') |
-                            ('!', '=') | ('=', '=') | ('<', '=') | ('>', '=') => {
+                            (':', ':')
+                            | ('-', '>')
+                            | ('=', '>')
+                            | ('<', '-')
+                            | ('!', '=')
+                            | ('=', '=')
+                            | ('<', '=')
+                            | ('>', '=') => {
                                 operator.push(next);
                                 i += 1; // Skip next char
                                 is_multi_char = true;
@@ -106,8 +111,8 @@ impl Tokenizer {
                     continue;
                 }
                 // Word boundaries (including operators we don't preserve)
-                ' ' | '\t' | '\n' | '\r' | ',' | ';' | '(' | ')' | '[' | ']' |
-                '{' | '}' | '"' | '\'' | '*' | '/' => {
+                ' ' | '\t' | '\n' | '\r' | ',' | ';' | '(' | ')' | '[' | ']' | '{' | '}' | '"'
+                | '\'' | '*' | '/' => {
                     if !current_token.is_empty() {
                         self.add_token(&mut tokens, &current_token);
                         current_token.clear();

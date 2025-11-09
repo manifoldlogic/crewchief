@@ -102,7 +102,10 @@ impl SignalExecutor {
         })?;
 
         let rows = client
-            .query(&stmt, &[&repo_id, &worktree_id, &weights.recency, &weights.churn])
+            .query(
+                &stmt,
+                &[&repo_id, &worktree_id, &weights.recency, &weights.churn],
+            )
             .await
             .map_err(|e| {
                 warn!("Failed to execute signal query: {}", e);

@@ -67,9 +67,7 @@
 //! - Test database with chunks (populated by MPEMBED-0001 fixture)
 //! - Optional: Ollama, OpenAI, Google Vertex AI for provider benchmarks
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Baseline performance targets from MPEMBED-0002
@@ -267,7 +265,11 @@ fn bench_search_single_provider(c: &mut Criterion) {
     group.sample_size(100);
 
     // Benchmark each search mode
-    for mode in [SearchMode::FtsOnly, SearchMode::VectorOnly, SearchMode::Hybrid] {
+    for mode in [
+        SearchMode::FtsOnly,
+        SearchMode::VectorOnly,
+        SearchMode::Hybrid,
+    ] {
         let mode_name = match mode {
             SearchMode::FtsOnly => "fts_only",
             SearchMode::VectorOnly => "vector_only",
@@ -295,7 +297,11 @@ fn bench_search_mixed_providers(c: &mut Criterion) {
     group.sample_size(100);
 
     // Benchmark each search mode with mixed embeddings
-    for mode in [SearchMode::FtsOnly, SearchMode::VectorOnly, SearchMode::Hybrid] {
+    for mode in [
+        SearchMode::FtsOnly,
+        SearchMode::VectorOnly,
+        SearchMode::Hybrid,
+    ] {
         let mode_name = match mode {
             SearchMode::FtsOnly => "fts_only",
             SearchMode::VectorOnly => "vector_only_with_coalesce",
@@ -330,7 +336,8 @@ fn bench_coalesce_overhead(c: &mut Criterion) {
     group.bench_function("without_coalesce", |b| {
         b.iter(|| {
             for query in test_queries.iter() {
-                let result = simulate_search(query, SearchMode::VectorOnly, ProviderMix::SingleProvider);
+                let result =
+                    simulate_search(query, SearchMode::VectorOnly, ProviderMix::SingleProvider);
                 black_box(result);
             }
         });
@@ -406,7 +413,9 @@ fn bench_embedding_throughput(c: &mut Criterion) {
         && std::env::var("GOOGLE_PROJECT_ID").is_err()
     {
         eprintln!("⚠️  No embedding providers configured");
-        eprintln!("   Set TEST_OLLAMA, OPENAI_API_KEY, or GOOGLE_PROJECT_ID for provider benchmarks");
+        eprintln!(
+            "   Set TEST_OLLAMA, OPENAI_API_KEY, or GOOGLE_PROJECT_ID for provider benchmarks"
+        );
         eprintln!("   Running simulated baseline for reference...");
 
         group.bench_function("simulated_ollama_baseline", |b| {
@@ -474,7 +483,8 @@ fn bench_dimension_comparison(c: &mut Criterion) {
         b.iter(|| {
             for query in QUERY_CORPUS.iter() {
                 // 768-dim is ~10% faster due to lower dimensionality
-                let mut result = simulate_search(query, SearchMode::VectorOnly, ProviderMix::SingleProvider);
+                let mut result =
+                    simulate_search(query, SearchMode::VectorOnly, ProviderMix::SingleProvider);
                 result.execution_ms *= 0.9;
                 black_box(result);
             }
@@ -485,7 +495,8 @@ fn bench_dimension_comparison(c: &mut Criterion) {
     group.bench_function("1536_dim_vector_search", |b| {
         b.iter(|| {
             for query in QUERY_CORPUS.iter() {
-                let result = simulate_search(query, SearchMode::VectorOnly, ProviderMix::SingleProvider);
+                let result =
+                    simulate_search(query, SearchMode::VectorOnly, ProviderMix::SingleProvider);
                 black_box(result);
             }
         });
@@ -508,7 +519,8 @@ fn bench_regression_detection(c: &mut Criterion) {
             let mut latencies = Vec::new();
             for query in QUERY_CORPUS.iter() {
                 // Use baseline timing
-                let result = simulate_search(query, SearchMode::Hybrid, ProviderMix::SingleProvider);
+                let result =
+                    simulate_search(query, SearchMode::Hybrid, ProviderMix::SingleProvider);
                 // Adjust to match baseline p95 ~33.62ms
                 let adjusted_time = result.total_ms() * (BASELINE_P95_MS / 35.0);
                 latencies.push(adjusted_time);

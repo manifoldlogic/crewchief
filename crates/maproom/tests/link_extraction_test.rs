@@ -11,9 +11,7 @@ Check out the [API docs](https://api.example.com/docs).
     let chunks = extract_chunks(source, "md");
 
     // Find link chunks
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 2, "Should extract 2 external links");
 
@@ -30,7 +28,10 @@ Check out the [API docs](https://api.example.com/docs).
     // Check second link
     let link2 = links[1];
     assert_eq!(link2.symbol_name.as_ref().unwrap(), "API docs");
-    assert_eq!(link2.signature.as_ref().unwrap(), "https://api.example.com/docs");
+    assert_eq!(
+        link2.signature.as_ref().unwrap(),
+        "https://api.example.com/docs"
+    );
     let meta2 = link2.metadata.as_ref().unwrap();
     assert_eq!(meta2["link_type"], "external");
 }
@@ -50,9 +51,7 @@ More content.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 2, "Should extract 2 anchor links");
 
@@ -81,9 +80,7 @@ Read about [config](config.md).
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 3, "Should extract 3 relative links");
 
@@ -115,9 +112,7 @@ See [root doc](/docs/README.md) at repository root.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 1, "Should extract 1 absolute link");
 
@@ -138,9 +133,7 @@ And another: ![Diagram](https://example.com/diagram.svg)
 
     let chunks = extract_chunks(source, "md");
 
-    let images: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "image_link")
-        .collect();
+    let images: Vec<_> = chunks.iter().filter(|c| c.kind == "image_link").collect();
 
     assert_eq!(images.len(), 2, "Should extract 2 image links");
 
@@ -154,7 +147,10 @@ And another: ![Diagram](https://example.com/diagram.svg)
 
     let img2 = images[1];
     assert_eq!(img2.symbol_name.as_ref().unwrap(), "Diagram");
-    assert_eq!(img2.signature.as_ref().unwrap(), "https://example.com/diagram.svg");
+    assert_eq!(
+        img2.signature.as_ref().unwrap(),
+        "https://example.com/diagram.svg"
+    );
     let meta2 = img2.metadata.as_ref().unwrap();
     assert_eq!(meta2["link_type"], "external");
     assert_eq!(meta2["is_image"], true);
@@ -170,11 +166,16 @@ Empty image: ![](image.png)
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
+    let links: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();
 
-    assert_eq!(links.len(), 2, "Should extract 2 links even with empty text");
+    assert_eq!(
+        links.len(),
+        2,
+        "Should extract 2 links even with empty text"
+    );
 
     // When link text is empty, symbol_name should be the target
     let link1 = links[0];
@@ -206,14 +207,16 @@ Content here.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
+    let links: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();
 
     assert_eq!(links.len(), 5, "Should extract all 5 links");
 
     // Check each link type
-    let types: Vec<String> = links.iter()
+    let types: Vec<String> = links
+        .iter()
         .map(|l| {
             l.metadata.as_ref().unwrap()["link_type"]
                 .as_str()
@@ -222,7 +225,10 @@ Content here.
         })
         .collect();
 
-    assert_eq!(types, vec!["external", "anchor", "relative", "relative", "absolute"]);
+    assert_eq!(
+        types,
+        vec!["external", "anchor", "relative", "relative", "absolute"]
+    );
 }
 
 #[test]
@@ -236,9 +242,7 @@ Line 5 has another [link](url2)
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 2);
     assert_eq!(links[0].start_line, 3, "First link should be on line 3");
@@ -254,12 +258,13 @@ Check [link1](url1) and [link2](url2) on same line.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 2, "Should extract both links from same line");
-    assert_eq!(links[0].start_line, links[1].start_line, "Both links on same line");
+    assert_eq!(
+        links[0].start_line, links[1].start_line,
+        "Both links on same line"
+    );
 }
 
 #[test]
@@ -275,13 +280,14 @@ fn test_links_with_special_characters() {
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     // Note: Links with spaces in URLs might not work in real markdown,
     // but our regex should still capture them
-    assert!(links.len() >= 4, "Should extract links with special characters");
+    assert!(
+        links.len() >= 4,
+        "Should extract links with special characters"
+    );
 }
 
 #[test]
@@ -294,7 +300,8 @@ Just plain text.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
+    let links: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();
 
@@ -312,7 +319,8 @@ Also incomplete: (url)
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
+    let links: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();
 
@@ -332,7 +340,8 @@ on next line.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
+    let links: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();
 
@@ -351,9 +360,7 @@ fn test_nested_brackets() {
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     // Our regex uses [^\]]* which stops at first ], so nested brackets
     // will only capture "Link with [nested"
@@ -372,9 +379,7 @@ fn test_http_vs_https() {
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "link")
-        .collect();
+    let links: Vec<_> = chunks.iter().filter(|c| c.kind == "link").collect();
 
     assert_eq!(links.len(), 3, "Should extract all protocol links");
 
@@ -417,21 +422,29 @@ Be nice.
 
     let chunks = extract_chunks(source, "md");
 
-    let all_links: Vec<_> = chunks.iter()
+    let all_links: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();
 
-    assert!(all_links.len() >= 6, "Should extract all links from realistic README");
+    assert!(
+        all_links.len() >= 6,
+        "Should extract all links from realistic README"
+    );
 
     // Count by type
     let regular_links = all_links.iter().filter(|l| l.kind == "link").count();
     let image_links = all_links.iter().filter(|l| l.kind == "image_link").count();
 
     assert_eq!(image_links, 1, "Should extract 1 image");
-    assert!(regular_links >= 5, "Should extract at least 5 regular links");
+    assert!(
+        regular_links >= 5,
+        "Should extract at least 5 regular links"
+    );
 
     // Check variety of link types
-    let link_types: std::collections::HashSet<String> = all_links.iter()
+    let link_types: std::collections::HashSet<String> = all_links
+        .iter()
         .map(|l| {
             l.metadata.as_ref().unwrap()["link_type"]
                 .as_str()
@@ -440,7 +453,13 @@ Be nice.
         })
         .collect();
 
-    assert!(link_types.contains("external"), "Should have external links");
-    assert!(link_types.contains("relative"), "Should have relative links");
+    assert!(
+        link_types.contains("external"),
+        "Should have external links"
+    );
+    assert!(
+        link_types.contains("relative"),
+        "Should have relative links"
+    );
     assert!(link_types.contains("anchor"), "Should have anchor links");
 }

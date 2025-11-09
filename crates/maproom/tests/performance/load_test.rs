@@ -104,7 +104,7 @@ impl LoadTestConfig {
 
     fn concurrent_load() -> Self {
         Self {
-            qps: 100, // 100 simultaneous queries
+            qps: 100,                         // 100 simultaneous queries
             duration: Duration::from_secs(1), // Single burst
             concurrency: 100,
             queries: default_query_corpus(),
@@ -545,7 +545,7 @@ fn test_load_test_results_calculations() {
     assert_eq!(results.total_queries, 10);
     assert_eq!(results.successful_queries, 10);
     assert_eq!(results.p50(), 50.0);
-    assert_eq!(results.p95(), 90.0);  // p95 of 10 elements is index 9
+    assert_eq!(results.p95(), 90.0); // p95 of 10 elements is index 9
     assert_eq!(results.mean(), 55.0);
     assert_eq!(results.actual_qps(), 10.0);
 }

@@ -125,7 +125,9 @@ fn test_metrics_handler_format() {
 
     // Verify metrics are present (may appear with different prefixes due to Prometheus format)
     assert!(
-        response.contains("maproom_search") || response.contains("# HELP") || response.contains("# TYPE")
+        response.contains("maproom_search")
+            || response.contains("# HELP")
+            || response.contains("# TYPE")
     );
 }
 
@@ -144,9 +146,7 @@ fn test_metrics_handler_prometheus_format() {
 
     // Verify Prometheus text format
     // Should contain metric type declarations
-    assert!(
-        body.contains("# HELP") || body.contains("# TYPE") || body.contains("maproom_search")
-    );
+    assert!(body.contains("# HELP") || body.contains("# TYPE") || body.contains("maproom_search"));
 }
 
 #[test]
@@ -208,7 +208,9 @@ fn test_histogram_buckets() {
     // Verify histogram metric is present
     assert!(response.contains("maproom_search_query_latency_seconds"));
     // Histogram should have bucket entries
-    assert!(response.contains("bucket") || response.contains("_sum") || response.contains("_count"));
+    assert!(
+        response.contains("bucket") || response.contains("_sum") || response.contains("_count")
+    );
 }
 
 #[test]
@@ -216,12 +218,7 @@ fn test_error_type_labels() {
     let metrics = get_metrics();
 
     // Record different error types
-    let error_types = vec![
-        "query_processing",
-        "search_execution",
-        "fusion",
-        "database",
-    ];
+    let error_types = vec!["query_processing", "search_execution", "fusion", "database"];
 
     for error_type in error_types {
         metrics.record_error(error_type);

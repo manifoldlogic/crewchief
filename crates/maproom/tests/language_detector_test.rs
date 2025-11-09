@@ -43,7 +43,10 @@ fn test_detect_typescript_files() {
         Language::TypeScript
     );
     assert_eq!(detector.detect_from_path("index.mts"), Language::TypeScript);
-    assert_eq!(detector.detect_from_path("types.d.ts"), Language::TypeScript);
+    assert_eq!(
+        detector.detect_from_path("types.d.ts"),
+        Language::TypeScript
+    );
 }
 
 #[test]
@@ -79,10 +82,7 @@ fn test_detect_unknown_extensions() {
     assert_eq!(detector.detect_from_path("README.md"), Language::Unknown);
     assert_eq!(detector.detect_from_path("config.json"), Language::Unknown);
     assert_eq!(detector.detect_from_path("data.xml"), Language::Unknown);
-    assert_eq!(
-        detector.detect_from_path("Dockerfile"),
-        Language::Unknown
-    );
+    assert_eq!(detector.detect_from_path("Dockerfile"), Language::Unknown);
 }
 
 #[test]
@@ -323,7 +323,8 @@ fn test_language_detection_accuracy() {
     for (path, expected) in test_cases {
         let detected = detector.detect_from_path(path);
         assert_eq!(
-            detected, expected,
+            detected,
+            expected,
             "Failed to detect {} for path: {}",
             expected.as_str(),
             path

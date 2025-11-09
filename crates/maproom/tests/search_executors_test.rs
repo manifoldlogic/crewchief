@@ -5,8 +5,8 @@
 //! within the 100ms performance target.
 
 use crewchief_maproom::search::{
-    FTSExecutor, GraphExecutor, ProcessedQuery, SearchExecutors, SearchMode,
-    SearchSource, SignalExecutor, VectorExecutor,
+    FTSExecutor, GraphExecutor, ProcessedQuery, SearchExecutors, SearchMode, SearchSource,
+    SignalExecutor, VectorExecutor,
 };
 use tokio_postgres::{Client, NoTls};
 
@@ -42,8 +42,8 @@ async fn test_fts_executor_basic() -> Result<(), Box<dyn std::error::Error>> {
     let client = get_test_client().await?;
 
     // Assuming test database has some indexed chunks
-    let results = FTSExecutor::execute(&client, "test & function", "test function", 1, None, 10)
-        .await?;
+    let results =
+        FTSExecutor::execute(&client, "test & function", "test function", 1, None, 10).await?;
 
     assert_eq!(results.source, SearchSource::FTS);
     // Results may be empty if test database has no data
@@ -241,10 +241,8 @@ async fn test_result_deduplication() -> Result<(), Box<dyn std::error::Error>> {
     let results = executors.execute_all(&query, 1, None, 10).await?;
 
     let unique_chunks = results.total_unique_chunks();
-    let total_results = results.fts.len()
-        + results.vector.len()
-        + results.graph.len()
-        + results.signals.len();
+    let total_results =
+        results.fts.len() + results.vector.len() + results.graph.len() + results.signals.len();
 
     println!(
         "Total results: {}, Unique chunks: {}",
@@ -317,31 +315,59 @@ async fn test_individual_executor_timing() -> Result<(), Box<dyn std::error::Err
 
     // FTS timing
     let start = std::time::Instant::now();
-    let fts_results = FTSExecutor::execute(&client, "authentication & function", "authentication function", 1, None, 10).await?;
+    let fts_results = FTSExecutor::execute(
+        &client,
+        "authentication & function",
+        "authentication function",
+        1,
+        None,
+        10,
+    )
+    .await?;
     let fts_time = start.elapsed();
-    println!("FTS:     {:.2}ms ({} results)", fts_time.as_secs_f64() * 1000.0, fts_results.len());
+    println!(
+        "FTS:     {:.2}ms ({} results)",
+        fts_time.as_secs_f64() * 1000.0,
+        fts_results.len()
+    );
 
     // Vector timing
     let start = std::time::Instant::now();
-    let vector_results = VectorExecutor::execute(&client, &query.embedding, SearchMode::Auto, 1, None, 10).await?;
+    let vector_results =
+        VectorExecutor::execute(&client, &query.embedding, SearchMode::Auto, 1, None, 10).await?;
     let vector_time = start.elapsed();
-    println!("Vector:  {:.2}ms ({} results)", vector_time.as_secs_f64() * 1000.0, vector_results.len());
+    println!(
+        "Vector:  {:.2}ms ({} results)",
+        vector_time.as_secs_f64() * 1000.0,
+        vector_results.len()
+    );
 
     // Graph timing
     let start = std::time::Instant::now();
     let graph_results = GraphExecutor::execute(&client, 1, None, 10).await?;
     let graph_time = start.elapsed();
-    println!("Graph:   {:.2}ms ({} results)", graph_time.as_secs_f64() * 1000.0, graph_results.len());
+    println!(
+        "Graph:   {:.2}ms ({} results)",
+        graph_time.as_secs_f64() * 1000.0,
+        graph_results.len()
+    );
 
     // Signals timing
     let start = std::time::Instant::now();
     let signal_results = SignalExecutor::execute(&client, 1, None).await?;
     let signal_time = start.elapsed();
-    println!("Signals: {:.2}ms ({} results)", signal_time.as_secs_f64() * 1000.0, signal_results.len());
+    println!(
+        "Signals: {:.2}ms ({} results)",
+        signal_time.as_secs_f64() * 1000.0,
+        signal_results.len()
+    );
 
     // Calculate total sequential time
     let sequential_total = fts_time + vector_time + graph_time + signal_time;
-    println!("\nSequential total: {:.2}ms", sequential_total.as_secs_f64() * 1000.0);
+    println!(
+        "\nSequential total: {:.2}ms",
+        sequential_total.as_secs_f64() * 1000.0
+    );
 
     Ok(())
 }
@@ -360,7 +386,10 @@ async fn test_parallel_vs_sequential_timing() -> Result<(), Box<dyn std::error::
     let parallel_results = executors.execute_all(&query, 1, None, 10).await?;
     let parallel_time = parallel_start.elapsed();
 
-    println!("Parallel execution: {:.2}ms", parallel_time.as_secs_f64() * 1000.0);
+    println!(
+        "Parallel execution: {:.2}ms",
+        parallel_time.as_secs_f64() * 1000.0
+    );
     println!("  FTS: {} results", parallel_results.fts.len());
     println!("  Vector: {} results", parallel_results.vector.len());
     println!("  Graph: {} results", parallel_results.graph.len());
@@ -368,13 +397,32 @@ async fn test_parallel_vs_sequential_timing() -> Result<(), Box<dyn std::error::
 
     // Sequential execution for comparison
     let seq_start = std::time::Instant::now();
-    let _fts = FTSExecutor::execute(executors.client(), "search & test", "search test", 1, None, 10).await?;
-    let _vector = VectorExecutor::execute(executors.client(), &query.embedding, SearchMode::Code, 1, None, 10).await?;
+    let _fts = FTSExecutor::execute(
+        executors.client(),
+        "search & test",
+        "search test",
+        1,
+        None,
+        10,
+    )
+    .await?;
+    let _vector = VectorExecutor::execute(
+        executors.client(),
+        &query.embedding,
+        SearchMode::Code,
+        1,
+        None,
+        10,
+    )
+    .await?;
     let _graph = GraphExecutor::execute(executors.client(), 1, None, 10).await?;
     let _signals = SignalExecutor::execute(executors.client(), 1, None).await?;
     let seq_time = seq_start.elapsed();
 
-    println!("\nSequential execution: {:.2}ms", seq_time.as_secs_f64() * 1000.0);
+    println!(
+        "\nSequential execution: {:.2}ms",
+        seq_time.as_secs_f64() * 1000.0
+    );
 
     // Calculate speedup
     let speedup = seq_time.as_secs_f64() / parallel_time.as_secs_f64();
@@ -452,12 +500,18 @@ async fn test_concurrent_queries_performance() -> Result<(), Box<dyn std::error:
 
     // Execute all queries concurrently
     let results = futures::future::join_all(
-        queries.iter().map(|q| executors.execute_all(q, 1, None, 10))
-    ).await;
+        queries
+            .iter()
+            .map(|q| executors.execute_all(q, 1, None, 10)),
+    )
+    .await;
 
     let elapsed = start.elapsed();
 
-    println!("3 concurrent queries completed in: {:.2}ms", elapsed.as_secs_f64() * 1000.0);
+    println!(
+        "3 concurrent queries completed in: {:.2}ms",
+        elapsed.as_secs_f64() * 1000.0
+    );
 
     // Verify all succeeded
     for (i, result) in results.iter().enumerate() {
@@ -483,12 +537,16 @@ async fn test_search_executor_timeout_handling() -> Result<(), Box<dyn std::erro
     let timeout = tokio::time::Duration::from_secs(5);
     let result = tokio::time::timeout(
         timeout,
-        FTSExecutor::execute(&client, "test", "test", 1, None, 10)
-    ).await;
+        FTSExecutor::execute(&client, "test", "test", 1, None, 10),
+    )
+    .await;
 
     match result {
         Ok(Ok(results)) => {
-            println!("✓ Query completed within timeout: {} results", results.len());
+            println!(
+                "✓ Query completed within timeout: {} results",
+                results.len()
+            );
         }
         Ok(Err(e)) => {
             println!("✗ Query failed: {:?}", e);
@@ -545,12 +603,14 @@ async fn test_search_result_consistency() -> Result<(), Box<dyn std::error::Erro
     for i in 0..5 {
         let results = executors.execute_all(&query, 1, None, 10).await?;
         all_results.push(results);
-        println!("Run {}: FTS={}, Vector={}, Graph={}, Signals={}",
-                 i + 1,
-                 all_results[i].fts.len(),
-                 all_results[i].vector.len(),
-                 all_results[i].graph.len(),
-                 all_results[i].signals.len());
+        println!(
+            "Run {}: FTS={}, Vector={}, Graph={}, Signals={}",
+            i + 1,
+            all_results[i].fts.len(),
+            all_results[i].vector.len(),
+            all_results[i].graph.len(),
+            all_results[i].signals.len()
+        );
     }
 
     // Results should be consistent (same query, same results)

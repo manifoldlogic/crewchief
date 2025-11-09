@@ -1,10 +1,9 @@
+use crewchief_maproom::indexer::parser;
 /// MD_ENHANCE-4002: Parser Benchmarks
 ///
 /// Criterion benchmarks for markdown parser performance testing.
 /// These benchmarks provide detailed performance metrics and regression detection.
-
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
-use crewchief_maproom::indexer::parser;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::fs;
 
 fn bench_small_document(c: &mut Criterion) {
@@ -33,9 +32,7 @@ More content.
     group.throughput(Throughput::Bytes(content.len() as u64));
 
     group.bench_function("parse", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(content), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(content), black_box("md")));
     });
 
     group.finish();
@@ -50,7 +47,10 @@ fn bench_medium_document(c: &mut Criterion) {
         content.push_str("Multiple paragraphs to test parsing.\n\n");
 
         if i % 5 == 0 {
-            content.push_str(&format!("```typescript\nfunction example{}() {{\n    return {};\n}}\n```\n\n", i, i));
+            content.push_str(&format!(
+                "```typescript\nfunction example{}() {{\n    return {};\n}}\n```\n\n",
+                i, i
+            ));
         }
 
         if i % 3 == 0 {
@@ -62,9 +62,7 @@ fn bench_medium_document(c: &mut Criterion) {
     group.throughput(Throughput::Bytes(content.len() as u64));
 
     group.bench_function("parse", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&content), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
     });
 
     group.finish();
@@ -79,7 +77,10 @@ fn bench_large_document(c: &mut Criterion) {
         content.push_str("Additional content line.\n\n");
 
         if i % 10 == 0 {
-            content.push_str(&format!("```rust\nfn function_{}() {{\n    println!(\"test\");\n}}\n```\n\n", i));
+            content.push_str(&format!(
+                "```rust\nfn function_{}() {{\n    println!(\"test\");\n}}\n```\n\n",
+                i
+            ));
         }
     }
 
@@ -87,9 +88,7 @@ fn bench_large_document(c: &mut Criterion) {
     group.throughput(Throughput::Bytes(content.len() as u64));
 
     group.bench_function("parse", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&content), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
     });
 
     group.finish();
@@ -111,9 +110,7 @@ fn bench_code_block_heavy(c: &mut Criterion) {
     group.throughput(Throughput::Bytes(content.len() as u64));
 
     group.bench_function("parse", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&content), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
     });
 
     group.finish();
@@ -133,9 +130,7 @@ fn bench_heading_heavy(c: &mut Criterion) {
     group.throughput(Throughput::Bytes(content.len() as u64));
 
     group.bench_function("parse", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&content), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
     });
 
     group.finish();
@@ -147,9 +142,7 @@ fn bench_real_readme(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(content.len() as u64));
 
         group.bench_function("parse", |b| {
-            b.iter(|| {
-                parser::extract_chunks(black_box(&content), black_box("md"))
-            });
+            b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
         });
 
         group.finish();
@@ -162,9 +155,7 @@ fn bench_real_claude_md(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(content.len() as u64));
 
         group.bench_function("parse", |b| {
-            b.iter(|| {
-                parser::extract_chunks(black_box(&content), black_box("md"))
-            });
+            b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
         });
 
         group.finish();
@@ -183,9 +174,7 @@ fn bench_document_sizes(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(content.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
-            b.iter(|| {
-                parser::extract_chunks(black_box(&content), black_box("md"))
-            });
+            b.iter(|| parser::extract_chunks(black_box(&content), black_box("md")));
         });
     }
 
@@ -203,9 +192,7 @@ fn bench_element_types(c: &mut Criterion) {
 
     group.throughput(Throughput::Bytes(headings_only.len() as u64));
     group.bench_function("headings_only", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&headings_only), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&headings_only), black_box("md")));
     });
 
     // Code-only document
@@ -216,9 +203,7 @@ fn bench_element_types(c: &mut Criterion) {
 
     group.throughput(Throughput::Bytes(code_only.len() as u64));
     group.bench_function("code_only", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&code_only), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&code_only), black_box("md")));
     });
 
     // List-only document
@@ -229,22 +214,23 @@ fn bench_element_types(c: &mut Criterion) {
 
     group.throughput(Throughput::Bytes(list_only.len() as u64));
     group.bench_function("list_only", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&list_only), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&list_only), black_box("md")));
     });
 
     // Table-only document
     let mut table_only = String::from("# Tables\n\n");
     for i in 1..=20 {
-        table_only.push_str(&format!("| Col1 | Col2 | Col3 |\n|------|------|------|\n| {} | {} | {} |\n\n", i, i*2, i*3));
+        table_only.push_str(&format!(
+            "| Col1 | Col2 | Col3 |\n|------|------|------|\n| {} | {} | {} |\n\n",
+            i,
+            i * 2,
+            i * 3
+        ));
     }
 
     group.throughput(Throughput::Bytes(table_only.len() as u64));
     group.bench_function("table_only", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&table_only), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&table_only), black_box("md")));
     });
 
     group.finish();
@@ -261,22 +247,21 @@ fn bench_nested_hierarchy(c: &mut Criterion) {
 
     group.throughput(Throughput::Bytes(shallow.len() as u64));
     group.bench_function("shallow", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&shallow), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&shallow), black_box("md")));
     });
 
     // Deep nesting (h1 > h2 > h3 > h4)
     let mut deep = String::from("# Root\n\n");
     for i in 1..=25 {
-        deep.push_str(&format!("## L2-{}\n\n### L3-{}\n\n#### L4-{}\n\nContent.\n\n", i, i, i));
+        deep.push_str(&format!(
+            "## L2-{}\n\n### L3-{}\n\n#### L4-{}\n\nContent.\n\n",
+            i, i, i
+        ));
     }
 
     group.throughput(Throughput::Bytes(deep.len() as u64));
     group.bench_function("deep", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&deep), black_box("md"))
-        });
+        b.iter(|| parser::extract_chunks(black_box(&deep), black_box("md")));
     });
 
     group.finish();

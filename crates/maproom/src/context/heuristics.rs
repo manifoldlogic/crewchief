@@ -34,8 +34,8 @@ impl Default for HeuristicsConfig {
                 r"\.test\.(ts|js|tsx|jsx|rs|go|py)$".to_string(),
                 r"\.spec\.(ts|js|tsx|jsx|rs|go|py)$".to_string(),
                 r"__tests__".to_string(), // Match __tests__ anywhere in path
-                r"^tests/".to_string(), // Match tests/ at start of path
-                r"/tests/".to_string(), // Match /tests/ anywhere in path
+                r"^tests/".to_string(),   // Match tests/ at start of path
+                r"/tests/".to_string(),   // Match /tests/ anywhere in path
                 r"_test\.(ts|js|tsx|jsx|rs|go|py)$".to_string(),
             ],
             config_patterns: vec![
@@ -262,10 +262,7 @@ mod tests {
             scorer.detect_file_type("src/component.test.tsx"),
             FileType::Test
         );
-        assert_eq!(
-            scorer.detect_file_type("src/utils.test.js"),
-            FileType::Test
-        );
+        assert_eq!(scorer.detect_file_type("src/utils.test.js"), FileType::Test);
 
         // .spec. pattern
         assert_eq!(
@@ -294,7 +291,10 @@ mod tests {
         );
 
         // _test suffix
-        assert_eq!(scorer.detect_file_type("src/handler_test.ts"), FileType::Test);
+        assert_eq!(
+            scorer.detect_file_type("src/handler_test.ts"),
+            FileType::Test
+        );
     }
 
     #[test]
@@ -306,7 +306,10 @@ mod tests {
             scorer.detect_file_type("src/parser.test.rs"),
             FileType::Test
         );
-        assert_eq!(scorer.detect_file_type("tests/integration.rs"), FileType::Test);
+        assert_eq!(
+            scorer.detect_file_type("tests/integration.rs"),
+            FileType::Test
+        );
     }
 
     #[test]
@@ -319,10 +322,7 @@ mod tests {
         assert_eq!(scorer.detect_file_type("jsconfig.json"), FileType::Config);
 
         // Various config file patterns
-        assert_eq!(
-            scorer.detect_file_type("vite.config.ts"),
-            FileType::Config
-        );
+        assert_eq!(scorer.detect_file_type("vite.config.ts"), FileType::Config);
         assert_eq!(
             scorer.detect_file_type("webpack.config.js"),
             FileType::Config
@@ -335,10 +335,7 @@ mod tests {
         // Environment files
         assert_eq!(scorer.detect_file_type(".env"), FileType::Config);
         assert_eq!(scorer.detect_file_type(".env.local"), FileType::Config);
-        assert_eq!(
-            scorer.detect_file_type(".env.production"),
-            FileType::Config
-        );
+        assert_eq!(scorer.detect_file_type(".env.production"), FileType::Config);
 
         // Rust
         assert_eq!(scorer.detect_file_type("Cargo.toml"), FileType::Config);

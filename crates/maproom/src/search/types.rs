@@ -22,7 +22,6 @@ pub enum SearchMode {
     Auto,
 }
 
-
 impl SearchMode {
     /// Returns true if this mode prioritizes code embeddings over text embeddings.
     pub fn prefers_code(&self) -> bool {
@@ -131,7 +130,8 @@ impl ProcessedQuery {
 
         for token in &self.tokens {
             // Find related expanded terms
-            let related: Vec<_> = self.expanded_terms
+            let related: Vec<_> = self
+                .expanded_terms
                 .iter()
                 .filter(|t| t.contains(token) || token.contains(t.as_str()))
                 .collect();

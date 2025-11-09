@@ -187,7 +187,9 @@ async fn generate_embeddings(
             "UPDATE maproom.chunks SET {} = $1 WHERE id = $2",
             column_name
         );
-        client.execute(&update_query, &[&embedding, &chunk_id]).await?;
+        client
+            .execute(&update_query, &[&embedding, &chunk_id])
+            .await?;
 
         println!("  ✓ Generated embedding for chunk {}", chunk_id);
     }
@@ -212,12 +214,7 @@ async fn search_with_provider(
     let column_name = match dimension {
         768 => "code_embedding_ollama",
         1536 => "code_embedding",
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unsupported dimension: {}",
-                dimension
-            ))
-        }
+        _ => return Err(anyhow::anyhow!("Unsupported dimension: {}", dimension)),
     };
 
     let search_query = format!(
@@ -236,7 +233,10 @@ async fn search_with_provider(
     );
 
     let rows = client
-        .query(&search_query, &[&query_embedding, &repo_id, &worktree_id, &limit])
+        .query(
+            &search_query,
+            &[&query_embedding, &repo_id, &worktree_id, &limit],
+        )
         .await?;
 
     let mut results = Vec::new();
@@ -337,15 +337,24 @@ async fn test_e2e_ollama_scan_and_search() -> Result<()> {
     ];
 
     let temp_dir = tempfile::tempdir()?;
-    let chunk_ids = create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
+    let chunk_ids =
+        create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Setup Ollama provider
     env::set_var("EMBEDDING_PROVIDER", "ollama");
     let provider = create_provider_from_env().await?;
-    assert_eq!(provider.dimension(), 768, "Ollama should use 768 dimensions");
+    assert_eq!(
+        provider.dimension(),
+        768,
+        "Ollama should use 768 dimensions"
+    );
     assert_eq!(provider.provider_name(), "ollama");
 
-    println!("Using provider: {} ({}D)", provider.provider_name(), provider.dimension());
+    println!(
+        "Using provider: {} ({}D)",
+        provider.provider_name(),
+        provider.dimension()
+    );
 
     // Generate embeddings
     let start = Instant::now();
@@ -370,15 +379,24 @@ async fn test_e2e_ollama_scan_and_search() -> Result<()> {
         768,
         "Ollama embedding should be 768-dim"
     );
-    assert!(openai_embedding.is_none(), "Should not have OpenAI embedding");
+    assert!(
+        openai_embedding.is_none(),
+        "Should not have OpenAI embedding"
+    );
 
     println!("✓ Embeddings stored in code_embedding_ollama column");
 
     // Perform semantic search
     let start = Instant::now();
-    let results =
-        search_with_provider(&client, &provider, repo_id, worktree_id, "authentication password validation", 5)
-            .await?;
+    let results = search_with_provider(
+        &client,
+        &provider,
+        repo_id,
+        worktree_id,
+        "authentication password validation",
+        5,
+    )
+    .await?;
     let search_duration = start.elapsed();
 
     println!("\nSearch results (took {:?}):", search_duration);
@@ -400,7 +418,10 @@ async fn test_e2e_ollama_scan_and_search() -> Result<()> {
         top_result.content.contains("authenticate") || top_result.content.contains("password"),
         "Top result should be relevant to authentication"
     );
-    assert!(top_result.similarity > 0.5, "Top result should have good similarity");
+    assert!(
+        top_result.similarity > 0.5,
+        "Top result should have good similarity"
+    );
 
     println!("\n✓ E2E Ollama test passed");
 
@@ -465,15 +486,24 @@ async fn test_e2e_google_scan_and_search() -> Result<()> {
     ];
 
     let temp_dir = tempfile::tempdir()?;
-    let chunk_ids = create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
+    let chunk_ids =
+        create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Setup Google provider
     env::set_var("EMBEDDING_PROVIDER", "google");
     let provider = create_provider_from_env().await?;
-    assert_eq!(provider.dimension(), 768, "Google should use 768 dimensions");
+    assert_eq!(
+        provider.dimension(),
+        768,
+        "Google should use 768 dimensions"
+    );
     assert_eq!(provider.provider_name(), "google");
 
-    println!("Using provider: {} ({}D)", provider.provider_name(), provider.dimension());
+    println!(
+        "Using provider: {} ({}D)",
+        provider.provider_name(),
+        provider.dimension()
+    );
 
     // Generate embeddings
     let start = Instant::now();
@@ -492,15 +522,29 @@ async fn test_e2e_google_scan_and_search() -> Result<()> {
     let ollama_embedding: Option<Vec<f32>> = row.get(0);
     let openai_embedding: Option<Vec<f32>> = row.get(1);
 
-    assert!(ollama_embedding.is_some(), "Should have 768-dim embedding in Ollama column");
+    assert!(
+        ollama_embedding.is_some(),
+        "Should have 768-dim embedding in Ollama column"
+    );
     assert_eq!(ollama_embedding.unwrap().len(), 768, "Should be 768-dim");
-    assert!(openai_embedding.is_none(), "Should not have OpenAI embedding");
+    assert!(
+        openai_embedding.is_none(),
+        "Should not have OpenAI embedding"
+    );
 
     println!("✓ Embeddings stored in code_embedding_ollama column");
 
     // Perform semantic search
     let start = Instant::now();
-    let results = search_with_provider(&client, &provider, repo_id, worktree_id, "database query transaction", 5).await?;
+    let results = search_with_provider(
+        &client,
+        &provider,
+        repo_id,
+        worktree_id,
+        "database query transaction",
+        5,
+    )
+    .await?;
     let search_duration = start.elapsed();
 
     println!("\nSearch results (took {:?}):", search_duration);
@@ -586,15 +630,24 @@ async fn test_e2e_openai_scan_and_search() -> Result<()> {
     ];
 
     let temp_dir = tempfile::tempdir()?;
-    let chunk_ids = create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
+    let chunk_ids =
+        create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Setup OpenAI provider
     env::set_var("EMBEDDING_PROVIDER", "openai");
     let provider = create_provider_from_env().await?;
-    assert_eq!(provider.dimension(), 1536, "OpenAI should use 1536 dimensions");
+    assert_eq!(
+        provider.dimension(),
+        1536,
+        "OpenAI should use 1536 dimensions"
+    );
     assert_eq!(provider.provider_name(), "openai");
 
-    println!("Using provider: {} ({}D)", provider.provider_name(), provider.dimension());
+    println!(
+        "Using provider: {} ({}D)",
+        provider.provider_name(),
+        provider.dimension()
+    );
 
     // Generate embeddings
     let start = Instant::now();
@@ -619,13 +672,24 @@ async fn test_e2e_openai_scan_and_search() -> Result<()> {
         1536,
         "OpenAI embedding should be 1536-dim"
     );
-    assert!(ollama_embedding.is_none(), "Should not have Ollama embedding");
+    assert!(
+        ollama_embedding.is_none(),
+        "Should not have Ollama embedding"
+    );
 
     println!("✓ Embeddings stored in code_embedding column");
 
     // Perform semantic search
     let start = Instant::now();
-    let results = search_with_provider(&client, &provider, repo_id, worktree_id, "error handling validation", 5).await?;
+    let results = search_with_provider(
+        &client,
+        &provider,
+        repo_id,
+        worktree_id,
+        "error handling validation",
+        5,
+    )
+    .await?;
     let search_duration = start.elapsed();
 
     println!("\nSearch results (took {:?}):", search_duration);
@@ -700,7 +764,8 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
     ];
 
     let temp_dir = tempfile::tempdir()?;
-    let chunk_ids = create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
+    let chunk_ids =
+        create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Step 1: Generate OpenAI embeddings for first chunk
     println!("\n--- Step 1: Generate OpenAI embeddings ---");
@@ -732,9 +797,15 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
 
     let openai_emb1: Option<Vec<f32>> = row1.get(0);
     let ollama_emb1: Option<Vec<f32>> = row1.get(1);
-    assert!(openai_emb1.is_some(), "Chunk 0 should have OpenAI embedding");
+    assert!(
+        openai_emb1.is_some(),
+        "Chunk 0 should have OpenAI embedding"
+    );
     assert_eq!(openai_emb1.unwrap().len(), 1536);
-    assert!(ollama_emb1.is_none(), "Chunk 0 should not have Ollama embedding");
+    assert!(
+        ollama_emb1.is_none(),
+        "Chunk 0 should not have Ollama embedding"
+    );
 
     let row2 = client
         .query_one(
@@ -745,9 +816,15 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
 
     let openai_emb2: Option<Vec<f32>> = row2.get(0);
     let ollama_emb2: Option<Vec<f32>> = row2.get(1);
-    assert!(ollama_emb2.is_some(), "Chunk 1 should have Ollama embedding");
+    assert!(
+        ollama_emb2.is_some(),
+        "Chunk 1 should have Ollama embedding"
+    );
     assert_eq!(ollama_emb2.unwrap().len(), 768);
-    assert!(openai_emb2.is_none(), "Chunk 1 should not have OpenAI embedding");
+    assert!(
+        openai_emb2.is_none(),
+        "Chunk 1 should not have OpenAI embedding"
+    );
 
     println!("✓ Mixed embeddings verified:");
     println!("  Chunk {} has 1536-dim OpenAI embedding", chunk_ids[0]);
@@ -755,8 +832,15 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
 
     // Step 4: Search with Ollama provider (should find both chunks)
     println!("\n--- Step 4: Search with Ollama provider ---");
-    let ollama_results =
-        search_with_provider(&client, &ollama_provider, repo_id, worktree_id, "process data function", 10).await?;
+    let ollama_results = search_with_provider(
+        &client,
+        &ollama_provider,
+        repo_id,
+        worktree_id,
+        "process data function",
+        10,
+    )
+    .await?;
 
     println!("Ollama search found {} results:", ollama_results.len());
     for result in &ollama_results {
@@ -765,8 +849,15 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
 
     // Step 5: Search with OpenAI provider (should find both chunks)
     println!("\n--- Step 5: Search with OpenAI provider ---");
-    let openai_results =
-        search_with_provider(&client, &openai_provider, repo_id, worktree_id, "process data function", 10).await?;
+    let openai_results = search_with_provider(
+        &client,
+        &openai_provider,
+        repo_id,
+        worktree_id,
+        "process data function",
+        10,
+    )
+    .await?;
 
     println!("OpenAI search found {} results:", openai_results.len());
     for result in &openai_results {

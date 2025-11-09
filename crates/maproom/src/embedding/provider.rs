@@ -489,7 +489,11 @@ mod tests {
             name: "mock",
         });
 
-        let texts = vec!["first".to_string(), "second".to_string(), "third".to_string()];
+        let texts = vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third".to_string(),
+        ];
         let embeddings = provider.embed_batch(texts.clone()).await.unwrap();
 
         assert_eq!(embeddings.len(), texts.len());

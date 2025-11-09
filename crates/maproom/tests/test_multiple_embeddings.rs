@@ -46,7 +46,10 @@ async fn test_store_multiple_embeddings() {
             }
             Err(e) => {
                 error_count += 1;
-                println!("❌ Failed to store embeddings for chunk {}: {:?}", chunk_id, e);
+                println!(
+                    "❌ Failed to store embeddings for chunk {}: {:?}",
+                    chunk_id, e
+                );
             }
         }
     }
@@ -82,5 +85,8 @@ async fn test_store_multiple_embeddings() {
         stored_count
     );
 
-    println!("\n✅ SUCCESS! All {} embeddings stored without type conversion errors!", success_count);
+    println!(
+        "\n✅ SUCCESS! All {} embeddings stored without type conversion errors!",
+        success_count
+    );
 }

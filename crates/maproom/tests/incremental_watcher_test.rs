@@ -6,9 +6,7 @@
 //! - Debouncing logic
 //! - Event coalescing
 
-use crewchief_maproom::incremental::{
-    FileEvent, FileWatcher, IgnorePatternMatcher, WatcherConfig,
-};
+use crewchief_maproom::incremental::{FileEvent, FileWatcher, IgnorePatternMatcher, WatcherConfig};
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -227,14 +225,7 @@ fn test_ignore_pattern_edge_cases() {
 
 #[test]
 fn test_multiple_ignore_patterns() {
-    let patterns = vec![
-        "*.log",
-        "*.tmp",
-        "build/**",
-        "cache/**",
-        "*.bak",
-        ".env*",
-    ];
+    let patterns = vec!["*.log", "*.tmp", "build/**", "cache/**", "*.bak", ".env*"];
     let matcher = IgnorePatternMatcher::with_patterns(patterns).unwrap();
 
     assert!(matcher.should_ignore(&PathBuf::from("debug.log")));

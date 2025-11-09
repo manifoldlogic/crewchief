@@ -209,10 +209,7 @@ impl BranchWatcherFixture {
 
         // Delete repo (cascades to worktrees, commits, files, chunks)
         client
-            .execute(
-                "DELETE FROM maproom.repos WHERE id = $1",
-                &[&self.repo_id],
-            )
+            .execute("DELETE FROM maproom.repos WHERE id = $1", &[&self.repo_id])
             .await?;
 
         Ok(())
@@ -359,11 +356,7 @@ async fn test_rapid_branch_switching() -> Result<()> {
 
         // Verify branch detection works
         let detected = get_current_branch(&fixture.repo_path)?;
-        assert_eq!(
-            detected, *branch,
-            "Should detect {} after checkout",
-            branch
-        );
+        assert_eq!(detected, *branch, "Should detect {} after checkout", branch);
     }
 
     // Index only the final branch (simulates debouncer preventing intermediate indexing)
@@ -493,10 +486,7 @@ async fn test_retry_on_transient_error() -> Result<()> {
     let fixture = BranchWatcherFixture::new().await?;
 
     // Create a source file
-    fs::write(
-        fixture.repo_path.join("retry.rs"),
-        "fn retry_test() { }",
-    )?;
+    fs::write(fixture.repo_path.join("retry.rs"), "fn retry_test() { }")?;
     Command::new("git")
         .args(["add", "."])
         .current_dir(&fixture.repo_path)

@@ -29,8 +29,7 @@ pub enum SearchConfigError {
 }
 
 /// Complete search configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SearchConfig {
     /// Embedding configuration
     pub embedding: EmbeddingConfig,
@@ -133,19 +132,28 @@ impl SearchConfig {
         }
         if let Ok(model) = std::env::var("MAPROOM_SEARCH_EMBEDDING_MODEL_NAME") {
             self.embedding.model_name = model;
-            debug!("Override: embedding.model_name = {}", self.embedding.model_name);
+            debug!(
+                "Override: embedding.model_name = {}",
+                self.embedding.model_name
+            );
         }
         if let Ok(dim) = std::env::var("MAPROOM_SEARCH_EMBEDDING_DIMENSION") {
             self.embedding.dimension = dim
                 .parse()
                 .context("Failed to parse MAPROOM_SEARCH_EMBEDDING_DIMENSION")?;
-            debug!("Override: embedding.dimension = {}", self.embedding.dimension);
+            debug!(
+                "Override: embedding.dimension = {}",
+                self.embedding.dimension
+            );
         }
         if let Ok(size) = std::env::var("MAPROOM_SEARCH_EMBEDDING_CACHE_SIZE") {
             self.embedding.cache_size = size
                 .parse()
                 .context("Failed to parse MAPROOM_SEARCH_EMBEDDING_CACHE_SIZE")?;
-            debug!("Override: embedding.cache_size = {}", self.embedding.cache_size);
+            debug!(
+                "Override: embedding.cache_size = {}",
+                self.embedding.cache_size
+            );
         }
         if let Ok(ttl) = std::env::var("MAPROOM_SEARCH_EMBEDDING_CACHE_TTL_SECONDS") {
             self.embedding.cache_ttl_seconds = ttl
@@ -258,7 +266,10 @@ impl SearchConfig {
             self.index.ivfflat_lists = lists
                 .parse()
                 .context("Failed to parse MAPROOM_SEARCH_INDEX_IVFFLAT_LISTS")?;
-            debug!("Override: index.ivfflat_lists = {}", self.index.ivfflat_lists);
+            debug!(
+                "Override: index.ivfflat_lists = {}",
+                self.index.ivfflat_lists
+            );
         }
         if let Ok(probes) = std::env::var("MAPROOM_SEARCH_INDEX_IVFFLAT_PROBES") {
             self.index.ivfflat_probes = probes
@@ -376,7 +387,6 @@ impl SearchConfig {
     }
 }
 
-
 /// Embedding configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingConfig {
@@ -467,9 +477,7 @@ impl FusionConfig {
     /// Validate fusion configuration.
     pub fn validate(&self) -> Result<()> {
         // Validate weights
-        self.weights
-            .validate()
-            .context("Invalid fusion weights")?;
+        self.weights.validate().context("Invalid fusion weights")?;
 
         // Warn if weights are not normalized
         if !self.weights.is_normalized() {
@@ -644,11 +652,11 @@ pub struct IndexingConfig {
 impl Default for IndexingConfig {
     fn default() -> Self {
         Self {
-            parallel_workers: 8,         // Tuned for 8-core CPU
-            batch_size: 50,               // Optimal throughput/memory balance
+            parallel_workers: 8,             // Tuned for 8-core CPU
+            batch_size: 50,                  // Optimal throughput/memory balance
             max_file_size: 10 * 1024 * 1024, // 10MB
-            chunk_insert_batch_size: 100, // Database INSERT batch
-            edge_insert_batch_size: 500,  // Edge INSERT batch
+            chunk_insert_batch_size: 100,    // Database INSERT batch
+            edge_insert_batch_size: 500,     // Edge INSERT batch
         }
     }
 }
@@ -723,14 +731,14 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            pool_size: 20,                    // Handles concurrent operations
-            connection_timeout_ms: 5000,      // 5s to acquire connection
-            statement_timeout_ms: 5000,       // 5s query timeout
-            lock_timeout_ms: 1000,            // 1s lock wait
+            pool_size: 20,                         // Handles concurrent operations
+            connection_timeout_ms: 5000,           // 5s to acquire connection
+            statement_timeout_ms: 5000,            // 5s query timeout
+            lock_timeout_ms: 1000,                 // 1s lock wait
             idle_in_transaction_timeout_ms: 30000, // 30s idle in transaction
-            work_mem: "256MB".to_string(),    // Per-operation memory
-            max_connection_lifetime_secs: 1800, // 30 minutes
-            idle_connection_timeout_secs: 600,  // 10 minutes
+            work_mem: "256MB".to_string(),         // Per-operation memory
+            max_connection_lifetime_secs: 1800,    // 30 minutes
+            idle_connection_timeout_secs: 600,     // 10 minutes
         }
     }
 }
@@ -787,8 +795,8 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            worker_threads: 8,              // Number of CPU cores
-            max_blocking_threads: 16,       // For blocking operations
+            worker_threads: 8,                  // Number of CPU cores
+            max_blocking_threads: 16,           // For blocking operations
             thread_stack_size: 2 * 1024 * 1024, // 2MB stack
             enable_thread_names: true,
         }
@@ -842,10 +850,10 @@ pub struct BufferConfig {
 impl Default for BufferConfig {
     fn default() -> Self {
         Self {
-            file_read_buffer: 64 * 1024,    // 64KB
-            db_buffer: 32 * 1024,           // 32KB
-            parse_buffer: 1024 * 1024,      // 1MB
-            buffer_pool_size: 100,          // Max pooled buffers
+            file_read_buffer: 64 * 1024, // 64KB
+            db_buffer: 32 * 1024,        // 32KB
+            parse_buffer: 1024 * 1024,   // 1MB
+            buffer_pool_size: 100,       // Max pooled buffers
         }
     }
 }

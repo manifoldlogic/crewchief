@@ -4,10 +4,11 @@
 //! and file system.
 
 use anyhow::Result;
-use crewchief_maproom::context::{
-    BasicContextAssembler, ContextAssembler, ExpandOptions,
+use crewchief_maproom::context::{BasicContextAssembler, ContextAssembler, ExpandOptions};
+use crewchief_maproom::db::{
+    create_pool, get_or_create_commit, get_or_create_repo, get_or_create_worktree, insert_chunk,
+    upsert_file,
 };
-use crewchief_maproom::db::{create_pool, get_or_create_commit, get_or_create_repo, get_or_create_worktree, insert_chunk, upsert_file};
 use std::env;
 use tempfile::TempDir;
 use tokio::fs;
@@ -140,16 +141,19 @@ async fn test_assemble_primary_chunk() -> Result<()> {
 
     // Assemble context for the test function
     let bundle = assembler
-        .assemble(
-            fixture.chunk_id,
-            6000,
-            ExpandOptions::primary_only()
-        )
+        .assemble(fixture.chunk_id, 6000, ExpandOptions::primary_only())
         .await?;
 
     // Verify bundle structure
-    assert_eq!(bundle.items.len(), 1, "Should have exactly 1 item (primary chunk)");
-    assert!(!bundle.truncated, "Should not be truncated with 6000 token budget");
+    assert_eq!(
+        bundle.items.len(),
+        1,
+        "Should have exactly 1 item (primary chunk)"
+    );
+    assert!(
+        !bundle.truncated,
+        "Should not be truncated with 6000 token budget"
+    );
     assert!(bundle.total_tokens > 0, "Should have counted tokens");
 
     // Verify primary chunk
@@ -197,13 +201,17 @@ async fn test_assemble_exceeds_budget() -> Result<()> {
         .assemble(
             fixture.chunk_id,
             10, // Very small budget
-            ExpandOptions::primary_only()
+            ExpandOptions::primary_only(),
         )
         .await?;
 
     // Should be marked as truncated
     assert!(bundle.truncated, "Should be marked as truncated");
-    assert_eq!(bundle.items.len(), 1, "Should still include the primary chunk");
+    assert_eq!(
+        bundle.items.len(),
+        1,
+        "Should still include the primary chunk"
+    );
 
     Ok(())
 }
@@ -230,13 +238,16 @@ async fn test_assemble_missing_chunk() -> Result<()> {
         .assemble(
             999999999, // Non-existent chunk ID
             6000,
-            ExpandOptions::primary_only()
+            ExpandOptions::primary_only(),
         )
         .await;
 
     assert!(result.is_err(), "Should fail for non-existent chunk");
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("not found"), "Error should mention 'not found'");
+    assert!(
+        err.to_string().contains("not found"),
+        "Error should mention 'not found'"
+    );
 
     Ok(())
 }
@@ -268,11 +279,7 @@ async fn test_token_counting_accuracy() -> Result<()> {
     let assembler = BasicContextAssembler::new_without_cache(pool);
 
     let bundle = assembler
-        .assemble(
-            fixture.chunk_id,
-            10000,
-            ExpandOptions::primary_only()
-        )
+        .assemble(fixture.chunk_id, 10000, ExpandOptions::primary_only())
         .await?;
 
     // Verify token count is reasonable
@@ -286,13 +293,17 @@ async fn test_token_counting_accuracy() -> Result<()> {
     assert!(
         primary.tokens >= min_expected_tokens,
         "Token count {} seems too low for {} lines (expected >= {})",
-        primary.tokens, line_count, min_expected_tokens
+        primary.tokens,
+        line_count,
+        min_expected_tokens
     );
 
     assert!(
         primary.tokens <= max_expected_tokens,
         "Token count {} seems too high for {} lines (expected <= {})",
-        primary.tokens, line_count, max_expected_tokens
+        primary.tokens,
+        line_count,
+        max_expected_tokens
     );
 
     // Total should match sum of items
@@ -332,11 +343,7 @@ async fn test_file_content_extraction() -> Result<()> {
     let assembler = BasicContextAssembler::new_without_cache(pool);
 
     let bundle = assembler
-        .assemble(
-            fixture.chunk_id,
-            10000,
-            ExpandOptions::primary_only()
-        )
+        .assemble(fixture.chunk_id, 10000, ExpandOptions::primary_only())
         .await?;
 
     let primary = &bundle.items[0];
@@ -344,13 +351,21 @@ async fn test_file_content_extraction() -> Result<()> {
     // Verify content matches expected lines
     assert!(primary.content.contains("A simple test function"));
     assert!(primary.content.contains("fn test_function()"));
-    assert!(primary.content.contains("println!(\"Hello from test function\")"));
+    assert!(primary
+        .content
+        .contains("println!(\"Hello from test function\")"));
     assert!(primary.content.contains("let x = 42"));
     assert!(primary.content.contains("let y = x * 2"));
 
     // Verify it doesn't contain lines outside the range
-    assert!(!primary.content.contains("Test file for context assembly"), "Should not include comment from line 1");
-    assert!(!primary.content.contains("fn another_function()"), "Should not include another_function from line 11");
+    assert!(
+        !primary.content.contains("Test file for context assembly"),
+        "Should not include comment from line 1"
+    );
+    assert!(
+        !primary.content.contains("fn another_function()"),
+        "Should not include another_function from line 11"
+    );
 
     Ok(())
 }

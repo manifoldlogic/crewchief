@@ -136,13 +136,10 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
     config.password = pg_config
         .get_password()
         .map(|p| String::from_utf8_lossy(p).to_string());
-    config.host = pg_config
-        .get_hosts()
-        .first()
-        .and_then(|h| match h {
-            tokio_postgres::config::Host::Tcp(hostname) => Some(hostname.clone()),
-            _ => None,
-        });
+    config.host = pg_config.get_hosts().first().and_then(|h| match h {
+        tokio_postgres::config::Host::Tcp(hostname) => Some(hostname.clone()),
+        _ => None,
+    });
     config.port = pg_config.get_ports().first().copied();
 
     // Pool manager configuration
@@ -183,8 +180,11 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
 
         // Check if using localhost and suggest docker hostname
         if database_url.contains("localhost") || database_url.contains("127.0.0.1") {
-            error_msg.push_str("\n  - In Docker/devcontainer, use hostname 'postgres' instead of 'localhost'");
-            error_msg.push_str("\n    Example: postgresql://postgres:postgres@postgres:5432/crewchief");
+            error_msg.push_str(
+                "\n  - In Docker/devcontainer, use hostname 'postgres' instead of 'localhost'",
+            );
+            error_msg
+                .push_str("\n    Example: postgresql://postgres:postgres@postgres:5432/crewchief");
         }
 
         error_msg.push_str("\n  - Check that DATABASE_URL points to the correct hostname and port");
@@ -219,10 +219,14 @@ pub fn sanitize_database_url(url: &str) -> String {
     // Try to parse as PostgreSQL config to extract components
     if let Ok(config) = url.parse::<tokio_postgres::Config>() {
         let user = config.get_user().unwrap_or("unknown");
-        let host = config.get_hosts().first().map(|h| match h {
-            tokio_postgres::config::Host::Tcp(hostname) => hostname.as_str(),
-            _ => "unknown",
-        }).unwrap_or("unknown");
+        let host = config
+            .get_hosts()
+            .first()
+            .map(|h| match h {
+                tokio_postgres::config::Host::Tcp(hostname) => hostname.as_str(),
+                _ => "unknown",
+            })
+            .unwrap_or("unknown");
         let port = config.get_ports().first().copied().unwrap_or(5432);
         let dbname = config.get_dbname().unwrap_or("unknown");
 

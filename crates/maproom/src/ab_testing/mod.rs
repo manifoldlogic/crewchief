@@ -83,9 +83,13 @@ pub mod shadow_mode;
 
 // Re-export commonly used types
 pub use analysis::{ConfidenceInterval, StatisticalAnalyzer, StatisticalTestResult};
-pub use dashboard::{Dashboard, DashboardMetrics, MetricComparison, QualityMetrics, SegmentMetrics, TimeSeriesPoint};
+pub use dashboard::{
+    Dashboard, DashboardMetrics, MetricComparison, QualityMetrics, SegmentMetrics, TimeSeriesPoint,
+};
 pub use framework::{
     ExperimentConfig, ExperimentManager, ExperimentStatus, QualityGates, TrafficSplitter,
 };
 pub use logger::{ABTestLogger, InteractionEvent, InteractionEventType, ShadowResultLog};
-pub use shadow_mode::{RankingChange, ResultComparison, SearchResult, ShadowMode, ShadowModeResults};
+pub use shadow_mode::{
+    RankingChange, ResultComparison, SearchResult, ShadowMode, ShadowModeResults,
+};

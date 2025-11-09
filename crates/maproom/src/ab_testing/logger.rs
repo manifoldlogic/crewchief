@@ -115,7 +115,12 @@ impl InteractionEvent {
         position: i32,
         user_id: Option<String>,
     ) -> Self {
-        let mut event = Self::new(experiment_id, query, InteractionEventType::Selection, user_id);
+        let mut event = Self::new(
+            experiment_id,
+            query,
+            InteractionEventType::Selection,
+            user_id,
+        );
         event.result_position = Some(position);
         event
     }
@@ -126,11 +131,7 @@ impl InteractionEvent {
     }
 
     /// Create a reformulation event
-    pub fn reformulation(
-        experiment_id: Uuid,
-        old_query: String,
-        user_id: Option<String>,
-    ) -> Self {
+    pub fn reformulation(experiment_id: Uuid, old_query: String, user_id: Option<String>) -> Self {
         Self::new(
             experiment_id,
             old_query,
@@ -317,7 +318,10 @@ impl ABTestLogger {
 
         transaction.commit().await?;
 
-        tracing::debug!(count = events.len(), "Flushed interaction events to database");
+        tracing::debug!(
+            count = events.len(),
+            "Flushed interaction events to database"
+        );
 
         Ok(())
     }
@@ -377,13 +381,7 @@ mod tests {
         assert_eq!(click.result_position, Some(3));
         assert_eq!(click.query, "test query");
 
-        let dwell = InteractionEvent::dwell(
-            experiment_id,
-            "test query".to_string(),
-            1,
-            5000,
-            None,
-        );
+        let dwell = InteractionEvent::dwell(experiment_id, "test query".to_string(), 1, 5000, None);
         assert_eq!(dwell.event_type, InteractionEventType::Dwell);
         assert_eq!(dwell.result_position, Some(1));
         assert_eq!(dwell.dwell_time_ms, Some(5000));

@@ -213,7 +213,11 @@ impl ContextCache {
     /// - The cache entry has exceeded its TTL
     ///
     /// On cache hit, updates the `last_accessed_at` timestamp for LRU tracking.
-    pub async fn get(&self, chunk_id: i64, options: &ExpandOptions) -> Result<Option<ContextBundle>> {
+    pub async fn get(
+        &self,
+        chunk_id: i64,
+        options: &ExpandOptions,
+    ) -> Result<Option<ContextBundle>> {
         if !self.config.enabled {
             return Ok(None);
         }
@@ -281,7 +285,12 @@ impl ContextCache {
     ///
     /// Before storing, checks if max entries would be exceeded and runs
     /// LRU eviction if necessary.
-    pub async fn put(&self, chunk_id: i64, options: &ExpandOptions, bundle: &ContextBundle) -> Result<()> {
+    pub async fn put(
+        &self,
+        chunk_id: i64,
+        options: &ExpandOptions,
+        bundle: &ContextBundle,
+    ) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
@@ -292,8 +301,7 @@ impl ContextCache {
         let key = CacheKey::new(chunk_id, options);
 
         // Serialize bundle to JSON
-        let bundle_json = serde_json::to_value(bundle)
-            .context("Failed to serialize bundle")?;
+        let bundle_json = serde_json::to_value(bundle).context("Failed to serialize bundle")?;
         let bundle_size = bundle_json.to_string().len() as i32;
 
         let client = self
@@ -344,16 +352,15 @@ impl ContextCache {
             .context("Failed to get database connection")?;
 
         let row = client
-            .query_one(
-                "SELECT maproom.invalidate_chunk_cache($1)",
-                &[&chunk_id],
-            )
+            .query_one("SELECT maproom.invalidate_chunk_cache($1)", &[&chunk_id])
             .await
             .context("Failed to invalidate cache")?;
 
         let count: i64 = row.get(0);
 
-        self.stats.invalidations.fetch_add(count as u64, Ordering::Relaxed);
+        self.stats
+            .invalidations
+            .fetch_add(count as u64, Ordering::Relaxed);
         debug!("Invalidated {} cache entries for chunk {}", count, chunk_id);
 
         Ok(count as u64)
@@ -382,7 +389,11 @@ impl ContextCache {
             .context("Failed to invalidate cache entries")?;
 
         self.stats.invalidations.fetch_add(count, Ordering::Relaxed);
-        debug!("Invalidated {} cache entries for {} chunks", count, chunk_ids.len());
+        debug!(
+            "Invalidated {} cache entries for {} chunks",
+            count,
+            chunk_ids.len()
+        );
 
         Ok(count)
     }
@@ -435,7 +446,9 @@ impl ContextCache {
         let count: i64 = row.get(0);
 
         if count > 0 {
-            self.stats.ttl_evictions.fetch_add(count as u64, Ordering::Relaxed);
+            self.stats
+                .ttl_evictions
+                .fetch_add(count as u64, Ordering::Relaxed);
             debug!("Evicted {} expired cache entries", count);
         }
 
@@ -467,7 +480,9 @@ impl ContextCache {
         let count: i64 = row.get(0);
 
         if count > 0 {
-            self.stats.lru_evictions.fetch_add(count as u64, Ordering::Relaxed);
+            self.stats
+                .lru_evictions
+                .fetch_add(count as u64, Ordering::Relaxed);
             debug!("Evicted {} LRU cache entries", count);
         }
 

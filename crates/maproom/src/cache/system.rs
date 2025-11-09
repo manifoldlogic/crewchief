@@ -595,10 +595,15 @@ mod tests {
         let tree_data = vec![1, 2, 3, 4, 5];
 
         // Miss on first access
-        assert!(cache.get_parse_tree(file_path, content_hash).await.is_none());
+        assert!(cache
+            .get_parse_tree(file_path, content_hash)
+            .await
+            .is_none());
 
         // Put and hit
-        cache.put_parse_tree(file_path, content_hash, tree_data.clone()).await;
+        cache
+            .put_parse_tree(file_path, content_hash, tree_data.clone())
+            .await;
         assert_eq!(
             cache.get_parse_tree(file_path, content_hash).await.unwrap(),
             tree_data
@@ -606,7 +611,10 @@ mod tests {
 
         // Invalidate
         cache.invalidate_parse_tree(file_path).await;
-        assert!(cache.get_parse_tree(file_path, content_hash).await.is_none());
+        assert!(cache
+            .get_parse_tree(file_path, content_hash)
+            .await
+            .is_none());
 
         // Stats
         let stats = cache.stats().await;

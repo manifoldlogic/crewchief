@@ -40,4 +40,4 @@ google-credentials.json
 maproom-sa-key.json
 
 # GCP config directories
-.config/gcp/
+.config/gcp/.crewchief/claude-code-plugins

@@ -1,5 +1,5 @@
-use tree_sitter::{Language, Node, Parser};
 use regex::Regex;
+use tree_sitter::{Language, Node, Parser};
 
 use super::SymbolChunk;
 use crate::profile_scope;
@@ -36,7 +36,8 @@ impl HierarchyTracker {
         let parent_path = if self.stack.is_empty() {
             String::new()
         } else {
-            self.stack.iter()
+            self.stack
+                .iter()
                 .map(|node| node.text.as_str())
                 .collect::<Vec<_>>()
                 .join(" > ")
@@ -54,7 +55,8 @@ impl HierarchyTracker {
         if self.stack.is_empty() {
             String::new()
         } else {
-            self.stack.iter()
+            self.stack
+                .iter()
                 .map(|node| node.text.as_str())
                 .collect::<Vec<_>>()
                 .join(" > ")
@@ -63,13 +65,27 @@ impl HierarchyTracker {
 }
 
 // Use the safe language providers exposed by the crates
-fn lang_typescript() -> Language { tree_sitter_typescript::language_typescript() }
-fn lang_tsx() -> Language { tree_sitter_typescript::language_tsx() }
-fn lang_javascript() -> Language { tree_sitter_javascript::language() }
-fn lang_python() -> Language { tree_sitter_python::language() }
-fn lang_rust() -> Language { tree_sitter_rust::language() }
-fn lang_go() -> Language { tree_sitter_go::language() }
-fn lang_markdown() -> Language { tree_sitter_md::language() }
+fn lang_typescript() -> Language {
+    tree_sitter_typescript::language_typescript()
+}
+fn lang_tsx() -> Language {
+    tree_sitter_typescript::language_tsx()
+}
+fn lang_javascript() -> Language {
+    tree_sitter_javascript::language()
+}
+fn lang_python() -> Language {
+    tree_sitter_python::language()
+}
+fn lang_rust() -> Language {
+    tree_sitter_rust::language()
+}
+fn lang_go() -> Language {
+    tree_sitter_go::language()
+}
+fn lang_markdown() -> Language {
+    tree_sitter_md::language()
+}
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
     profile_scope!("extract_chunks");
@@ -96,7 +112,10 @@ fn extract_code_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
         _ => return Vec::new(),
     };
     parser.set_language(&lang).ok();
-    let tree = match parser.parse(source, None) { Some(t) => t, None => return Vec::new() };
+    let tree = match parser.parse(source, None) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
     let root = tree.root_node();
     let mut chunks = Vec::new();
 
@@ -129,7 +148,12 @@ fn extract_markdown_chunks(source: &str) -> Vec<SymbolChunk> {
     chunks
 }
 
-fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, hierarchy: &mut HierarchyTracker) {
+fn walk_markdown_nodes(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    hierarchy: &mut HierarchyTracker,
+) {
     let kind = node.kind();
 
     match kind {
@@ -160,7 +184,12 @@ fn walk_markdown_nodes(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, 
     }
 }
 
-fn extract_heading(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, hierarchy: &mut HierarchyTracker) {
+fn extract_heading(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    hierarchy: &mut HierarchyTracker,
+) {
     // Get heading level by checking the marker
     let mut level = 0;
     let mut heading_text = String::new();
@@ -270,7 +299,12 @@ fn get_heading_level_from_line(line: &str) -> Option<usize> {
     None
 }
 
-fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, hierarchy: &HierarchyTracker) {
+fn extract_code_block(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    hierarchy: &HierarchyTracker,
+) {
     let mut language: Option<String> = None;
     let mut code_lines_count = 0;
 
@@ -282,7 +316,8 @@ fn extract_code_block(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, h
                     if let Ok(text) = child.utf8_text(source.as_bytes()) {
                         // Extract just the language name (first word) from info_string
                         // This handles cases like "typescript {1-3}" or "rust copy"
-                        let lang_text = text.trim().split_whitespace().next().unwrap_or(text.trim());
+                        let lang_text =
+                            text.trim().split_whitespace().next().unwrap_or(text.trim());
                         language = Some(lang_text.to_string());
                     }
                 }
@@ -503,30 +538,36 @@ fn find_line_number(source: &str, position: usize) -> usize {
 fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
     // Parse JSON and create chunks for top-level keys
     // This provides better granularity than treating the whole file as one chunk
-    
+
     // First, try to parse as valid JSON
     let value: serde_json::Value = match serde_json::from_str(source) {
         Ok(v) => v,
         Err(_) => return Vec::new(), // Invalid JSON, fall back to module chunking
     };
-    
+
     let mut chunks = Vec::new();
-    
+
     // Only chunk if it's an object with reasonable number of keys
     if let serde_json::Value::Object(map) = value {
         // For package.json, always chunk scripts, dependencies, devDependencies
-        let important_keys = ["scripts", "dependencies", "devDependencies", "config", "exports"];
-        
+        let important_keys = [
+            "scripts",
+            "dependencies",
+            "devDependencies",
+            "config",
+            "exports",
+        ];
+
         // If it has important keys or many keys, chunk it
         let has_important = important_keys.iter().any(|k| map.contains_key(*k));
         if !has_important && map.len() <= 3 {
             return Vec::new(); // Too simple, use module fallback
         }
-        
+
         // For each top-level key, create a chunk
         let lines: Vec<&str> = source.lines().collect();
         let mut current_line = 1;
-        
+
         for (key, _value) in map.iter() {
             // Find the line where this key appears
             let key_pattern = format!("\"{}\"", key);
@@ -536,16 +577,16 @@ fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
             let mut brace_depth = 0;
             let mut in_string = false;
             let mut escape_next = false;
-            
+
             for (i, line) in lines.iter().enumerate().skip(current_line - 1) {
                 let line_num = i + 1;
-                
+
                 // Look for the key
                 if !found && line.contains(&key_pattern) {
                     start_line = line_num;
                     found = true;
                 }
-                
+
                 if found {
                     // Track brace depth to find the end of this value
                     for ch in line.chars() {
@@ -553,7 +594,7 @@ fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
                             escape_next = false;
                             continue;
                         }
-                        
+
                         match ch {
                             '\\' if in_string => escape_next = true,
                             '"' if !in_string => in_string = true,
@@ -566,23 +607,23 @@ fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
                                     current_line = line_num + 1;
                                     break;
                                 }
-                            },
+                            }
                             ',' if !in_string && brace_depth == 0 => {
                                 // Simple value ends at comma
                                 end_line = line_num;
                                 current_line = line_num + 1;
                                 break;
-                            },
+                            }
                             _ => {}
                         }
                     }
-                    
+
                     if end_line > start_line {
                         break;
                     }
                 }
             }
-            
+
             if found && end_line >= start_line {
                 chunks.push(SymbolChunk {
                     symbol_name: Some(key.clone()),
@@ -596,7 +637,7 @@ fn extract_json_chunks(source: &str) -> Vec<SymbolChunk> {
             }
         }
     }
-    
+
     chunks
 }
 
@@ -605,16 +646,16 @@ fn extract_yaml_chunks(source: &str) -> Vec<SymbolChunk> {
     let mut chunks = Vec::new();
     let lines: Vec<&str> = source.lines().collect();
     let mut i = 0;
-    
+
     while i < lines.len() {
         let line = lines[i];
-        
+
         // Skip empty lines and comments
         if line.trim().is_empty() || line.trim().starts_with('#') {
             i += 1;
             continue;
         }
-        
+
         // Check if this is a top-level key (no leading spaces)
         if !line.starts_with(' ') && !line.starts_with('\t') && line.contains(':') {
             // Found a top-level key
@@ -623,25 +664,27 @@ fn extract_yaml_chunks(source: &str) -> Vec<SymbolChunk> {
                 i += 1;
                 continue;
             }
-            
+
             let start_line = i + 1;
             let mut end_line = start_line;
-            
+
             // Find where this section ends (next top-level key or EOF)
             let mut j = i + 1;
             while j < lines.len() {
                 let next_line = lines[j];
                 // Check if we hit another top-level key
-                if !next_line.starts_with(' ') && !next_line.starts_with('\t') 
-                    && !next_line.trim().is_empty() 
+                if !next_line.starts_with(' ')
+                    && !next_line.starts_with('\t')
+                    && !next_line.trim().is_empty()
                     && !next_line.trim().starts_with('#')
-                    && next_line.contains(':') {
+                    && next_line.contains(':')
+                {
                     break;
                 }
                 end_line = j + 1;
                 j += 1;
             }
-            
+
             chunks.push(SymbolChunk {
                 symbol_name: Some(key.to_string()),
                 kind: "yaml_key".to_string(),
@@ -651,13 +694,13 @@ fn extract_yaml_chunks(source: &str) -> Vec<SymbolChunk> {
                 end_line: end_line as i32,
                 metadata: None,
             });
-            
+
             i = j;
         } else {
             i += 1;
         }
     }
-    
+
     chunks
 }
 
@@ -666,33 +709,34 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
     let mut chunks = Vec::new();
     let lines: Vec<&str> = source.lines().collect();
     let mut i = 0;
-    
+
     while i < lines.len() {
         let line = lines[i];
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             i += 1;
             continue;
         }
-        
+
         // Check for section headers [section] or [[array]]
         if trimmed.starts_with('[') {
-            let section_name = trimmed.trim_start_matches('[')
+            let section_name = trimmed
+                .trim_start_matches('[')
                 .trim_start_matches('[')
                 .trim_end_matches(']')
                 .trim_end_matches(']')
                 .trim();
-            
+
             if section_name.is_empty() {
                 i += 1;
                 continue;
             }
-            
+
             let start_line = i + 1;
             let mut end_line = start_line;
-            
+
             // Find where this section ends (next section or EOF)
             let mut j = i + 1;
             while j < lines.len() {
@@ -704,7 +748,7 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
                 end_line = j + 1;
                 j += 1;
             }
-            
+
             chunks.push(SymbolChunk {
                 symbol_name: Some(section_name.to_string()),
                 kind: "toml_section".to_string(),
@@ -714,13 +758,13 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
                 end_line: end_line as i32,
                 metadata: None,
             });
-            
+
             i = j;
         } else {
             i += 1;
         }
     }
-    
+
     // If no sections found but file has content, look for top-level keys
     if chunks.is_empty() && !lines.is_empty() {
         // Simple approach: chunk by top-level keys
@@ -728,7 +772,7 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
         while i < lines.len() {
             let line = lines[i];
             let trimmed = line.trim();
-            
+
             if !trimmed.is_empty() && !trimmed.starts_with('#') && trimmed.contains('=') {
                 let key = trimmed.split('=').next().unwrap_or("").trim();
                 if !key.is_empty() {
@@ -746,7 +790,7 @@ fn extract_toml_chunks(source: &str) -> Vec<SymbolChunk> {
             i += 1;
         }
     }
-    
+
     chunks
 }
 
@@ -755,12 +799,16 @@ fn walk_add_decls(source: &str, node: Node, out: &mut Vec<SymbolChunk>) {
     match kind {
         // Functions
         "function_declaration" => {
-            let name = node.child_by_field_name("name").and_then(|n| Some(n.utf8_text(source.as_bytes()).ok()?.to_string()));
+            let name = node
+                .child_by_field_name("name")
+                .and_then(|n| Some(n.utf8_text(source.as_bytes()).ok()?.to_string()));
             push_chunk(source, node, name, "func", out);
         }
         // Classes
         "class_declaration" => {
-            let name = node.child_by_field_name("name").and_then(|n| Some(n.utf8_text(source.as_bytes()).ok()?.to_string()));
+            let name = node
+                .child_by_field_name("name")
+                .and_then(|n| Some(n.utf8_text(source.as_bytes()).ok()?.to_string()));
             push_chunk(source, node, name, "class", out);
         }
         // Variable declarations may contain arrow functions assigned to const
@@ -769,7 +817,8 @@ fn walk_add_decls(source: &str, node: Node, out: &mut Vec<SymbolChunk>) {
             for i in 0..node.child_count() {
                 if let Some(child) = node.child(i) {
                     if child.kind() == "variable_declarator" {
-                        let name = child.child_by_field_name("name")
+                        let name = child
+                            .child_by_field_name("name")
                             .and_then(|n| Some(n.utf8_text(source.as_bytes()).ok()?.to_string()));
                         let value = child.child_by_field_name("value");
                         if let Some(v) = value {
@@ -791,7 +840,13 @@ fn walk_add_decls(source: &str, node: Node, out: &mut Vec<SymbolChunk>) {
     }
 }
 
-fn push_chunk(source: &str, node: Node, name: Option<String>, kind: &str, out: &mut Vec<SymbolChunk>) {
+fn push_chunk(
+    source: &str,
+    node: Node,
+    name: Option<String>,
+    kind: &str,
+    out: &mut Vec<SymbolChunk>,
+) {
     let start = node.start_position();
     let end = node.end_position();
     let start_line = (start.row + 1) as i32;
@@ -811,7 +866,13 @@ fn push_chunk(source: &str, node: Node, name: Option<String>, kind: &str, out: &
 fn extract_preview(source: &str, start_line: i32, end_line: i32) -> String {
     let start = start_line.max(1) as usize - 1;
     let end = end_line.max(start_line) as usize;
-    source.lines().skip(start).take(end - start).take(60).collect::<Vec<_>>().join("\n")
+    source
+        .lines()
+        .skip(start)
+        .take(end - start)
+        .take(60)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // Python-specific parsing functions
@@ -839,17 +900,20 @@ fn extract_python_chunks(source: &str) -> Vec<SymbolChunk> {
     // Always create an imports chunk if we have imports
     // This provides a consistent way to query imports
     if !imports.is_empty() {
-        chunks.insert(0, SymbolChunk {
-            symbol_name: Some("__imports__".to_string()),
-            kind: "imports".to_string(),
-            signature: None,
-            docstring: None,
-            start_line: 1,
-            end_line: find_last_import_line(source, root),
-            metadata: Some(serde_json::json!({
-                "imports": imports
-            })),
-        });
+        chunks.insert(
+            0,
+            SymbolChunk {
+                symbol_name: Some("__imports__".to_string()),
+                kind: "imports".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: find_last_import_line(source, root),
+                metadata: Some(serde_json::json!({
+                    "imports": imports
+                })),
+            },
+        );
     }
 
     chunks
@@ -893,16 +957,18 @@ fn extract_python_module_assignments(source: &str, node: Node, chunks: &mut Vec<
             if left.kind() == "identifier" {
                 if let Ok(name) = left.utf8_text(source.as_bytes()) {
                     // Get the right side (value) for context
-                    let value = node.child_by_field_name("right")
+                    let value = node
+                        .child_by_field_name("right")
                         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
                         .map(|s| s.to_string());
 
                     // Determine if it's a constant (uppercase name convention)
-                    let kind = if name.to_uppercase() == name && name.chars().any(|c| c.is_alphabetic()) {
-                        "constant"
-                    } else {
-                        "variable"
-                    };
+                    let kind =
+                        if name.to_uppercase() == name && name.chars().any(|c| c.is_alphabetic()) {
+                            "constant"
+                        } else {
+                            "variable"
+                        };
 
                     let start = node.start_position();
                     let end = node.end_position();
@@ -940,9 +1006,15 @@ fn is_inside_function(node: Node) -> bool {
     false
 }
 
-fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, has_decorators: bool) {
+fn extract_python_function(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    has_decorators: bool,
+) {
     // Extract function name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -961,11 +1033,13 @@ fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChun
     };
 
     // Extract parameters for signature
-    let signature = node.child_by_field_name("parameters")
+    let signature = node
+        .child_by_field_name("parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|params| {
             // Also check for return type annotation
-            let return_type = node.child_by_field_name("return_type")
+            let return_type = node
+                .child_by_field_name("return_type")
                 .and_then(|n| n.utf8_text(source.as_bytes()).ok());
 
             let sig = if let Some(ret) = return_type {
@@ -1003,7 +1077,10 @@ fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChun
     // Build metadata object
     let mut metadata_obj = serde_json::Map::new();
     metadata_obj.insert("is_async".to_string(), serde_json::Value::Bool(is_async));
-    metadata_obj.insert("has_decorators".to_string(), serde_json::Value::Bool(has_decorators));
+    metadata_obj.insert(
+        "has_decorators".to_string(),
+        serde_json::Value::Bool(has_decorators),
+    );
 
     let start = node.start_position();
     let end = node.end_position();
@@ -1019,14 +1096,21 @@ fn extract_python_function(source: &str, node: Node, chunks: &mut Vec<SymbolChun
     });
 }
 
-fn extract_python_class(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, has_decorators: bool) {
+fn extract_python_class(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    has_decorators: bool,
+) {
     // Extract class name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract base classes for signature
-    let signature = node.child_by_field_name("superclasses")
+    let signature = node
+        .child_by_field_name("superclasses")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -1052,8 +1136,14 @@ fn extract_python_class(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>,
 
     // Build metadata object
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("has_decorators".to_string(), serde_json::Value::Bool(has_decorators));
-    metadata_obj.insert("base_classes".to_string(), serde_json::Value::Array(base_classes));
+    metadata_obj.insert(
+        "has_decorators".to_string(),
+        serde_json::Value::Bool(has_decorators),
+    );
+    metadata_obj.insert(
+        "base_classes".to_string(),
+        serde_json::Value::Array(base_classes),
+    );
 
     let start = node.start_position();
     let end = node.end_position();
@@ -1104,7 +1194,10 @@ fn extract_python_decorated(source: &str, node: Node, chunks: &mut Vec<SymbolChu
                         meta.insert(
                             "decorators".to_string(),
                             serde_json::Value::Array(
-                                decorators.iter().map(|d| serde_json::Value::String(d.clone())).collect()
+                                decorators
+                                    .iter()
+                                    .map(|d| serde_json::Value::String(d.clone()))
+                                    .collect(),
                             ),
                         );
                     }
@@ -1120,7 +1213,10 @@ fn extract_python_decorated(source: &str, node: Node, chunks: &mut Vec<SymbolChu
                         meta.insert(
                             "decorators".to_string(),
                             serde_json::Value::Array(
-                                decorators.iter().map(|d| serde_json::Value::String(d.clone())).collect()
+                                decorators
+                                    .iter()
+                                    .map(|d| serde_json::Value::String(d.clone()))
+                                    .collect(),
                             ),
                         );
                     }
@@ -1192,9 +1288,12 @@ fn detect_docstring_format(docstring: &str) -> DocstringFormat {
     let lines: Vec<&str> = docstring.lines().collect();
 
     // Check for reStructuredText field lists (:param:, :returns:, :type:, :raises:)
-    if docstring.contains(":param ") || docstring.contains(":returns:") ||
-       docstring.contains(":type ") || docstring.contains(":raises ") ||
-       docstring.contains(":rtype:") {
+    if docstring.contains(":param ")
+        || docstring.contains(":returns:")
+        || docstring.contains(":type ")
+        || docstring.contains(":raises ")
+        || docstring.contains(":rtype:")
+    {
         return DocstringFormat::ReStructuredText;
     }
 
@@ -1204,13 +1303,16 @@ fn detect_docstring_format(docstring: &str) -> DocstringFormat {
         let next_line = lines[i + 1].trim();
 
         // NumPy uses underlines (--- or ===) under section headers
-        if !line.is_empty() && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '=')) {
-            if line.eq_ignore_ascii_case("parameters") ||
-               line.eq_ignore_ascii_case("returns") ||
-               line.eq_ignore_ascii_case("raises") ||
-               line.eq_ignore_ascii_case("yields") ||
-               line.eq_ignore_ascii_case("notes") ||
-               line.eq_ignore_ascii_case("attributes") {
+        if !line.is_empty()
+            && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '='))
+        {
+            if line.eq_ignore_ascii_case("parameters")
+                || line.eq_ignore_ascii_case("returns")
+                || line.eq_ignore_ascii_case("raises")
+                || line.eq_ignore_ascii_case("yields")
+                || line.eq_ignore_ascii_case("notes")
+                || line.eq_ignore_ascii_case("attributes")
+            {
                 return DocstringFormat::NumPy;
             }
         }
@@ -1219,13 +1321,20 @@ fn detect_docstring_format(docstring: &str) -> DocstringFormat {
     // Check for Google style (sections ending with colon)
     for line in &lines {
         let trimmed = line.trim();
-        if trimmed == "Args:" || trimmed == "Arguments:" ||
-           trimmed == "Returns:" || trimmed == "Return:" ||
-           trimmed == "Raises:" || trimmed == "Yields:" ||
-           trimmed == "Examples:" || trimmed == "Example:" ||
-           trimmed == "Note:" || trimmed == "Notes:" ||
-           trimmed == "Warning:" || trimmed == "Warnings:" ||
-           trimmed == "Attributes:" {
+        if trimmed == "Args:"
+            || trimmed == "Arguments:"
+            || trimmed == "Returns:"
+            || trimmed == "Return:"
+            || trimmed == "Raises:"
+            || trimmed == "Yields:"
+            || trimmed == "Examples:"
+            || trimmed == "Example:"
+            || trimmed == "Note:"
+            || trimmed == "Notes:"
+            || trimmed == "Warning:"
+            || trimmed == "Warnings:"
+            || trimmed == "Attributes:"
+        {
             return DocstringFormat::Google;
         }
     }
@@ -1258,13 +1367,20 @@ fn parse_google_docstring(docstring: &str) -> String {
     // Extract brief description (everything before first section)
     while i < lines.len() {
         let trimmed = lines[i].trim();
-        if trimmed == "Args:" || trimmed == "Arguments:" ||
-           trimmed == "Returns:" || trimmed == "Return:" ||
-           trimmed == "Raises:" || trimmed == "Yields:" ||
-           trimmed == "Examples:" || trimmed == "Example:" ||
-           trimmed == "Note:" || trimmed == "Notes:" ||
-           trimmed == "Warning:" || trimmed == "Warnings:" ||
-           trimmed == "Attributes:" {
+        if trimmed == "Args:"
+            || trimmed == "Arguments:"
+            || trimmed == "Returns:"
+            || trimmed == "Return:"
+            || trimmed == "Raises:"
+            || trimmed == "Yields:"
+            || trimmed == "Examples:"
+            || trimmed == "Example:"
+            || trimmed == "Note:"
+            || trimmed == "Notes:"
+            || trimmed == "Warning:"
+            || trimmed == "Warnings:"
+            || trimmed == "Attributes:"
+        {
             break;
         }
         if !trimmed.is_empty() {
@@ -1316,10 +1432,10 @@ fn parse_google_docstring(docstring: &str) -> String {
                 // Handle parameter lines (usually indented)
                 if !trimmed.is_empty() {
                     // For list-like sections, add "- " prefix to indented items
-                    let is_list_section = current_section == "Parameters" ||
-                                         current_section == "Attributes" ||
-                                         current_section == "Raises" ||
-                                         current_section == "Yields";
+                    let is_list_section = current_section == "Parameters"
+                        || current_section == "Attributes"
+                        || current_section == "Raises"
+                        || current_section == "Yields";
 
                     if is_list_section && line.starts_with("    ") {
                         result.push_str("- ");
@@ -1353,14 +1469,17 @@ fn parse_numpy_docstring(docstring: &str) -> String {
             let next_line = lines[i + 1].trim();
 
             // Check if next line is an underline
-            if !line.is_empty() && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '=')) {
-                if line.eq_ignore_ascii_case("parameters") ||
-                   line.eq_ignore_ascii_case("returns") ||
-                   line.eq_ignore_ascii_case("raises") ||
-                   line.eq_ignore_ascii_case("yields") ||
-                   line.eq_ignore_ascii_case("notes") ||
-                   line.eq_ignore_ascii_case("examples") ||
-                   line.eq_ignore_ascii_case("attributes") {
+            if !line.is_empty()
+                && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '='))
+            {
+                if line.eq_ignore_ascii_case("parameters")
+                    || line.eq_ignore_ascii_case("returns")
+                    || line.eq_ignore_ascii_case("raises")
+                    || line.eq_ignore_ascii_case("yields")
+                    || line.eq_ignore_ascii_case("notes")
+                    || line.eq_ignore_ascii_case("examples")
+                    || line.eq_ignore_ascii_case("attributes")
+                {
                     break;
                 }
             }
@@ -1383,7 +1502,9 @@ fn parse_numpy_docstring(docstring: &str) -> String {
             let next_line = lines[i + 1].trim();
 
             // Check if this is a section header (has underline)
-            if !line.is_empty() && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '=')) {
+            if !line.is_empty()
+                && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '='))
+            {
                 let current_section = line.to_string();
                 result.push_str("\n\n");
                 result.push_str(line);
@@ -1397,7 +1518,9 @@ fn parse_numpy_docstring(docstring: &str) -> String {
                         let next = lines[i + 1].trim();
 
                         // Check if we've hit the next section
-                        if !content_line.is_empty() && (next.chars().all(|c| c == '-') || next.chars().all(|c| c == '=')) {
+                        if !content_line.is_empty()
+                            && (next.chars().all(|c| c == '-') || next.chars().all(|c| c == '='))
+                        {
                             break;
                         }
                     }
@@ -1407,8 +1530,9 @@ fn parse_numpy_docstring(docstring: &str) -> String {
 
                     // Handle parameter lines (format: "param_name : type" followed by description)
                     if !trimmed.is_empty() {
-                        if current_section.eq_ignore_ascii_case("parameters") ||
-                           current_section.eq_ignore_ascii_case("attributes") {
+                        if current_section.eq_ignore_ascii_case("parameters")
+                            || current_section.eq_ignore_ascii_case("attributes")
+                        {
                             if !content_line.starts_with("    ") && trimmed.contains(" : ") {
                                 result.push_str("- ");
                             }
@@ -1493,7 +1617,11 @@ fn parse_rst_docstring(docstring: &str) -> String {
             }
         } else if line.starts_with(":returns:") || line.starts_with(":return:") {
             // Format: :returns: description
-            let prefix = if line.starts_with(":returns:") { ":returns:" } else { ":return:" };
+            let prefix = if line.starts_with(":returns:") {
+                ":returns:"
+            } else {
+                ":return:"
+            };
             let description = line.strip_prefix(prefix).unwrap_or("").trim();
 
             // Collect multi-line descriptions
@@ -1671,11 +1799,13 @@ fn extract_standard_import(source: &str, node: Node, imports: &mut Vec<PythonImp
                 }
                 "aliased_import" => {
                     // Aliased import: import foo as bar
-                    let module_name = child.child_by_field_name("name")
+                    let module_name = child
+                        .child_by_field_name("name")
                         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
                         .map(|s| s.to_string());
 
-                    let alias = child.child_by_field_name("alias")
+                    let alias = child
+                        .child_by_field_name("alias")
                         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
                         .map(|s| s.to_string());
 
@@ -1719,7 +1849,9 @@ fn extract_from_import(source: &str, node: Node, imports: &mut Vec<PythonImport>
             (module, Some(dots))
         } else {
             // Absolute import
-            let module = mod_node.utf8_text(source.as_bytes()).ok()
+            let module = mod_node
+                .utf8_text(source.as_bytes())
+                .ok()
                 .map(|s| s.to_string())
                 .unwrap_or_default();
             (module, None)
@@ -1754,7 +1886,13 @@ fn extract_from_import(source: &str, node: Node, imports: &mut Vec<PythonImport>
             _ => {
                 // Complex case: import_list or other structure
                 // Walk all children to extract names
-                extract_import_list(source, name_node, &mut names, &mut aliases, &mut is_wildcard);
+                extract_import_list(
+                    source,
+                    name_node,
+                    &mut names,
+                    &mut aliases,
+                    &mut is_wildcard,
+                );
             }
         }
     }
@@ -1779,10 +1917,12 @@ fn extract_from_import(source: &str, node: Node, imports: &mut Vec<PythonImport>
                 }
             } else if child.kind() == "aliased_import" {
                 // Additional aliased import
-                let name = child.child_by_field_name("name")
+                let name = child
+                    .child_by_field_name("name")
                     .and_then(|n| n.utf8_text(source.as_bytes()).ok())
                     .map(|s| s.to_string());
-                let alias = child.child_by_field_name("alias")
+                let alias = child
+                    .child_by_field_name("alias")
                     .and_then(|n| n.utf8_text(source.as_bytes()).ok())
                     .map(|s| s.to_string());
 
@@ -1817,12 +1957,19 @@ fn extract_from_import(source: &str, node: Node, imports: &mut Vec<PythonImport>
     });
 }
 
-fn extract_aliased_import(source: &str, node: Node, names: &mut Vec<String>, aliases: &mut Vec<(String, String)>) {
-    let name = node.child_by_field_name("name")
+fn extract_aliased_import(
+    source: &str,
+    node: Node,
+    names: &mut Vec<String>,
+    aliases: &mut Vec<(String, String)>,
+) {
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let alias = node.child_by_field_name("alias")
+    let alias = node
+        .child_by_field_name("alias")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -1834,7 +1981,13 @@ fn extract_aliased_import(source: &str, node: Node, names: &mut Vec<String>, ali
     }
 }
 
-fn extract_import_list(source: &str, node: Node, names: &mut Vec<String>, aliases: &mut Vec<(String, String)>, is_wildcard: &mut bool) {
+fn extract_import_list(
+    source: &str,
+    node: Node,
+    names: &mut Vec<String>,
+    aliases: &mut Vec<(String, String)>,
+    is_wildcard: &mut bool,
+) {
     // Recursively walk the import list
     // The import_list can contain: identifier, aliased_import, wildcard_import, and comma separators
     for i in 0..node.child_count() {
@@ -1871,7 +2024,10 @@ fn extract_dynamic_import(source: &str, node: Node, imports: &mut Vec<PythonImpo
         let func_text = func_node.utf8_text(source.as_bytes()).ok().unwrap_or("");
 
         // Check for __import__('module') or importlib.import_module('module')
-        if func_text == "__import__" || func_text.ends_with(".import_module") || func_text == "import_module" {
+        if func_text == "__import__"
+            || func_text.ends_with(".import_module")
+            || func_text == "import_module"
+        {
             // Extract the first argument (module name)
             if let Some(args) = node.child_by_field_name("arguments") {
                 // Find the first string argument
@@ -1991,7 +2147,8 @@ fn walk_rust_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
 fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract function name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2005,7 +2162,8 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     let is_unsafe = modifiers.contains(&"unsafe");
 
     // Extract generic type parameters
-    let type_params = node.child_by_field_name("type_parameters")
+    let type_params = node
+        .child_by_field_name("type_parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2013,12 +2171,14 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     let where_clause = extract_rust_where_clause(source, node);
 
     // Extract parameters for signature
-    let params = node.child_by_field_name("parameters")
+    let params = node
+        .child_by_field_name("parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract return type
-    let return_type = node.child_by_field_name("return_type")
+    let return_type = node
+        .child_by_field_name("return_type")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.trim_start_matches("->").trim().to_string());
 
@@ -2039,19 +2199,28 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())),
+    );
     metadata_obj.insert("is_async".to_string(), serde_json::Value::Bool(is_async));
     metadata_obj.insert("is_const".to_string(), serde_json::Value::Bool(is_const));
     metadata_obj.insert("is_unsafe".to_string(), serde_json::Value::Bool(is_unsafe));
 
     // Add generic parameters to metadata if present
     if let Some(ref generics) = type_params {
-        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+        metadata_obj.insert(
+            "generics".to_string(),
+            serde_json::Value::String(generics.clone()),
+        );
     }
 
     // Add where clause to metadata if present
     if let Some(ref wc) = where_clause {
-        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+        metadata_obj.insert(
+            "where_clause".to_string(),
+            serde_json::Value::String(wc.clone()),
+        );
     }
 
     let start = node.start_position();
@@ -2070,7 +2239,8 @@ fn extract_rust_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
 
 fn extract_rust_struct(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract struct name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2078,7 +2248,8 @@ fn extract_rust_struct(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     let visibility = extract_rust_visibility(source, node);
 
     // Extract type parameters (generics)
-    let type_params = node.child_by_field_name("type_parameters")
+    let type_params = node
+        .child_by_field_name("type_parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2098,16 +2269,25 @@ fn extract_rust_struct(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())),
+    );
 
     // Add generic parameters to metadata if present
     if let Some(ref generics) = type_params {
-        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+        metadata_obj.insert(
+            "generics".to_string(),
+            serde_json::Value::String(generics.clone()),
+        );
     }
 
     // Add where clause to metadata if present
     if let Some(ref wc) = where_clause {
-        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+        metadata_obj.insert(
+            "where_clause".to_string(),
+            serde_json::Value::String(wc.clone()),
+        );
     }
 
     let start = node.start_position();
@@ -2126,7 +2306,8 @@ fn extract_rust_struct(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
 
 fn extract_rust_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract enum name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2134,7 +2315,8 @@ fn extract_rust_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     let visibility = extract_rust_visibility(source, node);
 
     // Extract type parameters (generics)
-    let type_params = node.child_by_field_name("type_parameters")
+    let type_params = node
+        .child_by_field_name("type_parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2154,16 +2336,25 @@ fn extract_rust_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())),
+    );
 
     // Add generic parameters to metadata if present
     if let Some(ref generics) = type_params {
-        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+        metadata_obj.insert(
+            "generics".to_string(),
+            serde_json::Value::String(generics.clone()),
+        );
     }
 
     // Add where clause to metadata if present
     if let Some(ref wc) = where_clause {
-        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+        metadata_obj.insert(
+            "where_clause".to_string(),
+            serde_json::Value::String(wc.clone()),
+        );
     }
 
     let start = node.start_position();
@@ -2182,7 +2373,8 @@ fn extract_rust_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
 fn extract_rust_trait(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract trait name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2190,7 +2382,8 @@ fn extract_rust_trait(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     let visibility = extract_rust_visibility(source, node);
 
     // Extract type parameters (generics)
-    let type_params = node.child_by_field_name("type_parameters")
+    let type_params = node
+        .child_by_field_name("type_parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2210,16 +2403,25 @@ fn extract_rust_trait(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())),
+    );
 
     // Add generic parameters to metadata if present
     if let Some(ref generics) = type_params {
-        metadata_obj.insert("generics".to_string(), serde_json::Value::String(generics.clone()));
+        metadata_obj.insert(
+            "generics".to_string(),
+            serde_json::Value::String(generics.clone()),
+        );
     }
 
     // Add where clause to metadata if present
     if let Some(ref wc) = where_clause {
-        metadata_obj.insert("where_clause".to_string(), serde_json::Value::String(wc.clone()));
+        metadata_obj.insert(
+            "where_clause".to_string(),
+            serde_json::Value::String(wc.clone()),
+        );
     }
 
     let start = node.start_position();
@@ -2238,12 +2440,14 @@ fn extract_rust_trait(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
 fn extract_rust_impl(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract the type being implemented for
-    let type_node = node.child_by_field_name("type")
+    let type_node = node
+        .child_by_field_name("type")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract the trait being implemented (if any)
-    let trait_node = node.child_by_field_name("trait")
+    let trait_node = node
+        .child_by_field_name("trait")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2255,10 +2459,7 @@ fn extract_rust_impl(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
             Some(format!("{} for {}", trait_name, type_name)),
         )
     } else if let Some(type_name) = type_node {
-        (
-            Some(format!("impl {}", type_name)),
-            Some(type_name),
-        )
+        (Some(format!("impl {}", type_name)), Some(type_name))
     } else {
         (None, None)
     };
@@ -2282,7 +2483,8 @@ fn extract_rust_impl(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
 fn extract_rust_module(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract module name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2294,7 +2496,10 @@ fn extract_rust_module(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())),
+    );
 
     let start = node.start_position();
     let end = node.end_position();
@@ -2312,7 +2517,8 @@ fn extract_rust_module(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
 
 fn extract_rust_constant(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract constant name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2320,12 +2526,14 @@ fn extract_rust_constant(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     let visibility = extract_rust_visibility(source, node);
 
     // Extract type annotation
-    let type_annotation = node.child_by_field_name("type")
+    let type_annotation = node
+        .child_by_field_name("type")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract value for signature
-    let value = node.child_by_field_name("value")
+    let value = node
+        .child_by_field_name("value")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2348,7 +2556,10 @@ fn extract_rust_constant(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
 
     // Build metadata
     let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert("visibility".to_string(), serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())));
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.unwrap_or_else(|| "private".to_string())),
+    );
     if let Some(v) = value {
         metadata_obj.insert("value".to_string(), serde_json::Value::String(v));
     }
@@ -2369,7 +2580,8 @@ fn extract_rust_constant(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
 
 fn extract_rust_macro(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract macro name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2398,7 +2610,10 @@ fn extract_rust_visibility(source: &str, node: Node) -> Option<String> {
     for i in 0..node.child_count() {
         if let Some(child) = node.child(i) {
             if child.kind() == "visibility_modifier" {
-                return child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                return child
+                    .utf8_text(source.as_bytes())
+                    .ok()
+                    .map(|s| s.to_string());
             }
         }
     }
@@ -2489,7 +2704,10 @@ fn extract_rust_where_clause(source: &str, node: Node) -> Option<String> {
     for i in 0..node.child_count() {
         if let Some(child) = node.child(i) {
             if child.kind() == "where_clause" {
-                return child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                return child
+                    .utf8_text(source.as_bytes())
+                    .ok()
+                    .map(|s| s.to_string());
             }
         }
     }
@@ -2498,7 +2716,9 @@ fn extract_rust_where_clause(source: &str, node: Node) -> Option<String> {
 
 fn extract_rust_use_statement(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract the full use statement text
-    let use_text = node.utf8_text(source.as_bytes()).ok()
+    let use_text = node
+        .utf8_text(source.as_bytes())
+        .ok()
         .map(|s| s.to_string());
 
     // Try to extract a meaningful name for the use statement
@@ -2506,7 +2726,11 @@ fn extract_rust_use_statement(source: &str, node: Node, chunks: &mut Vec<SymbolC
     // For complex cases like "use std::io::{Read, Write};", extract the whole path
     let name = if let Some(ref text) = use_text {
         // Remove "use " prefix and ";" suffix
-        let trimmed = text.trim_start_matches("use").trim().trim_end_matches(";").trim();
+        let trimmed = text
+            .trim_start_matches("use")
+            .trim()
+            .trim_end_matches(";")
+            .trim();
 
         // Handle different use statement patterns:
         // - use foo::bar; -> "foo::bar"
@@ -2638,17 +2862,20 @@ fn walk_go_decls(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
 fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract function name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract parameters
-    let params = node.child_by_field_name("parameters")
+    let params = node
+        .child_by_field_name("parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract return type
-    let result = node.child_by_field_name("result")
+    let result = node
+        .child_by_field_name("result")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2675,7 +2902,10 @@ fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
 
         // Add visibility based on function name
         if let Some(ref func_name) = name {
-            meta.insert("visibility".to_string(), serde_json::json!(go_visibility(func_name)));
+            meta.insert(
+                "visibility".to_string(),
+                serde_json::json!(go_visibility(func_name)),
+            );
         }
 
         if has_goroutines {
@@ -2705,22 +2935,26 @@ fn extract_go_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
 
 fn extract_go_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract method name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract receiver (e.g., "(r *MyType)")
-    let receiver = node.child_by_field_name("receiver")
+    let receiver = node
+        .child_by_field_name("receiver")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract parameters
-    let params = node.child_by_field_name("parameters")
+    let params = node
+        .child_by_field_name("parameters")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract return type
-    let result = node.child_by_field_name("result")
+    let result = node
+        .child_by_field_name("result")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2758,7 +2992,10 @@ fn extract_go_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
         // Add visibility based on method name
         if let Some(ref method_name) = name {
-            meta.insert("visibility".to_string(), serde_json::json!(go_visibility(method_name)));
+            meta.insert(
+                "visibility".to_string(),
+                serde_json::json!(go_visibility(method_name)),
+            );
         }
 
         if let Some(r) = receiver {
@@ -2808,12 +3045,14 @@ fn extract_go_type_declaration(source: &str, node: Node, chunks: &mut Vec<Symbol
 
 fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract type name
-    let name = node.child_by_field_name("name")
+    let name = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract type definition
-    let type_def = node.child_by_field_name("type")
+    let type_def = node
+        .child_by_field_name("type")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2841,7 +3080,10 @@ fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
 
         // Add visibility based on type name
         if let Some(ref type_name) = name {
-            meta.insert("visibility".to_string(), serde_json::json!(go_visibility(type_name)));
+            meta.insert(
+                "visibility".to_string(),
+                serde_json::json!(go_visibility(type_name)),
+            );
         }
 
         // For structs, extract embedded types
@@ -2849,13 +3091,19 @@ fn extract_go_type_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
             if type_node.kind() == "struct_type" {
                 let embedded_types = extract_go_embedded_types(source, *type_node);
                 if !embedded_types.is_empty() {
-                    meta.insert("embedded_types".to_string(), serde_json::json!(embedded_types));
+                    meta.insert(
+                        "embedded_types".to_string(),
+                        serde_json::json!(embedded_types),
+                    );
                 }
             } else if type_node.kind() == "interface_type" {
                 // For interfaces, extract method signatures
                 let interface_methods = extract_go_interface_methods(source, *type_node);
                 if !interface_methods.is_empty() {
-                    meta.insert("interface_methods".to_string(), serde_json::json!(interface_methods));
+                    meta.insert(
+                        "interface_methods".to_string(),
+                        serde_json::json!(interface_methods),
+                    );
                 }
             }
         }
@@ -2906,7 +3154,10 @@ fn extract_go_const_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
         for i in 0..node.child_count() {
             if let Some(child) = node.child(i) {
                 if child.kind() == "identifier" {
-                    const_name = child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    const_name = child
+                        .utf8_text(source.as_bytes())
+                        .ok()
+                        .map(|s| s.to_string());
                     break;
                 }
             }
@@ -2915,12 +3166,14 @@ fn extract_go_const_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     };
 
     // Extract type (if specified)
-    let type_annotation = node.child_by_field_name("type")
+    let type_annotation = node
+        .child_by_field_name("type")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract value
-    let value = node.child_by_field_name("value")
+    let value = node
+        .child_by_field_name("value")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -2941,7 +3194,10 @@ fn extract_go_const_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     // Build metadata with visibility
     let metadata = if let Some(ref const_name) = name {
         let mut meta = serde_json::Map::new();
-        meta.insert("visibility".to_string(), serde_json::json!(go_visibility(const_name)));
+        meta.insert(
+            "visibility".to_string(),
+            serde_json::json!(go_visibility(const_name)),
+        );
         Some(serde_json::Value::Object(meta))
     } else {
         None
@@ -2986,7 +3242,10 @@ fn extract_go_var_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
         for i in 0..node.child_count() {
             if let Some(child) = node.child(i) {
                 if child.kind() == "identifier" {
-                    var_name = child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    var_name = child
+                        .utf8_text(source.as_bytes())
+                        .ok()
+                        .map(|s| s.to_string());
                     break;
                 }
             }
@@ -2995,12 +3254,14 @@ fn extract_go_var_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     };
 
     // Extract type (if specified)
-    let type_annotation = node.child_by_field_name("type")
+    let type_annotation = node
+        .child_by_field_name("type")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
     // Extract value
-    let value = node.child_by_field_name("value")
+    let value = node
+        .child_by_field_name("value")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -3021,7 +3282,10 @@ fn extract_go_var_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
     // Build metadata with visibility
     let metadata = if let Some(ref var_name) = name {
         let mut meta = serde_json::Map::new();
-        meta.insert("visibility".to_string(), serde_json::json!(go_visibility(var_name)));
+        meta.insert(
+            "visibility".to_string(),
+            serde_json::json!(go_visibility(var_name)),
+        );
         Some(serde_json::Value::Object(meta))
     } else {
         None
@@ -3045,7 +3309,10 @@ fn extract_go_package(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         for i in 0..node.child_count() {
             if let Some(child) = node.child(i) {
                 if child.kind() == "package_identifier" {
-                    pkg_name = child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    pkg_name = child
+                        .utf8_text(source.as_bytes())
+                        .ok()
+                        .map(|s| s.to_string());
                     break;
                 }
             }
@@ -3090,12 +3357,14 @@ fn extract_go_import(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
 
 fn extract_go_import_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract import path (the string literal)
-    let import_path = node.child_by_field_name("path")
+    let import_path = node
+        .child_by_field_name("path")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.trim_matches('"').to_string());
 
     // Extract import alias (if any)
-    let alias = node.child_by_field_name("name")
+    let alias = node
+        .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
@@ -3121,7 +3390,11 @@ fn extract_go_import_spec(source: &str, node: Node, chunks: &mut Vec<SymbolChunk
         docstring: None,
         start_line: (start.row + 1) as i32,
         end_line: (end.row + 1) as i32,
-        metadata: if metadata.is_empty() { None } else { Some(serde_json::Value::Object(metadata)) },
+        metadata: if metadata.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(metadata))
+        },
     });
 }
 
@@ -3201,7 +3474,10 @@ fn extract_go_doc_comment(source: &str, node: Node) -> Option<String> {
 // Helper function to determine if a Go identifier is exported (PascalCase) or unexported (camelCase)
 fn go_is_exported(name: &str) -> bool {
     // In Go, an identifier is exported if it starts with an uppercase letter
-    name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+    name.chars()
+        .next()
+        .map(|c| c.is_uppercase())
+        .unwrap_or(false)
 }
 
 // Helper function to determine Go visibility based on identifier name
@@ -3218,7 +3494,10 @@ fn go_visibility(name: &str) -> &'static str {
 fn parse_go_receiver(receiver_text: &str) -> (Option<String>, Option<&'static str>) {
     // Receiver format: "(r *Type)" or "(r Type)"
     // Strip parentheses and split on whitespace
-    let stripped = receiver_text.trim().trim_start_matches('(').trim_end_matches(')');
+    let stripped = receiver_text
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')');
     let parts: Vec<&str> = stripped.split_whitespace().collect();
 
     if parts.len() >= 2 {
@@ -3373,5 +3652,3 @@ fn extract_gomod_chunks(source: &str) -> Vec<SymbolChunk> {
 
     chunks
 }
-
-

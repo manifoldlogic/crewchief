@@ -2,10 +2,9 @@
 ///
 /// Standalone quality tests that validate parser accuracy, hierarchy tracking,
 /// and code block detection without dependencies on other integration tests.
-
 use crewchief_maproom::indexer::parser;
-use std::fs;
 use std::collections::HashMap;
+use std::fs;
 
 #[test]
 fn test_hierarchy_tracking_validation() {
@@ -36,7 +35,10 @@ fn test_hierarchy_tracking_validation() {
         ("Grandchild 2.1", "Root > Child 2"),
         ("Great-grandchild 2.1.1", "Root > Child 2 > Grandchild 2.1"),
         ("Child 3", "Root"),
-    ].iter().cloned().collect();
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
     for chunk in &chunks {
         if let Some(ref name) = chunk.symbol_name {
@@ -65,8 +67,12 @@ fn test_hierarchy_tracking_validation() {
     }
 
     println!("\nHierarchy Tracking:");
-    println!("  Correct parent paths: {} / {} ({:.1}%)", correct, total,
-        (correct as f64 / total as f64) * 100.0);
+    println!(
+        "  Correct parent paths: {} / {} ({:.1}%)",
+        correct,
+        total,
+        (correct as f64 / total as f64) * 100.0
+    );
 
     if !errors.is_empty() {
         println!("  Errors:");
@@ -76,8 +82,11 @@ fn test_hierarchy_tracking_validation() {
     }
 
     // Success metric: 100% hierarchy tracking
-    assert_eq!(correct, total,
-        "All parent paths should be correct. {} / {} correct", correct, total);
+    assert_eq!(
+        correct, total,
+        "All parent paths should be correct. {} / {} correct",
+        correct, total
+    );
 }
 
 #[test]
@@ -130,10 +139,21 @@ echo "Hello"
     let code_blocks: Vec<_> = chunks.iter().filter(|c| c.kind == "code_block").collect();
 
     // Expected: 6 code blocks
-    assert_eq!(code_blocks.len(), 6, "Should detect all 6 code blocks (100%)");
+    assert_eq!(
+        code_blocks.len(),
+        6,
+        "Should detect all 6 code blocks (100%)"
+    );
 
     // Verify languages
-    let expected_languages = ["rust", "python", "javascript", "typescript", "plain", "bash"];
+    let expected_languages = [
+        "rust",
+        "python",
+        "javascript",
+        "typescript",
+        "plain",
+        "bash",
+    ];
     let mut found_languages = Vec::new();
 
     for block in &code_blocks {
@@ -145,8 +165,11 @@ echo "Hello"
     }
 
     for lang in expected_languages {
-        assert!(found_languages.contains(&lang.to_string()),
-            "Should detect code block with language: {}", lang);
+        assert!(
+            found_languages.contains(&lang.to_string()),
+            "Should detect code block with language: {}",
+            lang
+        );
     }
 
     println!("\nCode Block Detection:");
@@ -159,18 +182,31 @@ fn test_parser_accuracy_readme() {
     if let Ok(content) = fs::read_to_string("/workspace/README.md") {
         let chunks = parser::extract_chunks(&content, "md");
 
-        let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
+        let headings = chunks
+            .iter()
+            .filter(|c| c.kind.starts_with("heading_"))
+            .count();
         let code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
         // Tables now use markdown_section kind (MAPROOM-1001 fix)
-        let tables = chunks.iter().filter(|c| {
-            c.kind == "markdown_section" &&
-            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("Table "))
-        }).count();
+        let tables = chunks
+            .iter()
+            .filter(|c| {
+                c.kind == "markdown_section"
+                    && c.symbol_name
+                        .as_ref()
+                        .map_or(false, |s| s.starts_with("Table "))
+            })
+            .count();
         // Lists now use markdown_section kind (MAPROOM-1001 fix)
-        let lists = chunks.iter().filter(|c| {
-            c.kind == "markdown_section" &&
-            c.symbol_name.as_ref().map_or(false, |s| s.starts_with("List ("))
-        }).count();
+        let lists = chunks
+            .iter()
+            .filter(|c| {
+                c.kind == "markdown_section"
+                    && c.symbol_name
+                        .as_ref()
+                        .map_or(false, |s| s.starts_with("List ("))
+            })
+            .count();
 
         println!("\nREADME.md Parser Accuracy:");
         println!("  Headings: {}", headings);
@@ -192,7 +228,10 @@ fn test_parser_accuracy_claude_md() {
     if let Ok(content) = fs::read_to_string("/workspace/CLAUDE.md") {
         let chunks = parser::extract_chunks(&content, "md");
 
-        let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
+        let headings = chunks
+            .iter()
+            .filter(|c| c.kind.starts_with("heading_"))
+            .count();
         let code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
 
         println!("\nCLAUDE.md Parser Accuracy:");
@@ -202,7 +241,10 @@ fn test_parser_accuracy_claude_md() {
 
         // Should extract meaningful content
         assert!(headings > 10, "Should extract many headings from CLAUDE.md");
-        assert!(code_blocks >= 2, "Should extract code blocks from CLAUDE.md");
+        assert!(
+            code_blocks >= 2,
+            "Should extract code blocks from CLAUDE.md"
+        );
     } else {
         println!("CLAUDE.md not found, skipping test");
     }
@@ -225,7 +267,10 @@ fn test_edge_case_large_document() {
     let chunks = parser::extract_chunks(&source, "md");
     let duration = start.elapsed();
 
-    let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
+    let headings = chunks
+        .iter()
+        .filter(|c| c.kind.starts_with("heading_"))
+        .count();
     let code_blocks = chunks.iter().filter(|c| c.kind == "code_block").count();
 
     println!("\nLarge Document Test:");
@@ -235,8 +280,11 @@ fn test_edge_case_large_document() {
     println!("  Code blocks: {}", code_blocks);
 
     // Should parse within reasonable time
-    assert!(duration.as_millis() < 1000,
-        "Large document parsing should be fast: {:?}", duration);
+    assert!(
+        duration.as_millis() < 1000,
+        "Large document parsing should be fast: {:?}",
+        duration
+    );
 
     // Should extract expected elements
     assert!(headings >= 500, "Should extract at least 500 headings");
@@ -263,14 +311,20 @@ More text.
     // Should not panic
     let chunks = parser::extract_chunks(source, "md");
 
-    let headings = chunks.iter().filter(|c| c.kind.starts_with("heading_")).count();
+    let headings = chunks
+        .iter()
+        .filter(|c| c.kind.starts_with("heading_"))
+        .count();
 
     println!("\nMalformed Markdown Test:");
     println!("  Chunks extracted: {}", chunks.len());
     println!("  Headings: {}", headings);
 
     // Should extract at least some valid elements
-    assert!(headings >= 2, "Should extract valid headings even with malformed content");
+    assert!(
+        headings >= 2,
+        "Should extract valid headings even with malformed content"
+    );
 }
 
 #[test]
@@ -291,7 +345,8 @@ fn hello() {
 
     let chunks = parser::extract_chunks(source, "md");
 
-    let headings: Vec<_> = chunks.iter()
+    let headings: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind.starts_with("heading_"))
         .collect();
 
@@ -299,10 +354,14 @@ fn hello() {
     println!("  Headings: {}", headings.len());
 
     // Should handle Unicode correctly
-    assert!(headings.len() >= 2, "Should extract headings with Unicode characters");
+    assert!(
+        headings.len() >= 2,
+        "Should extract headings with Unicode characters"
+    );
 
     // Check that Chinese heading was extracted
-    let chinese_heading = headings.iter()
+    let chinese_heading = headings
+        .iter()
         .find(|h| h.symbol_name.as_ref().map_or(false, |n| n.contains("中文")));
     assert!(chinese_heading.is_some(), "Should extract Chinese heading");
 }

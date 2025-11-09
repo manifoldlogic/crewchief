@@ -307,7 +307,10 @@ impl UpdateQueue {
     /// Use this to remove old failed tasks that have been manually
     /// resolved or are no longer relevant.
     pub fn clear_dead_letter(&mut self) {
-        debug!("Clearing {} tasks from dead letter queue", self.dead_letter.len());
+        debug!(
+            "Clearing {} tasks from dead letter queue",
+            self.dead_letter.len()
+        );
         self.dead_letter.clear();
     }
 

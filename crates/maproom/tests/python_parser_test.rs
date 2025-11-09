@@ -39,7 +39,10 @@ def greet(name: str, age: int) -> str:
     assert!(func.signature.is_some());
     assert!(func.signature.as_ref().unwrap().contains("name"));
     assert!(func.signature.as_ref().unwrap().contains("age"));
-    assert_eq!(func.docstring, Some("Greet a person by name and age.".to_string()));
+    assert_eq!(
+        func.docstring,
+        Some("Greet a person by name and age.".to_string())
+    );
 }
 
 #[test]
@@ -99,7 +102,8 @@ class Dog(Animal):
     assert!(chunks.len() >= 2, "Expected at least 2 chunks");
 
     // Find the Dog class
-    let dog = chunks.iter()
+    let dog = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Dog".to_string()))
         .expect("Should find Dog class");
 
@@ -129,7 +133,8 @@ def multiply(a, b):
 
     assert_eq!(chunks.len(), 3, "Expected 3 functions");
 
-    let names: Vec<_> = chunks.iter()
+    let names: Vec<_> = chunks
+        .iter()
         .filter_map(|c| c.symbol_name.as_ref().map(|s| s.as_str()))
         .collect();
 
@@ -194,13 +199,15 @@ def use_imports():
     assert_eq!(chunks.len(), 2);
 
     // Find the function chunk
-    let func = chunks.iter()
+    let func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("use_imports".to_string()))
         .expect("Should find use_imports function");
     assert_eq!(func.kind, "func");
 
     // Verify imports chunk exists
-    let imports_chunk = chunks.iter()
+    let imports_chunk = chunks
+        .iter()
         .find(|c| c.kind == "imports")
         .expect("Should have imports chunk");
     assert!(imports_chunk.metadata.is_some());
@@ -222,7 +229,8 @@ def outer():
     // Should extract both outer and inner functions
     assert_eq!(chunks.len(), 2);
 
-    let names: Vec<_> = chunks.iter()
+    let names: Vec<_> = chunks
+        .iter()
         .filter_map(|c| c.symbol_name.as_ref())
         .map(|s| s.as_str())
         .collect();
@@ -269,7 +277,10 @@ async def fetch_data():
     assert_eq!(chunks.len(), 1);
     assert_eq!(chunks[0].symbol_name, Some("fetch_data".to_string()));
     assert_eq!(chunks[0].kind, "async_func");
-    assert_eq!(chunks[0].docstring, Some("Asynchronously fetch data.".to_string()));
+    assert_eq!(
+        chunks[0].docstring,
+        Some("Asynchronously fetch data.".to_string())
+    );
 
     // Verify metadata
     if let Some(metadata) = &chunks[0].metadata {

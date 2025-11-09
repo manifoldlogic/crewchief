@@ -21,7 +21,7 @@ use tokio::time::timeout;
 
 use crewchief_maproom::db::create_pool;
 use crewchief_maproom::incremental::{
-    ChangeDetector, ChangeType, FileHasher, IncrementalProcessor, UpdateTask, Trigger,
+    ChangeDetector, ChangeType, FileHasher, IncrementalProcessor, Trigger, UpdateTask,
 };
 
 /// Test utilities for watch integration tests.
@@ -45,7 +45,9 @@ impl WatchTestFixture {
         Self::init_git_repo(&repo_root)?;
 
         // Connect to database
-        let pool = create_pool().await.context("Failed to create database pool")?;
+        let pool = create_pool()
+            .await
+            .context("Failed to create database pool")?;
 
         // Create repo, worktree, and commit records
         let client = pool.get().await?;
@@ -235,10 +237,7 @@ impl WatchTestFixture {
 
         // Delete repo (cascades to worktrees, commits, files, chunks)
         client
-            .execute(
-                "DELETE FROM maproom.repos WHERE id = $1",
-                &[&self.repo_id],
-            )
+            .execute("DELETE FROM maproom.repos WHERE id = $1", &[&self.repo_id])
             .await?;
 
         Ok(())
@@ -265,25 +264,49 @@ async fn test_watch_multi_file_modification() -> Result<()> {
     let fixture = WatchTestFixture::new().await?;
 
     // Create and seed 3 files
-    fixture.create_and_seed_file("src/a.rs", "fn a() { println!(\"original a\"); }").await?;
-    fixture.create_and_seed_file("src/b.rs", "fn b() { println!(\"original b\"); }").await?;
-    fixture.create_and_seed_file("src/c.rs", "fn c() { println!(\"original c\"); }").await?;
+    fixture
+        .create_and_seed_file("src/a.rs", "fn a() { println!(\"original a\"); }")
+        .await?;
+    fixture
+        .create_and_seed_file("src/b.rs", "fn b() { println!(\"original b\"); }")
+        .await?;
+    fixture
+        .create_and_seed_file("src/c.rs", "fn c() { println!(\"original c\"); }")
+        .await?;
 
     // Record start time
     let start_time = Utc::now();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Modify all 3 files
-    fixture.modify_file("src/a.rs", "fn a() { println!(\"modified a\"); // CHANGED }")?;
-    fixture.modify_file("src/b.rs", "fn b() { println!(\"modified b\"); // CHANGED }")?;
-    fixture.modify_file("src/c.rs", "fn c() { println!(\"modified c\"); // CHANGED }")?;
+    fixture.modify_file(
+        "src/a.rs",
+        "fn a() { println!(\"modified a\"); // CHANGED }",
+    )?;
+    fixture.modify_file(
+        "src/b.rs",
+        "fn b() { println!(\"modified b\"); // CHANGED }",
+    )?;
+    fixture.modify_file(
+        "src/c.rs",
+        "fn c() { println!(\"modified c\"); // CHANGED }",
+    )?;
 
     // Detect changes for all 3 files
     let mut detector = ChangeDetector::new(fixture.pool.clone());
 
-    let file_a_id = fixture.get_file_id("src/a.rs").await?.expect("File a not found");
-    let file_b_id = fixture.get_file_id("src/b.rs").await?.expect("File b not found");
-    let file_c_id = fixture.get_file_id("src/c.rs").await?.expect("File c not found");
+    let file_a_id = fixture
+        .get_file_id("src/a.rs")
+        .await?
+        .expect("File a not found");
+    let file_b_id = fixture
+        .get_file_id("src/b.rs")
+        .await?
+        .expect("File b not found");
+    let file_c_id = fixture
+        .get_file_id("src/c.rs")
+        .await?
+        .expect("File c not found");
 
     let change_a = detector
         .detect_change(file_a_id, &fixture.repo_root.join("src/a.rs"))
@@ -315,21 +338,9 @@ async fn test_watch_multi_file_modification() -> Result<()> {
     // Process all 3 files using IncrementalProcessor
     let processor = IncrementalProcessor::new(fixture.pool.clone(), fixture.repo_root.clone());
 
-    let task_a = UpdateTask::new(
-        fixture.repo_root.join("src/a.rs"),
-        change_a,
-        Trigger::Save,
-    );
-    let task_b = UpdateTask::new(
-        fixture.repo_root.join("src/b.rs"),
-        change_b,
-        Trigger::Save,
-    );
-    let task_c = UpdateTask::new(
-        fixture.repo_root.join("src/c.rs"),
-        change_c,
-        Trigger::Save,
-    );
+    let task_a = UpdateTask::new(fixture.repo_root.join("src/a.rs"), change_a, Trigger::Save);
+    let task_b = UpdateTask::new(fixture.repo_root.join("src/b.rs"), change_b, Trigger::Save);
+    let task_c = UpdateTask::new(fixture.repo_root.join("src/c.rs"), change_c, Trigger::Save);
 
     // Process with timeout to prevent hanging
     timeout(Duration::from_secs(10), processor.process(task_a))
@@ -343,9 +354,15 @@ async fn test_watch_multi_file_modification() -> Result<()> {
         .context("Task C timed out")??;
 
     // Verify all 3 files were re-indexed with updated timestamps
-    fixture.assert_file_indexed_after("src/a.rs", start_time).await?;
-    fixture.assert_file_indexed_after("src/b.rs", start_time).await?;
-    fixture.assert_file_indexed_after("src/c.rs", start_time).await?;
+    fixture
+        .assert_file_indexed_after("src/a.rs", start_time)
+        .await?;
+    fixture
+        .assert_file_indexed_after("src/b.rs", start_time)
+        .await?;
+    fixture
+        .assert_file_indexed_after("src/c.rs", start_time)
+        .await?;
 
     // Cleanup
     fixture.cleanup().await?;
@@ -366,18 +383,26 @@ async fn test_watch_single_file_modified() -> Result<()> {
     let fixture = WatchTestFixture::new().await?;
 
     // Create and seed 1 file
-    fixture.create_and_seed_file("src/main.rs", "fn main() { println!(\"Hello, world!\"); }").await?;
+    fixture
+        .create_and_seed_file("src/main.rs", "fn main() { println!(\"Hello, world!\"); }")
+        .await?;
 
     // Record start time
     let start_time = Utc::now();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Modify the file
-    fixture.modify_file("src/main.rs", "fn main() { println!(\"Hello, modified!\"); }")?;
+    fixture.modify_file(
+        "src/main.rs",
+        "fn main() { println!(\"Hello, modified!\"); }",
+    )?;
 
     // Detect change
     let mut detector = ChangeDetector::new(fixture.pool.clone());
-    let file_id = fixture.get_file_id("src/main.rs").await?.expect("File not found");
+    let file_id = fixture
+        .get_file_id("src/main.rs")
+        .await?
+        .expect("File not found");
     let change = detector
         .detect_change(file_id, &fixture.repo_root.join("src/main.rs"))
         .await?;
@@ -391,18 +416,16 @@ async fn test_watch_single_file_modified() -> Result<()> {
 
     // Process the file
     let processor = IncrementalProcessor::new(fixture.pool.clone(), fixture.repo_root.clone());
-    let task = UpdateTask::new(
-        fixture.repo_root.join("src/main.rs"),
-        change,
-        Trigger::Save,
-    );
+    let task = UpdateTask::new(fixture.repo_root.join("src/main.rs"), change, Trigger::Save);
 
     timeout(Duration::from_secs(10), processor.process(task))
         .await
         .context("Task timed out")??;
 
     // Verify file was re-indexed
-    fixture.assert_file_indexed_after("src/main.rs", start_time).await?;
+    fixture
+        .assert_file_indexed_after("src/main.rs", start_time)
+        .await?;
 
     // Cleanup
     fixture.cleanup().await?;
@@ -421,7 +444,9 @@ async fn test_change_type_classification() -> Result<()> {
 
     // Create and seed a file
     let original_content = "fn original() { /* original */ }";
-    fixture.create_and_seed_file("src/lib.rs", original_content).await?;
+    fixture
+        .create_and_seed_file("src/lib.rs", original_content)
+        .await?;
 
     // Modify the file
     let modified_content = "fn original() { /* modified */ }";
@@ -429,7 +454,10 @@ async fn test_change_type_classification() -> Result<()> {
 
     // Detect change
     let mut detector = ChangeDetector::new(fixture.pool.clone());
-    let file_id = fixture.get_file_id("src/lib.rs").await?.expect("File not found");
+    let file_id = fixture
+        .get_file_id("src/lib.rs")
+        .await?
+        .expect("File not found");
     let change = detector
         .detect_change(file_id, &fixture.repo_root.join("src/lib.rs"))
         .await?;
@@ -441,17 +469,11 @@ async fn test_change_type_classification() -> Result<()> {
 
             // Verify old hash matches original content
             let expected_old = FileHasher::hash_bytes(original_content.as_bytes());
-            assert_eq!(
-                old, expected_old,
-                "Old hash should match original content"
-            );
+            assert_eq!(old, expected_old, "Old hash should match original content");
 
             // Verify new hash matches modified content
             let expected_new = FileHasher::hash_bytes(modified_content.as_bytes());
-            assert_eq!(
-                new, expected_new,
-                "New hash should match modified content"
-            );
+            assert_eq!(new, expected_new, "New hash should match modified content");
         }
         _ => panic!("Expected ChangeType::Modified, got: {:?}", change),
     }
@@ -472,25 +494,26 @@ async fn test_no_infinite_retry_loops() -> Result<()> {
     let fixture = WatchTestFixture::new().await?;
 
     // Create and seed a file
-    fixture.create_and_seed_file("src/test.rs", "fn test() {}").await?;
+    fixture
+        .create_and_seed_file("src/test.rs", "fn test() {}")
+        .await?;
 
     // Modify the file
     fixture.modify_file("src/test.rs", "fn test() { /* changed */ }")?;
 
     // Detect change
     let mut detector = ChangeDetector::new(fixture.pool.clone());
-    let file_id = fixture.get_file_id("src/test.rs").await?.expect("File not found");
+    let file_id = fixture
+        .get_file_id("src/test.rs")
+        .await?
+        .expect("File not found");
     let change = detector
         .detect_change(file_id, &fixture.repo_root.join("src/test.rs"))
         .await?;
 
     // Process with a strict timeout
     let processor = IncrementalProcessor::new(fixture.pool.clone(), fixture.repo_root.clone());
-    let task = UpdateTask::new(
-        fixture.repo_root.join("src/test.rs"),
-        change,
-        Trigger::Save,
-    );
+    let task = UpdateTask::new(fixture.repo_root.join("src/test.rs"), change, Trigger::Save);
 
     let result = timeout(Duration::from_secs(5), processor.process(task)).await;
 
@@ -519,9 +542,15 @@ async fn test_database_consistency_multi_file() -> Result<()> {
     let fixture = WatchTestFixture::new().await?;
 
     // Create and seed 3 files
-    fixture.create_and_seed_file("src/x.rs", "fn x() {}").await?;
-    fixture.create_and_seed_file("src/y.rs", "fn y() {}").await?;
-    fixture.create_and_seed_file("src/z.rs", "fn z() {}").await?;
+    fixture
+        .create_and_seed_file("src/x.rs", "fn x() {}")
+        .await?;
+    fixture
+        .create_and_seed_file("src/y.rs", "fn y() {}")
+        .await?;
+    fixture
+        .create_and_seed_file("src/z.rs", "fn z() {}")
+        .await?;
 
     // Count initial chunks
     let client = fixture.pool.get().await?;
@@ -552,11 +581,7 @@ async fn test_database_consistency_multi_file() -> Result<()> {
             .detect_change(file_id, &fixture.repo_root.join(relpath))
             .await?;
 
-        let task = UpdateTask::new(
-            fixture.repo_root.join(relpath),
-            change,
-            Trigger::Save,
-        );
+        let task = UpdateTask::new(fixture.repo_root.join(relpath), change, Trigger::Save);
 
         processor.process(task).await?;
     }

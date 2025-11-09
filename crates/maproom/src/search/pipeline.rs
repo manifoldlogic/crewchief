@@ -447,10 +447,10 @@ impl SearchPipeline {
         // Timing is tracked at the search() method level, so we estimate here
         // In a production system, we'd pass actual timing data through
         let timing = SearchTiming::new(
-            5.0,                          // query processing estimate
-            search_execution_time_ms,     // actual search time
-            2.0,                          // fusion estimate
-            5.0,                          // assembly estimate
+            5.0,                      // query processing estimate
+            search_execution_time_ms, // actual search time
+            2.0,                      // fusion estimate
+            5.0,                      // assembly estimate
         );
 
         SearchMetadata::new(query_details, result_counts, timing, total_unique, returned)

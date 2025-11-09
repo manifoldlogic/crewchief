@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio_postgres::Client;
-use tracing::{info, warn, error};
-use serde::{Serialize, Deserialize};
+use tracing::{error, info, warn};
 
 use crate::indexer::parser;
 
@@ -79,7 +79,11 @@ impl MarkdownMigrator {
     }
 
     /// Run the complete migration for a repository
-    pub async fn migrate(&mut self, repo_name: &str, worktree_name: Option<&str>) -> Result<MigrationResult> {
+    pub async fn migrate(
+        &mut self,
+        repo_name: &str,
+        worktree_name: Option<&str>,
+    ) -> Result<MigrationResult> {
         let mut stats = MigrationStats {
             started_at: Some(chrono::Utc::now()),
             ..Default::default()
@@ -127,7 +131,10 @@ impl MarkdownMigrator {
         );
 
         if let Some(duration) = stats.duration() {
-            info!("Migration took {:.2}s", duration.num_milliseconds() as f64 / 1000.0);
+            info!(
+                "Migration took {:.2}s",
+                duration.num_milliseconds() as f64 / 1000.0
+            );
         }
 
         Ok(MigrationResult {
@@ -160,10 +167,7 @@ impl MarkdownMigrator {
         // Add index on file_id for faster rollback
         self.client
             .execute(
-                &format!(
-                    "CREATE INDEX ON maproom.{} (file_id)",
-                    backup_table
-                ),
+                &format!("CREATE INDEX ON maproom.{} (file_id)", backup_table),
                 &[],
             )
             .await
@@ -252,12 +256,9 @@ impl MarkdownMigrator {
         let new_chunks = parser::extract_chunks(&file.content, "md");
 
         // Delete old chunks
-        tx.execute(
-            "DELETE FROM maproom.chunks WHERE file_id = $1",
-            &[&file.id],
-        )
-        .await
-        .context("Failed to delete old chunks")?;
+        tx.execute("DELETE FROM maproom.chunks WHERE file_id = $1", &[&file.id])
+            .await
+            .context("Failed to delete old chunks")?;
 
         // Insert new chunks
         let mut inserted_count = 0;
@@ -322,7 +323,8 @@ impl MarkdownMigrator {
         info!("Starting rollback from backup table: {}", backup_table);
 
         // Verify backup table exists
-        let exists_row = self.client
+        let exists_row = self
+            .client
             .query_opt(
                 "SELECT EXISTS (
                     SELECT FROM information_schema.tables
@@ -333,9 +335,7 @@ impl MarkdownMigrator {
             )
             .await?;
 
-        let exists: bool = exists_row
-            .and_then(|row| row.get(0))
-            .unwrap_or(false);
+        let exists: bool = exists_row.and_then(|row| row.get(0)).unwrap_or(false);
 
         if !exists {
             anyhow::bail!("Backup table {} does not exist", backup_table);
@@ -385,7 +385,8 @@ impl MarkdownMigrator {
 
     /// List available backup tables
     pub async fn list_backups(&self) -> Result<Vec<String>> {
-        let rows = self.client
+        let rows = self
+            .client
             .query(
                 "SELECT table_name FROM information_schema.tables
                  WHERE table_schema = 'maproom'
@@ -487,7 +488,10 @@ pub async fn verify_migration(client: &Client, repo_name: &str) -> Result<HashMa
         )
         .await?;
     let parent_path_count: i64 = parent_path_count_row.get(0);
-    results.insert("chunks_with_parent_path".to_string(), parent_path_count as usize);
+    results.insert(
+        "chunks_with_parent_path".to_string(),
+        parent_path_count as usize,
+    );
 
     // Count code blocks with language metadata
     let code_block_count_row = client
@@ -503,7 +507,10 @@ pub async fn verify_migration(client: &Client, repo_name: &str) -> Result<HashMa
         )
         .await?;
     let code_block_count: i64 = code_block_count_row.get(0);
-    results.insert("code_blocks_with_language".to_string(), code_block_count as usize);
+    results.insert(
+        "code_blocks_with_language".to_string(),
+        code_block_count as usize,
+    );
 
     Ok(results)
 }

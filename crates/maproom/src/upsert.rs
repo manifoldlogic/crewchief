@@ -152,19 +152,19 @@ pub async fn upsert_chunk_with_cache(
 pub async fn upsert_chunks_batch_with_cache(
     client: &Client,
     chunks: &[(
-        i64,                          // file_id
-        String,                       // content (for blob_sha)
-        Option<String>,               // symbol_name
-        String,                       // kind
-        Option<String>,               // signature
-        Option<String>,               // docstring
-        i32,                          // start_line
-        i32,                          // end_line
-        String,                       // preview
-        String,                       // ts_doc_text
-        f32,                          // recency_score
-        f32,                          // churn_score
-        Option<serde_json::Value>,    // metadata
+        i64,                       // file_id
+        String,                    // content (for blob_sha)
+        Option<String>,            // symbol_name
+        String,                    // kind
+        Option<String>,            // signature
+        Option<String>,            // docstring
+        i32,                       // start_line
+        i32,                       // end_line
+        String,                    // preview
+        String,                    // ts_doc_text
+        f32,                       // recency_score
+        f32,                       // churn_score
+        Option<serde_json::Value>, // metadata
     )],
     metrics: &CacheMetrics,
 ) -> Result<Vec<i64>> {
@@ -180,9 +180,7 @@ pub async fn upsert_chunks_batch_with_cache(
 
     // Step 2: Batch check which embeddings exist
     // Build IN clause for efficient lookup
-    let placeholders: Vec<String> = (1..=blob_shas.len())
-        .map(|i| format!("${}", i))
-        .collect();
+    let placeholders: Vec<String> = (1..=blob_shas.len()).map(|i| format!("${}", i)).collect();
 
     let query = format!(
         "SELECT blob_sha FROM maproom.code_embeddings WHERE blob_sha IN ({})",

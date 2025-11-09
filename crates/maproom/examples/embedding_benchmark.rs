@@ -6,7 +6,9 @@
 //!
 //! Run with: cargo run --release --example embedding_benchmark
 
-use crewchief_maproom::embedding::config::{CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig};
+use crewchief_maproom::embedding::config::{
+    CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig,
+};
 use crewchief_maproom::embedding::service::EmbeddingService;
 use std::time::Instant;
 
@@ -63,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         api_key: None,
         api_endpoint: Some("http://ollama:11434/api/embed".to_string()),
         parallel: ParallelConfig {
-            enabled: true, // Test with optimal sub-batch size
+            enabled: true,      // Test with optimal sub-batch size
             sub_batch_size: 10, // Smaller batches for better parallelism
             max_concurrency: 6, // More concurrency with 12 threads
         },
@@ -74,10 +76,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Model: {}", config.model);
     println!("  Endpoint: http://ollama:11434");
     println!("  Cache: Disabled (for accurate measurements)");
-    println!("  Parallel: {} (sub_batch={}, concurrency={})\n",
-        config.parallel.enabled,
-        config.parallel.sub_batch_size,
-        config.parallel.max_concurrency);
+    println!(
+        "  Parallel: {} (sub_batch={}, concurrency={})\n",
+        config.parallel.enabled, config.parallel.sub_batch_size, config.parallel.max_concurrency
+    );
 
     let service = EmbeddingService::new(config)?;
 
@@ -147,7 +149,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("✓ Success");
             println!("  Total time: {:.2} ms", elapsed.as_secs_f64() * 1000.0);
-            println!("  Per-chunk avg: {:.2} ms", elapsed.as_secs_f64() * 1000.0 / 10.0);
+            println!(
+                "  Per-chunk avg: {:.2} ms",
+                elapsed.as_secs_f64() * 1000.0 / 10.0
+            );
             println!("  Throughput: {:.1} chunks/sec", chunks_per_sec);
             println!("  Throughput: {:.1} chunks/min", chunks_per_min);
             println!("  Embeddings: {}", embeddings.len());
@@ -172,7 +177,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("✓ Success");
             println!("  Total time: {:.2} ms", elapsed.as_secs_f64() * 1000.0);
-            println!("  Per-chunk avg: {:.2} ms", elapsed.as_secs_f64() * 1000.0 / 50.0);
+            println!(
+                "  Per-chunk avg: {:.2} ms",
+                elapsed.as_secs_f64() * 1000.0 / 50.0
+            );
             println!("  Throughput: {:.1} chunks/sec", chunks_per_sec);
             println!("  Throughput: {:.1} chunks/min", chunks_per_min);
             println!("  Embeddings: {}", embeddings.len());
@@ -197,7 +205,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("✓ Success");
             println!("  Total time: {:.2} ms", elapsed.as_secs_f64() * 1000.0);
-            println!("  Per-chunk avg: {:.2} ms", elapsed.as_secs_f64() * 1000.0 / 100.0);
+            println!(
+                "  Per-chunk avg: {:.2} ms",
+                elapsed.as_secs_f64() * 1000.0 / 100.0
+            );
             println!("  Throughput: {:.1} chunks/sec", chunks_per_sec);
             println!("  Throughput: {:.1} chunks/min", chunks_per_min);
             println!("  Embeddings: {}", embeddings.len());
@@ -206,9 +217,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!();
             println!("Target Achievement:");
             if chunks_per_min >= 500.0 {
-                println!("  ✓ PASS: Exceeds 500 chunks/min target ({:.1} chunks/min)", chunks_per_min);
+                println!(
+                    "  ✓ PASS: Exceeds 500 chunks/min target ({:.1} chunks/min)",
+                    chunks_per_min
+                );
             } else {
-                println!("  ✗ FAIL: Below 500 chunks/min target ({:.1} chunks/min)", chunks_per_min);
+                println!(
+                    "  ✗ FAIL: Below 500 chunks/min target ({:.1} chunks/min)",
+                    chunks_per_min
+                );
             }
         }
         Err(e) => {

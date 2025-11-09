@@ -59,9 +59,7 @@
 //! - Cache sizing (lines 151-166)
 //! - Profiling setup (lines 178-183)
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::time::Duration;
 
 /// Memory statistics snapshot
@@ -87,8 +85,14 @@ impl MemoryStats {
         let parts: Vec<&str> = statm.split_whitespace().collect();
 
         let page_size = 4096; // Standard page size on Linux
-        let vsize_pages = parts.get(0).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
-        let rss_pages = parts.get(1).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+        let vsize_pages = parts
+            .get(0)
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0);
+        let rss_pages = parts
+            .get(1)
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0);
 
         Self {
             rss_bytes: rss_pages * page_size,

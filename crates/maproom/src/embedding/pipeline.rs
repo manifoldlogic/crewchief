@@ -133,8 +133,7 @@ impl EmbeddingPipeline {
 
         info!(
             "Initialized embedding pipeline: provider={}, dimension={}",
-            provider_name,
-            dimension
+            provider_name, dimension
         );
 
         Self {
@@ -181,7 +180,10 @@ impl EmbeddingPipeline {
             self.config.dry_run,
             self.config.sample_size
         );
-        info!("Provider: {} (dimension: {})", self.provider_name, self.dimension);
+        info!(
+            "Provider: {} (dimension: {})",
+            self.provider_name, self.dimension
+        );
 
         // Fetch chunks that need embeddings
         let chunks = self.fetch_chunks_needing_embeddings(client).await?;
@@ -241,14 +243,12 @@ impl EmbeddingPipeline {
 
             // Report progress
             let progress = ((batch_num as f64 / total_batches as f64) * 100.0) as u32;
-            info!(
-                "Progress: {}% ({}/{})",
-                progress, batch_num, total_batches
-            );
+            info!("Progress: {}% ({}/{})", progress, batch_num, total_batches);
 
             // Call progress callback if provided
             if let Some(callback) = progress_callback {
-                let chunks_processed = std::cmp::min(batch_num * self.config.batch_size, chunks.len());
+                let chunks_processed =
+                    std::cmp::min(batch_num * self.config.batch_size, chunks.len());
                 callback(chunks_processed, chunks.len());
             }
         }
@@ -273,10 +273,7 @@ impl EmbeddingPipeline {
     }
 
     /// Fetch chunks that need embeddings.
-    async fn fetch_chunks_needing_embeddings(
-        &self,
-        client: &Client,
-    ) -> Result<Vec<ChunkRow>> {
+    async fn fetch_chunks_needing_embeddings(&self, client: &Client) -> Result<Vec<ChunkRow>> {
         let query = if self.config.incremental {
             // Only fetch chunks where embeddings are NULL
             "SELECT c.id, c.signature, c.docstring, c.preview
@@ -333,17 +330,14 @@ impl EmbeddingPipeline {
             .collect();
 
         // Generate code embeddings
-        let (code_embeddings, code_batch_stats) = match self
-            .service
-            .embed_batch_with_stats(code_texts)
-            .await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                error!("Failed to generate code embeddings: {:?}", e);
-                return Err(e).context("Failed to generate code embeddings");
-            }
-        };
+        let (code_embeddings, code_batch_stats) =
+            match self.service.embed_batch_with_stats(code_texts).await {
+                Ok(result) => result,
+                Err(e) => {
+                    error!("Failed to generate code embeddings: {:?}", e);
+                    return Err(e).context("Failed to generate code embeddings");
+                }
+            };
 
         stats.embeddings_generated += code_batch_stats.from_api;
         stats.embeddings_cached += code_batch_stats.cached;
@@ -662,9 +656,7 @@ impl EmbeddingPipeline {
         }
 
         // Build parameter placeholders for the IN clause
-        let placeholders: Vec<String> = (1..=chunk_ids.len())
-            .map(|i| format!("${}", i))
-            .collect();
+        let placeholders: Vec<String> = (1..=chunk_ids.len()).map(|i| format!("${}", i)).collect();
 
         let query = format!(
             "SELECT c.id, c.signature, c.docstring, c.preview

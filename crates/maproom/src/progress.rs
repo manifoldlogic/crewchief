@@ -296,7 +296,10 @@ mod tests {
 
         // Should allow print now
         let third = tracker.should_print();
-        assert!(third, "After sleep, should_print() should return true again");
+        assert!(
+            third,
+            "After sleep, should_print() should return true again"
+        );
     }
 
     #[test]

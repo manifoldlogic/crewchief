@@ -89,8 +89,7 @@ impl HookDetector {
         let mut hooks = Vec::new();
 
         // Pattern matches: hookName( or const [x, y] = hookName(
-        let hook_call_pattern =
-            Regex::new(r"\b(use[A-Z][a-zA-Z0-9]*)\s*\(").unwrap();
+        let hook_call_pattern = Regex::new(r"\b(use[A-Z][a-zA-Z0-9]*)\s*\(").unwrap();
 
         for cap in hook_call_pattern.captures_iter(content) {
             if let Some(hook_name) = cap.get(1) {
@@ -115,11 +114,7 @@ impl HookDetector {
     ///
     /// # Returns
     /// Vector of hook information ordered by relevance
-    pub async fn find_used_hooks(
-        &self,
-        client: &Client,
-        chunk_id: i64,
-    ) -> Result<Vec<HookInfo>> {
+    pub async fn find_used_hooks(&self, client: &Client, chunk_id: i64) -> Result<Vec<HookInfo>> {
         // Query for chunks that:
         // 1. Are called/imported by the target chunk
         // 2. Have symbol names matching hook patterns

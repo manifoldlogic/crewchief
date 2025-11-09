@@ -26,16 +26,18 @@
 //! cargo test -p crewchief-maproom provider_abstraction -- --ignored --test-threads=1
 //! ```
 
-use crewchief_maproom::embedding::provider::EmbeddingProvider;
-use crewchief_maproom::embedding::ollama::OllamaProvider;
 use crewchief_maproom::embedding::client::OpenAIClient;
+use crewchief_maproom::embedding::config::{
+    CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig,
+};
+use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
 use crewchief_maproom::embedding::factory::create_provider_from_env;
-use crewchief_maproom::embedding::config::{EmbeddingConfig, Provider, CacheConfig, RetryConfig, ParallelConfig};
-use crewchief_maproom::embedding::error::{EmbeddingError, ApiError};
-use wiremock::{Mock, MockServer, ResponseTemplate};
-use wiremock::matchers::{method, path};
+use crewchief_maproom::embedding::ollama::OllamaProvider;
+use crewchief_maproom::embedding::provider::EmbeddingProvider;
 use serde_json::json;
 use serial_test::serial;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 // ============================================================================
 // Unit Tests: Provider Trait Implementation
@@ -51,16 +53,28 @@ async fn test_ollama_provider_implements_trait() {
     let provider: Box<dyn EmbeddingProvider> = Box::new(
         OllamaProvider::new(
             "http://localhost:11434/api/embed".to_string(),
-            "nomic-embed-text".to_string()
-        ).expect("Failed to create Ollama provider")
+            "nomic-embed-text".to_string(),
+        )
+        .expect("Failed to create Ollama provider"),
     );
 
     // Verify trait methods return correct values
-    assert_eq!(provider.dimension(), 768, "Ollama should use 768 dimensions");
-    assert_eq!(provider.provider_name(), "ollama", "Provider name should be 'ollama'");
+    assert_eq!(
+        provider.dimension(),
+        768,
+        "Ollama should use 768 dimensions"
+    );
+    assert_eq!(
+        provider.provider_name(),
+        "ollama",
+        "Provider name should be 'ollama'"
+    );
 
     // Verify metrics returns None (Ollama doesn't track metrics)
-    assert!(provider.metrics().is_none(), "Ollama provider should not track metrics");
+    assert!(
+        provider.metrics().is_none(),
+        "Ollama provider should not track metrics"
+    );
 }
 
 /// Contract test: OpenAI provider correctly implements EmbeddingProvider trait.
@@ -82,16 +96,26 @@ async fn test_openai_provider_implements_trait() {
     };
 
     // Create provider and verify it can be used as trait object
-    let provider: Box<dyn EmbeddingProvider> = Box::new(
-        OpenAIClient::new(config).expect("Failed to create OpenAI client")
-    );
+    let provider: Box<dyn EmbeddingProvider> =
+        Box::new(OpenAIClient::new(config).expect("Failed to create OpenAI client"));
 
     // Verify trait methods return correct values
-    assert_eq!(provider.dimension(), 1536, "OpenAI should use 1536 dimensions");
-    assert_eq!(provider.provider_name(), "openai", "Provider name should be 'openai'");
+    assert_eq!(
+        provider.dimension(),
+        1536,
+        "OpenAI should use 1536 dimensions"
+    );
+    assert_eq!(
+        provider.provider_name(),
+        "openai",
+        "Provider name should be 'openai'"
+    );
 
     // Verify metrics returns Some (OpenAI tracks cost metrics)
-    assert!(provider.metrics().is_some(), "OpenAI provider should track metrics");
+    assert!(
+        provider.metrics().is_some(),
+        "OpenAI provider should track metrics"
+    );
 
     let metrics = provider.metrics().unwrap();
     assert_eq!(metrics.total_requests, 0, "Initial requests should be 0");
@@ -123,12 +147,15 @@ async fn test_trait_contract_dimension_matches_output() {
     let provider: Box<dyn EmbeddingProvider> = Box::new(
         OllamaProvider::new(
             format!("{}/api/embed", mock_server.uri()),
-            "nomic-embed-text".to_string()
-        ).expect("Failed to create provider")
+            "nomic-embed-text".to_string(),
+        )
+        .expect("Failed to create provider"),
     );
 
     // Test the contract: output length must equal dimension
-    let embedding = provider.embed("test text".to_string()).await
+    let embedding = provider
+        .embed("test text".to_string())
+        .await
         .expect("Embedding request should succeed");
 
     assert_eq!(
@@ -164,19 +191,22 @@ async fn test_trait_contract_batch_length_matches_input() {
     let provider: Box<dyn EmbeddingProvider> = Box::new(
         OllamaProvider::new(
             format!("{}/api/embed", mock_server.uri()),
-            "nomic-embed-text".to_string()
-        ).expect("Failed to create provider")
+            "nomic-embed-text".to_string(),
+        )
+        .expect("Failed to create provider"),
     );
 
     let texts = vec![
         "first text".to_string(),
         "second text".to_string(),
-        "third text".to_string()
+        "third text".to_string(),
     ];
     let input_len = texts.len();
 
     // Test the contract: output length must equal input length
-    let embeddings = provider.embed_batch(texts).await
+    let embeddings = provider
+        .embed_batch(texts)
+        .await
         .expect("Batch embedding should succeed");
 
     assert_eq!(
@@ -207,8 +237,9 @@ async fn test_trait_contract_batch_length_matches_input() {
 async fn test_trait_contract_dimension_is_consistent() {
     let provider = OllamaProvider::new(
         "http://localhost:11434/api/embed".to_string(),
-        "nomic-embed-text".to_string()
-    ).expect("Failed to create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Failed to create provider");
 
     let dim1 = provider.dimension();
     let dim2 = provider.dimension();
@@ -247,14 +278,26 @@ async fn test_factory_auto_detects_ollama() {
 
     // Instead, test explicit Ollama configuration
     std::env::set_var("EMBEDDING_PROVIDER", "ollama");
-    std::env::set_var("EMBEDDING_API_ENDPOINT", format!("{}/api/embed", mock_server.uri()));
+    std::env::set_var(
+        "EMBEDDING_API_ENDPOINT",
+        format!("{}/api/embed", mock_server.uri()),
+    );
     std::env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
 
-    let provider = create_provider_from_env().await
+    let provider = create_provider_from_env()
+        .await
         .expect("Factory should create Ollama provider");
 
-    assert_eq!(provider.provider_name(), "ollama", "Should select Ollama provider");
-    assert_eq!(provider.dimension(), 768, "Ollama should have 768 dimensions");
+    assert_eq!(
+        provider.provider_name(),
+        "ollama",
+        "Should select Ollama provider"
+    );
+    assert_eq!(
+        provider.dimension(),
+        768,
+        "Ollama should have 768 dimensions"
+    );
 
     // Cleanup
     std::env::remove_var("EMBEDDING_PROVIDER");
@@ -273,11 +316,20 @@ async fn test_factory_explicit_config_overrides_auto_detection() {
     std::env::set_var("EMBEDDING_PROVIDER", "openai");
     std::env::set_var("OPENAI_API_KEY", "test-key-12345");
 
-    let provider = create_provider_from_env().await
+    let provider = create_provider_from_env()
+        .await
         .expect("Factory should create OpenAI provider");
 
-    assert_eq!(provider.provider_name(), "openai", "Should use explicit OpenAI config");
-    assert_eq!(provider.dimension(), 1536, "OpenAI should have 1536 dimensions");
+    assert_eq!(
+        provider.provider_name(),
+        "openai",
+        "Should use explicit OpenAI config"
+    );
+    assert_eq!(
+        provider.dimension(),
+        1536,
+        "OpenAI should have 1536 dimensions"
+    );
 
     // Cleanup
     std::env::remove_var("EMBEDDING_PROVIDER");
@@ -296,14 +348,16 @@ async fn test_factory_case_insensitive_provider_names() {
 
     // Test uppercase
     std::env::set_var("EMBEDDING_PROVIDER", "OLLAMA");
-    let provider = create_provider_from_env().await
+    let provider = create_provider_from_env()
+        .await
         .expect("Uppercase OLLAMA should work");
     assert_eq!(provider.provider_name(), "ollama");
     std::env::remove_var("EMBEDDING_PROVIDER");
 
     // Test mixed case
     std::env::set_var("EMBEDDING_PROVIDER", "Ollama");
-    let provider = create_provider_from_env().await
+    let provider = create_provider_from_env()
+        .await
         .expect("Mixed case Ollama should work");
     assert_eq!(provider.provider_name(), "ollama");
     std::env::remove_var("EMBEDDING_PROVIDER");
@@ -325,7 +379,8 @@ async fn test_provider_swap() {
     std::env::set_var("EMBEDDING_PROVIDER", "openai");
     std::env::set_var("OPENAI_API_KEY", "test-key");
 
-    let provider1 = create_provider_from_env().await
+    let provider1 = create_provider_from_env()
+        .await
         .expect("Should create OpenAI provider");
     assert_eq!(provider1.provider_name(), "openai");
     assert_eq!(provider1.dimension(), 1536);
@@ -342,17 +397,23 @@ async fn test_provider_swap() {
         .await;
 
     std::env::set_var("EMBEDDING_PROVIDER", "ollama");
-    std::env::set_var("EMBEDDING_API_ENDPOINT", format!("{}/api/embed", mock_server.uri()));
+    std::env::set_var(
+        "EMBEDDING_API_ENDPOINT",
+        format!("{}/api/embed", mock_server.uri()),
+    );
     std::env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
     std::env::remove_var("OPENAI_API_KEY");
 
-    let provider2 = create_provider_from_env().await
+    let provider2 = create_provider_from_env()
+        .await
         .expect("Should create Ollama provider");
     assert_eq!(provider2.provider_name(), "ollama");
     assert_eq!(provider2.dimension(), 768);
 
     // Verify embeddings work after swapping
-    let embedding = provider2.embed("test text".to_string()).await
+    let embedding = provider2
+        .embed("test text".to_string())
+        .await
         .expect("Embedding should work after provider swap");
 
     assert_eq!(
@@ -382,8 +443,9 @@ async fn test_providers_interchangeable_via_trait_object() {
     let ollama: Box<dyn EmbeddingProvider> = Box::new(
         OllamaProvider::new(
             "http://localhost:11434/api/embed".to_string(),
-            "nomic-embed-text".to_string()
-        ).expect("Create Ollama provider")
+            "nomic-embed-text".to_string(),
+        )
+        .expect("Create Ollama provider"),
     );
     let (name1, dim1) = process_with_provider(ollama).await;
     assert_eq!(name1, "ollama");
@@ -401,9 +463,8 @@ async fn test_providers_interchangeable_via_trait_object() {
         api_endpoint: None,
         parallel: ParallelConfig::default(),
     };
-    let openai: Box<dyn EmbeddingProvider> = Box::new(
-        OpenAIClient::new(config).expect("Create OpenAI client")
-    );
+    let openai: Box<dyn EmbeddingProvider> =
+        Box::new(OpenAIClient::new(config).expect("Create OpenAI client"));
     let (name2, dim2) = process_with_provider(openai).await;
     assert_eq!(name2, "openai");
     assert_eq!(dim2, 1536);
@@ -421,12 +482,16 @@ async fn test_error_handling_provider_unavailable() {
     // Create provider pointing to non-existent endpoint
     let provider = OllamaProvider::new(
         "http://localhost:99999/api/embed".to_string(),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let result = provider.embed("test".to_string()).await;
 
-    assert!(result.is_err(), "Should return error for unavailable provider");
+    assert!(
+        result.is_err(),
+        "Should return error for unavailable provider"
+    );
 
     match result.unwrap_err() {
         EmbeddingError::Network(_) => {
@@ -453,8 +518,9 @@ async fn test_error_handling_authentication_error() {
 
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let result = provider.embed("test".to_string()).await;
 
@@ -465,7 +531,10 @@ async fn test_error_handling_authentication_error() {
             match api_err {
                 ApiError::Authentication(_) => {
                     // Expected
-                    assert!(!api_err.is_retryable(), "Auth errors should not be retryable");
+                    assert!(
+                        !api_err.is_retryable(),
+                        "Auth errors should not be retryable"
+                    );
                 }
                 other => panic!("Expected Authentication error, got: {:?}", other),
             }
@@ -491,24 +560,27 @@ async fn test_error_handling_server_error_retryable() {
 
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let result = provider.embed("test".to_string()).await;
 
     assert!(result.is_err(), "Should return error for server error");
 
     match result.unwrap_err() {
-        EmbeddingError::Api(api_err) => {
-            match api_err {
-                ApiError::ServerError { status, .. } => {
-                    assert_eq!(status, 500, "Should capture 500 status");
-                    assert!(api_err.is_retryable(), "Server errors should be retryable");
-                    assert_eq!(api_err.retry_delay_ms(), Some(1000), "Should suggest 1s retry delay");
-                }
-                other => panic!("Expected ServerError, got: {:?}", other),
+        EmbeddingError::Api(api_err) => match api_err {
+            ApiError::ServerError { status, .. } => {
+                assert_eq!(status, 500, "Should capture 500 status");
+                assert!(api_err.is_retryable(), "Server errors should be retryable");
+                assert_eq!(
+                    api_err.retry_delay_ms(),
+                    Some(1000),
+                    "Should suggest 1s retry delay"
+                );
             }
-        }
+            other => panic!("Expected ServerError, got: {:?}", other),
+        },
         other => panic!("Expected Api error, got: {:?}", other),
     }
 }
@@ -530,23 +602,22 @@ async fn test_error_handling_rate_limit() {
 
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let result = provider.embed("test".to_string()).await;
 
     assert!(result.is_err(), "Should return error for rate limit");
 
     match result.unwrap_err() {
-        EmbeddingError::Api(api_err) => {
-            match api_err {
-                ApiError::RateLimit { retry_after_ms } => {
-                    assert_eq!(retry_after_ms, 1000, "Should suggest retry delay");
-                    assert!(api_err.is_retryable(), "Rate limits should be retryable");
-                }
-                other => panic!("Expected RateLimit error, got: {:?}", other),
+        EmbeddingError::Api(api_err) => match api_err {
+            ApiError::RateLimit { retry_after_ms } => {
+                assert_eq!(retry_after_ms, 1000, "Should suggest retry delay");
+                assert!(api_err.is_retryable(), "Rate limits should be retryable");
             }
-        }
+            other => panic!("Expected RateLimit error, got: {:?}", other),
+        },
         other => panic!("Expected Api error, got: {:?}", other),
     }
 }
@@ -568,8 +639,9 @@ async fn test_error_handling_empty_embeddings_response() {
 
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let result = provider.embed("test".to_string()).await;
 
@@ -577,7 +649,10 @@ async fn test_error_handling_empty_embeddings_response() {
 
     match result.unwrap_err() {
         EmbeddingError::Api(ApiError::InvalidResponse(msg)) => {
-            assert!(msg.contains("Empty"), "Error should mention empty embeddings");
+            assert!(
+                msg.contains("Empty"),
+                "Error should mention empty embeddings"
+            );
         }
         other => panic!("Expected InvalidResponse error, got: {:?}", other),
     }
@@ -607,12 +682,16 @@ async fn test_error_handling_dimension_mismatch() {
 
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let result = provider.embed("test".to_string()).await;
 
-    assert!(result.is_err(), "Should return error for dimension mismatch");
+    assert!(
+        result.is_err(),
+        "Should return error for dimension mismatch"
+    );
 
     match result.unwrap_err() {
         EmbeddingError::Api(ApiError::InvalidResponse(msg)) => {
@@ -624,7 +703,10 @@ async fn test_error_handling_dimension_mismatch() {
                 msg
             );
         }
-        other => panic!("Expected InvalidResponse error for dimension mismatch, got: {:?}", other),
+        other => panic!(
+            "Expected InvalidResponse error for dimension mismatch, got: {:?}",
+            other
+        ),
     }
 }
 
@@ -664,8 +746,9 @@ fn test_providers_can_be_stored_in_arc() {
 
     let provider = OllamaProvider::new(
         "http://localhost:11434/api/embed".to_string(),
-        "nomic-embed-text".to_string()
-    ).expect("Create provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create provider");
 
     let arc: Arc<dyn EmbeddingProvider> = Arc::new(provider);
     let _returned = use_in_arc(arc);
@@ -686,14 +769,21 @@ fn test_providers_can_be_stored_in_arc() {
 async fn integration_test_ollama_real() {
     let provider = OllamaProvider::new(
         "http://localhost:11434/api/embed".to_string(),
-        "nomic-embed-text".to_string()
-    ).expect("Create Ollama provider");
+        "nomic-embed-text".to_string(),
+    )
+    .expect("Create Ollama provider");
 
     // Test single embedding
-    let embedding = provider.embed("test text for embedding".to_string()).await
+    let embedding = provider
+        .embed("test text for embedding".to_string())
+        .await
         .expect("Should generate embedding with real Ollama");
 
-    assert_eq!(embedding.len(), 768, "Real Ollama should return 768-dim vectors");
+    assert_eq!(
+        embedding.len(),
+        768,
+        "Real Ollama should return 768-dim vectors"
+    );
 
     // Verify embedding has non-zero values
     let has_nonzero = embedding.iter().any(|&v| v != 0.0);
@@ -703,12 +793,18 @@ async fn integration_test_ollama_real() {
     let texts = vec![
         "first text".to_string(),
         "second text".to_string(),
-        "third text".to_string()
+        "third text".to_string(),
     ];
-    let embeddings = provider.embed_batch(texts.clone()).await
+    let embeddings = provider
+        .embed_batch(texts.clone())
+        .await
         .expect("Should generate batch embeddings");
 
-    assert_eq!(embeddings.len(), texts.len(), "Batch should return all embeddings");
+    assert_eq!(
+        embeddings.len(),
+        texts.len(),
+        "Batch should return all embeddings"
+    );
     for embedding in embeddings {
         assert_eq!(embedding.len(), 768, "Each embedding should be 768-dim");
     }
@@ -723,8 +819,8 @@ async fn integration_test_ollama_real() {
 #[tokio::test]
 #[ignore = "requires valid OPENAI_API_KEY environment variable"]
 async fn integration_test_openai_real() {
-    let api_key = std::env::var("OPENAI_API_KEY")
-        .expect("OPENAI_API_KEY must be set for this test");
+    let api_key =
+        std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set for this test");
 
     let config = EmbeddingConfig {
         provider: Provider::OpenAI,
@@ -738,28 +834,36 @@ async fn integration_test_openai_real() {
         parallel: ParallelConfig::default(),
     };
 
-    let provider = OpenAIClient::new(config)
-        .expect("Create OpenAI client");
+    let provider = OpenAIClient::new(config).expect("Create OpenAI client");
 
     // Test single embedding
-    let embedding = provider.embed("test text for embedding".to_string()).await
+    let embedding = provider
+        .embed("test text for embedding".to_string())
+        .await
         .expect("Should generate embedding with real OpenAI");
 
-    assert_eq!(embedding.len(), 1536, "Real OpenAI should return 1536-dim vectors");
+    assert_eq!(
+        embedding.len(),
+        1536,
+        "Real OpenAI should return 1536-dim vectors"
+    );
 
     // Verify embedding has non-zero values
     let has_nonzero = embedding.iter().any(|&v| v != 0.0);
     assert!(has_nonzero, "Embedding should contain non-zero values");
 
     // Test batch embedding
-    let texts = vec![
-        "first text".to_string(),
-        "second text".to_string()
-    ];
-    let embeddings = provider.embed_batch(texts.clone()).await
+    let texts = vec!["first text".to_string(), "second text".to_string()];
+    let embeddings = provider
+        .embed_batch(texts.clone())
+        .await
         .expect("Should generate batch embeddings");
 
-    assert_eq!(embeddings.len(), texts.len(), "Batch should return all embeddings");
+    assert_eq!(
+        embeddings.len(),
+        texts.len(),
+        "Batch should return all embeddings"
+    );
     for embedding in embeddings {
         assert_eq!(embedding.len(), 1536, "Each embedding should be 1536-dim");
     }
@@ -777,22 +881,30 @@ async fn integration_test_openai_real() {
 async fn integration_test_provider_switching() {
     // Start with Ollama
     std::env::set_var("EMBEDDING_PROVIDER", "ollama");
-    let provider1 = create_provider_from_env().await
+    let provider1 = create_provider_from_env()
+        .await
         .expect("Should create Ollama provider");
 
-    let embedding1 = provider1.embed("test".to_string()).await
+    let embedding1 = provider1
+        .embed("test".to_string())
+        .await
         .expect("Should embed with Ollama");
     assert_eq!(embedding1.len(), 768);
 
     // Switch to OpenAI
     std::env::set_var("EMBEDDING_PROVIDER", "openai");
-    std::env::set_var("OPENAI_API_KEY",
-        std::env::var("OPENAI_API_KEY").expect("Need OPENAI_API_KEY"));
+    std::env::set_var(
+        "OPENAI_API_KEY",
+        std::env::var("OPENAI_API_KEY").expect("Need OPENAI_API_KEY"),
+    );
 
-    let provider2 = create_provider_from_env().await
+    let provider2 = create_provider_from_env()
+        .await
         .expect("Should create OpenAI provider");
 
-    let embedding2 = provider2.embed("test".to_string()).await
+    let embedding2 = provider2
+        .embed("test".to_string())
+        .await
         .expect("Should embed with OpenAI");
     assert_eq!(embedding2.len(), 1536);
 

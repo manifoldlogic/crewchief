@@ -321,7 +321,10 @@ async fn test_rrf_vs_weighted_comparison() -> Result<(), Box<dyn std::error::Err
     println!("Query: {}", query);
     println!("\nRRF Fusion:");
     println!("  Results: {}", results_rrf.results.len());
-    println!("  Fusion time: {:.2}ms", results_rrf.metadata.timing.fusion_ms);
+    println!(
+        "  Fusion time: {:.2}ms",
+        results_rrf.metadata.timing.fusion_ms
+    );
     if !results_rrf.is_empty() {
         println!(
             "  Top result: {} (RRF score: {:.6})",
@@ -331,7 +334,10 @@ async fn test_rrf_vs_weighted_comparison() -> Result<(), Box<dyn std::error::Err
 
     println!("\nWeighted Fusion:");
     println!("  Results: {}", results_weighted.results.len());
-    println!("  Fusion time: {:.2}ms", results_weighted.metadata.timing.fusion_ms);
+    println!(
+        "  Fusion time: {:.2}ms",
+        results_weighted.metadata.timing.fusion_ms
+    );
     if !results_weighted.is_empty() {
         println!(
             "  Top result: {} (weighted score: {:.4})",

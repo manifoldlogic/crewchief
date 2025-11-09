@@ -56,12 +56,32 @@ async fn test_upsert_768_dimension_embeddings() -> Result<()> {
         )
         .await?;
 
-    assert!(row.get::<_, bool>("has_code_ollama"), "code_embedding_ollama should not be NULL");
-    assert!(row.get::<_, bool>("has_text_ollama"), "text_embedding_ollama should not be NULL");
-    assert!(row.get::<_, bool>("code_null"), "code_embedding should be NULL");
-    assert!(row.get::<_, bool>("text_null"), "text_embedding should be NULL");
-    assert_eq!(row.get::<_, i32>("code_dim"), 768, "code_embedding_ollama should have 768 dimensions");
-    assert_eq!(row.get::<_, i32>("text_dim"), 768, "text_embedding_ollama should have 768 dimensions");
+    assert!(
+        row.get::<_, bool>("has_code_ollama"),
+        "code_embedding_ollama should not be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("has_text_ollama"),
+        "text_embedding_ollama should not be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("code_null"),
+        "code_embedding should be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("text_null"),
+        "text_embedding should be NULL"
+    );
+    assert_eq!(
+        row.get::<_, i32>("code_dim"),
+        768,
+        "code_embedding_ollama should have 768 dimensions"
+    );
+    assert_eq!(
+        row.get::<_, i32>("text_dim"),
+        768,
+        "text_embedding_ollama should have 768 dimensions"
+    );
 
     Ok(())
 }
@@ -116,12 +136,32 @@ async fn test_upsert_1536_dimension_embeddings() -> Result<()> {
         )
         .await?;
 
-    assert!(row.get::<_, bool>("has_code"), "code_embedding should not be NULL");
-    assert!(row.get::<_, bool>("has_text"), "text_embedding should not be NULL");
-    assert!(row.get::<_, bool>("code_ollama_null"), "code_embedding_ollama should be NULL");
-    assert!(row.get::<_, bool>("text_ollama_null"), "text_embedding_ollama should be NULL");
-    assert_eq!(row.get::<_, i32>("code_dim"), 1536, "code_embedding should have 1536 dimensions");
-    assert_eq!(row.get::<_, i32>("text_dim"), 1536, "text_embedding should have 1536 dimensions");
+    assert!(
+        row.get::<_, bool>("has_code"),
+        "code_embedding should not be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("has_text"),
+        "text_embedding should not be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("code_ollama_null"),
+        "code_embedding_ollama should be NULL"
+    );
+    assert!(
+        row.get::<_, bool>("text_ollama_null"),
+        "text_embedding_ollama should be NULL"
+    );
+    assert_eq!(
+        row.get::<_, i32>("code_dim"),
+        1536,
+        "code_embedding should have 1536 dimensions"
+    );
+    assert_eq!(
+        row.get::<_, i32>("text_dim"),
+        1536,
+        "text_embedding should have 1536 dimensions"
+    );
 
     Ok(())
 }
@@ -158,7 +198,10 @@ async fn test_dimension_mismatch_error() -> Result<()> {
     let code_emb = vec![0.1f32; 1536];
     let result = upsert_embeddings(&client, chunk_id, Some(&code_emb), None, 768).await;
 
-    assert!(result.is_err(), "Should return error for dimension mismatch");
+    assert!(
+        result.is_err(),
+        "Should return error for dimension mismatch"
+    );
     let err_msg = result.unwrap_err().to_string();
     assert!(
         err_msg.contains("does not match dimension"),
@@ -325,7 +368,10 @@ async fn test_batch_dimension_mismatch_error() -> Result<()> {
     let embeddings = vec![(chunk_id, Some(vec![0.1f32; 1536]), None)];
     let result = batch_upsert_embeddings(&mut client, &embeddings, 768).await;
 
-    assert!(result.is_err(), "Should return error for dimension mismatch");
+    assert!(
+        result.is_err(),
+        "Should return error for dimension mismatch"
+    );
     let err_msg = result.unwrap_err().to_string();
     assert!(
         err_msg.contains("dimension mismatch") || err_msg.contains("does not match"),
@@ -391,7 +437,10 @@ async fn test_batch_transaction_rollback() -> Result<()> {
 
     // Batch upsert should fail due to second chunk
     let result = batch_upsert_embeddings(&mut client, &embeddings, 768).await;
-    assert!(result.is_err(), "Batch should fail due to dimension mismatch");
+    assert!(
+        result.is_err(),
+        "Batch should fail due to dimension mismatch"
+    );
 
     // Verify that NEITHER chunk was updated (transaction rollback)
     let row1 = client
@@ -451,7 +500,10 @@ async fn test_unsupported_dimension_error() -> Result<()> {
     let code_emb = vec![0.1f32; 384];
     let result = upsert_embeddings(&client, chunk_id, Some(&code_emb), None, 384).await;
 
-    assert!(result.is_err(), "Should return error for unsupported dimension");
+    assert!(
+        result.is_err(),
+        "Should return error for unsupported dimension"
+    );
     let err_msg = result.unwrap_err().to_string();
     assert!(
         err_msg.contains("Unsupported") && err_msg.contains("384"),
@@ -677,7 +729,10 @@ async fn test_text_embedding_column_correct_1536() -> Result<()> {
         )
         .await?;
 
-    assert!(row.get::<_, bool>("has_code"), "code_embedding should not be NULL");
+    assert!(
+        row.get::<_, bool>("has_code"),
+        "code_embedding should not be NULL"
+    );
     assert!(
         row.get::<_, bool>("has_text"),
         "text_embedding should not be NULL - embeddings should be in text_embedding column"

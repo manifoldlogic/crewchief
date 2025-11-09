@@ -43,7 +43,9 @@ impl TestDb {
         client
             .execute("DELETE FROM shadow_results WHERE 1=1", &[])
             .await?;
-        client.execute("DELETE FROM experiments WHERE 1=1", &[]).await?;
+        client
+            .execute("DELETE FROM experiments WHERE 1=1", &[])
+            .await?;
 
         Ok(())
     }
@@ -185,12 +187,7 @@ async fn test_shadow_mode_with_timeout() -> anyhow::Result<()> {
     }
 
     let results = shadow
-        .execute(
-            "test".to_string(),
-            None,
-            old_search,
-            slow_new_search,
-        )
+        .execute("test".to_string(), None, old_search, slow_new_search)
         .await?;
 
     // New implementation should timeout
@@ -330,7 +327,11 @@ async fn test_traffic_splitting() -> anyhow::Result<()> {
     }
 
     // Should be close to 50% (allow some variance)
-    assert!(count_new > 400 && count_new < 600, "Expected ~500, got {}", count_new);
+    assert!(
+        count_new > 400 && count_new < 600,
+        "Expected ~500, got {}",
+        count_new
+    );
 
     test_db.cleanup().await?;
     Ok(())

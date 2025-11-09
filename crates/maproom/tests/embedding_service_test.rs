@@ -129,9 +129,7 @@ async fn test_large_batch_chunking() {
     let service = EmbeddingService::new(config).unwrap();
 
     // Create 25 chunks (should be split into 3 batches of 10, 10, 5)
-    let chunks: Vec<String> = (0..25)
-        .map(|i| format!("text chunk {}", i))
-        .collect();
+    let chunks: Vec<String> = (0..25).map(|i| format!("text chunk {}", i)).collect();
 
     assert_eq!(chunks.len(), 25);
 }
@@ -158,7 +156,7 @@ fn test_retry_config_exponential_backoff() {
     assert_eq!(config.initial_delay_ms, 1000);
 
     // Test exponential backoff delays
-    assert_eq!(config.delay_for_attempt(0), 0);    // No delay for first attempt
+    assert_eq!(config.delay_for_attempt(0), 0); // No delay for first attempt
     assert_eq!(config.delay_for_attempt(1), 1000); // 1 second for first retry
     assert_eq!(config.delay_for_attempt(2), 2000); // 2 seconds for second retry
     assert_eq!(config.delay_for_attempt(3), 4000); // 4 seconds for third retry
@@ -232,12 +230,20 @@ fn test_cost_calculation_accuracy() {
 
     // text-embedding-3-small costs $0.02 per 1M tokens
     let cost = metrics.estimated_cost_usd();
-    assert!((cost - 0.02).abs() < 0.0001, "Expected $0.02, got ${}", cost);
+    assert!(
+        (cost - 0.02).abs() < 0.0001,
+        "Expected $0.02, got ${}",
+        cost
+    );
 
     // Test with 50K tokens
     metrics.total_tokens.store(50_000, Ordering::Relaxed);
     let cost = metrics.estimated_cost_usd();
-    assert!((cost - 0.001).abs() < 0.0001, "Expected $0.001, got ${}", cost);
+    assert!(
+        (cost - 0.001).abs() < 0.0001,
+        "Expected $0.001, got ${}",
+        cost
+    );
 }
 
 #[test]
@@ -258,7 +264,12 @@ fn test_cost_tracking_precision() {
     // Verify within 1% accuracy
     let diff = (cost - expected).abs();
     let tolerance = expected * 0.01;
-    assert!(diff < tolerance, "Cost difference {} exceeds 1% tolerance {}", diff, tolerance);
+    assert!(
+        diff < tolerance,
+        "Cost difference {} exceeds 1% tolerance {}",
+        diff,
+        tolerance
+    );
 }
 
 // ============================================================================
@@ -358,7 +369,11 @@ async fn test_real_api_simple_embedding() {
     let text = "fn main() { println!(\"Hello\"); }";
     let embedding = service.embed_text(text).await;
 
-    assert!(embedding.is_ok(), "Failed to generate embedding: {:?}", embedding.err());
+    assert!(
+        embedding.is_ok(),
+        "Failed to generate embedding: {:?}",
+        embedding.err()
+    );
     let embedding = embedding.unwrap();
     assert_eq!(embedding.len(), 1536);
     assert!(embedding.iter().all(|&v| v.is_finite()));
@@ -459,20 +474,35 @@ fn test_budget_warning_thresholds() {
 
     // Test warning threshold ($0.05 from test_config.yml)
     let warning_threshold = 0.05;
-    assert!(cost < warning_threshold, "Cost should be below warning threshold initially: {} < {}", cost, warning_threshold);
+    assert!(
+        cost < warning_threshold,
+        "Cost should be below warning threshold initially: {} < {}",
+        cost,
+        warning_threshold
+    );
 
     // Simulate more usage to exceed warning threshold
     tracker.record_usage(2_500_000); // Additional $0.05, total now ~$0.051
     let cost = tracker.estimated_cost_usd();
 
-    assert!(cost >= warning_threshold, "Cost should exceed warning threshold: {} >= {}", cost, warning_threshold);
+    assert!(
+        cost >= warning_threshold,
+        "Cost should exceed warning threshold: {} >= {}",
+        cost,
+        warning_threshold
+    );
 
     // Simulate even more usage to exceed error threshold ($0.10 from test_config.yml)
     tracker.record_usage(2_500_000); // Another $0.05, total now ~$0.101
     let cost = tracker.estimated_cost_usd();
 
     let error_threshold = 0.10;
-    assert!(cost >= error_threshold, "Cost should exceed error threshold: {} >= {}", cost, error_threshold);
+    assert!(
+        cost >= error_threshold,
+        "Cost should exceed error threshold: {} >= {}",
+        cost,
+        error_threshold
+    );
 }
 
 #[test]
@@ -490,11 +520,17 @@ fn test_budget_ceiling_enforcement() {
 
         // In real pipeline, this check would stop processing
         if current_cost >= max_cost {
-            assert!(current_cost >= max_cost, "Cost ceiling enforcement check works");
+            assert!(
+                current_cost >= max_cost,
+                "Cost ceiling enforcement check works"
+            );
             break;
         }
     }
 
     let final_cost = tracker.estimated_cost_usd();
-    assert!(final_cost > 0.0, "Cost tracking works during batch operations");
+    assert!(
+        final_cost > 0.0,
+        "Cost tracking works during batch operations"
+    );
 }

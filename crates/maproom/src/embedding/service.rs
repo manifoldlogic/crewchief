@@ -99,7 +99,10 @@ impl EmbeddingService {
         }
 
         // Generate embedding via provider
-        debug!("Cache miss, generating embedding via provider: {}", self.provider.provider_name());
+        debug!(
+            "Cache miss, generating embedding via provider: {}",
+            self.provider.provider_name()
+        );
         self.cache.record_miss().await;
 
         let embedding = self.provider.embed(text.to_string()).await?;
@@ -144,7 +147,11 @@ impl EmbeddingService {
 
         // Generate embeddings for uncached texts
         if !uncached_texts.is_empty() {
-            info!("Generating {} embeddings via provider: {}", uncached_texts.len(), self.provider.provider_name());
+            info!(
+                "Generating {} embeddings via provider: {}",
+                uncached_texts.len(),
+                self.provider.provider_name()
+            );
 
             // Generate embeddings via provider
             let new_embeddings = self.provider.embed_batch(uncached_texts.clone()).await?;
@@ -152,7 +159,11 @@ impl EmbeddingService {
             // Store new embeddings in cache and update results
             for (i, embedding) in uncached_indices.iter().zip(new_embeddings.iter()) {
                 self.cache
-                    .put(&uncached_texts[uncached_indices.iter().position(|&idx| idx == *i).unwrap()], embedding.clone())
+                    .put(
+                        &uncached_texts
+                            [uncached_indices.iter().position(|&idx| idx == *i).unwrap()],
+                        embedding.clone(),
+                    )
                     .await?;
                 results[*i].1 = Some(embedding.clone());
             }
@@ -177,14 +188,18 @@ impl EmbeddingService {
         let total = texts.len();
 
         // Get initial metrics if available
-        let initial_requests = self.provider.metrics()
+        let initial_requests = self
+            .provider
+            .metrics()
             .map(|m| m.total_requests)
             .unwrap_or(0);
 
         let embeddings = self.embed_batch(texts).await?;
 
         // Get final metrics if available
-        let final_requests = self.provider.metrics()
+        let final_requests = self
+            .provider
+            .metrics()
             .map(|m| m.total_requests)
             .unwrap_or(0);
 

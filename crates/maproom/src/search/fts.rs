@@ -104,7 +104,16 @@ impl FTSExecutor {
         })?;
 
         let rows = client
-            .query(&stmt, &[&fts_query, &original_query, &repo_id, &worktree_id, &fetch_limit])
+            .query(
+                &stmt,
+                &[
+                    &fts_query,
+                    &original_query,
+                    &repo_id,
+                    &worktree_id,
+                    &fetch_limit,
+                ],
+            )
             .await
             .map_err(|e| {
                 warn!("Failed to execute FTS query: {}", e);

@@ -137,7 +137,10 @@ async fn test_remove_worktree_from_single_chunk() {
 
     // Verify chunk was deleted (garbage collection)
     let count: i64 = client
-        .query_one("SELECT COUNT(*) FROM maproom.chunks WHERE id = $1", &[&chunk_id])
+        .query_one(
+            "SELECT COUNT(*) FROM maproom.chunks WHERE id = $1",
+            &[&chunk_id],
+        )
         .await
         .expect("Failed to count chunks")
         .get(0);
@@ -282,7 +285,10 @@ async fn test_remove_one_worktree_leaves_others() {
     let ids: Vec<i64> = ids_array.iter().map(|v| v.as_i64().unwrap()).collect();
 
     assert!(ids.contains(&wt_main), "Should still contain main");
-    assert!(ids.contains(&wt_feature_b), "Should still contain feature-b");
+    assert!(
+        ids.contains(&wt_feature_b),
+        "Should still contain feature-b"
+    );
     assert!(
         !ids.contains(&wt_feature_a),
         "Should NOT contain feature-a (removed)"
@@ -327,7 +333,10 @@ async fn test_garbage_collection_deletes_orphans() {
 
     // Verify chunk was DELETED (orphan with empty worktree_ids)
     let count: i64 = client
-        .query_one("SELECT COUNT(*) FROM maproom.chunks WHERE id = $1", &[&chunk_id])
+        .query_one(
+            "SELECT COUNT(*) FROM maproom.chunks WHERE id = $1",
+            &[&chunk_id],
+        )
         .await
         .expect("Failed to count chunks")
         .get(0);

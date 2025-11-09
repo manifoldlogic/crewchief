@@ -25,12 +25,10 @@
 //! cargo bench --bench memory_optimization_bench -- pool
 //! ```
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
 use crewchief_maproom::memory::{
-    BufferPool, StringInterner, dequantize_embedding, get_memory_metrics, quantize_embedding,
+    dequantize_embedding, get_memory_metrics, quantize_embedding, BufferPool, StringInterner,
 };
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::sync::Arc;
 
 /// Benchmark string interning performance
@@ -101,7 +99,11 @@ fn bench_string_interning(c: &mut Criterion) {
             }
 
             let stats = interner.stats();
-            black_box((stats.unique_strings, stats.hit_rate(), stats.deduplication_ratio()))
+            black_box((
+                stats.unique_strings,
+                stats.hit_rate(),
+                stats.deduplication_ratio(),
+            ))
         });
     });
 

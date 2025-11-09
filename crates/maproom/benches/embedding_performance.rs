@@ -65,11 +65,9 @@
 //!
 //! See LOCAL_ANALYSIS.md for performance targets and embedding strategy.
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
 use crewchief_maproom::embedding::config::{CacheConfig, EmbeddingConfig, Provider, RetryConfig};
 use crewchief_maproom::embedding::service::EmbeddingService;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Realistic code chunk samples for benchmarking.
@@ -283,8 +281,9 @@ fn ollama_config() -> EmbeddingConfig {
 
 /// Create OpenAI embedding configuration (if API key available)
 fn openai_config() -> Option<EmbeddingConfig> {
-    std::env::var("OPENAI_API_KEY").ok().map(|api_key| {
-        EmbeddingConfig {
+    std::env::var("OPENAI_API_KEY")
+        .ok()
+        .map(|api_key| EmbeddingConfig {
             provider: Provider::OpenAI,
             model: "text-embedding-3-small".to_string(),
             dimension: 1536,
@@ -297,8 +296,7 @@ fn openai_config() -> Option<EmbeddingConfig> {
             retry: RetryConfig::default(),
             api_key: Some(api_key),
             api_endpoint: None,
-        }
-    })
+        })
 }
 
 /// Benchmark: Single embedding generation (cold vs warm start)
@@ -320,9 +318,7 @@ fn bench_single_embedding(c: &mut Criterion) {
         let chunk = CodeChunk::typescript_function();
 
         // Warm start: Pre-warm the model with one request
-        let _ = rt.block_on(async {
-            service.embed_text(&chunk.text).await
-        });
+        let _ = rt.block_on(async { service.embed_text(&chunk.text).await });
 
         group.bench_function("ollama_warm", |b| {
             b.to_async(&rt).iter(|| async {
@@ -338,9 +334,7 @@ fn bench_single_embedding(c: &mut Criterion) {
 
     // OpenAI single embedding (if available)
     if let Some(config) = openai_config() {
-        let openai_service = rt.block_on(async {
-            EmbeddingService::new(config).ok()
-        });
+        let openai_service = rt.block_on(async { EmbeddingService::new(config).ok() });
 
         if let Some(service) = openai_service {
             group.bench_function("openai", |b| {
@@ -395,9 +389,7 @@ fn bench_batch_processing(c: &mut Criterion) {
 
         // OpenAI batch (if available)
         if let Some(config) = openai_config() {
-            let openai_service = rt.block_on(async {
-                EmbeddingService::new(config).ok()
-            });
+            let openai_service = rt.block_on(async { EmbeddingService::new(config).ok() });
 
             if let Some(service) = openai_service {
                 rt.block_on(async { service.clear_cache().await });
@@ -481,9 +473,7 @@ fn bench_latency_distribution(c: &mut Criterion) {
     if let Some(service) = ollama_service {
         // Warm up
         let warm_chunk = CodeChunk::typescript_function();
-        let _ = rt.block_on(async {
-            service.embed_text(&warm_chunk.text).await
-        });
+        let _ = rt.block_on(async { service.embed_text(&warm_chunk.text).await });
 
         let service_ref = &service;
         group.bench_function("ollama_single_latency", |b| {

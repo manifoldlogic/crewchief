@@ -13,7 +13,7 @@
 //! Run with: cargo test --test git_integration
 
 use anyhow::Result;
-use crewchief_maproom::git::{git_diff_tree, get_current_branch, get_git_tree_sha, FileStatus};
+use crewchief_maproom::git::{get_current_branch, get_git_tree_sha, git_diff_tree, FileStatus};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -111,16 +111,12 @@ fn test_tree_sha_changes_on_modification() {
     let tree1 = get_git_tree_sha(&repo).expect("Failed to get initial tree SHA");
 
     // Modify a file
-    fs::write(repo.join("file1.ts"), "console.log('modified');")
-        .expect("Failed to modify file");
+    fs::write(repo.join("file1.ts"), "console.log('modified');").expect("Failed to modify file");
     git_commit(&repo, "Modify file").expect("Failed to commit");
 
     let tree2 = get_git_tree_sha(&repo).expect("Failed to get second tree SHA");
 
-    assert_ne!(
-        tree1, tree2,
-        "Tree SHA must change when content changes"
-    );
+    assert_ne!(tree1, tree2, "Tree SHA must change when content changes");
 
     cleanup_test_repo(&repo);
 }
@@ -171,8 +167,7 @@ fn test_git_diff_tree_detects_changes() {
     fs::write(repo.join("new.ts"), "console.log('new');").expect("Failed to create new file");
 
     // Modify existing file
-    fs::write(repo.join("file1.ts"), "console.log('modified');")
-        .expect("Failed to modify file");
+    fs::write(repo.join("file1.ts"), "console.log('modified');").expect("Failed to modify file");
 
     // Create a file to delete later
     fs::write(repo.join("old.ts"), "console.log('old');").expect("Failed to create old file");

@@ -124,7 +124,11 @@ impl StatisticalAnalyzer {
     ///
     /// # Returns
     /// Statistical test result with t-statistic and p-value
-    pub fn t_test(&self, old_values: &[f64], new_values: &[f64]) -> anyhow::Result<StatisticalTestResult> {
+    pub fn t_test(
+        &self,
+        old_values: &[f64],
+        new_values: &[f64],
+    ) -> anyhow::Result<StatisticalTestResult> {
         if old_values.is_empty() || new_values.is_empty() {
             return Err(anyhow::anyhow!("Sample sizes must be greater than 0"));
         }
@@ -137,16 +141,8 @@ impl StatisticalAnalyzer {
         let mean2 = new_values.iter().sum::<f64>() / n2;
 
         // Calculate variances
-        let var1 = old_values
-            .iter()
-            .map(|x| (x - mean1).powi(2))
-            .sum::<f64>()
-            / (n1 - 1.0);
-        let var2 = new_values
-            .iter()
-            .map(|x| (x - mean2).powi(2))
-            .sum::<f64>()
-            / (n2 - 1.0);
+        let var1 = old_values.iter().map(|x| (x - mean1).powi(2)).sum::<f64>() / (n1 - 1.0);
+        let var2 = new_values.iter().map(|x| (x - mean2).powi(2)).sum::<f64>() / (n2 - 1.0);
 
         // Pooled standard error
         let se = ((var1 / n1) + (var2 / n2)).sqrt();
@@ -287,10 +283,9 @@ impl StatisticalAnalyzer {
         let p_pooled = (p1 + p2) / 2.0;
 
         // Sample size formula for two proportions
-        let numerator =
-            (z_alpha * (2.0 * p_pooled * (1.0 - p_pooled)).sqrt()
-                + z_beta * (p1 * (1.0 - p1) + p2 * (1.0 - p2)).sqrt())
-            .powi(2);
+        let numerator = (z_alpha * (2.0 * p_pooled * (1.0 - p_pooled)).sqrt()
+            + z_beta * (p1 * (1.0 - p1) + p2 * (1.0 - p2)).sqrt())
+        .powi(2);
         let denominator = (p2 - p1).powi(2);
 
         let n = (numerator / denominator).ceil() as usize;
@@ -424,9 +419,7 @@ mod tests {
         let analyzer = StatisticalAnalyzer::new();
 
         // Test with clear difference (should be significant)
-        let result = analyzer
-            .chi_square_test(100, 1000, 150, 1000)
-            .unwrap();
+        let result = analyzer.chi_square_test(100, 1000, 150, 1000).unwrap();
 
         assert!(result.statistic > 0.0);
         assert!(result.p_value >= 0.0 && result.p_value <= 1.0);

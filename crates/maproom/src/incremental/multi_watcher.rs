@@ -120,8 +120,9 @@ impl MultiWatcher {
         }
 
         // Create the worktree watcher
-        let (mut watcher, event_rx) = WorktreeWatcher::new(id.clone(), path.clone(), self.config.clone())
-            .with_context(|| format!("Failed to create watcher for worktree: {}", id))?;
+        let (mut watcher, event_rx) =
+            WorktreeWatcher::new(id.clone(), path.clone(), self.config.clone())
+                .with_context(|| format!("Failed to create watcher for worktree: {}", id))?;
 
         // Start watching
         watcher
@@ -340,7 +341,8 @@ impl MultiWatcher {
 
                 // Calculate next delay with exponential backoff
                 let next_delay = (current_retry_state.next_delay_ms as f64
-                    * self.health_config.backoff_multiplier) as u64;
+                    * self.health_config.backoff_multiplier)
+                    as u64;
                 current_retry_state.next_delay_ms =
                     next_delay.min(self.health_config.max_retry_delay_ms);
             }
@@ -456,6 +458,8 @@ mod tests {
     #[test]
     fn test_get_status_nonexistent() {
         let (multi_watcher, _rx) = MultiWatcher::new_with_defaults();
-        assert!(multi_watcher.get_status(&"nonexistent".to_string()).is_none());
+        assert!(multi_watcher
+            .get_status(&"nonexistent".to_string())
+            .is_none());
     }
 }

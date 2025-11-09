@@ -468,7 +468,7 @@ mod tests {
 
         // Even though base priorities are equal, category weights differ
         queue.push(1.0, Category::Config, "config"); // 1.0 * 0.3 = 0.3
-        queue.push(1.0, Category::Test, "test");     // 1.0 * 0.8 = 0.8
+        queue.push(1.0, Category::Test, "test"); // 1.0 * 0.8 = 0.8
         queue.push(1.0, Category::Primary, "primary"); // 1.0 * 1.0 = 1.0
 
         assert_eq!(*queue.pop().unwrap().item(), "primary");
@@ -572,14 +572,14 @@ mod tests {
     fn test_mixed_categories() {
         let mut queue = PriorityQueue::new();
 
-        queue.push(0.8, Category::Config, "config");   // 0.8 * 0.3 = 0.24
+        queue.push(0.8, Category::Config, "config"); // 0.8 * 0.3 = 0.24
         queue.push(0.6, Category::Primary, "primary"); // 0.6 * 1.0 = 0.6
-        queue.push(0.7, Category::Test, "test");       // 0.7 * 0.8 = 0.56
-        queue.push(0.9, Category::Caller, "caller");   // 0.9 * 0.6 = 0.54
+        queue.push(0.7, Category::Test, "test"); // 0.7 * 0.8 = 0.56
+        queue.push(0.9, Category::Caller, "caller"); // 0.9 * 0.6 = 0.54
 
         assert_eq!(*queue.pop().unwrap().item(), "primary"); // 0.6
-        assert_eq!(*queue.pop().unwrap().item(), "test");    // 0.56
-        assert_eq!(*queue.pop().unwrap().item(), "caller");  // 0.54
-        assert_eq!(*queue.pop().unwrap().item(), "config");  // 0.24
+        assert_eq!(*queue.pop().unwrap().item(), "test"); // 0.56
+        assert_eq!(*queue.pop().unwrap().item(), "caller"); // 0.54
+        assert_eq!(*queue.pop().unwrap().item(), "config"); // 0.24
     }
 }

@@ -195,9 +195,8 @@ impl OllamaProvider {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            EmbeddingError::Other("All retry attempts failed".to_string())
-        }))
+        Err(last_error
+            .unwrap_or_else(|| EmbeddingError::Other("All retry attempts failed".to_string())))
     }
 
     /// Make a single embedding request without retry.
@@ -246,13 +245,11 @@ impl OllamaProvider {
 
         // Validate dimension matches expected value (contract guarantee)
         if embedding.len() != expected_dim {
-            return Err(EmbeddingError::Api(ApiError::InvalidResponse(
-                format!(
-                    "Dimension mismatch: expected {} dimensions but got {}",
-                    expected_dim,
-                    embedding.len()
-                ),
-            )));
+            return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                "Dimension mismatch: expected {} dimensions but got {}",
+                expected_dim,
+                embedding.len()
+            ))));
         }
 
         Ok(embedding.clone())
@@ -350,9 +347,9 @@ impl EmbeddingProvider for OllamaProvider {
         // Collect results
         let mut results = Vec::with_capacity(tasks.len());
         for task in tasks {
-            let result = task.await.map_err(|e| {
-                EmbeddingError::Other(format!("Task join error: {}", e))
-            })??;
+            let result = task
+                .await
+                .map_err(|e| EmbeddingError::Other(format!("Task join error: {}", e)))??;
             results.push(result);
         }
 

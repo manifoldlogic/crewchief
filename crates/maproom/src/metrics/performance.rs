@@ -269,12 +269,7 @@ impl PerformanceMetrics {
     /// * `file_count` - Number of files indexed
     /// * `duration_seconds` - Total duration in seconds
     /// * `language` - Language being indexed (use "mixed" for multi-language batches)
-    pub fn record_batch_indexing(
-        &self,
-        file_count: usize,
-        duration_seconds: f64,
-        language: &str,
-    ) {
+    pub fn record_batch_indexing(&self, file_count: usize, duration_seconds: f64, language: &str) {
         let files_per_minute = (file_count as f64 / duration_seconds) * 60.0;
         self.record_indexing_rate(files_per_minute, language);
     }

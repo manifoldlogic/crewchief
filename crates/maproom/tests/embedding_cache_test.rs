@@ -114,7 +114,11 @@ async fn test_cache_hit_rate_realistic_sequence() {
     let metrics = cache.metrics().await;
     let hit_rate = metrics.hit_rate();
 
-    println!("Cache hit rate over {} operations: {:.1}%", operations, hit_rate * 100.0);
+    println!(
+        "Cache hit rate over {} operations: {:.1}%",
+        operations,
+        hit_rate * 100.0
+    );
     println!("Hits: {}, Misses: {}", metrics.hits, metrics.misses);
 
     // Should exceed 80% hit rate with this pattern
@@ -161,7 +165,11 @@ async fn test_cache_hit_rate_working_set() {
     assert_eq!(metrics.misses, expected_misses);
 
     let hit_rate = metrics.hit_rate();
-    assert!(hit_rate > 0.95, "Working set should have >95% hit rate, got {:.1}%", hit_rate * 100.0);
+    assert!(
+        hit_rate > 0.95,
+        "Working set should have >95% hit rate, got {:.1}%",
+        hit_rate * 100.0
+    );
 }
 
 // ============================================================================
@@ -254,7 +262,10 @@ async fn test_lru_maintains_order() {
 
     // Add 5 entries
     for i in 0..5 {
-        cache.put(&format!("text{}", i), test_vector(i as f32)).await.unwrap();
+        cache
+            .put(&format!("text{}", i), test_vector(i as f32))
+            .await
+            .unwrap();
     }
 
     // Access in specific order to set recency
@@ -285,7 +296,10 @@ async fn test_concurrent_reads() {
 
     // Populate cache
     for i in 0..10 {
-        cache.put(&format!("text{}", i), test_vector(i as f32)).await.unwrap();
+        cache
+            .put(&format!("text{}", i), test_vector(i as f32))
+            .await
+            .unwrap();
     }
 
     // Spawn 50 concurrent read tasks
@@ -343,7 +357,10 @@ async fn test_concurrent_mixed_operations() {
 
     // Seed cache with some data
     for i in 0..20 {
-        cache.put(&format!("text{}", i), test_vector(i as f32)).await.unwrap();
+        cache
+            .put(&format!("text{}", i), test_vector(i as f32))
+            .await
+            .unwrap();
     }
 
     // Spawn mixed read/write tasks
@@ -420,7 +437,10 @@ async fn test_ttl_cleanup_expired() {
 
     // Add multiple entries
     for i in 0..10 {
-        cache.put(&format!("text{}", i), test_vector(i as f32)).await.unwrap();
+        cache
+            .put(&format!("text{}", i), test_vector(i as f32))
+            .await
+            .unwrap();
     }
 
     assert_eq!(cache.len().await, 10);
@@ -512,7 +532,10 @@ async fn test_cache_insertion_tracking() {
 
     // Add 10 entries
     for i in 0..10 {
-        cache.put(&format!("text{}", i), test_vector(i as f32)).await.unwrap();
+        cache
+            .put(&format!("text{}", i), test_vector(i as f32))
+            .await
+            .unwrap();
     }
 
     let metrics = cache.metrics().await;
@@ -564,12 +587,7 @@ async fn test_cache_key_consistency() {
 async fn test_cache_unicode_keys() {
     let cache = EmbeddingCache::new(test_config()).unwrap();
 
-    let texts = vec![
-        "Hello, 世界!",
-        "Привет мир",
-        "مرحبا بالعالم",
-        "🚀 Rocket",
-    ];
+    let texts = vec!["Hello, 世界!", "Привет мир", "مرحبا بالعالم", "🚀 Rocket"];
 
     for (i, text) in texts.iter().enumerate() {
         cache.put(text, test_vector(i as f32)).await.unwrap();

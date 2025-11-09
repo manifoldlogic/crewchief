@@ -76,7 +76,11 @@ impl CacheWarmer {
             .map(|line| line.trim().to_string())
             .collect();
 
-        info!("Loaded {} warming queries from {}", queries.len(), path.display());
+        info!(
+            "Loaded {} warming queries from {}",
+            queries.len(),
+            path.display()
+        );
         self.warm_queries = queries;
 
         Ok(())
@@ -99,7 +103,10 @@ impl CacheWarmer {
 
     /// Warm cache on startup with predefined queries.
     async fn warm_startup(&self) -> Result<WarmingStats> {
-        info!("Starting cache warming on startup ({} queries)", self.warm_queries.len());
+        info!(
+            "Starting cache warming on startup ({} queries)",
+            self.warm_queries.len()
+        );
 
         let mut stats = WarmingStats::new();
 
@@ -117,8 +124,10 @@ impl CacheWarmer {
             stats.warmed += 1;
         }
 
-        info!("Startup warming complete: {} warmed, {} already cached",
-              stats.warmed, stats.already_cached);
+        info!(
+            "Startup warming complete: {} warmed, {} already cached",
+            stats.warmed, stats.already_cached
+        );
 
         Ok(stats)
     }
@@ -141,7 +150,10 @@ impl CacheWarmer {
         // 3. Predict likely next queries based on current cache state
         // 4. Execute and cache those queries
 
-        info!("Predictive warming complete: {} queries predicted and warmed", stats.warmed);
+        info!(
+            "Predictive warming complete: {} queries predicted and warmed",
+            stats.warmed
+        );
 
         Ok(stats)
     }
@@ -159,14 +171,20 @@ impl CacheWarmer {
 
         debug!("Scheduled warming: refreshing high-value entries...");
 
-        info!("Scheduled warming complete: {} entries refreshed", stats.warmed);
+        info!(
+            "Scheduled warming complete: {} entries refreshed",
+            stats.warmed
+        );
 
         Ok(stats)
     }
 
     /// Warm cache manually with provided queries.
     async fn warm_manual(&self) -> Result<WarmingStats> {
-        info!("Starting manual cache warming ({} queries)", self.warm_queries.len());
+        info!(
+            "Starting manual cache warming ({} queries)",
+            self.warm_queries.len()
+        );
 
         let mut stats = WarmingStats::new();
 
@@ -181,8 +199,10 @@ impl CacheWarmer {
             stats.warmed += 1;
         }
 
-        info!("Manual warming complete: {} warmed, {} already cached",
-              stats.warmed, stats.already_cached);
+        info!(
+            "Manual warming complete: {} warmed, {} already cached",
+            stats.warmed, stats.already_cached
+        );
 
         Ok(stats)
     }
@@ -266,11 +286,8 @@ mod tests {
     async fn test_cache_warmer_with_queries() {
         let cache = Arc::new(CacheSystem::new(CacheConfig::default()));
         let queries = vec!["query1".to_string(), "query2".to_string()];
-        let warmer = CacheWarmer::with_queries(
-            Arc::clone(&cache),
-            WarmingStrategy::Manual,
-            queries.clone(),
-        );
+        let warmer =
+            CacheWarmer::with_queries(Arc::clone(&cache), WarmingStrategy::Manual, queries.clone());
 
         assert_eq!(warmer.query_count(), 2);
         assert_eq!(warmer.queries(), &queries);
@@ -296,11 +313,8 @@ mod tests {
     async fn test_cache_warmer_clear_queries() {
         let cache = Arc::new(CacheSystem::new(CacheConfig::default()));
         let queries = vec!["query1".to_string(), "query2".to_string()];
-        let mut warmer = CacheWarmer::with_queries(
-            Arc::clone(&cache),
-            WarmingStrategy::Manual,
-            queries,
-        );
+        let mut warmer =
+            CacheWarmer::with_queries(Arc::clone(&cache), WarmingStrategy::Manual, queries);
 
         assert_eq!(warmer.query_count(), 2);
 

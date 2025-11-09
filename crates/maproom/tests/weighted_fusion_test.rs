@@ -402,7 +402,9 @@ async fn test_weighted_fusion_weight_comparison() -> Result<(), Box<dyn std::err
         );
     }
 
-    println!("\nFTS-Heavy Weights (FTS=0.9, Vector=0.05, Graph=0.025, Recency=0.0125, Churn=0.0125):");
+    println!(
+        "\nFTS-Heavy Weights (FTS=0.9, Vector=0.05, Graph=0.025, Recency=0.0125, Churn=0.0125):"
+    );
     println!("  Results: {}", results_fts.results.len());
     if !results_fts.is_empty() {
         println!(
@@ -496,7 +498,10 @@ async fn test_weighted_fusion_source_scores() -> Result<(), Box<dyn std::error::
         println!("\n=== Weighted Fusion Source Score Tracking ===");
 
         let first = &results.results[0];
-        println!("Top result: {} (final score: {:.4})", first.relpath, first.score);
+        println!(
+            "Top result: {} (final score: {:.4})",
+            first.relpath, first.score
+        );
         println!("Source contributions:");
 
         assert!(

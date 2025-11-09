@@ -111,7 +111,11 @@ fn test_validate_provider_typo() {
 fn test_scan_with_valid_provider() {
     let args = vec!["test", "scan", "--provider", "ollama"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_ok(), "Failed to parse valid provider: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse valid provider: {:?}",
+        result.err()
+    );
 
     if let TestCommands::Scan { provider } = result.unwrap().command {
         assert_eq!(provider, Some("ollama".to_string()));
@@ -124,7 +128,11 @@ fn test_scan_with_valid_provider() {
 fn test_scan_with_openai_provider() {
     let args = vec!["test", "scan", "--provider", "openai"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_ok(), "Failed to parse openai provider: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse openai provider: {:?}",
+        result.err()
+    );
 
     if let TestCommands::Scan { provider } = result.unwrap().command {
         assert_eq!(provider, Some("openai".to_string()));
@@ -137,7 +145,11 @@ fn test_scan_with_openai_provider() {
 fn test_scan_with_google_provider() {
     let args = vec!["test", "scan", "--provider", "google"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_ok(), "Failed to parse google provider: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse google provider: {:?}",
+        result.err()
+    );
 
     if let TestCommands::Scan { provider } = result.unwrap().command {
         assert_eq!(provider, Some("google".to_string()));
@@ -154,19 +166,33 @@ fn test_scan_with_invalid_provider() {
 
     let err = result.unwrap_err();
     let err_msg = err.to_string();
-    assert!(err_msg.contains("Invalid provider: 'invalid'"), "Error message should explain the problem: {}", err_msg);
-    assert!(err_msg.contains("ollama") || err_msg.contains("openai") || err_msg.contains("google"),
-            "Error message should list supported providers: {}", err_msg);
+    assert!(
+        err_msg.contains("Invalid provider: 'invalid'"),
+        "Error message should explain the problem: {}",
+        err_msg
+    );
+    assert!(
+        err_msg.contains("ollama") || err_msg.contains("openai") || err_msg.contains("google"),
+        "Error message should list supported providers: {}",
+        err_msg
+    );
 }
 
 #[test]
 fn test_scan_without_provider() {
     let args = vec!["test", "scan"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_ok(), "Should parse without provider flag: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse without provider flag: {:?}",
+        result.err()
+    );
 
     if let TestCommands::Scan { provider } = result.unwrap().command {
-        assert_eq!(provider, None, "Provider should be None when flag not provided");
+        assert_eq!(
+            provider, None,
+            "Provider should be None when flag not provided"
+        );
     } else {
         panic!("Expected Scan command");
     }
@@ -176,7 +202,11 @@ fn test_scan_without_provider() {
 fn test_upsert_with_valid_provider() {
     let args = vec!["test", "upsert", "--provider", "ollama"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_ok(), "Failed to parse valid provider for upsert: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse valid provider for upsert: {:?}",
+        result.err()
+    );
 
     if let TestCommands::Upsert { provider } = result.unwrap().command {
         assert_eq!(provider, Some("ollama".to_string()));
@@ -189,21 +219,35 @@ fn test_upsert_with_valid_provider() {
 fn test_upsert_with_invalid_provider() {
     let args = vec!["test", "upsert", "--provider", "unknown"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_err(), "Expected error for invalid provider in upsert");
+    assert!(
+        result.is_err(),
+        "Expected error for invalid provider in upsert"
+    );
 
     let err = result.unwrap_err();
     let err_msg = err.to_string();
-    assert!(err_msg.contains("Invalid provider: 'unknown'"), "Error message should explain the problem: {}", err_msg);
+    assert!(
+        err_msg.contains("Invalid provider: 'unknown'"),
+        "Error message should explain the problem: {}",
+        err_msg
+    );
 }
 
 #[test]
 fn test_upsert_without_provider() {
     let args = vec!["test", "upsert"];
     let result = TestCli::try_parse_from(args);
-    assert!(result.is_ok(), "Should parse upsert without provider flag: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse upsert without provider flag: {:?}",
+        result.err()
+    );
 
     if let TestCommands::Upsert { provider } = result.unwrap().command {
-        assert_eq!(provider, None, "Provider should be None when flag not provided");
+        assert_eq!(
+            provider, None,
+            "Provider should be None when flag not provided"
+        );
     } else {
         panic!("Expected Upsert command");
     }
@@ -227,7 +271,13 @@ fn test_provider_normalization() {
     for (input, expected) in test_cases {
         let result = validate_provider(input);
         assert!(result.is_ok(), "Failed to validate provider: {}", input);
-        assert_eq!(result.unwrap(), expected, "Provider '{}' should normalize to '{}'", input, expected);
+        assert_eq!(
+            result.unwrap(),
+            expected,
+            "Provider '{}' should normalize to '{}'",
+            input,
+            expected
+        );
     }
 }
 
@@ -240,13 +290,28 @@ fn test_error_message_quality() {
     let err_msg = result.unwrap_err();
 
     // Should mention the invalid value
-    assert!(err_msg.contains("aws"), "Error should mention the invalid provider name");
+    assert!(
+        err_msg.contains("aws"),
+        "Error should mention the invalid provider name"
+    );
 
     // Should list all valid options
-    assert!(err_msg.contains("ollama"), "Error should list 'ollama' as valid option");
-    assert!(err_msg.contains("openai"), "Error should list 'openai' as valid option");
-    assert!(err_msg.contains("google"), "Error should list 'google' as valid option");
+    assert!(
+        err_msg.contains("ollama"),
+        "Error should list 'ollama' as valid option"
+    );
+    assert!(
+        err_msg.contains("openai"),
+        "Error should list 'openai' as valid option"
+    );
+    assert!(
+        err_msg.contains("google"),
+        "Error should list 'google' as valid option"
+    );
 
     // Should be clear about the problem
-    assert!(err_msg.contains("Invalid provider"), "Error should clearly state the problem");
+    assert!(
+        err_msg.contains("Invalid provider"),
+        "Error should clearly state the problem"
+    );
 }

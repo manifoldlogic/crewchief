@@ -78,7 +78,10 @@ async fn test_signal_executor_basic() -> Result<(), Box<dyn std::error::Error>> 
     println!("Signal results: {}", signal_results.results.len());
 
     // Signal executor should return results
-    assert!(!signal_results.results.is_empty(), "Should have signal scores");
+    assert!(
+        !signal_results.results.is_empty(),
+        "Should have signal scores"
+    );
 
     // Verify signal scores are normalized (0.0-1.0)
     for result in &signal_results.results {
@@ -98,7 +101,12 @@ async fn test_signal_executor_basic() -> Result<(), Box<dyn std::error::Error>> 
 
     println!("Top 5 signal scores:");
     for (i, result) in signal_results.results.iter().take(5).enumerate() {
-        println!("  {}: chunk {} (score: {:.4})", i + 1, result.chunk_id, result.score);
+        println!(
+            "  {}: chunk {} (score: {:.4})",
+            i + 1,
+            result.chunk_id,
+            result.score
+        );
     }
 
     Ok(())
@@ -136,9 +144,18 @@ async fn test_signal_weights_custom() -> Result<(), Box<dyn std::error::Error>> 
         SignalExecutor::execute_with_weights(&client, repo_id, None, churn_weights).await?;
 
     println!("\n=== Signal Weights Comparison ===");
-    println!("Default (recency=0.3, churn=0.2): {} results", results_default.results.len());
-    println!("Recency-heavy (recency=0.8, churn=0.2): {} results", results_recency.results.len());
-    println!("Churn-heavy (recency=0.2, churn=0.8): {} results", results_churn.results.len());
+    println!(
+        "Default (recency=0.3, churn=0.2): {} results",
+        results_default.results.len()
+    );
+    println!(
+        "Recency-heavy (recency=0.8, churn=0.2): {} results",
+        results_recency.results.len()
+    );
+    println!(
+        "Churn-heavy (recency=0.2, churn=0.8): {} results",
+        results_churn.results.len()
+    );
 
     // All should return results
     assert!(!results_default.results.is_empty());
@@ -148,9 +165,33 @@ async fn test_signal_weights_custom() -> Result<(), Box<dyn std::error::Error>> 
     // Rankings may differ based on weights
     if results_default.results.len() >= 3 {
         println!("\nTop 3 chunks with different weights:");
-        println!("Default:       {:?}", results_default.results.iter().take(3).map(|r| r.chunk_id).collect::<Vec<_>>());
-        println!("Recency-heavy: {:?}", results_recency.results.iter().take(3).map(|r| r.chunk_id).collect::<Vec<_>>());
-        println!("Churn-heavy:   {:?}", results_churn.results.iter().take(3).map(|r| r.chunk_id).collect::<Vec<_>>());
+        println!(
+            "Default:       {:?}",
+            results_default
+                .results
+                .iter()
+                .take(3)
+                .map(|r| r.chunk_id)
+                .collect::<Vec<_>>()
+        );
+        println!(
+            "Recency-heavy: {:?}",
+            results_recency
+                .results
+                .iter()
+                .take(3)
+                .map(|r| r.chunk_id)
+                .collect::<Vec<_>>()
+        );
+        println!(
+            "Churn-heavy:   {:?}",
+            results_churn
+                .results
+                .iter()
+                .take(3)
+                .map(|r| r.chunk_id)
+                .collect::<Vec<_>>()
+        );
     }
 
     Ok(())
@@ -305,15 +346,24 @@ async fn test_signal_contribution_to_fusion() -> Result<(), Box<dyn std::error::
     println!("\nWith signals (default weights):");
     println!("  Results: {}", results_with.results.len());
     if !results_with.is_empty() {
-        println!("  Top result: {} (score: {:.4})", results_with.results[0].relpath, results_with.results[0].score);
+        println!(
+            "  Top result: {} (score: {:.4})",
+            results_with.results[0].relpath, results_with.results[0].score
+        );
         println!("  Sources: {}", results_with.results[0].source_scores.len());
     }
 
     println!("\nWithout signals (FTS+Vector only):");
     println!("  Results: {}", results_without.results.len());
     if !results_without.is_empty() {
-        println!("  Top result: {} (score: {:.4})", results_without.results[0].relpath, results_without.results[0].score);
-        println!("  Sources: {}", results_without.results[0].source_scores.len());
+        println!(
+            "  Top result: {} (score: {:.4})",
+            results_without.results[0].relpath, results_without.results[0].score
+        );
+        println!(
+            "  Sources: {}",
+            results_without.results[0].source_scores.len()
+        );
     }
 
     // Both should produce valid results
@@ -393,7 +443,10 @@ async fn test_missing_signal_handling() -> Result<(), Box<dyn std::error::Error>
     assert!(results.results.len() <= 10);
 
     if !results.is_empty() {
-        println!("Top result: {} (score: {:.4})", results.results[0].relpath, results.results[0].score);
+        println!(
+            "Top result: {} (score: {:.4})",
+            results.results[0].relpath, results.results[0].score
+        );
 
         // Verify fusion completed
         assert!(results.metadata.timing.fusion_ms > 0.0);

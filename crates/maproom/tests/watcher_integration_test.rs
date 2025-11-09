@@ -300,7 +300,11 @@ async fn test_multiple_files_independent() {
         }
     }
 
-    assert_eq!(received_paths.len(), 2, "Should receive events for both files");
+    assert_eq!(
+        received_paths.len(),
+        2,
+        "Should receive events for both files"
+    );
     assert!(
         received_paths.contains(&file1),
         "Should receive event for file1"

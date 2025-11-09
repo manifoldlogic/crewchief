@@ -13,8 +13,8 @@ use tracing::{debug, warn};
 use crate::context::{
     assembler::ChunkMetadata,
     file_loader::FileLoader,
-    strategy::AssemblyStrategy,
     strategies::default::DefaultAssemblyStrategy,
+    strategy::AssemblyStrategy,
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };

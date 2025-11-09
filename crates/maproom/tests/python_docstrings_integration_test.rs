@@ -10,10 +10,15 @@ fn test_google_style_fixture() {
     let chunks = parser::extract_chunks(&source, "py");
 
     // Should extract multiple functions and classes with docstrings
-    assert!(chunks.len() > 0, "Should extract symbols from Google-style fixture");
+    assert!(
+        chunks.len() > 0,
+        "Should extract symbols from Google-style fixture"
+    );
 
     // Find the divide_safely function
-    let divide_func = chunks.iter().find(|c| c.symbol_name == Some("divide_safely".to_string()));
+    let divide_func = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("divide_safely".to_string()));
     assert!(divide_func.is_some(), "Should find divide_safely function");
 
     let divide_func = divide_func.unwrap();
@@ -30,7 +35,9 @@ fn test_google_style_fixture() {
     assert!(docstring.contains("- TypeError: If inputs are not numeric"));
 
     // Find the Calculator class
-    let calculator_class = chunks.iter().find(|c| c.symbol_name == Some("Calculator".to_string()));
+    let calculator_class = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("Calculator".to_string()));
     assert!(calculator_class.is_some(), "Should find Calculator class");
 
     let calculator_class = calculator_class.unwrap();
@@ -50,11 +57,19 @@ fn test_numpy_style_fixture() {
 
     let chunks = parser::extract_chunks(&source, "py");
 
-    assert!(chunks.len() > 0, "Should extract symbols from NumPy-style fixture");
+    assert!(
+        chunks.len() > 0,
+        "Should extract symbols from NumPy-style fixture"
+    );
 
     // Find the process_matrix function
-    let process_func = chunks.iter().find(|c| c.symbol_name == Some("process_matrix".to_string()));
-    assert!(process_func.is_some(), "Should find process_matrix function");
+    let process_func = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("process_matrix".to_string()));
+    assert!(
+        process_func.is_some(),
+        "Should find process_matrix function"
+    );
 
     let process_func = process_func.unwrap();
     let docstring = process_func.docstring.as_ref().unwrap();
@@ -71,7 +86,9 @@ fn test_numpy_style_fixture() {
     assert!(docstring.contains("TypeError"));
 
     // Find the DataProcessor class
-    let data_processor = chunks.iter().find(|c| c.symbol_name == Some("DataProcessor".to_string()));
+    let data_processor = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("DataProcessor".to_string()));
     assert!(data_processor.is_some(), "Should find DataProcessor class");
 
     let data_processor = data_processor.unwrap();
@@ -89,10 +106,15 @@ fn test_rst_style_fixture() {
 
     let chunks = parser::extract_chunks(&source, "py");
 
-    assert!(chunks.len() > 0, "Should extract symbols from reST-style fixture");
+    assert!(
+        chunks.len() > 0,
+        "Should extract symbols from reST-style fixture"
+    );
 
     // Find the parse_config function
-    let parse_func = chunks.iter().find(|c| c.symbol_name == Some("parse_config".to_string()));
+    let parse_func = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("parse_config".to_string()));
     assert!(parse_func.is_some(), "Should find parse_config function");
 
     let parse_func = parse_func.unwrap();
@@ -110,7 +132,9 @@ fn test_rst_style_fixture() {
     assert!(docstring.contains("- ValueError: If the file format is invalid"));
 
     // Find the FileHandler class
-    let file_handler = chunks.iter().find(|c| c.symbol_name == Some("FileHandler".to_string()));
+    let file_handler = chunks
+        .iter()
+        .find(|c| c.symbol_name == Some("FileHandler".to_string()));
     assert!(file_handler.is_some(), "Should find FileHandler class");
 
     let file_handler = file_handler.unwrap();
@@ -169,7 +193,10 @@ def rst_function(value):
 
     // Verify each function has correctly parsed docstrings
     for chunk in &chunks {
-        assert!(chunk.docstring.is_some(), "All functions should have docstrings");
+        assert!(
+            chunk.docstring.is_some(),
+            "All functions should have docstrings"
+        );
         let docstring = chunk.docstring.as_ref().unwrap();
 
         match chunk.symbol_name.as_deref() {

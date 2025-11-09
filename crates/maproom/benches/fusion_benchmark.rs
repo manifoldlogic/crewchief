@@ -11,11 +11,11 @@
 //! cargo bench --bench fusion_benchmark
 //! ```
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use crewchief_maproom::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use crewchief_maproom::search::fusion::{
     BasicWeightedFusion, FusionWeights, RRFFusion, ScoreFusion,
 };
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 /// Generate synthetic ranked results for benchmarking.
 fn generate_results(
@@ -286,21 +286,17 @@ fn bench_fusion_with_limits(c: &mut Criterion) {
     let signal_results = generate_results(SearchSource::Signals, size, 3000);
 
     for limit in [10, 50, 100, 500].iter() {
-        group.bench_with_input(
-            BenchmarkId::new("weighted", limit),
-            limit,
-            |b, &limit| {
-                b.iter(|| {
-                    let results = vec![
-                        fts_results.clone(),
-                        vector_results.clone(),
-                        graph_results.clone(),
-                        signal_results.clone(),
-                    ];
-                    black_box(weighted.fuse(results, &weights, limit))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("weighted", limit), limit, |b, &limit| {
+            b.iter(|| {
+                let results = vec![
+                    fts_results.clone(),
+                    vector_results.clone(),
+                    graph_results.clone(),
+                    signal_results.clone(),
+                ];
+                black_box(weighted.fuse(results, &weights, limit))
+            });
+        });
 
         group.bench_with_input(BenchmarkId::new("rrf", limit), limit, |b, &limit| {
             b.iter(|| {

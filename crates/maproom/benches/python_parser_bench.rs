@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
 use crewchief_maproom::indexer::parser;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::fs;
 use std::time::Duration;
 
@@ -20,9 +20,7 @@ def calculate_sum(a: int, b: int) -> int:
 "#;
 
     c.bench_function("parse_simple_function", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -50,9 +48,7 @@ class Calculator:
 "#;
 
     c.bench_function("parse_simple_class", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -90,9 +86,7 @@ class User:
 "#;
 
     c.bench_function("parse_complex_dataclass", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -116,9 +110,7 @@ def process_data(data: List[Dict]) -> Dict:
 "#;
 
     c.bench_function("parse_imports_heavy", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -138,9 +130,7 @@ async def process_batch(items: List[str]) -> List[dict]:
 "#;
 
     c.bench_function("parse_async_functions", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -170,9 +160,7 @@ class Outer:
 "#;
 
     c.bench_function("parse_nested_classes", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -188,9 +176,7 @@ fn bench_django_models(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(10));
 
     group.bench_function("django_models", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(&source), "py"));
     });
 
     group.finish();
@@ -208,9 +194,7 @@ fn bench_django_views(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(10));
 
     group.bench_function("django_views", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(&source), "py"));
     });
 
     group.finish();
@@ -228,9 +212,7 @@ fn bench_flask_app(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(10));
 
     group.bench_function("flask_app", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(&source), "py"));
     });
 
     group.finish();
@@ -242,9 +224,7 @@ fn bench_edge_cases_incomplete(c: &mut Criterion) {
         .expect("Failed to read incomplete syntax fixture");
 
     c.bench_function("edge_cases_incomplete", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(&source), "py"));
     });
 }
 
@@ -261,7 +241,8 @@ def func1():
 def func2():
     """Function 2."""
     return 2
-"#.repeat(10);
+"#
+    .repeat(10);
 
     group.throughput(Throughput::Bytes(small.len() as u64));
     group.bench_with_input(BenchmarkId::new("small", small.len()), &small, |b, s| {
@@ -345,9 +326,7 @@ class DecoratedClass:
 "#;
 
     c.bench_function("parse_heavy_decorators", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -375,9 +354,7 @@ class GenericContainer(Generic[T]):
 "#;
 
     c.bench_function("parse_complex_type_hints", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(source), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(source), "py"));
     });
 }
 
@@ -426,9 +403,7 @@ fn bench_files_per_minute(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1)); // 1 file
 
     group.bench_function("files_per_minute_estimate", |b| {
-        b.iter(|| {
-            parser::extract_chunks(black_box(&average_file), "py")
-        });
+        b.iter(|| parser::extract_chunks(black_box(&average_file), "py"));
     });
 
     group.finish();

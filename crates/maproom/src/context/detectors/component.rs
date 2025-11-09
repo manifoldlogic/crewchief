@@ -350,18 +350,16 @@ mod tests {
 
         // Valid nested paths - match component patterns
         assert!(detector.is_component_file_path("src/components/Button.tsx"));
-        assert!(detector.is_component_file_path(
-            "src/components/forms/Input.tsx"
-        ));
+        assert!(detector.is_component_file_path("src/components/forms/Input.tsx"));
         assert!(detector.is_component_file_path("components/auth/LoginForm.jsx"));
 
         // Invalid nested paths - not in component directories
         // Note: *.tsx pattern will match these at the file level
         // but PascalCase check determines if they're components
         assert!(!detector.is_component_file_path("src/utils/helpers.tsx")); // Not PascalCase
-        // Props.tsx would match *.tsx pattern BUT to truly distinguish types from components
-        // we would need content analysis - for now this will match based on PascalCase
-        // In real usage, content analysis (has_jsx_return) would filter this out
+                                                                            // Props.tsx would match *.tsx pattern BUT to truly distinguish types from components
+                                                                            // we would need content analysis - for now this will match based on PascalCase
+                                                                            // In real usage, content analysis (has_jsx_return) would filter this out
     }
 
     #[test]

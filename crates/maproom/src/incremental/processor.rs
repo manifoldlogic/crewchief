@@ -165,17 +165,20 @@ impl IncrementalProcessor {
 
         match &task.change_type {
             ChangeType::New(hash) => {
-                self.index_new_file(&task.path, hash).await
+                self.index_new_file(&task.path, hash)
+                    .await
                     .with_context(|| format!("Failed to index new file: {}", path_display))?;
                 info!(path = %path_display, "Indexed new file");
             }
             ChangeType::Modified { old: _, new } => {
-                self.update_file(&task.path, new).await
+                self.update_file(&task.path, new)
+                    .await
                     .with_context(|| format!("Failed to update modified file: {}", path_display))?;
                 info!(path = %path_display, "Updated modified file");
             }
             ChangeType::Deleted(_) => {
-                self.remove_file(&task.path).await
+                self.remove_file(&task.path)
+                    .await
                     .with_context(|| format!("Failed to remove deleted file: {}", path_display))?;
                 info!(path = %path_display, "Removed deleted file");
             }
@@ -205,7 +208,10 @@ impl IncrementalProcessor {
     /// * `Err(_)` - Indexing failed (e.g., parse error, DB error)
     async fn index_new_file(&self, path: &Path, hash: &ContentHash) -> Result<()> {
         // Get database connection
-        let mut client = self.pool.get().await
+        let mut client = self
+            .pool
+            .get()
+            .await
             .context("Failed to get database connection from pool")?;
 
         // Check file size BEFORE reading to prevent OOM on very large files
@@ -248,7 +254,8 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let relpath_str = relpath.to_str()
+        let relpath_str = relpath
+            .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
         // Query to find the file record (it should exist from the watcher's file creation)
@@ -273,12 +280,15 @@ impl IncrementalProcessor {
         let chunks = parse_file_chunks(&content, language.unwrap_or("unknown"))?;
 
         // Begin transaction
-        let tx = client.transaction().await
+        let tx = client
+            .transaction()
+            .await
             .context("Failed to begin transaction")?;
 
         // Insert all chunks
         for chunk in &chunks {
-            insert_chunk_in_transaction(&tx, file_id, chunk, &content).await
+            insert_chunk_in_transaction(&tx, file_id, chunk, &content)
+                .await
                 .context("Failed to insert chunk")?;
         }
 
@@ -292,11 +302,12 @@ impl IncrementalProcessor {
         .context("Failed to update file hash")?;
 
         // Commit transaction
-        tx.commit().await
-            .context("Failed to commit transaction")?;
+        tx.commit().await.context("Failed to commit transaction")?;
 
         // Update edges (outside transaction for better performance)
-        self.edge_updater.update_edges(file_id).await
+        self.edge_updater
+            .update_edges(file_id)
+            .await
             .context("Failed to update edges")?;
 
         Ok(())
@@ -321,7 +332,10 @@ impl IncrementalProcessor {
     /// * `Err(_)` - Update failed, transaction rolled back
     async fn update_file(&self, path: &Path, new_hash: &ContentHash) -> Result<()> {
         // Get database connection
-        let mut client = self.pool.get().await
+        let mut client = self
+            .pool
+            .get()
+            .await
             .context("Failed to get database connection from pool")?;
 
         // Check file size BEFORE reading to prevent OOM on very large files
@@ -364,7 +378,8 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let relpath_str = relpath.to_str()
+        let relpath_str = relpath
+            .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
         // Look up file record
@@ -388,20 +403,20 @@ impl IncrementalProcessor {
         let chunks = parse_file_chunks(&content, language.unwrap_or("unknown"))?;
 
         // Begin transaction
-        let tx = client.transaction().await
+        let tx = client
+            .transaction()
+            .await
             .context("Failed to begin transaction")?;
 
         // Delete old chunks (CASCADE will delete edges automatically)
-        tx.execute(
-            "DELETE FROM maproom.chunks WHERE file_id = $1",
-            &[&file_id],
-        )
-        .await
-        .context("Failed to delete old chunks")?;
+        tx.execute("DELETE FROM maproom.chunks WHERE file_id = $1", &[&file_id])
+            .await
+            .context("Failed to delete old chunks")?;
 
         // Insert new chunks
         for chunk in &chunks {
-            insert_chunk_in_transaction(&tx, file_id, chunk, &content).await
+            insert_chunk_in_transaction(&tx, file_id, chunk, &content)
+                .await
                 .context("Failed to insert new chunk")?;
         }
 
@@ -415,11 +430,12 @@ impl IncrementalProcessor {
         .context("Failed to update file record")?;
 
         // Commit transaction
-        tx.commit().await
-            .context("Failed to commit transaction")?;
+        tx.commit().await.context("Failed to commit transaction")?;
 
         // Update edges (after transaction completes)
-        self.edge_updater.update_edges(file_id).await
+        self.edge_updater
+            .update_edges(file_id)
+            .await
             .context("Failed to update edges after file modification")?;
 
         Ok(())
@@ -441,7 +457,10 @@ impl IncrementalProcessor {
     /// * `Err(_)` - Removal failed, transaction rolled back
     async fn remove_file(&self, path: &Path) -> Result<()> {
         // Get database connection
-        let mut client = self.pool.get().await
+        let mut client = self
+            .pool
+            .get()
+            .await
             .context("Failed to get database connection from pool")?;
 
         // CRITICAL: Normalize path for database query (database stores relative paths)
@@ -450,7 +469,8 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let relpath_str = relpath.to_str()
+        let relpath_str = relpath
+            .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
         // Look up file record
@@ -472,7 +492,9 @@ impl IncrementalProcessor {
         };
 
         // Begin transaction
-        let tx = client.transaction().await
+        let tx = client
+            .transaction()
+            .await
             .context("Failed to begin transaction")?;
 
         // Delete chunks (CASCADE will delete edges automatically via ON DELETE CASCADE)
@@ -481,7 +503,11 @@ impl IncrementalProcessor {
             .await
             .context("Failed to delete chunks")?;
 
-        debug!(file_id = file_id, chunks_deleted = deleted_chunks, "Deleted chunks for file");
+        debug!(
+            file_id = file_id,
+            chunks_deleted = deleted_chunks,
+            "Deleted chunks for file"
+        );
 
         // Delete file record
         tx.execute("DELETE FROM maproom.files WHERE id = $1", &[&file_id])
@@ -489,8 +515,7 @@ impl IncrementalProcessor {
             .context("Failed to delete file record")?;
 
         // Commit transaction
-        tx.commit().await
-            .context("Failed to commit transaction")?;
+        tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(())
     }
@@ -572,7 +597,12 @@ async fn insert_chunk_in_transaction(
         .skip((chunk.start_line as usize).saturating_sub(1))
         .take((chunk.end_line - chunk.start_line + 1) as usize)
         .collect();
-    let preview = chunk_lines.iter().take(40).copied().collect::<Vec<_>>().join("\n");
+    let preview = chunk_lines
+        .iter()
+        .take(40)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n");
 
     // Build ts_doc text (for full-text search)
     let ts_doc = build_ts_doc(

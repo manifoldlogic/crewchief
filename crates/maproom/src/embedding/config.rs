@@ -38,7 +38,10 @@ impl std::str::FromStr for Provider {
             "local" => Ok(Self::Local),
             _ => Err(ConfigError::InvalidValue {
                 field: "provider".to_string(),
-                reason: format!("Unknown provider: {}. Supported: openai, cohere, ollama, google, local", s),
+                reason: format!(
+                    "Unknown provider: {}. Supported: openai, cohere, ollama, google, local",
+                    s
+                ),
             }),
         }
     }
@@ -146,12 +149,13 @@ impl EmbeddingConfig {
 
         // Load retry max attempts
         if let Ok(max_attempts) = env::var("EMBEDDING_RETRY_MAX_ATTEMPTS") {
-            config.retry.max_attempts = max_attempts.parse().map_err(|_| {
-                ConfigError::InvalidValue {
-                    field: "EMBEDDING_RETRY_MAX_ATTEMPTS".to_string(),
-                    reason: "Must be a positive integer".to_string(),
-                }
-            })?;
+            config.retry.max_attempts =
+                max_attempts
+                    .parse()
+                    .map_err(|_| ConfigError::InvalidValue {
+                        field: "EMBEDDING_RETRY_MAX_ATTEMPTS".to_string(),
+                        reason: "Must be a positive integer".to_string(),
+                    })?;
         }
 
         // Load API key based on provider
@@ -160,7 +164,7 @@ impl EmbeddingConfig {
             Provider::Cohere => env::var("COHERE_API_KEY").ok(),
             Provider::Ollama => None, // Ollama runs locally, no API key needed
             Provider::Google => None, // Google uses service account JSON, not API key
-            Provider::Local => None, // Local models don't need API keys
+            Provider::Local => None,  // Local models don't need API keys
         };
 
         // Provider-aware endpoint loading and validation (PROVFIX-1001)
@@ -217,21 +221,19 @@ impl EmbeddingConfig {
         }
 
         if let Ok(sub_batch) = env::var("EMBEDDING_PARALLEL_SUB_BATCH_SIZE") {
-            config.parallel.sub_batch_size = sub_batch.parse().map_err(|_| {
-                ConfigError::InvalidValue {
+            config.parallel.sub_batch_size =
+                sub_batch.parse().map_err(|_| ConfigError::InvalidValue {
                     field: "EMBEDDING_PARALLEL_SUB_BATCH_SIZE".to_string(),
                     reason: "Must be a positive integer".to_string(),
-                }
-            })?;
+                })?;
         }
 
         if let Ok(concurrency) = env::var("EMBEDDING_PARALLEL_MAX_CONCURRENCY") {
-            config.parallel.max_concurrency = concurrency.parse().map_err(|_| {
-                ConfigError::InvalidValue {
+            config.parallel.max_concurrency =
+                concurrency.parse().map_err(|_| ConfigError::InvalidValue {
                     field: "EMBEDDING_PARALLEL_MAX_CONCURRENCY".to_string(),
                     reason: "Must be a positive integer".to_string(),
-                }
-            })?;
+                })?;
         }
 
         Ok(config)
@@ -240,8 +242,7 @@ impl EmbeddingConfig {
     /// Validate the configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
         // Check API key for cloud providers
-        if matches!(self.provider, Provider::OpenAI | Provider::Cohere) && self.api_key.is_none()
-        {
+        if matches!(self.provider, Provider::OpenAI | Provider::Cohere) && self.api_key.is_none() {
             return Err(ConfigError::MissingConfig(format!(
                 "API key for {:?} provider",
                 self.provider
@@ -301,8 +302,10 @@ impl EmbeddingConfig {
                 Provider::Google => {
                     // Google endpoint is region-specific and constructed by GoogleProvider
                     // Default to us-central1 for compatibility
-                    let region = env::var("GOOGLE_REGION").unwrap_or_else(|_| "us-central1".to_string());
-                    let project = env::var("GOOGLE_PROJECT_ID").unwrap_or_else(|_| "unknown".to_string());
+                    let region =
+                        env::var("GOOGLE_REGION").unwrap_or_else(|_| "us-central1".to_string());
+                    let project =
+                        env::var("GOOGLE_PROJECT_ID").unwrap_or_else(|_| "unknown".to_string());
                     format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/textembedding-gecko@003:predict",
                             region, project, region)
                 }
@@ -462,8 +465,8 @@ impl RetryConfig {
             return 0;
         }
 
-        let delay = (self.initial_delay_ms as f32)
-            * self.backoff_multiplier.powi((attempt - 1) as i32);
+        let delay =
+            (self.initial_delay_ms as f32) * self.backoff_multiplier.powi((attempt - 1) as i32);
         delay.min(self.max_delay_ms as f32) as u64
     }
 }
@@ -592,10 +595,7 @@ mod tests {
         );
 
         config.provider = Provider::Cohere;
-        assert_eq!(
-            config.api_endpoint_url(),
-            "https://api.cohere.ai/v1/embed"
-        );
+        assert_eq!(config.api_endpoint_url(), "https://api.cohere.ai/v1/embed");
 
         config.provider = Provider::Ollama;
         assert_eq!(
@@ -790,10 +790,7 @@ mod tests {
         );
 
         config.provider = Provider::Cohere;
-        assert_eq!(
-            config.api_endpoint_url(),
-            "https://api.cohere.ai/v1/embed"
-        );
+        assert_eq!(config.api_endpoint_url(), "https://api.cohere.ai/v1/embed");
 
         config.provider = Provider::Ollama;
         assert_eq!(
@@ -861,7 +858,10 @@ mod config_endpoint_tests {
     #[test]
     fn test_openai_accepts_custom_openai_endpoint() {
         // Allow explicit OpenAI endpoint override
-        env::set_var("EMBEDDING_API_ENDPOINT", "https://api.openai.com/v2/embeddings");
+        env::set_var(
+            "EMBEDDING_API_ENDPOINT",
+            "https://api.openai.com/v2/embeddings",
+        );
         env::set_var("EMBEDDING_PROVIDER", "openai");
 
         let config = EmbeddingConfig::from_env().unwrap();
@@ -884,10 +884,7 @@ mod config_endpoint_tests {
         env::set_var("EMBEDDING_PROVIDER", "cohere");
 
         let config = EmbeddingConfig::from_env().unwrap();
-        assert_eq!(
-            config.api_endpoint_url(),
-            "https://api.cohere.ai/v1/embed"
-        );
+        assert_eq!(config.api_endpoint_url(), "https://api.cohere.ai/v1/embed");
 
         // Cleanup
         env::remove_var("EMBEDDING_PROVIDER");
@@ -900,10 +897,7 @@ mod config_endpoint_tests {
         env::set_var("EMBEDDING_PROVIDER", "cohere");
 
         let config = EmbeddingConfig::from_env().unwrap();
-        assert_eq!(
-            config.api_endpoint_url(),
-            "https://api.cohere.ai/v1/embed"
-        );
+        assert_eq!(config.api_endpoint_url(), "https://api.cohere.ai/v1/embed");
 
         // Cleanup
         env::remove_var("EMBEDDING_API_ENDPOINT");
@@ -918,10 +912,7 @@ mod config_endpoint_tests {
         env::set_var("EMBEDDING_PROVIDER", "ollama");
 
         let config = EmbeddingConfig::from_env().unwrap();
-        assert_eq!(
-            config.api_endpoint_url(),
-            "http://custom:8080/api/embed"
-        );
+        assert_eq!(config.api_endpoint_url(), "http://custom:8080/api/embed");
 
         // Cleanup
         env::remove_var("EMBEDDING_API_ENDPOINT");

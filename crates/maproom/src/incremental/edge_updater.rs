@@ -129,7 +129,10 @@ impl EdgeUpdater {
         let chunk_ids: Vec<i64> = chunk_rows.iter().map(|row| row.get(0)).collect();
 
         if chunk_ids.is_empty() {
-            debug!(file_id = file_id, "No chunks found for file, skipping edge update");
+            debug!(
+                file_id = file_id,
+                "No chunks found for file, skipping edge update"
+            );
             return Ok(());
         }
 
@@ -159,11 +162,13 @@ impl EdgeUpdater {
         // Step 3 & 4: Compute and insert new edges
         // For now, we'll implement a basic edge computation strategy
         // Future enhancement: Add more sophisticated edge detection (imports, calls, etc.)
-        let new_edges = compute_edges(&client, &chunk_ids).await
+        let new_edges = compute_edges(&client, &chunk_ids)
+            .await
             .context("Failed to compute new edges")?;
 
         if !new_edges.is_empty() {
-            let inserted_count = insert_edges(&client, &new_edges).await
+            let inserted_count = insert_edges(&client, &new_edges)
+                .await
                 .context("Failed to insert new edges")?;
 
             debug!(
@@ -234,10 +239,7 @@ impl EdgeType {
 /// - Function call graph via symbol resolution
 /// - Test target detection via naming conventions
 /// - Route handler detection via framework patterns
-async fn compute_edges(
-    client: &tokio_postgres::Client,
-    chunk_ids: &[i64],
-) -> Result<Vec<Edge>> {
+async fn compute_edges(client: &tokio_postgres::Client, chunk_ids: &[i64]) -> Result<Vec<Edge>> {
     if chunk_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -275,7 +277,10 @@ async fn compute_edges(
         if is_route_chunk(&kind, symbol_name.as_deref()) {
             // Routes typically don't have many edges in our simple model
             // This is a placeholder for future route graph construction
-            debug!(chunk_id = chunk_id, "Found route chunk (edge computation placeholder)");
+            debug!(
+                chunk_id = chunk_id,
+                "Found route chunk (edge computation placeholder)"
+            );
         }
 
         // Future: Add import/export/call graph analysis here
@@ -296,9 +301,7 @@ fn is_test_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
 
     if let Some(name) = symbol_name {
         let lower = name.to_lowercase();
-        if lower.starts_with("test_")
-            || lower.starts_with("it ")
-            || lower.starts_with("describe ")
+        if lower.starts_with("test_") || lower.starts_with("it ") || lower.starts_with("describe ")
         {
             return true;
         }

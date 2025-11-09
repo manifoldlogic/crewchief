@@ -9,7 +9,8 @@
 //! ```
 
 use crewchief_maproom::embedding::{
-    CacheConfig, EmbeddingCache, EmbeddingConfig, EmbeddingService, OllamaProvider, ParallelConfig, Provider, RetryConfig,
+    CacheConfig, EmbeddingCache, EmbeddingConfig, EmbeddingService, OllamaProvider, ParallelConfig,
+    Provider, RetryConfig,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -22,10 +23,7 @@ async fn ollama_available() -> bool {
         .unwrap();
 
     // Check if Ollama is running by hitting the tags endpoint
-    let result = client
-        .get("http://localhost:11434/api/tags")
-        .send()
-        .await;
+    let result = client.get("http://localhost:11434/api/tags").send().await;
 
     if result.is_err() {
         return false;
@@ -55,7 +53,7 @@ fn test_config() -> EmbeddingConfig {
         },
         batch_size: 10,
         retry: RetryConfig::default(),
-        api_key: None, // Ollama doesn't require API key
+        api_key: None,      // Ollama doesn't require API key
         api_endpoint: None, // Use default localhost:11434
         parallel: ParallelConfig::default(),
     }
@@ -73,18 +71,18 @@ async fn skip_if_ollama_unavailable() -> Option<EmbeddingService> {
 
     let config = test_config();
     match OllamaProvider::new(
-        config.api_endpoint.unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
+        config
+            .api_endpoint
+            .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
         config.model,
     ) {
-        Ok(provider) => {
-            match EmbeddingCache::new(config.cache) {
-                Ok(cache) => Some(EmbeddingService::new(Box::new(provider), Arc::new(cache))),
-                Err(e) => {
-                    eprintln!("WARNING: Failed to create EmbeddingCache: {:?}", e);
-                    None
-                }
+        Ok(provider) => match EmbeddingCache::new(config.cache) {
+            Ok(cache) => Some(EmbeddingService::new(Box::new(provider), Arc::new(cache))),
+            Err(e) => {
+                eprintln!("WARNING: Failed to create EmbeddingCache: {:?}", e);
+                None
             }
-        }
+        },
         Err(e) => {
             eprintln!("WARNING: Failed to create Ollama provider: {:?}", e);
             None
@@ -233,7 +231,9 @@ async fn test_invalid_model_error() {
     }
 
     let provider_result = OllamaProvider::new(
-        config.api_endpoint.unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
+        config
+            .api_endpoint
+            .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
         config.model,
     );
     assert!(
@@ -246,10 +246,7 @@ async fn test_invalid_model_error() {
     let text = "test text";
     let result = service.embed_text(text).await;
 
-    assert!(
-        result.is_err(),
-        "Embedding with invalid model should fail"
-    );
+    assert!(result.is_err(), "Embedding with invalid model should fail");
 
     // Check error message contains model-related information
     let error = result.err().unwrap();
@@ -279,7 +276,9 @@ async fn test_unreachable_endpoint_error() {
     };
 
     let provider_result = OllamaProvider::new(
-        config.api_endpoint.unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
+        config
+            .api_endpoint
+            .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
         config.model,
     );
     assert!(provider_result.is_ok(), "Provider creation should succeed");
@@ -300,7 +299,9 @@ async fn test_unreachable_endpoint_error() {
 
     // The error should indicate a network/connection problem
     assert!(
-        error_msg.contains("Network") || error_msg.contains("connection") || error_msg.contains("timeout"),
+        error_msg.contains("Network")
+            || error_msg.contains("connection")
+            || error_msg.contains("timeout"),
         "Error message should indicate network/connection issues"
     );
 }
@@ -460,7 +461,11 @@ async fn test_empty_batch_handling() {
 
     let embeddings = service.embed_batch(vec![]).await;
     assert!(embeddings.is_ok(), "Empty batch should succeed");
-    assert_eq!(embeddings.unwrap().len(), 0, "Empty batch should return empty result");
+    assert_eq!(
+        embeddings.unwrap().len(),
+        0,
+        "Empty batch should return empty result"
+    );
 }
 
 #[tokio::test]
@@ -883,7 +888,8 @@ async fn test_large_batch_100_chunks() {
 
     // Note: We don't have direct memory tracking, but log what we can
     println!("Memory usage notes:");
-    println!("  Embeddings stored: {} vectors × 768 dimensions × 4 bytes = {} KB",
+    println!(
+        "  Embeddings stored: {} vectors × 768 dimensions × 4 bytes = {} KB",
         embeddings.len(),
         (embeddings.len() * 768 * 4) / 1024
     );
@@ -891,9 +897,15 @@ async fn test_large_batch_100_chunks() {
     // Log throughput performance
     println!("Throughput analysis:");
     if chunks_per_minute >= 500.0 {
-        println!("  ✓ Throughput acceptable: {:.2} chunks/min", chunks_per_minute);
+        println!(
+            "  ✓ Throughput acceptable: {:.2} chunks/min",
+            chunks_per_minute
+        );
     } else {
-        println!("  ⚠ Throughput below target: {:.2} chunks/min (target: 500+)", chunks_per_minute);
+        println!(
+            "  ⚠ Throughput below target: {:.2} chunks/min (target: 500+)",
+            chunks_per_minute
+        );
     }
 
     // No strict time limit for large batch, just verify completion
@@ -1024,7 +1036,10 @@ async fn test_content_types() {
 
     println!("\nContent type embedding results:");
     println!("  Total time: {:?}", duration);
-    println!("  Average time per type: {:?}", duration / content_types.len() as u32);
+    println!(
+        "  Average time per type: {:?}",
+        duration / content_types.len() as u32
+    );
 
     // Verify each content type
     for ((content_type, _), embedding) in content_types.iter().zip(embeddings.iter()) {
@@ -1055,10 +1070,12 @@ async fn test_content_types() {
         // Calculate basic statistics
         let sum: f32 = embedding.iter().sum();
         let mean = sum / embedding.len() as f32;
-        let variance: f32 = embedding.iter().map(|&v| (v - mean).powi(2)).sum::<f32>() / embedding.len() as f32;
+        let variance: f32 =
+            embedding.iter().map(|&v| (v - mean).powi(2)).sum::<f32>() / embedding.len() as f32;
         let std_dev = variance.sqrt();
 
-        println!("  {}: dim={}, non_zero={}, mean={:.6}, std_dev={:.6}",
+        println!(
+            "  {}: dim={}, non_zero={}, mean={:.6}, std_dev={:.6}",
             content_type,
             embedding.len(),
             non_zero_count,
@@ -1073,8 +1090,7 @@ async fn test_content_types() {
             assert_ne!(
                 embeddings[i], embeddings[j],
                 "Different content types ({} and {}) should produce different embeddings",
-                content_types[i].0,
-                content_types[j].0
+                content_types[i].0, content_types[j].0
             );
         }
     }
@@ -1084,9 +1100,18 @@ async fn test_content_types() {
     let similarity_01 = cosine_similarity(&embeddings[0], &embeddings[1]);
     let similarity_02 = cosine_similarity(&embeddings[0], &embeddings[2]);
     let similarity_23 = cosine_similarity(&embeddings[2], &embeddings[3]);
-    println!("  {} vs {}: {:.4}", content_types[0].0, content_types[1].0, similarity_01);
-    println!("  {} vs {}: {:.4}", content_types[0].0, content_types[2].0, similarity_02);
-    println!("  {} vs {}: {:.4}", content_types[2].0, content_types[3].0, similarity_23);
+    println!(
+        "  {} vs {}: {:.4}",
+        content_types[0].0, content_types[1].0, similarity_01
+    );
+    println!(
+        "  {} vs {}: {:.4}",
+        content_types[0].0, content_types[2].0, similarity_02
+    );
+    println!(
+        "  {} vs {}: {:.4}",
+        content_types[2].0, content_types[3].0, similarity_23
+    );
 
     println!("\n✓ All content types generated valid embeddings");
     println!("✓ All embeddings have correct dimensions (768)");

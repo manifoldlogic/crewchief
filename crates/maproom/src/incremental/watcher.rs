@@ -55,10 +55,7 @@ impl FileWatcher {
     /// Create a new file watcher for the given path.
     ///
     /// Returns the watcher instance and a receiver for file events.
-    pub fn new(
-        path: PathBuf,
-        config: WatcherConfig,
-    ) -> Result<(Self, mpsc::Receiver<FileEvent>)> {
+    pub fn new(path: PathBuf, config: WatcherConfig) -> Result<(Self, mpsc::Receiver<FileEvent>)> {
         // Create two channels: raw events and debounced events
         let (raw_event_tx, raw_event_rx) = mpsc::channel(config.channel_capacity);
         let (debounced_event_tx, debounced_event_rx) = mpsc::channel(config.channel_capacity);
@@ -103,11 +100,9 @@ impl FileWatcher {
 
                         // Use blocking_send to avoid needing tokio runtime
                         // This runs in notify's event thread, so we can't use async
-                        if let Err(e) = Self::handle_notify_event_sync(
-                            event,
-                            raw_event_tx,
-                            ignore_matcher,
-                        ) {
+                        if let Err(e) =
+                            Self::handle_notify_event_sync(event, raw_event_tx, ignore_matcher)
+                        {
                             error!("Error handling file event: {}", e);
                         }
                     }

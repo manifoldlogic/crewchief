@@ -270,9 +270,7 @@ pub fn spawn_maintenance_task(
 ) -> tokio::task::JoinHandle<Result<()>> {
     let maintenance = CacheMaintenance::new(cache, config);
 
-    tokio::spawn(async move {
-        maintenance.run().await
-    })
+    tokio::spawn(async move { maintenance.run().await })
 }
 
 #[cfg(test)]

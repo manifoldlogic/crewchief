@@ -23,7 +23,10 @@ def calculate_sum(a: int, b: int) -> int:
     assert!(sig.contains("b: int"));
     assert!(sig.contains("-> int"));
 
-    assert_eq!(func.docstring, Some("Calculate the sum of two integers.".to_string()));
+    assert_eq!(
+        func.docstring,
+        Some("Calculate the sum of two integers.".to_string())
+    );
 }
 
 #[test]
@@ -41,7 +44,8 @@ def process_items(items: List[str], default: Optional[str] = None) -> str:
     assert_eq!(chunks.len(), 2);
 
     // Find the function chunk (not the imports chunk)
-    let func = chunks.iter()
+    let func = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("process_items".to_string()))
         .expect("Should find process_items function");
     assert!(func.signature.as_ref().unwrap().contains("List[str]"));
@@ -67,7 +71,8 @@ class DataProcessor:
     let chunks = parser::extract_chunks(source, "py");
     assert!(chunks.len() >= 1);
 
-    let class = chunks.iter()
+    let class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("DataProcessor".to_string()))
         .expect("Should find DataProcessor class");
 
@@ -98,7 +103,8 @@ class Dog(Mammal):
     let chunks = parser::extract_chunks(source, "py");
 
     // Find classes and check inheritance
-    let mammal = chunks.iter()
+    let mammal = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Mammal".to_string()))
         .expect("Should find Mammal class");
 
@@ -114,7 +120,8 @@ class Dog(Mammal):
         }
     }
 
-    let dog = chunks.iter()
+    let dog = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Dog".to_string()))
         .expect("Should find Dog class");
 
@@ -140,7 +147,8 @@ class Duck(Flyable, Swimmable):
 
     let chunks = parser::extract_chunks(source, "py");
 
-    let duck = chunks.iter()
+    let duck = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Duck".to_string()))
         .expect("Should find Duck class");
 
@@ -214,13 +222,16 @@ def decorated_function(x, y):
         assert_eq!(decorators.len(), 3);
 
         // Check decorator names
-        let decorator_texts: Vec<String> = decorators.iter()
+        let decorator_texts: Vec<String> = decorators
+            .iter()
             .map(|d| d.as_str().unwrap().to_string())
             .collect();
 
         assert!(decorator_texts.iter().any(|d| d.contains("decorator_one")));
         assert!(decorator_texts.iter().any(|d| d.contains("decorator_two")));
-        assert!(decorator_texts.iter().any(|d| d.contains("decorator_three")));
+        assert!(decorator_texts
+            .iter()
+            .any(|d| d.contains("decorator_three")));
     }
 }
 
@@ -253,7 +264,9 @@ class ImmutablePoint:
 
                 let decorators = metadata.get("decorators").unwrap().as_array().unwrap();
                 assert!(!decorators.is_empty());
-                assert!(decorators.iter().any(|d| d.as_str().unwrap().contains("dataclass")));
+                assert!(decorators
+                    .iter()
+                    .any(|d| d.as_str().unwrap().contains("dataclass")));
             }
         }
     }
@@ -303,7 +316,8 @@ class AsyncClient:
 
     let chunks = parser::extract_chunks(source, "py");
 
-    let connect = chunks.iter()
+    let connect = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("connect".to_string()))
         .expect("Should find connect method");
 
@@ -329,7 +343,8 @@ default_timeout = 30.0
     assert!(chunks.len() >= 4);
 
     // Check for constants (uppercase)
-    let version = chunks.iter()
+    let version = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("VERSION".to_string()))
         .expect("Should find VERSION constant");
 
@@ -337,14 +352,16 @@ default_timeout = 30.0
     assert!(version.signature.is_some());
     assert!(version.signature.as_ref().unwrap().contains("1.0.0"));
 
-    let debug = chunks.iter()
+    let debug = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("DEBUG".to_string()))
         .expect("Should find DEBUG constant");
 
     assert_eq!(debug.kind, "constant");
 
     // Check for variables (lowercase)
-    let max_retries = chunks.iter()
+    let max_retries = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("max_retries".to_string()))
         .expect("Should find max_retries variable");
 
@@ -367,7 +384,8 @@ class MyClass:
     let chunks = parser::extract_chunks(source, "py");
 
     // Should find GLOBAL_VAR
-    let global_var = chunks.iter()
+    let global_var = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("GLOBAL_VAR".to_string()))
         .expect("Should find GLOBAL_VAR");
 
@@ -375,7 +393,8 @@ class MyClass:
 
     // Should NOT find class_var as a separate chunk (it's inside the class)
     // Note: class attributes inside class bodies are not module-level assignments
-    let class_var_count = chunks.iter()
+    let class_var_count = chunks
+        .iter()
         .filter(|c| c.symbol_name == Some("class_var".to_string()))
         .count();
 
@@ -404,13 +423,15 @@ class Outer:
     let chunks = parser::extract_chunks(source, "py");
 
     // Should extract both classes
-    let outer = chunks.iter()
+    let outer = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Outer".to_string()))
         .expect("Should find Outer class");
 
     assert_eq!(outer.kind, "class");
 
-    let inner = chunks.iter()
+    let inner = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("Inner".to_string()))
         .expect("Should find Inner class");
 
@@ -478,7 +499,8 @@ class User:
     let chunks = parser::extract_chunks(source, "py");
 
     // Find the class
-    let user_class = chunks.iter()
+    let user_class = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("User".to_string()) && c.kind == "class")
         .expect("Should find User class");
 
@@ -490,13 +512,15 @@ class User:
     }
 
     // Find methods
-    let activate = chunks.iter()
+    let activate = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("activate".to_string()))
         .expect("Should find activate method");
 
     assert_eq!(activate.kind, "method");
 
-    let display_name = chunks.iter()
+    let display_name = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("display_name".to_string()))
         .expect("Should find display_name property");
 
@@ -536,9 +560,7 @@ class AsyncDatabase:
     let chunks = parser::extract_chunks(source, "py");
 
     // Find async methods
-    let async_methods = chunks.iter()
-        .filter(|c| c.kind == "async_method")
-        .count();
+    let async_methods = chunks.iter().filter(|c| c.kind == "async_method").count();
 
     assert!(async_methods >= 4, "Should have at least 4 async methods");
 }
@@ -639,28 +661,30 @@ fn test_python_real_world_api_fixture() {
         "/tests/fixtures/python/sample_api.py"
     );
 
-    let source = fs::read_to_string(fixture_path)
-        .expect("Failed to read Python fixture");
+    let source = fs::read_to_string(fixture_path).expect("Failed to read Python fixture");
 
     let chunks = parser::extract_chunks(&source, "py");
 
     // Verify we extracted a comprehensive set of symbols
-    assert!(chunks.len() > 10, "Should extract many symbols from real code");
+    assert!(
+        chunks.len() > 10,
+        "Should extract many symbols from real code"
+    );
 
     // Verify constants
-    let constants: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "constant")
-        .collect();
-    assert!(constants.len() >= 3, "Should extract module-level constants");
+    let constants: Vec<_> = chunks.iter().filter(|c| c.kind == "constant").collect();
+    assert!(
+        constants.len() >= 3,
+        "Should extract module-level constants"
+    );
 
     // Verify classes
-    let classes: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "class")
-        .collect();
+    let classes: Vec<_> = chunks.iter().filter(|c| c.kind == "class").collect();
     assert!(classes.len() >= 5, "Should extract all classes");
 
     // Verify we found specific classes
-    let class_names: Vec<_> = classes.iter()
+    let class_names: Vec<_> = classes
+        .iter()
         .filter_map(|c| c.symbol_name.as_ref())
         .collect();
 
@@ -671,10 +695,12 @@ fn test_python_real_world_api_fixture() {
     assert!(class_names.contains(&&"HTTPClient".to_string()));
 
     // Verify decorated classes (dataclasses)
-    let decorated_classes: Vec<_> = classes.iter()
+    let decorated_classes: Vec<_> = classes
+        .iter()
         .filter(|c| {
             if let Some(metadata) = &c.metadata {
-                metadata.get("has_decorators")
+                metadata
+                    .get("has_decorators")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false)
             } else {
@@ -683,15 +709,23 @@ fn test_python_real_world_api_fixture() {
         })
         .collect();
 
-    assert!(decorated_classes.len() >= 2, "Should find decorated classes");
+    assert!(
+        decorated_classes.len() >= 2,
+        "Should find decorated classes"
+    );
 
     // Verify inheritance
-    let http_client = chunks.iter()
+    let http_client = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("HTTPClient".to_string()) && c.kind == "class")
         .expect("Should find HTTPClient class");
 
     assert!(http_client.signature.is_some());
-    assert!(http_client.signature.as_ref().unwrap().contains("BaseClient"));
+    assert!(http_client
+        .signature
+        .as_ref()
+        .unwrap()
+        .contains("BaseClient"));
 
     if let Some(metadata) = &http_client.metadata {
         let base_classes = metadata.get("base_classes").unwrap().as_array().unwrap();
@@ -700,40 +734,42 @@ fn test_python_real_world_api_fixture() {
     }
 
     // Verify async functions
-    let async_funcs: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "async_func")
-        .collect();
+    let async_funcs: Vec<_> = chunks.iter().filter(|c| c.kind == "async_func").collect();
 
     assert!(async_funcs.len() >= 1, "Should extract async functions");
 
     // Verify methods
-    let methods: Vec<_> = chunks.iter()
+    let methods: Vec<_> = chunks
+        .iter()
         .filter(|c| c.kind == "method" || c.kind == "async_method")
         .collect();
 
     assert!(methods.len() >= 5, "Should extract many methods");
 
     // Verify static/class methods have decorators
-    let from_config = chunks.iter()
+    let from_config = chunks
+        .iter()
         .find(|c| c.symbol_name == Some("from_config".to_string()))
         .expect("Should find from_config classmethod");
 
     if let Some(metadata) = &from_config.metadata {
-        let has_decorators = metadata.get("has_decorators")
+        let has_decorators = metadata
+            .get("has_decorators")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         assert!(has_decorators, "classmethod should have decorators");
     }
 
     // Verify regular functions
-    let funcs: Vec<_> = chunks.iter()
-        .filter(|c| c.kind == "func")
-        .collect();
+    let funcs: Vec<_> = chunks.iter().filter(|c| c.kind == "func").collect();
 
     assert!(funcs.len() >= 2, "Should extract regular functions");
 
     // Overall accuracy check: we should have extracted most symbols
     // Expected: ~3 constants, ~5 classes, ~1+ async funcs, ~5+ methods, ~2+ funcs
     // Total: ~16+ symbols
-    assert!(chunks.len() >= 16, "Should extract comprehensive symbol set from real code");
+    assert!(
+        chunks.len() >= 16,
+        "Should extract comprehensive symbol set from real code"
+    );
 }

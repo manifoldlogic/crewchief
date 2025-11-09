@@ -1,3 +1,3 @@
 pub mod markdown;
 
-pub use markdown::{MarkdownMigrator, MigrationStats, MigrationResult, verify_migration};
+pub use markdown::{verify_migration, MarkdownMigrator, MigrationResult, MigrationStats};

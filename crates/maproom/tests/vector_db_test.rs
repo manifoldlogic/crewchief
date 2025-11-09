@@ -76,7 +76,9 @@ async fn test_vector_columns_exist() {
     let client = skip_if_no_db!();
 
     // Run migrations to ensure schema is up to date
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check code_embedding column
     let row = client
@@ -130,7 +132,9 @@ async fn test_vector_columns_exist() {
 async fn test_vector_dimension_validation() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Query column dimensions using pgvector functions
     let row = client
@@ -162,7 +166,9 @@ async fn test_vector_dimension_validation() {
 async fn test_ivfflat_indices_exist() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check for code_embedding index
     let row = client
@@ -184,8 +190,14 @@ async fn test_ivfflat_indices_exist() {
     let indexname: String = row.get("indexname");
     let indexdef: String = row.get("indexdef");
     assert_eq!(indexname, "idx_chunks_code_vec");
-    assert!(indexdef.contains("ivfflat"), "Index should use ivfflat access method");
-    assert!(indexdef.contains("vector_cosine_ops"), "Index should use cosine distance");
+    assert!(
+        indexdef.contains("ivfflat"),
+        "Index should use ivfflat access method"
+    );
+    assert!(
+        indexdef.contains("vector_cosine_ops"),
+        "Index should use cosine distance"
+    );
 
     // Check for text_embedding index
     let row = client
@@ -207,8 +219,14 @@ async fn test_ivfflat_indices_exist() {
     let indexname: String = row.get("indexname");
     let indexdef: String = row.get("indexdef");
     assert_eq!(indexname, "idx_chunks_text_vec");
-    assert!(indexdef.contains("ivfflat"), "Index should use ivfflat access method");
-    assert!(indexdef.contains("vector_cosine_ops"), "Index should use cosine distance");
+    assert!(
+        indexdef.contains("ivfflat"),
+        "Index should use ivfflat access method"
+    );
+    assert!(
+        indexdef.contains("vector_cosine_ops"),
+        "Index should use cosine distance"
+    );
 }
 
 #[tokio::test]
@@ -216,7 +234,9 @@ async fn test_ivfflat_indices_exist() {
 async fn test_ivfflat_index_parameters() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check index options (lists parameter)
     let rows = client
@@ -255,7 +275,9 @@ async fn test_ivfflat_index_parameters() {
 async fn test_partial_indices_exist() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check for recency_score partial index
     let result = client
@@ -272,7 +294,10 @@ async fn test_partial_indices_exist() {
         .await
         .expect("Failed to query partial index");
 
-    assert!(result.is_some(), "idx_chunks_recent partial index should exist");
+    assert!(
+        result.is_some(),
+        "idx_chunks_recent partial index should exist"
+    );
 
     // Check for churn_score partial index
     let result = client
@@ -289,7 +314,10 @@ async fn test_partial_indices_exist() {
         .await
         .expect("Failed to query partial index");
 
-    assert!(result.is_some(), "idx_chunks_high_churn partial index should exist");
+    assert!(
+        result.is_some(),
+        "idx_chunks_high_churn partial index should exist"
+    );
 }
 
 // ============================================================================
@@ -301,7 +329,9 @@ async fn test_partial_indices_exist() {
 async fn test_query_planner_uses_vector_index() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Set ivfflat.probes for this session
     client
@@ -311,7 +341,14 @@ async fn test_query_planner_uses_vector_index() {
 
     // Create a test vector (1536 dimensions)
     let test_vector: Vec<f32> = vec![0.1; 1536];
-    let vector_str = format!("[{}]", test_vector.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vector_str = format!(
+        "[{}]",
+        test_vector
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     // Run EXPLAIN on vector similarity query
     let query = format!(
@@ -348,7 +385,9 @@ async fn test_query_planner_uses_vector_index() {
 async fn test_explain_analyze_vector_query() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Set ivfflat.probes
     client
@@ -358,11 +397,21 @@ async fn test_explain_analyze_vector_query() {
 
     // Create test vector
     let test_vector: Vec<f32> = vec![0.1; 1536];
-    let vector_str = format!("[{}]", test_vector.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vector_str = format!(
+        "[{}]",
+        test_vector
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     // Run EXPLAIN ANALYZE (only if data exists)
     let count_row = client
-        .query_one("SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL", &[])
+        .query_one(
+            "SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL",
+            &[],
+        )
         .await
         .expect("Failed to count chunks");
 
@@ -407,11 +456,16 @@ async fn test_explain_analyze_vector_query() {
 async fn test_vector_query_latency() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check if we have data
     let count_row = client
-        .query_one("SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL", &[])
+        .query_one(
+            "SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL",
+            &[],
+        )
         .await
         .expect("Failed to count chunks");
 
@@ -430,7 +484,14 @@ async fn test_vector_query_latency() {
 
     // Create test vector
     let test_vector: Vec<f32> = vec![0.1; 1536];
-    let vector_str = format!("[{}]", test_vector.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vector_str = format!(
+        "[{}]",
+        test_vector
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     // Run multiple queries to measure latency
     let num_queries = 20;
@@ -479,11 +540,16 @@ async fn test_vector_query_latency() {
 async fn test_vector_query_different_probes() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check if we have data
     let count_row = client
-        .query_one("SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL", &[])
+        .query_one(
+            "SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL",
+            &[],
+        )
         .await
         .expect("Failed to count chunks");
 
@@ -497,7 +563,14 @@ async fn test_vector_query_different_probes() {
     // Test different probe values
     let probe_values = vec![1, 5, 10, 20];
     let test_vector: Vec<f32> = vec![0.1; 1536];
-    let vector_str = format!("[{}]", test_vector.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vector_str = format!(
+        "[{}]",
+        test_vector
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     for probes in probe_values {
         client
@@ -539,14 +612,28 @@ async fn test_vector_query_different_probes() {
 async fn test_cosine_distance_operator() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Create two test vectors
     let vec1: Vec<f32> = vec![1.0; 1536];
     let vec2: Vec<f32> = vec![0.5; 1536];
 
-    let vec1_str = format!("[{}]", vec1.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
-    let vec2_str = format!("[{}]", vec2.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vec1_str = format!(
+        "[{}]",
+        vec1.iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let vec2_str = format!(
+        "[{}]",
+        vec2.iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     // Calculate cosine distance
     let query = format!(
@@ -590,7 +677,9 @@ async fn test_cosine_distance_operator() {
 async fn test_vector_normalization() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Test that cosine distance works correctly with normalized vectors
     // Create normalized vector (magnitude = 1)
@@ -601,7 +690,14 @@ async fn test_vector_normalization() {
         v
     };
 
-    let vec_str = format!("[{}]", vec_normalized.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vec_str = format!(
+        "[{}]",
+        vec_normalized
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     // Query should work with normalized vectors
     let query = format!(
@@ -627,7 +723,9 @@ async fn test_vector_normalization() {
 async fn test_analyze_statistics() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Run ANALYZE to update statistics
     client
@@ -706,11 +804,16 @@ async fn test_ivfflat_probes_setting() {
 async fn test_vector_search_returns_results() {
     let client = skip_if_no_db!();
 
-    db::migrate(&client).await.expect("Failed to run migrations");
+    db::migrate(&client)
+        .await
+        .expect("Failed to run migrations");
 
     // Check if we have any embeddings
     let count_row = client
-        .query_one("SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL", &[])
+        .query_one(
+            "SELECT COUNT(*) as cnt FROM maproom.chunks WHERE code_embedding IS NOT NULL",
+            &[],
+        )
         .await
         .expect("Failed to count chunks");
 
@@ -725,7 +828,10 @@ async fn test_vector_search_returns_results() {
 
     // Get a sample embedding from the database
     let sample_row = client
-        .query_one("SELECT code_embedding FROM maproom.chunks WHERE code_embedding IS NOT NULL LIMIT 1", &[])
+        .query_one(
+            "SELECT code_embedding FROM maproom.chunks WHERE code_embedding IS NOT NULL LIMIT 1",
+            &[],
+        )
         .await
         .expect("Failed to get sample embedding");
 
@@ -733,7 +839,14 @@ async fn test_vector_search_returns_results() {
     // Note: pgvector returns vectors in array format
     // We'll construct a simple test vector instead
     let test_vector: Vec<f32> = vec![0.1; 1536];
-    let vector_str = format!("[{}]", test_vector.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vector_str = format!(
+        "[{}]",
+        test_vector
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     // Perform vector search
     let query = format!(
@@ -747,7 +860,10 @@ async fn test_vector_search_returns_results() {
         vector_str, vector_str
     );
 
-    let rows = client.query(&query, &[]).await.expect("Search query failed");
+    let rows = client
+        .query(&query, &[])
+        .await
+        .expect("Search query failed");
 
     assert!(!rows.is_empty(), "Should return at least some results");
     println!("Vector search returned {} results", rows.len());
@@ -761,10 +877,7 @@ async fn test_vector_search_returns_results() {
         println!("  distance={:.4}, symbol={:?}", distance, symbol_name);
 
         if let Some(prev) = prev_distance {
-            assert!(
-                distance >= prev,
-                "Results should be ordered by distance"
-            );
+            assert!(distance >= prev, "Results should be ordered by distance");
         }
         prev_distance = Some(distance);
     }

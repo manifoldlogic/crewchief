@@ -394,25 +394,16 @@ mod tests {
         // recency=0.08, churn=0.02, combined signals weight = 0.1
         let weights = FusionWeights::new(0.3, 0.3, 0.3, 0.08, 0.02);
 
-        let fts_results = RankedResults::new(
-            vec![RankedResult::new(1, 0.8, 1)],
-            SearchSource::FTS,
-        );
+        let fts_results = RankedResults::new(vec![RankedResult::new(1, 0.8, 1)], SearchSource::FTS);
 
-        let vector_results = RankedResults::new(
-            vec![RankedResult::new(1, 0.9, 1)],
-            SearchSource::Vector,
-        );
+        let vector_results =
+            RankedResults::new(vec![RankedResult::new(1, 0.9, 1)], SearchSource::Vector);
 
-        let graph_results = RankedResults::new(
-            vec![RankedResult::new(1, 0.7, 1)],
-            SearchSource::Graph,
-        );
+        let graph_results =
+            RankedResults::new(vec![RankedResult::new(1, 0.7, 1)], SearchSource::Graph);
 
-        let signal_results = RankedResults::new(
-            vec![RankedResult::new(1, 0.6, 1)],
-            SearchSource::Signals,
-        );
+        let signal_results =
+            RankedResults::new(vec![RankedResult::new(1, 0.6, 1)], SearchSource::Signals);
 
         let fused = fusion.fuse(
             vec![fts_results, vector_results, graph_results, signal_results],

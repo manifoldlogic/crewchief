@@ -20,10 +20,7 @@ pub enum ChangeType {
     /// New file - no previous hash exists
     New(ContentHash),
     /// Modified file - content hash changed
-    Modified {
-        old: ContentHash,
-        new: ContentHash,
-    },
+    Modified { old: ContentHash, new: ContentHash },
     /// Deleted file - file was removed from filesystem
     Deleted(ContentHash),
 }

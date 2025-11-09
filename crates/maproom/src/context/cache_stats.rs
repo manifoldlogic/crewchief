@@ -49,9 +49,15 @@ impl MemoryStats {
             hits: stats.hits.load(std::sync::atomic::Ordering::Relaxed),
             misses: stats.misses.load(std::sync::atomic::Ordering::Relaxed),
             puts: stats.puts.load(std::sync::atomic::Ordering::Relaxed),
-            invalidations: stats.invalidations.load(std::sync::atomic::Ordering::Relaxed),
-            ttl_evictions: stats.ttl_evictions.load(std::sync::atomic::Ordering::Relaxed),
-            lru_evictions: stats.lru_evictions.load(std::sync::atomic::Ordering::Relaxed),
+            invalidations: stats
+                .invalidations
+                .load(std::sync::atomic::Ordering::Relaxed),
+            ttl_evictions: stats
+                .ttl_evictions
+                .load(std::sync::atomic::Ordering::Relaxed),
+            lru_evictions: stats
+                .lru_evictions
+                .load(std::sync::atomic::Ordering::Relaxed),
             hit_rate: stats.hit_rate(),
             total_operations: stats.total_operations(),
         }
@@ -96,10 +102,7 @@ impl CacheMetrics {
         } else if !meets_hit_rate_target {
             (
                 false,
-                format!(
-                    "Hit rate {:.1}% below target (60%)",
-                    memory.hit_rate
-                ),
+                format!("Hit rate {:.1}% below target (60%)", memory.hit_rate),
             )
         } else if utilization_percentage > 95.0 {
             (
@@ -144,11 +147,8 @@ impl CacheStatsMonitor {
     pub async fn get_statistics(&self) -> Result<CacheStatistics> {
         let memory_stats = MemoryStats::from_cache_stats(&self.cache.stats());
         let db_stats = self.cache.get_db_stats().await?;
-        let metrics = CacheMetrics::calculate(
-            &memory_stats,
-            &db_stats,
-            self.cache.config().max_entries,
-        );
+        let metrics =
+            CacheMetrics::calculate(&memory_stats, &db_stats, self.cache.config().max_entries);
 
         Ok(CacheStatistics {
             memory: memory_stats,
@@ -170,13 +170,25 @@ impl CacheStatsMonitor {
         summary.push_str(&format!("  Misses: {}\n", stats.memory.misses));
         summary.push_str(&format!("  Hit Rate: {:.2}%\n", stats.memory.hit_rate));
         summary.push_str(&format!("  Puts: {}\n", stats.memory.puts));
-        summary.push_str(&format!("  Invalidations: {}\n", stats.memory.invalidations));
-        summary.push_str(&format!("  TTL Evictions: {}\n", stats.memory.ttl_evictions));
-        summary.push_str(&format!("  LRU Evictions: {}\n\n", stats.memory.lru_evictions));
+        summary.push_str(&format!(
+            "  Invalidations: {}\n",
+            stats.memory.invalidations
+        ));
+        summary.push_str(&format!(
+            "  TTL Evictions: {}\n",
+            stats.memory.ttl_evictions
+        ));
+        summary.push_str(&format!(
+            "  LRU Evictions: {}\n\n",
+            stats.memory.lru_evictions
+        ));
 
         // Database stats
         summary.push_str("Database (Persistent):\n");
-        summary.push_str(&format!("  Total Entries: {}\n", stats.database.total_entries));
+        summary.push_str(&format!(
+            "  Total Entries: {}\n",
+            stats.database.total_entries
+        ));
         summary.push_str(&format!(
             "  Total Size: {:.2} MB\n",
             stats.database.total_size_bytes as f64 / (1024.0 * 1024.0)

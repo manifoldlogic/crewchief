@@ -1,6 +1,8 @@
 use tree_sitter::{Language, Parser};
 
-fn lang_markdown() -> Language { tree_sitter_md::language() }
+fn lang_markdown() -> Language {
+    tree_sitter_md::language()
+}
 
 #[test]
 fn debug_link_structure() {
@@ -20,7 +22,8 @@ fn debug_link_structure() {
         } else {
             text.to_string()
         };
-        println!("{}{} [{}:{}] {:?}",
+        println!(
+            "{}{} [{}:{}] {:?}",
             indent,
             node.kind(),
             node.start_position().row,

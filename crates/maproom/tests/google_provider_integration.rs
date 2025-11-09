@@ -168,20 +168,11 @@ async fn test_google_provider_batch_embed() -> anyhow::Result<()> {
     // Verify each embedding
     for (i, embedding) in embeddings.iter().enumerate() {
         // Check dimension
-        assert_eq!(
-            embedding.len(),
-            768,
-            "Embedding {} has wrong dimension",
-            i
-        );
+        assert_eq!(embedding.len(), 768, "Embedding {} has wrong dimension", i);
 
         // Check not all zeros
         let sum: f32 = embedding.iter().sum();
-        assert!(
-            sum.abs() > 0.01,
-            "Embedding {} appears to be all zeros",
-            i
-        );
+        assert!(sum.abs() > 0.01, "Embedding {} appears to be all zeros", i);
     }
 
     // Verify embeddings are different (they should be for different texts)
@@ -427,7 +418,11 @@ async fn test_google_provider_empty_batch() -> anyhow::Result<()> {
     let empty_texts: Vec<String> = Vec::new();
     let embeddings = provider.embed_batch(empty_texts).await?;
 
-    assert_eq!(embeddings.len(), 0, "Empty batch should return empty result");
+    assert_eq!(
+        embeddings.len(),
+        0,
+        "Empty batch should return empty result"
+    );
 
     println!("✓ Empty batch handled correctly");
 

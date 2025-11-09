@@ -148,17 +148,10 @@ impl CacheWarmer {
         worktree_id: Option<i64>,
         pipeline: &SearchPipeline,
     ) -> Result<usize, WarmingError> {
-        let patterns = ["main",
-            "init",
-            "config",
-            "error",
-            "handle",
-            "process",
-            "create",
-            "update",
-            "delete",
-            "get",
-            "set"];
+        let patterns = [
+            "main", "init", "config", "error", "handle", "process", "create", "update", "delete",
+            "get", "set",
+        ];
 
         let queries: Vec<String> = patterns.iter().map(|s| s.to_string()).collect();
 

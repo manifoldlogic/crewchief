@@ -42,12 +42,9 @@ const TEST_DB_NAME: &str = "maproom_migration_test";
 /// Creates an ephemeral test database and returns a client connected to it
 async fn create_test_database() -> Result<Client> {
     // Connect to postgres database to create test db
-    let (client, connection) = tokio_postgres::connect(
-        &format!("{}/postgres", TEST_DB_URL),
-        NoTls,
-    )
-    .await
-    .context("Failed to connect to PostgreSQL")?;
+    let (client, connection) = tokio_postgres::connect(&format!("{}/postgres", TEST_DB_URL), NoTls)
+        .await
+        .context("Failed to connect to PostgreSQL")?;
 
     // Spawn connection handler
     tokio::spawn(async move {
@@ -92,26 +89,29 @@ async fn create_test_database() -> Result<Client> {
         .context("Failed to run migration 0001_init.sql")?;
 
     // 0002: Add markdown support and indexed_at column to worktrees
-    run_migration(&test_client, "crates/maproom/migrations/0002_markdown_support.sql")
-        .await
-        .context("Failed to run migration 0002_markdown_support.sql")?;
+    run_migration(
+        &test_client,
+        "crates/maproom/migrations/0002_markdown_support.sql",
+    )
+    .await
+    .context("Failed to run migration 0002_markdown_support.sql")?;
 
     // 0003: Add YAML/TOML support and indexed_at column to chunks
-    run_migration(&test_client, "crates/maproom/migrations/0003_yaml_toml_support.sql")
-        .await
-        .context("Failed to run migration 0003_yaml_toml_support.sql")?;
+    run_migration(
+        &test_client,
+        "crates/maproom/migrations/0003_yaml_toml_support.sql",
+    )
+    .await
+    .context("Failed to run migration 0003_yaml_toml_support.sql")?;
 
     Ok(test_client)
 }
 
 /// Drops the test database
 async fn drop_test_database() -> Result<()> {
-    let (client, connection) = tokio_postgres::connect(
-        &format!("{}/postgres", TEST_DB_URL),
-        NoTls,
-    )
-    .await
-    .context("Failed to connect to PostgreSQL for cleanup")?;
+    let (client, connection) = tokio_postgres::connect(&format!("{}/postgres", TEST_DB_URL), NoTls)
+        .await
+        .context("Failed to connect to PostgreSQL for cleanup")?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -178,7 +178,9 @@ async fn create_test_fixture(client: &Client) -> Result<()> {
     // Create 100 test chunks with embeddings
     // OpenAI embeddings are 1536 dimensions, we use a simple repeating pattern
     // Generate embedding SQL once: array of 1536 small floats
-    let embedding_values: Vec<String> = (0..1536).map(|i| format!("{}", (i % 10) as f32 / 10.0)).collect();
+    let embedding_values: Vec<String> = (0..1536)
+        .map(|i| format!("{}", (i % 10) as f32 / 10.0))
+        .collect();
     let embedding_sql = format!("ARRAY[{}]::vector", embedding_values.join(","));
 
     for i in 1..=100 {
@@ -239,7 +241,10 @@ async fn run_migration_with_concurrently(client: &Client, migration_path: &str) 
                         .trim()
                         .to_string();
 
-                    if !cleaned.is_empty() && (cleaned.to_uppercase().contains("CREATE INDEX") || cleaned.to_uppercase().contains("DROP INDEX")) {
+                    if !cleaned.is_empty()
+                        && (cleaned.to_uppercase().contains("CREATE INDEX")
+                            || cleaned.to_uppercase().contains("DROP INDEX"))
+                    {
                         parts.push(cleaned);
                     }
                 }
@@ -268,7 +273,10 @@ async fn run_migration_with_concurrently(client: &Client, migration_path: &str) 
                 .trim()
                 .to_string();
 
-            if !cleaned.is_empty() && (cleaned.to_uppercase().contains("CREATE INDEX") || cleaned.to_uppercase().contains("DROP INDEX")) {
+            if !cleaned.is_empty()
+                && (cleaned.to_uppercase().contains("CREATE INDEX")
+                    || cleaned.to_uppercase().contains("DROP INDEX"))
+            {
                 parts.push(cleaned);
             }
         }
@@ -286,10 +294,9 @@ async fn run_migration_with_concurrently(client: &Client, migration_path: &str) 
                     .with_context(|| format!("Failed to execute transaction block"))?;
             } else {
                 // CONCURRENTLY statement
-                client
-                    .execute(part_trimmed, &[])
-                    .await
-                    .with_context(|| format!("Failed to execute CONCURRENTLY statement: {}", part_trimmed))?;
+                client.execute(part_trimmed, &[]).await.with_context(|| {
+                    format!("Failed to execute CONCURRENTLY statement: {}", part_trimmed)
+                })?;
             }
         }
     }
@@ -403,22 +410,37 @@ async fn test_migration_0015_forward_and_rollback() {
         .await
         .expect("Failed to count text_embedding");
 
-    println!("✓ OpenAI code embeddings before migration: {}", before_code_count);
-    println!("✓ OpenAI text embeddings before migration: {}", before_text_count);
+    println!(
+        "✓ OpenAI code embeddings before migration: {}",
+        before_code_count
+    );
+    println!(
+        "✓ OpenAI text embeddings before migration: {}",
+        before_text_count
+    );
 
     // The fixture should have 100 code embeddings (one per chunk)
-    assert_eq!(before_code_count, 100, "Expected 100 code embeddings in fixture");
+    assert_eq!(
+        before_code_count, 100,
+        "Expected 100 code embeddings in fixture"
+    );
 
     // === FORWARD MIGRATION ===
     println!("\n--- Running forward migration ---");
     let migration_start = Instant::now();
 
-    run_migration_with_concurrently(&client, "crates/maproom/migrations/0015_add_ollama_columns.sql")
-        .await
-        .expect("Failed to run forward migration");
+    run_migration_with_concurrently(
+        &client,
+        "crates/maproom/migrations/0015_add_ollama_columns.sql",
+    )
+    .await
+    .expect("Failed to run forward migration");
 
     let migration_duration = migration_start.elapsed();
-    println!("✓ Forward migration completed in {:.2?}", migration_duration);
+    println!(
+        "✓ Forward migration completed in {:.2?}",
+        migration_duration
+    );
 
     // Verify migration completed within 5 seconds (requirement)
     assert!(
@@ -446,13 +468,19 @@ async fn test_migration_0015_forward_and_rollback() {
     let code_idx_exists = index_exists(&client, "idx_chunks_code_vec_ollama")
         .await
         .expect("Failed to check code index");
-    assert!(code_idx_exists, "idx_chunks_code_vec_ollama index should exist");
+    assert!(
+        code_idx_exists,
+        "idx_chunks_code_vec_ollama index should exist"
+    );
     println!("✓ idx_chunks_code_vec_ollama index exists");
 
     let text_idx_exists = index_exists(&client, "idx_chunks_text_vec_ollama")
         .await
         .expect("Failed to check text index");
-    assert!(text_idx_exists, "idx_chunks_text_vec_ollama index should exist");
+    assert!(
+        text_idx_exists,
+        "idx_chunks_text_vec_ollama index should exist"
+    );
     println!("✓ idx_chunks_text_vec_ollama index exists");
 
     // Verify existing OpenAI embeddings preserved (NO DATA LOSS)
@@ -471,7 +499,10 @@ async fn test_migration_0015_forward_and_rollback() {
         after_text_count, before_text_count,
         "OpenAI text embeddings should be preserved (no data loss)"
     );
-    println!("✓ OpenAI embeddings preserved: {} code, {} text", after_code_count, after_text_count);
+    println!(
+        "✓ OpenAI embeddings preserved: {} code, {} text",
+        after_code_count, after_text_count
+    );
 
     // Verify new Ollama columns are NULL (no data yet)
     let ollama_code_count = count_embeddings(&client, "code_embedding_ollama")
@@ -481,20 +512,35 @@ async fn test_migration_0015_forward_and_rollback() {
         .await
         .expect("Failed to count text_embedding_ollama");
 
-    assert_eq!(ollama_code_count, 0, "code_embedding_ollama should be NULL initially");
-    assert_eq!(ollama_text_count, 0, "text_embedding_ollama should be NULL initially");
-    println!("✓ Ollama columns are NULL: {} code, {} text", ollama_code_count, ollama_text_count);
+    assert_eq!(
+        ollama_code_count, 0,
+        "code_embedding_ollama should be NULL initially"
+    );
+    assert_eq!(
+        ollama_text_count, 0,
+        "text_embedding_ollama should be NULL initially"
+    );
+    println!(
+        "✓ Ollama columns are NULL: {} code, {} text",
+        ollama_code_count, ollama_text_count
+    );
 
     // === ROLLBACK MIGRATION ===
     println!("\n--- Running rollback migration ---");
     let rollback_start = Instant::now();
 
-    run_migration_with_concurrently(&client, "crates/maproom/migrations/0015_add_ollama_columns_rollback.sql")
-        .await
-        .expect("Failed to run rollback migration");
+    run_migration_with_concurrently(
+        &client,
+        "crates/maproom/migrations/0015_add_ollama_columns_rollback.sql",
+    )
+    .await
+    .expect("Failed to run rollback migration");
 
     let rollback_duration = rollback_start.elapsed();
-    println!("✓ Rollback migration completed in {:.2?}", rollback_duration);
+    println!(
+        "✓ Rollback migration completed in {:.2?}",
+        rollback_duration
+    );
 
     // Verify rollback completed within 5 seconds
     assert!(
@@ -509,26 +555,38 @@ async fn test_migration_0015_forward_and_rollback() {
     let code_col_removed = !column_exists(&client, "code_embedding_ollama")
         .await
         .expect("Failed to check code_embedding_ollama column after rollback");
-    assert!(code_col_removed, "code_embedding_ollama column should be removed");
+    assert!(
+        code_col_removed,
+        "code_embedding_ollama column should be removed"
+    );
     println!("✓ code_embedding_ollama column removed");
 
     let text_col_removed = !column_exists(&client, "text_embedding_ollama")
         .await
         .expect("Failed to check text_embedding_ollama column after rollback");
-    assert!(text_col_removed, "text_embedding_ollama column should be removed");
+    assert!(
+        text_col_removed,
+        "text_embedding_ollama column should be removed"
+    );
     println!("✓ text_embedding_ollama column removed");
 
     // Verify indexes removed
     let code_idx_removed = !index_exists(&client, "idx_chunks_code_vec_ollama")
         .await
         .expect("Failed to check code index after rollback");
-    assert!(code_idx_removed, "idx_chunks_code_vec_ollama index should be removed");
+    assert!(
+        code_idx_removed,
+        "idx_chunks_code_vec_ollama index should be removed"
+    );
     println!("✓ idx_chunks_code_vec_ollama index removed");
 
     let text_idx_removed = !index_exists(&client, "idx_chunks_text_vec_ollama")
         .await
         .expect("Failed to check text index after rollback");
-    assert!(text_idx_removed, "idx_chunks_text_vec_ollama index should be removed");
+    assert!(
+        text_idx_removed,
+        "idx_chunks_text_vec_ollama index should be removed"
+    );
     println!("✓ idx_chunks_text_vec_ollama index removed");
 
     // Verify existing OpenAI embeddings STILL preserved after rollback (NO DATA LOSS)
@@ -547,7 +605,10 @@ async fn test_migration_0015_forward_and_rollback() {
         final_text_count, before_text_count,
         "OpenAI text embeddings should still be preserved after rollback (no data loss)"
     );
-    println!("✓ OpenAI embeddings still preserved after rollback: {} code, {} text", final_code_count, final_text_count);
+    println!(
+        "✓ OpenAI embeddings still preserved after rollback: {} code, {} text",
+        final_code_count, final_text_count
+    );
 
     // Cleanup
     drop(client);
@@ -563,7 +624,10 @@ async fn test_migration_0015_forward_and_rollback() {
     println!("  - Forward migration: {:.2?}", migration_duration);
     println!("  - Rollback migration: {:.2?}", rollback_duration);
     println!("  - Total chunks: {}", total_chunks);
-    println!("  - OpenAI embeddings preserved: {} code, {} text", final_code_count, final_text_count);
+    println!(
+        "  - OpenAI embeddings preserved: {} code, {} text",
+        final_code_count, final_text_count
+    );
     println!("  - Zero data loss confirmed ✓");
     println!();
 }
@@ -590,21 +654,30 @@ async fn test_migration_0015_idempotency() {
 
     // Run forward migration twice (should be idempotent)
     println!("\n--- Testing forward migration idempotency ---");
-    run_migration_with_concurrently(&client, "crates/maproom/migrations/0015_add_ollama_columns.sql")
-        .await
-        .expect("Failed to run forward migration (first time)");
+    run_migration_with_concurrently(
+        &client,
+        "crates/maproom/migrations/0015_add_ollama_columns.sql",
+    )
+    .await
+    .expect("Failed to run forward migration (first time)");
     println!("✓ Forward migration (1st run) succeeded");
 
-    run_migration_with_concurrently(&client, "crates/maproom/migrations/0015_add_ollama_columns.sql")
-        .await
-        .expect("Failed to run forward migration (second time)");
+    run_migration_with_concurrently(
+        &client,
+        "crates/maproom/migrations/0015_add_ollama_columns.sql",
+    )
+    .await
+    .expect("Failed to run forward migration (second time)");
     println!("✓ Forward migration (2nd run) succeeded (idempotent)");
 
     // Verify columns still exist and only one index
     let code_col_exists = column_exists(&client, "code_embedding_ollama")
         .await
         .expect("Failed to check code_embedding_ollama column");
-    assert!(code_col_exists, "code_embedding_ollama column should exist after idempotent migration");
+    assert!(
+        code_col_exists,
+        "code_embedding_ollama column should exist after idempotent migration"
+    );
 
     let code_idx_count: i64 = client
         .query_one(
@@ -616,26 +689,38 @@ async fn test_migration_0015_idempotency() {
         .await
         .expect("Failed to count indexes")
         .get(0);
-    assert_eq!(code_idx_count, 1, "Should have exactly one index after idempotent migration");
+    assert_eq!(
+        code_idx_count, 1,
+        "Should have exactly one index after idempotent migration"
+    );
     println!("✓ Idempotency verified: columns exist, indexes not duplicated");
 
     // Run rollback twice (should be idempotent)
     println!("\n--- Testing rollback migration idempotency ---");
-    run_migration_with_concurrently(&client, "crates/maproom/migrations/0015_add_ollama_columns_rollback.sql")
-        .await
-        .expect("Failed to run rollback migration (first time)");
+    run_migration_with_concurrently(
+        &client,
+        "crates/maproom/migrations/0015_add_ollama_columns_rollback.sql",
+    )
+    .await
+    .expect("Failed to run rollback migration (first time)");
     println!("✓ Rollback migration (1st run) succeeded");
 
-    run_migration_with_concurrently(&client, "crates/maproom/migrations/0015_add_ollama_columns_rollback.sql")
-        .await
-        .expect("Failed to run rollback migration (second time)");
+    run_migration_with_concurrently(
+        &client,
+        "crates/maproom/migrations/0015_add_ollama_columns_rollback.sql",
+    )
+    .await
+    .expect("Failed to run rollback migration (second time)");
     println!("✓ Rollback migration (2nd run) succeeded (idempotent)");
 
     // Verify columns removed
     let code_col_removed = !column_exists(&client, "code_embedding_ollama")
         .await
         .expect("Failed to check code_embedding_ollama column after rollback");
-    assert!(code_col_removed, "code_embedding_ollama column should be removed after idempotent rollback");
+    assert!(
+        code_col_removed,
+        "code_embedding_ollama column should be removed after idempotent rollback"
+    );
     println!("✓ Idempotency verified: columns removed");
 
     // Cleanup

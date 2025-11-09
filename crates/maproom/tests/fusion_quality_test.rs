@@ -148,7 +148,10 @@ async fn test_score_source_contributions() -> Result<(), Box<dyn std::error::Err
             }
         }
 
-        println!("Source contribution counts across {} results:", results.results.len());
+        println!(
+            "Source contribution counts across {} results:",
+            results.results.len()
+        );
         println!("  FTS: {}", fts_count);
         println!("  Vector: {}", vector_count);
         println!("  Graph: {}", graph_count);
@@ -228,7 +231,10 @@ async fn test_edge_case_single_result() -> Result<(), Box<dyn std::error::Error>
 
     if !results.is_empty() {
         let first = &results.results[0];
-        println!("Single result: {} (score: {:.4})", first.relpath, first.score);
+        println!(
+            "Single result: {} (score: {:.4})",
+            first.relpath, first.score
+        );
         assert!(first.score > 0.0);
     }
 
@@ -400,7 +406,10 @@ async fn test_performance_weighted_fusion() -> Result<(), Box<dyn std::error::Er
     let test_queries = vec![
         ("function", "simple keyword"),
         ("async function handler", "multiple keywords"),
-        ("search implementation with vector embeddings", "complex phrase"),
+        (
+            "search implementation with vector embeddings",
+            "complex phrase",
+        ),
         ("class", "single word"),
         ("import export module", "multiple terms"),
     ];
@@ -418,7 +427,9 @@ async fn test_performance_weighted_fusion() -> Result<(), Box<dyn std::error::Er
 
         println!(
             "  {}: {:.2}ms ({})",
-            description, fusion_ms, results.results.len()
+            description,
+            fusion_ms,
+            results.results.len()
         );
 
         // Each fusion should be under 10ms
@@ -476,7 +487,10 @@ async fn test_performance_rrf_fusion() -> Result<(), Box<dyn std::error::Error>>
     let test_queries = vec![
         ("function", "simple keyword"),
         ("async function handler", "multiple keywords"),
-        ("search implementation with vector embeddings", "complex phrase"),
+        (
+            "search implementation with vector embeddings",
+            "complex phrase",
+        ),
         ("class", "single word"),
         ("import export module", "multiple terms"),
     ];
@@ -494,7 +508,9 @@ async fn test_performance_rrf_fusion() -> Result<(), Box<dyn std::error::Error>>
 
         println!(
             "  {}: {:.2}ms ({})",
-            description, fusion_ms, results.results.len()
+            description,
+            fusion_ms,
+            results.results.len()
         );
 
         // Each fusion should be under 10ms

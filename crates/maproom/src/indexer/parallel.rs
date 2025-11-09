@@ -25,10 +25,10 @@
 //! - `parallel_workers`: Number of concurrent database workers (4-8 recommended)
 //! - `max_file_size`: Skip files larger than this (10MB default)
 
-use std::path::PathBuf;
 use anyhow::Context;
 use crossbeam::channel::{self, Receiver};
 use rayon::prelude::*;
+use std::path::PathBuf;
 use tracing::{debug, warn};
 
 use crate::db::PgPool;
@@ -78,26 +78,24 @@ pub struct FileTask {
 #[derive(Debug)]
 pub struct ChunkBatch {
     pub chunks: Vec<(
-        i64,                          // file_id
-        Option<String>,               // symbol_name
-        String,                       // kind
-        Option<String>,               // signature
-        Option<String>,               // docstring
-        i32,                          // start_line
-        i32,                          // end_line
-        String,                       // preview
-        String,                       // ts_doc_text
-        f32,                          // recency_score
-        f32,                          // churn_score
-        Option<serde_json::Value>,    // metadata
+        i64,                       // file_id
+        Option<String>,            // symbol_name
+        String,                    // kind
+        Option<String>,            // signature
+        Option<String>,            // docstring
+        i32,                       // start_line
+        i32,                       // end_line
+        String,                    // preview
+        String,                    // ts_doc_text
+        f32,                       // recency_score
+        f32,                       // churn_score
+        Option<serde_json::Value>, // metadata
     )>,
 }
 
 impl ChunkBatch {
     pub fn new() -> Self {
-        Self {
-            chunks: Vec::new(),
-        }
+        Self { chunks: Vec::new() }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
@@ -165,10 +163,7 @@ impl ParallelIndexer {
     ///
     /// This uses rayon for CPU-bound parsing work and tokio for async database operations.
     /// Files are parsed in parallel, then batched and inserted concurrently.
-    pub async fn process_files(
-        &self,
-        files: Vec<FileTask>,
-    ) -> anyhow::Result<IndexingStats> {
+    pub async fn process_files(&self, files: Vec<FileTask>) -> anyhow::Result<IndexingStats> {
         let config = self.config.clone();
         let pool = self.pool.clone();
         let num_files = files.len();
@@ -185,9 +180,9 @@ impl ParallelIndexer {
                 let pool = pool.clone();
                 let chunk_rx = chunk_rx.clone();
 
-                tokio::spawn(async move {
-                    database_worker(worker_id, pool, chunk_rx, batch_size).await
-                })
+                tokio::spawn(
+                    async move { database_worker(worker_id, pool, chunk_rx, batch_size).await },
+                )
             })
             .collect();
 
@@ -197,8 +192,9 @@ impl ParallelIndexer {
         // Parse files in parallel using rayon
         let chunk_tx_clone = chunk_tx.clone();
         let parse_result = std::thread::spawn(move || {
-            files.par_iter().for_each(|file_task| {
-                match parse_file_task(file_task) {
+            files
+                .par_iter()
+                .for_each(|file_task| match parse_file_task(file_task) {
                     Ok(chunks) => {
                         for chunk_data in chunks {
                             if chunk_tx_clone.send(chunk_data).is_err() {
@@ -210,8 +206,7 @@ impl ParallelIndexer {
                     Err(e) => {
                         warn!(path = %file_task.path.display(), error = %e, "Failed to parse file");
                     }
-                }
-            });
+                });
         });
 
         // Wait for parsing to complete
@@ -308,13 +303,21 @@ async fn database_worker(
         }
     }
 
-    debug!(worker_id, chunks = stats.chunks_inserted, batches = stats.batches_processed, "Database worker finished");
+    debug!(
+        worker_id,
+        chunks = stats.chunks_inserted,
+        batches = stats.batches_processed,
+        "Database worker finished"
+    );
     Ok(stats)
 }
 
 /// Insert a batch of chunks using the batch insert function.
 async fn insert_batch(pool: &PgPool, batch: &ChunkBatch) -> anyhow::Result<usize> {
-    let client = pool.get().await.context("Failed to get database connection")?;
+    let client = pool
+        .get()
+        .await
+        .context("Failed to get database connection")?;
     let chunk_ids = crate::db::insert_chunks_batch(&client, &batch.chunks).await?;
     Ok(chunk_ids.len())
 }
@@ -344,7 +347,8 @@ fn parse_file_task(file_task: &FileTask) -> anyhow::Result<Vec<ChunkData>> {
 
     for chunk in chunks {
         let preview = first_n_lines(
-            &file_task.content
+            &file_task
+                .content
                 .split('\n')
                 .skip(chunk.start_line as usize - 1)
                 .take((chunk.end_line - chunk.start_line + 1) as usize)

@@ -48,9 +48,7 @@
 //! - Index configuration (lines 383-402)
 //! - Caching strategy (lines 343-379)
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 // Note: These benchmarks use synthetic data for CI/local testing.

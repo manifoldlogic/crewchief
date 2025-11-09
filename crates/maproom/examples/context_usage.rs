@@ -10,13 +10,9 @@
 //! Run with: cargo run --example context_usage
 
 use anyhow::Result;
-use crewchief_maproom::context::{
-    BasicContextAssembler,
-    ParallelContextAssembler,
-    ExpandOptions,
-};
 use crewchief_maproom::context::budget::BudgetAllocations;
 use crewchief_maproom::context::cache::CacheConfig;
+use crewchief_maproom::context::{BasicContextAssembler, ExpandOptions, ParallelContextAssembler};
 use crewchief_maproom::db::create_pool;
 use sqlx::PgPool;
 
@@ -92,12 +88,16 @@ async fn basic_assembly(pool: &PgPool) -> Result<()> {
         Ok(bundle) => {
             println!("✓ Assembly successful!");
             println!("  Items: {}", bundle.items.len());
-            println!("  Tokens used: {}/{}", bundle.total_tokens, bundle.budget_tokens);
+            println!(
+                "  Tokens used: {}/{}",
+                bundle.total_tokens, bundle.budget_tokens
+            );
             println!("  Truncated: {}", bundle.truncated);
 
             // Show items
             for (i, item) in bundle.items.iter().enumerate() {
-                println!("  {}. {} ({:?}) - {} tokens",
+                println!(
+                    "  {}. {} ({:?}) - {} tokens",
                     i + 1,
                     item.relpath,
                     item.role,
@@ -115,8 +115,8 @@ async fn basic_assembly(pool: &PgPool) -> Result<()> {
 
 /// Example 2: Parallel assembly (5x faster)
 async fn parallel_assembly(pool: &PgPool) -> Result<()> {
-    use crewchief_maproom::context::ParallelContextAssembler;
     use crewchief_maproom::context::cache::CacheConfig;
+    use crewchief_maproom::context::ParallelContextAssembler;
     use std::time::Instant;
 
     // Create parallel assembler with caching
@@ -148,10 +148,7 @@ async fn parallel_assembly(pool: &PgPool) -> Result<()> {
 
 /// Example 3: Custom expand options for different use cases
 async fn custom_expand_options(pool: &PgPool) -> Result<()> {
-    let assembler = ParallelContextAssembler::new(
-        pool.clone(),
-        CacheConfig::default(),
-    );
+    let assembler = ParallelContextAssembler::new(pool.clone(), CacheConfig::default());
     let chunk_id = 1;
     let budget = 6000;
 
@@ -166,7 +163,10 @@ async fn custom_expand_options(pool: &PgPool) -> Result<()> {
         max_depth: 1,
     };
     let bundle = assembler.assemble(chunk_id, budget, tdd_options).await?;
-    println!("  Items: {} (focused on tests and dependencies)", bundle.items.len());
+    println!(
+        "  Items: {} (focused on tests and dependencies)",
+        bundle.items.len()
+    );
 
     // API understanding: Include documentation
     println!("\nAPI Understanding Configuration:");
@@ -179,7 +179,10 @@ async fn custom_expand_options(pool: &PgPool) -> Result<()> {
         max_depth: 2,
     };
     let bundle = assembler.assemble(chunk_id, budget, api_options).await?;
-    println!("  Items: {} (includes docs and callers)", bundle.items.len());
+    println!(
+        "  Items: {} (includes docs and callers)",
+        bundle.items.len()
+    );
 
     // Minimal context for quick lookups
     println!("\nMinimal Configuration:");
@@ -202,7 +205,7 @@ async fn budget_configuration(pool: &PgPool) -> Result<()> {
     // Custom budget allocations
     let _test_focused = BudgetAllocations {
         primary: 0.30,
-        tests: 0.50,    // Give tests 50% of budget
+        tests: 0.50, // Give tests 50% of budget
         callers: 0.10,
         callees: 0.10,
     };
@@ -210,29 +213,35 @@ async fn budget_configuration(pool: &PgPool) -> Result<()> {
     let _dependency_focused = BudgetAllocations {
         primary: 0.30,
         tests: 0.10,
-        callers: 0.30,  // Emphasize call graph
+        callers: 0.30, // Emphasize call graph
         callees: 0.30,
     };
 
     // Use different budget sizes
-    let assembler = ParallelContextAssembler::new(
-        pool.clone(),
-        CacheConfig::default(),
-    );
+    let assembler = ParallelContextAssembler::new(pool.clone(), CacheConfig::default());
     let chunk_id = 1;
     let options = ExpandOptions::default();
 
     // Small budget for quick context
     let small_bundle = assembler.assemble(chunk_id, 2000, options.clone()).await?;
-    println!("Small budget (2000 tokens): {} items", small_bundle.items.len());
+    println!(
+        "Small budget (2000 tokens): {} items",
+        small_bundle.items.len()
+    );
 
     // Standard budget
     let standard_bundle = assembler.assemble(chunk_id, 6000, options.clone()).await?;
-    println!("Standard budget (6000 tokens): {} items", standard_bundle.items.len());
+    println!(
+        "Standard budget (6000 tokens): {} items",
+        standard_bundle.items.len()
+    );
 
     // Large budget for comprehensive context
     let large_bundle = assembler.assemble(chunk_id, 15000, options).await?;
-    println!("Large budget (15000 tokens): {} items", large_bundle.items.len());
+    println!(
+        "Large budget (15000 tokens): {} items",
+        large_bundle.items.len()
+    );
 
     Ok(())
 }
@@ -245,7 +254,7 @@ async fn caching_configuration(pool: &PgPool) -> Result<()> {
     // Development cache (short TTL)
     let dev_cache = CacheConfig {
         enabled: true,
-        ttl_seconds: 300,      // 5 minutes
+        ttl_seconds: 300, // 5 minutes
         max_entries: 500,
         hit_rate_target: 0.40,
     };
@@ -266,21 +275,24 @@ async fn caching_configuration(pool: &PgPool) -> Result<()> {
     let hit_duration = start.elapsed();
     println!("Second call (cache hit): {:?}", hit_duration);
 
-    println!("Speedup: {:.1}x faster", miss_duration.as_secs_f64() / hit_duration.as_secs_f64());
+    println!(
+        "Speedup: {:.1}x faster",
+        miss_duration.as_secs_f64() / hit_duration.as_secs_f64()
+    );
 
     Ok(())
 }
 
 /// Example 6: Error handling patterns
 async fn error_handling(pool: &PgPool) -> Result<()> {
-    let assembler = ParallelContextAssembler::new(
-        pool.clone(),
-        CacheConfig::default(),
-    );
+    let assembler = ParallelContextAssembler::new(pool.clone(), CacheConfig::default());
 
     // Handle missing chunk
     let invalid_chunk_id = 999999;
-    match assembler.assemble(invalid_chunk_id, 6000, ExpandOptions::default()).await {
+    match assembler
+        .assemble(invalid_chunk_id, 6000, ExpandOptions::default())
+        .await
+    {
         Ok(_) => println!("Unexpected success"),
         Err(e) => {
             if e.to_string().contains("Chunk not found") {
@@ -294,7 +306,10 @@ async fn error_handling(pool: &PgPool) -> Result<()> {
     // Handle budget exceeded
     let chunk_id = 1;
     let tiny_budget = 50; // Too small
-    match assembler.assemble(chunk_id, tiny_budget, ExpandOptions::default()).await {
+    match assembler
+        .assemble(chunk_id, tiny_budget, ExpandOptions::default())
+        .await
+    {
         Ok(bundle) => {
             if bundle.truncated {
                 println!("✓ Assembly succeeded but truncated");
@@ -318,31 +333,38 @@ async fn error_handling(pool: &PgPool) -> Result<()> {
 async fn working_with_results(pool: &PgPool) -> Result<()> {
     use crewchief_maproom::context::types::ItemRole;
 
-    let assembler = ParallelContextAssembler::new(
-        pool.clone(),
-        CacheConfig::default(),
-    );
-    let bundle = assembler.assemble(1, 6000, ExpandOptions::default()).await?;
+    let assembler = ParallelContextAssembler::new(pool.clone(), CacheConfig::default());
+    let bundle = assembler
+        .assemble(1, 6000, ExpandOptions::default())
+        .await?;
 
     // Filter items by role
-    let primary_items: Vec<_> = bundle.items.iter()
+    let primary_items: Vec<_> = bundle
+        .items
+        .iter()
         .filter(|item| matches!(item.role, ItemRole::Primary))
         .collect();
     println!("Primary items: {}", primary_items.len());
 
-    let test_items: Vec<_> = bundle.items.iter()
+    let test_items: Vec<_> = bundle
+        .items
+        .iter()
         .filter(|item| matches!(item.role, ItemRole::Test))
         .collect();
     println!("Test items: {}", test_items.len());
 
     // Find items from specific file
-    let calculator_items: Vec<_> = bundle.items.iter()
+    let calculator_items: Vec<_> = bundle
+        .items
+        .iter()
         .filter(|item| item.relpath.contains("calculator"))
         .collect();
     println!("Calculator items: {}", calculator_items.len());
 
     // Calculate statistics
-    let total_lines: usize = bundle.items.iter()
+    let total_lines: usize = bundle
+        .items
+        .iter()
         .map(|item| item.range.end - item.range.start + 1)
         .sum();
     println!("Total lines of code: {}", total_lines);

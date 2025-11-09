@@ -31,9 +31,7 @@
 //! cargo bench --bench context_assembly_bench -- --baseline before
 //! ```
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Simulated chunk metadata for benchmarking (without database).
@@ -154,7 +152,8 @@ async fn simulate_parallel_assembly(chunks: &[SimulatedChunk], budget: usize) ->
         async {
             // Load all related chunks in parallel
             let mut handles = vec![];
-            for chunk in related.iter().take(4) { // Limit parallelism
+            for chunk in related.iter().take(4) {
+                // Limit parallelism
                 let chunk = (*chunk).clone();
                 let handle = tokio::spawn(async move {
                     tokio::time::sleep(Duration::from_micros(3000)).await;

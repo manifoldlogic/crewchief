@@ -350,8 +350,7 @@ impl ExperimentManager {
         let mut experiments = Vec::new();
         for row in rows {
             let config_json: serde_json::Value = row.get("config");
-            let metadata: HashMap<String, serde_json::Value> =
-                serde_json::from_value(config_json)?;
+            let metadata: HashMap<String, serde_json::Value> = serde_json::from_value(config_json)?;
 
             let quality_gates = if let Some(gates_value) = metadata.get("quality_gates") {
                 serde_json::from_value(gates_value.clone())?
@@ -421,11 +420,7 @@ impl ExperimentManager {
     }
 
     /// Update rollout percentage for gradual rollout
-    pub async fn update_rollout(
-        &self,
-        id: Uuid,
-        new_percentage: i32,
-    ) -> anyhow::Result<()> {
+    pub async fn update_rollout(&self, id: Uuid, new_percentage: i32) -> anyhow::Result<()> {
         if !(0..=100).contains(&new_percentage) {
             return Err(anyhow::anyhow!(
                 "Rollout percentage must be between 0 and 100"
@@ -544,8 +539,10 @@ mod tests {
         let splitter = TrafficSplitter::new();
         let config = ExperimentConfig::new("test".to_string(), 50);
 
-        let result1 = splitter.should_use_new_implementation(&config, Some("user123"), "test query");
-        let result2 = splitter.should_use_new_implementation(&config, Some("user123"), "test query");
+        let result1 =
+            splitter.should_use_new_implementation(&config, Some("user123"), "test query");
+        let result2 =
+            splitter.should_use_new_implementation(&config, Some("user123"), "test query");
 
         assert_eq!(result1, result2, "Same user/query should get same result");
     }

@@ -45,7 +45,9 @@ async fn setup_test_graph(client: &Client) -> Result<Vec<i64>> {
 }
 
 async fn run_migrations(client: &Client) -> Result<()> {
-    client.batch_execute(include_str!("../migrations/0001_init.sql")).await?;
+    client
+        .batch_execute(include_str!("../migrations/0001_init.sql"))
+        .await?;
     Ok(())
 }
 
@@ -139,8 +141,9 @@ async fn create_test_link(client: &Client, test_chunk_id: i64, target_chunk_id: 
 
 #[tokio::test]
 async fn test_find_related_chunks_bidirectional() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -161,22 +164,41 @@ async fn test_find_related_chunks_bidirectional() -> Result<()> {
     // Verify chunk1 is included (depth 0)
     let chunk1_result = related.iter().find(|c| c.id == chunk1);
     assert!(chunk1_result.is_some(), "Should include source chunk");
-    assert_eq!(chunk1_result.unwrap().depth, 0, "Source chunk should have depth 0");
-    assert_eq!(chunk1_result.unwrap().relevance, 1.0, "Source chunk should have relevance 1.0");
+    assert_eq!(
+        chunk1_result.unwrap().depth,
+        0,
+        "Source chunk should have depth 0"
+    );
+    assert_eq!(
+        chunk1_result.unwrap().relevance,
+        1.0,
+        "Source chunk should have relevance 1.0"
+    );
 
     // Verify chunk2 is found (depth 1)
     let chunk2_result = related.iter().find(|c| c.id == chunk2);
-    assert!(chunk2_result.is_some(), "Should find directly connected chunk");
-    assert_eq!(chunk2_result.unwrap().depth, 1, "Direct connection should have depth 1");
-    assert!((chunk2_result.unwrap().relevance - 0.7).abs() < 0.01, "Depth 1 should have relevance 0.7");
+    assert!(
+        chunk2_result.is_some(),
+        "Should find directly connected chunk"
+    );
+    assert_eq!(
+        chunk2_result.unwrap().depth,
+        1,
+        "Direct connection should have depth 1"
+    );
+    assert!(
+        (chunk2_result.unwrap().relevance - 0.7).abs() < 0.01,
+        "Depth 1 should have relevance 0.7"
+    );
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_find_related_chunks_depth_limiting() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -207,8 +229,9 @@ async fn test_find_related_chunks_depth_limiting() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_related_chunks_edge_type_filtering() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -238,8 +261,9 @@ async fn test_find_related_chunks_edge_type_filtering() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_related_chunks_directional() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -251,24 +275,14 @@ async fn test_find_related_chunks_directional() -> Result<()> {
     use crewchief_maproom::context::{find_related_chunks_directional, EdgeType};
 
     // Test forward direction (what chunk1 calls)
-    let forward = find_related_chunks_directional(
-        &client,
-        chunk1,
-        2,
-        Some(vec![EdgeType::Calls]),
-        true,
-    )
-    .await?;
+    let forward =
+        find_related_chunks_directional(&client, chunk1, 2, Some(vec![EdgeType::Calls]), true)
+            .await?;
 
     // Test backward direction (what calls chunk2)
-    let backward = find_related_chunks_directional(
-        &client,
-        chunk2,
-        2,
-        Some(vec![EdgeType::Calls]),
-        false,
-    )
-    .await?;
+    let backward =
+        find_related_chunks_directional(&client, chunk2, 2, Some(vec![EdgeType::Calls]), false)
+            .await?;
 
     // Verify results make sense
     assert!(!forward.is_empty(), "Should find forward relationships");
@@ -276,15 +290,19 @@ async fn test_find_related_chunks_directional() -> Result<()> {
 
     // chunk1 should appear in backward search from chunk2
     let chunk1_in_backward = backward.iter().any(|c| c.id == chunk1);
-    assert!(chunk1_in_backward, "chunk1 should be found in backward search from chunk2");
+    assert!(
+        chunk1_in_backward,
+        "chunk1 should be found in backward search from chunk2"
+    );
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_relevance_decay() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });
@@ -314,8 +332,9 @@ async fn test_relevance_decay() -> Result<()> {
 
 #[tokio::test]
 async fn test_ordering_by_relevance() -> Result<()> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
+    });
 
     let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
     tokio::spawn(async move { connection.await });

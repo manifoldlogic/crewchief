@@ -307,10 +307,7 @@ impl SearchOptions {
     }
 
     /// Builder method to set fusion weights.
-    pub fn with_fusion_weights(
-        mut self,
-        weights: crate::search::fusion::FusionWeights,
-    ) -> Self {
+    pub fn with_fusion_weights(mut self, weights: crate::search::fusion::FusionWeights) -> Self {
         self.fusion_weights = Some(weights);
         self
     }
@@ -335,9 +332,7 @@ impl SearchOptions {
 
     /// Get the fusion weights, using defaults if not specified.
     pub fn get_fusion_weights(&self) -> crate::search::fusion::FusionWeights {
-        self.fusion_weights
-            .clone()
-            .unwrap_or_default()
+        self.fusion_weights.clone().unwrap_or_default()
     }
 }
 

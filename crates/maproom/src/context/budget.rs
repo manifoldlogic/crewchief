@@ -351,42 +351,27 @@ impl SharedBudgetManager {
 
     /// Get the remaining token budget atomically.
     pub fn remaining(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|mgr| mgr.remaining())
-            .unwrap_or(0)
+        self.inner.lock().map(|mgr| mgr.remaining()).unwrap_or(0)
     }
 
     /// Get the total budget.
     pub fn budget(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|mgr| mgr.budget())
-            .unwrap_or(0)
+        self.inner.lock().map(|mgr| mgr.budget()).unwrap_or(0)
     }
 
     /// Get the currently used token count.
     pub fn used(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|mgr| mgr.used())
-            .unwrap_or(0)
+        self.inner.lock().map(|mgr| mgr.used()).unwrap_or(0)
     }
 
     /// Get budget allocation atomically.
     pub fn allocate(&self) -> Option<BudgetAllocation> {
-        self.inner
-            .lock()
-            .ok()
-            .map(|mgr| mgr.allocate())
+        self.inner.lock().ok().map(|mgr| mgr.allocate())
     }
 
     /// Get detailed usage statistics atomically.
     pub fn usage_stats(&self) -> Option<UsageStats> {
-        self.inner
-            .lock()
-            .ok()
-            .map(|mgr| mgr.usage_stats())
+        self.inner.lock().ok().map(|mgr| mgr.usage_stats())
     }
 
     /// Execute a function with exclusive access to the budget manager.
@@ -397,10 +382,7 @@ impl SharedBudgetManager {
     where
         F: FnOnce(&mut TokenBudgetManager) -> R,
     {
-        self.inner
-            .lock()
-            .ok()
-            .map(|mut mgr| f(&mut mgr))
+        self.inner.lock().ok().map(|mut mgr| f(&mut mgr))
     }
 }
 
@@ -499,10 +481,10 @@ mod tests {
         let allocation = manager.allocate();
 
         assert_eq!(allocation.primary, 4000); // 40%
-        assert_eq!(allocation.tests, 2000);   // 20%
+        assert_eq!(allocation.tests, 2000); // 20%
         assert_eq!(allocation.callers, 1500); // 15%
         assert_eq!(allocation.callees, 1500); // 15%
-        assert_eq!(allocation.config, 1000);  // 10%
+        assert_eq!(allocation.config, 1000); // 10%
         assert_eq!(allocation.total(), 10000);
     }
 
@@ -513,10 +495,10 @@ mod tests {
 
         // Check rounding behavior
         assert_eq!(allocation.primary, 400); // 40% of 1000
-        assert_eq!(allocation.tests, 200);   // 20% of 1000
+        assert_eq!(allocation.tests, 200); // 20% of 1000
         assert_eq!(allocation.callers, 150); // 15% of 1000
         assert_eq!(allocation.callees, 150); // 15% of 1000
-        assert_eq!(allocation.config, 100);  // 10% of 1000
+        assert_eq!(allocation.config, 100); // 10% of 1000
     }
 
     #[test]
@@ -637,13 +619,9 @@ mod tests {
         let clone2 = shared.clone();
 
         // Spawn concurrent tasks
-        let handle1 = tokio::spawn(async move {
-            clone1.try_reserve("task1", 300)
-        });
+        let handle1 = tokio::spawn(async move { clone1.try_reserve("task1", 300) });
 
-        let handle2 = tokio::spawn(async move {
-            clone2.try_reserve("task2", 400)
-        });
+        let handle2 = tokio::spawn(async move { clone2.try_reserve("task2", 400) });
 
         let (r1, r2) = tokio::join!(handle1, handle2);
 

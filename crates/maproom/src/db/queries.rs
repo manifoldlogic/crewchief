@@ -1,6 +1,6 @@
 use anyhow::Context;
-use tokio_postgres::{types::ToSql, Client, NoTls};
 use serde::Serialize;
+use tokio_postgres::{types::ToSql, Client, NoTls};
 
 pub async fn connect() -> anyhow::Result<Client> {
     let database_url = crate::db::connection::get_database_url()
@@ -29,7 +29,9 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
 
     // Step 1: Ensure schema_migrations table exists (migration 0000)
     let migration_0000 = include_str!("./../../migrations/0000_schema_migrations.sql");
-    client.batch_execute(migration_0000).await
+    client
+        .batch_execute(migration_0000)
+        .await
         .context("Failed to create schema_migrations table")?;
 
     // Step 2: Get list of applied migrations
@@ -39,29 +41,112 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
     // Format: (version, filename, sql_content, use_concurrent_handler)
     // use_concurrent_handler=true for migrations with CREATE INDEX CONCURRENTLY statements
     let all_migrations: Vec<(i32, &str, &str, bool)> = vec![
-        (1, "0001_init.sql", include_str!("./../../migrations/0001_init.sql"), false),
-        (2, "0002_markdown_support.sql", include_str!("./../../migrations/0002_markdown_support.sql"), false),
-        (3, "0003_yaml_toml_support.sql", include_str!("./../../migrations/0003_yaml_toml_support.sql"), false),
-        (4, "0004_optimize_vector_indices.sql", include_str!("./../../migrations/0004_optimize_vector_indices.sql"), false),
-        (5, "0005_create_materialized_views.sql", include_str!("./../../migrations/0005_create_materialized_views.sql"), false),
-        (6, "0006_optimize_gin_index.sql", include_str!("./../../migrations/0006_optimize_gin_index.sql"), false),
-        (7, "0007_ab_testing_schema.sql", include_str!("./../../migrations/0007_ab_testing_schema.sql"), false),
-        (8, "0008_context_query_optimizations.sql", include_str!("./../../migrations/0008_context_query_optimizations.sql"), true),
-        (9, "0009_create_context_cache.sql", include_str!("./../../migrations/0009_create_context_cache.sql"), false),
-        (10, "0010_add_blake3_hash.sql", include_str!("./../../migrations/0010_add_blake3_hash.sql"), true),
-        (11, "0011_python_symbol_kinds.sql", include_str!("./../../migrations/0011_python_symbol_kinds.sql"), false),
-        (12, "0012_optimize_indices.sql", include_str!("./../../migrations/0012_optimize_indices.sql"), true),
-        (13, "0013_query_tuning.sql", include_str!("./../../migrations/0013_query_tuning.sql"), false),
-        (14, "0014_add_enhanced_symbol_kinds.sql", include_str!("./../../migrations/0014_add_enhanced_symbol_kinds.sql"), false),
-        (15, "0015_add_ollama_columns.sql", include_str!("./../../migrations/0015_add_ollama_columns.sql"), true),
-        (16, "0016_add_updated_at_to_chunks.sql", include_str!("./../../migrations/0016_add_updated_at_to_chunks.sql"), false),
+        (
+            1,
+            "0001_init.sql",
+            include_str!("./../../migrations/0001_init.sql"),
+            false,
+        ),
+        (
+            2,
+            "0002_markdown_support.sql",
+            include_str!("./../../migrations/0002_markdown_support.sql"),
+            false,
+        ),
+        (
+            3,
+            "0003_yaml_toml_support.sql",
+            include_str!("./../../migrations/0003_yaml_toml_support.sql"),
+            false,
+        ),
+        (
+            4,
+            "0004_optimize_vector_indices.sql",
+            include_str!("./../../migrations/0004_optimize_vector_indices.sql"),
+            false,
+        ),
+        (
+            5,
+            "0005_create_materialized_views.sql",
+            include_str!("./../../migrations/0005_create_materialized_views.sql"),
+            false,
+        ),
+        (
+            6,
+            "0006_optimize_gin_index.sql",
+            include_str!("./../../migrations/0006_optimize_gin_index.sql"),
+            false,
+        ),
+        (
+            7,
+            "0007_ab_testing_schema.sql",
+            include_str!("./../../migrations/0007_ab_testing_schema.sql"),
+            false,
+        ),
+        (
+            8,
+            "0008_context_query_optimizations.sql",
+            include_str!("./../../migrations/0008_context_query_optimizations.sql"),
+            true,
+        ),
+        (
+            9,
+            "0009_create_context_cache.sql",
+            include_str!("./../../migrations/0009_create_context_cache.sql"),
+            false,
+        ),
+        (
+            10,
+            "0010_add_blake3_hash.sql",
+            include_str!("./../../migrations/0010_add_blake3_hash.sql"),
+            true,
+        ),
+        (
+            11,
+            "0011_python_symbol_kinds.sql",
+            include_str!("./../../migrations/0011_python_symbol_kinds.sql"),
+            false,
+        ),
+        (
+            12,
+            "0012_optimize_indices.sql",
+            include_str!("./../../migrations/0012_optimize_indices.sql"),
+            true,
+        ),
+        (
+            13,
+            "0013_query_tuning.sql",
+            include_str!("./../../migrations/0013_query_tuning.sql"),
+            false,
+        ),
+        (
+            14,
+            "0014_add_enhanced_symbol_kinds.sql",
+            include_str!("./../../migrations/0014_add_enhanced_symbol_kinds.sql"),
+            false,
+        ),
+        (
+            15,
+            "0015_add_ollama_columns.sql",
+            include_str!("./../../migrations/0015_add_ollama_columns.sql"),
+            true,
+        ),
+        (
+            16,
+            "0016_add_updated_at_to_chunks.sql",
+            include_str!("./../../migrations/0016_add_updated_at_to_chunks.sql"),
+            false,
+        ),
     ];
 
     // Step 4: Apply each unapplied migration
     for (version, filename, sql, use_concurrent_handler) in all_migrations {
         // Skip if already applied
         if applied_migrations.contains(&version) {
-            println!("⏭️  Skipping migration {}: {} (already applied)", version, filename);
+            println!(
+                "⏭️  Skipping migration {}: {} (already applied)",
+                version, filename
+            );
             continue;
         }
 
@@ -69,15 +154,19 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
 
         // Execute migration based on whether it contains CONCURRENT indexes
         if use_concurrent_handler {
-            execute_with_concurrent_indexes(client, sql).await
+            execute_with_concurrent_indexes(client, sql)
+                .await
                 .with_context(|| format!("Failed to apply migration {}: {}", version, filename))?;
         } else {
-            client.batch_execute(sql).await
+            client
+                .batch_execute(sql)
+                .await
                 .with_context(|| format!("Failed to apply migration {}: {}", version, filename))?;
         }
 
         // Record successful application
-        record_migration(client, version, filename).await
+        record_migration(client, version, filename)
+            .await
             .with_context(|| format!("Failed to record migration {}: {}", version, filename))?;
 
         println!("✅ Applied migration {}: {}", version, filename);
@@ -110,20 +199,28 @@ async fn execute_with_concurrent_indexes(client: &Client, sql: &str) -> anyhow::
 
         // Check if this is a CREATE INDEX CONCURRENTLY statement
         let is_concurrent = trimmed.to_uppercase().contains("CREATE INDEX CONCURRENTLY")
-                         || trimmed.to_uppercase().contains("CREATE UNIQUE INDEX CONCURRENTLY");
+            || trimmed
+                .to_uppercase()
+                .contains("CREATE UNIQUE INDEX CONCURRENTLY");
 
         if is_concurrent {
             // Execute CONCURRENT indexes individually using simple_query
             // This ensures they run outside any transaction context
-            client.simple_query(trimmed).await
-                .with_context(|| format!("Failed to execute CONCURRENT index statement: {}",
-                    truncate_for_display(trimmed, 100)))?;
+            client.simple_query(trimmed).await.with_context(|| {
+                format!(
+                    "Failed to execute CONCURRENT index statement: {}",
+                    truncate_for_display(trimmed, 100)
+                )
+            })?;
         } else {
             // Execute other statements using batch_execute
             // This is safer for regular DDL as it provides transaction boundaries
-            client.batch_execute(trimmed).await
-                .with_context(|| format!("Failed to execute statement: {}",
-                    truncate_for_display(trimmed, 100)))?;
+            client.batch_execute(trimmed).await.with_context(|| {
+                format!(
+                    "Failed to execute statement: {}",
+                    truncate_for_display(trimmed, 100)
+                )
+            })?;
         }
     }
 
@@ -162,7 +259,7 @@ fn parse_sql_statements(sql: &str) -> Vec<String> {
         if ch == '/' && chars.peek() == Some(&'*') && !in_single_quote && !in_dollar_quote {
             current_stmt.push(ch);
             current_stmt.push(chars.next().unwrap()); // consume '*'
-            // Skip until */
+                                                      // Skip until */
             while let Some(c) = chars.next() {
                 current_stmt.push(c);
                 if c == '*' && chars.peek() == Some(&'/') {
@@ -286,10 +383,8 @@ async fn get_applied_migrations(client: &Client) -> anyhow::Result<std::collecti
         .query("SELECT version FROM maproom.schema_migrations", &[])
         .await?;
 
-    let applied: std::collections::HashSet<i32> = rows
-        .iter()
-        .map(|row| row.get::<_, i32>(0))
-        .collect();
+    let applied: std::collections::HashSet<i32> =
+        rows.iter().map(|row| row.get::<_, i32>(0)).collect();
 
     Ok(applied)
 }
@@ -307,7 +402,11 @@ async fn record_migration(client: &Client, version: i32, filename: &str) -> anyh
     Ok(())
 }
 
-pub async fn get_or_create_repo(client: &Client, name: &str, root_path: &str) -> anyhow::Result<i64> {
+pub async fn get_or_create_repo(
+    client: &Client,
+    name: &str,
+    root_path: &str,
+) -> anyhow::Result<i64> {
     let row = client
         .query_one(
             "INSERT INTO maproom.repos(name, root_path) VALUES ($1, $2)
@@ -436,18 +535,18 @@ pub async fn insert_chunk(
 pub async fn insert_chunks_batch(
     client: &Client,
     chunks: &[(
-        i64,                          // file_id
-        Option<String>,               // symbol_name
-        String,                       // kind
-        Option<String>,               // signature
-        Option<String>,               // docstring
-        i32,                          // start_line
-        i32,                          // end_line
-        String,                       // preview
-        String,                       // ts_doc_text
-        f32,                          // recency_score
-        f32,                          // churn_score
-        Option<serde_json::Value>,    // metadata
+        i64,                       // file_id
+        Option<String>,            // symbol_name
+        String,                    // kind
+        Option<String>,            // signature
+        Option<String>,            // docstring
+        i32,                       // start_line
+        i32,                       // end_line
+        String,                    // preview
+        String,                    // ts_doc_text
+        f32,                       // recency_score
+        f32,                       // churn_score
+        Option<serde_json::Value>, // metadata
     )],
 ) -> anyhow::Result<Vec<i64>> {
     if chunks.is_empty() {
@@ -467,16 +566,16 @@ pub async fn insert_chunks_batch(
             base + 6, base + 7, base + 8, base + 9, base + 10, base + 11, base + 12
         ));
 
-        params.push(&chunk.0);  // file_id
-        params.push(&chunk.1);  // symbol_name
-        params.push(&chunk.2);  // kind
-        params.push(&chunk.3);  // signature
-        params.push(&chunk.4);  // docstring
-        params.push(&chunk.5);  // start_line
-        params.push(&chunk.6);  // end_line
-        params.push(&chunk.7);  // preview
-        params.push(&chunk.8);  // ts_doc_text
-        params.push(&chunk.9);  // recency_score
+        params.push(&chunk.0); // file_id
+        params.push(&chunk.1); // symbol_name
+        params.push(&chunk.2); // kind
+        params.push(&chunk.3); // signature
+        params.push(&chunk.4); // docstring
+        params.push(&chunk.5); // start_line
+        params.push(&chunk.6); // end_line
+        params.push(&chunk.7); // preview
+        params.push(&chunk.8); // ts_doc_text
+        params.push(&chunk.9); // recency_score
         params.push(&chunk.10); // churn_score
         params.push(&chunk.11); // metadata
     }
@@ -814,7 +913,9 @@ pub async fn search_chunks_fts(
             )
             .await?;
         row.map(|r| r.get(0))
-    } else { None };
+    } else {
+        None
+    };
 
     let ts = query
         .split_whitespace()
@@ -885,5 +986,3 @@ pub async fn search_chunks_fts(
         .collect();
     Ok(hits)
 }
-
-

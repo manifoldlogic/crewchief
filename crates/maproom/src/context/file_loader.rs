@@ -262,8 +262,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_file_integration() {
-        use tempfile::NamedTempFile;
         use std::io::Write;
+        use tempfile::NamedTempFile;
 
         // Create a temporary file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -285,8 +285,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_range_integration() {
-        use tempfile::NamedTempFile;
         use std::io::Write;
+        use tempfile::NamedTempFile;
 
         // Create a temporary file
         let mut temp_file = NamedTempFile::new().unwrap();

@@ -283,16 +283,17 @@ mod database_tests {
         println!("\n=== Summary ===\n");
 
         // Filter to configs that meet minimum requirements
-        let valid_configs: Vec<_> = results
-            .iter()
-            .filter(|r| r.meets_requirements())
-            .collect();
+        let valid_configs: Vec<_> = results.iter().filter(|r| r.meets_requirements()).collect();
 
         if valid_configs.is_empty() {
             println!("WARNING: No configurations meet minimum requirements!");
             println!("  Required: recall@10 >= 0.95 AND p95 latency < 50ms");
         } else {
-            println!("Configurations meeting requirements: {}/{}", valid_configs.len(), results.len());
+            println!(
+                "Configurations meeting requirements: {}/{}",
+                valid_configs.len(),
+                results.len()
+            );
 
             // Find best configuration by quality score
             let best = valid_configs
@@ -312,21 +313,35 @@ mod database_tests {
 
         // Print comparison table
         println!("\n=== Full Results Table ===\n");
-        println!("{:<20} {:<12} {:<12} {:<12} {:<12} {:<15} {:<12}",
-                 "Config", "Recall@10", "P50 (ms)", "P95 (ms)", "P99 (ms)", "Build Time (ms)", "Size (MB)");
+        println!(
+            "{:<20} {:<12} {:<12} {:<12} {:<12} {:<15} {:<12}",
+            "Config",
+            "Recall@10",
+            "P50 (ms)",
+            "P95 (ms)",
+            "P99 (ms)",
+            "Build Time (ms)",
+            "Size (MB)"
+        );
         println!("{:-<110}", "");
 
         for result in &results {
-            let marker = if result.meets_requirements() { "✓" } else { " " };
-            println!("{:<20} {:<12.4} {:<12.2} {:<12.2} {:<12.2} {:<15.2} {:<12.2} {}",
-                     result.config.name(),
-                     result.recall_at_10,
-                     result.latency_p50_ms,
-                     result.latency_p95_ms,
-                     result.latency_p99_ms,
-                     result.index_build_time_ms,
-                     result.index_size_mb,
-                     marker);
+            let marker = if result.meets_requirements() {
+                "✓"
+            } else {
+                " "
+            };
+            println!(
+                "{:<20} {:<12.4} {:<12.2} {:<12.2} {:<12.2} {:<15.2} {:<12.2} {}",
+                result.config.name(),
+                result.recall_at_10,
+                result.latency_p50_ms,
+                result.latency_p95_ms,
+                result.latency_p99_ms,
+                result.index_build_time_ms,
+                result.index_size_mb,
+                marker
+            );
         }
 
         println!("\n(✓ = meets requirements: recall >= 0.95, p95 < 50ms)\n");
@@ -406,18 +421,14 @@ fn bench_index_creation_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("ivfflat_index_creation");
 
     for lists in [100, 200, 400] {
-        group.bench_with_input(
-            BenchmarkId::new("lists", lists),
-            &lists,
-            |b, &lists| {
-                b.iter(|| {
-                    // Simulate computational cost of clustering
-                    let dimension = 1536;
-                    let iterations = lists * dimension / 100; // Simplified cost model
-                    black_box(iterations)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("lists", lists), &lists, |b, &lists| {
+            b.iter(|| {
+                // Simulate computational cost of clustering
+                let dimension = 1536;
+                let iterations = lists * dimension / 100; // Simplified cost model
+                black_box(iterations)
+            });
+        });
     }
     group.finish();
 }
@@ -427,18 +438,14 @@ fn bench_search_probes_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("ivfflat_search_probes");
 
     for probes in [5, 10, 20] {
-        group.bench_with_input(
-            BenchmarkId::new("probes", probes),
-            &probes,
-            |b, &probes| {
-                b.iter(|| {
-                    // Simulate cost of searching multiple clusters
-                    let cluster_size = 50; // Average chunks per cluster
-                    let search_cost = probes * cluster_size;
-                    black_box(search_cost)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("probes", probes), &probes, |b, &probes| {
+            b.iter(|| {
+                // Simulate cost of searching multiple clusters
+                let cluster_size = 50; // Average chunks per cluster
+                let search_cost = probes * cluster_size;
+                black_box(search_cost)
+            });
+        });
     }
     group.finish();
 }
@@ -465,11 +472,7 @@ fn bench_quality_scoring(c: &mut Criterion) {
             let best = results
                 .iter()
                 .filter(|r| r.meets_requirements())
-                .max_by(|a, b| {
-                    a.quality_score()
-                        .partial_cmp(&b.quality_score())
-                        .unwrap()
-                });
+                .max_by(|a, b| a.quality_score().partial_cmp(&b.quality_score()).unwrap());
             black_box(best)
         });
     });

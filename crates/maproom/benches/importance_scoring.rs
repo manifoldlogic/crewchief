@@ -2,9 +2,11 @@
 //!
 //! Target: Scoring should complete within 10ms for 1000 chunks.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use crewchief_maproom::context::importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 use crewchief_maproom::context::graph::EdgeType;
+use crewchief_maproom::context::importance::{
+    ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig,
+};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn create_benchmark_chunk(id: i64, relpath: &str) -> ChunkMetadata {
     ChunkMetadata {
@@ -120,19 +122,15 @@ fn bench_distance_variations(c: &mut Criterion) {
     for distance in [0, 1, 2, 3, 5, 10].iter() {
         let relationship = create_benchmark_relationship(EdgeType::Calls, *distance);
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(distance),
-            distance,
-            |b, _| {
-                b.iter(|| {
-                    scorer.score(
-                        black_box(&chunk),
-                        black_box(&relationship),
-                        black_box(&target),
-                    )
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(distance), distance, |b, _| {
+            b.iter(|| {
+                scorer.score(
+                    black_box(&chunk),
+                    black_box(&relationship),
+                    black_box(&target),
+                )
+            })
+        });
     }
 
     group.finish();
@@ -305,14 +303,12 @@ fn bench_1000_chunks_performance_target(c: &mut Criterion) {
 
     // Generate 1000 chunks with realistic variety
     let chunks: Vec<ChunkMetadata> = (0..1000)
-        .map(|i| {
-            ChunkMetadata {
-                id: i as i64,
-                relpath: format!("src/module_{}/file_{}.rs", i / 100, i % 100),
-                importance_score: Some(1.0 + (i % 10) as f64 * 0.2),
-                recency_score: Some(0.5 + (i % 5) as f64 * 0.1),
-                churn_score: Some((i % 7) as f64 * 0.1),
-            }
+        .map(|i| ChunkMetadata {
+            id: i as i64,
+            relpath: format!("src/module_{}/file_{}.rs", i / 100, i % 100),
+            importance_score: Some(1.0 + (i % 10) as f64 * 0.2),
+            recency_score: Some(0.5 + (i % 5) as f64 * 0.1),
+            churn_score: Some((i % 7) as f64 * 0.1),
         })
         .collect();
 
