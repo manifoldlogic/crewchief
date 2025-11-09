@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-2003: Add debouncing for rapid branch switches
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -32,13 +32,13 @@ From architecture.md lines 330-353, we use time-based debouncing: if another swi
 **Planning Reference**: `/workspace/.agents/projects/BRWATCH_branch-switch-detection/planning/plan.md` - Phase 2
 
 ## Acceptance Criteria
-- [ ] DebouncedHandler struct implemented with Mutex-protected timestamp
-- [ ] Debounce duration configurable (default 2 seconds)
-- [ ] Events within debounce window are ignored
-- [ ] Only the latest branch switch triggers indexing
-- [ ] watch_loop() integrates with debouncer
-- [ ] Logs when events are debounced
-- [ ] No race conditions in timestamp checking
+- [x] DebouncedHandler struct implemented with Mutex-protected timestamp
+- [x] Debounce duration configurable (default 2 seconds)
+- [x] Events within debounce window are ignored
+- [x] Only the latest branch switch triggers indexing
+- [x] watch_loop() integrates with debouncer
+- [x] Logs when events are debounced
+- [x] No race conditions in timestamp checking
 
 ## Technical Requirements
 - Create DebouncedHandler struct with fields:

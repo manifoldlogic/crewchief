@@ -9,12 +9,41 @@ use notify::{Event, RecursiveMode, Watcher};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tokio_postgres::Client;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::db::{get_or_create_repo, get_or_create_worktree};
 use crate::incremental::incremental_update;
+
+/// Debouncer to prevent rapid successive branch switch handling
+struct DebouncedHandler {
+    last_event: Mutex<Instant>,
+    debounce_duration: Duration,
+}
+
+impl DebouncedHandler {
+    fn new(debounce_duration: Duration) -> Self {
+        Self {
+            last_event: Mutex::new(Instant::now()),
+            debounce_duration,
+        }
+    }
+
+    fn should_handle(&self) -> bool {
+        let mut last = self.last_event.lock().unwrap();
+        let now = Instant::now();
+
+        if now.duration_since(*last) < self.debounce_duration {
+            debug!("Debouncing event (too soon after previous)");
+            false
+        } else {
+            *last = now;
+            true
+        }
+    }
+}
 
 /// Watches .git/HEAD for branch switches and triggers automatic indexing
 pub struct BranchWatcher {
@@ -26,6 +55,8 @@ pub struct BranchWatcher {
     watcher: notify::RecommendedWatcher,
     /// Event receiver channel
     rx: Receiver<Result<Event, notify::Error>>,
+    /// Debouncer to prevent rapid successive indexing
+    debouncer: DebouncedHandler,
 }
 
 impl BranchWatcher {
@@ -42,12 +73,14 @@ impl BranchWatcher {
     pub fn new(repo_path: PathBuf, client: Client) -> Result<Self> {
         let (tx, rx) = channel();
         let watcher = notify::recommended_watcher(tx)?;
+        let debouncer = DebouncedHandler::new(Duration::from_secs(2));
 
         Ok(Self {
             repo_path,
             client,
             watcher,
             rx,
+            debouncer,
         })
     }
 
@@ -92,7 +125,9 @@ impl BranchWatcher {
                 Ok(event_result) => match event_result {
                     Ok(event) => {
                         // Process modify events (branch switch changes .git/HEAD content)
-                        if event.kind.is_modify() || event.kind.is_create() {
+                        if (event.kind.is_modify() || event.kind.is_create())
+                            && self.debouncer.should_handle()
+                        {
                             if let Err(e) = self.handle_branch_switch_with_retry().await {
                                 error!("Failed to handle branch switch after retries: {}", e);
                                 // Continue watching despite error
