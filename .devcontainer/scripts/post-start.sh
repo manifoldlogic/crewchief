@@ -9,11 +9,13 @@ if [ -S /var/run/docker.sock ]; then
     echo "✓ Fixed Docker socket permissions"
 fi
 
-# Ensure PostgreSQL is ready
-until pg_isready -h postgres -p 5432 -U postgres; do
-    echo "Waiting for PostgreSQL..."
-    sleep 2
-done
+# Ensure maproom-postgres is ready (optional - may not be running)
+# This is external to devcontainer, so we don't block if it's not available
+if pg_isready -h maproom-postgres -p 5432 -U maproom -d maproom 2>/dev/null; then
+    echo "✓ maproom-postgres is available"
+else
+    echo "⚠️  maproom-postgres not available (start with: cd packages/maproom-mcp && docker compose up -d)"
+fi
 
 # Update dependencies if package.json has changed
 if [ -f /workspace/.devcontainer/.last-package-json-hash ]; then
