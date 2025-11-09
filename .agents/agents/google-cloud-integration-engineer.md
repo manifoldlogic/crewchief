@@ -363,7 +363,7 @@ impl GoogleProvider {
         let location = env::var("GOOGLE_LOCATION")
             .unwrap_or_else(|_| "us-central1".to_string());
 
-        let model = env::var("EMBEDDING_MODEL")
+        let model = env::var("MAPROOM_EMBEDDING_MODEL")
             .unwrap_or_else(|_| "text-embedding-gecko@003".to_string());
 
         let task_type = env::var("EMBEDDING_TASK_TYPE")

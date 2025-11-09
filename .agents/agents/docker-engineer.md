@@ -374,7 +374,7 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgresql://user:pass@postgres:5432/db
-      EMBEDDING_PROVIDER: ollama
+      MAPROOM_EMBEDDING_PROVIDER: ollama
 
 volumes:
   db-data:

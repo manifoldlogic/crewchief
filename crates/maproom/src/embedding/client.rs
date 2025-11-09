@@ -227,10 +227,10 @@ impl OpenAIClient {
             }
             Provider::Google => {
                 // Google uses factory system, not this client
-                // Return error directing user to use EMBEDDING_PROVIDER env var
+                // Return error directing user to use MAPROOM_EMBEDDING_PROVIDER env var
                 return Err(EmbeddingError::Config(crate::embedding::error::ConfigError::InvalidValue {
                     field: "provider".to_string(),
-                    reason: "Google provider requires using EMBEDDING_PROVIDER=google environment variable. \
+                    reason: "Google provider requires using MAPROOM_EMBEDDING_PROVIDER=google environment variable. \
                              The legacy OpenAIClient does not support Google Vertex AI. \
                              Use create_provider_from_env() for Google support.".to_string(),
                 }));

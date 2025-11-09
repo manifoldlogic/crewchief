@@ -33,7 +33,7 @@
 ### 2.1 OpenAI → Ollama
 - [ ] Start with OpenAI embeddings (existing dataset)
 - [ ] Install Ollama
-- [ ] Set: `export EMBEDDING_PROVIDER=ollama`
+- [ ] Set: `export MAPROOM_EMBEDDING_PROVIDER=ollama`
 - [ ] Run: `crewchief maproom scan --generate-embeddings`
 - [ ] **Expected:** Only missing chunks are embedded
 - [ ] **Verify:** Search works across both embedding types
@@ -60,7 +60,7 @@ GROUP BY status;
 ### 2.2 Ollama → Google
 - [ ] Start with Ollama embeddings
 - [ ] Configure Google (see google-vertex-ai-setup.md)
-- [ ] Set: `export EMBEDDING_PROVIDER=google`
+- [ ] Set: `export MAPROOM_EMBEDDING_PROVIDER=google`
 - [ ] Run: `crewchief maproom scan --generate-embeddings`
 - [ ] **Expected:** Uses same columns (both 768-dim)
 - [ ] **Verify:** Search still works, no errors
@@ -76,7 +76,7 @@ GROUP BY status;
 - [ ] Run: `crewchief maproom search "test query"`
 - [ ] **Expected:** Search works without changes
 - [ ] **Verify:** No re-indexing required
-- [ ] **Verify:** EMBEDDING_PROVIDER defaults to openai if API key present
+- [ ] **Verify:** MAPROOM_EMBEDDING_PROVIDER defaults to openai if API key present
 
 **Result:** ✓ / ✗
 **Notes:** _________________

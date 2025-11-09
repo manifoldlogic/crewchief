@@ -25,7 +25,7 @@ describe('Scan Tool - Provider Integration', () => {
 
   it('should detect provider and include in result', async () => {
     // Mock provider detection
-    process.env.EMBEDDING_PROVIDER = 'ollama'
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'ollama'
 
     // We'll test the integration through the index handler
     // This is a unit test of the provider integration logic
@@ -39,7 +39,7 @@ describe('Scan Tool - Provider Integration', () => {
 
   it('should return error when no provider available', async () => {
     // Clear all provider configs
-    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
     delete process.env.OPENAI_API_KEY
     delete process.env.GOOGLE_PROJECT_ID
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS
@@ -62,7 +62,7 @@ describe('Scan Tool - Provider Integration', () => {
     })
 
     // But explicitly request OpenAI
-    process.env.EMBEDDING_PROVIDER = 'openai'
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'openai'
     process.env.OPENAI_API_KEY = 'sk-test123'
 
     const { getProviderConfig } = await import('../../src/utils/provider-detection.js')
@@ -74,7 +74,7 @@ describe('Scan Tool - Provider Integration', () => {
   })
 
   it('should use cached provider on subsequent calls', async () => {
-    process.env.EMBEDDING_PROVIDER = 'ollama'
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'ollama'
 
     const { getProviderConfig } = await import('../../src/utils/provider-detection.js')
 
@@ -86,7 +86,7 @@ describe('Scan Tool - Provider Integration', () => {
   })
 
   it('should include helpful setup instructions in error', async () => {
-    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
     delete process.env.OPENAI_API_KEY
     global.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'))
 
@@ -99,12 +99,12 @@ describe('Scan Tool - Provider Integration', () => {
       expect(error.message).toContain('Install Ollama')
       expect(error.message).toContain('OPENAI_API_KEY')
       expect(error.message).toContain('Google Vertex AI')
-      expect(error.message).toContain('EMBEDDING_PROVIDER')
+      expect(error.message).toContain('MAPROOM_EMBEDDING_PROVIDER')
     }
   })
 
   it('should handle Google provider correctly', async () => {
-    process.env.EMBEDDING_PROVIDER = 'google'
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'google'
     process.env.GOOGLE_PROJECT_ID = 'test-project'
     process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/key.json'
 

@@ -176,7 +176,7 @@ nano ~/.bashrc
 
 # Add these lines:
 export OPENAI_API_KEY="sk-proj-abc123...xyz789"
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 
 # Save and reload
 source ~/.bashrc
@@ -189,7 +189,7 @@ Create `.env` in your project root:
 ```bash
 # .env file
 OPENAI_API_KEY=sk-proj-abc123...xyz789
-EMBEDDING_PROVIDER=openai
+MAPROOM_EMBEDDING_PROVIDER=openai
 ```
 
 Add `.env` to `.gitignore`:
@@ -217,7 +217,7 @@ npm install dotenv
 ```bash
 # Set for current terminal session only
 export OPENAI_API_KEY="sk-proj-abc123...xyz789"
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 ```
 
 ### Windows (PowerShell)
@@ -227,7 +227,7 @@ export EMBEDDING_PROVIDER="openai"
 ```powershell
 # Set permanently for current user
 [System.Environment]::SetEnvironmentVariable('OPENAI_API_KEY', 'sk-proj-abc123...xyz789', 'User')
-[System.Environment]::SetEnvironmentVariable('EMBEDDING_PROVIDER', 'openai', 'User')
+[System.Environment]::SetEnvironmentVariable('MAPROOM_EMBEDDING_PROVIDER', 'openai', 'User')
 
 # Restart PowerShell for changes to take effect
 ```
@@ -237,7 +237,7 @@ export EMBEDDING_PROVIDER="openai"
 ```powershell
 # Set for current PowerShell session
 $env:OPENAI_API_KEY = "sk-proj-abc123...xyz789"
-$env:EMBEDDING_PROVIDER = "openai"
+$env:MAPROOM_EMBEDDING_PROVIDER = "openai"
 ```
 
 ### Windows (WSL2)
@@ -257,7 +257,7 @@ Test that your API key is configured correctly before indexing.
 echo $OPENAI_API_KEY
 # Should output: sk-proj-abc123...xyz789
 
-echo $EMBEDDING_PROVIDER
+echo $MAPROOM_EMBEDDING_PROVIDER
 # Should output: openai
 ```
 
@@ -706,11 +706,11 @@ crewchief maproom scan --generate-embeddings --dry-run
 5. **Develop with Ollama, deploy with OpenAI**:
    ```bash
    # Development (free)
-   export EMBEDDING_PROVIDER=ollama
+   export MAPROOM_EMBEDDING_PROVIDER=ollama
    crewchief maproom scan --generate-embeddings
 
    # Production (paid)
-   export EMBEDDING_PROVIDER=openai
+   export MAPROOM_EMBEDDING_PROVIDER=openai
    crewchief maproom scan --generate-embeddings
    ```
    **Savings**: 100% on development costs
@@ -837,7 +837,7 @@ export OPENAI_MAX_RETRIES=5  # Default: 3
 ```bash
 # Configuration
 export OPENAI_API_KEY="sk-proj-abc123...xyz789"
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 
 # Verify setup
 echo $OPENAI_API_KEY
@@ -861,7 +861,7 @@ open https://platform.openai.com/usage
 ```bash
 # Required
 OPENAI_API_KEY=sk-proj-abc123...xyz789
-EMBEDDING_PROVIDER=openai
+MAPROOM_EMBEDDING_PROVIDER=openai
 
 # Optional
 OPENAI_MODEL=text-embedding-3-small    # Default model

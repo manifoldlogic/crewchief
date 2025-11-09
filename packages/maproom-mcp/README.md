@@ -67,22 +67,22 @@ Alternatively, manually trigger indexing:
 
 **With OpenAI:**
 ```bash
-EMBEDDING_PROVIDER=openai npx @crewchief/maproom-mcp scan /path/to/your/repo
+MAPROOM_EMBEDDING_PROVIDER=openai npx @crewchief/maproom-mcp scan /path/to/your/repo
 ```
 
 **With Google Vertex AI:**
 ```bash
-EMBEDDING_PROVIDER=google npx @crewchief/maproom-mcp scan /path/to/your/repo
+MAPROOM_EMBEDDING_PROVIDER=google npx @crewchief/maproom-mcp scan /path/to/your/repo
 ```
 
 **With Ollama (local):**
 ```bash
-EMBEDDING_PROVIDER=ollama npx @crewchief/maproom-mcp scan /path/to/your/repo
+MAPROOM_EMBEDDING_PROVIDER=ollama npx @crewchief/maproom-mcp scan /path/to/your/repo
 ```
 
 **Optional: Auto-sync with watch mode**
 ```bash
-EMBEDDING_PROVIDER=openai npx @crewchief/maproom-mcp watch /path/to/your/repo
+MAPROOM_EMBEDDING_PROVIDER=openai npx @crewchief/maproom-mcp watch /path/to/your/repo
 ```
 
 This keeps your index up-to-date as you edit code. Leave it running in a terminal.
@@ -103,7 +103,7 @@ This keeps your index up-to-date as you edit code. Leave it running in a termina
         "/app/dist/index.js"
       ],
       "env": {
-        "EMBEDDING_PROVIDER": "openai",
+        "MAPROOM_EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       }
     }
@@ -125,7 +125,7 @@ This keeps your index up-to-date as you edit code. Leave it running in a termina
         "/app/dist/index.js"
       ],
       "env": {
-        "EMBEDDING_PROVIDER": "openai",
+        "MAPROOM_EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       }
     }
@@ -136,7 +136,7 @@ This keeps your index up-to-date as you edit code. Leave it running in a termina
 For **Google Vertex AI**, use:
 ```json
 "env": {
-  "EMBEDDING_PROVIDER": "google",
+  "MAPROOM_EMBEDDING_PROVIDER": "google",
   "GOOGLE_PROJECT_ID": "${GOOGLE_PROJECT_ID}",
   "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}"
 }
@@ -145,7 +145,7 @@ For **Google Vertex AI**, use:
 For **Ollama** (local), use:
 ```json
 "env": {
-  "EMBEDDING_PROVIDER": "ollama"
+  "MAPROOM_EMBEDDING_PROVIDER": "ollama"
 }
 ```
 
@@ -508,7 +508,7 @@ Override the default database connection:
       ],
       "env": {
         "MAPROOM_DATABASE_URL": "postgresql://user:pass@custom-host:5432/mydb",
-        "EMBEDDING_PROVIDER": "openai",
+        "MAPROOM_EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       }
     }
@@ -521,8 +521,8 @@ Override the default database connection:
 **OpenAI:**
 ```json
 "env": {
-  "EMBEDDING_PROVIDER": "openai",
-  "EMBEDDING_MODEL": "text-embedding-3-large",
+  "MAPROOM_EMBEDDING_PROVIDER": "openai",
+  "MAPROOM_EMBEDDING_MODEL": "text-embedding-3-large",
   "EMBEDDING_DIMENSION": "3072"
 }
 ```
@@ -530,16 +530,16 @@ Override the default database connection:
 **Google:**
 ```json
 "env": {
-  "EMBEDDING_PROVIDER": "google",
-  "EMBEDDING_MODEL": "textembedding-gecko@003"
+  "MAPROOM_EMBEDDING_PROVIDER": "google",
+  "MAPROOM_EMBEDDING_MODEL": "textembedding-gecko@003"
 }
 ```
 
 **Ollama:**
 ```json
 "env": {
-  "EMBEDDING_PROVIDER": "ollama",
-  "EMBEDDING_MODEL": "mxbai-embed-large"
+  "MAPROOM_EMBEDDING_PROVIDER": "ollama",
+  "MAPROOM_EMBEDDING_MODEL": "mxbai-embed-large"
 }
 ```
 
@@ -560,8 +560,8 @@ Higher = faster but more memory. Lower = slower but less memory.
 
 ### Provider Configuration
 
-- `EMBEDDING_PROVIDER`: (Required) One of: `openai`, `cohere`, `google`, `ollama`, `local`
-- `EMBEDDING_MODEL`: (Required) Model name for the provider
+- `MAPROOM_EMBEDDING_PROVIDER`: (Required) One of: `openai`, `cohere`, `google`, `ollama`, `local`
+- `MAPROOM_EMBEDDING_MODEL`: (Required) Model name for the provider
 - `EMBEDDING_DIMENSION`: (Required) Vector dimension for embeddings
 - `EMBEDDING_API_ENDPOINT`: (Optional) Custom endpoint override
 

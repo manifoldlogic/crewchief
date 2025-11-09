@@ -70,7 +70,7 @@ test_google_provider() {
   cleanup
 
   export GOOGLE_API_KEY="test-key-123"
-  export EMBEDDING_PROVIDER="google"
+  export MAPROOM_EMBEDDING_PROVIDER="google"
 
   timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
@@ -109,7 +109,7 @@ test_default_all_services() {
   cleanup
 
   # Unset provider env vars
-  unset EMBEDDING_PROVIDER
+  unset MAPROOM_EMBEDDING_PROVIDER
   unset GOOGLE_API_KEY
   unset OPENAI_API_KEY
 
@@ -138,7 +138,7 @@ test_openai_provider() {
   cleanup
 
   export OPENAI_API_KEY="sk-test-key-456"
-  export EMBEDDING_PROVIDER="openai"
+  export MAPROOM_EMBEDDING_PROVIDER="openai"
 
   timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
@@ -165,12 +165,12 @@ test_openai_provider() {
   cleanup
 }
 
-# Test 4: Explicit EMBEDDING_PROVIDER=ollama - Ollama SHOULD start
+# Test 4: Explicit MAPROOM_EMBEDDING_PROVIDER=ollama - Ollama SHOULD start
 test_explicit_ollama() {
-  echo -e "\n[TEST 4] Explicit EMBEDDING_PROVIDER=ollama - Ollama SHOULD start"
+  echo -e "\n[TEST 4] Explicit MAPROOM_EMBEDDING_PROVIDER=ollama - Ollama SHOULD start"
   cleanup
 
-  export EMBEDDING_PROVIDER="ollama"
+  export MAPROOM_EMBEDDING_PROVIDER="ollama"
 
   timeout 15 node "$CLI_PATH" &
   CLI_PID=$!
@@ -194,7 +194,7 @@ test_diagnostic_logs() {
   cleanup
 
   export GOOGLE_API_KEY="test-key-789"
-  export EMBEDDING_PROVIDER="google"
+  export MAPROOM_EMBEDDING_PROVIDER="google"
 
   # Capture logs
   LOG_FILE=$(mktemp)
@@ -203,8 +203,8 @@ test_diagnostic_logs() {
   sleep 8
 
   # Check for diagnostic output
-  if ! grep -q "EMBEDDING_PROVIDER" "$LOG_FILE"; then
-    echo "❌ FAIL: No EMBEDDING_PROVIDER in logs"
+  if ! grep -q "MAPROOM_EMBEDDING_PROVIDER" "$LOG_FILE"; then
+    echo "❌ FAIL: No MAPROOM_EMBEDDING_PROVIDER in logs"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     rm "$LOG_FILE"
     return 1

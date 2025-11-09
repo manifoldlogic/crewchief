@@ -148,7 +148,7 @@ Maproom supports **three embedding providers** with automatic detection and fail
 **Location**: `packages/maproom-mcp/src/utils/provider-detection.ts`, `crates/maproom/src/embedding/providers.rs`
 
 ```
-1. Check EMBEDDING_PROVIDER environment variable
+1. Check MAPROOM_EMBEDDING_PROVIDER environment variable
 2. If not set, auto-detect:
    - Google: Check GOOGLE_APPLICATION_CREDENTIALS
    - OpenAI: Check OPENAI_API_KEY

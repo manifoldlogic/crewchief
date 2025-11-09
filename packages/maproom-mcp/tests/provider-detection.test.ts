@@ -2,7 +2,7 @@
  * Tests for provider detection and configuration
  *
  * These tests verify:
- * - Explicit provider configuration via EMBEDDING_PROVIDER
+ * - Explicit provider configuration via MAPROOM_EMBEDDING_PROVIDER
  * - Auto-detection of Ollama when running
  * - Fallback to OpenAI when configured
  * - Fallback to Google when configured
@@ -29,7 +29,7 @@ describe('Provider Detection', () => {
     clearProviderCache()
 
     // Reset environment variables
-    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
     delete process.env.OPENAI_API_KEY
     delete process.env.GOOGLE_PROJECT_ID
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS
@@ -44,8 +44,8 @@ describe('Provider Detection', () => {
   })
 
   describe('Explicit Provider Configuration', () => {
-    it('should use explicit EMBEDDING_PROVIDER=ollama', async () => {
-      process.env.EMBEDDING_PROVIDER = 'ollama'
+    it('should use explicit MAPROOM_EMBEDDING_PROVIDER=ollama', async () => {
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'ollama'
 
       const config = await detectProvider()
 
@@ -54,8 +54,8 @@ describe('Provider Detection', () => {
       expect(config.available).toBe(true)
     })
 
-    it('should use explicit EMBEDDING_PROVIDER=openai with API key', async () => {
-      process.env.EMBEDDING_PROVIDER = 'openai'
+    it('should use explicit MAPROOM_EMBEDDING_PROVIDER=openai with API key', async () => {
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'openai'
       process.env.OPENAI_API_KEY = 'sk-test123'
 
       const config = await detectProvider()
@@ -65,8 +65,8 @@ describe('Provider Detection', () => {
       expect(config.available).toBe(true)
     })
 
-    it('should use explicit EMBEDDING_PROVIDER=google with credentials', async () => {
-      process.env.EMBEDDING_PROVIDER = 'google'
+    it('should use explicit MAPROOM_EMBEDDING_PROVIDER=google with credentials', async () => {
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'google'
       process.env.GOOGLE_PROJECT_ID = 'test-project'
       process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/key.json'
 
@@ -78,7 +78,7 @@ describe('Provider Detection', () => {
     })
 
     it('should handle case-insensitive provider names', async () => {
-      process.env.EMBEDDING_PROVIDER = 'OLLAMA'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'OLLAMA'
 
       const config = await detectProvider()
 
@@ -86,7 +86,7 @@ describe('Provider Detection', () => {
     })
 
     it('should throw error for unknown provider', async () => {
-      process.env.EMBEDDING_PROVIDER = 'unknown-provider'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'unknown-provider'
 
       await expect(detectProvider()).rejects.toThrow(
         'Unknown provider: "unknown-provider"'
@@ -94,14 +94,14 @@ describe('Provider Detection', () => {
     })
 
     it('should throw error for openai without API key', async () => {
-      process.env.EMBEDDING_PROVIDER = 'openai'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'openai'
       // No OPENAI_API_KEY set
 
       await expect(detectProvider()).rejects.toThrow('OPENAI_API_KEY not found')
     })
 
     it('should throw error for google without PROJECT_ID', async () => {
-      process.env.EMBEDDING_PROVIDER = 'google'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'google'
       process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/key.json'
       // No GOOGLE_PROJECT_ID set
 
@@ -109,7 +109,7 @@ describe('Provider Detection', () => {
     })
 
     it('should throw error for google without CREDENTIALS', async () => {
-      process.env.EMBEDDING_PROVIDER = 'google'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'google'
       process.env.GOOGLE_PROJECT_ID = 'test-project'
       // No GOOGLE_APPLICATION_CREDENTIALS set
 
@@ -185,7 +185,7 @@ describe('Provider Detection', () => {
         expect(error.message).toContain('Install Ollama')
         expect(error.message).toContain('OPENAI_API_KEY')
         expect(error.message).toContain('Google Vertex AI')
-        expect(error.message).toContain('EMBEDDING_PROVIDER')
+        expect(error.message).toContain('MAPROOM_EMBEDDING_PROVIDER')
       }
     })
   })
@@ -342,7 +342,7 @@ describe('Provider Detection', () => {
 
   describe('Provider Config Caching', () => {
     it('should cache provider detection result', async () => {
-      process.env.EMBEDDING_PROVIDER = 'ollama'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'ollama'
 
       const config1 = await getProviderConfig()
       const config2 = await getProviderConfig()
@@ -368,7 +368,7 @@ describe('Provider Detection', () => {
     })
 
     it('should clear cache when requested', async () => {
-      process.env.EMBEDDING_PROVIDER = 'ollama'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'ollama'
 
       const config1 = await getProviderConfig()
       clearProviderCache()
@@ -400,7 +400,7 @@ describe('Provider Detection', () => {
   })
 
   describe('Priority Order', () => {
-    it('should prefer explicit EMBEDDING_PROVIDER over auto-detection', async () => {
+    it('should prefer explicit MAPROOM_EMBEDDING_PROVIDER over auto-detection', async () => {
       // Setup Ollama as available
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -410,7 +410,7 @@ describe('Provider Detection', () => {
       })
 
       // But explicitly request OpenAI
-      process.env.EMBEDDING_PROVIDER = 'openai'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'openai'
       process.env.OPENAI_API_KEY = 'sk-test123'
 
       const config = await detectProvider()
@@ -454,7 +454,7 @@ describe('Provider Detection', () => {
   describe('Console Output', () => {
     it('should log when using explicit provider', async () => {
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      process.env.EMBEDDING_PROVIDER = 'ollama'
+      process.env.MAPROOM_EMBEDDING_PROVIDER = 'ollama'
 
       await detectProvider()
 

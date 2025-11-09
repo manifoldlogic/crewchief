@@ -6,7 +6,7 @@
 //!
 //! # Auto-detection Strategy
 //!
-//! 1. Check if `EMBEDDING_PROVIDER` environment variable is set
+//! 1. Check if `MAPROOM_EMBEDDING_PROVIDER` environment variable is set
 //! 2. If not set, attempt to detect Ollama at `localhost:11434/api/tags`
 //! 3. If Ollama is unavailable, return an error with helpful configuration guidance
 //!
@@ -17,7 +17,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Auto-detect provider (prefers Ollama, falls back to EMBEDDING_PROVIDER env var)
+//!     // Auto-detect provider (prefers Ollama, falls back to MAPROOM_EMBEDDING_PROVIDER env var)
 //!     let provider = create_provider_from_env().await?;
 //!
 //!     println!("Using provider: {}", provider.provider_name());
@@ -89,7 +89,7 @@ use crate::embedding::provider::EmbeddingProvider;
 ///
 /// # Auto-detection Process
 ///
-/// 1. **Explicit Configuration**: If `EMBEDDING_PROVIDER` is set, use that provider
+/// 1. **Explicit Configuration**: If `MAPROOM_EMBEDDING_PROVIDER` is set, use that provider
 /// 2. **Ollama Detection**: Otherwise, check if Ollama is available at `localhost:11434`
 /// 3. **Configuration Error**: If no provider is available, return helpful error message
 ///
@@ -142,7 +142,7 @@ use crate::embedding::provider::EmbeddingProvider;
 /// ```no_run
 /// # use crewchief_maproom::embedding::factory::create_provider_from_env;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// // Set environment: EMBEDDING_PROVIDER=openai
+/// // Set environment: MAPROOM_EMBEDDING_PROVIDER=openai
 /// //                  OPENAI_API_KEY=sk-...
 /// let provider = create_provider_from_env().await?;
 /// assert_eq!(provider.provider_name(), "openai");
@@ -155,22 +155,22 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
 
     let provider_name = match explicit_provider.as_deref() {
         Some(p) => {
-            tracing::debug!("Using explicit provider from EMBEDDING_PROVIDER: {}", p);
+            tracing::debug!("Using explicit provider from MAPROOM_EMBEDDING_PROVIDER: {}", p);
             p.to_lowercase()
         }
         None => {
             // Auto-detect Ollama
-            tracing::debug!("No EMBEDDING_PROVIDER set, attempting Ollama auto-detection");
+            tracing::debug!("No MAPROOM_EMBEDDING_PROVIDER set, attempting Ollama auto-detection");
             if is_ollama_available().await {
                 tracing::info!("Ollama detected at localhost:11434");
                 "ollama".to_string()
             } else {
-                tracing::warn!("Ollama not detected and no EMBEDDING_PROVIDER configured");
+                tracing::warn!("Ollama not detected and no MAPROOM_EMBEDDING_PROVIDER configured");
                 return Err(EmbeddingError::Config(ConfigError::MissingConfig(
                     "No embedding provider configured. Options:\n\
                      1. Install and start Ollama (https://ollama.ai) for zero-config local embeddings\n\
-                     2. Set EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
-                     3. Set EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future)"
+                     2. Set MAPROOM_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
+                     3. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future)"
                         .to_string(),
                 )));
             }
@@ -278,7 +278,7 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
         unknown => {
             tracing::error!("Unknown provider requested: {}", unknown);
             Err(EmbeddingError::Config(ConfigError::InvalidValue {
-                field: "EMBEDDING_PROVIDER".to_string(),
+                field: "MAPROOM_EMBEDDING_PROVIDER".to_string(),
                 reason: format!(
                     "Unknown provider: '{}'. Supported providers: ollama, openai, google",
                     unknown
@@ -468,23 +468,23 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_with_explicit_ollama() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
-        env::remove_var("EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
         env::remove_var("EMBEDDING_API_ENDPOINT");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
         // Test explicit Ollama configuration
-        env::set_var("EMBEDDING_PROVIDER", "ollama");
-        env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
         env::set_var("EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
 
         let result = create_provider_from_env().await;
 
         // Clean up env vars
-        env::remove_var("EMBEDDING_PROVIDER");
-        env::remove_var("EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
         env::remove_var("EMBEDDING_API_ENDPOINT");
 
         assert!(
@@ -500,18 +500,18 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_missing_openai_key() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
         // Set provider to openai without API key
-        env::set_var("EMBEDDING_PROVIDER", "openai");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
 
         let result = create_provider_from_env().await;
 
         // Clean up
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
 
         assert!(
             result.is_err(),
@@ -537,17 +537,17 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_unknown_provider() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
-        env::set_var("EMBEDDING_PROVIDER", "unknown-provider");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "unknown-provider");
 
         let result = create_provider_from_env().await;
 
         // Clean up
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
 
         assert!(result.is_err(), "Expected error for unknown provider");
         if let Err(err) = result {
@@ -573,18 +573,18 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_google_missing_project_id() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
         // Set provider but not project ID
-        env::set_var("EMBEDDING_PROVIDER", "google");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
 
         let result = create_provider_from_env().await;
 
         // Clean up
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
 
         assert!(
             result.is_err(),
@@ -614,19 +614,19 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_google_missing_credentials() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
         // Set provider and project ID but not credentials
-        env::set_var("EMBEDDING_PROVIDER", "google");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
         env::set_var("GOOGLE_PROJECT_ID", "test-project");
 
         let result = create_provider_from_env().await;
 
         // Clean up
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("GOOGLE_PROJECT_ID");
 
         assert!(
@@ -657,12 +657,12 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_google_credentials_file_not_found() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
-        env::set_var("EMBEDDING_PROVIDER", "google");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
         env::set_var("GOOGLE_PROJECT_ID", "test-project");
         env::set_var(
             "GOOGLE_APPLICATION_CREDENTIALS",
@@ -672,7 +672,7 @@ mod tests {
         let result = create_provider_from_env().await;
 
         // Clean up
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
 
@@ -853,7 +853,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_provider_no_config_no_ollama() {
         // Clean up all environment variables first
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
@@ -869,7 +869,7 @@ mod tests {
 
                 // Error should mention installation options
                 assert!(
-                    err_msg.contains("Ollama") || err_msg.contains("EMBEDDING_PROVIDER"),
+                    err_msg.contains("Ollama") || err_msg.contains("MAPROOM_EMBEDDING_PROVIDER"),
                     "Error message should provide helpful guidance: {}",
                     err_msg
                 );
@@ -884,12 +884,12 @@ mod tests {
     #[tokio::test]
     async fn test_provider_trait_object_compatibility() {
         // Test that factory returns a valid trait object
-        env::set_var("EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
 
         let result = create_provider_from_env().await;
 
         // Clean up
-        env::remove_var("EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
 
         if result.is_ok() {
             let provider: Box<dyn EmbeddingProvider> = result.unwrap();
@@ -913,10 +913,10 @@ mod tests {
         assert!(!err_msg.is_empty());
 
         let invalid_provider_error = ConfigError::InvalidValue {
-            field: "EMBEDDING_PROVIDER".to_string(),
+            field: "MAPROOM_EMBEDDING_PROVIDER".to_string(),
             reason: "Unknown provider".to_string(),
         };
         let err_msg = invalid_provider_error.to_string();
-        assert!(err_msg.contains("EMBEDDING_PROVIDER"));
+        assert!(err_msg.contains("MAPROOM_EMBEDDING_PROVIDER"));
     }
 }

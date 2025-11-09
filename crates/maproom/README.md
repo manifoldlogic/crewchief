@@ -95,14 +95,14 @@ See [Google Setup Guide](docs/providers/google-vertex-ai-setup.md)
 
 Maproom auto-detects your provider:
 
-1. Checks `EMBEDDING_PROVIDER` env var (explicit)
+1. Checks `MAPROOM_EMBEDDING_PROVIDER` env var (explicit)
 2. Detects Ollama on localhost:11434
 3. Falls back to OpenAI if `OPENAI_API_KEY` present
 4. Falls back to Google if `GOOGLE_PROJECT_ID` present
 
 ### Explicit Provider Selection
 ```bash
-export EMBEDDING_PROVIDER=ollama  # or openai, google
+export MAPROOM_EMBEDDING_PROVIDER=ollama  # or openai, google
 ```
 
 ### Mixed Embeddings

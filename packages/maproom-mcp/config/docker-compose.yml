@@ -96,22 +96,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # Note: Ollama dependency removed - only required if EMBEDDING_PROVIDER=ollama
+      # Note: Ollama dependency removed - only required if MAPROOM_EMBEDDING_PROVIDER=ollama
       # CLI ensures Ollama is started when needed via conditional service startup
     environment:
       MAPROOM_DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
       # Pass through provider from environment, default to ollama for zero-config
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      MAPROOM_EMBEDDING_PROVIDER: ${MAPROOM_EMBEDDING_PROVIDER:-ollama}
+      MAPROOM_EMBEDDING_MODEL: ${MAPROOM_EMBEDDING_MODEL:-nomic-embed-text}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
       # EMBEDDING_API_ENDPOINT: Provider-specific defaults handled by Rust (PROVFIX-4001)
       # Only set this if you need a custom endpoint for your provider
       EMBEDDING_API_ENDPOINT: ${EMBEDDING_API_ENDPOINT:-}
-      # Google Vertex AI configuration (when EMBEDDING_PROVIDER=google)
+      # Google Vertex AI configuration (when MAPROOM_EMBEDDING_PROVIDER=google)
       GOOGLE_PROJECT_ID: ${GOOGLE_PROJECT_ID:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       GOOGLE_VERTEX_REGION: ${GOOGLE_VERTEX_REGION:-us-west1}
-      # OpenAI configuration (when EMBEDDING_PROVIDER=openai)
+      # OpenAI configuration (when MAPROOM_EMBEDDING_PROVIDER=openai)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log

@@ -495,7 +495,7 @@ describe('Upsert Tool - Provider Integration', () => {
 
   it('should throw NO_PROVIDER error when no provider available', async () => {
     // Clear all provider configs
-    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
     delete process.env.OPENAI_API_KEY
     delete process.env.GOOGLE_PROJECT_ID
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS
@@ -515,7 +515,7 @@ describe('Upsert Tool - Provider Integration', () => {
   })
 
   it('should include helpful error message when provider unavailable', async () => {
-    delete process.env.EMBEDDING_PROVIDER
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
     delete process.env.OPENAI_API_KEY
     global.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'))
 

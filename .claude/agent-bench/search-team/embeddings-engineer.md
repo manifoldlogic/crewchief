@@ -140,7 +140,7 @@ Before marking complete, verify:
 
 ## Configuration
 - Load config from environment variables
-- Support EMBEDDING_MODEL, OPENAI_API_KEY, EMBEDDING_DIM, etc.
+- Support MAPROOM_EMBEDDING_MODEL, OPENAI_API_KEY, EMBEDDING_DIM, etc.
 - Use `.env` files (automatically copied to worktrees)
 - Never commit API keys to code
 

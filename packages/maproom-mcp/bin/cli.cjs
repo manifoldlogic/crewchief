@@ -90,7 +90,7 @@ function sanitizeDatabaseUrl(url) {
 
 /**
  * Log diagnostic information to stderr
- * Logs always appear when EMBEDDING_PROVIDER is not set OR when MAPROOM_MCP_DEBUG=true
+ * Logs always appear when MAPROOM_EMBEDDING_PROVIDER is not set OR when MAPROOM_MCP_DEBUG=true
  */
 function diagnosticLog(message, data) {
   if (DIAGNOSTIC_MODE || !process.env.MAPROOM_EMBEDDING_PROVIDER) {
@@ -104,7 +104,7 @@ function diagnosticLog(message, data) {
 
 // Log environment variables immediately on startup
 diagnosticLog('CLI Started', {
-  EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || '(not set)',
+  MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || '(not set)',
   GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID || '(not set)',
   GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || '(not set)',
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '(not set)',
@@ -189,8 +189,8 @@ function checkDockerDaemon() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
     EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
@@ -199,8 +199,8 @@ function checkDockerDaemon() {
     args: ['info'],
     cwd: process.cwd(),
     env: redactSensitive({
-      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+      MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
       EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
     })
   });
@@ -237,8 +237,8 @@ function checkDockerCompose() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
     EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
@@ -247,8 +247,8 @@ function checkDockerCompose() {
     args: ['compose', 'version'],
     cwd: process.cwd(),
     env: redactSensitive({
-      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+      MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
       EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
     })
   });
@@ -294,13 +294,13 @@ function setupConfigDirectory() {
 
   if (!needsUpdate && fs.existsSync(COMPOSE_FILE)) {
     const existingContent = fs.readFileSync(COMPOSE_FILE, 'utf-8');
-    // Check if file has old hardcoded EMBEDDING_PROVIDER (MCP-008 fix)
-    const hasHardcodedProvider = existingContent.includes('EMBEDDING_PROVIDER: ollama');
-    const hasEnvironmentVariable = existingContent.includes('${EMBEDDING_PROVIDER');
+    // Check if file has old hardcoded MAPROOM_EMBEDDING_PROVIDER (MCP-008 fix)
+    const hasHardcodedProvider = existingContent.includes('MAPROOM_EMBEDDING_PROVIDER: ollama');
+    const hasEnvironmentVariable = existingContent.includes('${MAPROOM_EMBEDDING_PROVIDER');
 
     if (hasHardcodedProvider && !hasEnvironmentVariable) {
       console.error('⚡ Detected outdated docker-compose.yml (pre-MCP-008)');
-      console.error('   Updating to support EMBEDDING_PROVIDER configuration...');
+      console.error('   Updating to support MAPROOM_EMBEDDING_PROVIDER configuration...');
       needsUpdate = true;
     }
   }
@@ -413,9 +413,9 @@ function copyRecursive(src, dest) {
  * Prevents silent failures where hardcoded values override user configuration
  *
  * This checks for outdated configs from before MCP-008 and MCP-011 that had:
- *   EMBEDDING_PROVIDER: ollama
+ *   MAPROOM_EMBEDDING_PROVIDER: ollama
  * Instead of the correct environment variable syntax:
- *   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+ *   MAPROOM_EMBEDDING_PROVIDER: ${MAPROOM_EMBEDDING_PROVIDER:-ollama}
  */
 function verifyDockerComposeConfig() {
   if (!fs.existsSync(COMPOSE_FILE)) {
@@ -426,21 +426,21 @@ function verifyDockerComposeConfig() {
   const content = fs.readFileSync(COMPOSE_FILE, 'utf-8');
 
   // Check for environment variable syntax (correct pattern)
-  const hasEnvVarSyntax = /\$\{EMBEDDING_PROVIDER[:\-]/.test(content);
+  const hasEnvVarSyntax = /\$\{MAPROOM_EMBEDDING_PROVIDER[:\-]/.test(content);
 
   // Check for hardcoded provider (incorrect pattern)
-  const hasHardcodedProvider = /EMBEDDING_PROVIDER:\s*['"]?ollama['"]?\s*$/m.test(content);
+  const hasHardcodedProvider = /MAPROOM_EMBEDDING_PROVIDER:\s*['"]?ollama['"]?\s*$/m.test(content);
 
   if (hasHardcodedProvider && !hasEnvVarSyntax) {
     console.error('');
-    console.error('❌ ERROR: docker-compose.yml contains hardcoded EMBEDDING_PROVIDER');
+    console.error('❌ ERROR: docker-compose.yml contains hardcoded MAPROOM_EMBEDDING_PROVIDER');
     console.error('   File:', COMPOSE_FILE);
     console.error('');
     console.error('   Your config file has:');
-    console.error('     EMBEDDING_PROVIDER: ollama');
+    console.error('     MAPROOM_EMBEDDING_PROVIDER: ollama');
     console.error('');
     console.error('   It should be:');
-    console.error('     EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}');
+    console.error('     MAPROOM_EMBEDDING_PROVIDER: ${MAPROOM_EMBEDDING_PROVIDER:-ollama}');
     console.error('');
     console.error('   This was fixed in MCP-011. Please update your config file or run:');
     console.error('     npx @crewchief/maproom-mcp setup');
@@ -464,8 +464,8 @@ function logDockerState() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
     EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
@@ -474,8 +474,8 @@ function logDockerState() {
     args: ['compose', 'ps', '--format', 'json'],
     cwd: CONFIG_DIR,
     env: redactSensitive({
-      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+      MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
       EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
     })
   });
@@ -570,7 +570,7 @@ async function ensureCleanState() {
 }
 
 /**
- * Determine which services to start based on EMBEDDING_PROVIDER
+ * Determine which services to start based on MAPROOM_EMBEDDING_PROVIDER
  */
 function getRequiredServices() {
   const provider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase();
@@ -627,8 +627,8 @@ function removeUnnecessaryServices(requiredServices) {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
     EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
@@ -640,8 +640,8 @@ function removeUnnecessaryServices(requiredServices) {
       args: ['compose', 'stop', service],
       cwd: CONFIG_DIR,
       env: redactSensitive({
-        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+        MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
         EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
       })
     });
@@ -665,8 +665,8 @@ function removeUnnecessaryServices(requiredServices) {
       args: ['compose', 'rm', '-f', service],
       cwd: CONFIG_DIR,
       env: redactSensitive({
-        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+        MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
         EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
       })
     });
@@ -710,8 +710,8 @@ function verifyFinalState(expectedServices) {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
     EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
@@ -799,8 +799,8 @@ async function startDockerCompose() {
     const env = {
       ...process.env,  // CRITICAL: Include all parent env vars FIRST
       // Ensure key vars are present with defaults
-      EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-      EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+      MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+      MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
       EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
     };
 
@@ -809,8 +809,8 @@ async function startDockerCompose() {
       args: args,
       cwd: CONFIG_DIR,
       env: redactSensitive({
-        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+        MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
         EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION,
         GOOGLE_PROJECT_ID: env.GOOGLE_PROJECT_ID,
         GOOGLE_APPLICATION_CREDENTIALS: env.GOOGLE_APPLICATION_CREDENTIALS,
@@ -905,8 +905,8 @@ async function waitForServicesHealthy() {
     const env = {
       ...process.env,  // CRITICAL: Include all parent env vars FIRST
       // Ensure key vars are present with defaults
-      EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-      EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+      MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+      MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
       EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
     };
 
@@ -915,8 +915,8 @@ async function waitForServicesHealthy() {
       args: ['compose', 'ps', '--format', 'json'],
       cwd: CONFIG_DIR,
       env: redactSensitive({
-        EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+        MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+        MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
         EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
       })
     });
@@ -1035,8 +1035,8 @@ function establishStdioProxy() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    MAPROOM_EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    MAPROOM_EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
     EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
@@ -1045,8 +1045,8 @@ function establishStdioProxy() {
     args: ['exec', '-i', 'maproom-mcp', 'node', '/app/dist/index.js'],
     cwd: process.cwd(),
     env: redactSensitive({
-      EMBEDDING_PROVIDER: env.EMBEDDING_PROVIDER,
-      EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+      MAPROOM_EMBEDDING_PROVIDER: env.MAPROOM_EMBEDDING_PROVIDER,
+      MAPROOM_EMBEDDING_MODEL: env.MAPROOM_EMBEDDING_MODEL,
       EMBEDDING_DIMENSION: env.EMBEDDING_DIMENSION
     })
   });
@@ -1112,7 +1112,7 @@ function validateProviderConfig(provider) {
 
   if (provider === 'google') {
     if (!process.env.GOOGLE_PROJECT_ID) {
-      console.error('❌ ERROR: EMBEDDING_PROVIDER=google requires GOOGLE_PROJECT_ID');
+      console.error('❌ ERROR: MAPROOM_EMBEDDING_PROVIDER=google requires GOOGLE_PROJECT_ID');
       console.error('   Check your .mcp.json configuration or set environment variable:');
       console.error('   export GOOGLE_PROJECT_ID=your-project-id');
       process.exit(1);
@@ -1127,7 +1127,7 @@ function validateProviderConfig(provider) {
     }
   } else if (provider === 'openai') {
     if (!process.env.OPENAI_API_KEY) {
-      console.error('❌ ERROR: EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY');
+      console.error('❌ ERROR: MAPROOM_EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY');
       console.error('   Check your .mcp.json configuration or set environment variable:');
       console.error('   export OPENAI_API_KEY=your-api-key');
       process.exit(1);
@@ -1306,7 +1306,7 @@ function showCompletionMessage(provider) {
           command: "npx",
           args: ["-y", "@crewchief/maproom-mcp"],
           env: {
-            EMBEDDING_PROVIDER: "openai",
+            MAPROOM_EMBEDDING_PROVIDER: "openai",
             OPENAI_API_KEY: "${OPENAI_API_KEY}"
           }
         }
@@ -1319,7 +1319,7 @@ function showCompletionMessage(provider) {
           command: "npx",
           args: ["-y", "@crewchief/maproom-mcp"],
           env: {
-            EMBEDDING_PROVIDER: "openai",
+            MAPROOM_EMBEDDING_PROVIDER: "openai",
             OPENAI_API_KEY: "${OPENAI_API_KEY}"
           }
         }
@@ -1335,7 +1335,7 @@ function showCompletionMessage(provider) {
           command: "npx",
           args: ["-y", "@crewchief/maproom-mcp"],
           env: {
-            EMBEDDING_PROVIDER: "google",
+            MAPROOM_EMBEDDING_PROVIDER: "google",
             GOOGLE_PROJECT_ID: "${GOOGLE_PROJECT_ID}",
             GOOGLE_APPLICATION_CREDENTIALS: "${GOOGLE_APPLICATION_CREDENTIALS}"
           }
@@ -1349,7 +1349,7 @@ function showCompletionMessage(provider) {
           command: "npx",
           args: ["-y", "@crewchief/maproom-mcp"],
           env: {
-            EMBEDDING_PROVIDER: "google",
+            MAPROOM_EMBEDDING_PROVIDER: "google",
             GOOGLE_PROJECT_ID: "${GOOGLE_PROJECT_ID}",
             GOOGLE_APPLICATION_CREDENTIALS: "${GOOGLE_APPLICATION_CREDENTIALS}"
           }
@@ -1385,9 +1385,9 @@ function showCompletionMessage(provider) {
   console.error('  1. Add config to your MCP file');
   console.error('  2. Restart your MCP client (Claude Code, Cursor)');
   console.error('  3. Index your codebase:');
-  console.error(`       EMBEDDING_PROVIDER=${provider} npx @crewchief/maproom-mcp scan /path/to/repo`);
+  console.error(`       MAPROOM_EMBEDDING_PROVIDER=${provider} npx @crewchief/maproom-mcp scan /path/to/repo`);
   console.error('  4. Keep index updated:');
-  console.error(`       EMBEDDING_PROVIDER=${provider} npx @crewchief/maproom-mcp watch /path/to/repo\n`);
+  console.error(`       MAPROOM_EMBEDDING_PROVIDER=${provider} npx @crewchief/maproom-mcp watch /path/to/repo\n`);
 }
 
 /**
@@ -1514,17 +1514,17 @@ async function runScan() {
 
   // Set provider-specific environment variables
   const providerEnv = {
-    EMBEDDING_PROVIDER: provider
+    MAPROOM_EMBEDDING_PROVIDER: provider
   };
 
   if (provider === 'openai') {
-    providerEnv.EMBEDDING_MODEL = 'text-embedding-3-small';
+    providerEnv.MAPROOM_EMBEDDING_MODEL = 'text-embedding-3-small';
     providerEnv.EMBEDDING_DIMENSION = '1536';
   } else if (provider === 'google') {
-    providerEnv.EMBEDDING_MODEL = 'text-embedding-004';
+    providerEnv.MAPROOM_EMBEDDING_MODEL = 'text-embedding-004';
     providerEnv.EMBEDDING_DIMENSION = '768';
   } else if (provider === 'ollama') {
-    providerEnv.EMBEDDING_MODEL = 'nomic-embed-text';
+    providerEnv.MAPROOM_EMBEDDING_MODEL = 'nomic-embed-text';
     providerEnv.EMBEDDING_DIMENSION = '768';
     providerEnv.EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
   }
@@ -1561,8 +1561,8 @@ async function runScan() {
 
   // Debug: Show embedding environment variables
   console.error('🔍 [DEBUG] Embedding environment variables being passed:');
-  console.error(`   EMBEDDING_PROVIDER: ${env.EMBEDDING_PROVIDER}`);
-  console.error(`   EMBEDDING_MODEL: ${env.EMBEDDING_MODEL}`);
+  console.error(`   MAPROOM_EMBEDDING_PROVIDER: ${env.MAPROOM_EMBEDDING_PROVIDER}`);
+  console.error(`   MAPROOM_EMBEDDING_MODEL: ${env.MAPROOM_EMBEDDING_MODEL}`);
   console.error(`   EMBEDDING_DIMENSION: ${env.EMBEDDING_DIMENSION}`);
   console.error(`   EMBEDDING_API_ENDPOINT: ${env.EMBEDDING_API_ENDPOINT || '(not set)'}`);
   console.error(`   MAPROOM_DATABASE_URL: ${sanitizeDatabaseUrl(env.MAPROOM_DATABASE_URL)}`);
@@ -1678,17 +1678,17 @@ async function upsertFiles(rootPath, repoInfo, provider, files) {
 
   // Set provider-specific environment variables
   const providerEnv = {
-    EMBEDDING_PROVIDER: provider
+    MAPROOM_EMBEDDING_PROVIDER: provider
   };
 
   if (provider === 'openai') {
-    providerEnv.EMBEDDING_MODEL = 'text-embedding-3-small';
+    providerEnv.MAPROOM_EMBEDDING_MODEL = 'text-embedding-3-small';
     providerEnv.EMBEDDING_DIMENSION = '1536';
   } else if (provider === 'google') {
-    providerEnv.EMBEDDING_MODEL = 'text-embedding-004';
+    providerEnv.MAPROOM_EMBEDDING_MODEL = 'text-embedding-004';
     providerEnv.EMBEDDING_DIMENSION = '768';
   } else if (provider === 'ollama') {
-    providerEnv.EMBEDDING_MODEL = 'nomic-embed-text';
+    providerEnv.MAPROOM_EMBEDDING_MODEL = 'nomic-embed-text';
     providerEnv.EMBEDDING_DIMENSION = '768';
     providerEnv.EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
   }
@@ -1785,7 +1785,7 @@ async function runSetup() {
   // Copy configs
   setupConfigDirectory();
 
-  // Start Docker Compose (respects EMBEDDING_PROVIDER)
+  // Start Docker Compose (respects MAPROOM_EMBEDDING_PROVIDER)
   await startDockerCompose();
 
   // Wait for services

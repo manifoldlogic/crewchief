@@ -78,8 +78,8 @@ async fn get_test_providers() -> Vec<(&'static str, Arc<dyn EmbeddingProvider>)>
 
     // Ollama (requires running instance at localhost:11434)
     if std::env::var("TEST_OLLAMA").is_ok() {
-        std::env::set_var("EMBEDDING_PROVIDER", "ollama");
-        std::env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
+        std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        std::env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
         std::env::set_var("EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
 
         match create_provider_from_env().await {
@@ -95,7 +95,7 @@ async fn get_test_providers() -> Vec<(&'static str, Arc<dyn EmbeddingProvider>)>
 
     // OpenAI (requires API key)
     if std::env::var("OPENAI_API_KEY").is_ok() {
-        std::env::set_var("EMBEDDING_PROVIDER", "openai");
+        std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
 
         match create_provider_from_env().await {
             Ok(provider) => {
@@ -112,7 +112,7 @@ async fn get_test_providers() -> Vec<(&'static str, Arc<dyn EmbeddingProvider>)>
     if std::env::var("GOOGLE_PROJECT_ID").is_ok()
         && std::env::var("GOOGLE_APPLICATION_CREDENTIALS").is_ok()
     {
-        std::env::set_var("EMBEDDING_PROVIDER", "google");
+        std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
 
         match create_provider_from_env().await {
             Ok(provider) => {
@@ -521,7 +521,7 @@ mod contract_tests {
 
         for (expected_name, env_var) in test_cases {
             if std::env::var(env_var).is_ok() {
-                std::env::set_var("EMBEDDING_PROVIDER", expected_name);
+                std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", expected_name);
 
                 match create_provider_from_env().await {
                     Ok(provider) => {

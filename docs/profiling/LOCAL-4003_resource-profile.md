@@ -476,8 +476,8 @@ services:
     build: packages/maproom-mcp/Dockerfile.mcp-server
     environment:
       DATABASE_URL: postgresql://maproom:maproom@postgres:5432/maproom
-      EMBEDDING_PROVIDER: ollama
-      EMBEDDING_MODEL: nomic-embed-text
+      MAPROOM_EMBEDDING_PROVIDER: ollama
+      MAPROOM_EMBEDDING_MODEL: nomic-embed-text
       EMBEDDING_API_ENDPOINT: http://ollama:11434
     depends_on:
       - postgres

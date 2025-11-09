@@ -569,13 +569,13 @@ Maproom supports **multiple providers simultaneously** using different embedding
 
 **Phase 1: Development (Ollama)**
 ```bash
-export EMBEDDING_PROVIDER="ollama"
+export MAPROOM_EMBEDDING_PROVIDER="ollama"
 crewchief maproom scan  # Generates 768-dim embeddings in embedding_nomic column
 ```
 
 **Phase 2: Production (OpenAI or Google)**
 ```bash
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 crewchief maproom scan  # Generates 1536-dim embeddings in embedding_openai column
 # Both embeddings coexist; search uses COALESCE logic
 ```
@@ -592,26 +592,26 @@ crewchief maproom scan  # Generates 1536-dim embeddings in embedding_openai colu
 **Generate embeddings with multiple providers**:
 ```bash
 # Generate Ollama embeddings
-export EMBEDDING_PROVIDER="ollama"
+export MAPROOM_EMBEDDING_PROVIDER="ollama"
 crewchief maproom scan
 
 # Generate OpenAI embeddings
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 crewchief maproom scan
 
 # Generate Google embeddings
-export EMBEDDING_PROVIDER="google"
+export MAPROOM_EMBEDDING_PROVIDER="google"
 crewchief maproom scan
 ```
 
 **Compare search quality**:
 ```bash
 # Search with Ollama
-export EMBEDDING_PROVIDER="ollama"
+export MAPROOM_EMBEDDING_PROVIDER="ollama"
 crewchief maproom search "authentication flow"
 
 # Search with OpenAI
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 crewchief maproom search "authentication flow"
 ```
 
@@ -627,10 +627,10 @@ crewchief maproom search "authentication flow"
 **Keep existing embeddings while migrating**:
 ```bash
 # Existing production: OpenAI (1536-dim)
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 
 # Migrate to Google incrementally
-export EMBEDDING_PROVIDER="google"
+export MAPROOM_EMBEDDING_PROVIDER="google"
 crewchief maproom scan --incremental  # Only new/changed files
 
 # Old searches still work (COALESCE falls back to openai column)
@@ -832,14 +832,14 @@ Differences are usually minor (<10% relevance delta). Choose based on cost/priva
 
 ### Can I use multiple providers simultaneously?
 
-**Yes!** Set `EMBEDDING_PROVIDER` to different values for different indexing runs. Example:
+**Yes!** Set `MAPROOM_EMBEDDING_PROVIDER` to different values for different indexing runs. Example:
 ```bash
 # Development: Use Ollama
-export EMBEDDING_PROVIDER="ollama"
+export MAPROOM_EMBEDDING_PROVIDER="ollama"
 crewchief maproom scan --worktree dev-branch
 
 # Production: Use Google
-export EMBEDDING_PROVIDER="google"
+export MAPROOM_EMBEDDING_PROVIDER="google"
 crewchief maproom scan --worktree main
 ```
 

@@ -345,8 +345,8 @@ export interface EmbeddingConfig {
 
 export function loadEmbeddingConfig(): EmbeddingConfig {
   return {
-    model: (process.env.EMBEDDING_MODEL as any) || 'openai',
-    openaiModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
+    model: (process.env.MAPROOM_EMBEDDING_MODEL as any) || 'openai',
+    openaiModel: process.env.OPENAI_MAPROOM_EMBEDDING_MODEL || 'text-embedding-3-large',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     dimension: parseInt(process.env.EMBEDDING_DIM || '1536'),
     batchSize: parseInt(process.env.EMBEDDING_BATCH_SIZE || '20'),

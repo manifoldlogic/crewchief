@@ -1930,7 +1930,7 @@ VACUUM ANALYZE code_embeddings;
 # .env
 DATABASE_URL=postgresql://user:pass@localhost/code_search
 OPENAI_API_KEY=sk-...
-EMBEDDING_MODEL=text-embedding-3-small
+MAPROOM_EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSIONS=1536
 MAX_CHUNK_SIZE=512
 ```

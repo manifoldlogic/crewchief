@@ -93,7 +93,7 @@ echo "Step 15: Testing MCP server with database connection..."
 timeout 5 docker run --rm -i \
   --network maproom-test-network \
   -e MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-test-postgres:5432/maproom \
-  -e EMBEDDING_PROVIDER=ollama \
+  -e MAPROOM_EMBEDDING_PROVIDER=ollama \
   -e LOG_LEVEL=info \
   maproom-test:local <<EOF || true
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}

@@ -46,7 +46,7 @@ curl http://localhost:11434/api/tags
 # Should return JSON with available models
 
 # 3. Set provider (auto-detected if Ollama is running)
-export EMBEDDING_PROVIDER=ollama
+export MAPROOM_EMBEDDING_PROVIDER=ollama
 
 # 4. Scan for missing embeddings
 crewchief maproom scan --generate-embeddings
@@ -96,7 +96,7 @@ psql -h localhost -U postgres crewchief -c "
 "
 
 # 3. Configure Ollama provider
-export EMBEDDING_PROVIDER=ollama
+export MAPROOM_EMBEDDING_PROVIDER=ollama
 
 # 4. Re-index with Ollama
 crewchief maproom scan --generate-embeddings
@@ -143,7 +143,7 @@ psql -h localhost -U postgres crewchief -c "VACUUM FULL chunks;"
 
 ```bash
 # 1. Switch to Ollama for new embeddings
-export EMBEDDING_PROVIDER=ollama
+export MAPROOM_EMBEDDING_PROVIDER=ollama
 
 # 2. Continue normal development workflow
 # - OpenAI embeddings continue working for existing code
@@ -200,11 +200,11 @@ psql -h localhost -U postgres crewchief -c "
 
 ```bash
 # 1. Index with OpenAI (if not already done)
-export EMBEDDING_PROVIDER=openai
+export MAPROOM_EMBEDDING_PROVIDER=openai
 crewchief maproom scan --generate-embeddings
 
 # 2. Index with Ollama (adds to existing, doesn't replace)
-export EMBEDDING_PROVIDER=ollama
+export MAPROOM_EMBEDDING_PROVIDER=ollama
 crewchief maproom scan --generate-embeddings
 
 # 3. Verify both embeddings exist
@@ -254,7 +254,7 @@ psql -h localhost -U postgres crewchief -c "
 
 ```bash
 # 1. Choose cloud provider
-export EMBEDDING_PROVIDER=openai  # or "google"
+export MAPROOM_EMBEDDING_PROVIDER=openai  # or "google"
 
 # 2. Configure credentials
 export OPENAI_API_KEY="sk-..."  # for OpenAI
@@ -401,7 +401,7 @@ psql -h localhost -U postgres crewchief < /tmp/crewchief-backup-20251029.sql
 psql -h localhost -U postgres crewchief -c "SELECT COUNT(*) FROM chunks;"
 
 # 4. Switch back to original provider
-export EMBEDDING_PROVIDER=openai
+export MAPROOM_EMBEDDING_PROVIDER=openai
 
 # 5. Restart Maproom
 crewchief maproom scan
@@ -420,7 +420,7 @@ psql -h localhost -U postgres crewchief -c "
 "
 
 # Switch back to OpenAI
-export EMBEDDING_PROVIDER=openai
+export MAPROOM_EMBEDDING_PROVIDER=openai
 
 # Verify search works
 crewchief maproom search "test query"
@@ -430,7 +430,7 @@ crewchief maproom search "test query"
 
 ```bash
 # Simply switch back - existing embeddings still work
-export EMBEDDING_PROVIDER=openai
+export MAPROOM_EMBEDDING_PROVIDER=openai
 
 # No data loss - OpenAI embeddings were preserved
 crewchief maproom search "test query"
@@ -512,7 +512,7 @@ A:
 
 **Q: What if I need to go back to OpenAI later?**
 
-A: Simply set `EMBEDDING_PROVIDER=openai` and scan. Your OpenAI embeddings are preserved unless explicitly deleted. No data loss occurs during provider switches.
+A: Simply set `MAPROOM_EMBEDDING_PROVIDER=openai` and scan. Your OpenAI embeddings are preserved unless explicitly deleted. No data loss occurs during provider switches.
 
 **Q: Do I need to re-index when switching between Ollama and Google?**
 
@@ -520,7 +520,7 @@ A: **No!** Both use 768 dimensions and share the same database columns. Just swi
 
 ```bash
 # From Ollama to Google (or vice versa)
-export EMBEDDING_PROVIDER=google
+export MAPROOM_EMBEDDING_PROVIDER=google
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 
 # Embeddings stored in same columns, seamless transition
@@ -735,7 +735,7 @@ psql -h localhost -U postgres crewchief -c "
 **Solution**:
 ```bash
 # Rollback to original provider temporarily
-export EMBEDDING_PROVIDER=openai
+export MAPROOM_EMBEDDING_PROVIDER=openai
 
 # Run side-by-side comparison
 crewchief maproom search "query" --provider openai > results-openai.txt

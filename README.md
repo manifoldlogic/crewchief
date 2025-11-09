@@ -198,16 +198,16 @@ Configure your embedding provider in `.env`:
 
 **Option 1: Ollama (Local, Free, Default)**
 ```bash
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_MODEL=nomic-embed-text
+MAPROOM_EMBEDDING_PROVIDER=ollama
+MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 EMBEDDING_DIMENSION=768
 ```
 
 **Option 2: OpenAI (Cloud, Requires API Key)**
 ```bash
-EMBEDDING_PROVIDER=openai
+MAPROOM_EMBEDDING_PROVIDER=openai
 OPENAI_API_KEY=your-key-here
-EMBEDDING_MODEL=text-embedding-3-small
+MAPROOM_EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSION=1536
 ```
 

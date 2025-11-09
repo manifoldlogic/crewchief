@@ -277,12 +277,12 @@ async fn test_factory_auto_detects_ollama() {
     // In real scenarios, if Ollama is running, it will be detected
 
     // Instead, test explicit Ollama configuration
-    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
     std::env::set_var(
         "EMBEDDING_API_ENDPOINT",
         format!("{}/api/embed", mock_server.uri()),
     );
-    std::env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
+    std::env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
 
     let provider = create_provider_from_env()
         .await
@@ -300,20 +300,20 @@ async fn test_factory_auto_detects_ollama() {
     );
 
     // Cleanup
-    std::env::remove_var("EMBEDDING_PROVIDER");
+    std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     std::env::remove_var("EMBEDDING_API_ENDPOINT");
-    std::env::remove_var("EMBEDDING_MODEL");
+    std::env::remove_var("MAPROOM_EMBEDDING_MODEL");
 }
 
 /// Factory test: Explicit config overrides auto-detection.
 ///
-/// When EMBEDDING_PROVIDER is explicitly set, it should be used even
+/// When MAPROOM_EMBEDDING_PROVIDER is explicitly set, it should be used even
 /// if Ollama is available for auto-detection.
 #[tokio::test]
 #[serial]
 async fn test_factory_explicit_config_overrides_auto_detection() {
     // Set explicit OpenAI configuration
-    std::env::set_var("EMBEDDING_PROVIDER", "openai");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
     std::env::set_var("OPENAI_API_KEY", "test-key-12345");
 
     let provider = create_provider_from_env()
@@ -332,7 +332,7 @@ async fn test_factory_explicit_config_overrides_auto_detection() {
     );
 
     // Cleanup
-    std::env::remove_var("EMBEDDING_PROVIDER");
+    std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     std::env::remove_var("OPENAI_API_KEY");
 }
 
@@ -347,20 +347,20 @@ async fn test_factory_case_insensitive_provider_names() {
     std::env::remove_var("OPENAI_API_KEY");
 
     // Test uppercase
-    std::env::set_var("EMBEDDING_PROVIDER", "OLLAMA");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "OLLAMA");
     let provider = create_provider_from_env()
         .await
         .expect("Uppercase OLLAMA should work");
     assert_eq!(provider.provider_name(), "ollama");
-    std::env::remove_var("EMBEDDING_PROVIDER");
+    std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
 
     // Test mixed case
-    std::env::set_var("EMBEDDING_PROVIDER", "Ollama");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "Ollama");
     let provider = create_provider_from_env()
         .await
         .expect("Mixed case Ollama should work");
     assert_eq!(provider.provider_name(), "ollama");
-    std::env::remove_var("EMBEDDING_PROVIDER");
+    std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
 }
 
 // ============================================================================
@@ -376,7 +376,7 @@ async fn test_factory_case_insensitive_provider_names() {
 #[serial]
 async fn test_provider_swap() {
     // Test swapping from OpenAI to Ollama
-    std::env::set_var("EMBEDDING_PROVIDER", "openai");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
     std::env::set_var("OPENAI_API_KEY", "test-key");
 
     let provider1 = create_provider_from_env()
@@ -396,12 +396,12 @@ async fn test_provider_swap() {
         .mount(&mock_server)
         .await;
 
-    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
     std::env::set_var(
         "EMBEDDING_API_ENDPOINT",
         format!("{}/api/embed", mock_server.uri()),
     );
-    std::env::set_var("EMBEDDING_MODEL", "nomic-embed-text");
+    std::env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
     std::env::remove_var("OPENAI_API_KEY");
 
     let provider2 = create_provider_from_env()
@@ -423,9 +423,9 @@ async fn test_provider_swap() {
     );
 
     // Cleanup
-    std::env::remove_var("EMBEDDING_PROVIDER");
+    std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     std::env::remove_var("EMBEDDING_API_ENDPOINT");
-    std::env::remove_var("EMBEDDING_MODEL");
+    std::env::remove_var("MAPROOM_EMBEDDING_MODEL");
 }
 
 /// Integration test: Different providers can be used interchangeably via trait object.
@@ -880,7 +880,7 @@ async fn integration_test_openai_real() {
 #[ignore = "requires both Ollama and OpenAI available"]
 async fn integration_test_provider_switching() {
     // Start with Ollama
-    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
     let provider1 = create_provider_from_env()
         .await
         .expect("Should create Ollama provider");
@@ -892,7 +892,7 @@ async fn integration_test_provider_switching() {
     assert_eq!(embedding1.len(), 768);
 
     // Switch to OpenAI
-    std::env::set_var("EMBEDDING_PROVIDER", "openai");
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
     std::env::set_var(
         "OPENAI_API_KEY",
         std::env::var("OPENAI_API_KEY").expect("Need OPENAI_API_KEY"),
@@ -909,6 +909,6 @@ async fn integration_test_provider_switching() {
     assert_eq!(embedding2.len(), 1536);
 
     // Cleanup
-    std::env::remove_var("EMBEDDING_PROVIDER");
+    std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     std::env::remove_var("OPENAI_API_KEY");
 }

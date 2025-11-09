@@ -341,7 +341,7 @@ async fn test_e2e_ollama_scan_and_search() -> Result<()> {
         create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Setup Ollama provider
-    env::set_var("EMBEDDING_PROVIDER", "ollama");
+    env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
     let provider = create_provider_from_env().await?;
     assert_eq!(
         provider.dimension(),
@@ -490,7 +490,7 @@ async fn test_e2e_google_scan_and_search() -> Result<()> {
         create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Setup Google provider
-    env::set_var("EMBEDDING_PROVIDER", "google");
+    env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
     let provider = create_provider_from_env().await?;
     assert_eq!(
         provider.dimension(),
@@ -634,7 +634,7 @@ async fn test_e2e_openai_scan_and_search() -> Result<()> {
         create_test_chunks(&client, repo_id, worktree_id, file_id, &test_content).await?;
 
     // Setup OpenAI provider
-    env::set_var("EMBEDDING_PROVIDER", "openai");
+    env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
     let provider = create_provider_from_env().await?;
     assert_eq!(
         provider.dimension(),
@@ -769,7 +769,7 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
 
     // Step 1: Generate OpenAI embeddings for first chunk
     println!("\n--- Step 1: Generate OpenAI embeddings ---");
-    env::set_var("EMBEDDING_PROVIDER", "openai");
+    env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
     let openai_provider = create_provider_from_env().await?;
     assert_eq!(openai_provider.dimension(), 1536);
 
@@ -778,7 +778,7 @@ async fn test_e2e_mixed_embeddings_workflow() -> Result<()> {
 
     // Step 2: Generate Ollama embeddings for second chunk
     println!("\n--- Step 2: Generate Ollama embeddings ---");
-    env::set_var("EMBEDDING_PROVIDER", "ollama");
+    env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
     let ollama_provider = create_provider_from_env().await?;
     assert_eq!(ollama_provider.dimension(), 768);
 

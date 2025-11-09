@@ -256,7 +256,7 @@ If you want to explicitly set Ollama as your provider:
 
 ```bash
 # Add to ~/.bashrc (update the path if your shell uses a different startup file)
-export EMBEDDING_PROVIDER=ollama
+export MAPROOM_EMBEDDING_PROVIDER=ollama
 ```
 
 **Apply changes:**
@@ -268,7 +268,7 @@ source ~/.bashrc
 
 ```bash
 # Check environment variable
-echo $EMBEDDING_PROVIDER
+echo $MAPROOM_EMBEDDING_PROVIDER
 # Expected output: ollama (or empty if using auto-detection)
 
 # Test Ollama connection
@@ -759,7 +759,7 @@ If you're migrating from Google Vertex AI or OpenAI to Ollama:
 2. **Re-index your codebase**:
    ```bash
    # Set provider to Ollama
-   export EMBEDDING_PROVIDER=ollama
+   export MAPROOM_EMBEDDING_PROVIDER=ollama
 
    # Clear old embeddings and re-index
    crewchief maproom scan --generate-embeddings --force
@@ -819,7 +819,7 @@ ollama list                           # List installed models
 ollama show nomic-embed-text          # Model details
 
 # Configuration
-export EMBEDDING_PROVIDER=ollama      # Set provider
+export MAPROOM_EMBEDDING_PROVIDER=ollama      # Set provider
 export OLLAMA_MODEL=nomic-embed-text  # Set model
 
 # Indexing

@@ -262,7 +262,7 @@ export GOOGLE_PROJECT_ID="your-project-id"
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcp/maproom-sa-key.json"
 
 # Required: Set Google as the embedding provider
-export EMBEDDING_PROVIDER="google"
+export MAPROOM_EMBEDDING_PROVIDER="google"
 
 # Optional: Regional endpoint (default: us-central1)
 export GOOGLE_VERTEX_REGION="us-central1"
@@ -274,7 +274,7 @@ Add these to your shell profile to persist across sessions (example shows Bash `
 ```bash
 echo 'export GOOGLE_PROJECT_ID="your-project-id"' >> ~/.bashrc
 echo 'export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcp/maproom-sa-key.json"' >> ~/.bashrc
-echo 'export EMBEDDING_PROVIDER="google"' >> ~/.bashrc
+echo 'export MAPROOM_EMBEDDING_PROVIDER="google"' >> ~/.bashrc
 echo 'export GOOGLE_VERTEX_REGION="us-central1"' >> ~/.bashrc
 
 # Reload shell configuration
@@ -289,7 +289,7 @@ For project-specific configuration, create a `.env` file in your project root:
 # .env file
 GOOGLE_PROJECT_ID=your-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/home/youruser/.config/gcp/maproom-sa-key.json
-EMBEDDING_PROVIDER=google
+MAPROOM_EMBEDDING_PROVIDER=google
 GOOGLE_VERTEX_REGION=us-central1
 ```
 
@@ -316,7 +316,7 @@ For containerized deployments:
 # Dockerfile
 ENV GOOGLE_PROJECT_ID=your-project-id
 ENV GOOGLE_APPLICATION_CREDENTIALS=/config/gcp/maproom-sa-key.json
-ENV EMBEDDING_PROVIDER=google
+ENV MAPROOM_EMBEDDING_PROVIDER=google
 ENV GOOGLE_VERTEX_REGION=us-central1
 
 # Mount the key file as a secret volume
@@ -331,7 +331,7 @@ services:
     environment:
       - GOOGLE_PROJECT_ID=your-project-id
       - GOOGLE_APPLICATION_CREDENTIALS=/config/gcp/maproom-sa-key.json
-      - EMBEDDING_PROVIDER=google
+      - MAPROOM_EMBEDDING_PROVIDER=google
       - GOOGLE_VERTEX_REGION=us-central1
     volumes:
       - ~/.config/gcp/maproom-sa-key.json:/config/gcp/maproom-sa-key.json:ro
@@ -1058,7 +1058,7 @@ gcloud iam service-accounts keys create ~/.config/gcp/maproom-sa-key.json \
 # Set environment variables
 export GOOGLE_PROJECT_ID="your-project-id"
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcp/maproom-sa-key.json"
-export EMBEDDING_PROVIDER="google"
+export MAPROOM_EMBEDDING_PROVIDER="google"
 export GOOGLE_VERTEX_REGION="us-central1"
 
 # Test setup
@@ -1071,7 +1071,7 @@ crewchief maproom scan --dry-run
 |----------|----------|---------|-------------|
 | `GOOGLE_PROJECT_ID` | ✅ Yes | None | Your GCP project ID |
 | `GOOGLE_APPLICATION_CREDENTIALS` | ✅ Yes | None | Path to service account JSON key |
-| `EMBEDDING_PROVIDER` | ✅ Yes | None | Must be set to `google` |
+| `MAPROOM_EMBEDDING_PROVIDER` | ✅ Yes | None | Must be set to `google` |
 | `GOOGLE_VERTEX_REGION` | ❌ No | `us-central1` | Vertex AI region endpoint |
 
 ### IAM Roles Reference

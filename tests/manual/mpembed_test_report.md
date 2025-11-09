@@ -322,8 +322,8 @@ The multi-provider embedding system has completed all automated testing phases s
    - **Workaround:** Documented in migration guide
 
 3. **Provider Detection:** Auto-detection happens in fixed order
-   - Order: EMBEDDING_PROVIDER env → Ollama → OpenAI → Google
-   - **Impact:** Users must explicitly set EMBEDDING_PROVIDER to override
+   - Order: MAPROOM_EMBEDDING_PROVIDER env → Ollama → OpenAI → Google
+   - **Impact:** Users must explicitly set MAPROOM_EMBEDDING_PROVIDER to override
    - **Workaround:** Documented in setup guides
 
 ### 6.2 Manual Testing Gaps

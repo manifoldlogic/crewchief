@@ -2,7 +2,7 @@
  * Embedding provider auto-detection and configuration
  *
  * Detects available embedding providers with the following priority:
- * 1. EMBEDDING_PROVIDER env var (explicit override)
+ * 1. MAPROOM_EMBEDDING_PROVIDER env var (explicit override)
  * 2. Ollama (if running on localhost:11434)
  * 3. OpenAI (if OPENAI_API_KEY set)
  * 4. Google Vertex AI (if GOOGLE_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS set)
@@ -18,7 +18,7 @@ export interface ProviderConfig {
  * Detect available embedding provider
  *
  * Priority:
- * 1. EMBEDDING_PROVIDER env var (explicit override)
+ * 1. MAPROOM_EMBEDDING_PROVIDER env var (explicit override)
  * 2. Ollama (if running on localhost:11434)
  * 3. OpenAI (if OPENAI_API_KEY set)
  * 4. Google (if GOOGLE_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS set)
@@ -71,7 +71,7 @@ export async function detectProvider(): Promise<ProviderConfig> {
     '  1. Install Ollama: https://ollama.ai (zero-config)\n' +
     '  2. Set OPENAI_API_KEY environment variable\n' +
     '  3. Configure Google Vertex AI (see docs/providers/google-vertex-ai-setup.md)\n' +
-    '  4. Set EMBEDDING_PROVIDER explicitly (ollama|openai|google)'
+    '  4. Set MAPROOM_EMBEDDING_PROVIDER explicitly (ollama|openai|google)'
   )
 }
 
@@ -121,7 +121,7 @@ export async function isOllamaAvailable(): Promise<boolean> {
 /**
  * Validate and return explicit provider configuration
  *
- * @param provider - Provider name from EMBEDDING_PROVIDER env var
+ * @param provider - Provider name from MAPROOM_EMBEDDING_PROVIDER env var
  * @returns Provider configuration
  * @throws Error if provider is invalid or required env vars missing
  */
@@ -135,7 +135,7 @@ export function validateExplicitProvider(provider: string): ProviderConfig {
     case 'openai':
       if (!process.env.OPENAI_API_KEY) {
         throw new Error(
-          'EMBEDDING_PROVIDER set to "openai" but OPENAI_API_KEY not found. ' +
+          'MAPROOM_EMBEDDING_PROVIDER set to "openai" but OPENAI_API_KEY not found. ' +
           'Set OPENAI_API_KEY or use a different provider.'
         )
       }
@@ -144,13 +144,13 @@ export function validateExplicitProvider(provider: string): ProviderConfig {
     case 'google':
       if (!process.env.GOOGLE_PROJECT_ID) {
         throw new Error(
-          'EMBEDDING_PROVIDER set to "google" but GOOGLE_PROJECT_ID not found. ' +
+          'MAPROOM_EMBEDDING_PROVIDER set to "google" but GOOGLE_PROJECT_ID not found. ' +
           'See docs/providers/google-vertex-ai-setup.md for setup instructions.'
         )
       }
       if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
         throw new Error(
-          'EMBEDDING_PROVIDER set to "google" but GOOGLE_APPLICATION_CREDENTIALS not found. ' +
+          'MAPROOM_EMBEDDING_PROVIDER set to "google" but GOOGLE_APPLICATION_CREDENTIALS not found. ' +
           'See docs/providers/google-vertex-ai-setup.md for setup instructions.'
         )
       }

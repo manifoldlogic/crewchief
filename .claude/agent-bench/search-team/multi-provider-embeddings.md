@@ -63,7 +63,7 @@ Implement and maintain Maproom's multi-provider embedding architecture that inte
    - Test migrations on devcontainer PostgreSQL first
 
 2. **Provider Detection Logic**
-   - Read EMBEDDING_PROVIDER environment variable (default: "ollama")
+   - Read MAPROOM_EMBEDDING_PROVIDER environment variable (default: "ollama")
    - Validate provider configuration completeness:
      - Ollama: EMBEDDING_API_ENDPOINT required
      - Google: GOOGLE_PROJECT_ID, GOOGLE_LOCATION required

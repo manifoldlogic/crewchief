@@ -91,7 +91,7 @@ enum Commands {
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
         embedding_batch_size: usize,
-        /// Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
+        /// Embedding provider: ollama, openai, or google (overrides MAPROOM_EMBEDDING_PROVIDER env var)
         #[arg(long, value_parser = validate_provider)]
         provider: Option<String>,
         /// Show detailed output (currently same as default, reserved for future enhancements)
@@ -117,7 +117,7 @@ enum Commands {
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
         embedding_batch_size: usize,
-        /// Embedding provider: ollama, openai, or google (overrides EMBEDDING_PROVIDER env var)
+        /// Embedding provider: ollama, openai, or google (overrides MAPROOM_EMBEDDING_PROVIDER env var)
         #[arg(long, value_parser = validate_provider)]
         provider: Option<String>,
     },
@@ -249,7 +249,7 @@ enum DbCommand {
 /// # Arguments
 ///
 /// * `batch_size` - Number of chunks to process per batch
-/// * `provider` - Optional provider name (overrides EMBEDDING_PROVIDER env var)
+/// * `provider` - Optional provider name (overrides MAPROOM_EMBEDDING_PROVIDER env var)
 async fn auto_generate_embeddings(
     batch_size: usize,
     provider: Option<String>,
@@ -262,7 +262,7 @@ async fn auto_generate_embeddings(
     // Set provider in environment if specified via CLI (overrides env var)
     if let Some(ref provider_name) = provider {
         tracing::info!("Using provider from CLI flag: {}", provider_name);
-        std::env::set_var("EMBEDDING_PROVIDER", provider_name);
+        std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", provider_name);
     } else {
         let env_provider =
             std::env::var("MAPROOM_EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
@@ -285,7 +285,7 @@ async fn auto_generate_embeddings(
                 // Try to detect if Ollama is configured
                 tracing::warn!("Embedding service unavailable: {}", e);
                 return Err(anyhow::anyhow!(
-                    "Embedding service not available. Configure EMBEDDING_PROVIDER (openai/ollama/google) and API keys in .env file."
+                    "Embedding service not available. Configure MAPROOM_EMBEDDING_PROVIDER (openai/ollama/google) and API keys in .env file."
                 ));
             }
             return Err(e.into());

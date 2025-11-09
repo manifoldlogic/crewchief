@@ -77,7 +77,7 @@ impl EmbeddingService {
     /// use crewchief_maproom::embedding::service::EmbeddingService;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// // Auto-detect provider (prefers Ollama, falls back to EMBEDDING_PROVIDER)
+    /// // Auto-detect provider (prefers Ollama, falls back to MAPROOM_EMBEDDING_PROVIDER)
     /// let service = EmbeddingService::from_env().await?;
     /// println!("Using provider: {}", service.provider_name());
     /// # Ok(())

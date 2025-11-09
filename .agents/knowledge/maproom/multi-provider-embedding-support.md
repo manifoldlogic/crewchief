@@ -67,25 +67,25 @@ idx_chunks_text_vec ivfflat (text_embedding vector_cosine_ops)
 
 ```bash
 # Provider selection (default: ollama)
-EMBEDDING_PROVIDER=ollama   # or: google, openai
+MAPROOM_EMBEDDING_PROVIDER=ollama   # or: google, openai
 
 # Ollama configuration
-EMBEDDING_MODEL=nomic-embed-text
+MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 EMBEDDING_DIMENSION=768
 EMBEDDING_API_ENDPOINT=http://ollama:11434/api/embed
 
 # Google Vertex AI configuration
-# EMBEDDING_PROVIDER=google
+# MAPROOM_EMBEDDING_PROVIDER=google
 # GOOGLE_PROJECT_ID=your-project-id
 # GOOGLE_LOCATION=us-central1
-# EMBEDDING_MODEL=text-embedding-gecko@003
+# MAPROOM_EMBEDDING_MODEL=text-embedding-gecko@003
 # EMBEDDING_DIMENSION=768
 # EMBEDDING_TASK_TYPE=RETRIEVAL_DOCUMENT  # or RETRIEVAL_QUERY
 
 # OpenAI configuration
-# EMBEDDING_PROVIDER=openai
+# MAPROOM_EMBEDDING_PROVIDER=openai
 # OPENAI_API_KEY=your-api-key
-# EMBEDDING_MODEL=text-embedding-3-small
+# MAPROOM_EMBEDDING_MODEL=text-embedding-3-small
 # EMBEDDING_DIMENSION=1536
 ```
 

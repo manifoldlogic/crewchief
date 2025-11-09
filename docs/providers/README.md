@@ -97,17 +97,17 @@ Click on your chosen provider above to view detailed setup instructions.
 
 ### 3. Configure Maproom
 
-Set the `EMBEDDING_PROVIDER` environment variable:
+Set the `MAPROOM_EMBEDDING_PROVIDER` environment variable:
 
 ```bash
 # For Google Vertex AI
-export EMBEDDING_PROVIDER="google"
+export MAPROOM_EMBEDDING_PROVIDER="google"
 
 # For Ollama
-export EMBEDDING_PROVIDER="ollama"
+export MAPROOM_EMBEDDING_PROVIDER="ollama"
 
 # For OpenAI
-export EMBEDDING_PROVIDER="openai"
+export MAPROOM_EMBEDDING_PROVIDER="openai"
 ```
 
 ### 4. Verify Setup
@@ -224,7 +224,7 @@ You can switch between providers at any time. See the **[Provider Migration Guid
 ### Common Issues Across All Providers
 
 **Issue**: Embeddings not generating
-- **Solution**: Verify `EMBEDDING_PROVIDER` environment variable is set correctly
+- **Solution**: Verify `MAPROOM_EMBEDDING_PROVIDER` environment variable is set correctly
 
 **Issue**: Slow embedding generation
 - **Solution**: Check network latency (cloud providers) or hardware resources (Ollama)
