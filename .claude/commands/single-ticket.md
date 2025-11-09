@@ -40,12 +40,45 @@ Use agents specified in ticket's "Agent Assignments" section:
 - ✓ Write code that meets technical requirements
 - ✓ Add inline documentation for complex logic
 - ✓ Consider edge cases and error handling
+- ✓ **If tests created/modified: Execute tests and capture output**
+- ✓ **Fix any test failures before proceeding to verification**
 
 **Working principles:**
 - Focus on ticket scope only (no feature creep)
 - Follow project conventions from CLAUDE.md
 - Implement cleanly for future maintainability
 - Ask clarifying questions if requirements are ambiguous
+
+### Test Execution Requirements
+
+**If ticket involves test creation or modification:**
+
+1. **Execute tests** using appropriate command for the project:
+   - Rust: `cargo test` or `cargo test --test <name> -- --ignored`
+   - TypeScript: `pnpm test` or `vitest run`
+   - Python: `pytest` or `python -m unittest`
+
+2. **Capture complete output** showing:
+   - Command used
+   - Number of tests run
+   - Pass/fail count
+   - Any warnings or errors
+
+3. **Fix failures** before proceeding to verification
+
+4. **Report results** in implementation summary:
+   ```
+   ## Test Execution
+   Command: cargo test --test watcher_integration -- --ignored
+   Result: ✅ 15/15 tests passing
+   Output: [paste relevant output]
+   ```
+
+**DO NOT:**
+- ❌ Check "Tests pass" without running tests
+- ❌ Assume tests pass based on code review
+- ❌ Skip ignored tests without noting why
+- ❌ Proceed to verification with failing tests
 
 ## Phase 3: Verification
 
@@ -54,7 +87,7 @@ Delegate to `verify-ticket` agent with ticket ID and implementation summary:
 **Verify-ticket will check:**
 - All acceptance criteria are met
 - Technical requirements are satisfied
-- Tests pass (if applicable)
+- **Tests executed and passing** (requires test output evidence if tests created/modified)
 - Code quality standards maintained
 - No unintended side effects
 - Documentation is adequate
@@ -80,10 +113,12 @@ Before moving to next phase:
 - Code compiles/runs without errors
 - Manual testing shows expected behavior
 - All files from ticket are addressed
+- **Tests executed with output shown** (if tests created/modified)
+- **All tests passing** (no failures, no skipped critical tests)
 
 **After Verification:**
 - All acceptance criteria explicitly confirmed
-- No failing tests
+- **Test execution evidence validated** (output confirms tests ran and passed)
 - verify-ticket agent provides clear pass
 
 **After Commit:**

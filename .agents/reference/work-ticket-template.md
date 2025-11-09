@@ -6,8 +6,14 @@
 
 ## Status
 - [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
+- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
 - [ ] **Verified** - by the verify-ticket agent
+
+**Note on "Tests pass"**:
+- If tests were created/modified, you MUST run them and show output
+- "Tests pass" means tests were EXECUTED and all passed
+- "Tests pass - N/A" is only valid for documentation-only tickets
+- Test file existence alone does NOT satisfy this requirement
 
 ## Agents
 - [primary-task-agent-name]
