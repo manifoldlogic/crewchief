@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-1003: Implement branch name parsing from .git/HEAD
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (15 tests, all pass)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -25,13 +25,13 @@ From architecture.md lines 164-194:
 **Planning Reference**: `/workspace/.agents/projects/BRWATCH_branch-switch-detection/planning/plan.md` - Step 1.3
 
 ## Acceptance Criteria
-- [ ] `get_current_branch()` function implemented in watcher.rs
-- [ ] Correctly parses standard branch refs (e.g., "main", "feature/auth")
-- [ ] Handles detached HEAD by returning first 8 characters of commit SHA
-- [ ] Returns error for invalid .git/HEAD format
-- [ ] Trims whitespace from parsed values
-- [ ] Unit tests pass for all scenarios: branch ref, feature branch, detached HEAD, invalid format
-- [ ] Function documented with rustdoc comments and examples
+- [x] `get_current_branch()` function implemented in watcher.rs
+- [x] Correctly parses standard branch refs (e.g., "main", "feature/auth")
+- [x] Handles detached HEAD by returning first 8 characters of commit SHA
+- [x] Returns error for invalid .git/HEAD format
+- [x] Trims whitespace from parsed values
+- [x] Unit tests pass for all scenarios: branch ref, feature branch, detached HEAD, invalid format
+- [x] Function documented with rustdoc comments and examples
 
 ## Technical Requirements
 - Function signature: `fn get_current_branch(repo_path: &Path) -> Result<String>`

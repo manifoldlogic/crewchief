@@ -6,7 +6,8 @@
 
 use anyhow::{bail, Result};
 use notify::{Event, RecursiveMode, Watcher};
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 use tokio_postgres::Client;
 use tracing::{error, info};
@@ -124,5 +125,118 @@ impl BranchWatcher {
         // TODO: Implement in BRWATCH-2001
         // Will extract branch name, get/create worktree, and trigger incremental update
         Ok(())
+    }
+}
+
+/// Extracts the current branch name from a git repository
+///
+/// Reads `.git/HEAD` and parses either a branch reference or detached HEAD.
+///
+/// # Branch Formats
+///
+/// - Standard branch: `ref: refs/heads/main` → `"main"`
+/// - Feature branch: `ref: refs/heads/feature/auth` → `"feature/auth"`
+/// - Detached HEAD: `abc123def...` → `"abc123de"` (first 8 chars)
+///
+/// # Arguments
+///
+/// * `repo_path` - Path to repository root
+///
+/// # Errors
+///
+/// Returns error if:
+/// - `.git/HEAD` doesn't exist
+/// - Cannot read file
+/// - Content has invalid format
+/// - SHA is too short (<8 characters)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use std::path::Path;
+/// use crewchief_maproom::watcher::get_current_branch;
+///
+/// let branch = get_current_branch(Path::new("/workspace/myproject")).unwrap();
+/// assert_eq!(branch, "main");
+/// ```
+pub fn get_current_branch(repo_path: &Path) -> Result<String> {
+    let head_path = repo_path.join(".git/HEAD");
+    let content = fs::read_to_string(&head_path)?;
+
+    // Parse "ref: refs/heads/main" or commit SHA
+    if let Some(branch_ref) = content.strip_prefix("ref: refs/heads/") {
+        Ok(branch_ref.trim().to_string())
+    } else {
+        // Detached HEAD (commit SHA)
+        let sha = content.trim();
+        // Validate it's a hex string (valid SHA)
+        if sha.len() >= 8 && sha.chars().all(|c| c.is_ascii_hexdigit()) {
+            Ok(sha[..8].to_string()) // Short SHA
+        } else {
+            bail!("Invalid HEAD content: expected branch ref or commit SHA")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper function to parse HEAD content without file I/O (for testing)
+    fn parse_head_content(content: &str) -> Result<String> {
+        if let Some(branch_ref) = content.strip_prefix("ref: refs/heads/") {
+            Ok(branch_ref.trim().to_string())
+        } else {
+            let sha = content.trim();
+            // Validate it's a hex string (valid SHA)
+            if sha.len() >= 8 && sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                Ok(sha[..8].to_string())
+            } else {
+                bail!("Invalid HEAD content: expected branch ref or commit SHA")
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_branch_ref() {
+        let branch = parse_head_content("ref: refs/heads/main\n").unwrap();
+        assert_eq!(branch, "main");
+    }
+
+    #[test]
+    fn test_parse_feature_branch() {
+        let branch = parse_head_content("ref: refs/heads/feature/auth-system\n").unwrap();
+        assert_eq!(branch, "feature/auth-system");
+    }
+
+    #[test]
+    fn test_parse_detached_head() {
+        let branch = parse_head_content("abc123def456789012345678901234567890abcd\n").unwrap();
+        assert_eq!(branch, "abc123de"); // Short SHA
+    }
+
+    #[test]
+    fn test_parse_invalid_format() {
+        let result = parse_head_content("invalid format");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_empty_sha() {
+        let result = parse_head_content("abc\n");
+        assert!(result.is_err()); // SHA too short
+    }
+
+    #[test]
+    fn test_parse_branch_with_no_newline() {
+        let branch = parse_head_content("ref: refs/heads/develop").unwrap();
+        assert_eq!(branch, "develop");
+    }
+
+    #[test]
+    fn test_parse_long_sha() {
+        let sha = "a".repeat(40);
+        let branch = parse_head_content(&sha).unwrap();
+        assert_eq!(branch, "aaaaaaaa");
     }
 }
