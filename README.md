@@ -11,6 +11,7 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 
 ✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees
 ✅ **Semantic Code Search** - Index and search code, docs, and configs using PostgreSQL
+✅ **Automatic Branch Detection** ✨ - Auto-index branches on switch (no manual scan needed)
 ✅ **Grep-Impossible Task Framework** - Scientific validation framework for semantic search value
 ✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)
 ✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML

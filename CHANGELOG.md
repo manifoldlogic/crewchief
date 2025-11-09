@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added - BRANCHX: Branch-Aware Indexing
+### Added
+
+#### Automatic Branch Switch Detection (BRWATCH)
+
+**New `maproom branch-watch` command** automatically detects branch switches and triggers incremental indexing:
+- Watches `.git/HEAD` for changes using OS-level file events (inotify/FSEvents/ReadDirectoryChanges)
+- Auto-indexes branches within <1 minute of switching
+- Resource efficient: <5% CPU while idle, ~15-20MB memory
+- Fault-tolerant: Retry logic with exponential backoff for transient errors
+- Graceful shutdown with Ctrl+C signal handling
+
+**Performance**:
+- Detection latency: <1 second (OS file events)
+- Update time: 30-60s for typical branch switches (varies by changed files)
+- Debouncing: 2-second window prevents rapid successive triggers
+
+**Usage**:
+```bash
+# Start watcher (blocks until Ctrl+C)
+maproom branch-watch --repo /workspace/myproject
+
+# With verbose logging
+maproom branch-watch --repo . --verbose
+```
+
+**See also**: [Automatic Indexing Guide](docs/features/automatic-indexing.md)
+
+#### BRANCHX: Branch-Aware Indexing
 
 **Core Features**:
 - **Worktree tracking**: Chunks now track which worktrees/branches contain them via JSONB array (`worktree_ids`)

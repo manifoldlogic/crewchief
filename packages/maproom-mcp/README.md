@@ -9,6 +9,7 @@ Semantic code search powered by PostgreSQL, pgvector, and your choice of embeddi
 - ✨ **Choice of Providers** - OpenAI (recommended), Google Vertex AI, or local Ollama
 - 🚀 **Fast Hybrid Search** - Vector similarity + full-text search with PostgreSQL
 - 🔄 **Auto-Sync** - Watch mode keeps your index up-to-date automatically
+- 🌿 **Automatic Branch Detection** ✨ NEW - Auto-index branches on switch (no manual scan needed)
 - 📦 **Fully Containerized** - Everything runs in Docker, isolated and clean
 - 🌳 **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
 - 🔒 **Privacy Options** - Use local Ollama for 100% private embeddings (no API keys)
@@ -42,6 +43,27 @@ This will (2-5 minutes on first run):
 - Validate everything works
 
 ### 2. Index Your Codebase
+
+#### Automatic Indexing (Recommended) ✨ NEW
+
+Start the branch watcher to automatically index as you switch branches:
+
+```bash
+# Set database URL
+export DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
+
+# Start watcher (Terminal 1)
+maproom branch-watch --repo /path/to/your/repo
+
+# Work normally (Terminal 2) - branches auto-index
+git checkout feature-auth  # Automatically indexed in <1 minute
+```
+
+The watcher runs continuously and indexes branches automatically when you switch. For more details, see the [Automatic Indexing Guide](../../docs/features/automatic-indexing.md).
+
+#### Manual Indexing
+
+Alternatively, manually trigger indexing:
 
 **With OpenAI:**
 ```bash

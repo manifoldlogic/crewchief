@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-4003: Update CHANGELOG and README
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -19,14 +19,14 @@ This ticket implements Step 4.3 from the implementation plan (plan.md - Phase 4)
 **Planning Reference**: `/workspace/.agents/projects/BRWATCH_branch-switch-detection/planning/plan.md` - Step 4.3
 
 ## Acceptance Criteria
-- [ ] CHANGELOG.md updated with new entry for BRWATCH feature
-- [ ] Entry includes version number (or "Unreleased")
-- [ ] Entry describes feature, benefits, and usage
-- [ ] README.md updated to mention automatic indexing
-- [ ] Quick start or usage section updated
-- [ ] Links to detailed documentation added
-- [ ] Changelog follows Keep a Changelog format
-- [ ] No broken links
+- [x] CHANGELOG.md updated with new entry for BRWATCH feature
+- [x] Entry includes version number (or "Unreleased")
+- [x] Entry describes feature, benefits, and usage
+- [x] README.md updated to mention automatic indexing
+- [x] Quick start or usage section updated
+- [x] Links to detailed documentation added
+- [x] Changelog follows Keep a Changelog format
+- [x] No broken links
 
 ## Technical Requirements
 - Update `/workspace/CHANGELOG.md` (or create if doesn't exist)
