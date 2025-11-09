@@ -1,9 +1,9 @@
 # Ticket: BRWATCH-3001: Add watch command to CLI
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -221,3 +221,32 @@ async fn watch_command(args: WatchArgs) -> Result<()> {
 - `/workspace/crates/maproom/src/cli.rs` (add watch command)
 - `/workspace/crates/maproom/src/main.rs` (register command if separate file)
 - `/workspace/crates/maproom/Cargo.toml` (add clap, env_logger if needed)
+
+## Implementation Notes
+
+### Naming Decision
+The command was implemented as `branch-watch` instead of `watch` because there was already an existing `Watch` command in the CLI (line 124-137 of main.rs) that performs file watching for incremental updates within a worktree. To avoid naming conflicts and maintain both functionalities:
+
+- **`watch`** - Watches files in a worktree for changes (existing functionality)
+- **`branch-watch`** - Watches for git branch switches (new functionality from BRWATCH)
+
+### Implementation Details
+- Command variant: `BranchWatch` in Commands enum (line 139-148)
+- Handler function: `branch_watch_command()` (line 342-393)
+- Arguments: `--repo` (optional PathBuf), `--verbose` (boolean flag)
+- Database: Uses `db::connect()` which reads DATABASE_URL from environment
+- Logging: Configured via RUST_LOG environment variable (debug level if --verbose)
+- Error handling: Comprehensive error context for validation and database connection
+- Validation: Checks repository path exists and contains .git/HEAD before starting
+
+### Usage
+```bash
+# Watch current directory
+crewchief-maproom branch-watch
+
+# Watch specific repository
+crewchief-maproom branch-watch --repo /path/to/repo
+
+# Verbose logging
+crewchief-maproom branch-watch --repo /path/to/repo --verbose
+```

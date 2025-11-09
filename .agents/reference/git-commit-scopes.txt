@@ -9,6 +9,7 @@ api
 build
 cache
 ci
+cli
 config
 db
 deprecation

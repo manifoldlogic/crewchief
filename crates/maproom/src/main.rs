@@ -136,6 +136,17 @@ enum Commands {
         throttle: String,
     },
 
+    /// Watch for branch switches and auto-index
+    BranchWatch {
+        /// Path to git repository (defaults to current directory)
+        #[arg(long)]
+        repo: Option<PathBuf>,
+
+        /// Show verbose logging
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
     /// Full-text search against indexed chunks
     Search {
         #[arg(long)]
@@ -326,6 +337,55 @@ async fn auto_generate_embeddings(
     progress.finish();
 
     Ok(stats)
+}
+
+/// Branch watch command handler
+///
+/// Starts the BranchWatcher for automatic indexing on branch switches.
+async fn branch_watch_command(repo: Option<PathBuf>, verbose: bool) -> anyhow::Result<()> {
+    use crewchief_maproom::watcher::BranchWatcher;
+
+    // Set up logging based on verbose flag
+    if verbose {
+        std::env::set_var("RUST_LOG", "crewchief_maproom=debug");
+    } else if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "crewchief_maproom=info");
+    }
+
+    // Default to current directory if no repo path provided
+    let repo_path = repo.unwrap_or_else(|| PathBuf::from("."));
+
+    // Validate repository path exists
+    if !repo_path.exists() {
+        anyhow::bail!("Repository path does not exist: {}", repo_path.display());
+    }
+
+    // Validate it's a git repository
+    let git_head = repo_path.join(".git/HEAD");
+    if !git_head.exists() {
+        anyhow::bail!(
+            "Not a git repository: {} (expected .git/HEAD)",
+            repo_path.display()
+        );
+    }
+
+    tracing::info!("Starting branch watcher for {}", repo_path.display());
+
+    // Connect to database
+    let client = db::connect().await
+        .context("Failed to connect to database")?;
+
+    tracing::info!("Connected to database");
+
+    // Create and start watcher
+    let mut watcher = BranchWatcher::new(repo_path, client)?;
+
+    tracing::info!("Watching for branch switches (Ctrl+C to stop)");
+
+    // Start watcher (blocks until error or shutdown)
+    watcher.start().await?;
+
+    Ok(())
 }
 
 /// Extract git information from a repository path
@@ -570,6 +630,10 @@ async fn main() -> anyhow::Result<()> {
 
             let client = db::connect().await?;
             indexer::watch_worktree(&client, &repo, &worktree, &path, &throttle).await?;
+        }
+
+        Commands::BranchWatch { repo, verbose } => {
+            branch_watch_command(repo, verbose).await?;
         }
 
         Commands::Search { repo, worktree, query, k } => {
