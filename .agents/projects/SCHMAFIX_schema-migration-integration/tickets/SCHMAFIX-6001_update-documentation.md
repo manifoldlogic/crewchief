@@ -1,9 +1,9 @@
 # Ticket: SCHMAFIX-6001: Update Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -19,12 +19,12 @@ Before SCHMAFIX, migration SQL files existed in two places (MCP and Rust) with n
 This ticket implements Phase 6 (Documentation) from `.agents/projects/SCHMAFIX_schema-migration-integration/planning/plan.md`.
 
 ## Acceptance Criteria
-- [ ] File `packages/maproom-mcp/migrations/README.md` updated to note Rust owns all migrations
-- [ ] File `crates/maproom/CLAUDE.md` updated to mention migrations 0018-0020
-- [ ] File `docs/architecture/DATABASE_ARCHITECTURE.md` updated with new schema (blob_sha, code_embeddings, worktree tracking)
-- [ ] Migration SQL files (0018-0020) have clear header comments explaining purpose
-- [ ] MCP migrations README explains relationship to Rust migrations (historical only)
-- [ ] All documentation changes reviewed for accuracy
+- [x] File `packages/maproom-mcp/migrations/README.md` updated to note Rust owns all migrations - CREATED with deprecation notice and migration mapping
+- [x] File `crates/maproom/CLAUDE.md` updated to mention migrations 0018-0020 - Added Migrations section with details and guide
+- [x] File `docs/architecture/DATABASE_ARCHITECTURE.md` updated with new schema (blob_sha, code_embeddings, worktree tracking) - Added comprehensive Schema section with tables, columns, indexes, and example queries
+- [x] Migration SQL files (0018-0020) have clear header comments explaining purpose - ALREADY COMPLETE (added during SCHMAFIX-1001)
+- [x] MCP migrations README explains relationship to Rust migrations (historical only) - Migration mapping table and clear deprecation notice added
+- [x] All documentation changes reviewed for accuracy - All docs reference actual migration files and current schema state
 
 ## Technical Requirements
 - Documentation format: Markdown

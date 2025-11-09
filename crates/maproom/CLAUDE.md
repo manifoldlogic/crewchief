@@ -72,6 +72,24 @@ See `migrations/`:
 - Vector indexes (ivfflat/hnsw)
 - GIN indexes for FTS
 
+## Migrations
+
+Migrations 0000-0017: Original maproom schema
+Migrations 0018-0020: BLOBSHA/BRANCHX integration (added SCHMAFIX project)
+
+**Migration 0018** (add_blob_sha): Adds blob_sha TEXT column to chunks for content-addressed storage
+**Migration 0019** (create_code_embeddings): Creates deduplicated embeddings table with HNSW index
+**Migration 0020** (add_worktree_tracking): Adds worktree_ids JSONB column and worktree_index_state table
+
+**Adding New Migrations**:
+1. Create SQL file in `crates/maproom/migrations/NNNN_description.sql`
+2. Update `src/db/queries.rs` migrations array with `include_str!`
+3. Use `IF NOT EXISTS` for idempotency
+4. Set `concurrent = false` for transaction safety (default)
+5. Write integration tests in `tests/migration_integration.rs`
+
+See `migrations/CLAUDE.md` for detailed migration guidelines.
+
 ## Binary Output
 
 Built to `../../packages/cli/bin/<platform>/crewchief-maproom`:

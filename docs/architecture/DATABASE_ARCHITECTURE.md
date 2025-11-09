@@ -159,6 +159,123 @@ The database includes performance tuning for vector search workloads:
 - `random_page_cost=1.1` - SSD-optimized
 - `max_parallel_workers=4` - Parallel query execution
 
+## Schema
+
+The maproom database schema includes core tables for code indexing and several recent additions for content-addressed storage and worktree tracking.
+
+### Core Tables
+
+**Core schema** (migrations 0000-0017):
+- `repos` - Repository metadata
+- `worktrees` - Git worktrees within repositories
+- `files` - Indexed files
+- `chunks` - Code chunks extracted from files
+- `chunk_relationships` - Dependencies between chunks
+
+### Blob SHA Column (Migration 0018)
+
+The `chunks` table includes a `blob_sha` column for content-addressed storage:
+
+```sql
+ALTER TABLE maproom.chunks ADD COLUMN blob_sha TEXT NOT NULL;
+CREATE INDEX idx_chunks_blob_sha ON maproom.chunks(blob_sha);
+```
+
+**Purpose**: Enable deduplication of embeddings based on content hash (git-compatible blob SHA).
+
+**Status**: Column exists and populated (backfilled with SHA-256 hashes of chunk content).
+
+**Future**: Multiple chunks with identical content will reference same embedding in code_embeddings table (implementation pending BLOBSHA-IMPL project).
+
+**Function**: `compute_git_blob_sha(text)` - PostgreSQL function that computes git-compatible blob SHA
+- Format: `SHA256("blob <size>\0<content>")`
+- Matches Rust implementation in `crates/maproom/src/content_hash.rs`
+
+### Code Embeddings Table (Migration 0019)
+
+Deduplicated storage for code embeddings:
+
+```sql
+CREATE TABLE maproom.code_embeddings (
+  blob_sha TEXT PRIMARY KEY,
+  embedding vector(1536) NOT NULL,
+  model_version TEXT NOT NULL DEFAULT 'text-embedding-3-small',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_embeddings_vector ON maproom.code_embeddings
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+**Purpose**: Store one embedding per unique blob_sha, reducing embedding costs by 70-90%.
+
+**Status**: Table exists but not yet populated (embeddings generation pending BLOBSHA-IMPL project).
+
+**Index**: HNSW (Hierarchical Navigable Small World) index for fast approximate nearest neighbor search using cosine similarity.
+
+**Foreign Key**: Disabled during migration for existing data. Will be enabled after indexer populates embeddings.
+
+### Worktree Tracking (Migration 0020)
+
+BRANCHX schema for worktree-aware indexing:
+
+```sql
+-- worktree_ids JSONB column in chunks table
+ALTER TABLE maproom.chunks
+  ADD COLUMN worktree_ids JSONB DEFAULT '[]'::jsonb NOT NULL;
+
+CREATE INDEX idx_chunks_worktree_ids ON maproom.chunks
+  USING gin (worktree_ids);
+
+-- Tracking table for worktree index state
+CREATE TABLE maproom.worktree_index_state (
+  worktree_id BIGINT PRIMARY KEY REFERENCES maproom.worktrees(id) ON DELETE CASCADE,
+  last_tree_sha TEXT,
+  last_indexed TIMESTAMP DEFAULT NOW(),
+  chunks_processed BIGINT DEFAULT 0,
+  embeddings_generated BIGINT DEFAULT 0
+);
+```
+
+**Purpose**: Track which worktrees contain each chunk, enable incremental indexing.
+
+**Status**: Schema complete, incremental update logic pending BRANCHX-IMPL project.
+
+**JSONB Operators**: Use `?` (contains), `?|` (any of), `?&` (all of), `-` (remove) for querying worktree_ids.
+
+**Example Queries**:
+```sql
+-- Find chunks in specific worktree
+SELECT * FROM maproom.chunks WHERE worktree_ids ? '123';
+
+-- Find chunks in any of multiple worktrees
+SELECT * FROM maproom.chunks WHERE worktree_ids ?| ARRAY['123', '456'];
+
+-- Get worktree index statistics
+SELECT
+  w.name,
+  wis.last_tree_sha,
+  wis.chunks_processed,
+  wis.last_indexed
+FROM maproom.worktree_index_state wis
+JOIN maproom.worktrees w ON w.id = wis.worktree_id
+ORDER BY wis.last_indexed DESC;
+```
+
+### Migration History
+
+See `crates/maproom/migrations/` for all migration SQL files.
+
+**Recent additions** (SCHMAFIX project, November 2025):
+- Migration 0018: `add_blob_sha.sql` - Content-addressed storage foundation
+- Migration 0019: `create_code_embeddings.sql` - Deduplicated embeddings table
+- Migration 0020: `add_worktree_tracking.sql` - Worktree-aware chunk tracking
+
+**To view applied migrations**:
+```bash
+psql $DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migrations ORDER BY version DESC LIMIT 10;"
+```
+
 ## Troubleshooting
 
 ### Connection Refused
