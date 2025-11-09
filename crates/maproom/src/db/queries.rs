@@ -143,6 +143,24 @@ pub async fn migrate(client: &Client) -> anyhow::Result<()> {
             include_str!("./../../migrations/0017_fix_index_size_limits.sql"),
             true,
         ),
+        (
+            18,
+            "0018_add_blob_sha.sql",
+            include_str!("./../../migrations/0018_add_blob_sha.sql"),
+            false,
+        ),
+        (
+            19,
+            "0019_create_code_embeddings.sql",
+            include_str!("./../../migrations/0019_create_code_embeddings.sql"),
+            false,
+        ),
+        (
+            20,
+            "0020_add_worktree_tracking.sql",
+            include_str!("./../../migrations/0020_add_worktree_tracking.sql"),
+            false,
+        ),
     ];
 
     // Step 4: Apply each unapplied migration
