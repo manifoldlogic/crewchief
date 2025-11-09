@@ -4,6 +4,7 @@ use std::process::Command;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
+use tokio::sync::oneshot;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crewchief_maproom::{db, indexer};
@@ -382,9 +383,41 @@ async fn branch_watch_command(repo: Option<PathBuf>, verbose: bool) -> anyhow::R
 
     tracing::info!("Watching for branch switches (Ctrl+C to stop)");
 
-    // Start watcher (blocks until error or shutdown)
-    watcher.start().await?;
+    // Create shutdown channel
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
+    // Wrap sender in Mutex to allow FnMut closure to take ownership
+    let shutdown_tx = std::sync::Mutex::new(Some(shutdown_tx));
+
+    // Setup Ctrl+C handler
+    ctrlc::set_handler(move || {
+        tracing::info!("Shutting down...");
+        if let Ok(mut tx) = shutdown_tx.lock() {
+            if let Some(tx) = tx.take() {
+                let _ = tx.send(());
+            }
+        }
+    })?;
+
+    // Run watcher until shutdown signal
+    tokio::select! {
+        result = watcher.start() => {
+            match result {
+                Ok(_) => {
+                    tracing::info!("Watcher stopped normally");
+                }
+                Err(e) => {
+                    tracing::error!("Watcher error: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+        _ = shutdown_rx => {
+            tracing::info!("Shutdown signal received");
+        }
+    }
+
+    tracing::info!("Branch watcher stopped");
     Ok(())
 }
 
