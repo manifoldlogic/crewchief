@@ -93,7 +93,7 @@ function sanitizeDatabaseUrl(url) {
  * Logs always appear when EMBEDDING_PROVIDER is not set OR when MAPROOM_MCP_DEBUG=true
  */
 function diagnosticLog(message, data) {
-  if (DIAGNOSTIC_MODE || !process.env.EMBEDDING_PROVIDER) {
+  if (DIAGNOSTIC_MODE || !process.env.MAPROOM_EMBEDDING_PROVIDER) {
     console.error('🔍 [DIAGNOSTIC]', message);
     if (data) {
       const redactedData = redactSensitive(data);
@@ -104,7 +104,7 @@ function diagnosticLog(message, data) {
 
 // Log environment variables immediately on startup
 diagnosticLog('CLI Started', {
-  EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || '(not set)',
+  EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || '(not set)',
   GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID || '(not set)',
   GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || '(not set)',
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '(not set)',
@@ -189,9 +189,9 @@ function checkDockerDaemon() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
   diagnosticLog('Docker Command: Checking Docker daemon status', {
@@ -237,9 +237,9 @@ function checkDockerCompose() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
   diagnosticLog('Docker Command: Checking Docker Compose version', {
@@ -464,9 +464,9 @@ function logDockerState() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
   diagnosticLog('Docker Command: Querying container state', {
@@ -573,7 +573,7 @@ async function ensureCleanState() {
  * Determine which services to start based on EMBEDDING_PROVIDER
  */
 function getRequiredServices() {
-  const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase();
+  const provider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase();
 
   const services = {
     // postgres: NOT included here - automatically started by docker-compose.yml via depends_on
@@ -627,9 +627,9 @@ function removeUnnecessaryServices(requiredServices) {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
   for (const service of unnecessaryServices) {
@@ -710,9 +710,9 @@ function verifyFinalState(expectedServices) {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
   // Get running services
@@ -799,9 +799,9 @@ async function startDockerCompose() {
     const env = {
       ...process.env,  // CRITICAL: Include all parent env vars FIRST
       // Ensure key vars are present with defaults
-      EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-      EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-      EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+      EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+      EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+      EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
     };
 
     diagnosticLog('Docker Compose Command: Starting services', {
@@ -905,9 +905,9 @@ async function waitForServicesHealthy() {
     const env = {
       ...process.env,  // CRITICAL: Include all parent env vars FIRST
       // Ensure key vars are present with defaults
-      EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-      EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-      EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+      EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+      EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+      EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
     };
 
     diagnosticLog('Docker Compose Command: Checking container status', {
@@ -1035,9 +1035,9 @@ function establishStdioProxy() {
   const env = {
     ...process.env,  // CRITICAL: Include all parent env vars FIRST
     // Ensure key vars are present with defaults
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'ollama',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'nomic-embed-text',
-    EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION || '768'
+    EMBEDDING_PROVIDER: process.env.MAPROOM_EMBEDDING_PROVIDER || 'ollama',
+    EMBEDDING_MODEL: process.env.MAPROOM_EMBEDDING_MODEL || 'nomic-embed-text',
+    EMBEDDING_DIMENSION: process.env.MAPROOM_EMBEDDING_DIMENSION || '768'
   };
 
   diagnosticLog('Docker Command: Establishing stdio proxy to MCP server', {
@@ -1509,7 +1509,7 @@ async function runScan() {
   console.error(`Commit: ${repoInfo.commit}\n`);
 
   // Get provider from environment variable or saved config
-  const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase() || getConfiguredProvider();
+  const provider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase() || getConfiguredProvider();
   console.error(`Using provider: ${provider.toUpperCase()}\n`);
 
   // Set provider-specific environment variables
@@ -1602,7 +1602,7 @@ async function runWatch() {
   console.error(`Worktree: ${repoInfo.worktree}\n`);
 
   // Get provider from environment variable or saved config
-  const provider = process.env.EMBEDDING_PROVIDER?.toLowerCase() || getConfiguredProvider();
+  const provider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase() || getConfiguredProvider();
   console.error(`Using provider: ${provider.toUpperCase()}\n`);
 
   console.error('Watching for changes (Ctrl+C to stop)...\n');
@@ -1760,19 +1760,19 @@ async function runSetup() {
   console.error(`\n🚀 Setting up Maproom with ${provider.toUpperCase()} embeddings...\n`);
 
   // Set environment variables for this session
-  process.env.EMBEDDING_PROVIDER = provider;
+  process.env.MAPROOM_EMBEDDING_PROVIDER = provider;
 
   // Set provider-specific model and dimension
   if (provider === 'openai') {
-    process.env.EMBEDDING_MODEL = 'text-embedding-3-small';
-    process.env.EMBEDDING_DIMENSION = '1536';
+    process.env.MAPROOM_EMBEDDING_MODEL = 'text-embedding-3-small';
+    process.env.MAPROOM_EMBEDDING_DIMENSION = '1536';
   } else if (provider === 'google') {
-    process.env.EMBEDDING_MODEL = 'text-embedding-004';
-    process.env.EMBEDDING_DIMENSION = '768';
+    process.env.MAPROOM_EMBEDDING_MODEL = 'text-embedding-004';
+    process.env.MAPROOM_EMBEDDING_DIMENSION = '768';
   } else if (provider === 'ollama') {
-    process.env.EMBEDDING_MODEL = 'nomic-embed-text';
-    process.env.EMBEDDING_DIMENSION = '768';
-    process.env.EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
+    process.env.MAPROOM_EMBEDDING_MODEL = 'nomic-embed-text';
+    process.env.MAPROOM_EMBEDDING_DIMENSION = '768';
+    process.env.MAPROOM_EMBEDDING_API_ENDPOINT = 'http://localhost:11434';
   }
 
   // Validate provider-specific requirements
@@ -1848,7 +1848,7 @@ async function runMCPServer() {
     verifyDockerComposeConfig();
 
     // Validate provider configuration (after config verification, before Docker Compose starts)
-    const embeddingProvider = process.env.EMBEDDING_PROVIDER || getConfiguredProvider();
+    const embeddingProvider = process.env.MAPROOM_EMBEDDING_PROVIDER || getConfiguredProvider();
     validateProviderConfig(embeddingProvider);
 
     // Start Docker Compose stack

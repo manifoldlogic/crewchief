@@ -28,7 +28,7 @@ export interface ProviderConfig {
  */
 export async function detectProvider(): Promise<ProviderConfig> {
   // 1. Check explicit override
-  const explicitProvider = process.env.EMBEDDING_PROVIDER?.toLowerCase()
+  const explicitProvider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase()
   if (explicitProvider) {
     console.log(`Using explicit provider: ${explicitProvider}`)
     return validateExplicitProvider(explicitProvider)

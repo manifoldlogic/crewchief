@@ -66,7 +66,7 @@ See [Provider Comparison](docs/providers/comparison.md) for detailed breakdown.
 **Setup:**
 ```bash
 export OPENAI_API_KEY="sk-proj-..."
-export EMBEDDING_PROVIDER=openai
+export MAPROOM_EMBEDDING_PROVIDER=openai
 crewchief maproom scan --generate-embeddings
 ```
 
@@ -83,7 +83,7 @@ See [OpenAI Setup Guide](docs/providers/openai-setup.md)
 ```bash
 export GOOGLE_PROJECT_ID="your-project"
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
-export EMBEDDING_PROVIDER=google
+export MAPROOM_EMBEDDING_PROVIDER=google
 crewchief maproom scan --generate-embeddings
 ```
 
@@ -190,7 +190,7 @@ psql maproom -f scripts/analyze.sql
 Or via CLI:
 
 ```
-export DATABASE_URL=postgres://USER:PASSWORD@localhost:5432/maproom
+export MAPROOM_DATABASE_URL=postgres://USER:PASSWORD@localhost:5432/maproom
 cargo run -p crewchief-maproom -- db migrate
 ```
 
@@ -253,7 +253,7 @@ cargo run -p crewchief-maproom -- search \
 ## Environment Variables
 
 ### Required
-- `DATABASE_URL` - PostgreSQL connection string
+- `MAPROOM_DATABASE_URL` - PostgreSQL connection string
 
 ### Provider-Specific (pick one)
 
@@ -261,21 +261,28 @@ cargo run -p crewchief-maproom -- search \
 - No environment variables required! Just install and run Ollama.
 
 **OpenAI:**
-- `OPENAI_API_KEY` - OpenAI API key for embedding generation
-- `EMBEDDING_PROVIDER=openai` (optional if API key present)
+- `MAPROOM_OPENAI_API_KEY` - Maproom-specific OpenAI API key (preferred)
+- OR `OPENAI_API_KEY` - Standard OpenAI API key (fallback)
+- `MAPROOM_EMBEDDING_PROVIDER=openai` (optional if API key present)
 
 **Google Vertex AI:**
-- `GOOGLE_PROJECT_ID` - Your GCP project ID
-- `GOOGLE_APPLICATION_CREDENTIALS` - Path to service account JSON key
-- `EMBEDDING_PROVIDER=google` (optional if project ID present)
+- `MAPROOM_GOOGLE_PROJECT_ID` - Maproom-specific GCP project ID (preferred)
+- OR `GOOGLE_PROJECT_ID` - Standard GCP project ID (fallback)
+- `MAPROOM_GOOGLE_APPLICATION_CREDENTIALS` - Maproom-specific service account key path (preferred)
+- OR `GOOGLE_APPLICATION_CREDENTIALS` - Standard service account key path (fallback)
+- `MAPROOM_EMBEDDING_PROVIDER=google` (optional if project ID present)
 
 ### Optional Configuration
-- `EMBEDDING_PROVIDER` - Explicit provider selection: `ollama`, `openai`, or `google`
-- `EMBEDDING_MODEL` - Model name override
-- `EMBEDDING_DIMENSION` - Embedding dimension override
-- `EMBEDDING_CACHE_SIZE` - LRU cache size (default: 10000)
-- `EMBEDDING_CACHE_TTL` - Cache TTL in seconds (default: 3600)
-- `EMBEDDING_BATCH_SIZE` - API batch size (default: 100)
+- `MAPROOM_EMBEDDING_PROVIDER` - Explicit provider selection: `ollama`, `openai`, or `google`
+- `MAPROOM_EMBEDDING_MODEL` - Model name override
+- `MAPROOM_EMBEDDING_DIMENSION` - Embedding dimension override
+- `MAPROOM_EMBEDDING_BATCH_SIZE` - API batch size (default: 100)
+- `MAPROOM_EMBEDDING_CACHE_SIZE` - LRU cache size (default: 10000)
+- `MAPROOM_EMBEDDING_CACHE_TTL` - Cache TTL in seconds (default: 3600)
+- `MAPROOM_EMBEDDING_API_ENDPOINT` - Custom API endpoint (for custom embedding services)
+- `MAPROOM_EMBEDDING_RETRY_MAX_ATTEMPTS` - Retry attempts (default: 3)
+
+**Note:** Maproom-specific variables (e.g., `MAPROOM_OPENAI_API_KEY`) are checked first, then standard variables (e.g., `OPENAI_API_KEY`). This allows you to use different API keys for Maproom than for other tools.
 
 ### Configuration File
 
@@ -291,39 +298,39 @@ cp crates/maproom/.env.example crates/maproom/.env
 
 ```bash
 # Ollama (default - no configuration needed!)
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/maproom
+MAPROOM_DATABASE_URL=postgres://maproom:maproom@localhost:5433/maproom
 
 # OpenAI
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/maproom
+MAPROOM_DATABASE_URL=postgres://maproom:maproom@localhost:5433/maproom
 OPENAI_API_KEY=sk-proj-...
-EMBEDDING_PROVIDER=openai
+MAPROOM_EMBEDDING_PROVIDER=openai
 
 # Google Vertex AI
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/maproom
+MAPROOM_DATABASE_URL=postgres://maproom:maproom@localhost:5433/maproom
 GOOGLE_PROJECT_ID=your-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
-EMBEDDING_PROVIDER=google
+MAPROOM_EMBEDDING_PROVIDER=google
 ```
 
 ### Database Configuration
 
-The `DATABASE_URL` environment variable must point to a running PostgreSQL instance with the required extensions installed.
+The `MAPROOM_DATABASE_URL` environment variable must point to a running PostgreSQL instance with the required extensions installed.
 
 **Format:**
 ```
-DATABASE_URL=postgresql://username:password@hostname:port/database
+MAPROOM_DATABASE_URL=postgresql://username:password@hostname:port/database
 ```
 
 **Local Development (PostgreSQL on host machine):**
 ```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/crewchief"
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5433/maproom"
 ```
 
 **Docker/Devcontainer (PostgreSQL in separate container):**
 
-When running in Docker or a devcontainer, PostgreSQL typically runs in a separate container with hostname `postgres`:
+When running in Docker or a devcontainer, PostgreSQL typically runs in a separate container with hostname `maproom-postgres`:
 ```bash
-export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
 ```
 
 **Common Configuration Issues:**
@@ -351,7 +358,7 @@ export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief"
 
 The `watch` command validates the database connection on startup and provides helpful error messages if misconfigured. You'll see:
 - ✅ Success: "Database connection validated successfully"
-- ❌ Failure: Clear error with the DATABASE_URL being used (password sanitized) and troubleshooting steps
+- ❌ Failure: Clear error with the MAPROOM_DATABASE_URL being used (password sanitized) and troubleshooting steps
 
 ## Testing
 
@@ -425,8 +432,8 @@ For detailed setup instructions, see [docs/development/integration-testing.md](d
 ### Test Requirements
 
 Integration tests require:
-- PostgreSQL running locally (default: `localhost:5432`)
-- Database credentials configured in `DATABASE_URL` environment variable
+- PostgreSQL running locally (default: `localhost:5433`)
+- Database credentials configured in `MAPROOM_DATABASE_URL` environment variable
 - Sufficient disk space for temporary test repositories
 
 The tests will automatically:

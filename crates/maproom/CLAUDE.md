@@ -99,10 +99,14 @@ Built to `../../packages/cli/bin/<platform>/crewchief-maproom`:
 ## Environment Variables
 
 ```bash
-DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom
+MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom
+MAPROOM_EMBEDDING_PROVIDER=ollama  # ollama, openai, or google
+MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 RUST_LOG=info              # info, debug, trace
 RUST_BACKTRACE=1
-OPENAI_API_KEY=sk-...      # If using OpenAI
+OPENAI_API_KEY=sk-...      # If using OpenAI provider
+GOOGLE_PROJECT_ID=...      # If using Google provider
+GOOGLE_APPLICATION_CREDENTIALS=... # If using Google provider
 ```
 
 Config: `~/.config/crewchief/maproom.json`

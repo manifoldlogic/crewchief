@@ -279,15 +279,23 @@ impl GoogleProvider {
     /// # }
     /// ```
     pub async fn from_env() -> Result<Self, EmbeddingError> {
-        let credentials_path = std::env::var("GOOGLE_APPLICATION_CREDENTIALS").map_err(|_| {
-            EmbeddingError::Config(ConfigError::EnvVarNotFound(
-                "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
-            ))
-        })?;
+        // Try Maproom-specific env vars first, then fall back to standard vars
+        let credentials_path = std::env::var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS")
+            .or_else(|_| std::env::var("GOOGLE_APPLICATION_CREDENTIALS"))
+            .map_err(|_| {
+                EmbeddingError::Config(ConfigError::EnvVarNotFound(
+                    "MAPROOM_GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_APPLICATION_CREDENTIALS"
+                        .to_string(),
+                ))
+            })?;
 
-        let project_id = std::env::var("GOOGLE_PROJECT_ID").map_err(|_| {
-            EmbeddingError::Config(ConfigError::EnvVarNotFound("GOOGLE_PROJECT_ID".to_string()))
-        })?;
+        let project_id = std::env::var("MAPROOM_GOOGLE_PROJECT_ID")
+            .or_else(|_| std::env::var("GOOGLE_PROJECT_ID"))
+            .map_err(|_| {
+                EmbeddingError::Config(ConfigError::EnvVarNotFound(
+                    "MAPROOM_GOOGLE_PROJECT_ID or GOOGLE_PROJECT_ID".to_string(),
+                ))
+            })?;
 
         let region =
             std::env::var("GOOGLE_REGION").unwrap_or_else(|_| Self::DEFAULT_REGION.to_string());

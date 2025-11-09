@@ -33,9 +33,9 @@
 //!
 //! # Environment Variables
 //!
-//! - `EMBEDDING_PROVIDER`: Provider name ("ollama", "openai", "google")
-//! - `EMBEDDING_MODEL`: Model name (provider-specific defaults)
-//! - `EMBEDDING_API_ENDPOINT`: API endpoint (provider-specific defaults)
+//! - `MAPROOM_EMBEDDING_PROVIDER`: Provider name ("ollama", "openai", "google")
+//! - `MAPROOM_EMBEDDING_MODEL`: Model name (provider-specific defaults)
+//! - `MAPROOM_EMBEDDING_API_ENDPOINT`: API endpoint (provider-specific defaults)
 //! - `OPENAI_API_KEY`: Required for OpenAI provider
 //! - `GOOGLE_PROJECT_ID`: Required for Google provider
 //! - `GOOGLE_APPLICATION_CREDENTIALS`: Required for Google provider
@@ -50,22 +50,22 @@
 //!
 //! ## Explicit OpenAI configuration
 //! ```bash
-//! export EMBEDDING_PROVIDER=openai
+//! export MAPROOM_EMBEDDING_PROVIDER=openai
 //! export OPENAI_API_KEY=sk-...
 //! cargo run
 //! ```
 //!
 //! ## Custom Ollama endpoint
 //! ```bash
-//! export EMBEDDING_PROVIDER=ollama
-//! export EMBEDDING_API_ENDPOINT=http://remote-host:11434/api/embed
-//! export EMBEDDING_MODEL=nomic-embed-text
+//! export MAPROOM_EMBEDDING_PROVIDER=ollama
+//! export MAPROOM_EMBEDDING_API_ENDPOINT=http://remote-host:11434/api/embed
+//! export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 //! cargo run
 //! ```
 //!
 //! ## Google Vertex AI configuration
 //! ```bash
-//! export EMBEDDING_PROVIDER=google
+//! export MAPROOM_EMBEDDING_PROVIDER=google
 //! export GOOGLE_PROJECT_ID=my-project
 //! export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 //! cargo run
@@ -102,11 +102,11 @@ use crate::embedding::provider::EmbeddingProvider;
 /// # Environment Variables
 ///
 /// ## Provider Selection
-/// - `EMBEDDING_PROVIDER`: Provider name (optional, default: auto-detect)
+/// - `MAPROOM_EMBEDDING_PROVIDER`: Provider name (optional, default: auto-detect)
 ///
 /// ## Model Configuration
-/// - `EMBEDDING_MODEL`: Model name (optional, provider-specific defaults)
-/// - `EMBEDDING_API_ENDPOINT`: API endpoint (optional, provider-specific defaults)
+/// - `MAPROOM_EMBEDDING_MODEL`: Model name (optional, provider-specific defaults)
+/// - `MAPROOM_EMBEDDING_API_ENDPOINT`: API endpoint (optional, provider-specific defaults)
 ///
 /// ## Provider-Specific Authentication
 /// - `OPENAI_API_KEY`: Required for OpenAI provider
@@ -151,7 +151,7 @@ use crate::embedding::provider::EmbeddingProvider;
 /// ```
 pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, EmbeddingError> {
     // Check explicit config first
-    let explicit_provider = env::var("EMBEDDING_PROVIDER").ok();
+    let explicit_provider = env::var("MAPROOM_EMBEDDING_PROVIDER").ok();
 
     let provider_name = match explicit_provider.as_deref() {
         Some(p) => {
@@ -180,10 +180,10 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
     // Create provider based on name
     match provider_name.as_str() {
         "ollama" => {
-            let endpoint = env::var("EMBEDDING_API_ENDPOINT")
+            let endpoint = env::var("MAPROOM_EMBEDDING_API_ENDPOINT")
                 .unwrap_or_else(|_| "http://localhost:11434/api/embed".to_string());
             let model =
-                env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
+                env::var("MAPROOM_EMBEDDING_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
 
             tracing::info!(
                 "Using provider: ollama (model: {}, endpoint: {})",
@@ -198,11 +198,13 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
             tracing::debug!("Creating OpenAI provider from environment configuration");
 
             // Validate required environment variables before creating provider
-            if env::var("OPENAI_API_KEY").is_err() {
+            // Try Maproom-specific var first, then fall back to standard var
+            if env::var("MAPROOM_OPENAI_API_KEY").is_err() && env::var("OPENAI_API_KEY").is_err() {
                 return Err(EmbeddingError::Config(ConfigError::MissingConfig(
-                    "OPENAI_API_KEY environment variable required for OpenAI provider.\n\
+                    "OpenAI API key required for OpenAI provider.\n\
                      Get your API key from: https://platform.openai.com/api-keys\n\
-                     Then set: export OPENAI_API_KEY=sk-..."
+                     Then set: export MAPROOM_OPENAI_API_KEY=sk-...\n\
+                     (or use standard: export OPENAI_API_KEY=sk-...)"
                         .to_string(),
                 )));
             }
@@ -216,26 +218,32 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
         "google" => {
             tracing::debug!("Creating Google provider from environment configuration");
 
-            // Validate GOOGLE_PROJECT_ID
-            let project_id = env::var("GOOGLE_PROJECT_ID").map_err(|_| {
-                EmbeddingError::Config(ConfigError::MissingConfig(
-                    "GOOGLE_PROJECT_ID environment variable not set. Required for Google provider.\n\
-                     Get your project ID from: https://console.cloud.google.com/\n\
-                     Then set: export GOOGLE_PROJECT_ID=your-project-id"
-                        .to_string(),
-                ))
-            })?;
+            // Validate GOOGLE_PROJECT_ID (try Maproom-specific var first)
+            let project_id = env::var("MAPROOM_GOOGLE_PROJECT_ID")
+                .or_else(|_| env::var("GOOGLE_PROJECT_ID"))
+                .map_err(|_| {
+                    EmbeddingError::Config(ConfigError::MissingConfig(
+                        "Google project ID required for Google provider.\n\
+                         Get your project ID from: https://console.cloud.google.com/\n\
+                         Then set: export MAPROOM_GOOGLE_PROJECT_ID=your-project-id\n\
+                         (or use standard: export GOOGLE_PROJECT_ID=your-project-id)"
+                            .to_string(),
+                    ))
+                })?;
 
-            // Validate GOOGLE_APPLICATION_CREDENTIALS
-            let creds_path_str = env::var("GOOGLE_APPLICATION_CREDENTIALS").map_err(|_| {
-                EmbeddingError::Config(ConfigError::MissingConfig(
-                    "GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Required for Google provider.\n\
-                     Set it to the path of your service account JSON key file.\n\
-                     Download from: https://console.cloud.google.com/iam-admin/serviceaccounts\n\
-                     Then set: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json"
-                        .to_string(),
-                ))
-            })?;
+            // Validate GOOGLE_APPLICATION_CREDENTIALS (try Maproom-specific var first)
+            let creds_path_str = env::var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS")
+                .or_else(|_| env::var("GOOGLE_APPLICATION_CREDENTIALS"))
+                .map_err(|_| {
+                    EmbeddingError::Config(ConfigError::MissingConfig(
+                        "Google application credentials required for Google provider.\n\
+                         Set it to the path of your service account JSON key file.\n\
+                         Download from: https://console.cloud.google.com/iam-admin/serviceaccounts\n\
+                         Then set: export MAPROOM_GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json\n\
+                         (or use standard: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json)"
+                            .to_string(),
+                    ))
+                })?;
 
             let creds_path = PathBuf::from(&creds_path_str);
 

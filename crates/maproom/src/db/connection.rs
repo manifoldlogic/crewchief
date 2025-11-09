@@ -1,7 +1,7 @@
 //! Database connection URL resolution with fallback logic.
 //!
 //! This module provides automatic database URL detection for different environments:
-//! - Explicit DATABASE_URL (highest priority)
+//! - Explicit MAPROOM_DATABASE_URL (highest priority)
 //! - MAPROOM_DB_HOST component-based configuration
 //! - maproom-postgres hostname auto-detection
 //! - localhost fallback (development)
@@ -14,7 +14,7 @@ use tracing::debug;
 /// Get database connection URL with fallback logic.
 ///
 /// Priority order:
-/// 1. DATABASE_URL env var (explicit config)
+/// 1. MAPROOM_DATABASE_URL env var (explicit config)
 /// 2. MAPROOM_DB_HOST env var (component-based config)
 /// 3. maproom-postgres hostname resolution (auto-detect)
 /// 4. localhost fallback (development)
@@ -28,9 +28,9 @@ use tracing::debug;
 /// println!("Connecting to: {}", url);
 /// ```
 pub fn get_database_url() -> Result<String> {
-    // 1. Check for explicit DATABASE_URL
-    if let Ok(url) = env::var("DATABASE_URL") {
-        debug!("Using explicit DATABASE_URL from environment");
+    // 1. Check for explicit MAPROOM_DATABASE_URL
+    if let Ok(url) = env::var("MAPROOM_DATABASE_URL") {
+        debug!("Using explicit MAPROOM_DATABASE_URL from environment");
         return Ok(url);
     }
 
@@ -90,7 +90,7 @@ mod tests {
     fn test_explicit_database_url_takes_precedence() {
         // Setup: Set all env vars
         env::set_var(
-            "DATABASE_URL",
+            "MAPROOM_DATABASE_URL",
             "postgresql://explicit:pass@explicit-host:5432/explicit",
         );
         env::set_var("MAPROOM_DB_HOST", "should-be-ignored");
@@ -103,14 +103,14 @@ mod tests {
         );
 
         // Cleanup
-        env::remove_var("DATABASE_URL");
+        env::remove_var("MAPROOM_DATABASE_URL");
         env::remove_var("MAPROOM_DB_HOST");
     }
 
     #[test]
     #[serial]
     fn test_maproom_db_host_override() {
-        env::remove_var("DATABASE_URL");
+        env::remove_var("MAPROOM_DATABASE_URL");
         env::set_var("MAPROOM_DB_HOST", "custom-postgres");
         env::set_var("MAPROOM_DB_PORT", "5555");
 
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_maproom_db_host_default_port() {
-        env::remove_var("DATABASE_URL");
+        env::remove_var("MAPROOM_DATABASE_URL");
         env::set_var("MAPROOM_DB_HOST", "custom-postgres");
         env::remove_var("MAPROOM_DB_PORT");
 
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_fallback_when_no_env_vars() {
-        env::remove_var("DATABASE_URL");
+        env::remove_var("MAPROOM_DATABASE_URL");
         env::remove_var("MAPROOM_DB_HOST");
 
         let url = get_database_url().unwrap();

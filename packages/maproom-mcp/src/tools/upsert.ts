@@ -122,7 +122,7 @@ export async function handleUpsertTool(
   ]
 
   // Add embedding batch size if configured
-  const embeddingBatchSize = process.env.EMBEDDING_BATCH_SIZE
+  const embeddingBatchSize = process.env.MAPROOM_EMBEDDING_BATCH_SIZE
   if (embeddingBatchSize) {
     args.push('--embedding-batch-size', embeddingBatchSize)
   }

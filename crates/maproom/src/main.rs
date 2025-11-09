@@ -265,7 +265,7 @@ async fn auto_generate_embeddings(
         std::env::set_var("EMBEDDING_PROVIDER", provider_name);
     } else {
         let env_provider =
-            std::env::var("EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
+            std::env::var("MAPROOM_EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
         tracing::info!("Using provider from environment: {}", env_provider);
     }
 
@@ -280,7 +280,7 @@ async fn auto_generate_embeddings(
         }
         Err(e) => {
             // Check if this is an Ollama configuration without Ollama running
-            let provider_name = std::env::var("EMBEDDING_PROVIDER").unwrap_or_default();
+            let provider_name = std::env::var("MAPROOM_EMBEDDING_PROVIDER").unwrap_or_default();
             if provider_name.to_lowercase() == "ollama" || provider_name.is_empty() {
                 // Try to detect if Ollama is configured
                 tracing::warn!("Embedding service unavailable: {}", e);

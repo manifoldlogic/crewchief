@@ -67,8 +67,8 @@ impl EmbeddingService {
     ///
     /// # Environment Variables
     ///
-    /// - `EMBEDDING_PROVIDER`: Provider name (optional, auto-detects Ollama if not set)
-    /// - `EMBEDDING_MODEL`: Model name (optional, provider-specific defaults)
+    /// - `MAPROOM_EMBEDDING_PROVIDER`: Provider name (optional, auto-detects Ollama if not set)
+    /// - `MAPROOM_EMBEDDING_MODEL`: Model name (optional, provider-specific defaults)
     /// - `OPENAI_API_KEY`: Required for OpenAI provider
     ///
     /// # Examples

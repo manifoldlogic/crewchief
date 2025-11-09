@@ -106,17 +106,17 @@ impl EmbeddingConfig {
         let mut config = Self::default();
 
         // Load provider
-        if let Ok(provider) = env::var("EMBEDDING_PROVIDER") {
+        if let Ok(provider) = env::var("MAPROOM_EMBEDDING_PROVIDER") {
             config.provider = provider.parse()?;
         }
 
         // Load model
-        if let Ok(model) = env::var("EMBEDDING_MODEL") {
+        if let Ok(model) = env::var("MAPROOM_EMBEDDING_MODEL") {
             config.model = model;
         }
 
         // Load dimension
-        if let Ok(dim) = env::var("EMBEDDING_DIMENSION") {
+        if let Ok(dim) = env::var("MAPROOM_EMBEDDING_DIMENSION") {
             config.dimension = dim.parse().map_err(|_| ConfigError::InvalidValue {
                 field: "EMBEDDING_DIMENSION".to_string(),
                 reason: "Must be a positive integer".to_string(),
@@ -124,7 +124,7 @@ impl EmbeddingConfig {
         }
 
         // Load cache size
-        if let Ok(size) = env::var("EMBEDDING_CACHE_SIZE") {
+        if let Ok(size) = env::var("MAPROOM_EMBEDDING_CACHE_SIZE") {
             config.cache.max_entries = size.parse().map_err(|_| ConfigError::InvalidValue {
                 field: "EMBEDDING_CACHE_SIZE".to_string(),
                 reason: "Must be a positive integer".to_string(),
@@ -132,7 +132,7 @@ impl EmbeddingConfig {
         }
 
         // Load cache TTL
-        if let Ok(ttl) = env::var("EMBEDDING_CACHE_TTL") {
+        if let Ok(ttl) = env::var("MAPROOM_EMBEDDING_CACHE_TTL") {
             config.cache.ttl_seconds = ttl.parse().map_err(|_| ConfigError::InvalidValue {
                 field: "EMBEDDING_CACHE_TTL".to_string(),
                 reason: "Must be a positive integer".to_string(),
@@ -140,7 +140,7 @@ impl EmbeddingConfig {
         }
 
         // Load batch size
-        if let Ok(batch) = env::var("EMBEDDING_BATCH_SIZE") {
+        if let Ok(batch) = env::var("MAPROOM_EMBEDDING_BATCH_SIZE") {
             config.batch_size = batch.parse().map_err(|_| ConfigError::InvalidValue {
                 field: "EMBEDDING_BATCH_SIZE".to_string(),
                 reason: "Must be a positive integer".to_string(),
@@ -148,7 +148,7 @@ impl EmbeddingConfig {
         }
 
         // Load retry max attempts
-        if let Ok(max_attempts) = env::var("EMBEDDING_RETRY_MAX_ATTEMPTS") {
+        if let Ok(max_attempts) = env::var("MAPROOM_EMBEDDING_RETRY_MAX_ATTEMPTS") {
             config.retry.max_attempts =
                 max_attempts
                     .parse()
@@ -159,9 +159,14 @@ impl EmbeddingConfig {
         }
 
         // Load API key based on provider
+        // Try Maproom-specific env vars first, then fall back to standard vars
         config.api_key = match config.provider {
-            Provider::OpenAI => env::var("OPENAI_API_KEY").ok(),
-            Provider::Cohere => env::var("COHERE_API_KEY").ok(),
+            Provider::OpenAI => env::var("MAPROOM_OPENAI_API_KEY")
+                .or_else(|_| env::var("OPENAI_API_KEY"))
+                .ok(),
+            Provider::Cohere => env::var("MAPROOM_COHERE_API_KEY")
+                .or_else(|_| env::var("COHERE_API_KEY"))
+                .ok(),
             Provider::Ollama => None, // Ollama runs locally, no API key needed
             Provider::Google => None, // Google uses service account JSON, not API key
             Provider::Local => None,  // Local models don't need API keys
@@ -187,7 +192,7 @@ impl EmbeddingConfig {
         //
         // See PROVFIX project documentation for full context on this critical fix.
         //
-        if let Ok(endpoint) = env::var("EMBEDDING_API_ENDPOINT") {
+        if let Ok(endpoint) = env::var("MAPROOM_EMBEDDING_API_ENDPOINT") {
             match config.provider {
                 Provider::OpenAI => {
                     // Only accept OpenAI endpoints
@@ -216,11 +221,11 @@ impl EmbeddingConfig {
         }
 
         // Load parallel processing configuration
-        if let Ok(enabled) = env::var("EMBEDDING_PARALLEL_ENABLED") {
+        if let Ok(enabled) = env::var("MAPROOM_EMBEDDING_PARALLEL_ENABLED") {
             config.parallel.enabled = enabled.parse().unwrap_or(true);
         }
 
-        if let Ok(sub_batch) = env::var("EMBEDDING_PARALLEL_SUB_BATCH_SIZE") {
+        if let Ok(sub_batch) = env::var("MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE") {
             config.parallel.sub_batch_size =
                 sub_batch.parse().map_err(|_| ConfigError::InvalidValue {
                     field: "EMBEDDING_PARALLEL_SUB_BATCH_SIZE".to_string(),
@@ -228,7 +233,7 @@ impl EmbeddingConfig {
                 })?;
         }
 
-        if let Ok(concurrency) = env::var("EMBEDDING_PARALLEL_MAX_CONCURRENCY") {
+        if let Ok(concurrency) = env::var("MAPROOM_EMBEDDING_PARALLEL_MAX_CONCURRENCY") {
             config.parallel.max_concurrency =
                 concurrency.parse().map_err(|_| ConfigError::InvalidValue {
                     field: "EMBEDDING_PARALLEL_MAX_CONCURRENCY".to_string(),
