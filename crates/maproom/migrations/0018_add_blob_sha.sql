@@ -4,7 +4,15 @@
 -- Changes: Simplified for transaction safety - removed CONCURRENTLY, batched backfill, and validation blocks
 
 -- ============================================================================
--- STEP 1: Create PostgreSQL function for blob SHA computation
+-- STEP 1: Enable pgcrypto extension for digest() function
+-- ============================================================================
+-- Required for SHA-256 hash computation in compute_git_blob_sha function
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+
+-- ============================================================================
+-- STEP 2: Create PostgreSQL function for blob SHA computation
 -- ============================================================================
 -- This function must produce identical output to the Rust implementation
 -- in crates/maproom/src/content_hash.rs::compute_blob_sha()
@@ -14,8 +22,8 @@ CREATE OR REPLACE FUNCTION maproom.compute_git_blob_sha(content TEXT)
 RETURNS TEXT AS $$
   SELECT encode(
     digest(
-      'blob ' || length(content) || E'\0' || content,
-      'sha256'
+      convert_to('blob ' || length(content), 'UTF8') || '\x00'::bytea || convert_to(content, 'UTF8'),
+      'sha256'::text
     ),
     'hex'
   );
@@ -26,7 +34,7 @@ COMMENT ON FUNCTION maproom.compute_git_blob_sha(TEXT) IS
 
 
 -- ============================================================================
--- STEP 2: Add blob_sha column (nullable initially for safe migration)
+-- STEP 3: Add blob_sha column (nullable initially for safe migration)
 -- ============================================================================
 
 ALTER TABLE maproom.chunks
@@ -37,7 +45,7 @@ COMMENT ON COLUMN maproom.chunks.blob_sha IS
 
 
 -- ============================================================================
--- STEP 3: Create index with IF NOT EXISTS (transaction-safe)
+-- STEP 4: Create index with IF NOT EXISTS (transaction-safe)
 -- ============================================================================
 -- Using IF NOT EXISTS ensures idempotency without requiring CONCURRENTLY
 -- This is safe for migration runner which runs in transactions
@@ -47,7 +55,7 @@ ON maproom.chunks(blob_sha);
 
 
 -- ============================================================================
--- STEP 4: Backfill all existing chunks with blob SHA
+-- STEP 5: Backfill all existing chunks with blob SHA
 -- ============================================================================
 -- Simplified backfill - single UPDATE statement
 -- Migration runner handles transaction management and error reporting
@@ -58,7 +66,7 @@ WHERE blob_sha IS NULL;
 
 
 -- ============================================================================
--- STEP 5: Make column NOT NULL after backfill completes
+-- STEP 6: Make column NOT NULL after backfill completes
 -- ============================================================================
 -- Only enforce NOT NULL constraint after all existing data is populated
 -- This ensures data integrity going forward

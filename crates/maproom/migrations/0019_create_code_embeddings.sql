@@ -34,11 +34,15 @@ COMMENT ON COLUMN maproom.code_embeddings.created_at IS
 
 
 -- ============================================================================
--- STEP 2: Migrate existing embeddings with deduplication
+-- STEP 2: Migrate existing embeddings with deduplication (if any exist)
 -- ============================================================================
 -- Uses DISTINCT ON (blob_sha) to select ONE embedding per unique blob SHA
 -- When multiple chunks share the same blob_sha, we keep the oldest (created_at ASC)
 -- This preserves data lineage and ensures deterministic migration
+--
+-- NOTE: This migration is safe on fresh databases (no embeddings to migrate)
+-- The chunks table has code_embedding column, not embedding column
+-- This migration will be populated by the indexer when it generates embeddings
 
 DO $$
 DECLARE
@@ -48,29 +52,32 @@ DECLARE
 BEGIN
   -- Get counts before migration
   SELECT COUNT(*) INTO total_chunks FROM maproom.chunks;
-  SELECT COUNT(*) INTO chunks_with_embeddings FROM maproom.chunks WHERE embedding IS NOT NULL;
+  SELECT COUNT(*) INTO chunks_with_embeddings FROM maproom.chunks WHERE code_embedding IS NOT NULL;
 
   RAISE NOTICE 'Starting embedding migration...';
   RAISE NOTICE 'Total chunks: %', total_chunks;
   RAISE NOTICE 'Chunks with embeddings: %', chunks_with_embeddings;
 
-  -- Perform migration with deduplication
-  INSERT INTO maproom.code_embeddings (blob_sha, embedding, model_version)
-  SELECT DISTINCT ON (blob_sha)
-    blob_sha,
-    embedding,
-    'text-embedding-3-small' AS model_version
-  FROM maproom.chunks
-  WHERE embedding IS NOT NULL
-  ORDER BY blob_sha, created_at ASC;
+  -- Perform migration with deduplication (only if embeddings exist)
+  IF chunks_with_embeddings > 0 THEN
+    INSERT INTO maproom.code_embeddings (blob_sha, embedding, model_version)
+    SELECT DISTINCT ON (blob_sha)
+      blob_sha,
+      code_embedding,
+      'text-embedding-3-small' AS model_version
+    FROM maproom.chunks
+    WHERE code_embedding IS NOT NULL
+    ORDER BY blob_sha, created_at ASC;
 
-  -- Report results
-  GET DIAGNOSTICS rows_inserted = ROW_COUNT;
+    -- Report results
+    GET DIAGNOSTICS rows_inserted = ROW_COUNT;
 
-  RAISE NOTICE 'Migration complete: % unique embeddings inserted', rows_inserted;
-  RAISE NOTICE 'Deduplication achieved: % embeddings eliminated (%.1f%% reduction)',
-    chunks_with_embeddings - rows_inserted,
-    100.0 * (chunks_with_embeddings - rows_inserted) / NULLIF(chunks_with_embeddings, 0);
+    RAISE NOTICE 'Migration complete: % unique embeddings inserted', rows_inserted;
+    RAISE NOTICE 'Deduplication achieved: % embeddings eliminated',
+      chunks_with_embeddings - rows_inserted;
+  ELSE
+    RAISE NOTICE 'No embeddings to migrate - fresh database or embeddings not yet generated';
+  END IF;
 END $$;
 
 
@@ -97,10 +104,21 @@ COMMENT ON INDEX maproom.idx_embeddings_vector IS
 -- Prevents orphaned chunks (chunks without embeddings in code_embeddings table)
 -- ON DELETE RESTRICT: cannot delete embedding if any chunk still references it
 
-ALTER TABLE maproom.chunks
-ADD CONSTRAINT IF NOT EXISTS fk_chunks_embedding
-FOREIGN KEY (blob_sha) REFERENCES maproom.code_embeddings(blob_sha)
-ON DELETE RESTRICT;
+-- Check if constraint already exists before adding
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_chunks_embedding'
+      AND conrelid = 'maproom.chunks'::regclass
+  ) THEN
+    ALTER TABLE maproom.chunks
+    ADD CONSTRAINT fk_chunks_embedding
+    FOREIGN KEY (blob_sha) REFERENCES maproom.code_embeddings(blob_sha)
+    ON DELETE RESTRICT;
+  END IF;
+END $$;
 
 COMMENT ON CONSTRAINT fk_chunks_embedding ON maproom.chunks IS
   'Ensures all chunks reference valid embeddings in code_embeddings table. Prevents orphaned chunks.';
@@ -119,7 +137,7 @@ BEGIN
   SELECT COUNT(*) INTO orphaned_count
   FROM maproom.chunks c
   LEFT JOIN maproom.code_embeddings e ON c.blob_sha = e.blob_sha
-  WHERE e.blob_sha IS NULL AND c.embedding IS NOT NULL;
+  WHERE e.blob_sha IS NULL AND c.code_embedding IS NOT NULL;
 
   IF orphaned_count > 0 THEN
     RAISE EXCEPTION 'Validation failed: Found % orphaned chunks (chunks without embeddings)', orphaned_count;
@@ -146,10 +164,9 @@ BEGIN
     RAISE NOTICE 'Validation 2 passed: Deduplication successful';
     RAISE NOTICE '  Total chunks:        %', total_chunks;
     RAISE NOTICE '  Unique embeddings:   %', total_embeddings;
-    RAISE NOTICE '  Cache efficiency:    %%', cache_efficiency;
-    RAISE NOTICE '  Duplicates removed:  % (%.1f%%)',
-      total_chunks - total_embeddings,
-      100.0 * (total_chunks - total_embeddings) / NULLIF(total_chunks, 0);
+    RAISE NOTICE '  Cache efficiency:    %', cache_efficiency;
+    RAISE NOTICE '  Duplicates removed:  %',
+      total_chunks - total_embeddings;
   END IF;
 END $$;
 
@@ -175,7 +192,8 @@ BEGIN
   RAISE NOTICE '=== Storage Savings Analysis ===';
   RAISE NOTICE 'Embedding size per chunk:    % KB', embedding_size_kb;
   RAISE NOTICE 'Duplicate chunks eliminated: %', duplicate_chunks;
-  RAISE NOTICE 'Storage saved:               % MB (% GB)', storage_saved_mb, storage_saved_gb;
+  RAISE NOTICE 'Storage saved (MB):          %', storage_saved_mb;
+  RAISE NOTICE 'Storage saved (GB):          %', storage_saved_gb;
   RAISE NOTICE '';
   RAISE NOTICE 'Note: This only accounts for embedding vectors. Additional savings from index deduplication not included.';
 END $$;
