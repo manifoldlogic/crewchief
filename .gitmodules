@@ -1,0 +1,3 @@
+[submodule ".crewchief/claude-code-plugins"]
+	path = .crewchief/claude-code-plugins
+	url = https://github.com/danielbushman/claude-code-plugins.git
