@@ -1,0 +1,68 @@
+COMPETITION REPORT
+============================================================
+
+Competition ID: comp-1762742968491
+Task: Find Worktree Creation Implementation
+Difficulty: easy
+Category: finding-implementation
+
+RESULTS
+------------------------------------------------------------
+1. Detailed (Comprehensive)
+   Score: 19.3%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 96.4%
+   Searches: 0
+   Target Found: NO
+
+2. Simple (Minimal)
+   Score: 19.0%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 95.1%
+   Searches: 0
+   Target Found: NO
+
+3. Code-like (Technical)
+   Score: 18.9%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 94.3%
+   Searches: 0
+   Target Found: NO
+
+4. Conversational (Friendly)
+   Score: 18.5%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 92.3%
+   Searches: 0
+   Target Found: NO
+
+5. Control (Current Baseline)
+   Score: 18.2%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 91.1%
+   Searches: 0
+   Target Found: NO
+
+WINNER
+------------------------------------------------------------
+Detailed (Comprehensive) (19.3%)
+
+Search quality: 0% (target not found well), Task completion: 0% (needs work), Efficiency: 96% (0 searches, 12 calls, 26.366s), Total score: 19%
+
+COMPETITION METRICS
+------------------------------------------------------------
+Average Score: 18.8%
+Score Range: 18.2% - 19.3%
+Average Searches: 0.0
+Success Rate: 0.0%
+
+NEXT STEPS
+------------------------------------------------------------
+- Use winner as baseline for next generation
+- Generate mutations from winner
+- Run next competition

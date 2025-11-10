@@ -1,0 +1,8 @@
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Grep","tool_input":{"pattern":"worktree","glob":"*.{ts,js,tsx,jsx}","output_mode":"files_with_matches","-i":true},"timestamp":1762743840035}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Grep","tool_input":{"pattern":"git worktree","output_mode":"content","-i":true},"timestamp":1762743840035}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743844827}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743844828}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Glob","tool_input":{"pattern":"**/git/worktrees.ts"},"timestamp":1762743848819}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Glob","tool_input":{"pattern":"**/cli/worktree.ts"},"timestamp":1762743848820}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen3-mhsk5mcksldv-1762743824942/packages/cli/src/git/worktrees.ts"},"timestamp":1762743852805}
+{"session_id":"a53f577c-84ea-4cd4-a29e-69fa8783d0df","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen3-mhsk5mcksldv-1762743824942/packages/cli/src/cli/worktree.ts"},"timestamp":1762743852806}

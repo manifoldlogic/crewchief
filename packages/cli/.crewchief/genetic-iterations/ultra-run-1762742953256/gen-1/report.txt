@@ -1,0 +1,35 @@
+GENERATION 1 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Detailed (Comprehensive)
+   ID: variant-a-detailed
+   Score: 19.3%
+   Generation: 0
+
+2. Simple (Minimal)
+   ID: variant-b-simple
+   Score: 19.0%
+   Generation: 0
+
+3. Code-like (Technical)
+   ID: variant-d-code-like
+   Score: 18.9%
+   Generation: 0
+
+4. Conversational (Friendly)
+   ID: variant-c-conversational
+   Score: 18.5%
+   Generation: 0
+
+5. Control (Current Baseline)
+   ID: variant-control
+   Score: 18.2%
+   Generation: 0
+
+SUMMARY
+------------------------------------------------------------
+Best: Detailed (Comprehensive) - 19.3%
+Average: 18.8%
+Improvement: +19.29%

@@ -1,0 +1,16 @@
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Grep","tool_input":{"pattern":"git worktree","output_mode":"files_with_matches"},"timestamp":1762743838777}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches"},"timestamp":1762743838781}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Glob","tool_input":{"pattern":"**/*worktree*"},"timestamp":1762743838784}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743844181}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743844182}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762743844182}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743848490}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743848491}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762743848491}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Bash","tool_input":{"command":"pwd","description":"Check current working directory"},"timestamp":1762743853095}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Bash","tool_input":{"command":"find /workspace -name \"worktree.ts\" -type f 2>/dev/null | head -5","description":"Find worktree.ts files"},"timestamp":1762743853096}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Glob","tool_input":{"pattern":"**/cli/worktree.ts"},"timestamp":1762743857477}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Glob","tool_input":{"pattern":"**/git/worktrees.ts"},"timestamp":1762743857478}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen3-mhsk5mckwq6w-1762743830150/packages/cli/src/cli/worktree.ts"},"timestamp":1762743862104}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen3-mhsk5mckwq6w-1762743830150/packages/cli/src/git/worktrees.ts"},"timestamp":1762743862105}
+{"session_id":"c4a7afb6-cf1a-4e76-a4bf-1bc60d5e27db","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen3-mhsk5mckwq6w-1762743830150/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762743862106}

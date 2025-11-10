@@ -1,0 +1,51 @@
+GENERATION 2 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Detailed (Comprehensive)
+   ID: variant-a-detailed
+   Score: 19.6%
+   Generation: 0
+
+2. Amplification Mutation (Gen 1)
+   ID: variant-amplification-gen1-mhsjrk800ol9
+   Score: 19.1%
+   Generation: 1
+   Mutation: amplification
+
+3. Specialization Mutation (Gen 1)
+   ID: variant-specialization-gen1-mhsjrk80hmjj
+   Score: 19.1%
+   Generation: 1
+   Mutation: specialization
+
+4. Amplification Mutation (Gen 1)
+   ID: variant-amplification-gen1-mhsjrk7zy2yb
+   Score: 18.8%
+   Generation: 1
+   Mutation: amplification
+
+5. Reduction Mutation (Gen 1)
+   ID: variant-reduction-gen1-mhsjrk7zu2c4
+   Score: 18.5%
+   Generation: 1
+   Mutation: reduction
+
+6. Reduction Mutation (Gen 1)
+   ID: variant-reduction-gen1-mhsjrk80l8jd
+   Score: 17.9%
+   Generation: 1
+   Mutation: reduction
+
+7. Crossover Mutation (Gen 1)
+   ID: variant-crossover-gen1-mhsjrk7zi9nz
+   Score: 17.8%
+   Generation: 1
+   Mutation: crossover
+
+SUMMARY
+------------------------------------------------------------
+Best: Detailed (Comprehensive) - 19.6%
+Average: 18.7%
+Improvement: +0.27%

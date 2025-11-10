@@ -1,0 +1,12 @@
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches","-i":true},"timestamp":1762743638736}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Glob","tool_input":{"pattern":"**/*.{ts,js,tsx,jsx}"},"timestamp":1762743638741}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743644062}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743644063}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Glob","tool_input":{"pattern":"**/src/git/worktrees.ts"},"timestamp":1762743648480}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Glob","tool_input":{"pattern":"**/src/cli/worktree.ts"},"timestamp":1762743648480}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Bash","tool_input":{"command":"find /workspace/packages/cli -name \"worktrees.ts\" -not -path \"*/.crewchief/*\" -not -path \"*/node_modules/*\"","description":"Find worktrees.ts outside .crewchief directory"},"timestamp":1762743653136}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen2-mhsk1c4jppgz-1762743622713/packages/cli/src/git/worktrees.ts"},"timestamp":1762743658231}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen2-mhsk1c4jppgz-1762743622713/packages/cli/src/cli/worktree.ts"},"timestamp":1762743658232}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Grep","tool_input":{"pattern":"createWorktree","output_mode":"files_with_matches"},"timestamp":1762743662727}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen2-mhsk1c4jppgz-1762743622713/packages/cli/src/orchestrator/scheduler.ts","limit":150},"timestamp":1762743666547}
+{"session_id":"f5a601c4-b6aa-439e-ab87-0e71cec873ba","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen2-mhsk1c4jppgz-1762743622713/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762743671080}

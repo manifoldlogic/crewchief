@@ -1,0 +1,17 @@
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Grep","tool_input":{"pattern":"git worktree","output_mode":"files_with_matches"},"timestamp":1762743838105}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches"},"timestamp":1762743838109}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Glob","tool_input":{"pattern":"**/*worktree*"},"timestamp":1762743838112}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743843206}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743843207}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743847723}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743847724}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Bash","tool_input":{"command":"pwd","description":"Check current directory"},"timestamp":1762743852989}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Bash","tool_input":{"command":"find . -name \"worktrees.ts\" -o -name \"worktree.ts\" | grep -v \".crewchief\" | grep -v \"node_modules\" | head -10","description":"Find worktree files outside .crewchief"},"timestamp":1762743852990}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743856465}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743856466}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Bash","tool_input":{"command":"cat ./packages/cli/src/git/worktrees.ts","description":"Read worktrees.ts file"},"timestamp":1762743860217}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Glob","tool_input":{"pattern":"packages/cli/src/git/worktrees.ts"},"timestamp":1762743864610}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Glob","tool_input":{"pattern":"packages/cli/src/cli/worktree.ts"},"timestamp":1762743864611}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-specialization-gen2-mhsk1c4k7gya-1762743817320/packages/cli/src/git/worktrees.ts"},"timestamp":1762743869167}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-specialization-gen2-mhsk1c4k7gya-1762743817320/packages/cli/src/cli/worktree.ts"},"timestamp":1762743869168}
+{"session_id":"57752141-6b7f-45dc-9dfc-fc60ea524242","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-specialization-gen2-mhsk1c4k7gya-1762743817320/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762743875376}

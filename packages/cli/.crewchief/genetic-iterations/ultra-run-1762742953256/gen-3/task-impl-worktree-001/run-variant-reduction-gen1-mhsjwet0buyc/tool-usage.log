@@ -1,0 +1,12 @@
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches","-i":true},"timestamp":1762743412718}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Glob","tool_input":{"pattern":"**/*.{js,ts,py,go,rb}"},"timestamp":1762743412729}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762743418592}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762743418593}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Glob","tool_input":{"pattern":"**/worktrees.ts"},"timestamp":1762743422508}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Glob","tool_input":{"pattern":"**/worktree.ts"},"timestamp":1762743422509}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Bash","tool_input":{"command":"find /workspace/packages/cli/src -name \"worktree*.ts\" -o -name \"worktrees.ts\" 2>/dev/null | grep -v \".crewchief/worktrees\"","description":"Find worktree files outside of .crewchief directory"},"timestamp":1762743427784}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Bash","tool_input":{"command":"ls -la /workspace/packages/cli/src/git/","description":"List files in git directory"},"timestamp":1762743431580}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Bash","tool_input":{"command":"ls -la /workspace/packages/cli/src/cli/","description":"List files in cli directory"},"timestamp":1762743431580}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen1-mhsjwet0buyc-1762743403085/packages/cli/src/git/worktrees.ts"},"timestamp":1762743436378}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen1-mhsjwet0buyc-1762743403085/packages/cli/src/cli/worktree.ts"},"timestamp":1762743436380}
+{"session_id":"3de45a77-1413-4eb8-9c89-eb9283aedf5a","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/worktrees/variant-variant-reduction-gen1-mhsjwet0buyc-1762743403085/packages/cli/src/utils/worktree-metadata.ts"},"timestamp":1762743443078}

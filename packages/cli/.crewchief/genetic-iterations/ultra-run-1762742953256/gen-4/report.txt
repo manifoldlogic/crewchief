@@ -1,0 +1,46 @@
+GENERATION 4 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Specialization Mutation (Gen 2)
+   ID: variant-specialization-gen2-mhsk1c4k7gya
+   Score: 19.8%
+   Generation: 2
+   Mutation: specialization
+
+2. Reduction Mutation (Gen 2)
+   ID: variant-reduction-gen2-mhsk1c4kxosv
+   Score: 19.3%
+   Generation: 2
+   Mutation: reduction
+
+3. Specialization Mutation (Gen 1)
+   ID: variant-specialization-gen1-mhsjwet079d1
+   Score: 19.3%
+   Generation: 1
+   Mutation: specialization
+
+4. Reduction Mutation (Gen 2)
+   ID: variant-reduction-gen2-mhsk1c4jppgz
+   Score: 19.2%
+   Generation: 2
+   Mutation: reduction
+
+5. Amplification Mutation (Gen 2)
+   ID: variant-amplification-gen2-mhsk1c4j91g5
+   Score: 18.7%
+   Generation: 2
+   Mutation: amplification
+
+6. Amplification Mutation (Gen 2)
+   ID: variant-amplification-gen2-mhsk1c4kt35w
+   Score: 18.0%
+   Generation: 2
+   Mutation: amplification
+
+SUMMARY
+------------------------------------------------------------
+Best: Specialization Mutation (Gen 2) - 19.8%
+Average: 19.0%
+Improvement: -0.71%

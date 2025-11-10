@@ -1,0 +1,76 @@
+COMPETITION REPORT
+============================================================
+
+Competition ID: comp-1762744015629
+Task: Find Worktree Creation Implementation
+Difficulty: easy
+Category: finding-implementation
+
+RESULTS
+------------------------------------------------------------
+1. Reduction Mutation (Gen 4)
+   Score: 19.3%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 96.6%
+   Searches: 0
+   Target Found: NO
+
+2. Crossover Mutation (Gen 4)
+   Score: 19.0%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 95.0%
+   Searches: 0
+   Target Found: NO
+
+3. Amplification Mutation (Gen 4)
+   Score: 19.0%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 95.0%
+   Searches: 0
+   Target Found: NO
+
+4. Amplification Mutation (Gen 4)
+   Score: 18.6%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 93.2%
+   Searches: 0
+   Target Found: NO
+
+5. Reduction Mutation (Gen 3)
+   Score: 18.5%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 92.5%
+   Searches: 0
+   Target Found: NO
+
+6. Reduction Mutation (Gen 4)
+   Score: 18.4%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 92.2%
+   Searches: 0
+   Target Found: NO
+
+WINNER
+------------------------------------------------------------
+Reduction Mutation (Gen 4) (19.3%)
+
+Search quality: 0% (target not found well), Task completion: 0% (needs work), Efficiency: 97% (0 searches, 12 calls, 25.408s), Total score: 19%
+
+COMPETITION METRICS
+------------------------------------------------------------
+Average Score: 18.8%
+Score Range: 18.4% - 19.3%
+Average Searches: 0.0
+Success Rate: 0.0%
+
+NEXT STEPS
+------------------------------------------------------------
+- Use winner as baseline for next generation
+- Generate mutations from winner
+- Run next competition
