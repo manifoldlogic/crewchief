@@ -4,6 +4,7 @@ This directory contains comprehensive documentation for the grep-impossible task
 
 ## Quick Links
 
+- **[Competition Framework Guide](./competition-framework.md)** - How to run agent competitions to optimize tool descriptions
 - **[Task Design Guide](./task-design-guide.md)** - How to create high-quality grep-impossible tasks
 - **[Validation Guide](./validation-guide.md)** - How to validate task quality across 5 dimensions
 - **[Benchmark Usage Guide](./benchmark-usage.md)** - How to run benchmarks and interpret results
@@ -79,11 +80,32 @@ Start here if you want to validate task quality:
 - Validation workflow examples
 - Fixing common validation failures
 
+### For Competition Runners
+
+Start here if you want to run agent competitions:
+
+3. **[Competition Framework Guide](./competition-framework.md)**
+   - Setting up the environment
+   - Running agent competitions
+   - Understanding competition results
+   - Genetic iteration for optimization
+   - Cost management and budgeting
+   - Troubleshooting common issues
+
+**Topics Covered**:
+- Environment variable setup (ANTHROPIC_API_KEY, MAPROOM_DATABASE_URL)
+- Competition configuration and execution
+- Variant creation and testing
+- Multi-generation genetic optimization
+- Statistical validation
+- Cost estimation and savings
+- Best practices
+
 ### For Benchmark Users
 
 Start here if you want to run benchmarks:
 
-3. **[Benchmark Usage Guide](./benchmark-usage.md)**
+4. **[Benchmark Usage Guide](./benchmark-usage.md)**
    - Running individual tasks
    - Running full validation suites
    - Reading and interpreting reports
@@ -325,6 +347,31 @@ Documentation PRs welcome! Focus on:
 - **Cohen's d**: Effect size interpretation
 - **Statistical Power Analysis**: Sample size determination
 
+## Quick Start
+
+### 1. Setup Your Environment
+
+```bash
+# Set required environment variables
+export ANTHROPIC_API_KEY="sk-ant-..."
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
+
+# Test your setup
+cd packages/cli
+pnpm search-optimization:test-setup
+```
+
+### 2. Run a Test Competition
+
+```bash
+# Run a minimal competition (cost: ~$0.50-1.00, time: 2-5 min)
+pnpm search-optimization:run-example
+```
+
+### 3. Explore the Framework
+
+See **[Competition Framework Guide](./competition-framework.md)** for full instructions.
+
 ## Frequently Asked Questions
 
 **Q: Why "grep-impossible"? Isn't that biased against grep?**
@@ -341,6 +388,9 @@ A: Single task (5 iterations): ~$0.30-0.75. Full Tier 1 suite: ~$12-20. Full 3-t
 
 **Q: What if my task fails validation?**
 A: Follow the troubleshooting guide in [Validation Guide](./validation-guide.md#troubleshooting-guide-by-failure-type). Validation failures provide actionable recommendations for improvement.
+
+**Q: How do I run agent competitions to optimize tool descriptions?**
+A: See the **[Competition Framework Guide](./competition-framework.md)** for complete setup instructions, examples, and best practices.
 
 ## License
 
