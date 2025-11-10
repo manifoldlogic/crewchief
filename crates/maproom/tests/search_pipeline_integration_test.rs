@@ -40,8 +40,8 @@ async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std:
 }
 
 /// Helper to create embedding service from environment.
-fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
-    EmbeddingService::from_env().map_err(|e| e.into())
+async fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+    EmbeddingService::from_env().await.map_err(|e| e.into())
 }
 
 /// Helper to find a test repo ID from the database.
@@ -60,7 +60,7 @@ async fn find_test_repo(
 async fn test_search_pipeline_basic_query() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -112,7 +112,7 @@ async fn test_search_pipeline_basic_query() -> Result<(), Box<dyn std::error::Er
 async fn test_search_pipeline_with_custom_weights() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -144,7 +144,7 @@ async fn test_search_pipeline_with_custom_weights() -> Result<(), Box<dyn std::e
 async fn test_search_pipeline_empty_query() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -167,7 +167,7 @@ async fn test_search_pipeline_empty_query() -> Result<(), Box<dyn std::error::Er
 async fn test_search_pipeline_no_matches() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -195,7 +195,7 @@ async fn test_search_pipeline_no_matches() -> Result<(), Box<dyn std::error::Err
 async fn test_search_pipeline_code_query() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -222,7 +222,7 @@ async fn test_search_pipeline_code_query() -> Result<(), Box<dyn std::error::Err
 async fn test_search_pipeline_performance() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -271,7 +271,7 @@ async fn test_search_pipeline_performance() -> Result<(), Box<dyn std::error::Er
 async fn test_search_pipeline_result_deduplication() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -316,7 +316,7 @@ async fn test_search_pipeline_result_deduplication() -> Result<(), Box<dyn std::
 async fn test_search_pipeline_with_worktree_filter() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -348,7 +348,7 @@ async fn test_search_pipeline_with_worktree_filter() -> Result<(), Box<dyn std::
 async fn test_search_pipeline_custom_fusion_strategy() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
 
@@ -376,7 +376,7 @@ async fn test_search_pipeline_custom_fusion_strategy() -> Result<(), Box<dyn std
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_malformed_query() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -423,7 +423,7 @@ async fn test_search_pipeline_malformed_query() -> Result<(), Box<dyn std::error
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_special_characters() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -458,7 +458,7 @@ async fn test_search_pipeline_special_characters() -> Result<(), Box<dyn std::er
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_very_long_query() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -498,7 +498,7 @@ async fn test_search_pipeline_very_long_query() -> Result<(), Box<dyn std::error
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_unicode_query() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -530,7 +530,7 @@ async fn test_search_pipeline_unicode_query() -> Result<(), Box<dyn std::error::
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_ranking_order() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -570,7 +570,7 @@ async fn test_search_pipeline_ranking_order() -> Result<(), Box<dyn std::error::
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_score_range() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -604,7 +604,7 @@ async fn test_search_pipeline_score_range() -> Result<(), Box<dyn std::error::Er
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_concurrent_searches() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -629,7 +629,7 @@ async fn test_search_pipeline_concurrent_searches() -> Result<(), Box<dyn std::e
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_invalid_repo_id() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -654,7 +654,7 @@ async fn test_search_pipeline_invalid_repo_id() -> Result<(), Box<dyn std::error
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_metadata_completeness() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);
@@ -701,7 +701,7 @@ async fn test_search_pipeline_metadata_completeness() -> Result<(), Box<dyn std:
 #[ignore] // Run only when database is available
 async fn test_search_pipeline_result_fields_populated() -> Result<(), Box<dyn std::error::Error>> {
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let pipeline = SearchPipeline::new(processor, executors);

@@ -6790,7 +6790,480 @@
       "generations": 1,
       "finalAvgScore": 0.7657792821142372,
       "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-VSINxx",
+      "startedAt": "2025-11-10T00:15:26.173Z",
+      "completedAt": "2025-11-10T00:15:26.183Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-0",
+        "name": "Test Variant 0",
+        "score": 0.7704515702843586,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-VSINxx/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-VSINxx/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-VSINxx/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 1,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-VSINxx"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": 0.7704515702843586
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.7704515702843586,
+          "bestGenerationImprovement": 0.7704515702843586,
+          "worstGenerationImprovement": 0.7704515702843586
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 1,
+      "finalAvgScore": 0.7574686455363647,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-rjwLKx",
+      "startedAt": "2025-11-10T00:15:26.194Z",
+      "completedAt": "2025-11-10T00:15:26.203Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-2",
+        "name": "Test Variant 2",
+        "score": 0.7345784566420583,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-rjwLKx/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-rjwLKx/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-rjwLKx/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 2,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-rjwLKx"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": -0.03271013264351541
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.36728922832102917,
+          "bestGenerationImprovement": 0.7672885892855738,
+          "worstGenerationImprovement": -0.03271013264351541
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 2,
+      "finalAvgScore": 0.7345784566420583,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-u4VE3w",
+      "startedAt": "2025-11-10T00:15:26.208Z",
+      "completedAt": "2025-11-10T00:15:26.218Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-2",
+        "name": "Test Variant 2",
+        "score": 0.7578683743238792,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-u4VE3w/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-u4VE3w/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-u4VE3w/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 3,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-u4VE3w"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": -0.014340334374609354
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.25262279144129307,
+          "bestGenerationImprovement": 0.7672689584561813,
+          "worstGenerationImprovement": -0.014340334374609354
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 3,
+      "finalAvgScore": 0.7578683743238792,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-SzRI14",
+      "startedAt": "2025-11-10T00:15:26.227Z",
+      "completedAt": "2025-11-10T00:15:26.248Z",
+      "status": "completed",
+      "convergenceReached": true,
+      "bestVariant": {
+        "id": "test-variant-2",
+        "name": "Test Variant 2",
+        "score": 0.72814118520017,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-SzRI14/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-SzRI14/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-SzRI14/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 10,
+        "convergenceThreshold": 0.2,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-SzRI14"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": 4,
+          "plateauDetected": false,
+          "finalImprovement": -0.02589622176605122
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.1820352963000425,
+          "bestGenerationImprovement": 0.7535564171230954,
+          "worstGenerationImprovement": -0.02589622176605122
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
+      },
+      "generations": 4,
+      "finalAvgScore": 0.72814118520017,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-pYXA7g",
+      "startedAt": "2025-11-10T00:15:26.261Z",
+      "completedAt": "2025-11-10T00:15:26.274Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-2",
+        "name": "Test Variant 2",
+        "score": 0.7361447888771193,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-pYXA7g/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-pYXA7g/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-pYXA7g/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 2,
+        "convergenceThreshold": 0.0001,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-pYXA7g"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": -0.03543156498274258
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.36807239443855966,
+          "bestGenerationImprovement": 0.7715763538598619,
+          "worstGenerationImprovement": -0.03543156498274258
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 2,
+      "finalAvgScore": 0.7361447888771193,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-0MOQ8r",
+      "startedAt": "2025-11-10T00:15:26.284Z",
+      "completedAt": "2025-11-10T00:15:26.290Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-0",
+        "name": "Test Variant 0",
+        "score": 0.7547308159066364,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": ["/tmp/genetic-iter-test-0MOQ8r/variants/test-variant-0.json"],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 1,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 1,
+        "baseDir": "/tmp/genetic-iter-test-0MOQ8r"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": 0.7547308159066364
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.7547308159066364,
+          "bestGenerationImprovement": 0.7547308159066364,
+          "worstGenerationImprovement": 0.7547308159066364
+        },
+        "successfulParameters": {
+          "populationSize": 1,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 1,
+      "finalAvgScore": 0.7547308159066364,
+      "multiTierEnabled": false
     }
   ],
-  "lastUpdated": "2025-11-08T09:15:23.627Z"
+  "lastUpdated": "2025-11-10T00:15:26.290Z"
 }

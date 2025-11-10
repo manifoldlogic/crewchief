@@ -47,8 +47,8 @@ async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std:
 }
 
 /// Helper to create embedding service from environment.
-fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
-    EmbeddingService::from_env().map_err(|e| e.into())
+async fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+    EmbeddingService::from_env().await.map_err(|e| e.into())
 }
 
 /// Helper to find a test repo ID from the database.
@@ -309,7 +309,7 @@ async fn test_churn_signal_integration() -> Result<(), Box<dyn std::error::Error
 #[ignore] // Run only when database is available
 async fn test_signal_contribution_to_fusion() -> Result<(), Box<dyn std::error::Error>> {
     // Test that signals contribute to final fusion scores
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
 
     // Setup pipeline with signals included
     let client1 = create_test_connection().await?;
@@ -422,7 +422,7 @@ async fn test_graph_signal_importance() -> Result<(), Box<dyn std::error::Error>
 async fn test_missing_signal_handling() -> Result<(), Box<dyn std::error::Error>> {
     // Test graceful degradation when signals are missing
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());

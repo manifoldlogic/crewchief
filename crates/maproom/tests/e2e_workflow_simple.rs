@@ -99,24 +99,13 @@ async fn skip_if_services_unavailable() -> Option<()> {
     Some(())
 }
 
-fn create_test_embedding_service() -> Result<EmbeddingService> {
-    let config = EmbeddingConfig {
-        provider: Provider::Ollama,
-        model: "nomic-embed-text".to_string(),
-        dimension: 768,
-        cache: CacheConfig {
-            max_entries: 1000,
-            ttl_seconds: 3600,
-            enable_metrics: true,
-        },
-        batch_size: 10,
-        retry: RetryConfig::default(),
-        api_key: None,
-        api_endpoint: Some(format!("{}/api/embed", OLLAMA_ENDPOINT)),
-        parallel: ParallelConfig::default(),
-    };
+async fn create_test_embedding_service() -> Result<EmbeddingService> {
+    // Set environment variables for Ollama configuration
+    std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+    std::env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
+    std::env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", format!("{}/api/embed", OLLAMA_ENDPOINT));
 
-    EmbeddingService::new(config).map_err(|e| anyhow::anyhow!("{:?}", e))
+    EmbeddingService::from_env().await.map_err(|e| anyhow::anyhow!("{:?}", e))
 }
 
 // =============================================================================
@@ -521,7 +510,7 @@ async fn test_06_embedding_service_integration() {
         return;
     };
 
-    let service = create_test_embedding_service().expect("Failed to create embedding service");
+    let service = create_test_embedding_service().await.expect("Failed to create embedding service");
 
     // Test single embedding
     let text = "async function processData(input: string): Promise<Result>";

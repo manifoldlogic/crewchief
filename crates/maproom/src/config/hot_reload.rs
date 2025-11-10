@@ -262,6 +262,7 @@ impl Drop for ConfigReloader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use std::sync::Mutex;
     use tempfile::NamedTempFile;
@@ -270,6 +271,7 @@ mod tests {
     static CONFIG_MUTEX: Mutex<()> = Mutex::new(());
 
     #[tokio::test]
+    #[serial]
     async fn test_config_reloader_creation() {
         let config = Arc::new(RwLock::new(SearchConfig::default()));
         let temp_file = NamedTempFile::new().unwrap();
@@ -279,8 +281,16 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_manual_reload() {
         let _guard = CONFIG_MUTEX.lock().unwrap();
+
+        // Clean up environment variables that could override file config
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_FTS");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_VECTOR");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_GRAPH");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_RECENCY");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_CHURN");
 
         let config = Arc::new(RwLock::new(SearchConfig::default()));
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -338,8 +348,16 @@ feature_flags:
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_invalid_config_rejected() {
         let _guard = CONFIG_MUTEX.lock().unwrap();
+
+        // Clean up environment variables that could override file config
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_FTS");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_VECTOR");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_GRAPH");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_RECENCY");
+        std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_CHURN");
 
         let config = Arc::new(RwLock::new(SearchConfig::default()));
         let mut temp_file = NamedTempFile::new().unwrap();

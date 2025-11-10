@@ -434,10 +434,10 @@ async fn is_ollama_available() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     // Note: These tests use environment variables which are global state.
-    // Run with `--test-threads=1` to avoid test interference:
-    //   cargo test -p crewchief-maproom --lib embedding::factory -- --test-threads=1
+    // The #[serial] annotation ensures tests run sequentially to avoid interference.
 
     #[test]
     fn test_provider_name_normalization() {
@@ -466,6 +466,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_with_explicit_ollama() {
         // Clean up all environment variables first
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
@@ -498,6 +499,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_missing_openai_key() {
         // Clean up all environment variables first
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
@@ -535,12 +537,16 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_unknown_provider() {
         // Clean up all environment variables first
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("OPENAI_API_KEY");
+        env::remove_var("MAPROOM_OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("MAPROOM_GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+        env::remove_var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS");
 
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "unknown-provider");
 
@@ -571,6 +577,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_google_missing_project_id() {
         // Clean up all environment variables first
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
@@ -612,6 +619,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_google_missing_credentials() {
         // Clean up all environment variables first
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
@@ -851,6 +859,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_no_config_no_ollama() {
         // Clean up all environment variables first
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");

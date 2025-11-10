@@ -40,8 +40,8 @@ async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std:
 }
 
 /// Helper to create embedding service from environment.
-fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
-    EmbeddingService::from_env().map_err(|e| e.into())
+async fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+    EmbeddingService::from_env().await.map_err(|e| e.into())
 }
 
 /// Helper to find a test repo ID from the database.
@@ -60,7 +60,7 @@ async fn find_test_repo(
 async fn test_weighted_fusion_integration() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -110,7 +110,7 @@ async fn test_weighted_fusion_integration() -> Result<(), Box<dyn std::error::Er
 async fn test_rrf_fusion_integration() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(RRFFusion::default()); // k=60
@@ -169,7 +169,7 @@ async fn test_rrf_fusion_integration() -> Result<(), Box<dyn std::error::Error>>
 async fn test_rrf_custom_k_integration() -> Result<(), Box<dyn std::error::Error>> {
     // Setup with custom k parameter
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(RRFFusion::new(100.0)); // Higher k = more conservative
@@ -207,7 +207,7 @@ async fn test_compare_fusion_strategies() -> Result<(), Box<dyn std::error::Erro
     // Setup both fusion strategies
     let client1 = create_test_connection().await?;
     let client2 = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
 
     let processor1 = Arc::new(QueryProcessor::new(embedder.clone()));
     let executors1 = SearchExecutors::new(client1);
@@ -286,7 +286,7 @@ async fn test_compare_fusion_strategies() -> Result<(), Box<dyn std::error::Erro
 async fn test_rrf_with_custom_weights_ignored() -> Result<(), Box<dyn std::error::Error>> {
     // Setup
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(RRFFusion::default());

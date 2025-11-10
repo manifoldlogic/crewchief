@@ -46,8 +46,8 @@ async fn create_test_connection() -> Result<tokio_postgres::Client, Box<dyn std:
 }
 
 /// Helper to create embedding service from environment.
-fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
-    EmbeddingService::from_env().map_err(|e| e.into())
+async fn create_embedding_service() -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+    EmbeddingService::from_env().await.map_err(|e| e.into())
 }
 
 /// Helper to find a test repo ID from the database.
@@ -70,7 +70,7 @@ async fn find_test_repo(
 async fn test_score_breakdown_availability() -> Result<(), Box<dyn std::error::Error>> {
     // Test that score breakdown is available in search results
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -115,7 +115,7 @@ async fn test_score_breakdown_availability() -> Result<(), Box<dyn std::error::E
 async fn test_score_source_contributions() -> Result<(), Box<dyn std::error::Error>> {
     // Test that each source's contribution is tracked correctly
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -176,7 +176,7 @@ async fn test_score_source_contributions() -> Result<(), Box<dyn std::error::Err
 async fn test_edge_case_empty_results() -> Result<(), Box<dyn std::error::Error>> {
     // Test fusion with query that returns no results
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -210,7 +210,7 @@ async fn test_edge_case_empty_results() -> Result<(), Box<dyn std::error::Error>
 async fn test_edge_case_single_result() -> Result<(), Box<dyn std::error::Error>> {
     // Test fusion with limit of 1 (single result)
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -248,7 +248,7 @@ async fn test_edge_case_single_result() -> Result<(), Box<dyn std::error::Error>
 async fn test_edge_case_duplicate_chunks_weighted() -> Result<(), Box<dyn std::error::Error>> {
     // Test that weighted fusion handles chunks appearing in multiple sources
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -299,7 +299,7 @@ async fn test_edge_case_duplicate_chunks_weighted() -> Result<(), Box<dyn std::e
 async fn test_edge_case_duplicate_chunks_rrf() -> Result<(), Box<dyn std::error::Error>> {
     // Test that RRF fusion handles chunks appearing in multiple sources
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(RRFFusion::default());
@@ -350,7 +350,7 @@ async fn test_edge_case_duplicate_chunks_rrf() -> Result<(), Box<dyn std::error:
 async fn test_edge_case_very_large_limit() -> Result<(), Box<dyn std::error::Error>> {
     // Test fusion with very large limit (edge case)
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -392,7 +392,7 @@ async fn test_edge_case_very_large_limit() -> Result<(), Box<dyn std::error::Err
 async fn test_performance_weighted_fusion() -> Result<(), Box<dyn std::error::Error>> {
     // Comprehensive performance test for weighted fusion
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -473,7 +473,7 @@ async fn test_performance_weighted_fusion() -> Result<(), Box<dyn std::error::Er
 async fn test_performance_rrf_fusion() -> Result<(), Box<dyn std::error::Error>> {
     // Comprehensive performance test for RRF fusion
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(RRFFusion::default());
@@ -554,7 +554,7 @@ async fn test_performance_rrf_fusion() -> Result<(), Box<dyn std::error::Error>>
 async fn test_performance_fusion_scaling() -> Result<(), Box<dyn std::error::Error>> {
     // Test fusion performance with different result set sizes
     let client = create_test_connection().await?;
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
     let processor = Arc::new(QueryProcessor::new(embedder));
     let executors = SearchExecutors::new(client);
     let fusion = Box::new(BasicWeightedFusion::new());
@@ -598,7 +598,7 @@ async fn test_performance_fusion_scaling() -> Result<(), Box<dyn std::error::Err
 #[ignore] // Run only when database is available
 async fn test_performance_comparison_weighted_vs_rrf() -> Result<(), Box<dyn std::error::Error>> {
     // Compare performance of weighted vs RRF fusion
-    let embedder = Arc::new(create_embedding_service()?);
+    let embedder = Arc::new(create_embedding_service().await?);
 
     // Setup weighted fusion
     let client1 = create_test_connection().await?;
