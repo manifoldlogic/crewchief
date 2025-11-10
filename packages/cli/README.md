@@ -66,16 +66,16 @@ Then initialize and use semantic search:
 
 ```bash
 # Initialize database
-crewchief maproom:db
+crewchief maproom db migrate
 
 # Index your codebase
-crewchief maproom:scan
+crewchief maproom scan
 
 # Search semantically
-crewchief maproom:search "authentication flow"
+crewchief maproom search "authentication flow"
 
 # Watch for changes and auto-index
-crewchief maproom:watch
+crewchief maproom watch
 ```
 
 ### AI Agent Orchestration (Requires iTerm2)
@@ -187,7 +187,7 @@ export OPENAI_API_KEY=sk-your-api-key-here
 export MAPROOM_EMBEDDING_MODEL=text-embedding-3-small
 
 # Index your codebase
-crewchief maproom:scan
+crewchief maproom scan
 ```
 
 **Cost:** ~$0.02 per 1GB of code indexed
@@ -208,7 +208,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 export GOOGLE_VERTEX_REGION=us-central1
 
 # Index your codebase
-crewchief maproom:scan
+crewchief maproom scan
 ```
 
 **Requirements:**
@@ -236,7 +236,7 @@ export MAPROOM_EMBEDDING_PROVIDER=ollama
 export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 
 # Index your codebase
-crewchief maproom:scan
+crewchief maproom scan
 ```
 
 **Pros:** Free, private, no internet required
@@ -446,13 +446,14 @@ All commands below should be prefixed with `crewchief`. For example: `crewchief 
 
 ### Maproom Commands (Semantic Search)
 
-| Command                     | Description                    |
-| --------------------------- | ------------------------------ |
-| `maproom:db`                | Initialize PostgreSQL database |
-| `maproom:scan`              | Index your codebase            |
-| `maproom:search <query>`    | Search code semantically       |
-| `maproom:watch`             | Auto-index on file changes     |
-| `maproom:upsert [files...]` | Update specific files          |
+| Command                       | Description                    |
+| ----------------------------- | ------------------------------ |
+| `maproom db migrate`          | Initialize PostgreSQL database |
+| `maproom scan`                | Index your codebase            |
+| `maproom search <query>`      | Search code semantically       |
+| `maproom watch`               | Auto-index on file changes     |
+| `maproom upsert [files...]`   | Update specific files          |
+| `maproom generate-embeddings` | Generate embeddings for chunks |
 
 **Note:** For AI assistant integration, install [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) instead of using these commands directly.
 
