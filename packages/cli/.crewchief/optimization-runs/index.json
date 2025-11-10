@@ -27,19 +27,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -112,19 +107,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -197,19 +187,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -282,19 +267,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -332,10 +312,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7283843248244382,
@@ -367,19 +344,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -439,9 +411,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-p9mcYi/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-p9mcYi/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -450,19 +420,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -535,19 +500,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -620,19 +580,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -705,19 +660,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -790,19 +740,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -876,19 +821,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -948,9 +888,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-qaFcKs/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-qaFcKs/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -959,19 +897,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1044,19 +977,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1129,19 +1057,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1214,19 +1137,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1299,19 +1217,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1349,10 +1262,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7558492975308809,
@@ -1384,19 +1294,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1456,9 +1361,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-nxBMTi/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-nxBMTi/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -1467,19 +1370,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1552,19 +1450,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1637,19 +1530,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1722,19 +1610,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1807,19 +1690,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1857,10 +1735,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7501478643301925,
@@ -1892,19 +1767,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -1977,19 +1847,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2062,19 +1927,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2147,19 +2007,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2232,19 +2087,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2282,10 +2132,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7481223584354365,
@@ -2317,19 +2164,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2389,9 +2231,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-yCkX0O/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-yCkX0O/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -2400,19 +2240,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2485,19 +2320,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2570,19 +2400,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2655,19 +2480,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2740,19 +2560,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2790,10 +2605,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7445585378319579,
@@ -2825,19 +2637,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2897,9 +2704,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-slO8IU/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-slO8IU/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -2908,19 +2713,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -2993,19 +2793,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3078,19 +2873,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3163,19 +2953,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3248,19 +3033,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3298,10 +3078,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7681886197165751,
@@ -3333,19 +3110,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3405,9 +3177,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-USfi7A/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-USfi7A/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -3416,19 +3186,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3501,19 +3266,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3586,19 +3346,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3671,19 +3426,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3756,19 +3506,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3806,10 +3551,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7417763315273835,
@@ -3841,19 +3583,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -3913,9 +3650,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-Q9zZUz/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-Q9zZUz/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -3924,19 +3659,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4009,19 +3739,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4094,19 +3819,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4179,19 +3899,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4264,19 +3979,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4314,10 +4024,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7251492619351122,
@@ -4349,19 +4056,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4421,9 +4123,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-PhmmWk/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-PhmmWk/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -4432,19 +4132,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4517,19 +4212,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4602,19 +4292,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4687,19 +4372,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4772,19 +4452,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4822,10 +4497,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.731681187838333,
@@ -4857,19 +4529,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -4929,9 +4596,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-7BfRX5/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-7BfRX5/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -4940,19 +4605,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5025,19 +4685,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5110,19 +4765,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5195,19 +4845,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5280,19 +4925,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5365,19 +5005,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5450,19 +5085,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5535,19 +5165,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5585,10 +5210,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7629156315435514,
@@ -5620,19 +5242,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5692,9 +5309,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-WhptL8/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-WhptL8/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -5703,19 +5318,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5788,19 +5398,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5873,19 +5478,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -5958,19 +5558,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6043,19 +5638,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6093,10 +5683,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7567100083995477,
@@ -6128,19 +5715,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6200,9 +5782,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-x4lz6T/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-x4lz6T/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -6211,19 +5791,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6296,19 +5871,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6381,19 +5951,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6466,19 +6031,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6551,19 +6111,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6601,10 +6156,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7574091469633951,
@@ -6636,19 +6188,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6708,9 +6255,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-BOAmYR/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-BOAmYR/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -6719,19 +6264,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6804,19 +6344,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6889,19 +6424,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -6974,19 +6504,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7059,19 +6584,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7109,10 +6629,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7670966739142415,
@@ -7144,19 +6661,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7216,9 +6728,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-GtFDvE/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-GtFDvE/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -7227,19 +6737,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7312,19 +6817,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7397,19 +6897,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7482,19 +6977,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7567,19 +7057,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7617,10 +7102,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.72814118520017,
@@ -7652,19 +7134,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7724,9 +7201,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-0MOQ8r/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-0MOQ8r/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -7735,19 +7210,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7820,19 +7290,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7905,19 +7370,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -7990,19 +7450,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8075,19 +7530,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8125,10 +7575,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7677678921881975,
@@ -8160,19 +7607,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8232,9 +7674,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-1VbZS6/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-1VbZS6/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -8243,19 +7683,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8328,19 +7763,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8413,19 +7843,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8498,19 +7923,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8583,19 +8003,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8633,10 +8048,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.736680702894486,
@@ -8668,19 +8080,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8740,9 +8147,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-1Lz3nh/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-1Lz3nh/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -8751,19 +8156,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8836,19 +8236,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -8921,19 +8316,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9006,19 +8396,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9091,19 +8476,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9177,19 +8557,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9249,9 +8624,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-hhLU12/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-hhLU12/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -9260,19 +8633,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9345,19 +8713,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9430,19 +8793,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9515,19 +8873,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9600,19 +8953,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9650,10 +8998,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7651303674545348,
@@ -9685,19 +9030,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9757,9 +9097,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-CwU6er/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-CwU6er/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -9768,19 +9106,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9853,19 +9186,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -9938,19 +9266,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10023,19 +9346,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10108,19 +9426,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10158,10 +9471,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7274601961068897,
@@ -10193,19 +9503,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10265,9 +9570,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-bRyXkw/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-bRyXkw/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -10276,19 +9579,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10361,19 +9659,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10446,19 +9739,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10531,19 +9819,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10616,19 +9899,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10666,10 +9944,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7641893627021795,
@@ -10701,19 +9976,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10773,9 +10043,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-dG3cLb/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-dG3cLb/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -10784,19 +10052,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10869,19 +10132,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -10954,19 +10212,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11039,19 +10292,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11124,19 +10372,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11174,10 +10417,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7646858607452298,
@@ -11209,19 +10449,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11281,9 +10516,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-XgAU3e/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-XgAU3e/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -11292,19 +10525,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11377,19 +10605,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11462,19 +10685,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11547,19 +10765,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11632,19 +10845,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11682,10 +10890,7 @@
           "mutationRate": 0,
           "convergenceThreshold": 0.01
         },
-        "insights": [
-          "Convergence reached in 4 generations",
-          "Strong optimization velocity - good parameter choices"
-        ]
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
       },
       "generations": 4,
       "finalAvgScore": 0.7402318347105634,
@@ -11717,19 +10922,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11789,9 +10989,7 @@
         "generation": 0
       },
       "config": {
-        "initialVariants": [
-          "/tmp/genetic-iter-test-ZvrfQF/variants/test-variant-0.json"
-        ],
+        "initialVariants": ["/tmp/genetic-iter-test-ZvrfQF/variants/test-variant-0.json"],
         "tasks": [
           {
             "id": "impl-worktree-001",
@@ -11800,19 +10998,14 @@
             "searchTarget": {
               "type": "file",
               "path": "packages/cli/src/git/worktree.ts",
-              "alternatives": [
-                "packages/cli/src/git/worktrees.ts",
-                "src/git/worktree"
-              ]
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
             },
             "followUpTask": {
               "type": "explanation",
               "prompt": "Explain how worktree creation works in this codebase",
               "validator": {
                 "type": "explanation",
-                "mentionsFiles": [
-                  "packages/cli/src/git/worktree"
-                ],
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
                 "mentionsPattern": {}
               }
             },
@@ -11858,7 +11051,480 @@
       "generations": 1,
       "finalAvgScore": 0.7326058620366415,
       "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-KJAAb3",
+      "startedAt": "2025-11-10T01:41:10.803Z",
+      "completedAt": "2025-11-10T01:41:10.816Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-0",
+        "name": "Test Variant 0",
+        "score": 0.7566953538562265,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-KJAAb3/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-KJAAb3/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-KJAAb3/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 1,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-KJAAb3"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": 0.7566953538562265
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.7566953538562265,
+          "bestGenerationImprovement": 0.7566953538562265,
+          "worstGenerationImprovement": 0.7566953538562265
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 1,
+      "finalAvgScore": 0.7458521872948433,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-FHo7JC",
+      "startedAt": "2025-11-10T01:41:10.832Z",
+      "completedAt": "2025-11-10T01:41:10.846Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-1",
+        "name": "Test Variant 1",
+        "score": 0.7502803404559473,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-FHo7JC/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-FHo7JC/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-FHo7JC/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 2,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-FHo7JC"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": -0.01282807631764371
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.37514017022797363,
+          "bestGenerationImprovement": 0.763108416773591,
+          "worstGenerationImprovement": -0.01282807631764371
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 2,
+      "finalAvgScore": 0.7502803404559473,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-6LoDMY",
+      "startedAt": "2025-11-10T01:41:10.859Z",
+      "completedAt": "2025-11-10T01:41:10.871Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-0",
+        "name": "Test Variant 0",
+        "score": 0.7341204217382772,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-6LoDMY/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-6LoDMY/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-6LoDMY/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 3,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-6LoDMY"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": -0.025467925068047848
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.2447068072460924,
+          "bestGenerationImprovement": 0.762569573387377,
+          "worstGenerationImprovement": -0.025467925068047848
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 3,
+      "finalAvgScore": 0.7341204217382772,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-pmsf0G",
+      "startedAt": "2025-11-10T01:41:10.896Z",
+      "completedAt": "2025-11-10T01:41:10.914Z",
+      "status": "completed",
+      "convergenceReached": true,
+      "bestVariant": {
+        "id": "test-variant-2",
+        "name": "Test Variant 2",
+        "score": 0.7664292613926869,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-pmsf0G/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-pmsf0G/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-pmsf0G/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 10,
+        "convergenceThreshold": 0.2,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-pmsf0G"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": 4,
+          "plateauDetected": false,
+          "finalImprovement": 0.03510370578882749
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.19160731534817171,
+          "bestGenerationImprovement": 0.7484019342678156,
+          "worstGenerationImprovement": -0.012406289585447317
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": ["Convergence reached in 4 generations", "Strong optimization velocity - good parameter choices"]
+      },
+      "generations": 4,
+      "finalAvgScore": 0.7664292613926869,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-TLTHMf",
+      "startedAt": "2025-11-10T01:41:10.923Z",
+      "completedAt": "2025-11-10T01:41:10.936Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-1",
+        "name": "Test Variant 1",
+        "score": 0.7415805882712274,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": [
+          "/tmp/genetic-iter-test-TLTHMf/variants/test-variant-0.json",
+          "/tmp/genetic-iter-test-TLTHMf/variants/test-variant-1.json",
+          "/tmp/genetic-iter-test-TLTHMf/variants/test-variant-2.json"
+        ],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 2,
+        "convergenceThreshold": 0.0001,
+        "mutationRate": 0.5,
+        "populationSize": 3,
+        "baseDir": "/tmp/genetic-iter-test-TLTHMf"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": -0.013564677288439797
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.3707902941356137,
+          "bestGenerationImprovement": 0.7551452655596672,
+          "worstGenerationImprovement": -0.013564677288439797
+        },
+        "successfulParameters": {
+          "populationSize": 3,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 2,
+      "finalAvgScore": 0.7415805882712274,
+      "multiTierEnabled": false
+    },
+    {
+      "runId": "genetic-iter-test-7En0Dh",
+      "startedAt": "2025-11-10T01:41:10.945Z",
+      "completedAt": "2025-11-10T01:41:10.955Z",
+      "status": "completed",
+      "convergenceReached": false,
+      "bestVariant": {
+        "id": "test-variant-0",
+        "name": "Test Variant 0",
+        "score": 0.7734214726802581,
+        "generation": 0
+      },
+      "config": {
+        "initialVariants": ["/tmp/genetic-iter-test-7En0Dh/variants/test-variant-0.json"],
+        "tasks": [
+          {
+            "id": "impl-worktree-001",
+            "name": "Find Worktree Creation Implementation",
+            "description": "Find the code that creates git worktrees in the crewchief CLI and explain how it works",
+            "searchTarget": {
+              "type": "file",
+              "path": "packages/cli/src/git/worktree.ts",
+              "alternatives": ["packages/cli/src/git/worktrees.ts", "src/git/worktree"]
+            },
+            "followUpTask": {
+              "type": "explanation",
+              "prompt": "Explain how worktree creation works in this codebase",
+              "validator": {
+                "type": "explanation",
+                "mentionsFiles": ["packages/cli/src/git/worktree"],
+                "mentionsPattern": {}
+              }
+            },
+            "difficulty": "easy",
+            "category": "finding-implementation",
+            "maxSearchAttempts": 5,
+            "maxTimeSeconds": 180
+          }
+        ],
+        "maxIterations": 1,
+        "convergenceThreshold": 0.01,
+        "mutationRate": 0.5,
+        "populationSize": 1,
+        "baseDir": "/tmp/genetic-iter-test-7En0Dh"
+      },
+      "learnings": {
+        "bestMutationTypes": [],
+        "convergencePattern": {
+          "generationsToConverge": null,
+          "plateauDetected": false,
+          "finalImprovement": 0.7734214726802581
+        },
+        "taskCoverageTrends": {
+          "startingPassRate": 0,
+          "finalPassRate": 0,
+          "improvement": 0
+        },
+        "scoreVelocity": {
+          "avgImprovementPerGeneration": 0.7734214726802581,
+          "bestGenerationImprovement": 0.7734214726802581,
+          "worstGenerationImprovement": 0.7734214726802581
+        },
+        "successfulParameters": {
+          "populationSize": 1,
+          "mutationRate": 0,
+          "convergenceThreshold": 0.01
+        },
+        "insights": [
+          "Max iterations reached without convergence",
+          "Strong optimization velocity - good parameter choices"
+        ]
+      },
+      "generations": 1,
+      "finalAvgScore": 0.7734214726802581,
+      "multiTierEnabled": false
     }
   ],
-  "lastUpdated": "2025-11-10T01:41:02.875Z"
+  "lastUpdated": "2025-11-10T01:41:10.956Z"
 }

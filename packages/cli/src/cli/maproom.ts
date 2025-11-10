@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
+import { validateMaproomEnvironment, displayValidationResult } from './maproom-validation.js'
 
 function resolvePackagedMaproomBin(): string | null {
   const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
@@ -49,6 +50,27 @@ function resolvePackagedMaproomBin(): string | null {
 }
 
 function runMaproomForward(args: string[]) {
+  const subcommand = args[0]
+
+  // Skip validation for help commands and non-database commands
+  const skipValidation = args.includes('--help') || args.includes('-h') || subcommand === 'cache'
+
+  if (!skipValidation) {
+    // Commands that require database and may need embeddings
+    const needsValidation = ['scan', 'upsert', 'search', 'generate-embeddings']
+
+    if (needsValidation.includes(subcommand)) {
+      const validation = validateMaproomEnvironment()
+      displayValidationResult(validation)
+
+      if (!validation.valid) {
+        process.exitCode = 1
+        return
+      }
+    }
+  }
+
+  // Forward to Rust binary
   const bin = resolvePackagedMaproomBin()
   if (!bin) {
     console.error(
