@@ -276,12 +276,35 @@ export async function detectRunningServer(): Promise<boolean> {
   // This is a simple heuristic - check for node process with maproom-mcp
   // In production, this could be more sophisticated
   try {
-    const { execSync } = await import('child_process')
-    const output = execSync('ps aux | grep -i "maproom-mcp" | grep -v grep', {
-      encoding: 'utf-8',
-      stdio: 'pipe',
+    return await new Promise((resolve) => {
+      const proc = spawn('ps', ['aux'], {
+        stdio: 'pipe',
+        shell: false, // CRITICAL: never use shell
+      })
+
+      let stdout = ''
+
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString()
+      })
+
+      proc.on('close', (code) => {
+        if (code !== 0) {
+          resolve(false)
+          return
+        }
+
+        // Filter output for maproom-mcp (excluding grep itself)
+        const lines = stdout.split('\n')
+        const hasMaproomMcp = lines.some((line) => line.toLowerCase().includes('maproom-mcp') && !line.includes('grep'))
+
+        resolve(hasMaproomMcp)
+      })
+
+      proc.on('error', () => {
+        resolve(false)
+      })
     })
-    return output.trim().length > 0
   } catch {
     // ps command failed or no processes found
     return false

@@ -15,9 +15,12 @@ import type { SearchTask, Variant, SetupMetrics, VariantValidation } from './typ
 import type { SearchEvaluationSummary } from '../evaluation/checks.js'
 import { runSearchTaskEvaluation } from '../evaluation/search-checks.js'
 import type { ToolUseEvent, AgentResult } from '../sdk/types.js'
+import { validateCompetitionConfig } from './security/limits.js'
+import { sanitizeDbUrl } from './security/sanitize.js'
 import { PreFlightValidator } from './validation/pre-flight-validator.js'
 import type { VariantEnvironment } from './validation/types.js'
 import { createVariantWorktree } from '../sdk/variant-injection.js'
+import { validateVariantId } from './security/validators.js'
 
 /**
  * Competition configuration
@@ -81,6 +84,21 @@ export interface CompetitionMetrics {
 export async function runCompetition(config: CompetitionConfig): Promise<CompetitionResult> {
   const setupStartTime = Date.now()
 
+  // ─────────────────────────────────────────────────────────
+  // SECURITY VALIDATION (Before any operations)
+  // ─────────────────────────────────────────────────────────
+
+  // Validate competition config (resource limits)
+  validateCompetitionConfig({
+    variants: config.variants.map((v) => v.id),
+    timeout: config.timeout,
+  })
+
+  // Validate all variant IDs (path traversal protection)
+  for (const variant of config.variants) {
+    validateVariantId(variant.id)
+  }
+
   console.log('🏁 Starting competition with pre-flight validation')
 
   // ─────────────────────────────────────────────────────────
@@ -94,9 +112,7 @@ export async function runCompetition(config: CompetitionConfig): Promise<Competi
   const validator = new PreFlightValidator()
   const dbValid = await validator.checkDatabaseConnection()
   if (!dbValid) {
-    const sanitizedUrl = process.env.MAPROOM_DATABASE_URL
-      ? process.env.MAPROOM_DATABASE_URL.replace(/:[^:@]+@/, ':***@')
-      : 'Not configured'
+    const dbUrl = process.env.MAPROOM_DATABASE_URL || 'Not configured'
     throw new Error(
       `
 ❌ Pre-flight validation failed: Database connection failed
@@ -106,7 +122,7 @@ Troubleshooting:
 - Check MAPROOM_DATABASE_URL environment variable
 - Test connection: psql $MAPROOM_DATABASE_URL -c "SELECT 1"
 
-Current value: ${sanitizedUrl}
+Current value: ${sanitizeDbUrl(dbUrl)}
     `.trim(),
     )
   }
@@ -302,8 +318,9 @@ async function executeParticipants(
   }>,
 ): Promise<ParticipantResult[]> {
   if (config.parallelExecution) {
-    // Execute in parallel
-    return Promise.all(variantEnvironments.map((env) => executeParticipant(env, config, baseDir)))
+    // Execute in parallel with batching to respect MAX_PARALLEL_AGENTS
+    const { runAgentsInParallel } = await import('./security/limits.js')
+    return runAgentsInParallel(variantEnvironments, (env) => executeParticipant(env, config, baseDir))
   } else {
     // Execute sequentially
     const results: ParticipantResult[] = []

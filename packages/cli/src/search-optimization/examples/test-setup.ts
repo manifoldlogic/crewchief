@@ -8,12 +8,68 @@
  *   tsx src/search-optimization/examples/test-setup.ts
  */
 
-import { execSync } from 'child_process'
+import { spawn } from 'child_process'
 
 interface SetupCheck {
   name: string
   check: () => boolean | Promise<boolean>
   fix?: string
+}
+
+/**
+ * Execute a command using spawn (secure, no shell injection)
+ * Returns true if exit code is 0, false otherwise
+ */
+async function execCommand(command: string, args: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const proc = spawn(command, args, {
+      stdio: 'pipe',
+      shell: false, // CRITICAL: never use shell
+    })
+
+    proc.on('close', (code) => {
+      resolve(code === 0)
+    })
+
+    proc.on('error', () => {
+      resolve(false)
+    })
+  })
+}
+
+/**
+ * Execute a command and capture output
+ */
+async function execCommandWithOutput(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, {
+      stdio: 'pipe',
+      shell: false, // CRITICAL: never use shell
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout)
+      } else {
+        reject(new Error(`Command failed with code ${code}: ${stderr}`))
+      }
+    })
+
+    proc.on('error', (err) => {
+      reject(err)
+    })
+  })
 }
 
 const checks: SetupCheck[] = [
@@ -49,8 +105,7 @@ const checks: SetupCheck[] = [
         const url = process.env.MAPROOM_DATABASE_URL
         if (!url) return false
 
-        execSync(`psql "${url}" -c "SELECT 1;" > /dev/null 2>&1`)
-        return true
+        return await execCommand('psql', [url, '-c', 'SELECT 1;'])
       } catch {
         return false
       }
@@ -64,9 +119,12 @@ const checks: SetupCheck[] = [
         const url = process.env.MAPROOM_DATABASE_URL
         if (!url) return false
 
-        const output = execSync(`psql "${url}" -c "SELECT * FROM pg_extension WHERE extname='vector';" -t`, {
-          encoding: 'utf8',
-        })
+        const output = await execCommandWithOutput('psql', [
+          url,
+          '-c',
+          "SELECT * FROM pg_extension WHERE extname='vector';",
+          '-t',
+        ])
         return output.trim().length > 0
       } catch {
         return false
