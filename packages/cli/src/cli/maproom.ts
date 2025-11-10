@@ -62,47 +62,80 @@ function runMaproomForward(args: string[]) {
 }
 
 export function registerMaproomCommands(program: Command) {
-  program
+  const maproom = program
     .command('maproom')
-    .description('Semantic code indexing and search (forwards to Rust binary)')
-    .allowUnknownOption(true)
-    .argument('[args...]', 'Arguments forwarded to crewchief-maproom')
-    .addHelpText('after', '\nExamples:\n  $ crewchief maproom --help        # Show all maproom commands\n  $ crewchief maproom:scan           # Index current repository\n  $ crewchief maproom:search "auth"  # Search for authentication code')
-    .action((args: string[]) => runMaproomForward(args || []))
+    .description('Semantic code indexing and search')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ crewchief maproom scan              # Index current repository\n  $ crewchief maproom search "auth"     # Search for authentication code\n  $ crewchief maproom watch             # Auto-index on file changes\n  $ crewchief maproom db migrate        # Initialize database',
+    )
 
-  // Convenience shims for common subcommands
-  const sub = program.command('maproom:db').description('Initialize/migrate PostgreSQL database for code indexing').allowUnknownOption(true)
-  sub.argument('[args...]').action((args: string[]) => runMaproomForward(['db', ...(args || [])]))
-
-  program
-    .command('maproom:scan')
+  maproom
+    .command('scan')
     .description('Scan and index repository files into PostgreSQL (auto-detects git context)')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .addHelpText('after', '\nAuto-detects: repo name, worktree, file path, and commit from git context\nSupports: TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML')
-    .action((args: string[]) => runMaproomForward(['scan', ...(args || [])]))
+    .addHelpText(
+      'after',
+      '\nAuto-detects: repo name, worktree, file path, and commit from git context\nSupports: TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML',
+    )
+    .action((args) => runMaproomForward(['scan', ...(args || [])]))
 
-  program
-    .command('maproom:upsert')
+  maproom
+    .command('search')
+    .description('Semantic search across indexed code, docs, and configs')
+    .allowUnknownOption(true)
+    .argument('[args...]')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ crewchief maproom search "authentication flow"\n  $ crewchief maproom search "database queries" --limit 10',
+    )
+    .action((args) => runMaproomForward(['search', ...(args || [])]))
+
+  maproom
+    .command('upsert')
     .description('Update specific files in the index at a given commit')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .addHelpText('after', '\nExample: crewchief maproom:upsert src/index.ts src/utils.ts')
-    .action((args: string[]) => runMaproomForward(['upsert', ...(args || [])]))
+    .addHelpText('after', '\nExample: crewchief maproom upsert src/index.ts src/utils.ts')
+    .action((args) => runMaproomForward(['upsert', ...(args || [])]))
 
-  program
-    .command('maproom:watch')
+  maproom
+    .command('watch')
     .description('Watch repository for changes and auto-index modified files')
     .allowUnknownOption(true)
     .argument('[args...]')
     .addHelpText('after', '\nAuto-detects git context and watches for file changes\nPress Ctrl-C to stop watching')
-    .action((args: string[]) => runMaproomForward(['watch', ...(args || [])]))
+    .action((args) => runMaproomForward(['watch', ...(args || [])]))
 
-  program
-    .command('maproom:search')
-    .description('Semantic search across indexed code, docs, and configs')
+  // Nested subcommand for database operations
+  const db = maproom.command('db').description('Database operations')
+
+  db.command('migrate')
+    .description('Initialize/migrate PostgreSQL database for code indexing')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .addHelpText('after', '\nExamples:\n  $ crewchief maproom:search "authentication flow"\n  $ crewchief maproom:search "database queries" --limit 10')
-    .action((args: string[]) => runMaproomForward(['search', ...(args || [])]))
+    .action((args) => runMaproomForward(['db', 'migrate', ...(args || [])]))
+
+  // New commands
+  maproom
+    .command('branch-watch')
+    .description('Auto-index worktrees on branch switch')
+    .allowUnknownOption(true)
+    .argument('[args...]')
+    .action((args) => runMaproomForward(['branch-watch', ...(args || [])]))
+
+  maproom
+    .command('cache')
+    .description('Manage maproom caches')
+    .allowUnknownOption(true)
+    .argument('[args...]')
+    .action((args) => runMaproomForward(['cache', ...(args || [])]))
+
+  maproom
+    .command('generate-embeddings')
+    .description('Generate embeddings for indexed chunks')
+    .allowUnknownOption(true)
+    .argument('[args...]')
+    .action((args) => runMaproomForward(['generate-embeddings', ...(args || [])]))
 }
