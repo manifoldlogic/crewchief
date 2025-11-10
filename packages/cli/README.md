@@ -59,7 +59,7 @@ See the [maproom-mcp package](https://www.npmjs.com/package/maproom-mcp) for ins
 First, set up your database connection:
 
 ```bash
-export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5432/maproom"
 ```
 
 Then initialize and use semantic search:
@@ -97,6 +97,152 @@ crewchief agent message implement-auth__claude "Add OAuth support"
 # Send message to all agents on a task
 crewchief agent message implement-auth --all "Update approach"
 ```
+
+## Database Setup
+
+Semantic code search requires PostgreSQL with the pgvector extension. Choose one of the following setup options:
+
+### Option 1: Using Docker Compose (Recommended)
+
+The easiest way is to use the Docker setup from the maproom-mcp package:
+
+```bash
+# Clone or navigate to the maproom-mcp directory
+cd packages/maproom-mcp
+
+# Start PostgreSQL with pgvector
+docker compose up -d postgres
+
+# Verify database is running
+docker compose ps
+
+# Set connection string
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5433/maproom"
+```
+
+**Note:** The Docker setup maps port 5433 (not 5432) to avoid conflicts with local PostgreSQL installations.
+
+**Connection String Format:**
+
+```
+postgresql://[user]:[password]@[host]:[port]/[database]
+```
+
+### Option 2: Local PostgreSQL Installation
+
+```bash
+# macOS with Homebrew
+brew install postgresql@14 pgvector
+brew services start postgresql@14
+
+# Create database
+createdb maproom
+
+# Install pgvector extension
+psql maproom -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# Set connection string
+export MAPROOM_DATABASE_URL="postgresql://localhost:5432/maproom"
+```
+
+### Option 3: Cloud Database
+
+Use any PostgreSQL provider that supports pgvector:
+
+- **Supabase**: Includes pgvector by default
+- **Neon**: Contact support to enable pgvector
+- **AWS RDS**: Enable pgvector extension manually
+
+Set the connection string they provide:
+
+```bash
+export MAPROOM_DATABASE_URL="postgresql://user:password@your-db-host.com:5432/database"
+```
+
+### Environment Variable Fallback Hierarchy
+
+The system checks environment variables in this order:
+
+1. `MAPROOM_DATABASE_URL` **(recommended)** - Current standard
+2. Component-specific (e.g., `MAPROOM_DB_HOST`, `MAPROOM_DB_PORT`)
+3. `PG_DATABASE_URL` - Legacy support (deprecated)
+4. `DATABASE_URL` - Generic fallback
+
+**Best Practice:** Always use `MAPROOM_DATABASE_URL` for new configurations.
+
+## Embedding Provider Setup
+
+Semantic search uses embeddings to understand code semantically. Choose one provider:
+
+### OpenAI (Recommended for Production)
+
+Fast, high-quality embeddings with minimal setup:
+
+```bash
+# Set provider and API key
+export MAPROOM_EMBEDDING_PROVIDER=openai
+export OPENAI_API_KEY=sk-your-api-key-here
+
+# Optional: specify model (default: text-embedding-3-small)
+export MAPROOM_EMBEDDING_MODEL=text-embedding-3-small
+
+# Index your codebase
+crewchief maproom:scan
+```
+
+**Cost:** ~$0.02 per 1GB of code indexed
+
+### Google Vertex AI
+
+Enterprise-grade embeddings with Google Cloud integration:
+
+```bash
+# Set provider
+export MAPROOM_EMBEDDING_PROVIDER=google
+
+# Configure Google Cloud credentials
+export GOOGLE_PROJECT_ID=your-project-id
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+
+# Optional: specify region (default: us-west1)
+export GOOGLE_VERTEX_REGION=us-central1
+
+# Index your codebase
+crewchief maproom:scan
+```
+
+**Requirements:**
+
+- Google Cloud project with Vertex AI API enabled
+- Service account with Vertex AI permissions
+- Download service account JSON key
+
+### Ollama (Local, Private)
+
+Run embeddings locally with no API costs or external dependencies:
+
+```bash
+# Install Ollama (macOS)
+brew install ollama
+
+# Or use Docker from maproom-mcp:
+cd packages/maproom-mcp
+docker compose up -d ollama
+
+# Set provider
+export MAPROOM_EMBEDDING_PROVIDER=ollama
+
+# Optional: specify model (default: nomic-embed-text)
+export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+
+# Index your codebase
+crewchief maproom:scan
+```
+
+**Pros:** Free, private, no internet required
+**Cons:** Slower than cloud providers, requires local compute
+
+**Docker Note:** The maproom-mcp Docker setup automatically pulls the `nomic-embed-text` model on first startup.
 
 ## Configuration
 
@@ -205,7 +351,7 @@ brew services start postgresql@14
 createdb maproom
 
 # Set connection string
-export PG_DATABASE_URL="postgres://localhost:5432/maproom"
+export MAPROOM_DATABASE_URL="postgresql://localhost:5432/maproom"
 ```
 
 ### Option 2: Docker
@@ -218,7 +364,7 @@ docker run -d \
   -p 5432:5432 \
   postgres:14
 
-export PG_DATABASE_URL="postgres://postgres:password@localhost:5432/maproom"
+export MAPROOM_DATABASE_URL="postgresql://postgres:password@localhost:5432/maproom"
 ```
 
 ### Option 3: Cloud Database
@@ -259,10 +405,199 @@ npx crewchief --help
 crewchief doctor
 ```
 
+This will check for:
+
+- Node.js version (>= 18 required)
+- Git installation
+- PostgreSQL connectivity (if `MAPROOM_DATABASE_URL` is set)
+- iTerm2 availability (macOS only)
+
 ### Common Issues
 
-**PostgreSQL connection failed**: Ensure PostgreSQL is running and `PG_DATABASE_URL` is set correctly.
+#### Database Connection Errors
 
-**iTerm2 not found**: Agent features require iTerm2 on macOS. Install from [iterm2.com](https://iterm2.com).
+**Symptom:** `PostgreSQL connection failed` or `ECONNREFUSED`
 
-**Worktree creation failed**: Ensure you're in a git repository with at least one commit.
+**Solutions:**
+
+1. **Verify PostgreSQL is running:**
+
+   ```bash
+   # For Docker:
+   docker compose ps
+
+   # For Homebrew:
+   brew services list | grep postgresql
+   ```
+
+2. **Check environment variable:**
+
+   ```bash
+   echo $MAPROOM_DATABASE_URL
+   # Should output: postgresql://maproom:maproom@localhost:5433/maproom
+   ```
+
+3. **Test connection manually:**
+
+   ```bash
+   psql $MAPROOM_DATABASE_URL -c "SELECT version();"
+   ```
+
+4. **Verify port mapping:**
+   - Docker setup uses port **5433** (not 5432)
+   - Local PostgreSQL typically uses port **5432**
+   - Cloud databases use provider-specific ports
+
+**Common mistakes:**
+
+- Using `PG_DATABASE_URL` instead of `MAPROOM_DATABASE_URL` (deprecated)
+- Wrong port number in connection string
+- PostgreSQL not started or crashed
+- Firewall blocking connection
+
+#### Embedding Provider Errors
+
+**Symptom:** `Embedding generation failed` or `Provider not configured`
+
+**Solutions:**
+
+**For OpenAI:**
+
+1. Verify API key is set:
+
+   ```bash
+   echo $OPENAI_API_KEY
+   # Should start with: sk-...
+   ```
+
+2. Check API key permissions at https://platform.openai.com/api-keys
+
+3. Ensure you have credits available
+
+**For Google Vertex AI:**
+
+1. Verify environment variables:
+
+   ```bash
+   echo $GOOGLE_PROJECT_ID
+   echo $GOOGLE_APPLICATION_CREDENTIALS
+   ```
+
+2. Test service account authentication:
+
+   ```bash
+   gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+   ```
+
+3. Ensure Vertex AI API is enabled in your project
+
+**For Ollama:**
+
+1. Check if Ollama is running:
+
+   ```bash
+   # For Docker:
+   docker compose ps ollama
+
+   # For local:
+   ollama list
+   ```
+
+2. Verify model is pulled:
+
+   ```bash
+   ollama list | grep nomic-embed-text
+   ```
+
+3. If model missing, pull it manually:
+   ```bash
+   ollama pull nomic-embed-text
+   ```
+
+#### Binary Compatibility Issues
+
+**Symptom:** `crewchief-maproom binary not found` or `command not found`
+
+**Solutions:**
+
+1. **Rebuild the Rust binary:**
+
+   ```bash
+   cd packages/cli
+   pnpm build:rust
+   ```
+
+2. **Verify binary exists:**
+
+   ```bash
+   ls -la packages/cli/bin/$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)/
+   ```
+
+3. **Check platform compatibility:**
+   - macOS: darwin-arm64 (Apple Silicon) or darwin-x64 (Intel)
+   - Linux: linux-x64 or linux-arm64
+   - Windows: Not currently supported for direct Rust binary usage
+
+#### iTerm2 Not Found
+
+**Symptom:** `iTerm2 is required to run CrewChief` or agent features don't work
+
+**Solutions:**
+
+1. Install iTerm2: https://iterm2.com/downloads.html
+
+2. Ensure you're running commands _inside_ iTerm2, not Terminal.app
+
+3. Verify iTerm2 version (>= 3.4 recommended):
+   - iTerm2 → About iTerm2
+
+**Note:** Agent orchestration features are macOS-only and require iTerm2. Worktree and semantic search work on all platforms.
+
+#### Worktree Creation Failed
+
+**Symptom:** `fatal: not a git repository` or `worktree creation failed`
+
+**Solutions:**
+
+1. Ensure you're in a git repository:
+
+   ```bash
+   git status
+   ```
+
+2. Verify at least one commit exists:
+
+   ```bash
+   git log
+   ```
+
+3. Check for uncommitted changes that might conflict:
+   ```bash
+   git status
+   ```
+
+#### Environment Variable Debugging
+
+If you're unsure which variables are set:
+
+```bash
+# Check all MAPROOM variables
+env | grep MAPROOM
+
+# Check database connection
+env | grep -E "(MAPROOM_DATABASE_URL|PG_DATABASE_URL|DATABASE_URL)"
+
+# Check embedding provider
+env | grep -E "(MAPROOM_EMBEDDING|OPENAI|GOOGLE|OLLAMA)"
+```
+
+### Getting Help
+
+If issues persist:
+
+1. Run `crewchief doctor` and share the output
+2. Check logs: `~/.crewchief/logs/` (if exists)
+3. Open an issue at https://github.com/your-org/crewchief/issues with:
+   - Error message (remove sensitive data)
+   - Output of `crewchief doctor`
+   - Platform and Node.js version
