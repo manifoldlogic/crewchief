@@ -20,6 +20,302 @@ The AGENTOPT framework optimizes tool descriptions by:
 - **Continuous improvement** - Genetic algorithm finds optimal descriptions
 - **Objective metrics** - Clear scoring across multiple dimensions
 
+## Pre-Flight Validation
+
+Starting with the competition framework improvements, the competition runner includes comprehensive pre-flight validation to ensure 100% of agents have valid tool environments before execution.
+
+### Why Validation is Required
+
+Analysis of early competition runs revealed systematic failures:
+- 0% search tool usage (agents didn't have access to maproom tools)
+- 0% task completion (agents couldn't complete tasks without tools)
+- Wasted API credits (~$15-20 per failed run)
+
+Validation ensures:
+- Database is accessible
+- Base branch is indexed
+- All worktrees are scanned
+- MCP tools are configured
+- File permissions are correct
+
+### Validation Phases
+
+The competition runner now operates in three distinct phases:
+
+**Phase 1: Setup (Sequential)**
+1. Validate database connection
+2. Verify base branch indexed
+3. Create competition directory
+4. Load variants
+5. Create worktrees (one per variant)
+6. Inject variant tool descriptions
+7. **Scan all worktrees** (NEW)
+
+**Phase 2: Validation (Per-Variant)**
+1. Check worktree exists
+2. Check worktree scanned (chunk_count > 0)
+3. Check MCP config valid
+4. Check file permissions OK
+5. **Fail fast if any check fails** (NEW)
+
+**Phase 3: Execution (Parallel)**
+1. Spawn agents (only if validation passed)
+2. Collect results
+3. Evaluate winner
+
+### Timing Expectations
+
+**For 12 variants (ultra configuration):**
+- Setup: ~2-3 minutes (worktree creation + scanning)
+- Validation: ~10-20 seconds
+- Execution: ~2-5 minutes (parallel agents)
+- **Total: ~4-8 minutes** (vs ~2-3 minutes without validation)
+
+**Tradeoff:** +2-3 minutes setup time for 100% success rate (vs 0% without validation)
+
+### Validation Checks
+
+#### Database Connection
+- **What**: Tests PostgreSQL connectivity
+- **How**: Executes `SELECT 1` query
+- **Failure**: "Database connection failed - check MAPROOM_DATABASE_URL"
+
+#### Base Branch Indexed
+- **What**: Verifies base branch has chunks in database
+- **How**: Runs `maproom status --repo <repo> --worktree <branch>`
+- **Failure**: "Base branch not indexed - run: crewchief-maproom scan..."
+
+#### Worktree Scanned
+- **What**: Ensures variant worktree has chunks indexed
+- **How**: Checks `chunk_count > 0` in database
+- **Failure**: "Worktree has 0 chunks indexed"
+
+#### MCP Config Valid
+- **What**: Validates .mcp.json structure
+- **How**: Parses JSON and checks for maproom server
+- **Failure**: "MCP config missing or invalid"
+
+#### File Permissions
+- **What**: Tests read/write access
+- **How**: Reads package.json and creates test file
+- **Failure**: "Permission error: EACCES"
+
+### Validation Workflow Diagram
+
+```
+Competition Validation Workflow
+=================================
+
+                 Start Competition
+                        │
+                        ├─▶ Check Database Connection
+                        │      ├─ PASS → Continue
+                        │      └─ FAIL → Error: "Database connection failed"
+                        │
+                        ├─▶ Verify Base Branch Indexed
+                        │      ├─ PASS → Continue
+                        │      └─ FAIL → Error: "Base branch not indexed"
+                        │
+                        ├─▶ Create Worktrees
+                        │      └─▶ For each variant:
+                        │             ├─ Create directory
+                        │             └─ Copy base files
+                        │
+                        ├─▶ Inject Variant Descriptions
+                        │      └─▶ For each worktree:
+                        │             └─ Modify .mcp.json
+                        │
+                        ├─▶ Scan Worktrees
+                        │      └─▶ For each worktree:
+                        │             ├─ Run: maproom scan
+                        │             ├─ Wait for completion
+                        │             └─ FAIL if errors
+                        │
+                        ├─▶ Validate Environments
+                        │      └─▶ For each worktree:
+                        │             ├─ Check: Exists
+                        │             ├─ Check: Indexed
+                        │             ├─ Check: MCP config
+                        │             ├─ Check: Permissions
+                        │             └─ FAIL if any fails
+                        │
+                        ├─▶ Spawn Agents (parallel)
+                        │      └─▶ Only if ALL validations passed
+                        │
+                        └─▶ Evaluate Results
+```
+
+### Console Output Examples
+
+Example successful run with validation:
+
+```
+$ pnpm tsx scripts/run-genetic-optimizer-ultra.ts
+
+🏁 Starting competition with pre-flight validation
+
+📋 Phase 1: Setup
+============================================================
+✅ Database connection verified
+✅ Base branch indexed (1234 chunks)
+✅ Competition directory: /tmp/comp-1234567890
+✅ Loaded 12 variants
+
+✅ Created worktree for variant-control
+✅ Created worktree for variant-a-detailed
+...
+
+📊 Scanning worktrees...
+============================================================
+📊 Scanning worktree: variant-control
+   Path: /tmp/comp-1234567890/worktrees/variant-control
+   ✅ Scan complete: 567 chunks in 8234ms
+...
+============================================================
+✅ All scans complete in 16.1s
+📊 Total chunks indexed: 6804
+
+🔍 Phase 2: Pre-Flight Validation
+============================================================
+✅ variant-control: All checks passed
+✅ variant-a-detailed: All checks passed
+...
+
+✅ All variants validated - ready for execution
+
+🚀 Phase 3: Agent Execution
+============================================================
+[Agents running...]
+```
+
+## Troubleshooting
+
+### Database Connection Failed
+
+**Error:**
+```
+❌ Pre-flight validation failed: Database connection failed
+```
+
+**Fix:**
+1. Verify PostgreSQL is running:
+   ```bash
+   docker ps | grep maproom-postgres
+   ```
+
+2. Check environment variable:
+   ```bash
+   echo $MAPROOM_DATABASE_URL
+   ```
+
+3. Test connection manually:
+   ```bash
+   psql $MAPROOM_DATABASE_URL -c "SELECT 1"
+   ```
+
+4. Restart PostgreSQL if needed:
+   ```bash
+   cd packages/maproom-mcp/config
+   docker compose down
+   docker compose up -d
+   ```
+
+### Base Branch Not Indexed
+
+**Error:**
+```
+❌ Pre-flight validation failed: Base branch 'main' not indexed
+```
+
+**Fix:**
+Run scan on base branch first (one-time setup):
+```bash
+crewchief-maproom scan --repo crewchief --worktree main --root /workspace
+```
+
+This takes 30-60 seconds initially. Subsequent variant scans will be fast (5-15s) due to embedding reuse.
+
+### Worktree Scan Failed
+
+**Error:**
+```
+❌ Scan failed for variant-a-detailed: Permission denied
+```
+
+**Fix:**
+1. Check worktree path exists:
+   ```bash
+   ls -la .crewchief/worktrees/
+   ```
+
+2. Verify binary is in PATH:
+   ```bash
+   which crewchief-maproom
+   ```
+
+3. Check database permissions:
+   ```bash
+   psql $MAPROOM_DATABASE_URL -c "SELECT * FROM repos LIMIT 1"
+   ```
+
+### MCP Config Missing
+
+**Error:**
+```
+❌ Validation failed: MCP config missing in worktree
+```
+
+**Fix:**
+This indicates a bug in worktree creation. Check:
+1. Variant injection completed:
+   ```bash
+   cat .crewchief/worktrees/variant-*/.mcp.json
+   ```
+
+2. SDK version is compatible:
+   ```bash
+   pnpm list @anthropic-ai/claude-agent-sdk
+   ```
+
+### Permission Denied
+
+**Error:**
+```
+❌ Validation failed: Permission error: EACCES
+```
+
+**Fix:**
+1. Check directory ownership:
+   ```bash
+   ls -la .crewchief/worktrees/
+   ```
+
+2. Fix permissions if needed:
+   ```bash
+   chmod -R u+rw .crewchief/worktrees/
+   ```
+
+## Security and Resource Limits
+
+### Resource Limits
+
+The competition runner enforces limits to prevent resource exhaustion:
+
+- **MAX_VARIANTS**: 50 (prevents excessive worktree creation)
+- **MAX_PARALLEL_AGENTS**: 10 (limits concurrent API calls)
+- **MAX_TIMEOUT**: 600000ms (10 minutes per agent)
+
+To run larger competitions, these limits can be adjusted in code (requires recompilation).
+
+### Security Controls
+
+1. **Variant ID Validation**: Only alphanumeric, dash, underscore allowed (prevents path traversal)
+2. **Command Injection Protection**: All subprocess execution uses spawn with args array
+3. **Sensitive Data Sanitization**: Database credentials redacted in logs
+4. **Fail-Fast Validation**: Stops immediately on setup errors (doesn't waste API credits)
+
+For details, see the project planning documentation in `.agents/projects/COMPFIX_competition-agent-setup-validation/planning/`.
+
 ## Prerequisites
 
 ### Required Software

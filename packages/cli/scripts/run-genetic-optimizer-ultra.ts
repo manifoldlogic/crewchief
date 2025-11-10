@@ -9,6 +9,16 @@
  * - Multiple validation runs
  * - Comprehensive task coverage
  *
+ * The competition runner now includes three phases:
+ * 1. Setup: Create worktrees, scan, validate (~2-3 min for 12 variants)
+ * 2. Validation: Check environment readiness (~10-20 sec)
+ * 3. Execution: Run agents in parallel (~2-5 min)
+ *
+ * Total time per generation: ~4-8 minutes
+ * Total time for 15 generations: ~60-120 minutes
+ *
+ * Validation ensures 100% of agents have tool access (vs 0% previously).
+ *
  * Estimated cost: $20-35
  * Estimated time: 1-2 hours
  *

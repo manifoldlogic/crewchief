@@ -11,6 +11,37 @@ This library provides:
 - **12 pre-built tasks** - Covering 5 common search scenarios
 - **Task utilities** - Query, filter, and select tasks
 
+## Scan Orchestration
+
+### Overview
+
+The competition runner now automatically scans all variant worktrees before agent execution. This ensures agents can use `mcp__maproom__search` tools effectively.
+
+### How It Works
+
+1. **Sequential Scanning**: Worktrees scanned one at a time
+2. **Embedding Reuse**: Subsequent scans reuse base branch embeddings (fast)
+3. **Progress Logging**: Shows current worktree, chunk count, duration
+4. **Fail-Fast**: Stops immediately if any scan fails
+
+### Timing
+
+- First variant: 10-15s (some new embeddings)
+- Subsequent variants: 5-10s (embedding reuse)
+- Total for 12 variants: ~2-3 minutes
+
+### Implementation
+
+See `scan-orchestrator.ts` for implementation details.
+
+### Troubleshooting
+
+If scans fail, check:
+
+1. Base branch is indexed: `maproom status --repo crewchief --worktree main`
+2. Database is accessible: `psql $MAPROOM_DATABASE_URL -c "SELECT 1"`
+3. Worktree paths are correct
+
 ## Task Structure
 
 Each `SearchTask` includes:
