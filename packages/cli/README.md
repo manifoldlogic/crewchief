@@ -244,6 +244,68 @@ crewchief maproom:scan
 
 **Docker Note:** The maproom-mcp Docker setup automatically pulls the `nomic-embed-text` model on first startup.
 
+## Performance Optimization
+
+The maproom indexer includes several performance features to handle large codebases efficiently.
+
+### Incremental Scanning (Default)
+
+By default, `maproom scan` uses **incremental scanning** to only index changed files:
+
+- Compares git tree SHA between runs
+- Skips unchanged files automatically
+- Dramatically faster for subsequent scans (10x+ speedup)
+- Use `--force` to bypass and scan all files
+
+```bash
+# Incremental scan (default) - only changed files
+crewchief maproom scan
+
+# Force full re-index - scan all files
+crewchief maproom scan --force
+```
+
+**When to use `--force`:**
+
+- After schema migrations
+- When switching embedding providers
+- If incremental scan produces unexpected results
+
+### Parallel Processing
+
+Enable parallel processing for large repositories (>10k files):
+
+```bash
+# Enable parallel mode with default workers (4)
+crewchief maproom scan --parallel
+
+# Customize worker count for multi-core systems
+crewchief maproom scan --parallel --parallel-workers 8
+```
+
+**Performance:** 4x+ faster on large codebases with multi-core CPUs.
+
+**Trade-off:** Higher memory usage during indexing.
+
+### Batch Size Tuning
+
+Adjust batch sizes for optimal performance based on your environment:
+
+```bash
+# Larger batches for faster indexing (more memory)
+crewchief maproom scan --batch-size 100 --embedding-batch-size 100
+
+# Smaller batches for memory-constrained environments
+crewchief maproom scan --batch-size 25 --embedding-batch-size 25
+```
+
+**Parameters:**
+
+- `--batch-size` - Database insert batch size (default: 50)
+- `--embedding-batch-size` - Embedding generation batch size (default: 50)
+
+**Recommendation:** Start with defaults, increase for faster indexing on powerful machines.
+
 ## Configuration
 
 Run the interactive setup wizard on first use:
@@ -292,6 +354,80 @@ export default {
   },
 }
 ```
+
+## Schema & Features
+
+The maproom database schema has evolved to support advanced features like content addressing, deduplication, and branch-aware search.
+
+### Migration 0018: Content-Addressed Storage (blob_sha)
+
+Added `blob_sha` column to the `chunks` table for content-addressed storage:
+
+```sql
+ALTER TABLE maproom.chunks ADD COLUMN blob_sha TEXT NOT NULL;
+CREATE INDEX idx_chunks_blob_sha ON maproom.chunks(blob_sha);
+```
+
+**Benefits:**
+
+- Each chunk has a unique content-based hash (git-compatible blob SHA)
+- Foundation for embedding deduplication
+- Enables efficient content tracking across worktrees
+
+**Implementation:** Uses `compute_git_blob_sha(text)` PostgreSQL function matching git's blob hash format.
+
+### Migration 0019: Deduplicated Embeddings (code_embeddings)
+
+Created dedicated `code_embeddings` table with HNSW vector index:
+
+```sql
+CREATE TABLE maproom.code_embeddings (
+  blob_sha TEXT PRIMARY KEY,
+  embedding vector(1536) NOT NULL,
+  model_version TEXT NOT NULL DEFAULT 'text-embedding-3-small',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_embeddings_vector ON maproom.code_embeddings
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+**Benefits:**
+
+- **70-90% storage reduction** for typical codebases
+- Significantly faster search queries (HNSW index)
+- One embedding per unique content blob (no duplicates)
+- Reduced embedding generation costs
+
+**Impact:** Large codebases see dramatic storage savings as identical code blocks across files/branches share a single embedding.
+
+### Migration 0020: Worktree Tracking (worktree_ids)
+
+Added worktree tracking to support multi-worktree workflows:
+
+```sql
+ALTER TABLE maproom.chunks
+  ADD COLUMN worktree_ids JSONB DEFAULT '[]'::jsonb NOT NULL;
+
+CREATE INDEX idx_chunks_worktree_ids ON maproom.chunks
+  USING gin (worktree_ids);
+```
+
+**Benefits:**
+
+- Branch-aware search (find code in specific worktrees)
+- Incremental indexing per worktree
+- Efficient worktree cleanup when branches are deleted
+- Supports parallel development workflows
+
+**Example Query:**
+
+```sql
+-- Find chunks in specific worktree
+SELECT * FROM maproom.chunks WHERE worktree_ids ? '123';
+```
+
+**For more details:** See [Database Architecture](../../docs/architecture/DATABASE_ARCHITECTURE.md) and [migration files](../../crates/maproom/migrations/).
 
 ## Command Reference
 
@@ -395,6 +531,127 @@ npx @crewchief/cli --help
 npm install @crewchief/cli
 # Then run with:
 npx crewchief --help
+```
+
+## Security Best Practices
+
+Proper credential management is essential when working with database connections and API keys.
+
+### Option 1: .env File (Development)
+
+Create a `.env` file in your project root with restricted permissions:
+
+```bash
+# Create .env file (never commit!)
+cat > .env <<EOF
+MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom
+MAPROOM_EMBEDDING_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+EOF
+
+# Restrict permissions to owner-only
+chmod 600 .env
+
+# Add to .gitignore
+echo ".env" >> .gitignore
+```
+
+**Automatic loading with direnv:**
+
+```bash
+# Install direnv (macOS)
+brew install direnv
+
+# Add hook to your shell (~/.bashrc or ~/.zshrc)
+eval "$(direnv hook bash)"  # or 'zsh'
+
+# Create .envrc instead of .env
+cat > .envrc <<EOF
+export MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom
+export OPENAI_API_KEY=sk-...
+EOF
+
+# Allow the directory
+direnv allow
+```
+
+### Option 2: Secret Manager (Production)
+
+Use external secret management for production environments:
+
+**AWS Secrets Manager:**
+
+```bash
+# Fetch API key from AWS Secrets Manager
+export OPENAI_API_KEY=$(aws secretsmanager get-secret-value \
+  --secret-id openai-key \
+  --query SecretString \
+  --output text)
+
+# Fetch database URL
+export MAPROOM_DATABASE_URL=$(aws secretsmanager get-secret-value \
+  --secret-id maproom-db-url \
+  --query SecretString \
+  --output text)
+
+# Run crewchief commands
+crewchief maproom scan
+```
+
+**HashiCorp Vault:**
+
+```bash
+# Authenticate to Vault
+vault login -method=token
+
+# Fetch credentials from Vault KV store
+export OPENAI_API_KEY=$(vault kv get -field=key maproom/openai)
+export MAPROOM_DATABASE_URL=$(vault kv get -field=url maproom/db)
+
+# Run crewchief commands
+crewchief maproom scan
+```
+
+**Benefits of secret managers:**
+
+- Centralized credential storage
+- Audit logging of access
+- Automatic rotation support
+- Fine-grained access control
+- No credentials in source code or shell history
+
+### Security Warnings
+
+**Critical:**
+
+- **Never commit credentials to git** - Always use `.gitignore` for `.env` files
+- **Rotate API keys regularly** - Especially after potential exposure
+- **Use read-only database credentials** when possible for indexing workloads
+- **Environment variables are visible** to all processes - use `.env` files or secret managers for better isolation
+- **Consider IAM roles** instead of static credentials (AWS, GCP) for cloud deployments
+
+**Connection string exposure:**
+
+```bash
+# ❌ BAD: Credentials visible in process list
+export MAPROOM_DATABASE_URL="postgresql://user:secret@host/db"
+
+# ✅ GOOD: Load from protected .env file
+source .env  # or use direnv
+
+# ✅ BETTER: Use secret manager
+export MAPROOM_DATABASE_URL=$(vault kv get -field=url maproom/db)
+```
+
+**File permissions:**
+
+```bash
+# Verify .env permissions (should be 600)
+ls -la .env
+# -rw------- 1 user group 123 Jan 10 12:00 .env
+
+# Fix if needed
+chmod 600 .env
 ```
 
 ## Troubleshooting
