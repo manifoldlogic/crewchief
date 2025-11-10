@@ -89,9 +89,10 @@ export async function runCompetition(config: CompetitionConfig): Promise<Competi
   // ─────────────────────────────────────────────────────────
 
   // Validate competition config (resource limits)
+  // Convert timeout from seconds to milliseconds for validation
   validateCompetitionConfig({
     variants: config.variants.map((v) => v.id),
-    timeout: config.timeout,
+    timeout: config.timeout ? config.timeout * 1000 : undefined,
   })
 
   // Validate all variant IDs (path traversal protection)
