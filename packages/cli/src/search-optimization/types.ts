@@ -109,3 +109,59 @@ export interface WorkResult {
   explanationText?: string
   success: boolean
 }
+
+/**
+ * Tool description variant for competition
+ */
+export interface Variant {
+  id: string
+  name: string
+  description: string
+  category?: string
+}
+
+/**
+ * Result of scanning a worktree
+ */
+export interface ScanResult {
+  success: boolean
+  worktree: string
+  chunkCount: number
+  durationMs: number
+  error?: string
+}
+
+/**
+ * Result of a single validation check
+ */
+export interface CheckResult {
+  passed: boolean
+  message: string
+  details?: Record<string, unknown>
+}
+
+/**
+ * Validation result for a single variant
+ */
+export interface VariantValidation {
+  variantId: string
+  worktreePath: string
+  checks: {
+    worktreeExists: CheckResult
+    worktreeScanned: CheckResult
+    mcpConfigValid: CheckResult
+    toolsAccessible: CheckResult
+    filePermissions: CheckResult
+  }
+  overall: 'pass' | 'fail'
+  failureReason?: string
+}
+
+/**
+ * Setup metrics for competition
+ */
+export interface SetupMetrics {
+  scanResults: ScanResult[]
+  validationResults: VariantValidation[]
+  totalSetupTimeMs: number
+}

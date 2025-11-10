@@ -1,16 +1,23 @@
 /**
  * Competition runner orchestrator
  *
- * Integrates all components to run end-to-end agent competitions
+ * Integrates all components to run end-to-end agent competitions with
+ * three-phase validation:
+ * 1. Phase 1: Setup (database check, base branch check, worktree creation, scanning)
+ * 2. Phase 2: Per-variant validation (fail-fast)
+ * 3. Phase 3: Agent execution (parallel, existing behavior preserved)
  */
 
 import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { SearchTask, Variant } from './types.js'
+import { scanAllWorktrees } from './scan-orchestrator.js'
+import type { SearchTask, Variant, SetupMetrics, VariantValidation } from './types.js'
 import type { SearchEvaluationSummary } from '../evaluation/checks.js'
 import { runSearchTaskEvaluation } from '../evaluation/search-checks.js'
-import { spawnAgentWithVariant } from '../sdk/spawner.js'
 import type { ToolUseEvent, AgentResult } from '../sdk/types.js'
+import { PreFlightValidator } from './validation/pre-flight-validator.js'
+import type { VariantEnvironment } from './validation/types.js'
+import { createVariantWorktree } from '../sdk/variant-injection.js'
 
 /**
  * Competition configuration
@@ -32,6 +39,7 @@ export interface CompetitionResult {
   participants: ParticipantResult[]
   winner: ParticipantResult
   metrics: CompetitionMetrics
+  setupMetrics?: SetupMetrics
   report: string
 }
 
@@ -61,68 +69,246 @@ export interface CompetitionMetrics {
 }
 
 /**
- * Run a complete competition
+ * Run a complete competition with three-phase validation
+ *
+ * Phase 1: Setup (sequential) - Database check, base branch check, worktree creation, scanning
+ * Phase 2: Validation (per-variant) - Validate each variant environment
+ * Phase 3: Execution (parallel) - Run agents in validated environments
  *
  * @param config - Competition configuration
  * @returns Competition result with winner
  */
 export async function runCompetition(config: CompetitionConfig): Promise<CompetitionResult> {
+  const setupStartTime = Date.now()
+
+  console.log('🏁 Starting competition with pre-flight validation')
+
+  // ─────────────────────────────────────────────────────────
+  // PHASE 1: SETUP (Sequential)
+  // ─────────────────────────────────────────────────────────
+
+  console.log('\n📋 Phase 1: Setup')
+  console.log('='.repeat(60))
+
+  // 1.1: Validate database connection
+  const validator = new PreFlightValidator()
+  const dbValid = await validator.checkDatabaseConnection()
+  if (!dbValid) {
+    const sanitizedUrl = process.env.MAPROOM_DATABASE_URL
+      ? process.env.MAPROOM_DATABASE_URL.replace(/:[^:@]+@/, ':***@')
+      : 'Not configured'
+    throw new Error(
+      `
+❌ Pre-flight validation failed: Database connection failed
+
+Troubleshooting:
+- Verify PostgreSQL is running: docker ps | grep postgres
+- Check MAPROOM_DATABASE_URL environment variable
+- Test connection: psql $MAPROOM_DATABASE_URL -c "SELECT 1"
+
+Current value: ${sanitizedUrl}
+    `.trim(),
+    )
+  }
+  console.log('✅ Database connection verified')
+
+  // 1.2: Verify base branch is indexed
+  const baseIndexed = await validator.verifyBaseBranchIndexed('crewchief', 'main')
+  if (!baseIndexed.indexed) {
+    throw new Error(
+      `
+❌ Pre-flight validation failed: Base branch 'main' not indexed
+
+Fix: Run scan on base branch first
+$ crewchief-maproom scan --repo crewchief --worktree main --root /workspace
+
+This is a one-time setup step. Subsequent scans will be fast.
+    `.trim(),
+    )
+  }
+  console.log(`✅ Base branch indexed (${baseIndexed.chunkCount} chunks)`)
+
+  // 1.3: Create competition directory
   const competitionId = `comp-${Date.now()}`
   const baseDir = config.baseDir || join('.crewchief', 'competitions', competitionId)
-
-  console.log(`\nStarting competition: ${config.task.name}`)
-  console.log(`Variants: ${config.variants.map((v) => v.name).join(', ')}`)
-  console.log(`Parallel: ${config.parallelExecution || false}`)
-
-  // Create competition directory
   mkdirSync(baseDir, { recursive: true })
+  console.log(`✅ Competition directory: ${baseDir}`)
+  console.log(`✅ Loaded ${config.variants.length} variants`)
 
-  // Execute participants
-  const results = await executeParticipants(config, baseDir)
+  // 1.4: Create variant worktrees
+  console.log('\n📦 Creating variant worktrees...')
+  const variantEnvironments: Array<{
+    variant: Variant
+    worktreePath: string
+    worktreeName: string
+    cleanup: () => Promise<void>
+  }> = []
 
-  // Determine winner
-  const winner = determineWinner(results)
+  for (const variant of config.variants) {
+    const { path: worktreePath, cleanup } = await createVariantWorktree(variant, baseDir)
+    // Extract worktree name from path (last segment)
+    const worktreeName = worktreePath.split('/').pop() || variant.id
+    variantEnvironments.push({
+      variant,
+      worktreePath,
+      worktreeName,
+      cleanup,
+    })
+    console.log(`✅ Created worktree for ${variant.name}`)
+  }
 
-  // Calculate metrics
-  const metrics = calculateCompetitionMetrics(results)
+  // 1.5: Scan all worktrees
+  console.log('\n📊 Scanning worktrees...')
+  const scanConfigs = variantEnvironments.map((env) => ({
+    worktreePath: env.worktreePath,
+    repo: 'crewchief',
+    worktree: env.worktreeName,
+    commit: 'HEAD',
+    baseDir,
+  }))
 
-  // Generate report
-  const report = generateCompetitionReport({
-    competitionId,
-    task: config.task,
-    results,
-    winner,
-    metrics,
-  })
+  const scanResults = await scanAllWorktrees(scanConfigs)
+  console.log(`✅ All worktrees scanned (${scanResults.length} total)`)
 
-  // Save report
-  writeFileSync(join(baseDir, 'report.txt'), report)
+  // ─────────────────────────────────────────────────────────
+  // PHASE 2: VALIDATION (Per-Variant)
+  // ─────────────────────────────────────────────────────────
 
-  console.log(`\nWinner: ${winner.variantName} (${(winner.score * 100).toFixed(1)}%)`)
-  console.log(`Report saved to: ${baseDir}/report.txt`)
+  console.log('\n🔍 Phase 2: Pre-Flight Validation')
+  console.log('='.repeat(60))
 
-  return {
-    competitionId,
-    task: config.task,
-    participants: results,
-    winner,
-    metrics,
-    report,
+  const validationResults: VariantValidation[] = []
+  for (const env of variantEnvironments) {
+    const variantEnv: VariantEnvironment = {
+      variantId: env.variant.id,
+      worktreePath: env.worktreePath,
+      repo: 'crewchief',
+      worktree: env.worktreeName,
+    }
+
+    const validation = await validator.validateVariantEnvironment(variantEnv)
+    validationResults.push(validation)
+
+    if (validation.overall === 'fail') {
+      console.error(`❌ Validation failed for ${env.variant.name}: ${validation.failureReason}`)
+
+      // Log all failed checks
+      Object.entries(validation.checks).forEach(([check, result]) => {
+        if (!result.passed) {
+          console.error(`   - ${check}: ${result.message}`)
+        }
+      })
+
+      // Cleanup all worktrees before throwing
+      for (const cleanupEnv of variantEnvironments) {
+        try {
+          await cleanupEnv.cleanup()
+        } catch (cleanupError) {
+          console.error(`Failed to cleanup worktree ${cleanupEnv.worktreeName}:`, cleanupError)
+        }
+      }
+
+      throw new Error(`Pre-flight validation failed: ${validation.failureReason}`)
+    }
+
+    console.log(`✅ ${env.variant.name}: All checks passed`)
+  }
+
+  console.log('\n✅ All variants validated - ready for execution')
+
+  const setupEndTime = Date.now()
+  const totalSetupTimeMs = setupEndTime - setupStartTime
+
+  const setupMetrics: SetupMetrics = {
+    scanResults,
+    validationResults,
+    totalSetupTimeMs,
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // PHASE 3: EXECUTION (Parallel)
+  // ─────────────────────────────────────────────────────────
+
+  console.log('\n🚀 Phase 3: Agent Execution')
+  console.log('='.repeat(60))
+
+  try {
+    // Execute participants
+    const results = await executeParticipants(config, baseDir, variantEnvironments)
+
+    // Determine winner
+    const winner = determineWinner(results)
+
+    // Calculate metrics
+    const metrics = calculateCompetitionMetrics(results)
+
+    // ─────────────────────────────────────────────────────────
+    // PHASE 4: EVALUATION
+    // ─────────────────────────────────────────────────────────
+
+    console.log('\n📊 Phase 4: Evaluation')
+    console.log('='.repeat(60))
+
+    // Generate report with setup metrics
+    const report = generateCompetitionReport({
+      competitionId,
+      task: config.task,
+      results,
+      winner,
+      metrics,
+      setupMetrics,
+    })
+
+    // Save report
+    writeFileSync(join(baseDir, 'report.txt'), report)
+    console.log(`\n📄 Report saved: ${join(baseDir, 'report.txt')}`)
+
+    console.log(`\nWinner: ${winner.variantName} (${(winner.score * 100).toFixed(1)}%)`)
+
+    return {
+      competitionId,
+      task: config.task,
+      participants: results,
+      winner,
+      metrics,
+      setupMetrics,
+      report,
+    }
+  } finally {
+    // Always cleanup worktrees
+    console.log('\n🧹 Cleaning up worktrees...')
+    for (const env of variantEnvironments) {
+      try {
+        await env.cleanup()
+        console.log(`✅ Cleaned up ${env.worktreeName}`)
+      } catch (cleanupError) {
+        console.error(`❌ Failed to cleanup worktree ${env.worktreeName}:`, cleanupError)
+      }
+    }
   }
 }
 
 /**
- * Execute all participants
+ * Execute all participants in their pre-created, validated worktrees
  */
-async function executeParticipants(config: CompetitionConfig, baseDir: string): Promise<ParticipantResult[]> {
+async function executeParticipants(
+  config: CompetitionConfig,
+  baseDir: string,
+  variantEnvironments: Array<{
+    variant: Variant
+    worktreePath: string
+    worktreeName: string
+    cleanup: () => Promise<void>
+  }>,
+): Promise<ParticipantResult[]> {
   if (config.parallelExecution) {
     // Execute in parallel
-    return Promise.all(config.variants.map((variant) => executeParticipant(variant, config, baseDir)))
+    return Promise.all(variantEnvironments.map((env) => executeParticipant(env, config, baseDir)))
   } else {
     // Execute sequentially
     const results: ParticipantResult[] = []
-    for (const variant of config.variants) {
-      const result = await executeParticipant(variant, config, baseDir)
+    for (const env of variantEnvironments) {
+      const result = await executeParticipant(env, config, baseDir)
       results.push(result)
     }
     return results
@@ -130,72 +316,68 @@ async function executeParticipants(config: CompetitionConfig, baseDir: string): 
 }
 
 /**
- * Execute a single participant
+ * Execute a single participant in their pre-created worktree
  */
 async function executeParticipant(
-  variant: Variant,
+  env: {
+    variant: Variant
+    worktreePath: string
+    worktreeName: string
+    cleanup: () => Promise<void>
+  },
   config: CompetitionConfig,
   baseDir: string,
 ): Promise<ParticipantResult> {
-  console.log(`  Running: ${variant.name}...`)
+  console.log(`  Running: ${env.variant.name}...`)
 
-  const runDir = join(baseDir, `run-${variant.id}`)
+  const runDir = join(baseDir, `run-${env.variant.id}`)
   mkdirSync(runDir, { recursive: true })
 
   // Log file for tool usage
   const toolLogPath = join(runDir, 'tool-usage.log')
 
-  // Spawn agent with variant
-  const agentResult = await spawnAgentWithVariant(
-    config.task.description,
-    variant,
-    {
+  // Track tool usage via hooks
+  const toolsUsed = new Set<string>()
+  let toolCallCount = 0
+
+  // Spawn agent directly in the pre-created worktree
+  // Note: We use spawnAgent instead of spawnAgentWithVariant since worktree is already set up
+  const { spawnAgent } = await import('../sdk/spawner.js')
+  const agentResult = await spawnAgent({
+    task: config.task.description,
+    worktreePath: env.worktreePath,
+    hooks: {
       onToolUse: (event: ToolUseEvent) => {
+        // Track tool usage
+        toolsUsed.add(event.tool_name)
+        toolCallCount++
+
         // Log tool usage to file
         writeFileSync(toolLogPath, JSON.stringify(event) + '\n', { flag: 'a' })
       },
     },
-    {
-      maxTurns: config.timeout ? Math.floor(config.timeout / 10) : 30,
-    },
-  )
+    maxTurns: config.timeout ? Math.floor(config.timeout / 10) : 30,
+  })
 
   // Save agent result
   writeFileSync(join(runDir, 'agent-result.json'), JSON.stringify(agentResult, null, 2))
 
-  // Note: For now, we use the worktree from the agent result
-  // In a real implementation, we'd track the worktree path during execution
-  const worktreePath = agentResult.transcriptPath ? join(agentResult.transcriptPath, '..', '..') : process.cwd()
+  // Use the pre-created worktree path for evaluation
+  const worktreePath = env.worktreePath
 
   // Evaluate the result
   const evaluation = await runSearchTaskEvaluation(config.task, worktreePath, runDir)
 
-  console.log(`  Completed: ${variant.name} - Score: ${(evaluation.compositeScore * 100).toFixed(1)}%`)
-
-  // Extract tool usage from messages
-  const toolsUsed = new Set<string>()
-  let toolCallCount = 0
-  for (const message of agentResult.messages) {
-    if (message.content) {
-      for (const block of Array.isArray(message.content) ? message.content : [message.content]) {
-        if (typeof block === 'object' && block !== null && 'type' in block && block.type === 'tool_use') {
-          toolCallCount++
-          if ('name' in block && typeof block.name === 'string') {
-            toolsUsed.add(block.name)
-          }
-        }
-      }
-    }
-  }
+  console.log(`  Completed: ${env.variant.name} - Score: ${(evaluation.compositeScore * 100).toFixed(1)}%`)
 
   return {
-    variantId: variant.id,
-    variantName: variant.name,
+    variantId: env.variant.id,
+    variantName: env.variant.name,
     score: evaluation.compositeScore,
     evaluation,
     agentResult,
     toolsUsed: Array.from(toolsUsed),
-    searchCount: evaluation.searchUsageScore || 0,
+    searchCount: evaluation.searchMetrics.searchCount,
     toolCallCount,
     durationSeconds: (agentResult.performance?.durationMs || 0) / 1000,
   }
@@ -248,7 +430,7 @@ function calculateCompetitionMetrics(results: ParticipantResult[]): CompetitionM
 }
 
 /**
- * Generate competition report
+ * Generate competition report with setup metrics
  */
 function generateCompetitionReport(data: {
   competitionId: string
@@ -256,6 +438,7 @@ function generateCompetitionReport(data: {
   results: ParticipantResult[]
   winner: ParticipantResult
   metrics: CompetitionMetrics
+  setupMetrics?: SetupMetrics
 }): string {
   const lines: string[] = []
 
@@ -267,6 +450,26 @@ function generateCompetitionReport(data: {
   lines.push(`Difficulty: ${data.task.difficulty}`)
   lines.push(`Category: ${data.task.category}`)
   lines.push('')
+
+  // Add setup metrics section
+  if (data.setupMetrics) {
+    lines.push('SETUP METRICS')
+    lines.push('-'.repeat(60))
+    lines.push(`Total setup time: ${(data.setupMetrics.totalSetupTimeMs / 1000).toFixed(1)}s`)
+    lines.push('')
+
+    lines.push('Scan Results:')
+    data.setupMetrics.scanResults.forEach((scan) => {
+      lines.push(`  - ${scan.worktree}: ${scan.chunkCount} chunks in ${(scan.durationMs / 1000).toFixed(1)}s`)
+    })
+    lines.push('')
+
+    lines.push('Validation Results:')
+    data.setupMetrics.validationResults.forEach((val) => {
+      lines.push(`  - ${val.variantId}: ${val.overall}`)
+    })
+    lines.push('')
+  }
 
   lines.push('RESULTS')
   lines.push('-'.repeat(60))

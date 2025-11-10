@@ -11,8 +11,79 @@ import { runCompetition } from '../../src/search-optimization/competition-runner
 import { TASK_FIND_WORKTREE_CREATION } from '../../src/search-optimization/tasks/implementation.js'
 import type { Variant } from '../../src/search-optimization/types.js'
 
+// Mock PreFlightValidator
+vi.mock('../../src/search-optimization/validation/pre-flight-validator.js', () => ({
+  PreFlightValidator: vi.fn().mockImplementation(() => ({
+    checkDatabaseConnection: vi.fn().mockResolvedValue(true),
+    verifyBaseBranchIndexed: vi.fn().mockResolvedValue({ indexed: true, chunkCount: 1000 }),
+    validateVariantEnvironment: vi.fn().mockResolvedValue({
+      variantId: 'test',
+      worktreePath: '/tmp/test',
+      checks: {
+        worktreeExists: { passed: true, message: 'OK' },
+        worktreeScanned: { passed: true, message: 'OK' },
+        mcpConfigValid: { passed: true, message: 'OK' },
+        toolsAccessible: { passed: true, message: 'OK' },
+        filePermissions: { passed: true, message: 'OK' },
+      },
+      overall: 'pass',
+    }),
+  })),
+}))
+
+// Mock scan orchestrator
+vi.mock('../../src/search-optimization/scan-orchestrator.js', () => ({
+  scanAllWorktrees: vi.fn().mockResolvedValue([
+    {
+      success: true,
+      worktree: 'test-worktree',
+      chunkCount: 100,
+      durationMs: 1000,
+    },
+  ]),
+}))
+
+// Mock variant injection
+vi.mock('../../src/sdk/variant-injection.js', () => ({
+  createVariantWorktree: vi.fn().mockImplementation(async (variant) => ({
+    path: `/tmp/test-worktree-${variant.id}`,
+    cleanup: vi.fn().mockResolvedValue(undefined),
+  })),
+}))
+
 // Mock the SDK spawner to avoid actually spawning agents
 vi.mock('../../src/sdk/spawner.js', () => ({
+  spawnAgent: vi.fn(async (options) => {
+    const { hooks } = options
+
+    // Simulate agent execution by calling hooks
+    if (hooks?.onToolUse) {
+      // Simulate a search
+      await hooks.onToolUse({
+        session_id: 'test-session',
+        tool_name: 'search',
+        tool_input: { query: 'worktree' },
+        timestamp: Date.now(),
+      })
+    }
+
+    return {
+      success: true,
+      sessionId: 'test-session',
+      transcriptPath: '/tmp/test-transcript',
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 500,
+        totalCostUsd: 0.01,
+      },
+      performance: {
+        durationMs: 5000,
+        durationApiMs: 4000,
+        numTurns: 3,
+      },
+      messages: [],
+    }
+  }),
   spawnAgentWithVariant: vi.fn(async (task, variant, hooks) => {
     // Simulate agent execution by calling hooks
     if (hooks?.onToolUse) {
