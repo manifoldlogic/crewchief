@@ -1,10 +1,10 @@
 name: Publish Maproom MCP Docker Image
 
-# Trigger only on version tags (v1.2.3, v2.0.0, etc.)
+# Trigger on maproom-mcp package version tags
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - '@crewchief/maproom-mcp@v*.*.*'
   # Allow manual triggering for testing
   workflow_dispatch:
     inputs:
