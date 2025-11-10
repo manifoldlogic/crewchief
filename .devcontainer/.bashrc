@@ -40,10 +40,6 @@ case $- in
     alias dlog='docker logs -f'
     alias dexec='docker exec -it'
 
-    alias ta='tmux attach -t'
-    alias tl='tmux list-sessions'
-    alias tn='tmux new -s'
-
     alias ..='cd ..'
     alias ...='cd ../..'
     alias ....='cd ../../..'
