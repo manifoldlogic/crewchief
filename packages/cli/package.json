@@ -27,6 +27,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "search-optimization:validate-full": "tsx src/search-optimization/scripts/run-full-validation.ts",
+    "search-optimization:test-setup": "tsx src/search-optimization/examples/test-setup.ts",
+    "search-optimization:run-example": "tsx src/search-optimization/examples/run-single-competition.ts",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write .",
