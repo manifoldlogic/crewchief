@@ -160,6 +160,19 @@ enum Commands {
         k: i64,
     },
 
+    /// Show status of indexed repositories and worktrees
+    Status {
+        /// Filter by repository name
+        #[arg(long)]
+        repo: Option<String>,
+        /// Filter by worktree name (requires --repo)
+        #[arg(long)]
+        worktree: Option<String>,
+        /// Output as JSON instead of human-readable text
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
     /// Generate embeddings for indexed chunks
     GenerateEmbeddings {
         /// Only process chunks where embeddings are NULL (default: true)
@@ -717,6 +730,35 @@ async fn main() -> anyhow::Result<()> {
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
             );
+        }
+
+        Commands::Status {
+            repo,
+            worktree,
+            json,
+        } => {
+            use crewchief_maproom::status;
+
+            // Validate worktree filter requires repo filter
+            if worktree.is_some() && repo.is_none() {
+                anyhow::bail!("--worktree requires --repo to be specified");
+            }
+
+            match status::get_status(repo, worktree).await {
+                Ok(status_data) => {
+                    if json {
+                        let output = status::format_json(&status_data)?;
+                        println!("{}", output);
+                    } else {
+                        let output = status::format_text(&status_data);
+                        print!("{}", output);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error querying status: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
 
         Commands::GenerateEmbeddings {

@@ -279,6 +279,7 @@ pub async fn scan_worktree_parallel(
             language: language.unwrap().to_string(),
             content,
             file_id,
+            worktree_id,
         });
     }
 
@@ -493,6 +494,7 @@ pub async fn scan_worktree(
                 1.0,
                 0.0,
                 None,
+                worktree_id,
             )
             .await?;
         } else {
@@ -528,6 +530,7 @@ pub async fn scan_worktree(
                     1.0,
                     0.0,
                     ch.metadata.as_ref(),
+                    worktree_id,
                 )
                 .await?;
             }
@@ -684,6 +687,7 @@ pub async fn upsert_files(
                 1.0,
                 0.0,
                 None,
+                worktree_id,
             )
             .await?;
         } else {
@@ -718,6 +722,7 @@ pub async fn upsert_files(
                     1.0,
                     0.0,
                     ch.metadata.as_ref(),
+                    worktree_id,
                 )
                 .await?;
             }

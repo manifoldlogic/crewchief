@@ -83,6 +83,7 @@ pub async fn upsert_chunk_with_cache(
     recency_score: f32,
     churn_score: f32,
     metadata: Option<&serde_json::Value>,
+    worktree_id: i64,
     metrics: &CacheMetrics,
 ) -> Result<i64> {
     // Step 1: Compute blob SHA from chunk content
@@ -99,6 +100,7 @@ pub async fn upsert_chunk_with_cache(
         debug!(
             blob_sha = %blob_sha,
             symbol = ?symbol_name,
+            worktree_id = worktree_id,
             "Cache hit: reusing existing embedding"
         );
     } else {
@@ -106,6 +108,7 @@ pub async fn upsert_chunk_with_cache(
         debug!(
             blob_sha = %blob_sha,
             symbol = ?symbol_name,
+            worktree_id = worktree_id,
             "Cache miss: new embedding needed"
         );
     }
@@ -129,6 +132,7 @@ pub async fn upsert_chunk_with_cache(
         recency_score,
         churn_score,
         metadata,
+        worktree_id,
     )
     .await
     .context("Failed to insert chunk")?;
@@ -167,6 +171,7 @@ pub async fn upsert_chunks_batch_with_cache(
         f32,                       // churn_score
         Option<serde_json::Value>, // metadata
     )],
+    worktree_id: i64,
     metrics: &CacheMetrics,
 ) -> Result<Vec<i64>> {
     if chunks.is_empty() {
@@ -222,7 +227,7 @@ pub async fn upsert_chunks_batch_with_cache(
 
     // Step 4: Insert all chunks
     // Convert to format expected by insert_chunks_batch
-    // Include blob_sha computed earlier
+    // Include blob_sha computed earlier and worktree_id
     let insert_data: Vec<_> = chunks
         .iter()
         .zip(blob_shas.iter())
@@ -259,6 +264,7 @@ pub async fn upsert_chunks_batch_with_cache(
                     *recency_score,
                     *churn_score,
                     metadata.clone(),
+                    worktree_id,
                 )
             },
         )

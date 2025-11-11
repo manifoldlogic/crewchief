@@ -72,6 +72,7 @@ pub struct FileTask {
     pub language: String,
     pub content: String,
     pub file_id: i64,
+    pub worktree_id: i64,
 }
 
 /// Chunk batch for database insertion.
@@ -90,6 +91,7 @@ pub struct ChunkBatch {
         f32,                       // recency_score
         f32,                       // churn_score
         Option<serde_json::Value>, // metadata
+        i64,                       // worktree_id
     )>,
 }
 
@@ -119,6 +121,7 @@ impl ChunkBatch {
         recency_score: f32,
         churn_score: f32,
         metadata: Option<serde_json::Value>,
+        worktree_id: i64,
     ) {
         self.chunks.push((
             file_id,
@@ -134,6 +137,7 @@ impl ChunkBatch {
             recency_score,
             churn_score,
             metadata,
+            worktree_id,
         ));
     }
 
@@ -270,6 +274,7 @@ async fn database_worker(
                     chunk_data.recency_score,
                     chunk_data.churn_score,
                     chunk_data.metadata,
+                    chunk_data.worktree_id,
                 );
 
                 // Insert batch when full
@@ -341,6 +346,7 @@ struct ChunkData {
     recency_score: f32,
     churn_score: f32,
     metadata: Option<serde_json::Value>,
+    worktree_id: i64,
 }
 
 /// Parse a file task and extract chunks.
@@ -383,6 +389,7 @@ fn parse_file_task(file_task: &FileTask) -> anyhow::Result<Vec<ChunkData>> {
             recency_score: 1.0,
             churn_score: 0.0,
             metadata: chunk.metadata,
+            worktree_id: file_task.worktree_id,
         });
     }
 

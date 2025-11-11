@@ -519,13 +519,14 @@ pub async fn insert_chunk(
     recency_score: f32,
     churn_score: f32,
     metadata: Option<&serde_json::Value>,
+    worktree_id: i64,
 ) -> anyhow::Result<i64> {
     let row = client
         .query_one(
              "INSERT INTO maproom.chunks (
-               file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
+               file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata, worktree_ids
              ) VALUES (
-               $1, $2::text, $3::text, ($4::text)::maproom.symbol_kind, $5::text, $6::text, $7, $8, $9::text, to_tsvector('simple', unaccent($10::text)), $11, $12, $13::jsonb
+               $1, $2::text, $3::text, ($4::text)::maproom.symbol_kind, $5::text, $6::text, $7, $8, $9::text, to_tsvector('simple', unaccent($10::text)), $11, $12, $13::jsonb, jsonb_build_array($14::BIGINT)
              )
              ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
                blob_sha = EXCLUDED.blob_sha,
@@ -535,9 +536,13 @@ pub async fn insert_chunk(
                docstring = EXCLUDED.docstring,
                preview = EXCLUDED.preview,
                ts_doc = EXCLUDED.ts_doc,
-               metadata = EXCLUDED.metadata
+               metadata = EXCLUDED.metadata,
+               worktree_ids = CASE
+                   WHEN maproom.chunks.worktree_ids @> jsonb_build_array($14::BIGINT) THEN maproom.chunks.worktree_ids
+                   ELSE maproom.chunks.worktree_ids || jsonb_build_array($14::BIGINT)
+               END
              RETURNING id",
-            &[&file_id, &blob_sha, &symbol_name, &kind, &signature, &docstring, &start_line, &end_line, &preview, &ts_doc_text, &recency_score, &churn_score, &metadata],
+            &[&file_id, &blob_sha, &symbol_name, &kind, &signature, &docstring, &start_line, &end_line, &preview, &ts_doc_text, &recency_score, &churn_score, &metadata, &worktree_id],
         )
         .await?;
     Ok(row.get(0))
@@ -574,6 +579,7 @@ pub async fn insert_chunks_batch(
         f32,                       // recency_score
         f32,                       // churn_score
         Option<serde_json::Value>, // metadata
+        i64,                       // worktree_id
     )],
 ) -> anyhow::Result<Vec<i64>> {
     if chunks.is_empty() {
@@ -581,16 +587,16 @@ pub async fn insert_chunks_batch(
     }
 
     // Build VALUES clause with parameter placeholders
-    // Each chunk has 13 parameters (added blob_sha)
+    // Each chunk has 14 parameters (added worktree_id)
     let mut values_clauses = Vec::with_capacity(chunks.len());
-    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(chunks.len() * 13);
+    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(chunks.len() * 14);
 
     for (idx, chunk) in chunks.iter().enumerate() {
-        let base = idx * 13;
+        let base = idx * 14;
         values_clauses.push(format!(
-            "(${}, ${}::text, ${}::text, (${}::text)::maproom.symbol_kind, ${}::text, ${}::text, ${}, ${}, ${}::text, to_tsvector('simple', unaccent(${}::text)), ${}, ${}, ${}::jsonb)",
+            "(${}, ${}::text, ${}::text, (${}::text)::maproom.symbol_kind, ${}::text, ${}::text, ${}, ${}, ${}::text, to_tsvector('simple', unaccent(${}::text)), ${}, ${}, ${}::jsonb, jsonb_build_array(${}::BIGINT))",
             base + 1, base + 2, base + 3, base + 4, base + 5, base + 6,
-            base + 7, base + 8, base + 9, base + 10, base + 11, base + 12, base + 13
+            base + 7, base + 8, base + 9, base + 10, base + 11, base + 12, base + 13, base + 14
         ));
 
         params.push(&chunk.0); // file_id
@@ -606,11 +612,12 @@ pub async fn insert_chunks_batch(
         params.push(&chunk.10); // recency_score
         params.push(&chunk.11); // churn_score
         params.push(&chunk.12); // metadata
+        params.push(&chunk.13); // worktree_id
     }
 
     let query = format!(
         "INSERT INTO maproom.chunks (
-           file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
+           file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata, worktree_ids
          ) VALUES {}
          ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
            blob_sha = EXCLUDED.blob_sha,
@@ -620,7 +627,11 @@ pub async fn insert_chunks_batch(
            docstring = EXCLUDED.docstring,
            preview = EXCLUDED.preview,
            ts_doc = EXCLUDED.ts_doc,
-           metadata = EXCLUDED.metadata
+           metadata = EXCLUDED.metadata,
+           worktree_ids = CASE
+               WHEN maproom.chunks.worktree_ids @> EXCLUDED.worktree_ids THEN maproom.chunks.worktree_ids
+               ELSE maproom.chunks.worktree_ids || EXCLUDED.worktree_ids
+           END
          RETURNING id",
         values_clauses.join(", ")
     );
