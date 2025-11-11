@@ -49,7 +49,7 @@ print_success "Husky installed globally"
 
 # Install CrewChief CLI globally
 print_step "Installing CrewChief CLI globally..."
-npm install -g crewchief@latest || print_error "Failed to install CrewChief CLI"
+npm install -g @crewchief/cli@latest || print_error "Failed to install CrewChief CLI"
 print_success "CrewChief CLI installed globally"
 
 # Install pnpm dependencies
