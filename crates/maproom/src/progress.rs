@@ -229,6 +229,40 @@ impl ProgressTracker {
         }
         0
     }
+
+    /// Get the current count of processed files
+    ///
+    /// Returns the number of files that have been processed so far.
+    /// This can be used for statistics collection after scanning completes.
+    ///
+    /// # Example
+    /// ```
+    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    ///
+    /// let tracker = ProgressTracker::new(OutputMode::Minimal);
+    /// tracker.update_files(42);
+    /// assert_eq!(tracker.files_processed(), 42);
+    /// ```
+    pub fn files_processed(&self) -> usize {
+        self.processed_files.load(Ordering::Relaxed)
+    }
+
+    /// Get the current count of processed chunks
+    ///
+    /// Returns the number of code chunks that have been processed so far.
+    /// This can be used for statistics collection after scanning completes.
+    ///
+    /// # Example
+    /// ```
+    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    ///
+    /// let tracker = ProgressTracker::new(OutputMode::Minimal);
+    /// tracker.update_chunks(100);
+    /// assert_eq!(tracker.chunks_processed(), 100);
+    /// ```
+    pub fn chunks_processed(&self) -> usize {
+        self.processed_chunks.load(Ordering::Relaxed)
+    }
 }
 
 #[cfg(test)]
