@@ -75,10 +75,10 @@ pub struct FileTask {
 }
 
 /// Chunk batch for database insertion.
-#[derive(Debug)]
 pub struct ChunkBatch {
     pub chunks: Vec<(
         i64,                       // file_id
+        String,                    // blob_sha
         Option<String>,            // symbol_name
         String,                    // kind
         Option<String>,            // signature
@@ -107,6 +107,7 @@ impl ChunkBatch {
     pub fn push(
         &mut self,
         file_id: i64,
+        blob_sha: String,
         symbol_name: Option<String>,
         kind: String,
         signature: Option<String>,
@@ -121,6 +122,7 @@ impl ChunkBatch {
     ) {
         self.chunks.push((
             file_id,
+            blob_sha,
             symbol_name,
             kind,
             signature,
@@ -256,6 +258,7 @@ async fn database_worker(
             Ok(chunk_data) => {
                 current_batch.push(
                     chunk_data.file_id,
+                    chunk_data.blob_sha,
                     chunk_data.symbol_name,
                     chunk_data.kind,
                     chunk_data.signature,
@@ -326,6 +329,7 @@ async fn insert_batch(pool: &PgPool, batch: &ChunkBatch) -> anyhow::Result<usize
 #[derive(Debug, Clone)]
 struct ChunkData {
     file_id: i64,
+    blob_sha: String,
     symbol_name: Option<String>,
     kind: String,
     signature: Option<String>,
@@ -346,16 +350,16 @@ fn parse_file_task(file_task: &FileTask) -> anyhow::Result<Vec<ChunkData>> {
     let mut chunk_data_vec = Vec::with_capacity(chunks.len());
 
     for chunk in chunks {
-        let preview = first_n_lines(
-            &file_task
-                .content
-                .split('\n')
-                .skip(chunk.start_line as usize - 1)
-                .take((chunk.end_line - chunk.start_line + 1) as usize)
-                .collect::<Vec<&str>>()
-                .join("\n"),
-            40,
-        );
+        let chunk_content = file_task
+            .content
+            .split('\n')
+            .skip(chunk.start_line as usize - 1)
+            .take((chunk.end_line - chunk.start_line + 1) as usize)
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        let preview = first_n_lines(&chunk_content, 40);
+        let blob_sha = crate::content_hash::compute_blob_sha(&chunk_content);
 
         let ts_doc_text = build_ts_doc(
             file_task.relpath.to_string_lossy().as_ref(),
@@ -367,6 +371,7 @@ fn parse_file_task(file_task: &FileTask) -> anyhow::Result<Vec<ChunkData>> {
 
         chunk_data_vec.push(ChunkData {
             file_id: file_task.file_id,
+            blob_sha,
             symbol_name: chunk.symbol_name,
             kind: chunk.kind,
             signature: chunk.signature,

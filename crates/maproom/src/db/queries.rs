@@ -507,6 +507,7 @@ pub async fn upsert_file(
 pub async fn insert_chunk(
     client: &Client,
     file_id: i64,
+    blob_sha: &str,
     symbol_name: Option<&str>,
     kind: &str,
     signature: Option<&str>,
@@ -522,11 +523,12 @@ pub async fn insert_chunk(
     let row = client
         .query_one(
              "INSERT INTO maproom.chunks (
-               file_id, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
+               file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
              ) VALUES (
-               $1, $2::text, ($3::text)::maproom.symbol_kind, $4::text, $5::text, $6, $7, $8::text, to_tsvector('simple', unaccent($9::text)), $10, $11, $12::jsonb
+               $1, $2::text, $3::text, ($4::text)::maproom.symbol_kind, $5::text, $6::text, $7, $8, $9::text, to_tsvector('simple', unaccent($10::text)), $11, $12, $13::jsonb
              )
              ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
+               blob_sha = EXCLUDED.blob_sha,
                symbol_name = EXCLUDED.symbol_name,
                kind = EXCLUDED.kind,
                signature = EXCLUDED.signature,
@@ -535,7 +537,7 @@ pub async fn insert_chunk(
                ts_doc = EXCLUDED.ts_doc,
                metadata = EXCLUDED.metadata
              RETURNING id",
-            &[&file_id, &symbol_name, &kind, &signature, &docstring, &start_line, &end_line, &preview, &ts_doc_text, &recency_score, &churn_score, &metadata],
+            &[&file_id, &blob_sha, &symbol_name, &kind, &signature, &docstring, &start_line, &end_line, &preview, &ts_doc_text, &recency_score, &churn_score, &metadata],
         )
         .await?;
     Ok(row.get(0))
@@ -560,6 +562,7 @@ pub async fn insert_chunks_batch(
     client: &Client,
     chunks: &[(
         i64,                       // file_id
+        String,                    // blob_sha
         Option<String>,            // symbol_name
         String,                    // kind
         Option<String>,            // signature
@@ -578,37 +581,39 @@ pub async fn insert_chunks_batch(
     }
 
     // Build VALUES clause with parameter placeholders
-    // Each chunk has 12 parameters
+    // Each chunk has 13 parameters (added blob_sha)
     let mut values_clauses = Vec::with_capacity(chunks.len());
-    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(chunks.len() * 12);
+    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(chunks.len() * 13);
 
     for (idx, chunk) in chunks.iter().enumerate() {
-        let base = idx * 12;
+        let base = idx * 13;
         values_clauses.push(format!(
-            "(${}, ${}::text, (${}::text)::maproom.symbol_kind, ${}::text, ${}::text, ${}, ${}, ${}::text, to_tsvector('simple', unaccent(${}::text)), ${}, ${}, ${}::jsonb)",
-            base + 1, base + 2, base + 3, base + 4, base + 5,
-            base + 6, base + 7, base + 8, base + 9, base + 10, base + 11, base + 12
+            "(${}, ${}::text, ${}::text, (${}::text)::maproom.symbol_kind, ${}::text, ${}::text, ${}, ${}, ${}::text, to_tsvector('simple', unaccent(${}::text)), ${}, ${}, ${}::jsonb)",
+            base + 1, base + 2, base + 3, base + 4, base + 5, base + 6,
+            base + 7, base + 8, base + 9, base + 10, base + 11, base + 12, base + 13
         ));
 
         params.push(&chunk.0); // file_id
-        params.push(&chunk.1); // symbol_name
-        params.push(&chunk.2); // kind
-        params.push(&chunk.3); // signature
-        params.push(&chunk.4); // docstring
-        params.push(&chunk.5); // start_line
-        params.push(&chunk.6); // end_line
-        params.push(&chunk.7); // preview
-        params.push(&chunk.8); // ts_doc_text
-        params.push(&chunk.9); // recency_score
-        params.push(&chunk.10); // churn_score
-        params.push(&chunk.11); // metadata
+        params.push(&chunk.1); // blob_sha
+        params.push(&chunk.2); // symbol_name
+        params.push(&chunk.3); // kind
+        params.push(&chunk.4); // signature
+        params.push(&chunk.5); // docstring
+        params.push(&chunk.6); // start_line
+        params.push(&chunk.7); // end_line
+        params.push(&chunk.8); // preview
+        params.push(&chunk.9); // ts_doc_text
+        params.push(&chunk.10); // recency_score
+        params.push(&chunk.11); // churn_score
+        params.push(&chunk.12); // metadata
     }
 
     let query = format!(
         "INSERT INTO maproom.chunks (
-           file_id, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
+           file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
          ) VALUES {}
          ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
+           blob_sha = EXCLUDED.blob_sha,
            symbol_name = EXCLUDED.symbol_name,
            kind = EXCLUDED.kind,
            signature = EXCLUDED.signature,

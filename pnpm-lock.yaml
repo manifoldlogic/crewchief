@@ -35,6 +35,9 @@ importers:
       inquirer:
         specifier: ^9.0.0
         version: 9.3.7
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
       simple-git:
         specifier: ^3.0.0
         version: 3.28.0
@@ -45,6 +48,9 @@ importers:
       '@types/inquirer':
         specifier: ^9.0.9
         version: 9.0.9
+      '@types/pg':
+        specifier: ^8.15.6
+        version: 8.15.6
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.39.1
         version: 8.39.1(@typescript-eslint/parser@8.39.1(eslint@8.57.1)(typescript@5.9.2))(eslint@8.57.1)(typescript@5.9.2)
@@ -697,6 +703,9 @@ packages:
 
   '@types/pg@8.15.5':
     resolution: {integrity: sha512-LF7lF6zWEKxuT3/OR8wAZGzkg4ENGXFNyiV/JeOt9z5B+0ZVwbql9McqX5c/WStFq1GaGso7H1AzP/qSzmlCKQ==}
+
+  '@types/pg@8.15.6':
+    resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
 
   '@types/through@0.0.33':
     resolution: {integrity: sha512-HsJ+z3QuETzP3cswwtzt2vEIiHBk/dCcHGhbmG5X3ecnwFD/lPrMpliGXxSCg03L9AhrdwA4Oz/qfspkDW+xGQ==}
@@ -3124,6 +3133,12 @@ snapshots:
       undici-types: 6.21.0
 
   '@types/pg@8.15.5':
+    dependencies:
+      '@types/node': 20.19.10
+      pg-protocol: 1.10.3
+      pg-types: 2.2.0
+
+  '@types/pg@8.15.6':
     dependencies:
       '@types/node': 20.19.10
       pg-protocol: 1.10.3

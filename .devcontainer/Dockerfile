@@ -11,7 +11,6 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     pkg-config \
     libssl-dev \
     libpq-dev \
-    tmux \
     postgresql-client \
     redis-tools \
     jq \
@@ -42,12 +41,7 @@ RUN mkdir -p /workspace && chown -R vscode:vscode /workspace && \
     echo 'cd /workspace 2>/dev/null || true' >> /etc/bash.bashrc && \
     echo 'cd /workspace 2>/dev/null || true' >> /etc/zsh/zshrc
 
-# Install tmux plugins (TPM)
 USER vscode
-RUN git clone https://github.com/tmux-plugins/tpm /home/vscode/.tmux/plugins/tpm
-
-# Copy tmux configuration
-COPY --chown=vscode:vscode tmux.conf /home/vscode/.tmux.conf
 
 # Set up pnpm and workspace defaults
 RUN SHELL=/bin/bash pnpm setup && \

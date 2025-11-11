@@ -86,7 +86,9 @@ export interface ITerminalService {
   /**
    * Create a window with working directory
    */
-  createWindowWithCwd(cwd?: string): { windowId: string; paneId: string } | Promise<{ windowId: string; paneId: string }>
+  createWindowWithCwd(
+    cwd?: string,
+  ): { windowId: string; paneId: string } | Promise<{ windowId: string; paneId: string }>
 
   /**
    * Create a named window
@@ -94,7 +96,9 @@ export interface ITerminalService {
   createNamedWindow(
     name: string,
     cwd?: string,
-  ): { windowId: string; paneId: string; target: string } | Promise<{ windowId: string; paneId: string; target: string }>
+  ):
+    | { windowId: string; paneId: string; target: string }
+    | Promise<{ windowId: string; paneId: string; target: string }>
 
   /**
    * Get any available pane ID

@@ -470,6 +470,7 @@ pub async fn scan_worktree(
             // Fallback: single module chunk
             total_chunks += 1;
             let preview = first_n_lines(&content, 40);
+            let blob_sha = crate::content_hash::compute_blob_sha(&preview);
             let ts_doc = build_ts_doc(
                 relpath.to_string_lossy().as_ref(),
                 None,
@@ -480,6 +481,7 @@ pub async fn scan_worktree(
             crate::db::insert_chunk(
                 client,
                 file_id,
+                &blob_sha,
                 None,
                 "module",
                 None,
@@ -496,15 +498,14 @@ pub async fn scan_worktree(
         } else {
             total_chunks += chunks.len();
             for ch in &chunks {
-                let preview = first_n_lines(
-                    &content
-                        .split('\n')
-                        .skip(ch.start_line as usize - 1)
-                        .take((ch.end_line - ch.start_line + 1) as usize)
-                        .collect::<Vec<&str>>()
-                        .join("\n"),
-                    40,
-                );
+                let chunk_content = content
+                    .split('\n')
+                    .skip(ch.start_line as usize - 1)
+                    .take((ch.end_line - ch.start_line + 1) as usize)
+                    .collect::<Vec<&str>>()
+                    .join("\n");
+                let preview = first_n_lines(&chunk_content, 40);
+                let blob_sha = crate::content_hash::compute_blob_sha(&chunk_content);
                 let ts_doc = build_ts_doc(
                     relpath.to_string_lossy().as_ref(),
                     ch.symbol_name.as_deref(),
@@ -515,6 +516,7 @@ pub async fn scan_worktree(
                 crate::db::insert_chunk(
                     client,
                     file_id,
+                    &blob_sha,
                     ch.symbol_name.as_deref(),
                     &ch.kind,
                     ch.signature.as_deref(),
@@ -659,6 +661,7 @@ pub async fn upsert_files(
         let chunks = parser::extract_chunks(&content, language.unwrap());
         if chunks.is_empty() {
             let preview = first_n_lines(&content, 40);
+            let blob_sha = crate::content_hash::compute_blob_sha(&preview);
             let ts_doc = build_ts_doc(
                 relpath.to_string_lossy().as_ref(),
                 None,
@@ -669,6 +672,7 @@ pub async fn upsert_files(
             crate::db::insert_chunk(
                 client,
                 file_id,
+                &blob_sha,
                 None,
                 "module",
                 None,
@@ -684,15 +688,14 @@ pub async fn upsert_files(
             .await?;
         } else {
             for ch in &chunks {
-                let preview = first_n_lines(
-                    &content
-                        .split('\n')
-                        .skip(ch.start_line as usize - 1)
-                        .take((ch.end_line - ch.start_line + 1) as usize)
-                        .collect::<Vec<&str>>()
-                        .join("\n"),
-                    40,
-                );
+                let chunk_content = content
+                    .split('\n')
+                    .skip(ch.start_line as usize - 1)
+                    .take((ch.end_line - ch.start_line + 1) as usize)
+                    .collect::<Vec<&str>>()
+                    .join("\n");
+                let preview = first_n_lines(&chunk_content, 40);
+                let blob_sha = crate::content_hash::compute_blob_sha(&chunk_content);
                 let ts_doc = build_ts_doc(
                     relpath.to_string_lossy().as_ref(),
                     ch.symbol_name.as_deref(),
@@ -703,6 +706,7 @@ pub async fn upsert_files(
                 crate::db::insert_chunk(
                     client,
                     file_id,
+                    &blob_sha,
                     ch.symbol_name.as_deref(),
                     &ch.kind,
                     ch.signature.as_deref(),

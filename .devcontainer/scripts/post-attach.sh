@@ -50,15 +50,6 @@ echo "  ${GREEN}claude${NC}     - Run Claude Code in dangerous mode"
 echo "  ${GREEN}pnpm test${NC}  - Run tests"
 echo ""
 
-echo -e "${YELLOW}tmux Sessions:${NC}"
-if tmux has-session -t crewchief 2>/dev/null; then
-    echo -e "  ${GREEN}crewchief${NC} session available"
-    echo "  Run: ${GREEN}tmux attach -t crewchief${NC} to attach"
-else
-    echo "  No tmux sessions running"
-    echo "  Run: ${GREEN}tn crewchief${NC} to create one"
-fi
-
 echo ""
 echo -e "${YELLOW}Git Status:${NC}"
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
@@ -77,10 +68,3 @@ fi
 echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════════════════${NC}"
 echo ""
-
-# If no tmux session exists, offer to create one (with workspace dir)
-if ! tmux has-session -t crewchief 2>/dev/null; then
-    echo -e "${YELLOW}Tip:${NC} Start a tmux session for better workflow:"
-    echo "  ${GREEN}tmux new -s crewchief -c /workspace${NC}"
-    echo ""
-fi

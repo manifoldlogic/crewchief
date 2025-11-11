@@ -97,11 +97,6 @@ fi
 
 print_step "Note: .zshrc is still sourced from the host environment if you switch shells"
 
-# Install tmux plugins
-print_step "Installing tmux plugins..."
-~/.tmux/plugins/tpm/bin/install_plugins
-print_success "tmux plugins installed"
-
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
     print_step "Creating .env file from example..."

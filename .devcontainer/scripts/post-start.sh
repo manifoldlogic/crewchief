@@ -41,22 +41,4 @@ else
     sha256sum package.json | cut -d' ' -f1 > /workspace/.devcontainer/.last-package-json-hash
 fi
 
-# Start tmux session if not already running
-if ! tmux has-session -t crewchief 2>/dev/null; then
-    echo "🖥️  Creating tmux session 'crewchief'..."
-    tmux new-session -d -s crewchief -n main
-    tmux send-keys -t crewchief:main "cd /workspace" C-m
-    tmux send-keys -t crewchief:main "clear" C-m
-    
-    # Create additional windows
-    tmux new-window -t crewchief -n cli
-    tmux send-keys -t crewchief:cli "cd /workspace/packages/cli" C-m
-    
-    tmux new-window -t crewchief -n maproom
-    tmux send-keys -t crewchief:maproom "cd /workspace/crates/maproom" C-m
-    
-    echo "✓ tmux session 'crewchief' created"
-    echo "  Use 'tmux attach -t crewchief' to attach"
-fi
-
 echo "✅ Post-start setup complete"

@@ -117,6 +117,7 @@ pub async fn upsert_chunk_with_cache(
     let chunk_id = crate::db::insert_chunk(
         client,
         file_id,
+        &blob_sha,
         symbol_name,
         kind,
         signature,
@@ -221,26 +222,32 @@ pub async fn upsert_chunks_batch_with_cache(
 
     // Step 4: Insert all chunks
     // Convert to format expected by insert_chunks_batch
+    // Include blob_sha computed earlier
     let insert_data: Vec<_> = chunks
         .iter()
+        .zip(blob_shas.iter())
         .map(
             |(
-                file_id,
-                _content,
-                symbol_name,
-                kind,
-                signature,
-                docstring,
-                start_line,
-                end_line,
-                preview,
-                ts_doc_text,
-                recency_score,
-                churn_score,
-                metadata,
+                (
+                    file_id,
+                    _content,
+                    symbol_name,
+                    kind,
+                    signature,
+                    docstring,
+                    start_line,
+                    end_line,
+                    preview,
+                    ts_doc_text,
+                    recency_score,
+                    churn_score,
+                    metadata,
+                ),
+                blob_sha,
             )| {
                 (
                     *file_id,
+                    blob_sha.clone(),
                     symbol_name.clone(),
                     kind.clone(),
                     signature.clone(),
