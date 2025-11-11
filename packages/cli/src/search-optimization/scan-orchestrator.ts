@@ -1,4 +1,7 @@
-import { spawn } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 export interface ScanConfig {
   worktreePath: string
@@ -17,7 +20,44 @@ export interface ScanResult {
 }
 
 /**
- * Scans a single worktree using crewchief-maproom scan command.
+ * Find the crewchief CLI binary.
+ * The CLI handles maproom binary resolution and environment validation internally.
+ *
+ * @returns Path to crewchief CLI, or null if not found
+ */
+function findCrewchiefCli(): string | null {
+  const execName = 'crewchief'
+
+  // Try packaged location (same directory as maproom binary)
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const possiblePaths = [
+    // Development/built location
+    path.join(__dirname, '..', '..', 'bin', execName),
+    // Workspace root location
+    path.join(__dirname, '..', '..', '..', '..', 'packages', 'cli', 'bin', execName),
+  ]
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p
+    }
+  }
+
+  // Try global installation
+  const which = spawnSync('bash', ['-lc', 'command -v crewchief'])
+  if (which.status === 0 && which.stdout) {
+    const binPath = which.stdout.toString().trim()
+    if (binPath && fs.existsSync(binPath)) {
+      return binPath
+    }
+  }
+
+  return null
+}
+
+/**
+ * Scans a single worktree using crewchief maproom scan command.
+ * Uses the crewchief CLI which handles binary resolution and environment validation.
  * Uses spawn with args array for command injection protection.
  *
  * @param config - Configuration for the worktree to scan
@@ -30,10 +70,18 @@ export async function scanWorktree(config: ScanConfig): Promise<ScanResult> {
   console.log(`   Path: ${config.worktreePath}`)
 
   try {
+    // Find the crewchief CLI (which handles maproom binary resolution)
+    const crewchiefCli = findCrewchiefCli()
+    if (!crewchiefCli) {
+      throw new Error('crewchief CLI not found. Please build it with: pnpm build')
+    }
+
+    // Use crewchief maproom scan (includes validation and proper binary resolution)
     // CRITICAL: Use spawn with args array (command injection protection)
     const proc = spawn(
-      'crewchief-maproom',
+      crewchiefCli,
       [
+        'maproom',
         'scan',
         '--repo',
         config.repo,
