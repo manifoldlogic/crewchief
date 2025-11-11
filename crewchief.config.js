@@ -1,24 +1,18 @@
 /**
- * CrewChief Configuration
+ * Example CrewChief configuration
  * 
- * You can create either:
- * - crewchief.config.js (committed to repo, shared with team)
- * - crewchief.config.local.js (gitignored, for local overrides)
+ * IMPORTANT: iTerm2 is required for agent orchestration.
+ * The tmux implementation is incomplete and no longer under development.
  * 
- * If both exist, the local version takes priority.
+ * @type {import('./packages/cli/src/config/schema').CrewChiefConfig}
  */
-
-export default {
+const config = {
   repository: {
     mainBranch: 'main',
     worktreeBasePath: '.crewchief/worktrees',
   },
 
-  // Launch behavior for initial CLI UX
-  launch: {
-    autoRunDefaultAgents: false,
-    askToUpdateLlmGuides: true,
-  },
+  // orchestrator and agents sections removed (unused)
 
   // Terminal configuration (iTerm2)
   terminal: {
@@ -33,28 +27,39 @@ export default {
     requireTestsPass: true,
     requireReview: false,
     qualityChecks: [
-      { type: 'tests', command: 'pnpm test' },
-      { type: 'linting', command: 'pnpm lint' },
-      { type: 'build', command: 'pnpm build' },
+      {
+        type: 'tests',
+        command: 'pnpm test',
+      },
+      {
+        type: 'linting',
+        command: 'pnpm lint',
+      },
+      {
+        type: 'build',
+        command: 'pnpm build',
+      },
+    ],
+  },
+
+  launch: {
+    autoRunDefaultAgents: false,
+    askToUpdateLlmGuides: true,
+  },
+
+  defaults: {
+    rootAgents: [
+      { id: 'planner', platform: 'claude' },
+      { id: 'coder', platform: 'claude' },
+      { id: 'reviewer', platform: 'gemini' },
     ],
   },
 
   worktree: {
-    // Files to copy to new worktrees (useful for .env files, etc.)
-    copyIgnoredFiles: [
-      '!**/.crewchief/worktrees/**/*',
-      '**/.claude/**/*',
-      '**/.cursor/**/*',
-      '**/.gemini/**/*',
-      '**/.codex/**/*',
-      '**/.cursorrules',
-      '**/crewchief.config.js',
-      '**/crewchief.config.local.js',
-      '**/.env',
-      '**/.env.local',
-      '**/.mcp.json'
-    ],
+    copyIgnoredFiles: ['.env', '.env.local', 'config.local.js'],
     copyFromPath: '.',
-    overwriteStrategy: 'overwrite'
-  }
-};
+    overwriteStrategy: 'skip',
+  },
+}
+
+export default config

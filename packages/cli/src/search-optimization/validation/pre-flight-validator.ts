@@ -72,16 +72,20 @@ export class PreFlightValidator {
       const statusOutput = await this.executeMaproomStatus(repo, branch)
       const status = JSON.parse(statusOutput)
 
-      // Look for the worktree in the status output
-      if (status.worktrees && Array.isArray(status.worktrees)) {
-        const worktree = status.worktrees.find(
-          (wt: Record<string, unknown>) => wt.name === branch || wt.worktree === branch,
-        )
+      // Look for the worktree in the status output (nested under repos)
+      if (status.repos && Array.isArray(status.repos)) {
+        for (const repoData of status.repos) {
+          if (repoData.name === repo && repoData.worktrees && Array.isArray(repoData.worktrees)) {
+            const worktree = repoData.worktrees.find(
+              (wt: Record<string, unknown>) => wt.name === branch || wt.worktree === branch,
+            )
 
-        if (worktree && typeof worktree.chunk_count === 'number') {
-          return {
-            indexed: worktree.chunk_count > 0,
-            chunkCount: worktree.chunk_count,
+            if (worktree && typeof worktree.chunk_count === 'number') {
+              return {
+                indexed: worktree.chunk_count > 0,
+                chunkCount: worktree.chunk_count,
+              }
+            }
           }
         }
       }
@@ -112,32 +116,38 @@ export class PreFlightValidator {
       const statusOutput = await this.executeMaproomStatus(repo, worktree)
       const status = JSON.parse(statusOutput)
 
-      // Look for the worktree in the status output
-      if (status.worktrees && Array.isArray(status.worktrees)) {
-        const wt = status.worktrees.find((w: Record<string, unknown>) => w.name === worktree || w.worktree === worktree)
+      // Look for the worktree in the status output (nested under repos)
+      if (status.repos && Array.isArray(status.repos)) {
+        for (const repoData of status.repos) {
+          if (repoData.name === repo && repoData.worktrees && Array.isArray(repoData.worktrees)) {
+            const wt = repoData.worktrees.find(
+              (w: Record<string, unknown>) => w.name === worktree || w.worktree === worktree,
+            )
 
-        if (!wt) {
-          return {
-            passed: false,
-            message: 'Worktree not in database',
-            details: { repo, worktree },
+            if (!wt) {
+              return {
+                passed: false,
+                message: 'Worktree not in database',
+                details: { repo, worktree },
+              }
+            }
+
+            const chunkCount = wt.chunk_count || 0
+
+            if (chunkCount === 0) {
+              return {
+                passed: false,
+                message: 'Worktree has 0 chunks indexed',
+                details: { repo, worktree, chunkCount },
+              }
+            }
+
+            return {
+              passed: true,
+              message: `Indexed with ${chunkCount} chunks`,
+              details: { repo, worktree, chunkCount },
+            }
           }
-        }
-
-        const chunkCount = wt.chunk_count || 0
-
-        if (chunkCount === 0) {
-          return {
-            passed: false,
-            message: 'Worktree has 0 chunks indexed',
-            details: { repo, worktree, chunkCount },
-          }
-        }
-
-        return {
-          passed: true,
-          message: `Indexed with ${chunkCount} chunks`,
-          details: { repo, worktree, chunkCount },
         }
       }
 
@@ -421,8 +431,15 @@ export class PreFlightValidator {
    */
   private async executeMaproomStatus(repo: string, worktree: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Find the maproom binary
-      const maproomBinary = join(process.cwd(), 'packages', 'cli', 'bin', 'crewchief-maproom')
+      // Find the maproom binary - look for workspace root
+      let currentDir = process.cwd()
+
+      // If we're in packages/cli, go up to workspace root
+      if (currentDir.endsWith('/packages/cli') || currentDir.endsWith('\\packages\\cli')) {
+        currentDir = join(currentDir, '..', '..')
+      }
+
+      const maproomBinary = join(currentDir, 'packages', 'cli', 'bin', 'crewchief-maproom')
 
       const args = ['status', '--repo', repo, '--worktree', worktree, '--json']
 
