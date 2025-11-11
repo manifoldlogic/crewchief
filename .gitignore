@@ -23,6 +23,7 @@ node_modules
 .DS_Store
 
 .crewchief/worktrees/
+**/.crewchief/worktrees/**
 crewchief.config.local.js
 .crewchief-meta.json
 
