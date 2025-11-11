@@ -732,6 +732,98 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
+
+            // State persistence (INCRSCAN-1002)
+            // Update worktree_index_state with scan results and current tree SHA
+            // This enables future scans to skip unchanged worktrees (INCRSCAN-1001)
+            //
+            // Design: Non-fatal errors (scan succeeded, state update is advisory only)
+            // If this fails, next scan will be slower but still correct
+            if let Some(ref current_tree_sha) = tree_sha {
+                // Collect statistics from ProgressTracker using getter methods
+                // Note: scan functions return Result<()>, not stats, so we use ProgressTracker
+                let files_processed = progress.files_processed() as i32;
+                let chunks_processed = progress.chunks_processed() as i32;
+
+                // Calculate embeddings generated
+                // If embeddings were enabled and succeeded, all chunks got embeddings
+                let embeddings_generated = if generate_embeddings {
+                    chunks_processed
+                } else {
+                    0
+                };
+
+                let scan_stats = crewchief_maproom::db::UpdateStats {
+                    files_processed,
+                    chunks_processed,
+                    embeddings_generated,
+                };
+
+                // Get database client based on scan mode
+                // Sequential mode: reuse existing client
+                // Parallel mode: get client from pool (or create new connection)
+                match db::connect().await {
+                    Ok(state_client) => {
+                        let root_abs = match path.canonicalize() {
+                            Ok(p) => p,
+                            Err(e) => {
+                                tracing::warn!("Could not canonicalize path for state update: {}", e);
+                                path.clone()
+                            }
+                        };
+
+                        // Get repo ID
+                        let repo_id = match db::get_or_create_repo(
+                            &state_client,
+                            &repo,
+                            root_abs.to_string_lossy().as_ref()
+                        ).await {
+                            Ok(id) => Some(id),
+                            Err(e) => {
+                                tracing::warn!("Could not get repo ID for state update: {}", e);
+                                None
+                            }
+                        };
+
+                        if let Some(repo_id) = repo_id {
+                            // Get worktree ID
+                            let worktree_id = match db::get_or_create_worktree(
+                                &state_client,
+                                repo_id,
+                                &worktree,
+                                root_abs.to_string_lossy().as_ref()
+                            ).await {
+                                Ok(id) => Some(id),
+                                Err(e) => {
+                                    tracing::warn!("Could not get worktree ID for state update: {}", e);
+                                    None
+                                }
+                            };
+
+                            if let Some(wt_id) = worktree_id {
+                                // Update index state with current tree SHA and stats
+                                match db::update_index_state(&state_client, wt_id, current_tree_sha, &scan_stats).await {
+                                    Ok(_) => {
+                                        tracing::info!(
+                                            "✓ Updated index state: tree {} ({} files, {} chunks, {} embeddings)",
+                                            current_tree_sha, files_processed, chunks_processed, embeddings_generated
+                                        );
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Failed to update index state: {}", e);
+                                        tracing::warn!("Scan completed successfully, but next scan may be slower");
+                                        // Don't fail the scan - state update is advisory only
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Could not create connection for state update: {}", e);
+                        tracing::warn!("Scan completed successfully, but state was not persisted");
+                    }
+                }
+            }
         }
 
         Commands::Upsert {

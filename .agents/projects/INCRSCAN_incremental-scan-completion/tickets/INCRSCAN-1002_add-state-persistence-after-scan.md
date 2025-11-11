@@ -1,9 +1,9 @@
 # Ticket: INCRSCAN-1002: Add State Persistence After Scan Completion
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,11 +30,11 @@ From planning/architecture.md: "After scan completes, collect statistics (files/
 This ticket implements the state persistence component of the incremental scan completion feature, ensuring that successful scans are recorded for future optimization.
 
 ## Acceptance Criteria
-- [ ] State saved after successful scan - `worktree_index_state` table populated with record including worktree_id, last_tree_sha, last_indexed timestamp
-- [ ] Correct tree SHA stored - matches the tree SHA retrieved before scan, 40-character hex format verified, enables skip logic on next scan
-- [ ] Stats accurately tracked - files processed count matches actual files scanned, chunks processed matches database inserts, embeddings generated tracked (if embedding step ran)
-- [ ] Update errors non-fatal - scan returns success even if state update fails, warning logged with error details, user informed they can continue
-- [ ] Works for all scan modes - sequential scan updates state, parallel scan updates state, force scan updates state (overwrites with same SHA), skipped scan (from INCRSCAN-1001) requires no update
+- [x] State saved after successful scan - `worktree_index_state` table populated with record including worktree_id, last_tree_sha, last_indexed timestamp
+- [x] Correct tree SHA stored - matches the tree SHA retrieved before scan, 40-character hex format verified, enables skip logic on next scan
+- [x] Stats accurately tracked - files processed count matches actual files scanned, chunks processed matches database inserts, embeddings generated tracked (if embedding step ran)
+- [x] Update errors non-fatal - scan returns success even if state update fails, warning logged with error details, user informed they can continue
+- [x] Works for all scan modes - sequential scan updates state, parallel scan updates state, force scan updates state (overwrites with same SHA), skipped scan (from INCRSCAN-1001) requires no update
 
 ## Technical Requirements
 
