@@ -14,7 +14,7 @@
 
 | Ticket ID | Title | Status | Agent | Effort |
 |-----------|-------|--------|-------|--------|
-| CLIMAP-1001 | Update CLI README with correct environment variables and setup documentation | 🔲 Todo | technical-writer | 3-4 hours |
+| CLIMAP-1001 | Update CLI README with correct environment variables and setup documentation | ✅ Complete (3e0b1a2) | technical-writer | 3-4 hours |
 
 **Phase Goal:** Fix critical documentation errors causing user connection failures
 
@@ -25,7 +25,7 @@
 
 | Ticket ID | Title | Status | Agent | Effort |
 |-----------|-------|--------|-------|--------|
-| CLIMAP-2001 | Refactor maproom commands from colon-separated to subcommand pattern | 🔲 Todo | typescript-engineer | 2-3 hours |
+| CLIMAP-2001 | Refactor maproom commands from colon-separated to subcommand pattern | ✅ Complete (6823812) | typescript-engineer | 2-3 hours |
 
 **Phase Goal:** Convert `maproom:scan` to `maproom scan` pattern for consistency
 **Dependencies:** CLIMAP-1001
@@ -37,8 +37,8 @@
 
 | Ticket ID | Title | Status | Agent | Effort |
 |-----------|-------|--------|-------|--------|
-| CLIMAP-3001 | Create environment validation module for maproom commands | 🔲 Todo | typescript-engineer | 4-6 hours |
-| CLIMAP-3002 | Integrate environment validation into maproom command execution | 🔲 Todo | typescript-engineer | 1-2 hours |
+| CLIMAP-3001 | Create environment validation module for maproom commands | ✅ Complete (e33c834) | typescript-engineer | 4-6 hours |
+| CLIMAP-3002 | Integrate environment validation into maproom command execution | ✅ Complete (d44a14b) | typescript-engineer | 1-2 hours |
 
 **Phase Goal:** Add pre-flight validation with helpful error messages
 **Dependencies:** CLIMAP-3001 → CLIMAP-3002
@@ -50,8 +50,8 @@
 
 | Ticket ID | Title | Status | Agent | Effort |
 |-----------|-------|--------|-------|--------|
-| CLIMAP-3901 | Create unit tests for environment validation module | 🔲 Todo | unit-test-runner | 1-1.5 hours |
-| CLIMAP-4002 | Create integration tests for maproom command structure and validation | 🔲 Todo | integration-tester | 1-1.5 hours |
+| CLIMAP-3901 | Create unit tests for environment validation module | ✅ Complete (0494626) | unit-test-runner | 1-1.5 hours |
+| CLIMAP-4002 | Create integration tests for maproom command structure and validation | ✅ Complete (092db0f) | integration-tester | 1-1.5 hours |
 
 **Phase Goal:** Comprehensive test coverage for validation and command structure
 **Dependencies:**
@@ -65,7 +65,7 @@
 
 | Ticket ID | Title | Status | Agent | Effort |
 |-----------|-------|--------|-------|--------|
-| CLIMAP-5001 | Add performance, schema, and security documentation to CLI README | 🔲 Todo | technical-writer | 2-3 hours |
+| CLIMAP-5001 | Add performance, schema, and security documentation to CLI README | ✅ Complete (60a7883) | technical-writer | 2-3 hours |
 
 **Phase Goal:** Complete documentation with advanced features, schema evolution, security
 **Dependencies:** CLIMAP-1001, CLIMAP-2001, CLIMAP-3001
@@ -77,7 +77,7 @@
 
 | Ticket ID | Title | Status | Agent | Effort |
 |-----------|-------|--------|-------|--------|
-| CLIMAP-6001 | Final verification and quality assurance for CLI-maproom alignment | 🔲 Todo | verify-ticket | 1-2 hours |
+| CLIMAP-6001 | Final verification and quality assurance for CLI-maproom alignment | ✅ Complete (a624540) | verify-ticket | 1-2 hours |
 
 **Phase Goal:** Comprehensive verification before commit
 **Dependencies:** ALL previous tickets

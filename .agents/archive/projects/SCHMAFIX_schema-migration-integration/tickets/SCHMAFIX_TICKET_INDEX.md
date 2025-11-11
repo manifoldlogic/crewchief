@@ -13,9 +13,9 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 ## Ticket Status Summary
 
 - **Total:** 8 tickets (Phase 0-6)
-- **Completed:** 0
+- **Completed:** 8
 - **In Progress:** 0
-- **Pending:** 8
+- **Pending:** 0
 
 ## Tickets by Phase
 
@@ -23,7 +23,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-0001: Add Missing Migration 0017 to Rust Runner
 - **File:** `SCHMAFIX-0001_add-migration-0017-to-runner.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (b160ad8)
 - **Agent:** rust-indexer-engineer
 - **Estimated Effort:** 30 minutes
 - **Summary:** Add migration 0017 (`fix_index_size_limits.sql`) to the Rust migration runner. This migration exists in the filesystem but was never added to the migrations array, creating a numbering gap that blocks SCHMAFIX execution.
@@ -36,7 +36,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-1001: Copy and Adapt Migration SQL Files
 - **File:** `SCHMAFIX-1001_copy-migration-sql-files.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (941a5c1)
 - **Agent:** rust-indexer-engineer
 - **Estimated Effort:** 1-2 hours
 - **Summary:** Copy 3 migration SQL files from `packages/maproom-mcp/migrations/` to `crates/maproom/migrations/` as migrations 0018-0020. Simplify migration 001 for transaction safety. Migration 005 excluded (destructive TRUNCATE).
@@ -51,7 +51,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-2001: Update Rust Migration Runner
 - **File:** `SCHMAFIX-2001_update-rust-migration-runner.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (1cef6de)
 - **Agent:** rust-indexer-engineer
 - **Estimated Effort:** 30 minutes - 1 hour
 - **Summary:** Update `crates/maproom/src/db/queries.rs` to include migrations 0018-0020 in the migrations array, enabling the Rust binary to execute the new schema migrations.
@@ -65,7 +65,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-3001: Write Migration Integration Tests
 - **File:** `SCHMAFIX-3001_migration-integration-tests.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (68318b6)
 - **Agent:** rust-indexer-engineer
 - **Estimated Effort:** 2-3 hours
 - **Summary:** Create Rust integration tests to verify migrations 0018-0020 work correctly on fresh databases, existing databases (incremental upgrade), and when run multiple times (idempotency).
@@ -78,7 +78,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-3901: Run Migration Integration Tests
 - **File:** `SCHMAFIX-3901_run-migration-integration-tests.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (b2588b5)
 - **Agent:** unit-test-runner
 - **Estimated Effort:** 15-30 minutes
 - **Summary:** Execute the Rust integration tests created in SCHMAFIX-3001 and report results. This is a critical quality gate - all tests must pass before proceeding to MCP integration.
@@ -94,7 +94,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-4001: Write MCP Integration Tests
 - **File:** `SCHMAFIX-4001_mcp-integration-tests.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (7669414)
 - **Agent:** integration-tester
 - **Estimated Effort:** 1-2 hours
 - **Summary:** Create TypeScript integration tests to verify the MCP server works correctly with the new database schema, specifically confirming the code_embeddings table exists and vector search doesn't crash.
@@ -110,7 +110,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-5001: Manual Migration Validation
 - **File:** `SCHMAFIX-5001_manual-migration-validation.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (57c7d12)
 - **Agent:** verify-ticket
 - **Estimated Effort:** 1-2 hours
 - **Summary:** Manually validate that migrations apply correctly to both fresh and existing databases, and that the MCP server starts and executes vector search without errors. Complete the manual validation checklist from quality-strategy.md.
@@ -130,7 +130,7 @@ Integrate existing BLOBSHA/BRANCHX migration SQL files into the Rust migration r
 
 #### SCHMAFIX-6001: Update Documentation
 - **File:** `SCHMAFIX-6001_update-documentation.md`
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed (7c9eab6)
 - **Agent:** general-purpose
 - **Estimated Effort:** 1-2 hours
 - **Summary:** Update project documentation to reflect that Rust owns all migrations, document the new schema elements (blob_sha, code_embeddings, worktree tracking), and add comments to migration SQL files.
