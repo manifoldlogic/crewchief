@@ -1,9 +1,9 @@
 # Ticket: INCRSCAN-3001: Documentation and Changelog
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -27,9 +27,9 @@ Good documentation ensures that future developers understand:
 The INCREMENTAL_INTEGRATION_NOTE.md currently says the feature is deferred (BRANCHX-1008 TODO). We need to update it to reflect that Phase 1 is complete, while Phase 2 (full refactoring with git diff-tree) remains future work.
 
 ## Acceptance Criteria
-- [ ] **All new code has clear comments** - Tree SHA retrieval logic documented, skip decision rationale explained, state persistence purpose clear, error handling strategy documented
-- [ ] **CHANGELOG has entry for this feature** - Follows project conventions, describes what changed (incremental scanning now works), notes performance improvement (10,000x for unchanged trees), lists related tickets (INCRSCAN-1001, 1002)
-- [ ] **INCREMENTAL_INTEGRATION_NOTE.md updated** - Status: Phase 1 complete (tree SHA check at command level), Future Work: Phase 2 deferred (git diff-tree integration), References INCRSCAN project, clear distinction between what's done vs future
+- [x] **All new code has clear comments** - Tree SHA retrieval logic documented, skip decision rationale explained, state persistence purpose clear, error handling strategy documented
+- [x] **CHANGELOG has entry for this feature** - Follows project conventions, describes what changed (incremental scanning now works), notes performance improvement (10,000x for unchanged trees), lists related tickets (INCRSCAN-1001, 1002)
+- [x] **INCREMENTAL_INTEGRATION_NOTE.md updated** - Status: Phase 1 complete (tree SHA check at command level), Future Work: Phase 2 deferred (git diff-tree integration), References INCRSCAN project, clear distinction between what's done vs future
 
 ## Technical Requirements
 
