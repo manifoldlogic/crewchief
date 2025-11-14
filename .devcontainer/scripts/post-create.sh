@@ -23,20 +23,20 @@ print_success() {
 }
 
 # Install Oh My Zsh if not already installed
-print_step "Checking for Oh My Zsh..."
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    print_step "Installing Oh My Zsh..."
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-    print_success "Oh My Zsh installed"
-else
-    print_success "Oh My Zsh already installed"
-fi
+# print_step "Checking for Oh My Zsh..."
+# if [ ! -d "$HOME/.oh-my-zsh" ]; then
+#     print_step "Installing Oh My Zsh..."
+#     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+#     print_success "Oh My Zsh installed"
+# else
+#     print_success "Oh My Zsh already installed"
+# fi
 
 # Install Claude Code if not already installed
 print_step "Checking for Claude Code..."
 if ! command -v claude &> /dev/null; then
     print_step "Installing Claude Code..."
-    npm install -g @anthropic-ai/claude-code@latest || print_error "Failed to install Claude Code"
+    curl -fsSL https://claude.ai/install.sh | bash || print_error "Failed to install Claude Code"
     print_success "Claude Code installed"
 else
     print_success "Claude Code already installed"
@@ -82,7 +82,7 @@ print_success "PostgreSQL is ready"
 # Set up git configuration
 print_step "Configuring Git..."
 git config --global --add safe.directory /workspace
-git config --global core.editor "code --wait"
+git config --global core.editor "cursor --wait"
 print_success "Git configured"
 
 # Link repository-managed Bash configuration
@@ -153,22 +153,22 @@ else
 fi
 
 # Create Claude Code configuration
-print_step "Setting up Claude Code..."
-if [ ! -f /home/vscode/.claude/config.json ]; then
-    mkdir -p /home/vscode/.claude
-    cat > /home/vscode/.claude/config.json << 'EOF'
-{
-  "dangerousMode": true,
-  "apiKey": "${ANTHROPIC_API_KEY}",
-  "model": "claude-3-opus-20240229",
-  "maxTokens": 4096,
-  "temperature": 0,
-  "autoSave": true,
-  "workspaceRoot": "/workspace"
-}
-EOF
-    print_success "Claude Code configured"
-fi
+# print_step "Setting up Claude Code..."
+# if [ ! -f /home/vscode/.claude/config.json ]; then
+#     mkdir -p /home/vscode/.claude
+#     cat > /home/vscode/.claude/config.json << 'EOF'
+# {
+#   "dangerousMode": true,
+#   "apiKey": "${ANTHROPIC_API_KEY}",
+#   "model": "claude-3-opus-20240229",
+#   "maxTokens": 4096,
+#   "temperature": 0,
+#   "autoSave": true,
+#   "workspaceRoot": "/workspace"
+# }
+# EOF
+#     print_success "Claude Code configured"
+# fi
 
 print_success "🎉 CrewChief devcontainer setup complete!"
 echo ""

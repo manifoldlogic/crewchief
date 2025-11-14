@@ -86,9 +86,6 @@ The DevContainer includes Claude Code with dangerous mode enabled:
 ```bash
 # Run Claude Code
 claude
-
-# Or use the alias
-claude --dangerous-mode
 ```
 
 Network access is configured to allow internet while blocking host access for security.
