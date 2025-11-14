@@ -89,7 +89,7 @@ export async function scanWorktree(config: ScanConfig): Promise<ScanResult> {
         config.worktree,
         '--commit',
         config.commit,
-        '--root',
+        '--path',
         config.worktreePath,
       ],
       {
