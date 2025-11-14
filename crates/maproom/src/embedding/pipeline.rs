@@ -939,6 +939,7 @@ mod tests {
             signature: Some("function foo()".to_string()),
             docstring: Some("A test function".to_string()),
             preview: "console.log('test')".to_string(),
+            blob_sha: Some("abc123".to_string()),
         };
 
         let text = pipeline.prepare_code_text(&chunk);
@@ -958,6 +959,7 @@ mod tests {
             signature: Some("function foo()".to_string()),
             docstring: Some("A test function".to_string()),
             preview: "console.log('test')".to_string(),
+            blob_sha: Some("abc123".to_string()),
         };
 
         let text = pipeline.prepare_text_summary(&chunk);
