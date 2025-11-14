@@ -58,6 +58,12 @@ pub struct PipelineStats {
     /// Chunks from cache
     pub embeddings_cached: usize,
 
+    /// Chunks copied from code_embeddings table
+    pub copied_from_cache: usize,
+
+    /// Cost saved from reusing embeddings (USD)
+    pub cost_saved_usd: f64,
+
     /// Failed chunks
     pub failed_chunks: usize,
 
@@ -98,9 +104,10 @@ impl PipelineStats {
         format!(
             "Processed {} chunks in {:.1}s ({:.1} chunks/s)\n\
              Provider: {} ({} dimensions)\n\
-             Generated: {}, Cached: {}, Failed: {}\n\
+             Generated: {}, Cached: {}, Copied from DB: {}, Failed: {}\n\
              Cache hit rate: {:.1}%\n\
-             API calls: {}, Tokens: {}, Cost: ${:.4}",
+             API calls: {}, Tokens: {}, Cost: ${:.4}\n\
+             Cost saved from reuse: ${:.4}",
             self.total_chunks,
             self.duration_secs,
             self.chunks_per_second(),
@@ -108,11 +115,13 @@ impl PipelineStats {
             self.dimension,
             self.embeddings_generated,
             self.embeddings_cached,
+            self.copied_from_cache,
             self.failed_chunks,
             self.cache_hit_rate * 100.0,
             self.api_calls,
             self.total_tokens,
-            self.estimated_cost_usd
+            self.estimated_cost_usd,
+            self.cost_saved_usd
         )
     }
 }
@@ -154,6 +163,51 @@ impl EmbeddingPipeline {
         &self.provider_name
     }
 
+    /// Copy embeddings from code_embeddings table to chunks with NULL embeddings.
+    ///
+    /// This method queries the code_embeddings deduplication table and copies
+    /// existing embeddings to chunks that have matching blob_sha but NULL embeddings.
+    /// This is the critical step that enables embedding inheritance across worktrees.
+    ///
+    /// # Arguments
+    /// * `client` - Database client
+    ///
+    /// # Returns
+    /// Number of chunks that had embeddings copied
+    ///
+    /// # Errors
+    /// Returns error if database query fails
+    pub async fn copy_existing_embeddings(&self, client: &Client) -> Result<usize> {
+        info!("Copying existing embeddings from code_embeddings table");
+
+        let query = r#"
+            UPDATE maproom.chunks c
+            SET
+                code_embedding = ce.code_embedding,
+                text_embedding = ce.text_embedding,
+                updated_at = NOW()
+            FROM maproom.code_embeddings ce
+            WHERE c.blob_sha = ce.blob_sha
+              AND (c.code_embedding IS NULL OR c.text_embedding IS NULL)
+            RETURNING c.id
+        "#;
+
+        let rows = client
+            .query(query, &[])
+            .await
+            .context("Failed to copy embeddings from code_embeddings table")?;
+
+        let count = rows.len();
+
+        if count > 0 {
+            info!("Copied embeddings for {} chunks from code_embeddings table", count);
+        } else {
+            debug!("No embeddings to copy from code_embeddings table");
+        }
+
+        Ok(count)
+    }
+
     /// Run the embedding generation pipeline.
     pub async fn run(&self, client: &Client) -> Result<PipelineStats> {
         self.run_with_progress(client, None).await
@@ -185,7 +239,26 @@ impl EmbeddingPipeline {
             self.provider_name, self.dimension
         );
 
-        // Fetch chunks that need embeddings
+        // STEP 1: Copy existing embeddings from code_embeddings table
+        // This is the critical missing step from BLOBSHA infrastructure
+        match self.copy_existing_embeddings(client).await {
+            Ok(copied_count) => {
+                stats.copied_from_cache = copied_count;
+                // Calculate cost saved: $0.00013 per 1K tokens (OpenAI text-embedding-3-small)
+                // Average chunk is ~1K tokens, so we use copied_count directly
+                stats.cost_saved_usd = copied_count as f64 * 0.00013;
+                info!(
+                    "Copied {} embeddings from cache, saved ${:.4}",
+                    copied_count, stats.cost_saved_usd
+                );
+            }
+            Err(e) => {
+                warn!("Failed to copy embeddings from cache: {}", e);
+                // Continue with generation - this is not a fatal error
+            }
+        }
+
+        // STEP 2: Fetch chunks that still need embeddings (after copy step)
         let chunks = self.fetch_chunks_needing_embeddings(client).await?;
         stats.total_chunks = chunks.len();
 
@@ -771,6 +844,8 @@ mod tests {
             total_chunks: 1000,
             embeddings_generated: 200,
             embeddings_cached: 800,
+            copied_from_cache: 0,
+            cost_saved_usd: 0.0,
             failed_chunks: 0,
             api_calls: 10,
             total_tokens: 50000,
