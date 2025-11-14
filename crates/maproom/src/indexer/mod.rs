@@ -83,7 +83,7 @@ async fn process_python_imports(
     Ok(())
 }
 
-fn detect_language_from_path(path: &Path) -> Option<&'static str> {
+pub fn detect_language_from_path(path: &Path) -> Option<&'static str> {
     // Check for go.mod file specifically
     if path.file_name().and_then(|n| n.to_str()) == Some("go.mod") {
         return Some("gomod");

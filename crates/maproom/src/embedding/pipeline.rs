@@ -208,6 +208,33 @@ impl EmbeddingPipeline {
         Ok(count)
     }
 
+    /// Populate code_embeddings cache with newly generated embedding.
+    ///
+    /// This enables embedding reuse across worktrees when chunks have the same blob_sha.
+    /// Uses ON CONFLICT DO NOTHING to handle concurrent inserts safely.
+    async fn populate_embedding_cache(
+        &self,
+        client: &Client,
+        blob_sha: &str,
+        code_embedding: &[f32],
+    ) -> Result<()> {
+        let embedding_vec = pgvector::Vector::from(code_embedding.to_vec());
+
+        client
+            .execute(
+                r#"
+                INSERT INTO maproom.code_embeddings (blob_sha, embedding)
+                VALUES ($1, $2)
+                ON CONFLICT (blob_sha) DO NOTHING
+                "#,
+                &[&blob_sha, &embedding_vec],
+            )
+            .await
+            .context("Failed to populate code_embeddings cache")?;
+
+        Ok(())
+    }
+
     /// Run the embedding generation pipeline.
     pub async fn run(&self, client: &Client) -> Result<PipelineStats> {
         self.run_with_progress(client, None).await
@@ -349,13 +376,13 @@ impl EmbeddingPipeline {
     async fn fetch_chunks_needing_embeddings(&self, client: &Client) -> Result<Vec<ChunkRow>> {
         let query = if self.config.incremental {
             // Only fetch chunks where embeddings are NULL
-            "SELECT c.id, c.signature, c.docstring, c.preview
+            "SELECT c.id, c.signature, c.docstring, c.preview, c.blob_sha
              FROM maproom.chunks c
              WHERE c.code_embedding IS NULL OR c.text_embedding IS NULL
              ORDER BY c.id"
         } else {
             // Fetch all chunks
-            "SELECT c.id, c.signature, c.docstring, c.preview
+            "SELECT c.id, c.signature, c.docstring, c.preview, c.blob_sha
              FROM maproom.chunks c
              ORDER BY c.id"
         };
@@ -378,6 +405,7 @@ impl EmbeddingPipeline {
                 signature: row.get(1),
                 docstring: row.get(2),
                 preview: row.get(3),
+                blob_sha: row.get(4),
             })
             .collect();
 
@@ -439,6 +467,16 @@ impl EmbeddingPipeline {
                     &text_embeddings[i],
                 )
                 .await?;
+
+                // Populate code_embeddings cache for deduplication
+                if let Some(blob_sha) = &chunk.blob_sha {
+                    self.populate_embedding_cache(
+                        client,
+                        blob_sha,
+                        &code_embeddings[i],
+                    )
+                    .await?;
+                }
             }
 
             debug!("Wrote {} chunk embeddings to database", batch.len());
@@ -732,7 +770,7 @@ impl EmbeddingPipeline {
         let placeholders: Vec<String> = (1..=chunk_ids.len()).map(|i| format!("${}", i)).collect();
 
         let query = format!(
-            "SELECT c.id, c.signature, c.docstring, c.preview
+            "SELECT c.id, c.signature, c.docstring, c.preview, c.blob_sha
              FROM maproom.chunks c
              WHERE c.id IN ({})
              ORDER BY c.id",
@@ -756,6 +794,7 @@ impl EmbeddingPipeline {
                 signature: row.get(1),
                 docstring: row.get(2),
                 preview: row.get(3),
+                blob_sha: row.get(4),
             })
             .collect();
 
@@ -770,6 +809,7 @@ struct ChunkRow {
     signature: Option<String>,
     docstring: Option<String>,
     preview: String,
+    blob_sha: Option<String>,
 }
 
 #[cfg(test)]
