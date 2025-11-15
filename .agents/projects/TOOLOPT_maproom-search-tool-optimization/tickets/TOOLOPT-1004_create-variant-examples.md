@@ -1,9 +1,9 @@
 # Ticket: TOOLOPT-1004: Export variant examples with annotations
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation only)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -19,17 +19,17 @@ Having concrete examples of actual variants tested during optimization provides 
 This implements the documentation phase from TOOLOPT project plan - preserving concrete examples.
 
 ## Acceptance Criteria
-- [ ] `docs/optimization/examples/variant-a-detailed.md` created (winner, 19.6%)
-- [ ] `docs/optimization/examples/variant-control.md` created (baseline, 17.7%)
-- [ ] `docs/optimization/examples/variant-e-task-mapping.md` created (future enhancement, if exists)
-- [ ] Each example includes:
-  - [ ] Performance score and generation number
-  - [ ] Annotated sections explaining key features
-  - [ ] Highlighted differences from other variants
-  - [ ] Token count
-  - [ ] Key patterns used (reference to patterns guide)
-- [ ] Original variant content preserved accurately
-- [ ] Annotations clearly distinguished from original content
+- [x] `docs/optimization/examples/variant-a-detailed.md` created (winner, 19.6%)
+- [x] `docs/optimization/examples/variant-control.md` created (baseline, 17.7%)
+- [x] `docs/optimization/examples/variant-e-task-mapping.md` created (future enhancement, if exists) - N/A: variant-e does not exist in source data
+- [x] Each example includes:
+  - [x] Performance score and generation number
+  - [x] Annotated sections explaining key features
+  - [x] Highlighted differences from other variants
+  - [x] Token count
+  - [x] Key patterns used (reference to patterns guide)
+- [x] Original variant content preserved accurately
+- [x] Annotations clearly distinguished from original content
 
 ## Technical Requirements
 - Source directory: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/variants/`
