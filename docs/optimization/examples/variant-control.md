@@ -20,11 +20,11 @@ This variant represents the production tool description before optimization. It 
 6. **Best Practices List** - Simple bullet points for good vs. bad queries
 
 ### Patterns Used
-- **Concrete Examples** (TOOLOPT-PG-003): Query examples provided
-- **Visual Hierarchy** (TOOLOPT-PG-002): Uses ⚠️ and ✅ symbols for emphasis
-- **Comparison Positioning** (TOOLOPT-PG-007): "FASTER THAN Grep" and tool comparison sections
+- **Concrete Examples**: Query examples provided
+- **Visual Hierarchy**: Uses ⚠️ and ✅ symbols for emphasis
+- **Comparison Positioning**: "FASTER THAN Grep" and tool comparison sections
 
-See [Pattern Catalog](../patterns-catalog.md) for detailed pattern descriptions.
+See [Tool Description Patterns](../tool-description-patterns.md) for detailed pattern guidance and templates.
 
 ## Original Variant Content
 
@@ -187,8 +187,8 @@ However, for maximum performance, variant-a-detailed's transformation workflow p
 
 ## References
 
-- Source: `/workspace/packages/maproom-mcp/test/tool-description-optimization/variants/variant-control.json`
-- Generation 1 Report: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-1/report.txt`
-- Current Production: `/workspace/packages/maproom-mcp/src/index.ts` (line 117)
-- Pattern Catalog: [../patterns-catalog.md](../patterns-catalog.md)
-- Optimization Summary: [../TOOLOPT-summary.md](../TOOLOPT-summary.md)
+- **Source**: `/workspace/packages/maproom-mcp/test/tool-description-optimization/variants/variant-control.json`
+- **Generation 1 Report**: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-1/report.txt`
+- **Current Production**: `/workspace/packages/maproom-mcp/src/index.ts` (search tool description)
+- **Tool Description Patterns**: [../tool-description-patterns.md](../tool-description-patterns.md)
+- **Genetic Optimization Results**: [../genetic-optimization-results.md](../genetic-optimization-results.md)

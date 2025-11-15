@@ -48,6 +48,8 @@ The single biggest differentiator between high-performing (19.6%) and low-perfor
 
 **Copy-Paste Template**:
 
+(Note: 🤖 emoji marks sections specifically for AI agents)
+
 ```markdown
 🤖 AI AGENT [INPUT TYPE] → [OUTPUT TYPE] TRANSFORMATION:
 

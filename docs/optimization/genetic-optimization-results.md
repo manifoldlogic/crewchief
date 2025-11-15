@@ -1,12 +1,14 @@
 # Genetic Optimization Results
 
-Comprehensive findings from the 10-generation genetic optimization experiment testing tool description variants for the Maproom semantic search MCP tool.
+Comprehensive findings from the 10-generation genetic optimization experiment testing tool description variants for the Maproom semantic search MCP tool (MCP = Model Context Protocol).
 
-**Experiment Date**: November 2025
+**Experiment Date**: November 14, 2025
 **Total Generations**: 11 (Gen 0 baseline + Gen 1-10)
 **Total Variants Tested**: 58 unique variants
 **Benchmark Task**: "Find where git worktrees are created in the crewchief CLI and explain how it works"
 **Source Data**: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/`
+
+**Note**: "Gen 0" refers to the initial baseline variants (variant-a-detailed, variant-control, etc.) tested in Generation 1. There is no separate gen-0/ directory - these results appear in gen-1/report.txt.
 
 ---
 
@@ -78,15 +80,15 @@ The genetic optimization experiment used an evolutionary algorithm to improve AI
 | 0 | Simple (Minimal) | variant-b-simple | 18.7% | - | Initial |
 | 0 | Control (Current Baseline) | variant-control | 17.7% | - | Production |
 | 1 | Amplification | mhzd6q94jxz7 | 19.3% | -0.3% | Amplification |
-| 2 | Amplification | mhzdleegwdc1 | 19.7% | +0.1% | Amplification |
-| 3 | Reduction | mhze21ubqxiy | 19.5% | -0.2% | Reduction |
-| 4 | Crossover | mhzeggiife68 | **20.4%** | +0.8% | Crossover |
-| 5 | Reduction | mhzew243o80o | 19.4% | -1.0% | Reduction |
-| 6 | Amplification | mhzfayfrbjia | **19.8%** | +0.4% | Amplification |
-| 7 | Specialization | mhzfq5bk1vx9 | 19.5% | -0.3% | Specialization |
-| 8 | Reduction | mhzg5pafe4rt | 19.7% | +0.2% | Reduction |
-| 9 | Crossover | mhzgkcdirpen | 19.2% | -0.5% | Crossover |
-| 10 | - | - | - | - | - |
+| 2 | Amplification | mhzdleegwdc1 | 19.7% | +0.4% | Amplification |
+| 3 | Amplification | mhze21ubqxiy | 19.7% | 0.0% | Amplification |
+| 4 | Reduction | mhze21ubqxiy | 19.5% | -0.2% | Reduction |
+| 5 | Crossover | mhzeggiife68 | **20.4%** | +0.9% | Crossover |
+| 6 | Reduction | mhzew243o80o | 19.4% | -1.0% | Reduction |
+| 7 | Amplification | mhzfayfrbjia | 19.8% | +0.4% | Amplification |
+| 8 | Specialization | mhzfq5bk1vx9 | 19.5% | -0.3% | Specialization |
+| 9 | Reduction | mhzg5pafe4rt | 19.7% | +0.2% | Reduction |
+| 10 | Crossover | mhzgkcdirpen | 19.2% | -0.5% | Crossover |
 
 **Source**: Generation reports in `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-*/report.txt`
 
@@ -100,7 +102,7 @@ The genetic optimization experiment used an evolutionary algorithm to improve AI
    - Variance: ±0.5-1.0%
    - Suggests local optimum reached
 
-3. **Peak Performance**: Gen 4 achieved highest score (20.4%) but was not consistently reproducible
+3. **Peak Performance**: Gen 5 achieved highest score (20.4%) but was not consistently reproducible
    - May indicate measurement variance or task-specific advantage
 
 4. **Stable Winner**: variant-a-detailed (19.6%) remained competitive throughout all generations
@@ -112,7 +114,7 @@ The genetic optimization experiment used an evolutionary algorithm to improve AI
 | Metric | Value |
 |--------|-------|
 | **Baseline (Control)** | 17.7% |
-| **Best Overall** | 20.4% (Gen 4) |
+| **Best Overall** | 20.4% (Gen 5) |
 | **Consistent Winner** | 19.6% (variant-a-detailed) |
 | **Average Top-3** | 19.4% |
 | **Average All Variants** | 18.6% |

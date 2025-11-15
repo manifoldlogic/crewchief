@@ -20,13 +20,13 @@ This variant won the initial competition by introducing several innovative patte
 6. **Structured Best Practices** - Uses ✅ and ❌ symbols to distinguish good vs. bad query patterns
 
 ### Patterns Used
-- **Progressive Disclosure** (TOOLOPT-PG-001): Information organized from high-level to detailed
-- **Visual Hierarchy** (TOOLOPT-PG-002): Emoji markers and symbols create clear section boundaries
-- **Concrete Examples** (TOOLOPT-PG-003): Multiple before→after query transformations
-- **Agent-Specific Guidance** (TOOLOPT-PG-004): Dedicated "AI AGENT QUERY FORMULATION" section
-- **Fallback Strategy** (TOOLOPT-PG-005): Multi-query retry pattern when results < 3
+- **Progressive Disclosure**: Information organized from high-level to detailed
+- **Visual Hierarchy**: Emoji markers and symbols create clear section boundaries
+- **Concrete Examples**: Multiple before→after query transformations
+- **Agent-Specific Guidance**: Dedicated "AI AGENT QUERY FORMULATION" section
+- **Fallback Strategy**: Multi-query retry pattern when results < 3
 
-See [Pattern Catalog](../patterns-catalog.md) for detailed pattern descriptions.
+See [Tool Description Patterns](../tool-description-patterns.md) for detailed pattern guidance and templates.
 
 ## Original Variant Content
 
@@ -176,7 +176,7 @@ Later generations (Gen 3 reached 19.7%, Gen 5 peaked at 20.4%) built upon this f
 
 ## References
 
-- Source: `/workspace/packages/maproom-mcp/test/tool-description-optimization/variants/variant-a-detailed.json`
-- Generation 1 Report: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-1/report.txt`
-- Pattern Catalog: [../patterns-catalog.md](../patterns-catalog.md)
-- Optimization Summary: [../TOOLOPT-summary.md](../TOOLOPT-summary.md)
+- **Source**: `/workspace/packages/maproom-mcp/test/tool-description-optimization/variants/variant-a-detailed.json`
+- **Generation 1 Report**: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-1/report.txt`
+- **Tool Description Patterns**: [../tool-description-patterns.md](../tool-description-patterns.md)
+- **Genetic Optimization Results**: [../genetic-optimization-results.md](../genetic-optimization-results.md)
