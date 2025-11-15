@@ -1,0 +1,86 @@
+COMPETITION REPORT
+============================================================
+
+Competition ID: comp-1763154822888
+Task: Find Worktree Creation Implementation
+Difficulty: easy
+Category: finding-implementation
+
+SETUP METRICS
+------------------------------------------------------------
+Total setup time: 413.1s
+
+Scan Results:
+  - variant-variant-control-1763154822889: 0 chunks in 0.3s
+  - variant-variant-a-detailed-1763154915082: 0 chunks in 0.2s
+  - variant-variant-b-simple-1763154995764: 0 chunks in 0.3s
+  - variant-variant-c-conversational-1763155074828: 0 chunks in 0.2s
+  - variant-variant-d-code-like-1763155151611: 0 chunks in 0.3s
+
+Validation Results:
+  - variant-control: pass
+  - variant-a-detailed: pass
+  - variant-b-simple: pass
+  - variant-c-conversational: pass
+  - variant-d-code-like: pass
+
+RESULTS
+------------------------------------------------------------
+1. Detailed (Comprehensive)
+   Score: 19.6%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 98.2%
+   Searches: 0
+   Target Found: NO
+
+2. Code-like (Technical)
+   Score: 19.0%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 95.1%
+   Searches: 0
+   Target Found: NO
+
+3. Conversational (Friendly)
+   Score: 19.0%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 94.8%
+   Searches: 0
+   Target Found: NO
+
+4. Simple (Minimal)
+   Score: 18.7%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 93.5%
+   Searches: 0
+   Target Found: NO
+
+5. Control (Current Baseline)
+   Score: 17.7%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 88.6%
+   Searches: 0
+   Target Found: NO
+
+WINNER
+------------------------------------------------------------
+Detailed (Comprehensive) (19.6%)
+
+Search quality: 0% (target not found well), Task completion: 0% (needs work), Efficiency: 98% (0 searches, 11 calls, 21.357s), Total score: 20%
+
+COMPETITION METRICS
+------------------------------------------------------------
+Average Score: 18.8%
+Score Range: 17.7% - 19.6%
+Average Searches: 0.0
+Success Rate: 0.0%
+
+NEXT STEPS
+------------------------------------------------------------
+- Use winner as baseline for next generation
+- Generate mutations from winner
+- Run next competition

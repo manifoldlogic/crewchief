@@ -1,0 +1,46 @@
+GENERATION 10 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Crossover Mutation (Gen 9)
+   ID: variant-crossover-gen9-mhzgkcdirpen
+   Score: 19.2%
+   Generation: 9
+   Mutation: crossover
+
+2. Amplification Mutation (Gen 9)
+   ID: variant-amplification-gen9-mhzgkcdiny6o
+   Score: 19.1%
+   Generation: 9
+   Mutation: amplification
+
+3. Reduction Mutation (Gen 8)
+   ID: variant-reduction-gen8-mhzg5pafe4rt
+   Score: 18.9%
+   Generation: 8
+   Mutation: reduction
+
+4. Reduction Mutation (Gen 9)
+   ID: variant-reduction-gen9-mhzgkcdihrxg
+   Score: 18.7%
+   Generation: 9
+   Mutation: reduction
+
+5. Amplification Mutation (Gen 9)
+   ID: variant-amplification-gen9-mhzgkcdizmxw
+   Score: 18.3%
+   Generation: 9
+   Mutation: amplification
+
+6. Reduction Mutation (Gen 9)
+   ID: variant-reduction-gen9-mhzgkcdihf6t
+   Score: 15.0%
+   Generation: 9
+   Mutation: reduction
+
+SUMMARY
+------------------------------------------------------------
+Best: Crossover Mutation (Gen 9) - 19.2%
+Average: 18.2%
+Improvement: -0.45%

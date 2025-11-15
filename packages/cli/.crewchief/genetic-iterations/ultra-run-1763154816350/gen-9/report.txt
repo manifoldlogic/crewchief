@@ -1,0 +1,46 @@
+GENERATION 9 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Reduction Mutation (Gen 8)
+   ID: variant-reduction-gen8-mhzg5pafe4rt
+   Score: 19.7%
+   Generation: 8
+   Mutation: reduction
+
+2. Specialization Mutation (Gen 7)
+   ID: variant-specialization-gen7-mhzfq5bk1vx9
+   Score: 19.4%
+   Generation: 7
+   Mutation: specialization
+
+3. Reduction Mutation (Gen 8)
+   ID: variant-reduction-gen8-mhzg5pagiw9i
+   Score: 19.3%
+   Generation: 8
+   Mutation: reduction
+
+4. Amplification Mutation (Gen 8)
+   ID: variant-amplification-gen8-mhzg5pag1qz6
+   Score: 19.1%
+   Generation: 8
+   Mutation: amplification
+
+5. Amplification Mutation (Gen 8)
+   ID: variant-amplification-gen8-mhzg5pafzrqs
+   Score: 18.6%
+   Generation: 8
+   Mutation: amplification
+
+6. Crossover Mutation (Gen 8)
+   ID: variant-crossover-gen8-mhzg5pafigff
+   Score: 17.5%
+   Generation: 8
+   Mutation: crossover
+
+SUMMARY
+------------------------------------------------------------
+Best: Reduction Mutation (Gen 8) - 19.7%
+Average: 18.9%
+Improvement: +0.20%

@@ -1,0 +1,106 @@
+COMPETITION REPORT
+============================================================
+
+Competition ID: comp-1763159641682
+Task: Find Worktree Creation Implementation
+Difficulty: easy
+Category: finding-implementation
+
+SETUP METRICS
+------------------------------------------------------------
+Total setup time: 578.8s
+
+Scan Results:
+  - variant-variant-amplification-gen6-mhzfayfrbjia-1763159641682: 0 chunks in 0.3s
+  - variant-variant-crossover-gen7-mhzfq5bjooh1-1763159722455: 0 chunks in 0.3s
+  - variant-variant-amplification-gen7-mhzfq5bj22p0-1763159798487: 0 chunks in 0.3s
+  - variant-variant-reduction-gen7-mhzfq5bjh8g1-1763159882764: 0 chunks in 0.3s
+  - variant-variant-specialization-gen7-mhzfq5bk1vx9-1763159971057: 0 chunks in 0.3s
+  - variant-variant-amplification-gen7-mhzfq5bk7497-1763160054791: 0 chunks in 0.3s
+  - variant-variant-reduction-gen7-mhzfq5bkj6s5-1763160137417: 0 chunks in 0.3s
+
+Validation Results:
+  - variant-amplification-gen6-mhzfayfrbjia: pass
+  - variant-crossover-gen7-mhzfq5bjooh1: pass
+  - variant-amplification-gen7-mhzfq5bj22p0: pass
+  - variant-reduction-gen7-mhzfq5bjh8g1: pass
+  - variant-specialization-gen7-mhzfq5bk1vx9: pass
+  - variant-amplification-gen7-mhzfq5bk7497: pass
+  - variant-reduction-gen7-mhzfq5bkj6s5: pass
+
+RESULTS
+------------------------------------------------------------
+1. Specialization Mutation (Gen 7)
+   Score: 19.5%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 97.4%
+   Searches: 0
+   Target Found: NO
+
+2. Amplification Mutation (Gen 7)
+   Score: 19.4%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 96.9%
+   Searches: 0
+   Target Found: NO
+
+3. Amplification Mutation (Gen 6)
+   Score: 19.0%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 94.8%
+   Searches: 0
+   Target Found: NO
+
+4. Crossover Mutation (Gen 7)
+   Score: 18.7%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 93.6%
+   Searches: 0
+   Target Found: NO
+
+5. Reduction Mutation (Gen 7)
+   Score: 18.5%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 92.5%
+   Searches: 0
+   Target Found: NO
+
+6. Amplification Mutation (Gen 7)
+   Score: 17.9%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 89.4%
+   Searches: 0
+   Target Found: NO
+
+7. Reduction Mutation (Gen 7)
+   Score: 17.8%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 89.1%
+   Searches: 0
+   Target Found: NO
+
+WINNER
+------------------------------------------------------------
+Specialization Mutation (Gen 7) (19.5%)
+
+Search quality: 0% (target not found well), Task completion: 0% (needs work), Efficiency: 97% (0 searches, 11 calls, 28.812s), Total score: 19%
+
+COMPETITION METRICS
+------------------------------------------------------------
+Average Score: 18.7%
+Score Range: 17.8% - 19.5%
+Average Searches: 0.0
+Success Rate: 0.0%
+
+NEXT STEPS
+------------------------------------------------------------
+- Use winner as baseline for next generation
+- Generate mutations from winner
+- Run next competition

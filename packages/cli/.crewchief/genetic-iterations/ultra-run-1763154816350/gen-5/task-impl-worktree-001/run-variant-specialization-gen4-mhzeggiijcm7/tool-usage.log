@@ -1,0 +1,12 @@
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Glob","tool_input":{"pattern":"**/*worktree*"},"timestamp":1763158052244}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches"},"timestamp":1763158052252}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Glob","tool_input":{"pattern":"**/cli/**/*.{ts,js,tsx,jsx}"},"timestamp":1763158052258}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1763158058595}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1763158058598}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Bash","tool_input":{"command":"find /workspace -name \"worktrees.ts\" -type f | grep -v node_modules | grep -v \".crewchief\" | head -5","description":"Find worktrees.ts files"},"timestamp":1763158063608}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Bash","tool_input":{"command":"find /workspace -name \"worktree.ts\" -type f | grep -v node_modules | grep -v \".crewchief\" | head -5","description":"Find worktree.ts files"},"timestamp":1763158063609}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Glob","tool_input":{"pattern":"packages/cli/src/**/*.ts"},"timestamp":1763158066788}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Bash","tool_input":{"command":"pwd","description":"Get current working directory"},"timestamp":1763158071195}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Bash","tool_input":{"command":"ls -la","description":"List current directory contents"},"timestamp":1763158071197}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-5/task-impl-worktree-001/.crewchief/worktrees/variant-variant-specialization-gen4-mhzeggiijcm7-1763157818251/packages/cli/src/git/worktrees.ts"},"timestamp":1763158077153}
+{"session_id":"91f6006f-706d-468e-9e41-c2a0e95bb041","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/gen-5/task-impl-worktree-001/.crewchief/worktrees/variant-variant-specialization-gen4-mhzeggiijcm7-1763157818251/packages/cli/src/cli/worktree.ts"},"timestamp":1763158077154}

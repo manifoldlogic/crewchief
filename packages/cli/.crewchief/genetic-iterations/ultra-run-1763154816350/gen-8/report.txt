@@ -1,0 +1,52 @@
+GENERATION 8 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Specialization Mutation (Gen 7)
+   ID: variant-specialization-gen7-mhzfq5bk1vx9
+   Score: 19.5%
+   Generation: 7
+   Mutation: specialization
+
+2. Amplification Mutation (Gen 7)
+   ID: variant-amplification-gen7-mhzfq5bk7497
+   Score: 19.4%
+   Generation: 7
+   Mutation: amplification
+
+3. Amplification Mutation (Gen 6)
+   ID: variant-amplification-gen6-mhzfayfrbjia
+   Score: 19.0%
+   Generation: 6
+   Mutation: amplification
+
+4. Crossover Mutation (Gen 7)
+   ID: variant-crossover-gen7-mhzfq5bjooh1
+   Score: 18.7%
+   Generation: 7
+   Mutation: crossover
+
+5. Reduction Mutation (Gen 7)
+   ID: variant-reduction-gen7-mhzfq5bjh8g1
+   Score: 18.5%
+   Generation: 7
+   Mutation: reduction
+
+6. Amplification Mutation (Gen 7)
+   ID: variant-amplification-gen7-mhzfq5bj22p0
+   Score: 17.9%
+   Generation: 7
+   Mutation: amplification
+
+7. Reduction Mutation (Gen 7)
+   ID: variant-reduction-gen7-mhzfq5bkj6s5
+   Score: 17.8%
+   Generation: 7
+   Mutation: reduction
+
+SUMMARY
+------------------------------------------------------------
+Best: Specialization Mutation (Gen 7) - 19.5%
+Average: 18.7%
+Improvement: -0.31%

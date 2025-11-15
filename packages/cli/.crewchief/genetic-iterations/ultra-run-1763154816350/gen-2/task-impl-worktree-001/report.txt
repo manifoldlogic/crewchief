@@ -1,0 +1,106 @@
+COMPETITION REPORT
+============================================================
+
+Competition ID: comp-1763155376554
+Task: Find Worktree Creation Implementation
+Difficulty: easy
+Category: finding-implementation
+
+SETUP METRICS
+------------------------------------------------------------
+Total setup time: 537.8s
+
+Scan Results:
+  - variant-variant-a-detailed-1763155376555: 0 chunks in 0.3s
+  - variant-variant-crossover-gen1-mhzd6q94i1m6-1763155459029: 0 chunks in 0.3s
+  - variant-variant-amplification-gen1-mhzd6q94jxz7-1763155537410: 0 chunks in 0.3s
+  - variant-variant-reduction-gen1-mhzd6q95foti-1763155609853: 0 chunks in 0.3s
+  - variant-variant-specialization-gen1-mhzd6q9545du-1763155683488: 0 chunks in 0.3s
+  - variant-variant-amplification-gen1-mhzd6q95ljfb-1763155760034: 0 chunks in 0.3s
+  - variant-variant-reduction-gen1-mhzd6q95ix9s-1763155835918: 0 chunks in 0.3s
+
+Validation Results:
+  - variant-a-detailed: pass
+  - variant-crossover-gen1-mhzd6q94i1m6: pass
+  - variant-amplification-gen1-mhzd6q94jxz7: pass
+  - variant-reduction-gen1-mhzd6q95foti: pass
+  - variant-specialization-gen1-mhzd6q9545du: pass
+  - variant-amplification-gen1-mhzd6q95ljfb: pass
+  - variant-reduction-gen1-mhzd6q95ix9s: pass
+
+RESULTS
+------------------------------------------------------------
+1. Amplification Mutation (Gen 1)
+   Score: 19.3%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 96.6%
+   Searches: 0
+   Target Found: NO
+
+2. Detailed (Comprehensive)
+   Score: 19.1%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 95.5%
+   Searches: 0
+   Target Found: NO
+
+3. Crossover Mutation (Gen 1)
+   Score: 18.9%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 94.6%
+   Searches: 0
+   Target Found: NO
+
+4. Reduction Mutation (Gen 1)
+   Score: 18.7%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 93.4%
+   Searches: 0
+   Target Found: NO
+
+5. Specialization Mutation (Gen 1)
+   Score: 18.6%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 93.0%
+   Searches: 0
+   Target Found: NO
+
+6. Reduction Mutation (Gen 1)
+   Score: 18.1%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 90.7%
+   Searches: 0
+   Target Found: NO
+
+7. Amplification Mutation (Gen 1)
+   Score: 14.8%
+   Search Quality: 0.0%
+   Task Completion: 0.0%
+   Efficiency: 74.1%
+   Searches: 0
+   Target Found: NO
+
+WINNER
+------------------------------------------------------------
+Amplification Mutation (Gen 1) (19.3%)
+
+Search quality: 0% (target not found well), Task completion: 0% (needs work), Efficiency: 97% (0 searches, 12 calls, 25.417s), Total score: 19%
+
+COMPETITION METRICS
+------------------------------------------------------------
+Average Score: 18.2%
+Score Range: 14.8% - 19.3%
+Average Searches: 0.0
+Success Rate: 0.0%
+
+NEXT STEPS
+------------------------------------------------------------
+- Use winner as baseline for next generation
+- Generate mutations from winner
+- Run next competition

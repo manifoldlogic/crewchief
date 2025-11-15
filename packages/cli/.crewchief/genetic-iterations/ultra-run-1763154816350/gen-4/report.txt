@@ -1,0 +1,52 @@
+GENERATION 4 REPORT
+============================================================
+
+RESULTS
+------------------------------------------------------------
+1. Reduction Mutation (Gen 3)
+   ID: variant-reduction-gen3-mhze21ubqxiy
+   Score: 19.5%
+   Generation: 3
+   Mutation: reduction
+
+2. Specialization Mutation (Gen 3)
+   ID: variant-specialization-gen3-mhze21ubyvvn
+   Score: 19.2%
+   Generation: 3
+   Mutation: specialization
+
+3. Amplification Mutation (Gen 3)
+   ID: variant-amplification-gen3-mhze21uahk99
+   Score: 19.2%
+   Generation: 3
+   Mutation: amplification
+
+4. Crossover Mutation (Gen 3)
+   ID: variant-crossover-gen3-mhze21uao397
+   Score: 19.0%
+   Generation: 3
+   Mutation: crossover
+
+5. Amplification Mutation (Gen 3)
+   ID: variant-amplification-gen3-mhze21ubbik8
+   Score: 18.9%
+   Generation: 3
+   Mutation: amplification
+
+6. Amplification Mutation (Gen 2)
+   ID: variant-amplification-gen2-mhzdleegwdc1
+   Score: 18.0%
+   Generation: 2
+   Mutation: amplification
+
+7. Reduction Mutation (Gen 3)
+   ID: variant-reduction-gen3-mhze21ubfh1e
+   Score: 17.9%
+   Generation: 3
+   Mutation: reduction
+
+SUMMARY
+------------------------------------------------------------
+Best: Reduction Mutation (Gen 3) - 19.5%
+Average: 18.8%
+Improvement: -0.18%
