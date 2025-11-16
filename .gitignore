@@ -42,3 +42,5 @@ maproom-sa-key.json
 
 # GCP config directories
 .config/gcp/.crewchief/claude-code-plugins
+
+coverage/
