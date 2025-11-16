@@ -1,104 +1,209 @@
-# VSCode Maproom Extension
+# VSMAP: VSCode Maproom Extension
 
-**Project ID:** VSMAP
-**Status:** Planning
-**Location:** `packages/vscode-maproom/`
-
-## Overview
-
-A VSCode/Cursor extension that provides automatic code indexing for Maproom's semantic search capabilities. This extension manages the indexing lifecycle (scan, watch, update) and Docker service orchestration, making codebases continuously ready for MCP-based semantic search.
+**Status**: ✅ Ready for Implementation (Revised Architecture)
+**Timeline**: 3-5 weeks (15-25 days)
+**Complexity**: Low (thin orchestration layer)
+**Last Updated**: 2025-11-16
 
 ## Problem Statement
 
-Developers using Maproom MCP for semantic code search must manually:
-- Run setup commands to configure embedding providers
-- Start Docker services (PostgreSQL + optional Ollama)
-- Execute initial repository scans
-- Remember to re-scan after branch switches
-- Monitor index freshness
+Developers using Maproom semantic search must manually:
+1. Start Docker services (PostgreSQL + MCP server)
+2. Run `crewchief-maproom scan` after code changes
+3. Remember to re-index when switching branches
+4. Monitor indexing status manually
 
-This friction prevents Maproom from reaching its potential as an "always-ready" search engine.
+**This is friction.** Every context switch requires manual indexing steps.
 
-## Proposed Solution
+## Solution
 
-A VSCode extension that:
-- **Automates indexing:** Scans on workspace open, watches files and branch switches
-- **Manages services:** Auto-starts/stops Docker containers with manual override
-- **Simplifies setup:** Guided wizard for provider selection and credential configuration
-- **Provides visibility:** Status bar integration showing index health
+A **lightweight VSCode extension** that automates Maproom infrastructure by orchestrating existing tools.
 
-**Key principle:** Search happens via MCP (Claude/Cursor), extension handles indexing only.
+### What This Extension Does
+
+**Four simple responsibilities:**
+
+1. **Manages Docker Services**
+   - Starts PostgreSQL + Maproom MCP server on activation
+   - Stops services on deactivation
+   - Health check monitoring
+
+2. **Spawns Watch Processes**
+   - Launches `crewchief-maproom watch` (file watching)
+   - Launches `crewchief-maproom branch-watch` (branch detection)
+   - Both run as long-lived background processes
+
+3. **Displays Status**
+   - Parses stdout from watch processes
+   - Updates status bar: "$(eye) Watching...", "$(sync~spin) Indexing 15 files..."
+   - Click for detailed status
+
+4. **Guides Setup**
+   - First-run wizard for provider configuration
+   - Securely stores credentials (SecretStorage)
+   - Triggers initial scan
+
+### What This Extension DOESN'T Do
+
+The extension is a **thin orchestration layer**. All heavy lifting is delegated:
+
+**To Rust Binary (`crewchief-maproom`):**
+- ✅ File watching and debouncing
+- ✅ Branch detection and .git/HEAD monitoring
+- ✅ Incremental indexing and deduplication
+- ✅ Embedding generation
+- ✅ Cross-platform compatibility
+
+**To TypeScript CLI (`crewchief`):**
+- ✅ Worktree creation and management
+- ✅ Automatic indexing on worktree creation
+
+**Out of Scope:**
+- ❌ Search UI (use MCP via Claude Code)
+- ❌ Custom configuration UI (use VSCode settings)
+- ❌ Marketplace publishing (Phase 5, post-MVP)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│         VSCode Extension (~300 lines)          │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  1. DockerManager                               │
+│     └─> docker-compose up/down                  │
+│                                                 │
+│  2. ProcessOrchestrator                         │
+│     ├─> spawn('crewchief-maproom watch')       │
+│     └─> spawn('crewchief-maproom branch-watch')│
+│                                                 │
+│  3. StatusBarManager                            │
+│     └─> Parse stdout → Update UI                │
+│                                                 │
+│  4. SetupWizard                                 │
+│     └─> Provider config + initial scan          │
+│                                                 │
+└─────────────────────────────────────────────────┘
+           ↓ spawns                    ↓ spawns
+    ┌──────────────┐          ┌──────────────────┐
+    │ watch process│          │ branch-watch     │
+    │ (Rust binary)│          │ process          │
+    │              │          │ (Rust binary)    │
+    │ - File watch │          │ - .git/HEAD watch│
+    │ - Debouncing │          │ - Branch detect  │
+    │ - Upserts    │          │ - Auto-index     │
+    └──────────────┘          └──────────────────┘
+```
+
+## Success Criteria
+
+| Metric | Target | Measured By |
+|--------|--------|-------------|
+| **Activation Time** | <500ms | performance.mark() in activate() |
+| **Memory Usage** | <50MB idle | process.memoryUsage() |
+| **Test Coverage** | >50% | c8 coverage report |
+| **Docker Startup** | <30s | Health check completion time |
+| **Status Updates** | <1s latency | Stdout parse to UI update |
+| **Process Reliability** | 99% uptime | Crash recovery success rate |
+
+## Timeline
+
+**Total: 15-25 days (3-5 weeks)**
+
+- Phase 0: Agent Creation (2-3 days)
+- Phase 1: Core Infrastructure (5-7 days)
+- Phase 2: Setup Wizard (3-4 days)
+- Phase 3: Process Monitoring (2-4 days)
+- Phase 4: Polish & Testing (3-5 days)
+
+**60% faster than original estimate** (was 37-52 days)
 
 ## Scope
 
 ### In Scope (MVP)
-- Automatic repository scanning on workspace open
-- File change watching with debounced updates
-- Branch switch detection and incremental re-indexing
-- Docker lifecycle management (auto-start with manual override)
-- Provider configuration wizard (Ollama/OpenAI/Google Vertex AI)
-- Status bar item with index status
-- Development installation documentation
+
+**Extension Implementation:**
+- Docker lifecycle management (docker-compose)
+- Process spawning and monitoring
+- Stdout parsing (NDJSON format)
+- Status bar integration
+- Setup wizard (provider selection, credentials)
+- Error recovery (exponential backoff)
+- VSIX packaging
+
+**Platform Support:**
+- Linux (x64, arm64)
+- macOS (x64, arm64)
+- Windows (x64)
+- Devcontainers (DinD, DooD modes)
 
 ### Out of Scope
-- Search UI within VSCode (use MCP instead)
-- Multi-workspace support
-- Custom embedding model configuration
-- Search result caching
-- Marketplace publishing (phase 1)
 
-## Technology Stack
+**Delegated to Existing Tools:**
+- File/branch watching → Rust binary
+- Indexing logic → Rust binary
+- Worktree management → CLI
+- Search UI → MCP
 
-- **Language:** TypeScript
-- **Platform:** VSCode Extension API
-- **Indexing:** Spawns `crewchief-maproom` Rust binary
-- **Docker:** docker-compose via child process
-- **Storage:** VSCode workspace settings + Secrets API
+**Deferred to Post-MVP:**
+- Marketplace publishing (Phase 5)
+- Multi-workspace support (Phase 6)
+- Custom search UI (Phase 8)
+- Advanced configuration UI (Phase 8)
 
-## Relevant Agents
+## Dependencies
 
-- **TypeScript/VSCode Agent:** Extension implementation, API integration
-- **Docker Engineer:** Service orchestration, health checks
-- **Technical Writer:** Installation and usage documentation
-- **Test Engineer:** Integration testing for indexing workflows
+**Runtime Requirements:**
+- Docker Desktop (for PostgreSQL + MCP server)
+- `crewchief-maproom` binary (bundled with extension)
+- VSCode 1.85+
 
-## Planning Documents
+**Development Dependencies:**
+- TypeScript 5.x
+- Vitest (testing)
+- @vscode/test-electron (E2E testing)
+- Docker Compose
 
-- [Analysis](planning/analysis.md) - Problem space research and user needs
-- [Architecture](planning/architecture.md) - Technical design and MVP scope
-- [Quality Strategy](planning/quality-strategy.md) - Testing approach
-- [Security Review](planning/security-review.md) - Security considerations
-- [Agent Suggestions](planning/agent-suggestions.md) - Specialized agents needed
-- [Execution Plan](planning/plan.md) - Phase-based implementation roadmap
+## Risk Assessment
 
-## Success Criteria
+| Risk | Level | Mitigation |
+|------|-------|------------|
+| Rust binary stdout changes | Medium | Define NDJSON contract, version output |
+| Process crashes | Low | Exponential backoff, auto-restart |
+| Docker unavailable | Medium | Clear error message, setup guide |
+| Platform-specific issues | Low | Test on all platforms, bundle binaries |
+| Devcontainer compatibility | Medium | Test DinD and DooD modes |
 
-**Functional:**
-1. ✅ Extension installs and activates in <500ms
-2. ✅ Setup wizard completes in <2 minutes
-3. ✅ Docker services start automatically and reach healthy state
-4. ✅ Repository scans complete successfully (100 files in <5 min)
-5. ✅ File changes trigger index updates within 3-5 seconds
-6. ✅ Branch switches detected within 1 second, trigger re-indexing
-7. ✅ Status bar reflects accurate index state in real-time
-8. ✅ MCP searches return results from extension-managed index
-9. ✅ Works identically in local and devcontainer environments
-10. ✅ Development installation documented with step-by-step guide
+**Overall Risk:** LOW (reusing battle-tested components)
 
-**Technical:**
-- Test coverage: >60%
-- Memory usage: <50MB idle
-- Zero security vulnerabilities (credential leaks, path traversal)
-- Supports: macOS (Intel + ARM64), Linux (x64 + ARM64)
+## Why This Approach?
 
-## Timeline
+### Benefits
+- ✅ **60% faster development** (15-25 days vs 37-52 days)
+- ✅ **90% less code** (~300 lines vs ~3000 lines)
+- ✅ **Consistent behavior** with CLI (same Rust binary)
+- ✅ **Better performance** (Rust vs TypeScript for watching)
+- ✅ **Lower risk** (reusing proven infrastructure)
+- ✅ **Easier maintenance** (fewer moving parts)
 
-**Estimated Duration:** 37-52 days (7.5-10.5 weeks)
+### Trade-offs
+- ⚠️ Coupled to Rust binary stdout format
+- ⚠️ Less control over watching behavior
+- ⚠️ Depends on binary stability
 
-This includes 50% buffer for:
-- VSCode Extension API learning curve
-- Cross-platform testing
-- Edge case discovery
-- Agent coordination
+**The trade-offs are acceptable for MVP.** We can add direct integration later if needed (Phase 10+).
 
-**MVP-Minus Option:** 28-40 days (defer Google Vertex AI, Windows support)
+## Next Steps
+
+1. ✅ Planning complete (this document)
+2. **Run `/create-project-tickets VSMAP`** to generate implementation tickets
+3. **Run `/work-on-project VSMAP`** to execute tickets
+4. Ship VSIX in 3-5 weeks
+
+## Related Documentation
+
+- `planning/architecture.md` - Detailed component specifications
+- `planning/plan.md` - Implementation phases and tickets
+- `planning/architecture-revision.md` - Why we revised the architecture
+- `planning/quality-strategy.md` - Testing approach
+- `planning/security-review.md` - Security considerations

@@ -8,6 +8,47 @@ This document contains all features and enhancements that are explicitly **OUT O
 
 ---
 
+## Current Architecture: Thin Orchestration Layer
+
+**Current Approach:** Spawn Rust processes (`crewchief-maproom watch`, `crewchief-maproom branch-watch`)
+
+**Alternative Future:** Direct integration (link Rust library via N-API)
+
+---
+
+## Phase 10: Direct Integration (Future Alternative)
+
+**When to consider:** Only if spawning processes becomes a limitation
+
+**Potential benefits:**
+- More control over watching behavior
+- Custom debouncing logic
+- Avoid stdout parsing coupling
+- Lower latency (no IPC overhead)
+
+**Potential costs:**
+- Much more complex (back to 3000 lines)
+- Platform-specific builds required
+- Harder to maintain (N-API complexity)
+- Lose benefits of CLI consistency
+
+**Recommendation:** Stay with process spawning unless user feedback demands direct integration.
+
+---
+
+## MVP Approach Advantages
+
+The current thin orchestration approach provides:
+- ✅ 90% less code to maintain
+- ✅ Consistent behavior with CLI
+- ✅ Faster development (3-5 weeks)
+- ✅ Lower risk (proven components)
+- ✅ Simple architecture
+
+**Continue with Phases 5-9 as originally planned, using process spawning.**
+
+---
+
 ## Phase 5: Marketplace & Refinement (Post-MVP)
 
 **Timeline:** 2-3 weeks after MVP release

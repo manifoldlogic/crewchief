@@ -1,1292 +1,630 @@
-# Execution Plan: VSCode Maproom Extension
+# Implementation Plan: VSCode Maproom Extension
 
-## Overview
+## Executive Summary
 
-This plan outlines the phased development of the Maproom VSCode extension, focusing on delivering automatic indexing capabilities with a pragmatic MVP approach. The plan integrates insights from analysis, architecture, quality strategy, security review, and agent suggestions.
+**Project:** VSCode extension for automatic semantic code indexing
+**Approach:** Thin orchestration layer over existing Rust binary and CLI
+**Timeline:** 15-25 days (3-5 weeks)
+**Complexity:** Low (delegate to existing infrastructure)
+**Risk:** Low (reusing battle-tested components)
 
-## Project Scope Reminder
+### Scope Reduction
 
-**In Scope (MVP):**
-- ✅ Automatic repository scanning on workspace open
-- ✅ File change watching with debounced updates
-- ✅ Branch switch detection and incremental re-indexing
-- ✅ Docker lifecycle management (auto-start with manual override)
-- ✅ Provider configuration wizard (Ollama/OpenAI/Google)
-- ✅ Status bar integration
-- ✅ Development installation documentation
+**Before (Original Plan):** 37-52 days, ~3000 lines of custom implementation
+**After (Revised Plan):** 15-25 days, ~300 lines of orchestration code
 
-**Out of Scope (Post-MVP):**
-- ❌ Search UI in VSCode (use MCP instead)
-- ❌ Multi-workspace support
-- ❌ Custom embedding models
-- ❌ Marketplace publishing (VSIX only for now)
+**Why the Change:**
+- Rust binary already has `watch` and `branch-watch` commands
+- CLI already has worktree management with auto-indexing
+- Extension should orchestrate, not reimplement
 
-## Prerequisites
+## Implementation Phases
 
-### 0. Agent Creation Phase
-**Duration:** 1-2 days
-**Deliverable:** Specialized agent definitions
+### Phase 0: Agent Creation (2-3 days)
 
-**Tasks:**
-1. Create VSCode Extension Specialist agent
-   - Define expertise and responsibilities
-   - Provide VSCode API documentation
-   - Add example patterns from architecture
-   - Test agent with simple extension task
+**Agents needed (REDUCED from 3 to 2):**
 
-2. Create Process Management Specialist agent
-   - Define child process expertise
-   - Document stream handling patterns
-   - Add cross-platform considerations
-   - Test agent with binary spawning task
+1. **process-management-specialist** - Spawn/monitor Rust processes
+   - Child process spawning (Node.js `spawn`)
+   - Stdout/stderr parsing (NDJSON format)
+   - Process lifecycle (start/stop/restart)
+   - Crash recovery with exponential backoff
+   - Platform-specific binary selection
 
-3. Create Configuration & Secrets Specialist agent
-   - Define SecretStorage expertise
-   - Document configuration patterns
-   - Add validation strategies
-   - Test agent with credential storage task
+2. **vscode-extension-specialist** - Extension activation, status bar, UI
+   - Extension activation (<500ms requirement)
+   - StatusBarItem updates
+   - SecretStorage for credentials
+   - QuickPick UI for setup wizard
+   - Extension packaging (VSIX)
+
+**Removed:** No need for separate watcher specialists (Rust handles it)
+
+**Deliverables:**
+- `.claude/agents/specialized/process-management-specialist.md`
+- `.claude/agents/specialized/vscode-extension-specialist.md`
 
 **Acceptance Criteria:**
-- [ ] All three agent definitions complete
-- [ ] Agents tested with sample tasks
-- [ ] Documentation comprehensive
-- [ ] Ready for ticket assignment
-
-**Assigned Agent:** Technical Researcher (for research), Manual (for agent file creation)
+- Agents can be invoked via CLI
+- Agent definitions include training examples
+- Agents have clear scope and responsibilities
 
 ---
 
-## Phase 1: Foundation (Week 1)
+### Phase 1: Core Infrastructure (5-7 days)
 
-**Goal:** Extension scaffold, Docker integration, basic binary spawning
+**Objective:** Get extension activating and spawning watch processes
 
-### Milestone 1.1: Extension Scaffold
-**Duration:** 1-2 days
-**Assigned Agent:** VSCode Extension Specialist
+#### Milestone 1.1: Docker Manager (2 days)
 
 **Tasks:**
-1. Initialize extension project in `packages/vscode-maproom/`
-   - `package.json` with extension metadata
-   - TypeScript configuration (tsconfig.json)
-   - Build configuration (esbuild or webpack)
-   - VSCode extension manifest
+- Copy docker-compose.yml for postgres + maproom-mcp
+- Implement `DockerManager` class
+  - Start/stop services via `docker compose` CLI
+  - Health check monitoring (pg_isready, TCP ping)
+  - Error handling with user-friendly messages
 
-2. Implement extension entry points
-   - `activate()` function with lifecycle logging
-   - `deactivate()` function with cleanup
-   - Basic error boundary
-   - Output channel for logging
+**Agent:** process-management-specialist
 
-3. Register activation events
-   - `onStartupFinished` for automatic activation
-   - `workspaceContains:.git` for git repos only
-   - Test activation performance (<500ms)
+**Files Created:**
+- `src/docker/manager.ts`
+- `config/docker-compose.yml`
 
-4. Setup development workflow
-   - `npm run compile` for TypeScript build
-   - `npm run watch` for continuous compilation
-   - F5 debug configuration
-   - `.vscodeignore` for packaging
-
-**Deliverables:**
-- `packages/vscode-maproom/src/extension.ts`
-- `packages/vscode-maproom/package.json`
-- `packages/vscode-maproom/tsconfig.json`
-- Development launch configuration
+**Tests:**
+- Docker services start successfully
+- Health checks timeout gracefully
+- Services already running (no-op)
 
 **Acceptance Criteria:**
-- [ ] Extension activates in Extension Development Host (F5 debug works)
-- [ ] Activation time <500ms (measured with `console.time('activation')` in activate function)
-- [ ] Logging to Output channel works (verify "Maproom" channel exists, shows "Extension activated")
-- [ ] Clean deactivation with no errors (deactivate() called, all dispose() methods called, no leaked resources)
-- [ ] TypeScript compiles with zero errors (`npm run compile` exits 0)
-- [ ] Extension can be packaged (`vsce package` succeeds, produces .vsix file)
-
-**Testing:** Unit tests for activation lifecycle
+- `DockerManager.ensureServicesRunning()` works
+- PostgreSQL healthy within 30s
+- Error shown if Docker not running
 
 ---
 
-### Milestone 1.2: Docker Manager
-**Duration:** 2-3 days
-**Assigned Agent:** Docker Engineer
+#### Milestone 1.2: Binary Spawner (2 days)
 
 **Tasks:**
-1. Implement DockerManager class
-   - Check Docker daemon status (`docker info`)
-   - Start services (`docker compose up -d`)
-   - Stop services (`docker compose down`)
-   - Health check polling (postgres, ollama)
+- Implement platform detection
+- Spawn `crewchief-maproom watch` process
+- Spawn `crewchief-maproom branch-watch` process
+- Basic stdout parsing (log to console for now)
 
-2. Service orchestration logic
-   - Determine required services based on provider
-   - Remove unused services when switching providers
-   - Handle service dependencies (postgres before mcp)
-   - Wait for healthy with timeout (120s)
+**Agent:** process-management-specialist
 
-3. Error handling
-   - Docker not installed detection
-   - Daemon not running detection
-   - Service startup failures
-   - Health check timeout errors
+**Files Created:**
+- `src/process/spawner.ts`
+- `src/process/parser.ts`
+- `src/utils/platform.ts`
 
-4. Configuration
-   - Use bundled docker-compose.yml from `packages/maproom-mcp/config/`
-   - Support override via settings (dockerComposePath)
-   - Localhost-only binding (security)
-
-**Deliverables:**
-- `packages/vscode-maproom/src/docker/manager.ts`
-- `packages/vscode-maproom/src/docker/health.ts`
-- `packages/vscode-maproom/src/docker/types.ts`
+**Tests:**
+- Correct binary selected for current platform
+- Process spawns successfully
+- Stdout parsed to NDJSON events
+- Process kills on extension deactivation
 
 **Acceptance Criteria:**
-- [ ] Services start successfully on localhost (postgres reachable at localhost:5433 within 30s)
-- [ ] Health checks detect when services are ready (pg_isready returns 0, status === 'healthy')
-- [ ] Graceful errors when Docker unavailable (show error: "Docker not installed" or "Docker daemon not running")
-- [ ] Unused services removed on provider switch (switching Ollama→OpenAI stops ollama container, verified with `docker ps`)
-- [ ] Total startup time <120s for all services (measured from `docker compose up` to all healthy)
-- [ ] Services bind to 127.0.0.1 only (not 0.0.0.0, verify with `docker port maproom-postgres 5432`)
-
-**Testing:**
-- Integration tests with real Docker
-- Unit tests for health check logic
-- Error handling tests (mock Docker failures)
+- Both watch processes spawn and run
+- Stdout logged to VSCode Output panel
+- Processes die gracefully on deactivation
 
 ---
 
-### Milestone 1.3: Rust Binary Spawner
-**Duration:** 2-3 days
-**Assigned Agent:** Process Management Specialist
+#### Milestone 1.3: Status Bar (1 day)
 
 **Tasks:**
-1. Implement RustBinarySpawner class
-   - Platform detection (darwin-arm64, linux-x64, etc.)
-   - Binary path resolution from bundled binaries
-   - Binary integrity verification (checksums)
-   - Spawn with validated arguments
+- Create StatusBarItem
+- Wire to process output
+- Show watching/indexing/error states
 
-2. Progress parsing
-   - Parse stdout for "Scanning: X/Y files"
-   - Emit progress events for UI updates
-   - Handle errors from stderr
-   - Capture exit codes
+**Agent:** vscode-extension-specialist
 
-3. Process lifecycle
-   - Graceful termination on cancel
-   - Timeout enforcement (10 min for scan)
-   - Cleanup on extension deactivation
-   - Retry logic for transient failures
+**Files Created:**
+- `src/ui/statusBar.ts`
 
-4. Security
-   - Use `spawn()` not `exec()` (no shell)
-   - Validate all arguments before passing
-   - Environment variables for config (not CLI args)
-   - Path validation within workspace
-
-**Deliverables:**
-- `packages/vscode-maproom/src/utils/binary.ts`
-- `packages/vscode-maproom/src/utils/platform.ts`
-- Platform-specific binary checksums
+**Tests:**
+- Status bar shows correct text for each state
+- Tooltip updates with details
 
 **Acceptance Criteria:**
-- [ ] Correct binary selected for each platform (darwin-arm64 on M1 Mac, linux-amd64 on Ubuntu x64, etc.)
-- [ ] Binary checksum validated before spawn (SHA-256 hash matches expected value from package.json)
-- [ ] Progress reported during scan (stdout parser emits 'progress' events, percent value 0-100)
-- [ ] Cancellation works within 5 seconds (SIGTERM sent, process exits, then SIGKILL after 5s if needed)
-- [ ] No shell injection vulnerabilities (use `spawn()` not `exec()`, no shell: true, args validated)
-- [ ] Binary spawn overhead <100ms (measured from spawn() call to first stdout line)
-- [ ] Exit code 0 = success, non-zero = error with specific meaning (2=database, 3=args, 10=provider, etc.)
-
-**Testing:**
-- Unit tests for platform detection
-- Integration tests with real binary
-- Security tests (path validation, no shell)
-- Performance tests (spawn overhead <100ms)
+- Status bar visible after activation
+- Status bar updates when processes start
+- Clicking status bar shows output panel
 
 ---
 
-### Milestone 1.4: Status Bar Integration
-**Duration:** 1 day
-**Assigned Agent:** VSCode Extension Specialist
+**Phase 1 Acceptance Criteria:**
+- ✅ Extension activates in <500ms
+- ✅ Docker services start successfully
+- ✅ Both watch processes spawn and run
+- ✅ Status bar shows "Watching..."
+- ✅ Processes kill on deactivation
+
+---
+
+### Phase 2: Setup Wizard (3-4 days)
+
+**Objective:** Guide users through first-time configuration
+
+#### Milestone 2.1: Provider Selection UI (1 day)
 
 **Tasks:**
-1. Implement StatusBarManager class
-   - Create status bar item (right side)
-   - Update text and icon based on state
-   - Click handler for details
-   - Tooltip with metadata
+- QuickPick for provider selection (Ollama/OpenAI/Google)
+- Detect running Ollama instance
+- Show recommendations based on availability
 
-2. State management
-   - NOT_CONFIGURED → "⚙️ Maproom: Setup"
-   - INDEXING → "⟳ Indexing... (X/Y)"
-   - HEALTHY → "✓ Indexed (2m ago)"
-   - ERROR → "✗ Error"
+**Agent:** vscode-extension-specialist
 
-3. Real-time updates
-   - Listen to indexing progress events
-   - Update every second during scan
-   - Debounce updates (max 1/second)
-   - Hide when not relevant (no workspace)
+**Files Created:**
+- `src/ui/setupWizard.ts`
 
-**Deliverables:**
-- `packages/vscode-maproom/src/ui/statusBar.ts`
-- Status icons and text formatting
+**Tests:**
+- Wizard shown on first activation
+- Provider selection works
+- Ollama detection accurate
 
 **Acceptance Criteria:**
-- [ ] Status bar visible on activation
-- [ ] Updates reflect indexing progress
-- [ ] Click opens detailed status panel
-- [ ] States render correctly
-
-**Testing:**
-- Unit tests for state transitions
-- E2E tests for UI updates
-- Manual testing for visual appearance
+- QuickPick displays 3 providers
+- "Recommended" badge for Ollama if running
+- Selection persisted to settings
 
 ---
 
-### Phase 1 Checkpoint
-
-**Deliverables:**
-- Working extension scaffold
-- Docker services start/stop automatically
-- Rust binary spawns successfully
-- Status bar shows basic status
-
-**Validation:**
-- [ ] Extension installs via VSIX
-- [ ] Docker services healthy
-- [ ] Binary spawns and exits cleanly
-- [ ] Status bar updates correctly
-
-**Duration:** ~5-7 days total
-
----
-
-## Phase 2: Indexing (Week 2)
-
-**Goal:** File watching, branch watching, automatic indexing
-
-### Milestone 2.1: Initial Scan Implementation
-**Duration:** 2 days
-**Assigned Agents:** Process Management Specialist, TypeScript Developer
+#### Milestone 2.2: Credential Storage (1 day)
 
 **Tasks:**
-1. Implement IndexingManager class
-   - Orchestrate scan workflow
-   - Manage Rust binary lifecycle
-   - Track index status
-   - Provide progress callbacks
+- Integrate VSCode SecretStorage API
+- Store OpenAI API key securely
+- Store Google credentials (if selected)
+- Environment variable setup for binary
 
-2. Git repository detection
-   - Find `.git` directory
-   - Extract repo name from remote
-   - Get current branch from `.git/HEAD`
-   - Get commit SHA from `git rev-parse HEAD`
+**Agent:** vscode-extension-specialist
 
-3. Progress notifications
-   - Show notification during scan
-   - Update progress (0-100%)
-   - Support cancellation
-   - Handle errors gracefully
+**Files Created:**
+- `src/config/secrets.ts`
 
-4. Integration with status bar
-   - Update status during scan
-   - Show completion time
-   - Persist last scan timestamp
-
-**Deliverables:**
-- `packages/vscode-maproom/src/indexing/manager.ts`
-- `packages/vscode-maproom/src/utils/git.ts`
+**Tests:**
+- Credentials stored in SecretStorage
+- Credentials retrieved for binary spawn
+- Credentials never logged
 
 **Acceptance Criteria:**
-- [ ] Scan completes for test repository (100 TypeScript files in <5 minutes)
-- [ ] Progress notification shows percentage (updates at least every 10%, shows "Indexing... 45%")
-- [ ] Cancellation stops binary cleanly (click Cancel → binary killed within 5s → notification dismissed)
-- [ ] Status bar reflects completion (shows "✓ Indexed (just now)" immediately after scan completes)
-- [ ] Git metadata extracted correctly (repo name from remote URL, branch from .git/HEAD, commit SHA from HEAD)
-- [ ] Scan respects .gitignore (files in .gitignore not passed to binary)
-
-**Testing:**
-- Integration tests with test repositories
-- Unit tests for git metadata extraction
-- E2E tests for user flow
+- API keys stored securely
+- Environment variables passed to binary
+- No credentials in VSCode logs
 
 ---
 
-### Milestone 2.2: File Watcher
-**Duration:** 2 days
-**Assigned Agent:** TypeScript Developer
+#### Milestone 2.3: Initial Scan (1 day)
 
 **Tasks:**
-1. Implement FileWatcher class
-   - Use `vscode.workspace.createFileSystemWatcher`
-   - Watch `**/*` pattern (all files)
-   - Exclude `.git/**` directory
-   - Respect .gitignore patterns
+- Trigger `crewchief-maproom scan` on setup complete
+- Parse progress output (% complete, files scanned)
+- Show progress notification
 
-2. Debouncing logic
-   - Collect changes for 3 seconds
-   - Reset timer on new changes
-   - Batch upsert when timer expires
-   - Queue multiple batches if needed
+**Agent:** process-management-specialist
 
-3. File change handling
-   - onCreate → add to index
-   - onChange → update index
-   - onDelete → remove from index
-   - Binary files → skip
+**Files Created:**
+- `src/process/scan.ts`
 
-4. Integration with IndexingManager
-   - Call `upsert()` with changed files
-   - Update status bar on completion
-   - Handle errors without crashing watcher
-
-**Deliverables:**
-- `packages/vscode-maproom/src/indexing/fileWatcher.ts`
-- `packages/vscode-maproom/src/indexing/debouncer.ts`
+**Tests:**
+- Scan spawns successfully
+- Progress parsed correctly
+- Completion detected
 
 **Acceptance Criteria:**
-- [ ] File save triggers update after 3s (tolerance ±100ms, measured with timestamps in logs)
-- [ ] Multiple rapid saves batched correctly (save 10 files in 2s → results in 1 upsert call with all 10 files)
-- [ ] .git directory changes ignored (modify .git/index file → no upsert triggered)
-- [ ] Watcher survives errors (binary fails during upsert → error shown, but watcher continues for next change)
-- [ ] MAX_WAIT prevents indefinite delay (save 100 files continuously → forces flush after 10s max)
-- [ ] Binary files skipped (save .png file → not included in upsert, no error)
-
-**Testing:**
-- Unit tests for debouncing algorithm
-- Integration tests with real file changes
-- E2E tests for multi-file batching
+- Scan triggered after wizard complete
+- Notification shows progress (0-100%)
+- Status bar updates to "Indexed" on complete
 
 ---
 
-### Milestone 2.3: Branch Watcher
-**Duration:** 2 days
-**Assigned Agent:** TypeScript Developer
+**Phase 2 Acceptance Criteria:**
+- ✅ Wizard runs on first activation
+- ✅ Credentials stored securely
+- ✅ Initial scan completes
+- ✅ User can select provider
+- ✅ Setup can be re-run via command
+
+---
+
+### Phase 3: Process Monitoring (2-4 days)
+
+**Objective:** Robust process management with error recovery
+
+#### Milestone 3.1: Stdout Parser (2 days)
 
 **Tasks:**
-1. Implement BranchWatcher class
-   - Watch `.git/HEAD` file for changes
-   - Parse current branch from HEAD content
-   - Detect branch switches
-   - Detect detached HEAD state
+- Parse NDJSON from watch processes
+- Extract progress info (files indexed, errors)
+- Update status bar in real-time
 
-2. Incremental scan on branch switch
-   - Trigger scan for new branch
-   - Use worktree name = branch name
-   - Incremental mode (only changed files)
-   - Content-addressed deduplication (BLOBSHA)
+**Agent:** process-management-specialist
 
-3. Edge cases
-   - Concurrent branch switches (queue)
-   - .git/HEAD parse errors (corrupted)
-   - Branch switch during active scan (cancel and restart)
-   - First scan vs subsequent scans
+**Files Enhanced:**
+- `src/process/parser.ts` (expand beyond basic logging)
+- `src/ui/statusBar.ts` (wire to parsed events)
 
-4. User notifications
-   - Show toast: "Branch changed to {branch}, re-indexing..."
-   - Hide notification on completion
-   - Error notification on failure
-
-**Deliverables:**
-- `packages/vscode-maproom/src/indexing/branchWatcher.ts`
+**Tests:**
+- All NDJSON event types parsed
+- Status bar updates correctly
+- File counts accurate
 
 **Acceptance Criteria:**
-- [ ] Branch switch detected within 1 second (measured: `git checkout` timestamp to watcher callback)
-- [ ] Incremental scan triggered automatically (scan spawned with `--worktree=<new-branch>` parameter)
-- [ ] Detached HEAD handled gracefully (parse SHA, truncate to 7 chars, show in status bar)
-- [ ] Concurrent switches queued properly (checkout A → checkout B rapidly → only B scan runs, A cancelled)
-- [ ] Corrupted .git/HEAD handled (invalid content → error notification, watching disabled, manual scan offered)
-- [ ] Rebase operations debounced (HEAD changes 10 times during rebase → only 1 scan after 500ms stable)
-
-**Testing:**
-- Unit tests for HEAD parsing
-- Integration tests with git checkouts
-- E2E tests for branch switching workflow
+- Status bar shows file counts during indexing
+- Errors displayed with actionable messages
+- "Last indexed" timestamp shown
 
 ---
 
-### Milestone 2.4: Auto-Start Workflow
-**Duration:** 1 day
-**Assigned Agent:** VSCode Extension Specialist
+#### Milestone 3.2: Error Handling (1 day)
 
 **Tasks:**
-1. Implement auto-start logic in activate()
-   - Check if configured (provider, credentials)
-   - Start Docker services if autoStart=true
-   - Wait for services healthy
-   - Run initial scan if not scanned before
+- Detect process crashes
+- Restart with exponential backoff
+- Show user-friendly error messages
+- Offer "Show Logs" action
 
-2. First-time detection
-   - Check for existing index (query database)
-   - Prompt user to scan if no index
-   - Track last scan timestamp
-   - Skip re-scan if recent (<1 hour)
+**Agent:** process-management-specialist
 
-3. Error recovery
-   - Retry Docker start on transient failures
-   - Show helpful errors with actions
-   - Allow manual retry via command
-   - Graceful degradation (skip scan, allow manual)
+**Files Created:**
+- `src/process/recovery.ts`
 
-**Deliverables:**
-- Enhanced `packages/vscode-maproom/src/extension.ts`
-- Auto-start state machine
+**Tests:**
+- Process crash triggers restart
+- Backoff increases exponentially
+- Max restarts enforced (5 attempts)
 
 **Acceptance Criteria:**
-- [ ] Extension auto-starts on workspace open
-- [ ] Services become healthy within 2 minutes
-- [ ] Initial scan prompts user
-- [ ] Errors show actionable messages
-
-**Testing:**
-- E2E tests for cold start
-- Integration tests for warm start (services already running)
-- Error handling tests
+- Crashed process restarts automatically
+- User notified on persistent failures
+- Logs accessible via "Show Logs" button
 
 ---
 
-### Phase 2 Checkpoint
-
-**Deliverables:**
-- Automatic indexing on workspace open
-- File changes trigger updates
-- Branch switches trigger re-indexing
-- Complete auto-start workflow
-
-**Validation:**
-- [ ] Open workspace → services start → scan completes
-- [ ] Save file → update after 3s
-- [ ] Switch branch → incremental re-index
-- [ ] Status bar always accurate
-
-**Duration:** ~6-7 days total
+**Phase 3 Acceptance Criteria:**
+- ✅ Status bar updates show file counts
+- ✅ Process crashes trigger restart
+- ✅ Errors displayed with actionable messages
+- ✅ Memory usage <50MB idle
 
 ---
 
-## Phase 3: Configuration & Setup (Week 3)
+### Phase 4: Polish & Testing (3-5 days)
 
-**Goal:** Provider configuration, credential management, setup wizard
+**Objective:** Production-ready quality
 
-### Milestone 3.1: Configuration Schema
-**Duration:** 1 day
-**Assigned Agent:** Configuration & Secrets Specialist
+#### Milestone 4.1: Integration Testing (2 days)
 
 **Tasks:**
-1. Define configuration schema in package.json
-   - `maproom.autoStart` (boolean, default: true)
-   - `maproom.provider` (enum: ollama|openai|google, default: ollama)
-   - `maproom.databaseUrl` (string, default: auto-detect)
-   - `maproom.watchDebounce` (number, default: 3000)
-   - `maproom.scanConcurrency` (number, default: 4)
-   - `maproom.dockerAutoManage` (boolean, default: true)
-   - `maproom.showProgress` (boolean, default: true)
+- Docker startup tests
+- Process spawning tests
+- Error recovery tests
 
-2. Implement ConfigurationManager class
-   - Read workspace/user settings
-   - Validate configuration values
-   - Provide sensible defaults
-   - Handle configuration changes
+**Agent:** ALL (collaborative)
 
-3. Validation logic
-   - Concurrency: 1-16
-   - Debounce: 500-10000ms
-   - Provider: enum validation
-   - Database URL: connection string format
+**Files Created:**
+- `src/test/integration/docker.test.ts`
+- `src/test/integration/process.test.ts`
+- `src/test/integration/recovery.test.ts`
 
-**Deliverables:**
-- Configuration schema in `package.json`
-- `packages/vscode-maproom/src/config/manager.ts`
-- `packages/vscode-maproom/src/config/validation.ts`
+**Tests:**
+- All integration tests pass
+- Coverage >50% for critical paths
 
 **Acceptance Criteria:**
-- [ ] Settings appear in VSCode Settings UI
-- [ ] Invalid values rejected with errors
-- [ ] Defaults applied correctly
-- [ ] Changes propagate immediately
-
-**Testing:**
-- Unit tests for validation logic
-- Integration tests for settings updates
+- Integration tests run in CI
+- Tests pass on Linux (devcontainer)
+- Docker cleanup after tests
 
 ---
 
-### Milestone 3.2: SecretStorage Integration
-**Duration:** 1-2 days
-**Assigned Agent:** Configuration & Secrets Specialist
+#### Milestone 4.2: Manual Testing (1 day)
 
 **Tasks:**
-1. Implement SecretsManager class
-   - Store API keys: `maproom.{provider}.apiKey`
-   - Retrieve from SecretStorage
-   - Delete on provider switch
-   - Environment variable fallback
+- Test on Linux (devcontainer)
+- Test on macOS (if available)
+- Test on Windows (optional for MVP)
+- Verify watch processes work
+- Test all error scenarios
 
-2. Security measures
-   - Never log API keys
-   - Redact credentials in errors
-   - Use environment variables for subprocess
-   - Validate keys before storing
-
-3. Provider-specific keys
-   - OpenAI: `OPENAI_API_KEY`
-   - Google: `GOOGLE_PROJECT_ID` (not secret, in settings)
-   - Google: `GOOGLE_APPLICATION_CREDENTIALS` (path)
-   - Ollama: No credentials needed
-
-4. Migration logic
-   - Detect old config format (if any)
-   - Migrate to SecretStorage
-   - Clear old plaintext config
-   - One-time migration on activate
+**Agent:** ALL
 
 **Deliverables:**
-- `packages/vscode-maproom/src/config/secrets.ts`
-- Credential validation functions
+- Manual testing checklist (checked off)
+- Bug fixes for critical issues
 
 **Acceptance Criteria:**
-- [ ] API keys stored encrypted
-- [ ] Keys never appear in logs
-- [ ] Environment variable fallback works
-- [ ] Migration completes successfully
-
-**Testing:**
-- Unit tests for credential storage
-- Security tests (no logging)
-- Integration tests with VSCode SecretStorage
+- Manual testing checklist complete
+- Critical bugs fixed
+- Works in devcontainer
 
 ---
 
-### Milestone 3.3: Provider Configuration
-**Duration:** 1-2 days
-**Assigned Agent:** Configuration & Secrets Specialist
+#### Milestone 4.3: Documentation (1 day)
 
 **Tasks:**
-1. Implement provider selection logic
-   - Ollama: No setup, auto-pull model
-   - OpenAI: Require API key validation
-   - Google: Require project ID and credentials
+- README with installation instructions
+- Troubleshooting guide
+- VSIX packaging
+- Release notes
 
-2. Credential validation
-   - OpenAI: Test API call to `/v1/models`
-   - Google: Validate project ID format
-   - Ollama: Check service health
-   - Show validation errors clearly
+**Agent:** vscode-extension-specialist
 
-3. Provider switching
-   - Prompt to confirm switch
-   - Restart Docker with new services
-   - Clear old provider credentials (optional)
-   - Re-index with new provider
-
-4. Environment setup
-   - Set `MAPROOM_EMBEDDING_PROVIDER` env var
-   - Pass credentials to Rust binary via env
-   - Configure docker-compose service selection
-
-**Deliverables:**
-- `packages/vscode-maproom/src/providers/config.ts`
-- `packages/vscode-maproom/src/providers/validation.ts`
-
-**Acceptance Criteria:**
-- [ ] Provider selection persists
-- [ ] Credentials validated before save
-- [ ] Docker services match provider
-- [ ] Switching providers works smoothly
-
-**Testing:**
-- Integration tests for each provider
-- Validation tests (valid/invalid keys)
-- Provider switching E2E tests
-
----
-
-### Milestone 3.4: Setup Wizard
-**Duration:** 2-3 days
-**Assigned Agent:** VSCode Extension Specialist
-
-**Tasks:**
-1. Implement setup wizard UI
-   - Welcome screen explaining Maproom
-   - Provider selection (QuickPick)
-   - Credential input (InputBox, password)
-   - Validation and error display
-   - Success screen with next steps
-
-2. Wizard flow
-   - Step 1: Welcome
-   - Step 2: Choose provider
-   - Step 3: Enter credentials (if needed)
-   - Step 4: Validate credentials
-   - Step 5: Start Docker services
-   - Step 6: Wait for healthy
-   - Step 7: Prompt for initial scan
-   - Step 8: Success
-
-3. Error handling
-   - Invalid credentials → retry
-   - Docker fails → show error + retry
-   - User cancels → save partial progress
-   - Validation timeout → retry option
-
-4. Skip/retry options
-   - Allow skipping initial scan
-   - Retry button on failures
-   - Cancel anytime
-   - Resume from last step
-
-**Deliverables:**
-- `packages/vscode-maproom/src/ui/setupWizard.ts`
-- Welcome and success messaging
-
-**Acceptance Criteria:**
-- [ ] Wizard completes for Ollama (no credentials)
-- [ ] Wizard validates OpenAI API key
-- [ ] Wizard validates Google credentials
-- [ ] Errors show actionable messages
-- [ ] Wizard can be cancelled
-
-**Testing:**
-- E2E tests for complete wizard flow
-- Error handling tests (mock failures)
-- UX testing (manual)
-
----
-
-### Phase 3 Checkpoint
-
-**Deliverables:**
-- Complete configuration system
-- Secure credential storage
-- Provider configuration and validation
-- Polished setup wizard
-
-**Validation:**
-- [ ] New user completes setup in <2 minutes
-- [ ] All providers configure successfully
-- [ ] Credentials stored securely
-- [ ] Settings UI works correctly
-
-**Duration:** ~5-7 days total
-
----
-
-## Phase 4: Testing, Polish & Documentation (Week 4)
-
-**Goal:** Comprehensive testing, documentation, development installation guide
-
-### Milestone 4.1: Unit Tests
-**Duration:** 2 days
-**Assigned Agent:** Test Engineer
-
-**Tasks:**
-1. Unit test coverage for critical logic
-   - Debouncing algorithm (fileWatcher)
-   - Path validation (security)
-   - Platform detection (binary)
-   - Configuration validation
-   - Branch parsing (branchWatcher)
-
-2. Test infrastructure setup
-   - Vitest configuration
-   - Test utilities and mocks
-   - Coverage reporting
-   - CI integration
-
-3. Achieve >70% coverage
-   - Focus on complex logic
-   - Skip trivial getters/setters
-   - Mock VSCode APIs
-   - Test error paths
-
-**Deliverables:**
-- Unit tests in `src/**/*.test.ts`
-- Vitest configuration
-- Coverage reports
-
-**Acceptance Criteria:**
-- [ ] All unit tests passing
-- [ ] Coverage >70%
-- [ ] Critical paths 100% coverage
-- [ ] Fast execution (<30s total)
-
----
-
-### Milestone 4.2: Integration Tests
-**Duration:** 2-3 days
-**Assigned Agent:** Test Engineer
-
-**Tasks:**
-1. Docker integration tests
-   - Service startup
-   - Health checks
-   - Service removal
-   - Error scenarios
-
-2. Binary spawning tests
-   - Scan execution
-   - Upsert execution
-   - Progress parsing
-   - Cancellation
-
-3. Database integration tests
-   - Connection validation
-   - Index queries
-   - Schema verification
-
-4. SecretStorage tests
-   - Store and retrieve
-   - Delete credentials
-   - Environment fallback
-
-**Deliverables:**
-- Integration tests in `src/test/integration/*.test.ts`
-- Test fixtures and helpers
-
-**Acceptance Criteria:**
-- [ ] All integration tests passing
-- [ ] Tests run on CI
-- [ ] Real Docker/database used
-- [ ] Cleanup after tests
-
----
-
-### Milestone 4.3: E2E Tests
-**Duration:** 2-3 days
-**Assigned Agent:** Test Engineer
-
-**Tasks:**
-1. Setup workflow E2E test
-   - Complete wizard for each provider
-   - Verify services started
-   - Verify initial scan
-
-2. File watching E2E test
-   - Save file → update triggered
-   - Multiple files → batched
-   - Verify status bar updates
-
-3. Branch switching E2E test
-   - Checkout branch → scan triggered
-   - Verify incremental update
-   - Verify status bar
-
-4. Error recovery E2E test
-   - Docker not running → error shown
-   - Binary fails → error shown
-   - Retry works
-
-**Deliverables:**
-- E2E tests in `src/test/e2e/*.test.ts`
-- @vscode/test-electron configuration
-
-**Acceptance Criteria:**
-- [ ] All E2E tests passing
-- [ ] Tests run in CI (Linux only)
-- [ ] Cover critical workflows
-- [ ] Realistic test scenarios
-
----
-
-### Milestone 4.4: Development Installation Documentation
-**Duration:** 1-2 days
-**Assigned Agent:** Technical Researcher
-
-**Tasks:**
-1. Write installation guide for developers
-   - Prerequisites (Node.js, Docker, pnpm)
-   - Build instructions
-   - VSIX packaging
-   - Installation in VSCode/Cursor
-
-2. Document three installation methods
-   - **Method 1:** VSIX package (for testing)
-   - **Method 2:** Symlink (for development)
-   - **Method 3:** Debug mode (for contributors)
-
-3. Platform-specific instructions
-   - macOS setup
-   - Linux setup
-   - Windows setup (if supported)
-   - Devcontainer setup
-
-4. Troubleshooting guide
-   - Docker not found
-   - Binary not executable
-   - Extension won't activate
-   - Services unhealthy
-
-**Deliverables:**
-- `packages/vscode-maproom/DEVELOPMENT.md`
-- `packages/vscode-maproom/INSTALLATION.md`
+**Files Created:**
+- `packages/vscode-maproom/README.md`
 - `packages/vscode-maproom/TROUBLESHOOTING.md`
+- `packages/vscode-maproom/CHANGELOG.md`
 
 **Acceptance Criteria:**
-- [ ] Instructions complete for all methods
-- [ ] Tested on all platforms
-- [ ] Screenshots/examples included
-- [ ] Troubleshooting covers common issues
+- README explains installation
+- Troubleshooting covers common issues
+- VSIX builds successfully
 
 ---
 
-### Milestone 4.5: Code Quality & Polish
-**Duration:** 1-2 days
-**Assigned Agents:** All
-
-**Tasks:**
-1. Code review and refactoring
-   - Remove dead code
-   - Improve naming
-   - Add missing comments
-   - Extract reusable utilities
-
-2. Performance optimization
-   - Measure activation time
-   - Optimize hot paths
-   - Reduce memory usage
-   - Profile extension
-
-3. Error message improvements
-   - Make errors actionable
-   - Add "Learn More" links
-   - Include troubleshooting hints
-   - Test all error paths
-
-4. Logging improvements
-   - Structured logging
-   - Appropriate log levels
-   - No credential leaks
-   - Helpful debug output
-
-**Deliverables:**
-- Refactored codebase
-- Performance benchmarks
-- Improved error messages
-- Comprehensive logging
-
-**Acceptance Criteria:**
-- [ ] Activation time <500ms
-- [ ] Memory usage <50MB idle
-- [ ] All errors actionable
-- [ ] No credentials in logs
+**Phase 4 Acceptance Criteria:**
+- ✅ 50% test coverage (critical paths)
+- ✅ Manual testing passes on all platforms
+- ✅ VSIX installs and activates correctly
+- ✅ Documentation complete
 
 ---
 
-### Milestone 4.6: Security Audit
-**Duration:** 1 day
-**Assigned Agent:** Configuration & Secrets Specialist
+## Total Timeline: 15-25 days (3-5 weeks)
 
-**Tasks:**
-1. Implement security mitigations from security-review.md
-   - Path validation comprehensive
-   - Binary checksum verification
-   - Credential logging prevention
-   - No shell injection
+**Breakdown:**
+- Phase 0: 2-3 days (agent creation)
+- Phase 1: 5-7 days (core infrastructure)
+- Phase 2: 3-4 days (setup wizard)
+- Phase 3: 2-4 days (process monitoring)
+- Phase 4: 3-5 days (polish & testing)
+- Buffer: ~20% built into ranges
 
-2. Security testing
-   - Attempt path traversal
-   - Verify credentials encrypted
-   - Check HTTPS enforcement
-   - Validate input sanitization
-
-3. Security documentation
-   - Document data flows
-   - Privacy policy (what leaves machine)
-   - Security best practices
-   - Threat model summary
-
-**Deliverables:**
-- Security tests passing
-- `packages/vscode-maproom/SECURITY.md`
-- Updated README with privacy info
-
-**Acceptance Criteria:**
-- [ ] All high-priority security gaps addressed
-- [ ] Security tests passing
-- [ ] Data flows documented
-- [ ] No critical vulnerabilities
+**Comparison:**
+- Original plan: 37-52 days (7.5-10.5 weeks)
+- Revised plan: 15-25 days (3-5 weeks)
+- **Reduction: 60% faster**
 
 ---
 
-### Phase 4 Checkpoint
+## Success Criteria
 
-**Deliverables:**
-- Comprehensive test suite (unit, integration, E2E)
-- Development installation documentation
-- Polished codebase
-- Security audit complete
+### Functional Requirements
 
-**Validation:**
-- [ ] All tests passing on CI
-- [ ] Documentation complete and tested
-- [ ] Extension ready for distribution
-- [ ] Security review passed
+**MVP Must-Have:**
+- ✅ Extension activates in <500ms
+- ✅ Docker services start automatically
+- ✅ `watch` process spawns and runs continuously
+- ✅ `branch-watch` process spawns and runs continuously
+- ✅ Status bar shows real-time indexing status
+- ✅ Setup wizard guides first-time configuration
+- ✅ Ollama and OpenAI providers supported
+- ✅ Credentials stored securely (SecretStorage)
+- ✅ Process crashes recover automatically
 
-**Duration:** ~7-10 days total
+**MVP Nice-to-Have (Defer if Time-Constrained):**
+- ⚠️ Google provider fully tested
+- ⚠️ Windows testing (document as experimental)
+- ⚠️ Custom throttle configuration
 
----
-
-## Release Preparation
-
-### Pre-Release Checklist
-
-**Code Quality:**
-- [ ] All tests passing (unit, integration, E2E)
-- [ ] Test coverage >70%
-- [ ] No TypeScript errors
-- [ ] No linting errors
-- [ ] No security vulnerabilities (`npm audit`)
-
-**Functionality:**
-- [ ] Extension activates in <500ms
-- [ ] Setup wizard completes for all providers
-- [ ] Automatic indexing works (scan, watch, branch)
-- [ ] Docker services start/stop correctly
-- [ ] Status bar accurate
-- [ ] Error handling graceful
-
-**Documentation:**
-- [ ] DEVELOPMENT.md complete
-- [ ] INSTALLATION.md complete
-- [ ] TROUBLESHOOTING.md complete
-- [ ] SECURITY.md complete
-- [ ] README.md updated
-- [ ] CHANGELOG.md created
-
-**Security:**
-- [ ] Credentials stored encrypted
-- [ ] No credentials in logs
-- [ ] Path validation comprehensive
-- [ ] Binary checksums verified
-- [ ] HTTPS enforced for cloud APIs
-
-**Platform Testing:**
-- [ ] Works on macOS (Intel)
-- [ ] Works on macOS (Apple Silicon)
-- [ ] Works on Linux (x64)
-- [ ] Works on Windows (x64) - if supported
-- [ ] Works in devcontainer
+### Non-Functional Requirements
 
 **Performance:**
-- [ ] Activation time <500ms
-- [ ] Scan throughput >100 files/min
-- [ ] Memory usage <50MB idle
-- [ ] CPU usage <5% idle
+- Activation time <500ms
+- Memory usage <50MB idle, <200MB indexing
+- CPU usage <5% idle
 
-### VSIX Packaging
+**Quality:**
+- Test coverage >50%
+- No critical bugs
+- Works in devcontainer
 
-```bash
-cd packages/vscode-maproom
-
-# Install packaging tool
-pnpm add -D @vscode/vsce
-
-# Package extension
-pnpm run package
-
-# Output: maproom-0.1.0.vsix
-
-# Generate checksum
-sha256sum maproom-0.1.0.vsix > maproom-0.1.0.vsix.sha256
-
-# Test installation
-code --install-extension maproom-0.1.0.vsix
-```
-
-### Distribution
-
-**Initial Release:**
-1. Publish VSIX to GitHub Releases
-2. Include installation instructions
-3. Include checksum for verification
-4. Tag release (e.g., `vscode-maproom-v0.1.0`)
-
-**Future:**
-- Publish to VSCode Marketplace
-- Publish to Open VSX (for Cursor)
-- Automated releases via GitHub Actions
+**Documentation:**
+- README explains installation
+- Troubleshooting guide exists
+- VSIX packaging documented
 
 ---
 
-## Timeline Summary
+## Risk Assessment
 
-| Phase | Original Est. | Realistic Est. (50% buffer) | Deliverables |
-|-------|--------------|----------------------------|-------------|
-| **Phase 0: Agent Creation** | 1-2 days | 2-3 days | 3 specialized agents, tested and ready |
-| **Phase 1: Foundation** | 5-7 days | 7-10 days | Extension scaffold, Docker, binary spawning, status bar |
-| **Phase 2: Indexing** | 6-7 days | 9-11 days | File/branch watching, auto-start, automatic indexing |
-| **Phase 3: Configuration** | 5-7 days | 8-11 days | Config schema, SecretStorage, setup wizard |
-| **Phase 4: Testing & Polish** | 7-10 days | 10-15 days | Tests, docs, security, polish |
-| **Release Preparation** | 1-2 days | 1-2 days | Packaging, testing, distribution |
-| **TOTAL** | **25-35 days** | **37-52 days** | **Functional MVP extension** |
+### High Risks (Monitor Closely)
 
-**Calendar Estimate:** 7.5-10.5 weeks (with 50% buffer for learning curve, coordination, edge cases)
+**Risk 1: Rust Binary Stability**
+- **Probability:** Low
+- **Impact:** High (blocks all functionality)
+- **Mitigation:** Binary already battle-tested, use known-good version
+- **Contingency:** Pin to specific binary version
 
-**MVP-Minus Option:** If we defer Google Vertex AI, Windows support, and advanced error handling:
-- Timeline: 28-40 days (5.5-8 weeks)
-- Scope: Ollama + OpenAI only, macOS + Linux only, basic error handling
+**Risk 2: Stdout Parsing Breaks**
+- **Probability:** Medium
+- **Impact:** Medium (status bar doesn't update)
+- **Mitigation:** Define NDJSON contract upfront, test thoroughly
+- **Contingency:** Graceful degradation (show "Indexing..." without details)
 
----
+**Risk 3: Process Doesn't Restart**
+- **Probability:** Low
+- **Impact:** Medium (manual restart required)
+- **Mitigation:** Comprehensive crash recovery tests
+- **Contingency:** Manual "Restart" command
 
-## Project Management
+### Medium Risks (Accept for MVP)
 
-### Bi-Weekly Checkpoint Criteria
+**Risk 4: Platform-Specific Issues**
+- **Probability:** Medium
+- **Impact:** Low (affects subset of users)
+- **Mitigation:** Test on Linux/macOS, document Windows as experimental
+- **Contingency:** Platform-specific bug fixes post-MVP
 
-**Week 2 Checkpoint (End of Phase 1):**
-- [ ] Extension activates in <500ms (measured with `console.time()`)
-- [ ] Docker postgres service reaches "healthy" status within 30s
-- [ ] Rust binary spawns successfully and exits with code 0
-- [ ] Status bar displays all 4 states (NOT_CONFIGURED, INDEXING, HEALTHY, ERROR)
-- [ ] All Phase 1 unit tests pass (>80% coverage for Phase 1 code)
-- [ ] No TypeScript compilation errors
-- [ ] Docker cleanup works (no orphaned containers after deactivation)
+**Risk 5: Docker Not Installed**
+- **Probability:** High (some users)
+- **Impact:** Low (clear error message)
+- **Mitigation:** Detect Docker, show helpful error
+- **Contingency:** Documentation for Docker installation
 
-**Week 4 Checkpoint (End of Phase 2):**
-- [ ] File save triggers upsert exactly 3s after last change (tolerance: ±100ms)
-- [ ] Batch of 10 file saves results in single upsert call (check logs)
-- [ ] Branch switch detected within 1s of `git checkout` (measured)
-- [ ] Branch switch triggers scan with correct `--worktree` parameter (verify CLI args)
-- [ ] Index update completes for 100-file test repo in <5 minutes
-- [ ] All Phase 1+2 tests pass (>70% cumulative coverage)
-- [ ] Manual test: Save file → wait 3s → see "Indexing" → see "Indexed (just now)"
+### Low Risks (Acceptable)
 
-**Week 6 Checkpoint (End of Phase 3):**
-- [ ] Setup wizard completes for Ollama in <30s (no credentials)
-- [ ] Setup wizard validates OpenAI key (test with invalid key → error shown)
-- [ ] API keys stored in SecretStorage (verify with `secrets.get()` test)
-- [ ] API keys never appear in VSCode Output panel (grep logs for "sk-")
-- [ ] Provider switch from Ollama → OpenAI stops ollama container (verify with `docker ps`)
-- [ ] All Phase 1+2+3 tests pass (>70% cumulative coverage)
-- [ ] Manual test: Run wizard → configure provider → see services start → scan prompted
-
-**Week 8 Checkpoint (End of Phase 4):**
-- [ ] All tests pass (unit: >60%, integration: >70%, E2E: 100% of critical paths)
-- [ ] Test execution time <5 minutes for full suite
-- [ ] Installation docs tested on 3 platforms (macOS, Linux, Windows/devcontainer)
-- [ ] Security audit checklist 100% complete (all high-priority gaps addressed)
-- [ ] Performance benchmarks met (activation <500ms, memory <50MB, scan >100 files/min)
-- [ ] Manual testing checklist 100% complete (all scenarios pass)
-- [ ] Zero credentials found in logs across all test runs
-
-**Failed Checkpoint Protocol:**
-1. Document what failed and why
-2. Estimate time to fix (if >2 days, escalate)
-3. Decide: Fix now, defer to later phase, or descope
-4. Update timeline if necessary
-5. Add regression test to prevent recurrence
-
-### Agent Handoff Protocol
-
-**When handing off code between agents:**
-
-1. **Outgoing Agent Responsibilities:**
-   - [ ] All code compiles without errors
-   - [ ] All existing tests still pass
-   - [ ] New tests added for new functionality (if applicable)
-   - [ ] Code documented with JSDoc comments
-   - [ ] Create handoff document listing:
-     - Files created/modified
-     - Key design decisions
-     - Open questions/TODOs
-     - Integration points for next agent
-     - Known issues/limitations
-
-2. **Incoming Agent Responsibilities:**
-   - [ ] Read handoff document
-   - [ ] Review code changes (ask questions if unclear)
-   - [ ] Run existing tests to verify starting state
-   - [ ] Understand integration points
-   - [ ] Acknowledge receipt of handoff
-
-3. **Handoff Document Template:**
-   ```markdown
-   # Handoff: [Previous Milestone] → [Next Milestone]
-
-   ## Files Modified
-   - src/docker/manager.ts (created, implements DockerManager)
-   - src/docker/health.ts (created, health check logic)
-
-   ## Key Decisions
-   - Used phased startup (postgres → provider → mcp) to handle dependencies
-   - Health checks poll every 2s with 120s total timeout
-
-   ## Integration Points
-   - DockerManager.ensureServicesRunning() should be called in extension activate()
-   - Emits 'servicesReady' event when healthy
-
-   ## Open Questions
-   - Should we support remote Docker daemons? (deferred to post-MVP)
-
-   ## Known Issues
-   - Windows: Docker Desktop must be started manually (no auto-start)
-
-   ## Next Agent
-   - Need binary spawner that uses env vars from DockerManager
-   ```
-
-4. **Human Review Points:**
-   - After each phase completion (review architecture alignment)
-   - Before security-critical code (credential handling, binary spawning)
-   - Before E2E test implementation (validate test scenarios)
-   - Before release (final code review)
-
-### Dependency Tracking
-
-**Critical Dependencies:**
-
-1. **Phase 1 → Phase 2:**
-   - DockerManager must be complete before IndexingManager
-   - BinarySpawner must be complete before FileWatcher
-   - StatusBar must exist before IndexingManager
-
-2. **Phase 2 → Phase 3:**
-   - IndexingManager must work before SetupWizard (wizard uses it)
-   - Git utilities must exist before configuration (repo name extraction)
-
-3. **Phase 3 → Phase 4:**
-   - All features complete before E2E tests
-   - SecretStorage complete before security audit
-
-**Parallel Work Opportunities:**
-- Phase 1: StatusBar can be built in parallel with DockerManager
-- Phase 2: FileWatcher and BranchWatcher can be built in parallel
-- Phase 3: ConfigSchema and SecretsManager can be built in parallel
-- Phase 4: Unit tests can be written as code is completed (not all at end)
-
-## Risk Management
-
-### High-Risk Items
-
-**Risk 1: Docker Integration Complexity**
-- **Impact:** Extension won't work if Docker fails
-- **Mitigation:** Extensive integration tests, graceful errors, manual override
-- **Contingency:** Provide Docker troubleshooting guide, manual start commands
-
-**Risk 2: Platform-Specific Binary Issues**
-- **Impact:** Extension fails on some platforms
-- **Mitigation:** Test on all platforms, bundle all binaries, checksum verification
-- **Contingency:** Platform-specific documentation, binary download fallback
-
-**Risk 3: VSCode Extension API Learning Curve**
-- **Impact:** Delays in UI implementation
-- **Mitigation:** Create VSCode Extension Specialist agent first, reference examples
-- **Contingency:** Simplify UI, use simpler alternatives (commands vs WebView)
-
-**Risk 4: SecretStorage Security Issues**
-- **Impact:** Credentials leaked
-- **Mitigation:** Automated tests, code review, security audit
-- **Contingency:** Environment variable fallback, clear security documentation
-
-### Medium-Risk Items
-
-**Risk 5: Test Coverage Insufficient**
-- **Impact:** Bugs slip through
-- **Mitigation:** Target 70% coverage, focus on critical paths
-- **Contingency:** Manual testing checklist, beta testing period
-
-**Risk 6: File Watching Edge Cases**
-- **Impact:** Missed file changes
-- **Mitigation:** Comprehensive E2E tests, debouncing tests
-- **Contingency:** Manual rescan command, periodic full scans
-
-**Risk 7: Performance Degradation**
-- **Impact:** Slow activation or indexing
-- **Mitigation:** Performance benchmarks, profiling
-- **Contingency:** Lazy loading, background processing, concurrency limits
+**Risk 6: Extension Activation Slow**
+- **Probability:** Low
+- **Impact:** Low (slightly annoying)
+- **Mitigation:** Lazy-load heavy modules
+- **Contingency:** Document as known issue
 
 ---
 
-## Success Metrics
+## Out of Scope (Post-MVP)
 
-### MVP Success Criteria
+**Explicitly NOT in MVP:**
+- ❌ Search UI in extension (use MCP)
+- ❌ Custom embedding models
+- ❌ Multi-workspace support
+- ❌ Index statistics dashboard
+- ❌ Marketplace publishing
+- ❌ Advanced configuration UI
+- ❌ Audit logging
+- ❌ Enterprise features
 
-**Functional:**
-1. ✅ Extension installs and activates successfully
-2. ✅ Setup wizard completes in <2 minutes
-3. ✅ Automatic indexing works without user intervention
-4. ✅ Status bar reflects accurate state
-5. ✅ Works with all three providers (Ollama, OpenAI, Google)
+**Why Deferred:**
+- MCP search works well (no UI needed)
+- Fixed models sufficient for MVP
+- Single workspace covers majority use case
+- Statistics nice-to-have, not critical
+- Marketplace requires publisher account setup
+- Settings JSON sufficient for MVP
+- Logging for enterprise, not MVP users
 
-**Technical:**
-1. ✅ Activation time <500ms
-2. ✅ Test coverage >70%
-3. ✅ Memory usage <50MB idle
-4. ✅ No critical security vulnerabilities
-5. ✅ Works on macOS, Linux, Windows (if supported)
-
-**User Experience:**
-1. ✅ Installation documentation clear and complete
-2. ✅ Error messages actionable
-3. ✅ Setup wizard intuitive
-4. ✅ No manual steps required after setup
-5. ✅ Troubleshooting guide comprehensive
-
-### Post-MVP Metrics (Future)
-
-- Active installations (after marketplace publishing)
-- Setup completion rate
-- Error rate (crashes, failures)
-- User feedback (GitHub issues, ratings)
-- Performance metrics (activation time, scan speed)
+See `post-mvp-roadmap.md` for full roadmap.
 
 ---
 
-## Next Steps After MVP
+## Dependencies
 
-**Immediate (Phase 5):**
-1. Beta testing with early adopters
-2. Bug fixes based on feedback
-3. Performance optimization
-4. Documentation improvements
+### External Dependencies
 
-**Near-Term (Phases 6-7):**
-1. Marketplace publishing
-2. Multi-workspace support
-3. Index statistics panel
-4. Search UI (if needed)
+**Required:**
+- Docker Desktop (or Docker daemon)
+- VSCode 1.85+
+- Node.js 18+ (for development)
 
-**Long-Term (Future):**
-1. Custom embedding models
-2. Enterprise features (audit logging, policy enforcement)
-3. Advanced configuration (exclude patterns, custom concurrency)
-4. Performance analytics dashboard
+**Bundled:**
+- `crewchief-maproom` binary (all platforms)
+- PostgreSQL (via Docker)
+- Ollama (via Docker, optional)
+- Maproom MCP server (via Docker)
+
+### Internal Dependencies
+
+**From Other CrewChief Projects:**
+- Rust binary (`crewchief-maproom`) - COMPLETED
+- Branch-watch command (`branch-watch`) - COMPLETED (BRWATCH project)
+- Docker Compose config - EXISTS
+- Database schema - EXISTS
+
+**No Blockers:** All dependencies already implemented!
 
 ---
 
-## Agent Assignment Summary
+## Agent Workflow
 
-| Agent | Primary Responsibilities | Estimated Tickets |
-|-------|-------------------------|-------------------|
-| **VSCode Extension Specialist** | Extension scaffold, status bar, setup wizard, packaging | 8-10 |
-| **Process Management Specialist** | Binary spawning, progress parsing, process lifecycle | 6-8 |
-| **Configuration & Secrets Specialist** | Config schema, SecretStorage, provider config, security | 6-8 |
-| **Docker Engineer** | Docker orchestration, health checks, service management | 4-6 |
-| **TypeScript Developer** | File watching, branch watching, utilities | 6-8 |
-| **Test Engineer** | Unit, integration, E2E tests, CI configuration | 8-10 |
-| **Technical Researcher** | Documentation, API research, troubleshooting guides | 4-6 |
+### Sequential Workflow
 
-**Total Tickets:** ~40-60
+**Phase 1:**
+1. `process-management-specialist` implements DockerManager
+2. `process-management-specialist` implements BinarySpawner
+3. `vscode-extension-specialist` implements StatusBar
+
+**Phase 2:**
+1. `vscode-extension-specialist` implements SetupWizard
+2. `vscode-extension-specialist` implements SecretStorage
+3. `process-management-specialist` implements initial scan
+
+**Phase 3:**
+1. `process-management-specialist` enhances StdoutParser
+2. `process-management-specialist` implements error recovery
+
+**Phase 4:**
+1. Both agents write integration tests
+2. Both agents perform manual testing
+3. `vscode-extension-specialist` writes documentation
+
+### Parallel Opportunities
+
+**Can Run in Parallel:**
+- Phase 1.2 (Binary Spawner) + Phase 1.3 (Status Bar) - different agents
+- Phase 2.1 (Provider Selection) + Phase 2.2 (Secrets) - same agent, can interleave
+- Phase 4.1 (Tests) - both agents write tests simultaneously
+
+---
+
+## Ticket Creation Strategy
+
+**Ticket Naming:** `VSMAP-{number}_{description}.md`
+
+**Estimated Ticket Count:** 15-20 tickets
+
+**Example Tickets:**
+- `VSMAP-1001_agent-creation.md` - Create 2 specialized agents
+- `VSMAP-1002_docker-manager.md` - Implement Docker orchestration
+- `VSMAP-1003_binary-spawner.md` - Spawn watch processes
+- `VSMAP-1004_status-bar.md` - StatusBarItem integration
+- `VSMAP-1005_setup-wizard.md` - First-run wizard
+- `VSMAP-1006_secret-storage.md` - SecretStorage integration
+- `VSMAP-1007_initial-scan.md` - Trigger scan on setup
+- `VSMAP-1008_stdout-parser.md` - Parse NDJSON from binary
+- `VSMAP-1009_error-recovery.md` - Process crash recovery
+- `VSMAP-1010_integration-tests.md` - Docker + process tests
+- `VSMAP-1011_manual-testing.md` - Cross-platform testing
+- `VSMAP-1012_documentation.md` - README + troubleshooting
+- `VSMAP-1013_vsix-packaging.md` - VSIX build and release
+
+**Ticket Assignment:**
+- Phases 1-3: Mostly `process-management-specialist`
+- Phase 2: Mostly `vscode-extension-specialist`
+- Phase 3: Mostly `process-management-specialist`
+- Phase 4: Both agents
+
+---
+
+## Daily Progress Tracking
+
+**Daily Standup Questions:**
+1. What did I complete yesterday?
+2. What am I working on today?
+3. Any blockers?
+
+**Progress Metrics:**
+- Tickets completed
+- Tests passing
+- Coverage %
+- Manual testing checklist items
+
+**Weekly Goals:**
+- Week 1: Phase 0 + Phase 1 complete
+- Week 2: Phase 2 complete
+- Week 3: Phase 3 complete
+- Week 4: Phase 4 complete (buffer week)
 
 ---
 
 ## Conclusion
 
-This execution plan provides a clear roadmap from agent creation through MVP release. The phased approach ensures:
+**Plan Summary:**
+- **Duration:** 15-25 days (3-5 weeks)
+- **Agents:** 2 specialized agents
+- **Tickets:** ~15-20 tickets
+- **Risk:** Low (reusing existing infrastructure)
+- **Complexity:** Low (thin orchestration layer)
 
-1. **Foundation First:** Core infrastructure (extension, Docker, binary) before features
-2. **Incremental Value:** Each phase delivers working functionality
-3. **Quality Built-In:** Testing and security integrated throughout
-4. **Clear Ownership:** Agent assignments for each milestone
-5. **Risk Management:** Identified risks with mitigations
+**Key Success Factors:**
+1. Delegate to existing Rust binary and CLI
+2. Keep extension code minimal (~300 lines)
+3. Focus on process orchestration, not implementation
+4. Leverage battle-tested components
+5. Ship fast, iterate based on feedback
 
-**Key to Success:**
-- Create specialized agents before starting (Phase 0)
-- Follow phase sequence strictly (don't skip ahead)
-- Test continuously (not just Phase 4)
-- Document as you build (not at the end)
-- Ship MVP, iterate based on feedback
-
-**Target:** Functional MVP in 5-7 weeks, ready for development distribution.
-
-**Next:** Begin Phase 0 (Agent Creation) to prepare for implementation.
+**Next Steps:**
+1. Review and approve this plan
+2. Create specialized agents (Phase 0)
+3. Generate tickets via `/create-project-tickets VSMAP`
+4. Execute sequentially via `/work-on-project VSMAP`

@@ -10,18 +10,19 @@
 - Mock sparingly, prefer real dependencies when fast
 
 **Confidence Over Coverage:**
-- 60% coverage target for MVP (not 100%)
-- Critical paths: 100% coverage (activation, scanning, Docker startup)
+- 50% coverage target for MVP (reduced due to simpler architecture)
+- Critical paths: 100% coverage (activation, process spawning, Docker startup)
 - Trivial code: Skip tests (getters/setters, simple formatting)
-- Complex logic: Comprehensive tests (debouncing, state machines, error handling)
-- Integration boundaries: Extensive tests (Docker, binary spawning, database health)
+- Complex logic: Comprehensive tests (stdout parsing, error handling)
+- Integration boundaries: Extensive tests (Docker, binary spawning, process lifecycle)
 
 **Coverage Targets by Component:**
-- Core logic (debouncer, branch watcher): 90-100%
-- Managers (Docker, Indexing, Config): 70-80%
+- ProcessOrchestrator (spawn, monitor, restart): 70%
+- StdoutParser (NDJSON parsing): 80%
+- Managers (Docker, Config): 70-80%
 - UI components (status bar, wizard): 50-60%
 - Utilities: 60-70%
-- **Overall MVP target: 60% (reduced from 70% for pragmatic MVP)**
+- **Overall MVP target: 50% (reduced from 60% due to simpler architecture)**
 
 **Ship Without Meaningful Risk:**
 - Block regressions in core workflows
@@ -86,46 +87,46 @@ Setup wizard → Docker services start → Binary spawns → Scan completes → 
 6. Database connection failure
 7. Timeout after 10 minutes
 
-### CP3: File Change Watching
+### CP3: Process Spawning and Monitoring
 
 **Flow:**
 ```
-File saved → Debounce 3s → Upsert spawned → Index updated → Status bar updated
+Extension activate → Spawn watch → Spawn branch-watch → Monitor stdout → Update status
 ```
 
-**Risk:** Medium (daily workflow)
+**Risk:** Medium (core functionality)
 
 **Test Coverage:** 90%
 
 **Tests:**
-1. Single file change triggers upsert
-2. Multiple rapid changes debounced correctly
-3. Large file changes handled
-4. Binary files ignored
-5. .git directory changes ignored
-6. Upsert failure doesn't crash watcher
-7. File deletion handled
+1. Process spawns successfully
+2. Stdout parsed correctly (NDJSON)
+3. Process crash triggers restart
+4. Exponential backoff on repeated crashes
+5. Graceful shutdown on deactivate
+6. Multiple processes managed concurrently
+7. Binary not found error handling
 
-### CP4: Branch Switch Detection
+### CP4: Stdout Parsing and Status Updates
 
 **Flow:**
 ```
-git checkout → .git/HEAD changes → Watcher detects → Incremental scan → Index updated
+Process outputs NDJSON → Parser extracts events → Status bar updated → User sees progress
 ```
 
-**Risk:** High (index staleness)
+**Risk:** Medium (user visibility)
 
-**Test Coverage:** 100%
+**Test Coverage:** 90%
 
 **Tests:**
-1. Branch switch detected within 1s (measure time from `git checkout` to callback)
-2. Incremental scan triggered (verify `--worktree` parameter in spawned command)
-3. Content-addressed deduplication works (binary handles this, verify scan completes)
-4. Detached HEAD handled (40-char SHA parsed correctly, truncated to 7 chars for display)
-5. .git/HEAD parse errors handled (empty file, corrupted ref, missing file)
-6. Concurrent branch switches queued (rapid checkout A→B→C results in only C scan)
-7. Rebase operations debounced (10 HEAD changes during rebase → 1 scan after 500ms stable)
-8. Branch switch during active scan (existing scan cancelled, new scan starts)
+1. Valid NDJSON parsed correctly
+2. Malformed NDJSON skipped with warning
+3. Missing fields use defaults
+4. Large output bursts buffered correctly
+5. Status bar updates within 1s
+6. Multiple event types handled (progress, error, complete)
+7. Binary version mismatch detected
+8. Incremental line parsing (partial JSON)
 
 ### CP5: Docker Service Management
 
@@ -177,38 +178,37 @@ Setup wizard → Provider selected → Credentials entered → Validated → Sav
 
 **Examples:**
 
-**File:** `src/indexing/debouncer.test.ts`
+**File:** `src/processes/stdout-parser.test.ts`
 ```typescript
-describe('FileChangeDebouncer', () => {
-  it('should collect changes for 3 seconds', async () => {
-    const debouncer = new FileChangeDebouncer(3000);
-    const changes: string[][] = [];
+describe('StdoutParser', () => {
+  it('should parse valid NDJSON events', async () => {
+    const parser = new StdoutParser();
+    const events: any[] = [];
 
-    debouncer.onChange((files) => changes.push(files));
+    parser.onEvent((event) => events.push(event));
 
-    debouncer.add('file1.ts');
-    await sleep(1000);
-    debouncer.add('file2.ts');
-    await sleep(1000);
-    debouncer.add('file3.ts');
-    await sleep(3100); // Total > 3s from last change
+    parser.parseLine('{"type":"progress","files_processed":10,"total_files":100}\n');
+    parser.parseLine('{"type":"complete","chunks_indexed":500}\n');
 
-    expect(changes).toHaveLength(1);
-    expect(changes[0]).toEqual(['file1.ts', 'file2.ts', 'file3.ts']);
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('progress');
+    expect(events[1].type).toBe('complete');
   });
 
-  it('should reset timer on new changes', async () => {
-    const debouncer = new FileChangeDebouncer(3000);
-    const changes: string[][] = [];
+  it('should skip malformed JSON with warning', async () => {
+    const parser = new StdoutParser();
+    const events: any[] = [];
+    const warnings: string[] = [];
 
-    debouncer.onChange((files) => changes.push(files));
+    parser.onEvent((event) => events.push(event));
+    parser.onWarning((msg) => warnings.push(msg));
 
-    debouncer.add('file1.ts');
-    await sleep(2000);
-    debouncer.add('file2.ts'); // Resets timer
-    await sleep(2000); // Only 2s from file2, not enough
+    parser.parseLine('not valid json\n');
+    parser.parseLine('{"type":"progress","count":5}\n'); // Valid
 
-    expect(changes).toHaveLength(0); // Not fired yet
+    expect(events).toHaveLength(1);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('Malformed JSON');
   });
 });
 ```
@@ -237,29 +237,35 @@ describe('RustBinarySpawner', () => {
 });
 ```
 
-**File:** `src/indexing/branchWatcher.test.ts`
+**File:** `src/processes/process-orchestrator.test.ts`
 ```typescript
-describe('BranchWatcher', () => {
-  it('should parse branch name from .git/HEAD', () => {
-    const tempDir = createTempGitRepo();
-    fs.writeFileSync(
-      path.join(tempDir, '.git', 'HEAD'),
-      'ref: refs/heads/main'
-    );
+describe('ProcessOrchestrator', () => {
+  it('should spawn process successfully', async () => {
+    const orchestrator = new ProcessOrchestrator();
+    const events: any[] = [];
 
-    const watcher = new BranchWatcher(tempDir, async () => {});
-    expect(watcher.currentBranch).toBe('main');
+    orchestrator.onEvent((event) => events.push(event));
+
+    await orchestrator.spawn('watch', ['--path', '/test']);
+
+    expect(orchestrator.isRunning('watch')).toBe(true);
+    expect(events.some(e => e.type === 'started')).toBe(true);
   });
 
-  it('should detect detached HEAD', () => {
-    const tempDir = createTempGitRepo();
-    fs.writeFileSync(
-      path.join(tempDir, '.git', 'HEAD'),
-      'abc1234567890def'
-    );
+  it('should restart process on crash', async () => {
+    const orchestrator = new ProcessOrchestrator();
+    let restartCount = 0;
 
-    const watcher = new BranchWatcher(tempDir, async () => {});
-    expect(watcher.currentBranch).toBe('abc1234'); // Truncated
+    orchestrator.onRestart(() => restartCount++);
+
+    await orchestrator.spawn('watch', ['--path', '/test']);
+
+    // Simulate crash
+    orchestrator.killProcess('watch');
+    await sleep(2000); // Wait for backoff
+
+    expect(restartCount).toBeGreaterThan(0);
+    expect(orchestrator.isRunning('watch')).toBe(true);
   });
 });
 ```
@@ -269,6 +275,9 @@ describe('BranchWatcher', () => {
 - VSCode API calls (integration test instead)
 - Configuration reading (use real config)
 - Status bar updates (E2E test instead)
+- File watching logic (Rust binary handles this)
+- Branch detection logic (Rust binary handles this)
+- Debouncing logic (Rust binary handles this)
 
 ### Integration Tests
 
@@ -439,57 +448,48 @@ describe('Setup Workflow E2E', () => {
 });
 ```
 
-**File:** `src/test/e2e/file-watching.test.ts`
+**File:** `src/test/e2e/process-lifecycle.test.ts`
 ```typescript
-describe('File Watching E2E', () => {
+describe('Process Lifecycle E2E', () => {
   beforeAll(async () => {
     await openConfiguredWorkspace(testWorkspace);
-    await waitForStatusBar('Indexed');
   });
 
-  it('should auto-update index on file save', async () => {
-    // 1. Open file
+  it('should spawn and monitor watch process', async () => {
+    // 1. Extension activates and spawns process
+    await waitForStatusBar('Watching');
+
+    // 2. Verify process running
+    const statusBar = await getStatusBarItem('Maproom');
+    expect(statusBar.text).toContain('Watching');
+
+    // 3. Save a file
     const doc = await vscode.workspace.openTextDocument(
       path.join(testWorkspace, 'src', 'test.ts')
     );
-
-    // 2. Edit file
     const edit = new vscode.WorkspaceEdit();
     edit.insert(doc.uri, new vscode.Position(0, 0), '// New comment\n');
     await vscode.workspace.applyEdit(edit);
-
-    // 3. Save file
     await doc.save();
 
-    // 4. Wait for debounce + upsert
+    // 4. Wait for Rust binary to detect and process
     await sleep(5000);
 
-    // 5. Verify status bar updated
-    const statusBar = await getStatusBarItem('Maproom');
-    expect(statusBar.text).toContain('just now');
+    // 5. Verify status updated from stdout
+    const updatedStatus = await getStatusBarItem('Maproom');
+    expect(updatedStatus.text).toContain('Indexed');
   });
 
-  it('should batch multiple file changes', async () => {
-    // Save 3 files rapidly
-    for (const file of ['a.ts', 'b.ts', 'c.ts']) {
-      const doc = await vscode.workspace.openTextDocument(
-        path.join(testWorkspace, 'src', file)
-      );
-      const edit = new vscode.WorkspaceEdit();
-      edit.insert(doc.uri, new vscode.Position(0, 0), '// Edit\n');
-      await vscode.workspace.applyEdit(edit);
-      await doc.save();
-      await sleep(500); // Within 3s window
-    }
+  it('should recover from process crash', async () => {
+    // 1. Kill watch process
+    await executeCommand('maproom.killProcesses');
 
-    // Should only trigger ONE upsert after 3s
-    await sleep(3500);
+    // 2. Wait for restart
+    await sleep(3000);
 
-    // Verify all files updated (check logs)
-    const logs = getOutputChannelLogs('Maproom');
-    const upsertCalls = logs.filter(l => l.includes('upsert --paths'));
-    expect(upsertCalls).toHaveLength(1);
-    expect(upsertCalls[0]).toContain('a.ts,b.ts,c.ts');
+    // 3. Verify process restarted
+    const statusBar = await getStatusBarItem('Maproom');
+    expect(statusBar.text).toContain('Watching');
   });
 });
 ```
@@ -499,25 +499,25 @@ describe('File Watching E2E', () => {
 describe('Branch Switching E2E', () => {
   beforeAll(async () => {
     await openConfiguredWorkspace(testGitRepo);
-    await waitForStatusBar('Indexed');
+    await waitForStatusBar('Watching');
   });
 
-  it('should re-index on branch switch', async () => {
+  it('should re-index on branch switch (via Rust binary)', async () => {
     // 1. Switch branch via git command
     await exec('git checkout feature-branch', { cwd: testGitRepo });
 
-    // 2. Wait for detection
+    // 2. Wait for Rust binary to detect (branch-watch process)
     await sleep(2000);
 
-    // 3. Verify notification
-    await waitForNotification('Branch changed, re-indexing');
+    // 3. Status bar should show indexing activity
+    await waitForStatusBar('Indexing', { timeout: 5000 });
 
     // 4. Wait for completion
     await waitForStatusBar('Indexed', { timeout: 60000 });
 
-    // 5. Verify correct worktree indexed
-    const stats = await getIndexStats();
-    expect(stats.worktree).toBe('feature-branch');
+    // 5. Verify status reflects new branch
+    const statusBar = await getStatusBarItem('Maproom');
+    expect(statusBar.tooltip).toContain('feature-branch');
   });
 });
 ```
@@ -672,8 +672,8 @@ jobs:
       - name: Check coverage threshold
         run: |
           cd packages/vscode-maproom
-          # Fail if coverage below 60%
-          pnpm run coverage:check --lines 60 --functions 60 --branches 60
+          # Fail if coverage below 50%
+          pnpm run coverage:check --lines 50 --functions 50 --branches 50
 ```
 
 **Devcontainer Testing:**
@@ -769,28 +769,33 @@ Before release, manual testing checklist on:
 
 **Edge Cases to Test:**
 
-1. **Detached HEAD State:**
-   - Test: `git checkout <commit-sha>` → verify status bar shows truncated SHA
-   - Test: Scan triggered with detached HEAD → verify `--worktree` uses SHA
+1. **Process Management:**
+   - Test: Binary not found → clear error message
+   - Test: Binary wrong platform → platform mismatch error
+   - Test: Process crashes repeatedly → circuit breaker activates
+   - Test: Stdout buffer overflow → incremental parsing works
 
-2. **Corrupted .git/HEAD:**
-   - Test: Write empty file to .git/HEAD → verify error notification
-   - Test: Write invalid content to .git/HEAD → verify retry logic
-   - Test: Delete .git/HEAD → verify error state, watching disabled
+2. **NDJSON Parsing:**
+   - Test: Malformed JSON in stdout → skip line, continue
+   - Test: Missing required fields → defaults used
+   - Test: Binary version mismatch → warning shown
+   - Test: Multiple events in one line → all parsed
 
-3. **Concurrent Operations:**
-   - Test: Branch switch during active scan → verify cancel + restart
-   - Test: File save during branch switch scan → verify queued for next batch
-   - Test: Multiple rapid branch switches → verify only last one scanned
+3. **Process Lifecycle:**
+   - Test: Extension deactivates during indexing → graceful shutdown
+   - Test: Docker stops mid-operation → process fails, restart attempted
+   - Test: Multiple restarts quickly → exponential backoff works
 
 4. **Resource Constraints:**
-   - Test: Scan repository with 10,000 files → verify doesn't crash
-   - Test: Save 1000 files rapidly → verify MAX_WAIT flush
-   - Test: Binary crashes mid-scan → verify error handling, retry offered
+   - Test: Large output burst → buffering works, no memory leak
+   - Test: Binary crashes mid-scan → restart, resume watching
+   - Test: Concurrent process crashes → both restart independently
 
-5. **Network Filesystem (NFS/SMB):**
-   - Document as known limitation (file watcher may miss changes)
-   - Provide manual rescan command as workaround
+5. **Edge Cases Delegated to Rust:**
+   - Detached HEAD handling → Rust binary handles
+   - Corrupted .git/HEAD → Rust binary handles
+   - File watching debouncing → Rust binary handles
+   - Rapid branch switches → Rust binary handles
 
 ## Performance Benchmarks
 
@@ -835,7 +840,7 @@ describe('Extension Activation', () => {
 **Pre-PR:**
 - [ ] Unit tests pass
 - [ ] Integration tests pass
-- [ ] Test coverage >70%
+- [ ] Test coverage >50%
 - [ ] Manual smoke test passed
 
 **Pre-Release:**
@@ -866,13 +871,13 @@ describe('Extension Activation', () => {
   - Validate binary exists before spawn
   - Clear error if unsupported platform
 
-**3. File System Watching**
-- **Risk:** Missed changes, excessive CPU usage
+**3. Process Crash Recovery**
+- **Risk:** Processes crash and don't restart
 - **Mitigation:**
-  - E2E tests for file watching
-  - Debounce implementation tested
-  - Performance benchmarks
-  - Manual testing on slow filesystems (network mounts)
+  - Unit tests for crash recovery
+  - Exponential backoff tested
+  - Circuit breaker prevents infinite restarts
+  - Manual testing of crash scenarios
 
 **4. Credentials Storage**
 - **Risk:** API keys leaked or lost
@@ -899,21 +904,22 @@ describe('Extension Activation', () => {
 ## Conclusion
 
 **Quality Strategy Summary:**
-1. **Unit tests** for complex logic (debouncing, parsing, validation)
-2. **Integration tests** for Docker, binary spawning, database
-3. **E2E tests** for complete workflows (setup, indexing, watching)
+1. **Unit tests** for complex logic (stdout parsing, process management)
+2. **Integration tests** for Docker, binary spawning, process lifecycle
+3. **E2E tests** for complete workflows (setup, process monitoring, status updates)
 4. **Manual testing** for platform-specific issues and UX
 5. **CI automation** to catch regressions early
 
 **Success Criteria:**
 - All critical paths have 100% test coverage
-- Overall coverage >70%
+- Overall coverage >50% (reduced due to simpler architecture)
 - All tests pass on CI
 - Manual checklist complete
 - Performance targets met
 
 **Risk Acceptance:**
-- Some edge cases untested (network filesystems, race conditions)
+- File watching edge cases delegated to Rust binary
+- Branch detection edge cases delegated to Rust binary
 - E2E tests only on Linux (CI limitation)
 - Large repo testing manual only
 

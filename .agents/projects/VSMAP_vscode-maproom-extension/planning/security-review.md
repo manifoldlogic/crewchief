@@ -318,6 +318,36 @@ code --install-extension maproom-0.1.0.vsix
 - Marketplace distribution significantly more secure
 - **Recommendation:** Publish to marketplace as soon as stable
 
+## Simplified Error Taxonomy (Process-Focused)
+
+### 1. Docker Errors
+- `DOCKER_NOT_INSTALLED` - Docker not found
+- `DOCKER_NOT_RUNNING` - Docker daemon not running
+- `SERVICE_START_FAILED` - PostgreSQL or MCP failed to start
+- `HEALTH_CHECK_TIMEOUT` - Services unhealthy after 60s
+
+### 2. Binary Errors
+- `BINARY_NOT_FOUND` - crewchief-maproom binary missing
+- `BINARY_WRONG_PLATFORM` - Binary doesn't match OS/arch
+- `BINARY_PERMISSION_DENIED` - Binary not executable
+- `BINARY_CORRUPTED` - SHA256 mismatch or invalid ELF
+
+### 3. Process Errors
+- `PROCESS_SPAWN_FAILED` - Failed to spawn watch process
+- `PROCESS_CRASHED` - Watch process exited unexpectedly
+- `PROCESS_TIMEOUT` - No output for 5 minutes
+- `STDOUT_PARSE_ERROR` - Malformed NDJSON output
+
+### 4. Configuration Errors
+- `MISSING_CREDENTIALS` - No API key in SecretStorage
+- `INVALID_PROVIDER` - Unknown provider selected
+- `ENV_VAR_MISSING` - Required env var not set
+
+**Recovery Strategies:**
+- Retriable: PROCESS_CRASHED, SERVICE_START_FAILED
+- Fatal: BINARY_NOT_FOUND, DOCKER_NOT_INSTALLED
+- User Action: MISSING_CREDENTIALS, DOCKER_NOT_RUNNING
+
 ## Known Gaps
 
 ### High Priority (Must Address)
