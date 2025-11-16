@@ -20,7 +20,7 @@
  *
  * Example:
  * ```json
- * {"type":"progress","files":100,"complete":45}
+ * {"type":"progress","files":100,"complete":45,"percent":45.0,"elapsed":1234,"current_file":"src/main.rs"}
  * ```
  */
 export interface ProgressEvent {
@@ -29,6 +29,12 @@ export interface ProgressEvent {
   files: number
   /** Number of files processed so far */
   complete: number
+  /** Completion percentage (0-100) */
+  percent?: number
+  /** Elapsed time in milliseconds */
+  elapsed?: number
+  /** Currently processing file path */
+  current_file?: string
 }
 
 /**
@@ -36,7 +42,7 @@ export interface ProgressEvent {
  *
  * Example:
  * ```json
- * {"type":"error","message":"Failed to parse file","file":"src/main.rs"}
+ * {"type":"error","message":"Failed to parse file","file":"src/main.rs","error_type":"parse"}
  * ```
  */
 export interface ErrorEvent {
@@ -45,6 +51,8 @@ export interface ErrorEvent {
   message: string
   /** Optional file path where error occurred */
   file?: string
+  /** Category of error for better diagnostics */
+  error_type?: 'parse' | 'io' | 'embedding' | 'database'
 }
 
 /**
@@ -52,7 +60,7 @@ export interface ErrorEvent {
  *
  * Example:
  * ```json
- * {"type":"complete","files":100,"duration":2500}
+ * {"type":"complete","files":100,"duration":2500,"elapsed":2500,"timestamp":"2025-01-16T12:34:56Z"}
  * ```
  */
 export interface CompleteEvent {
@@ -61,6 +69,10 @@ export interface CompleteEvent {
   files: number
   /** Duration in milliseconds */
   duration: number
+  /** Elapsed time in milliseconds (same as duration, for consistency) */
+  elapsed?: number
+  /** ISO 8601 timestamp when completed */
+  timestamp?: string
 }
 
 /**
@@ -68,19 +80,37 @@ export interface CompleteEvent {
  *
  * Example:
  * ```json
- * {"type":"status","state":"watching"}
+ * {"type":"status","state":"watching","files":100}
  * ```
  */
 export interface StatusEvent {
   type: 'status'
   /** Current state of the process */
   state: 'watching' | 'indexing' | 'idle'
+  /** Optional file count for context */
+  files?: number
+}
+
+/**
+ * File processed event - emitted when a single file completes processing
+ *
+ * Example:
+ * ```json
+ * {"type":"file_processed","file_path":"src/main.rs","elapsed":123}
+ * ```
+ */
+export interface FileProcessedEvent {
+  type: 'file_processed'
+  /** Path to the file that was processed */
+  file_path: string
+  /** Time taken to process this file in milliseconds */
+  elapsed: number
 }
 
 /**
  * Union type of all possible watch events
  */
-export type WatchEvent = ProgressEvent | ErrorEvent | CompleteEvent | StatusEvent
+export type WatchEvent = ProgressEvent | ErrorEvent | CompleteEvent | StatusEvent | FileProcessedEvent
 
 /**
  * Type guard to check if object is a valid WatchEvent
@@ -108,13 +138,18 @@ export function isWatchEvent(obj: unknown): obj is WatchEvent {
         typeof event.complete === 'number' &&
         event.files >= 0 &&
         event.complete >= 0 &&
-        event.complete <= event.files
+        event.complete <= event.files &&
+        (event.percent === undefined || (typeof event.percent === 'number' && event.percent >= 0)) &&
+        (event.elapsed === undefined || (typeof event.elapsed === 'number' && event.elapsed >= 0)) &&
+        (event.current_file === undefined || typeof event.current_file === 'string')
       )
 
     case 'error':
       return (
         typeof event.message === 'string' &&
-        (event.file === undefined || typeof event.file === 'string')
+        (event.file === undefined || typeof event.file === 'string') &&
+        (event.error_type === undefined ||
+         ['parse', 'io', 'embedding', 'database'].includes(event.error_type as string))
       )
 
     case 'complete':
@@ -122,13 +157,23 @@ export function isWatchEvent(obj: unknown): obj is WatchEvent {
         typeof event.files === 'number' &&
         typeof event.duration === 'number' &&
         event.files >= 0 &&
-        event.duration >= 0
+        event.duration >= 0 &&
+        (event.elapsed === undefined || (typeof event.elapsed === 'number' && event.elapsed >= 0)) &&
+        (event.timestamp === undefined || typeof event.timestamp === 'string')
       )
 
     case 'status':
       return (
         typeof event.state === 'string' &&
-        ['watching', 'indexing', 'idle'].includes(event.state)
+        ['watching', 'indexing', 'idle'].includes(event.state) &&
+        (event.files === undefined || typeof event.files === 'number')
+      )
+
+    case 'file_processed':
+      return (
+        typeof event.file_path === 'string' &&
+        typeof event.elapsed === 'number' &&
+        event.elapsed >= 0
       )
 
     default:

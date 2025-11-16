@@ -559,4 +559,224 @@ describe('StdoutParser', () => {
       stdout.push(null)
     })
   })
+
+  describe('optional fields', () => {
+    it('should parse progress event with optional fields', (done) => {
+      parser.on('event', (event: WatchEvent) => {
+        expect(event.type).toBe('progress')
+        if (event.type === 'progress') {
+          expect(event.files).toBe(100)
+          expect(event.complete).toBe(45)
+          expect(event.percent).toBe(45.0)
+          expect(event.elapsed).toBe(1234)
+          expect(event.current_file).toBe('src/main.rs')
+        }
+        done()
+      })
+
+      stdout.push('{"type":"progress","files":100,"complete":45,"percent":45.0,"elapsed":1234,"current_file":"src/main.rs"}\n')
+      stdout.push(null)
+    })
+
+    it('should parse error event with error_type', (done) => {
+      parser.on('event', (event: WatchEvent) => {
+        expect(event.type).toBe('error')
+        if (event.type === 'error') {
+          expect(event.message).toBe('Parse error')
+          expect(event.file).toBe('src/lib.rs')
+          expect(event.error_type).toBe('parse')
+        }
+        done()
+      })
+
+      stdout.push('{"type":"error","message":"Parse error","file":"src/lib.rs","error_type":"parse"}\n')
+      stdout.push(null)
+    })
+
+    it('should parse error event with all error types', async () => {
+      const errorTypes: Array<'parse' | 'io' | 'embedding' | 'database'> = ['parse', 'io', 'embedding', 'database']
+      const events: WatchEvent[] = []
+
+      return new Promise<void>((resolve) => {
+        parser.on('event', (event: WatchEvent) => {
+          events.push(event)
+          if (events.length === errorTypes.length) {
+            errorTypes.forEach((type, index) => {
+              const evt = events[index]
+              expect(evt.type).toBe('error')
+              if (evt.type === 'error') {
+                expect(evt.error_type).toBe(type)
+              }
+            })
+            resolve()
+          }
+        })
+
+        errorTypes.forEach(type => {
+          stdout.push(`{"type":"error","message":"${type} error","error_type":"${type}"}\n`)
+        })
+        stdout.push(null)
+      })
+    })
+
+    it('should parse complete event with optional fields', (done) => {
+      parser.on('event', (event: WatchEvent) => {
+        expect(event.type).toBe('complete')
+        if (event.type === 'complete') {
+          expect(event.files).toBe(100)
+          expect(event.duration).toBe(2500)
+          expect(event.elapsed).toBe(2500)
+          expect(event.timestamp).toBe('2025-01-16T12:34:56Z')
+        }
+        done()
+      })
+
+      stdout.push('{"type":"complete","files":100,"duration":2500,"elapsed":2500,"timestamp":"2025-01-16T12:34:56Z"}\n')
+      stdout.push(null)
+    })
+
+    it('should parse status event with files', (done) => {
+      parser.on('event', (event: WatchEvent) => {
+        expect(event.type).toBe('status')
+        if (event.type === 'status') {
+          expect(event.state).toBe('indexing')
+          expect(event.files).toBe(100)
+        }
+        done()
+      })
+
+      stdout.push('{"type":"status","state":"indexing","files":100}\n')
+      stdout.push(null)
+    })
+
+    it('should reject invalid error_type', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"error","message":"test","error_type":"invalid"}\n')
+      stdout.push(null)
+    })
+
+    it('should reject negative elapsed time in progress', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"progress","files":100,"complete":50,"elapsed":-100}\n')
+      stdout.push(null)
+    })
+
+    it('should reject negative percent in progress', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"progress","files":100,"complete":50,"percent":-10}\n')
+      stdout.push(null)
+    })
+  })
+
+  describe('file_processed event', () => {
+    it('should parse file_processed event', (done) => {
+      parser.on('event', (event: WatchEvent) => {
+        expect(event.type).toBe('file_processed')
+        if (event.type === 'file_processed') {
+          expect(event.file_path).toBe('src/main.rs')
+          expect(event.elapsed).toBe(123)
+        }
+        done()
+      })
+
+      stdout.push('{"type":"file_processed","file_path":"src/main.rs","elapsed":123}\n')
+      stdout.push(null)
+    })
+
+    it('should parse multiple file_processed events', (done) => {
+      const events: WatchEvent[] = []
+
+      parser.on('event', (event: WatchEvent) => {
+        events.push(event)
+
+        if (events.length === 3) {
+          expect(events[0].type).toBe('file_processed')
+          expect(events[1].type).toBe('file_processed')
+          expect(events[2].type).toBe('file_processed')
+
+          if (events[0].type === 'file_processed') {
+            expect(events[0].file_path).toBe('src/a.rs')
+            expect(events[0].elapsed).toBe(100)
+          }
+          if (events[1].type === 'file_processed') {
+            expect(events[1].file_path).toBe('src/b.rs')
+            expect(events[1].elapsed).toBe(200)
+          }
+          if (events[2].type === 'file_processed') {
+            expect(events[2].file_path).toBe('src/c.rs')
+            expect(events[2].elapsed).toBe(150)
+          }
+
+          done()
+        }
+      })
+
+      stdout.push('{"type":"file_processed","file_path":"src/a.rs","elapsed":100}\n')
+      stdout.push('{"type":"file_processed","file_path":"src/b.rs","elapsed":200}\n')
+      stdout.push('{"type":"file_processed","file_path":"src/c.rs","elapsed":150}\n')
+      stdout.push(null)
+    })
+
+    it('should emit parseError for missing file_path', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"file_processed","elapsed":100}\n')
+      stdout.push(null)
+    })
+
+    it('should emit parseError for missing elapsed', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"file_processed","file_path":"src/main.rs"}\n')
+      stdout.push(null)
+    })
+
+    it('should emit parseError for negative elapsed', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"file_processed","file_path":"src/main.rs","elapsed":-100}\n')
+      stdout.push(null)
+    })
+
+    it('should emit parseError for wrong file_path type', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"file_processed","file_path":123,"elapsed":100}\n')
+      stdout.push(null)
+    })
+
+    it('should emit parseError for wrong elapsed type', (done) => {
+      parser.on('parseError', (error: Error) => {
+        expect(error.message).toContain('Invalid event schema')
+        done()
+      })
+
+      stdout.push('{"type":"file_processed","file_path":"src/main.rs","elapsed":"not a number"}\n')
+      stdout.push(null)
+    })
+  })
 })

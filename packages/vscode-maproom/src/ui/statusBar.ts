@@ -16,6 +16,7 @@
 import * as vscode from 'vscode'
 import type { ProcessOrchestrator } from '../process/orchestrator.js'
 import type { WatchEvent } from '../process/events.js'
+import { formatRelativeTime } from '../utils/time.js'
 
 /**
  * Status bar icon and text for each state
@@ -162,7 +163,7 @@ export class StatusBarManager implements vscode.Disposable {
   private handleWatchEvent(processName: string, event: WatchEvent): void {
     switch (event.type) {
       case 'status':
-        this.handleStatusEvent(event.state)
+        this.handleStatusEvent(event.state, event.files)
         break
 
       case 'progress':
@@ -170,11 +171,15 @@ export class StatusBarManager implements vscode.Disposable {
         break
 
       case 'complete':
-        this.handleCompleteEvent(event.files)
+        this.handleCompleteEvent(event.files, event.timestamp)
         break
 
       case 'error':
-        this.handleErrorEvent(event.message)
+        this.handleErrorEvent(event.message, event.file, event.error_type)
+        break
+
+      case 'file_processed':
+        this.handleFileProcessedEvent(event.file_path)
         break
     }
   }
@@ -183,8 +188,9 @@ export class StatusBarManager implements vscode.Disposable {
    * Handle status state change event
    *
    * @param state - New state (watching, indexing, idle)
+   * @param files - Optional file count from enhanced status event
    */
-  private handleStatusEvent(state: 'watching' | 'indexing' | 'idle'): void {
+  private handleStatusEvent(state: 'watching' | 'indexing' | 'idle', files?: number): void {
     this.currentState = state
     this.lastError = undefined
 
@@ -192,6 +198,10 @@ export class StatusBarManager implements vscode.Disposable {
       // Reset counters when idle
       this.currentFileCount = 0
       this.totalFiles = 0
+    } else if (files !== undefined) {
+      // Update file count if provided
+      this.currentFileCount = files
+      this.totalFiles = files
     }
 
     this.scheduleUpdate()
@@ -213,18 +223,37 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   /**
+   * Handle file processed event
+   *
+   * Not currently displayed in status bar, but logged for debugging
+   *
+   * @param filePath - Path to processed file
+   */
+  private handleFileProcessedEvent(filePath: string): void {
+    // Future enhancement: Could show last processed file in tooltip
+    // For now, just ensure we stay in indexing state
+    if (this.currentState !== 'indexing') {
+      this.currentState = 'indexing'
+      this.scheduleUpdate()
+    }
+  }
+
+  /**
    * Handle indexing complete event
    *
    * @param filesIndexed - Total number of files indexed
+   * @param timestamp - Optional ISO timestamp from enhanced complete event
    */
-  private handleCompleteEvent(filesIndexed: number): void {
+  private handleCompleteEvent(filesIndexed: number, timestamp?: string): void {
     this.currentState = 'watching'
     this.currentFileCount = filesIndexed
     this.totalFiles = filesIndexed
     this.lastError = undefined
 
     // Store last indexed timestamp
-    this.context.workspaceState.update(LAST_INDEXED_KEY, Date.now())
+    // Use provided timestamp if available, otherwise use current time
+    const completionTime = timestamp ? new Date(timestamp).getTime() : Date.now()
+    this.context.workspaceState.update(LAST_INDEXED_KEY, completionTime)
 
     this.scheduleUpdate()
   }
@@ -233,10 +262,26 @@ export class StatusBarManager implements vscode.Disposable {
    * Handle error event
    *
    * @param message - Error message
+   * @param file - Optional file path where error occurred
+   * @param errorType - Optional error classification
    */
-  private handleErrorEvent(message: string): void {
+  private handleErrorEvent(
+    message: string,
+    file?: string,
+    errorType?: 'parse' | 'io' | 'embedding' | 'database'
+  ): void {
     this.currentState = 'error'
-    this.lastError = message
+
+    // Build detailed error message with file path and type if available
+    let errorMessage = message
+    if (file) {
+      errorMessage = `${message} (in ${file})`
+    }
+    if (errorType) {
+      errorMessage = `[${errorType}] ${errorMessage}`
+    }
+
+    this.lastError = errorMessage
 
     this.scheduleUpdate()
   }
@@ -282,8 +327,13 @@ export class StatusBarManager implements vscode.Disposable {
     let text = `$(${config.icon}) ${config.text}`
 
     if (this.currentState === 'indexing' && this.totalFiles > 0) {
-      // Show file count during indexing
-      text = `$(${config.icon}) ${config.text} ${this.currentFileCount}/${this.totalFiles} files...`
+      // Show file count during indexing with locale formatting
+      const formattedTotal = this.totalFiles.toLocaleString()
+      text = `$(${config.icon}) ${config.text}: ${formattedTotal} files`
+    } else if (this.currentState === 'watching' && this.currentFileCount > 0) {
+      // Show indexed file count when watching
+      const formattedCount = this.currentFileCount.toLocaleString()
+      text = `$(${config.icon}) Indexed: ${formattedCount} files`
     }
 
     this.statusBarItem.text = text
@@ -316,7 +366,7 @@ export class StatusBarManager implements vscode.Disposable {
     // Last indexed timestamp
     const lastIndexed = this.context.workspaceState.get<number>(LAST_INDEXED_KEY)
     if (lastIndexed) {
-      const timeAgo = this.formatTimeAgo(lastIndexed)
+      const timeAgo = formatRelativeTime(new Date(lastIndexed))
       lines.push(`Last indexed: ${timeAgo}`)
     }
 
@@ -324,34 +374,6 @@ export class StatusBarManager implements vscode.Disposable {
     lines.push('', 'Click to show output')
 
     return lines.join('\n')
-  }
-
-  /**
-   * Format timestamp as human-friendly "time ago" string
-   *
-   * @param timestamp - Unix timestamp in milliseconds
-   * @returns Human-friendly string (e.g., "2 minutes ago")
-   */
-  private formatTimeAgo(timestamp: number): string {
-    const now = Date.now()
-    const seconds = Math.floor((now - timestamp) / 1000)
-
-    if (seconds < 60) {
-      return 'just now'
-    }
-
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) {
-      return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-    }
-
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) {
-      return `${hours} hour${hours === 1 ? '' : 's'} ago`
-    }
-
-    const days = Math.floor(hours / 24)
-    return `${days} day${days === 1 ? '' : 's'} ago`
   }
 
   /**

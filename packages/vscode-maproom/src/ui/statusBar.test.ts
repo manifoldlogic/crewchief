@@ -181,7 +181,7 @@ describe('StatusBarManager', () => {
       await sleep(1100)
 
       expect(statusBarItem.text).toContain('Indexing')
-      expect(statusBarItem.text).toContain('15/100 files')
+      expect(statusBarItem.text).toContain('100 files')
       expect(statusBarItem.text).toContain('$(sync~spin)')
     })
 
@@ -194,17 +194,17 @@ describe('StatusBarManager', () => {
       })
       await sleep(1100)
 
-      expect(statusBarItem.text).toContain('25/100 files')
+      expect(statusBarItem.text).toContain('100 files')
 
-      // Second progress
+      // Second progress with different total
       orchestrator.emitWatchEvent('watch', {
         type: 'progress',
         complete: 75,
-        files: 100,
+        files: 150,
       })
       await sleep(1100)
 
-      expect(statusBarItem.text).toContain('75/100 files')
+      expect(statusBarItem.text).toContain('150 files')
     })
   })
 
@@ -219,7 +219,8 @@ describe('StatusBarManager', () => {
       // Wait for debounce
       await sleep(1100)
 
-      expect(statusBarItem.text).toContain('Watching...')
+      expect(statusBarItem.text).toContain('Indexed')
+      expect(statusBarItem.text).toContain('100 files')
       expect(statusBarItem.text).toContain('$(eye)')
     })
 
@@ -266,6 +267,58 @@ describe('StatusBarManager', () => {
       await sleep(1100)
 
       expect(statusBarItem.tooltip).toContain('Connection refused')
+    })
+
+    it('should include file path in error message when provided', async () => {
+      orchestrator.emitWatchEvent('watch', {
+        type: 'error',
+        message: 'Parse failed',
+        file: 'src/broken.ts',
+      })
+
+      await sleep(1100)
+
+      expect(statusBarItem.tooltip).toContain('Parse failed (in src/broken.ts)')
+    })
+
+    it('should include error type in error message when provided', async () => {
+      orchestrator.emitWatchEvent('watch', {
+        type: 'error',
+        message: 'Database connection lost',
+        error_type: 'database',
+      })
+
+      await sleep(1100)
+
+      expect(statusBarItem.tooltip).toContain('[database] Database connection lost')
+    })
+
+    it('should include both file path and error type when both provided', async () => {
+      orchestrator.emitWatchEvent('watch', {
+        type: 'error',
+        message: 'Failed to read',
+        file: 'large.bin',
+        error_type: 'io',
+      })
+
+      await sleep(1100)
+
+      expect(statusBarItem.tooltip).toContain('[io] Failed to read (in large.bin)')
+    })
+  })
+
+  describe('file_processed event handling', () => {
+    it('should handle file_processed events', async () => {
+      orchestrator.emitWatchEvent('watch', {
+        type: 'file_processed',
+        file_path: 'src/components/App.tsx',
+        elapsed: 125,
+      })
+
+      await sleep(1100)
+
+      // Should maintain indexing state
+      expect(statusBarItem.text).toContain('Indexing')
     })
   })
 
@@ -323,8 +376,8 @@ describe('StatusBarManager', () => {
       // Wait for debounce
       await sleep(1100)
 
-      // Should now show the final state (90/100)
-      expect(statusBarItem.text).toContain('90/100 files')
+      // Should now show the final state (100 files total)
+      expect(statusBarItem.text).toContain('100 files')
     })
 
     it('should not update more than once per second', async () => {

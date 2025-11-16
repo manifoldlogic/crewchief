@@ -1,9 +1,9 @@
 # Ticket: VSMAP-3001: Enhance StdoutParser with detailed event extraction
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (237 tests pass)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,12 +26,12 @@ This implements Phase 3 (Process Monitoring) of the VSMAP plan. The basic Stdout
 Reference: VSMAP_PLAN.md Phase 3 "Process Monitoring - Enhanced Event Parsing"
 
 ## Acceptance Criteria
-- [ ] All NDJSON event types parsed: progress, error, complete, status, file_processed
-- [ ] Status bar shows file counts during indexing (e.g., "Indexing: 1,234 files")
-- [ ] Status bar shows relative timestamps (e.g., "Last indexed: 2 minutes ago")
-- [ ] Error events displayed with file path if available
-- [ ] Malformed JSON logged as warning but doesn't crash parser
-- [ ] Parser emits detailed events to subscribers
+- [x] All NDJSON event types parsed: progress, error, complete, status, file_processed
+- [x] Status bar shows file counts during indexing (e.g., "Indexing: 1,234 files")
+- [x] Status bar shows relative timestamps (e.g., "Last indexed: 2 minutes ago")
+- [x] Error events displayed with file path if available
+- [x] Malformed JSON logged as warning but doesn't crash parser
+- [x] Parser emits detailed events to subscribers
 
 ## Technical Requirements
 - Parse additional event fields:
