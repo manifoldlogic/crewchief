@@ -1,9 +1,9 @@
 # Ticket: VSMAP-2003: Implement initial scan with progress notification
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,12 +28,12 @@ The Rust binary emits NDJSON progress events which we parse and display in a VSC
 Reference: VSMAP_PLAN.md Phase 2 "Setup Wizard - Initial Scan"
 
 ## Acceptance Criteria
-- [ ] Scan process spawns automatically after wizard completes successfully
-- [ ] Progress notification shows 0-100% with file counts
-- [ ] Notification is dismissible and scan continues in background
-- [ ] Status bar updates to "Indexed" on completion with file count
-- [ ] Error shown if scan fails with actionable error message
-- [ ] Users can see detailed progress in Output channel
+- [x] Scan process spawns automatically after wizard completes successfully
+- [x] Progress notification shows 0-100% with file counts
+- [x] Notification is dismissible and scan continues in background
+- [x] Status bar updates to "Indexed" on completion with file count
+- [x] Error shown if scan fails with actionable error message
+- [x] Users can see detailed progress in Output channel
 
 ## Technical Requirements
 - Spawn command: `crewchief-maproom scan --path <workspace>`

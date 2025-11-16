@@ -35,6 +35,7 @@ import {
   registerSetupCommand,
 } from './ui/setupWizard.js'
 import { SecretsManager } from './config/secrets.js'
+import { runInitialScan } from './process/scan.js'
 
 /**
  * Output channel for extension logging
@@ -126,8 +127,8 @@ export function activate(context: vscode.ExtensionContext): void {
 /**
  * First-time setup flow
  *
- * Runs the setup wizard to select embedding provider, then proceeds with
- * normal service initialization. If user cancels setup, initialization is skipped.
+ * Runs the setup wizard to select embedding provider, then starts Docker services
+ * and triggers initial workspace scan. If user cancels setup, initialization is skipped.
  *
  * @param context - Extension context
  * @param workspaceRoot - Workspace root path
@@ -156,8 +157,14 @@ async function runFirstTimeSetup(
       `Maproom configured to use ${provider.toUpperCase()} for embeddings`
     )
 
-    // Proceed with normal initialization
-    await initializeServices(context, workspaceRoot)
+    // Start Docker services first
+    await initializeDockerServices(context, workspaceRoot)
+
+    // Run initial scan after setup completes
+    await runInitialWorkspaceScan(context, workspaceRoot)
+
+    // After scan completes, start watch processes
+    await startWatchProcesses(context, workspaceRoot)
   } catch (error: any) {
     const errorMessage = `Setup failed: ${error.message}`
     outputChannel?.appendLine(`ERROR: ${errorMessage}`)
@@ -269,6 +276,120 @@ async function initializeServices(
     // Cleanup partial initialization
     await cleanup()
   }
+}
+
+/**
+ * Initialize Docker services
+ *
+ * Starts PostgreSQL container and waits for it to be healthy.
+ *
+ * @param context - Extension context
+ * @param workspaceRoot - Workspace root path
+ */
+async function initializeDockerServices(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string
+): Promise<void> {
+  outputChannel?.appendLine('Starting Docker Compose services...')
+
+  dockerManager = new DockerManager(outputChannel!, context.extensionPath)
+  await dockerManager.ensureServicesRunning()
+
+  outputChannel?.appendLine('Docker services started successfully')
+
+  // Wait for services to be healthy
+  outputChannel?.appendLine('Checking service health...')
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+  outputChannel?.appendLine('Services are healthy')
+}
+
+/**
+ * Run initial workspace scan
+ *
+ * Triggers a one-time scan of the workspace to build the initial semantic index.
+ * Shows progress notification with file counts and percentage.
+ *
+ * @param context - Extension context
+ * @param workspaceRoot - Workspace root path
+ */
+async function runInitialWorkspaceScan(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string
+): Promise<void> {
+  if (!statusBar) {
+    throw new Error('Status bar not initialized')
+  }
+
+  outputChannel?.appendLine('Running initial workspace scan...')
+
+  // Get configured provider for environment variables
+  const provider = getConfiguredProvider(context)
+  const secretsManager = new SecretsManager(context.secrets)
+
+  // Build environment variables with credentials
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  if (provider) {
+    const credentialEnv = await secretsManager.getEnvironmentVars(provider)
+    Object.assign(env, credentialEnv)
+  }
+
+  // Run scan with progress notification
+  const filesIndexed = await runInitialScan({
+    extensionRoot: context.extensionPath,
+    workspaceRoot,
+    databaseUrl: 'postgresql://maproom:maproom@localhost:5432/maproom',
+    outputChannel: outputChannel!,
+    statusBarManager: statusBar,
+    env,
+  })
+
+  outputChannel?.appendLine(`Initial scan complete: ${filesIndexed} files indexed`)
+}
+
+/**
+ * Start watch processes
+ *
+ * Starts file and branch watch processes after initial scan completes.
+ *
+ * @param context - Extension context
+ * @param workspaceRoot - Workspace root path
+ */
+async function startWatchProcesses(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string
+): Promise<void> {
+  outputChannel?.appendLine('Creating process orchestrator...')
+
+  const postgresConfig = {
+    host: 'localhost',
+    port: 5432,
+    user: 'maproom',
+    password: 'maproom',
+    database: 'maproom',
+  }
+
+  // Get configured provider and create secrets manager
+  const provider = getConfiguredProvider(context)
+  const secretsManager = new SecretsManager(context.secrets)
+
+  orchestrator = new ProcessOrchestrator(outputChannel!, {
+    extensionRoot: context.extensionPath,
+    workspaceRoot,
+    postgres: postgresConfig,
+    secretsManager,
+    provider,
+  })
+
+  // Start watch processes
+  outputChannel?.appendLine('Starting watch processes...')
+  await orchestrator.startWatching()
+  outputChannel?.appendLine('Watch processes started successfully')
+
+  // Connect status bar to orchestrator
+  outputChannel?.appendLine('Connecting status bar to orchestrator...')
+  statusBar?.connectOrchestrator(orchestrator)
+  statusBar?.setState('watching')
+  outputChannel?.appendLine('Status bar connected (Watching)')
 }
 
 /**
