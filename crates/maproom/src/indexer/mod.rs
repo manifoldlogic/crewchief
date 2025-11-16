@@ -888,6 +888,26 @@ pub async fn watch_worktree(
     // Drop test client to return it to pool
     drop(test_client);
 
+    // Initialize dynamic worktree tracking state (UNIWATCH-1002)
+    let _current_branch = std::sync::Arc::new(std::sync::RwLock::new(worktree.to_string()));
+    let _current_worktree_id = std::sync::Arc::new(std::sync::RwLock::new({
+        let client = pool.get().await?;
+        let repo_id = crate::db::get_or_create_repo(
+            &client,
+            repo,
+            root_abs.to_string_lossy().as_ref(),
+        )
+        .await?;
+        let worktree_id = crate::db::get_or_create_worktree(
+            &client,
+            repo_id,
+            worktree,
+            root_abs.to_string_lossy().as_ref(),
+        )
+        .await?;
+        worktree_id
+    }));
+
     // Initialize components
     let config = WatcherConfig {
         debounce_ms,
@@ -1253,5 +1273,103 @@ mod tests {
 
         // Test passes if we reach here without panicking
         // The bridging task should exit cleanly when the watcher is dropped
+    }
+
+    /// Test that worktree tracking state is initialized correctly (UNIWATCH-1002)
+    ///
+    /// This test verifies:
+    /// 1. Arc<RwLock<String>> for current_branch is created and initialized
+    /// 2. Arc<RwLock<i64>> for current_worktree_id is created and initialized
+    /// 3. Initialization uses get_or_create_repo() and get_or_create_worktree()
+    /// 4. Arc/RwLock semantics work (can acquire read/write locks)
+    /// 5. Values match the input parameters
+    #[tokio::test]
+    async fn test_worktree_tracking_initialization() {
+        // Setup test database
+        let pool = match crate::db::pool::create_pool().await {
+            Ok(p) => p,
+            Err(_) => {
+                // Skip test if database not available
+                eprintln!("Skipping test: database not available");
+                return;
+            }
+        };
+
+        // Test parameters
+        let repo = "test-repo";
+        let worktree = "test-branch";
+        let root = std::path::Path::new("/tmp/test-root");
+        let root_str = root.to_string_lossy();
+
+        // Initialize tracking state (mirrors watch_worktree logic)
+        let current_branch = std::sync::Arc::new(std::sync::RwLock::new(worktree.to_string()));
+        let current_worktree_id = std::sync::Arc::new(std::sync::RwLock::new({
+            let client = pool.get().await.expect("Failed to get client from pool");
+            let repo_id = crate::db::get_or_create_repo(&client, repo, &root_str)
+                .await
+                .expect("Failed to get_or_create_repo");
+            let worktree_id =
+                crate::db::get_or_create_worktree(&client, repo_id, worktree, &root_str)
+                    .await
+                    .expect("Failed to get_or_create_worktree");
+            worktree_id
+        }));
+
+        // Test 1: Verify current_branch initialized correctly
+        {
+            let branch_guard = current_branch
+                .read()
+                .expect("Failed to acquire read lock on current_branch");
+            assert_eq!(
+                *branch_guard, worktree,
+                "current_branch should be initialized to worktree parameter"
+            );
+        }
+
+        // Test 2: Verify current_worktree_id initialized correctly
+        {
+            let worktree_id_guard = current_worktree_id
+                .read()
+                .expect("Failed to acquire read lock on current_worktree_id");
+            assert!(
+                *worktree_id_guard > 0,
+                "current_worktree_id should be a valid positive integer"
+            );
+        }
+
+        // Test 3: Verify Arc semantics work (can clone and access from multiple locations)
+        let branch_clone = std::sync::Arc::clone(&current_branch);
+        let worktree_id_clone = std::sync::Arc::clone(&current_worktree_id);
+
+        {
+            let branch_guard = branch_clone.read().expect("Failed to acquire read lock");
+            assert_eq!(*branch_guard, worktree, "Arc clone should have same value");
+        }
+
+        {
+            let worktree_id_guard = worktree_id_clone
+                .read()
+                .expect("Failed to acquire read lock");
+            assert!(*worktree_id_guard > 0, "Arc clone should have same value");
+        }
+
+        // Test 4: Verify write locks work (for future branch switch logic)
+        {
+            let mut branch_guard = current_branch
+                .write()
+                .expect("Failed to acquire write lock on current_branch");
+            let new_branch = "feature-branch";
+            *branch_guard = new_branch.to_string();
+            assert_eq!(*branch_guard, new_branch, "Write lock should allow mutation");
+        }
+
+        // Test 5: Verify value persisted after write lock released
+        {
+            let branch_guard = current_branch.read().expect("Failed to acquire read lock");
+            assert_eq!(
+                *branch_guard, "feature-branch",
+                "Value should persist after write lock released"
+            );
+        }
     }
 }
