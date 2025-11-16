@@ -14,6 +14,80 @@ use crate::incremental::path_utils::normalize_to_relpath;
 pub mod parallel;
 pub mod parser;
 
+/// Debouncer to prevent rapid successive event handling
+///
+/// Implements time-based debouncing to avoid triggering operations
+/// too frequently. This prevents issues with:
+/// - Multiple rapid branch switches
+/// - Git operations that modify files multiple times
+/// - File system noise (duplicate events from the OS)
+///
+/// # Debouncing Strategy
+///
+/// Events that occur within the debounce duration (default: 2 seconds) of the
+/// previous event are ignored. This ensures at most one operation
+/// per debounce window.
+///
+/// # Thread Safety
+///
+/// The last event timestamp is protected by a `Mutex` to allow safe access
+/// from the event handler thread.
+#[allow(dead_code)] // Used in UNIWATCH-1004 for branch switch debouncing
+struct DebouncedHandler {
+    /// Timestamp of the last processed event, protected by mutex for thread safety
+    last_event: std::sync::Mutex<std::time::Instant>,
+    /// Minimum duration between processed events
+    debounce_duration: std::time::Duration,
+}
+
+impl DebouncedHandler {
+    /// Creates a new debounced handler with the specified duration
+    ///
+    /// # Arguments
+    ///
+    /// * `debounce_duration` - Minimum time between processed events
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::time::Duration;
+    ///
+    /// let debouncer = DebouncedHandler::new(Duration::from_secs(2));
+    /// ```
+    fn new(debounce_duration: std::time::Duration) -> Self {
+        Self {
+            last_event: std::sync::Mutex::new(std::time::Instant::now() - debounce_duration),
+            debounce_duration,
+        }
+    }
+
+    /// Checks if an event should be processed or debounced
+    ///
+    /// Returns `true` if sufficient time has passed since the last event,
+    /// `false` if the event should be debounced (ignored).
+    ///
+    /// # Thread Safety
+    ///
+    /// This method acquires a lock on the last event timestamp. If the lock
+    /// is poisoned (due to a panic while holding the lock), this will panic.
+    ///
+    /// # Returns
+    ///
+    /// - `true` - Process the event (>= debounce_duration since last event)
+    /// - `false` - Ignore the event (< debounce_duration since last event)
+    fn should_handle(&self) -> bool {
+        let mut last = self.last_event.lock().unwrap();
+        let now = std::time::Instant::now();
+
+        if now.duration_since(*last) >= self.debounce_duration {
+            *last = now;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// Process Python imports from chunk metadata and create import edges in chunk_edges table
 async fn process_python_imports(
     client: &Client,
@@ -1371,5 +1445,55 @@ mod tests {
                 "Value should persist after write lock released"
             );
         }
+    }
+
+    /// Test that DebouncedHandler prevents rapid successive events (UNIWATCH-1003)
+    ///
+    /// This test verifies:
+    /// 1. First call to should_handle() returns true (event processed)
+    /// 2. Immediate second call returns false (debounced, too soon)
+    /// 3. After debounce duration expires, should_handle() returns true again
+    /// 4. Thread-safe Mutex<Instant> pattern works correctly
+    /// 5. Configurable debounce duration is respected
+    #[test]
+    fn test_debouncer_prevents_rapid_events() {
+        use std::time::Duration;
+
+        // Create debouncer with short duration for testing (100ms)
+        let debounce_duration = Duration::from_millis(100);
+        let debouncer = DebouncedHandler::new(debounce_duration);
+
+        // Test 1: First call should return true (enough time has passed since initialization)
+        assert!(
+            debouncer.should_handle(),
+            "First call to should_handle() should return true"
+        );
+
+        // Test 2: Immediate second call should return false (debounced)
+        assert!(
+            !debouncer.should_handle(),
+            "Immediate second call should return false (debounced)"
+        );
+
+        // Test 3: Another immediate call should also return false
+        assert!(
+            !debouncer.should_handle(),
+            "Third immediate call should also return false (still debounced)"
+        );
+
+        // Test 4: Wait for debounce duration to expire
+        std::thread::sleep(debounce_duration + Duration::from_millis(10));
+
+        // Test 5: After waiting, should_handle() should return true again
+        assert!(
+            debouncer.should_handle(),
+            "After waiting for debounce duration, should_handle() should return true"
+        );
+
+        // Test 6: Immediate call after the previous one should be debounced again
+        assert!(
+            !debouncer.should_handle(),
+            "Immediate call after previous success should be debounced"
+        );
     }
 }

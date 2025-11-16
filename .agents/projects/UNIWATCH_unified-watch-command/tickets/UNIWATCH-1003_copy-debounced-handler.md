@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-1003: Extract and Reuse DebouncedHandler
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,11 +29,11 @@ This is part of Phase 1 (Foundation) of the UNIWATCH project, providing the debo
 
 ## Acceptance Criteria
 
-- [ ] DebouncedHandler accessible from watch_worktree() context
-- [ ] Maintains thread-safe Mutex<Instant> pattern
-- [ ] Configurable debounce duration (default 2 seconds)
-- [ ] Unit test `test_debouncer_prevents_rapid_events()` passes
-- [ ] No clippy warnings
+- [x] DebouncedHandler accessible from watch_worktree() context
+- [x] Maintains thread-safe Mutex<Instant> pattern
+- [x] Configurable debounce duration (default 2 seconds)
+- [x] Unit test `test_debouncer_prevents_rapid_events()` passes
+- [x] No clippy warnings
 
 ## Technical Requirements
 
