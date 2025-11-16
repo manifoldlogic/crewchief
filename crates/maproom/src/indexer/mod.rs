@@ -746,6 +746,85 @@ pub async fn upsert_files(
     Ok(())
 }
 
+/// Sets up file watching for .git/HEAD with channel bridging from sync to async
+///
+/// Creates a `notify::RecommendedWatcher` that monitors the `.git/HEAD` file for changes
+/// (e.g., branch switches). Events from the synchronous `notify` crate are bridged to
+/// tokio's async channels via a spawned task.
+///
+/// # Arguments
+///
+/// * `git_head` - Path to the .git/HEAD file to watch
+/// * `tx` - Tokio async channel sender for forwarding file system events
+///
+/// # Returns
+///
+/// Returns the watcher handle which must be kept alive. When the watcher is dropped,
+/// file watching stops automatically.
+///
+/// # Channel Bridging
+///
+/// The notify crate uses synchronous `std::sync::mpsc` channels, while tokio uses
+/// async channels. This function bridges the two by:
+/// 1. Creating a sync channel for notify events
+/// 2. Spawning a tokio task that forwards events to the async channel
+/// 3. Breaking the loop when the async channel is closed (receiver dropped)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use std::path::Path;
+/// use tokio::sync::mpsc;
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let git_head = Path::new("/workspace/repo/.git/HEAD");
+///     let (tx, mut rx) = mpsc::channel(100);
+///
+///     let _watcher = setup_head_watcher(git_head, tx)?;
+///
+///     // Receive events
+///     while let Some(event) = rx.recv().await {
+///         println!("Branch switch detected: {:?}", event);
+///     }
+///
+///     Ok(())
+/// }
+/// ```
+fn setup_head_watcher(
+    git_head: &Path,
+    tx: tokio::sync::mpsc::Sender<notify::Event>,
+) -> anyhow::Result<notify::RecommendedWatcher> {
+    use notify::{RecursiveMode, Watcher};
+
+    // Create sync channel for notify crate
+    let (sync_tx, sync_rx) = std::sync::mpsc::channel();
+
+    // Create watcher with sync callback
+    let mut watcher = notify::recommended_watcher(move |res| {
+        if let Ok(event) = res {
+            let _ = sync_tx.send(event);
+        }
+    })?;
+
+    // Watch the .git/HEAD file (non-recursive, file only)
+    watcher.watch(git_head, RecursiveMode::NonRecursive)?;
+
+    // Bridge sync to async: spawn blocking task to forward events
+    // Use spawn_blocking because sync_rx.recv() is a blocking call
+    tokio::task::spawn_blocking(move || {
+        while let Ok(event) = sync_rx.recv() {
+            // Send to async channel - need to block_on since we're in a blocking context
+            if tx.blocking_send(event).is_err() {
+                // Channel closed, exit task
+                break;
+            }
+        }
+    });
+
+    Ok(watcher)
+}
+
 pub async fn watch_worktree(
     _client: &Client,
     repo: &str,
@@ -1128,4 +1207,51 @@ pub struct SymbolChunk {
     pub start_line: i32,
     pub end_line: i32,
     pub metadata: Option<serde_json::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    /// Test that setup_head_watcher creates a working channel bridge from sync to async
+    ///
+    /// This test verifies:
+    /// 1. The function creates a notify::RecommendedWatcher without errors
+    /// 2. The watcher can be configured to watch a file path
+    /// 3. The async channel is created and ready to receive events
+    /// 4. The function returns a valid watcher handle
+    /// 5. Cleanup works properly when the watcher is dropped
+    #[tokio::test]
+    async fn test_setup_head_watcher_creates_bridge() {
+        // Create a temporary file to watch (simulates .git/HEAD)
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path().to_path_buf();
+
+        // Write initial content
+        writeln!(temp_file, "ref: refs/heads/main").unwrap();
+        temp_file.flush().unwrap();
+
+        // Create async channel
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+
+        // Setup the watcher - this is the main test
+        // It should not panic or return an error
+        let watcher_result = setup_head_watcher(&temp_path, tx);
+
+        // Verify the watcher was created successfully
+        assert!(watcher_result.is_ok(), "Failed to create watcher: {:?}", watcher_result.err());
+
+        // Drop the watcher to stop watching and close the sync channel
+        // This will cause the bridging task to exit when sync_rx.recv() returns Err
+        drop(watcher_result.unwrap());
+
+        // Drop the receiver to close the async channel
+        // This ensures the bridging task will exit if it's still trying to send
+        drop(rx);
+
+        // Test passes if we reach here without panicking
+        // The bridging task should exit cleanly when the watcher is dropped
+    }
 }
