@@ -1,9 +1,9 @@
 # Ticket: VSMAP-1003: Implement platform-aware binary spawning for watch processes
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,12 +26,12 @@ The extension spawns two long-running Rust processes: `watch` (file changes) and
 This ticket implements **Milestone 1.2: Binary Spawner** from Phase 1 of the VSMAP project plan, establishing the process management layer that runs the Maproom indexing engine.
 
 ## Acceptance Criteria
-- [ ] Correct binary selected based on `process.platform` and `process.arch`
-- [ ] `ProcessOrchestrator.startWatching()` spawns both processes
-- [ ] Both processes run continuously (don't exit unexpectedly)
-- [ ] Stdout logged to VSCode Output panel ("Maproom" channel)
-- [ ] Processes killed on `stopWatching()` or extension deactivation
-- [ ] Error shown if binary not found for platform
+- [x] Correct binary selected based on `process.platform` and `process.arch`
+- [x] `ProcessOrchestrator.startWatching()` spawns both processes
+- [x] Both processes run continuously (don't exit unexpectedly)
+- [x] Stdout logged to VSCode Output panel ("Maproom" channel)
+- [x] Processes killed on `stopWatching()` or extension deactivation
+- [x] Error shown if binary not found for platform
 
 ## Technical Requirements
 - Detect platform: darwin (x64/arm64), linux (x64/arm64), win32 (x64)

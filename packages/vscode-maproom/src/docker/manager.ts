@@ -459,6 +459,30 @@ export class DockerManager {
   }
 
   /**
+   * Get PostgreSQL connection configuration
+   *
+   * Returns the connection details for the managed PostgreSQL instance.
+   * These values match the docker-compose.yml configuration.
+   *
+   * @returns PostgreSQL connection configuration
+   */
+  getPostgresConfig(): {
+    host: string
+    port: number
+    user: string
+    password: string
+    database: string
+  } {
+    return {
+      host: 'localhost',
+      port: 5433, // External port mapping from docker-compose.yml
+      user: 'maproom',
+      password: 'maproom',
+      database: 'maproom',
+    }
+  }
+
+  /**
    * Sleep for the specified duration
    *
    * @param ms - Milliseconds to sleep
