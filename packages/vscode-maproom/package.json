@@ -1,0 +1,31 @@
+{
+  "name": "vscode-maproom",
+  "displayName": "Maproom Semantic Search",
+  "description": "Semantic code search powered by Maproom",
+  "version": "0.1.0",
+  "publisher": "crewchief",
+  "type": "module",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}

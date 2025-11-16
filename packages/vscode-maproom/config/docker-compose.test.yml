@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: maproom-postgres
+    environment:
+      POSTGRES_DB: maproom
+      POSTGRES_USER: maproom
+      POSTGRES_PASSWORD: maproom
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - maproom-data:/var/lib/postgresql/data
+    ports:
+      - "0.0.0.0:5433:5432"
+    command: >
+      postgres
+      -c max_connections=50
+      -c shared_buffers=512MB
+    networks:
+      maproom-network:
+        aliases:
+          - maproom-postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maproom -d maproom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  maproom-data:
+    driver: local
+
+networks:
+  maproom-network:
+    driver: bridge

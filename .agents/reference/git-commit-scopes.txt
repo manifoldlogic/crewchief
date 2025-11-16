@@ -31,4 +31,5 @@ test
 tests
 tools
 ui
+vscode-maproom
 watcher
