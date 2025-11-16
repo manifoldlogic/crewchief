@@ -21,6 +21,10 @@ import type { WatchEvent } from '../process/events.js'
  * Status bar icon and text for each state
  */
 const STATUS_CONFIG = {
+  starting: {
+    icon: 'sync~spin',
+    text: 'Starting...',
+  },
   idle: {
     icon: 'database',
     text: 'Maproom Ready',
@@ -42,7 +46,7 @@ const STATUS_CONFIG = {
 /**
  * Current state of the status bar
  */
-type StatusBarState = 'idle' | 'watching' | 'indexing' | 'error'
+type StatusBarState = 'starting' | 'idle' | 'watching' | 'indexing' | 'error'
 
 /**
  * Debounce interval for status bar updates (milliseconds)
@@ -70,8 +74,8 @@ const LAST_INDEXED_KEY = 'maproom.lastIndexed'
 export class StatusBarManager implements vscode.Disposable {
   private readonly statusBarItem: vscode.StatusBarItem
   private readonly context: vscode.ExtensionContext
-  private readonly orchestrator: ProcessOrchestrator
-  private currentState: StatusBarState = 'idle'
+  private orchestrator: ProcessOrchestrator
+  private currentState: StatusBarState = 'starting'
   private currentFileCount = 0
   private totalFiles = 0
   private lastError: string | undefined
@@ -84,11 +88,11 @@ export class StatusBarManager implements vscode.Disposable {
    * Create a new status bar manager
    *
    * @param context - Extension context for state storage
-   * @param orchestrator - Process orchestrator to subscribe to
+   * @param orchestrator - Process orchestrator to subscribe to (optional for delayed initialization)
    */
-  constructor(context: vscode.ExtensionContext, orchestrator: ProcessOrchestrator) {
+  constructor(context: vscode.ExtensionContext, orchestrator?: ProcessOrchestrator) {
     this.context = context
-    this.orchestrator = orchestrator
+    this.orchestrator = orchestrator!
 
     // Create status bar item
     // Right alignment, priority 100 (lower than most built-in items)
@@ -103,12 +107,50 @@ export class StatusBarManager implements vscode.Disposable {
     // Bind and store the event handler reference for proper cleanup
     this.watchEventHandler = this.handleWatchEvent.bind(this)
 
-    // Subscribe to orchestrator events
-    this.orchestrator.on('watchEvent', this.watchEventHandler)
+    // Subscribe to orchestrator events if provided
+    if (orchestrator) {
+      this.orchestrator.on('watchEvent', this.watchEventHandler)
+    }
 
     // Initialize with idle state
     this.updateStatusBar()
     this.statusBarItem.show()
+  }
+
+  /**
+   * Connect to process orchestrator for event updates
+   *
+   * Used when orchestrator is initialized after status bar creation.
+   *
+   * @param orchestrator - Process orchestrator to subscribe to
+   */
+  connectOrchestrator(orchestrator: ProcessOrchestrator): void {
+    // Remove existing listener if already connected
+    if (this.orchestrator) {
+      this.orchestrator.removeListener('watchEvent', this.watchEventHandler)
+    }
+
+    // Store new orchestrator and subscribe
+    this.orchestrator = orchestrator
+    this.orchestrator.on('watchEvent', this.watchEventHandler)
+  }
+
+  /**
+   * Manually set status bar state
+   *
+   * Used for pre-initialization states before orchestrator is ready.
+   *
+   * @param state - New state
+   * @param message - Optional custom message
+   */
+  setState(state: StatusBarState, message?: string): void {
+    this.currentState = state
+    if (state === 'error' && message) {
+      this.lastError = message
+    } else if (state !== 'error') {
+      this.lastError = undefined
+    }
+    this.scheduleUpdate()
   }
 
   /**

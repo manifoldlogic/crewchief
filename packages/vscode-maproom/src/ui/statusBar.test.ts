@@ -128,9 +128,9 @@ describe('StatusBarManager', () => {
       expect(statusBarItem.isShown).toBe(true)
     })
 
-    it('should initialize with idle state', () => {
-      expect(statusBarItem.text).toContain('Maproom Ready')
-      expect(statusBarItem.text).toContain('$(database)')
+    it('should initialize with starting state', () => {
+      expect(statusBarItem.text).toContain('Starting...')
+      expect(statusBarItem.text).toContain('$(sync~spin)')
     })
   })
 
