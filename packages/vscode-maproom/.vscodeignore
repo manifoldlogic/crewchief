@@ -1,0 +1,38 @@
+# Source files
+src/**
+test/**
+*.ts
+!**/*.d.ts
+
+# Development files
+.vscode/**
+.vscode-test/**
+.gitignore
+.prettierrc
+tsconfig.json
+vitest.config.ts
+
+# Build artifacts
+*.map
+coverage/**
+.nyc_output/**
+
+# Dependencies (bundled separately)
+node_modules/**
+
+# Documentation development files
+.eslintrc.*
+.editorconfig
+
+# Scripts (not needed at runtime)
+scripts/**
+
+# Git
+.git/**
+.github/**
+
+# Other
+.DS_Store
+*.log
+*.vsix
+pnpm-lock.yaml
