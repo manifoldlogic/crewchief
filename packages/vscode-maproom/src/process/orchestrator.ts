@@ -19,13 +19,14 @@ import type { OutputChannel } from 'vscode'
 import * as vscode from 'vscode'
 import path from 'node:path'
 import { access, constants } from 'node:fs/promises'
-import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform.js'
-import { StdoutParser } from './parser.js'
-import type { WatchEvent } from './events.js'
-import { CrashRecovery } from './recovery.js'
+import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform'
+import { StdoutParser } from './parser'
+import type { WatchEvent } from './events'
+import { CrashRecovery } from './recovery'
 
-import type { SecretsManager } from '../config/secrets.js'
-import type { EmbeddingProvider } from '../ui/setupWizard.js'
+import type { SecretsManager } from '../config/secrets'
+import type { EmbeddingProvider } from '../ui/setupWizard'
+import { getRepoName, getBranchName } from '../utils/git'
 
 /**
  * PostgreSQL connection configuration
@@ -155,8 +156,27 @@ export class ProcessOrchestrator extends EventEmitter {
       // Prepare environment variables (includes credentials if configured)
       const env = await this.buildEnvironment()
 
+      // Get git repository and branch information
+      const repoName = await getRepoName(this.config.workspaceRoot)
+      const branchName = await getBranchName(this.config.workspaceRoot)
+      this.log(`Repository: ${repoName}, Branch: ${branchName}`)
+
       // Start watch process (file change monitoring)
-      await this.startProcess('watch', ['watch', '--throttle', '3s'], env)
+      await this.startProcess(
+        'watch',
+        [
+          'watch',
+          '--repo',
+          repoName,
+          '--worktree',
+          branchName,
+          '--path',
+          this.config.workspaceRoot,
+          '--throttle',
+          '3s',
+        ],
+        env
+      )
 
       // Start branch-watch process (git branch monitoring)
       await this.startProcess('branch-watch', ['branch-watch', '--repo', this.config.workspaceRoot], env)

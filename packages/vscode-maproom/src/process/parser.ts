@@ -15,7 +15,7 @@
 import { EventEmitter } from 'node:events'
 import { createInterface, type Interface } from 'node:readline'
 import type { Readable } from 'node:stream'
-import { isWatchEvent, type WatchEvent } from './events.js'
+import { isWatchEvent, type WatchEvent } from './events'
 
 /**
  * Parser events emitted via EventEmitter

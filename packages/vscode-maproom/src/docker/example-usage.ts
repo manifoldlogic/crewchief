@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode'
-import { DockerManager, DockerError } from './manager.js'
+import { DockerManager, DockerError } from './manager'
 
 /**
  * Example extension activation

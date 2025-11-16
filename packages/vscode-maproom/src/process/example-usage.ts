@@ -6,8 +6,8 @@
  */
 
 import * as vscode from 'vscode'
-import { ProcessOrchestrator, ProcessError } from './orchestrator.js'
-import { DockerManager } from '../docker/manager.js'
+import { ProcessOrchestrator, ProcessError } from './orchestrator'
+import { DockerManager } from '../docker/manager'
 
 /**
  * Example: Initialize and start watch processes in a VSCode extension

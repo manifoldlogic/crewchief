@@ -4,7 +4,6 @@
   "description": "Semantic code search powered by Maproom - find code by concept, not just text",
   "version": "0.1.0",
   "publisher": "crewchief",
-  "type": "module",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -46,6 +45,11 @@
       {
         "command": "maproom.restartWatchers",
         "title": "Maproom: Restart Watchers",
+        "category": "Maproom"
+      },
+      {
+        "command": "maproom.showStatus",
+        "title": "Maproom: Show Status",
         "category": "Maproom"
       }
     ]

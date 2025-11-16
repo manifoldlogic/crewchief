@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { runInitialScan, ScanError, type ScanConfig } from './scan.js'
-import type { StatusBarManager } from '../ui/statusBar.js'
+import { runInitialScan, ScanError, type ScanConfig } from './scan'
+import type { StatusBarManager } from '../ui/statusBar'
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'

@@ -14,9 +14,9 @@
  */
 
 import * as vscode from 'vscode'
-import type { ProcessOrchestrator } from '../process/orchestrator.js'
-import type { WatchEvent } from '../process/events.js'
-import { formatRelativeTime } from '../utils/time.js'
+import type { ProcessOrchestrator } from '../process/orchestrator'
+import type { WatchEvent } from '../process/events'
+import { formatRelativeTime } from '../utils/time'
 
 /**
  * Status bar icon and text for each state

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import type { WatchEvent } from '../process/events.js'
+import type { WatchEvent } from '../process/events'
 
 /**
  * Mock StatusBarItem

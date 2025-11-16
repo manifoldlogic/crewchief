@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { CrashRecovery } from './recovery.js'
+import { CrashRecovery } from './recovery'
 
 describe('CrashRecovery', () => {
   beforeEach(() => {

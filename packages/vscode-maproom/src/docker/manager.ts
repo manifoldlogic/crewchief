@@ -16,7 +16,6 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import type { OutputChannel } from 'vscode'
 import { createConnection } from 'node:net'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 /**
  * Error thrown when Docker operations fail
@@ -73,11 +72,9 @@ export class DockerManager {
 
     // Auto-detect extension root if not provided
     if (!extensionRoot) {
-      // In ESM, __dirname equivalent is path.dirname(fileURLToPath(import.meta.url))
+      // In CommonJS, __dirname is available globally
       // From src/docker/manager.ts, we go up two levels to reach extension root
-      const currentFilePath = fileURLToPath(import.meta.url)
-      const currentDir = path.dirname(currentFilePath)
-      extensionRoot = path.resolve(currentDir, '..', '..')
+      extensionRoot = path.resolve(__dirname, '..', '..')
     }
 
     this.workingDirectory = extensionRoot

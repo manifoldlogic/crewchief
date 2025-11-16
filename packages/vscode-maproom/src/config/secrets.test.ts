@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { SecretsManager } from './secrets.js'
+import { SecretsManager } from './secrets'
 
 /**
  * Mock SecretStorage implementation

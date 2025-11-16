@@ -6,9 +6,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { DockerManager, DockerError } from './manager.js'
+import { DockerManager, DockerError } from './manager'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 // Mock OutputChannel for testing
 class MockOutputChannel {
@@ -56,8 +55,7 @@ describe('DockerManager', () => {
     outputChannel = new MockOutputChannel()
     // Note: In production, you would pass the actual extension root
     // For testing, we use the test environment's path and test compose file
-    const currentDir = path.dirname(fileURLToPath(import.meta.url))
-    const extensionRoot = path.resolve(currentDir, '..', '..')
+    const extensionRoot = path.resolve(__dirname, '..', '..')
     const testComposeFile = path.join(extensionRoot, 'config', 'docker-compose.test.yml')
     manager = new DockerManager(outputChannel as any, extensionRoot, testComposeFile)
   })

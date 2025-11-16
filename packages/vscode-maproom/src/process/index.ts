@@ -10,13 +10,13 @@ export {
   type OrchestratorConfig,
   type PostgresConfig,
   type OrchestratorEvents,
-} from './orchestrator.js'
+} from './orchestrator'
 
 export {
   StdoutParser,
   type ParserEvents,
   type TypedStdoutParser,
-} from './parser.js'
+} from './parser'
 
 export {
   isWatchEvent,
@@ -26,4 +26,4 @@ export {
   type ErrorEvent,
   type CompleteEvent,
   type StatusEvent,
-} from './events.js'
+} from './events'

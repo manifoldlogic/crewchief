@@ -26,26 +26,25 @@
  */
 
 import * as vscode from 'vscode'
-import { DockerManager } from './docker/manager.js'
-import { ProcessOrchestrator } from './process/orchestrator.js'
-import { StatusBarManager } from './ui/statusBar.js'
+import { ProcessOrchestrator } from './process/orchestrator'
+import { StatusBarManager } from './ui/statusBar'
 import {
   runSetupWizard,
   getConfiguredProvider,
   registerSetupCommand,
-} from './ui/setupWizard.js'
-import { SecretsManager } from './config/secrets.js'
-import { runInitialScan } from './process/scan.js'
+} from './ui/setupWizard'
+import { SecretsManager } from './config/secrets'
+import { runInitialScan } from './process/scan'
+import {
+  checkPostgresAvailable,
+  getPostgresUnavailableMessage,
+  DEFAULT_POSTGRES_CONFIG,
+} from './services/postgres-checker'
 
 /**
  * Output channel for extension logging
  */
 let outputChannel: vscode.OutputChannel | undefined
-
-/**
- * Docker manager for PostgreSQL container
- */
-let dockerManager: DockerManager | undefined
 
 /**
  * Process orchestrator for watch processes
@@ -117,6 +116,28 @@ export function activate(context: vscode.ExtensionContext): void {
   })
   context.subscriptions.push(restartWatchersCommand)
 
+  // Register show status command
+  const showStatusCommand = vscode.commands.registerCommand('maproom.showStatus', () => {
+    if (orchestrator) {
+      const status = orchestrator.getStatus()
+      const statusLines: string[] = ['Maproom Process Status:', '']
+
+      for (const [name, state] of status) {
+        const statusText = state.running ? '✓ Running' : state.crashed ? '✗ Crashed' : '○ Stopped'
+        statusLines.push(`${name}: ${statusText}`)
+        if (state.exitCode !== undefined) {
+          statusLines.push(`  Exit code: ${state.exitCode}`)
+        }
+      }
+
+      outputChannel?.show()
+      outputChannel?.appendLine('\n' + statusLines.join('\n'))
+    } else {
+      vscode.window.showInformationMessage('Maproom orchestrator not initialized')
+    }
+  })
+  context.subscriptions.push(showStatusCommand)
+
   // Register setup wizard command
   registerSetupCommand(context)
   outputChannel.appendLine('Commands registered')
@@ -171,8 +192,8 @@ async function runFirstTimeSetup(
       `Maproom configured to use ${provider.toUpperCase()} for embeddings`
     )
 
-    // Start Docker services first
-    await initializeDockerServices(context, workspaceRoot)
+    // Check if PostgreSQL is available
+    await ensurePostgresAvailable()
 
     // Run initial scan after setup completes
     await runInitialWorkspaceScan(context, workspaceRoot)
@@ -214,30 +235,16 @@ async function initializeServices(
         cancellable: false,
       },
       async (progress) => {
-        // Step 1: Start Docker services
-        progress.report({ message: 'Starting Docker services...' })
-        outputChannel?.appendLine('Starting Docker Compose services...')
+        // Step 1: Check PostgreSQL availability
+        progress.report({ message: 'Checking PostgreSQL...' })
+        await ensurePostgresAvailable()
 
-        dockerManager = new DockerManager(outputChannel!, context.extensionPath)
-        await dockerManager.ensureServicesRunning()
-
-        outputChannel?.appendLine('Docker services started successfully')
-
-        // Step 2: Wait for services to be healthy
-        progress.report({ message: 'Waiting for services to be ready...' })
-        outputChannel?.appendLine('Checking service health...')
-
-        // Give services a moment to start accepting connections
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-
-        outputChannel?.appendLine('Services are healthy')
-
-        // Step 3: Create process orchestrator
+        // Step 2: Create process orchestrator
         progress.report({ message: 'Starting watch processes...' })
         outputChannel?.appendLine('Creating process orchestrator...')
 
         const postgresConfig = {
-          host: 'localhost',
+          host: 'maproom-postgres', // Docker network hostname
           port: 5432,
           user: 'maproom',
           password: 'maproom',
@@ -293,28 +300,25 @@ async function initializeServices(
 }
 
 /**
- * Initialize Docker services
+ * Ensure PostgreSQL is available
  *
- * Starts PostgreSQL container and waits for it to be healthy.
+ * Checks if PostgreSQL is listening at maproom-postgres:5432 (Docker network).
+ * Throws error with helpful message if not available.
  *
- * @param context - Extension context
- * @param workspaceRoot - Workspace root path
+ * @throws Error if PostgreSQL is not available
  */
-async function initializeDockerServices(
-  context: vscode.ExtensionContext,
-  workspaceRoot: string
-): Promise<void> {
-  outputChannel?.appendLine('Starting Docker Compose services...')
+async function ensurePostgresAvailable(): Promise<void> {
+  outputChannel?.appendLine('Checking PostgreSQL availability at maproom-postgres:5432...')
 
-  dockerManager = new DockerManager(outputChannel!, context.extensionPath)
-  await dockerManager.ensureServicesRunning()
+  const available = await checkPostgresAvailable(DEFAULT_POSTGRES_CONFIG)
 
-  outputChannel?.appendLine('Docker services started successfully')
+  if (!available) {
+    const message = getPostgresUnavailableMessage()
+    outputChannel?.appendLine(`ERROR: ${message}`)
+    throw new Error(message)
+  }
 
-  // Wait for services to be healthy
-  outputChannel?.appendLine('Checking service health...')
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-  outputChannel?.appendLine('Services are healthy')
+  outputChannel?.appendLine('PostgreSQL is available and ready')
 }
 
 /**
@@ -351,7 +355,7 @@ async function runInitialWorkspaceScan(
   const filesIndexed = await runInitialScan({
     extensionRoot: context.extensionPath,
     workspaceRoot,
-    databaseUrl: 'postgresql://maproom:maproom@localhost:5432/maproom',
+    databaseUrl: 'postgresql://maproom:maproom@maproom-postgres:5432/maproom',
     outputChannel: outputChannel!,
     statusBarManager: statusBar,
     env,
@@ -375,7 +379,7 @@ async function startWatchProcesses(
   outputChannel?.appendLine('Creating process orchestrator...')
 
   const postgresConfig = {
-    host: 'localhost',
+    host: 'maproom-postgres', // Docker network hostname
     port: 5432,
     user: 'maproom',
     password: 'maproom',

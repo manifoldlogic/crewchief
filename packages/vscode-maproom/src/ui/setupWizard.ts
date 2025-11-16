@@ -17,7 +17,7 @@
 
 import * as vscode from 'vscode'
 import * as http from 'http'
-import { SecretsManager } from '../config/secrets.js'
+import { SecretsManager } from '../config/secrets'
 
 /**
  * Supported embedding providers

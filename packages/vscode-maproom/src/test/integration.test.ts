@@ -18,11 +18,11 @@ import type { ChildProcess } from 'node:child_process'
 import type { OutputChannel, ExtensionContext, StatusBarItem } from 'vscode'
 
 // Import modules to test (real, not mocked)
-import { StdoutParser } from '../process/parser.js'
-import { ProcessOrchestrator, type OrchestratorConfig } from '../process/orchestrator.js'
-import { StatusBarManager } from '../ui/statusBar.js'
-import { CrashRecovery } from '../process/recovery.js'
-import type { WatchEvent, ProgressEvent, StatusEvent, ErrorEvent, CompleteEvent } from '../process/events.js'
+import { StdoutParser } from '../process/parser'
+import { ProcessOrchestrator, type OrchestratorConfig } from '../process/orchestrator'
+import { StatusBarManager } from '../ui/statusBar'
+import { CrashRecovery } from '../process/recovery'
+import type { WatchEvent, ProgressEvent, StatusEvent, ErrorEvent, CompleteEvent } from '../process/events'
 
 // Mock vscode module
 vi.mock('vscode', () => ({

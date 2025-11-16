@@ -4,4 +4,4 @@
  * @module docker
  */
 
-export { DockerManager, DockerError } from './manager.js'
+export { DockerManager, DockerError } from './manager'

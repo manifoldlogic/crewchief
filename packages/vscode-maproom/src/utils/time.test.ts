@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { formatRelativeTime } from './time.js'
+import { formatRelativeTime } from './time'
 
 describe('formatRelativeTime', () => {
   describe('seconds range (< 60 seconds)', () => {

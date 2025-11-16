@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { ProcessOrchestrator, ProcessError, type OrchestratorConfig } from './orchestrator.js'
+import { ProcessOrchestrator, ProcessError, type OrchestratorConfig } from './orchestrator'
 import type { OutputChannel } from 'vscode'
-import * as platform from '../utils/platform.js'
+import * as platform from '../utils/platform'
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'

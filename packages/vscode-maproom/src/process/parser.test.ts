@@ -4,8 +4,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Readable } from 'node:stream'
-import { StdoutParser } from './parser.js'
-import type { WatchEvent } from './events.js'
+import { StdoutParser } from './parser'
+import type { WatchEvent } from './events'
 
 describe('StdoutParser', () => {
   let stdout: Readable

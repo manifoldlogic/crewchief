@@ -12,7 +12,7 @@ import {
   getPathSeparator,
   PlatformError,
   type PlatformId,
-} from './platform.js'
+} from './platform'
 
 describe('platform utilities', () => {
   // Store original values to restore after tests

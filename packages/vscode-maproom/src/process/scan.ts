@@ -18,10 +18,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import path from 'node:path'
 import { access, constants } from 'node:fs/promises'
-import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform.js'
-import { StdoutParser } from './parser.js'
-import type { WatchEvent } from './events.js'
-import type { StatusBarManager } from '../ui/statusBar.js'
+import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform'
+import { StdoutParser } from './parser'
+import type { WatchEvent } from './events'
+import type { StatusBarManager } from '../ui/statusBar'
 
 /**
  * Configuration for initial scan
