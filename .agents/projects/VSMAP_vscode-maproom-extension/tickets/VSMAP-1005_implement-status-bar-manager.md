@@ -1,9 +1,9 @@
 # Ticket: VSMAP-1005: Implement StatusBarManager for UI updates
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,15 +26,15 @@ Users need visibility into indexing status. The status bar shows current state (
 This ticket implements **Milestone 1.3: Status Bar** from Phase 1 of the VSMAP project plan, completing the core infrastructure by providing user visibility into the indexing system.
 
 ## Acceptance Criteria
-- [ ] StatusBarItem created and visible after activation
-- [ ] Text updates on watch events:
+- [x] StatusBarItem created and visible after activation
+- [x] Text updates on watch events:
   - Idle: "$(database) Maproom Ready"
   - Watching: "$(eye) Watching..."
   - Indexing: "$(sync~spin) Indexing 15 files..."
   - Error: "$(error) Maproom Error"
-- [ ] Tooltip shows detailed info (last indexed time, file counts)
-- [ ] Clicking status bar shows Output panel
-- [ ] Status bar hidden on deactivation
+- [x] Tooltip shows detailed info (last indexed time, file counts)
+- [x] Clicking status bar shows Output panel
+- [x] Status bar hidden on deactivation
 
 ## Technical Requirements
 - Use `vscode.window.createStatusBarItem(alignment, priority)`

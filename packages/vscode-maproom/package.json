@@ -15,6 +15,14 @@
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "maproom.showOutput",
+        "title": "Maproom: Show Output"
+      }
+    ]
+  },
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",

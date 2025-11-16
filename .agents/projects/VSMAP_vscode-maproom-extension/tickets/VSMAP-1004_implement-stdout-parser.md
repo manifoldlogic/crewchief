@@ -1,4 +1,4 @@
-# Ticket: VSMAP-1004: Implement NDJSON stdout parser for process output
+  # Ticket: VSMAP-1004: Implement NDJSON stdout parser for process output
 
 ## Status
 - [x] **Task completed** - acceptance criteria met
