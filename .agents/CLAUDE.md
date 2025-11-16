@@ -11,7 +11,7 @@ Working with agent workspace at `/.agents`.
 ├── agents/            # Agent definitions
 ├── reference/         # Process docs and templates
 ├── knowledge/         # Research and specs
-└── work-in-progress/  # Scratchpad
+└── scratchpad/  # Scratchpad
 ```
 
 ## Project Structure

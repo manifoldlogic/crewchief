@@ -11,7 +11,7 @@ This directory contains AI agent-focused documentation, project planning, work t
 ├── agents/            # Agent definitions and capabilities
 ├── reference/         # Process documentation and conventions
 ├── knowledge/         # Research and technical knowledge base
-└── work-in-progress/  # Scratchpad for exploration
+└── scratchpad/  # Scratchpad for exploration
 ```
 
 ## Quick Navigation
@@ -36,7 +36,7 @@ This directory contains AI agent-focused documentation, project planning, work t
 - **[Archive](./archive/README.md)** - Completed projects and sessions
 
 ### 🔬 Work in Progress
-- **[Work in Progress](./work-in-progress/)** - Experimental notes and ideas
+- **[Work in Progress](./scratchpad/)** - Experimental notes and ideas
 
 ## For AI Agents
 
