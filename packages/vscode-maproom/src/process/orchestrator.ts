@@ -14,10 +14,13 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import type { OutputChannel } from 'vscode'
 import path from 'node:path'
 import { access, constants } from 'node:fs/promises'
 import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform.js'
+import { StdoutParser } from './parser.js'
+import type { WatchEvent } from './events.js'
 
 /**
  * PostgreSQL connection configuration
@@ -67,6 +70,17 @@ interface ManagedProcess {
   args: string[]
   crashed: boolean
   exitCode?: number
+  parser?: StdoutParser // NDJSON parser for structured events
+}
+
+/**
+ * Process orchestrator events emitted via EventEmitter
+ */
+export interface OrchestratorEvents {
+  /** Emitted when a process emits a parsed watch event */
+  watchEvent: (processName: string, event: WatchEvent) => void
+  /** Emitted when a process encounters a parse error */
+  parseError: (processName: string, error: Error, line: string) => void
 }
 
 /**
@@ -75,8 +89,10 @@ interface ManagedProcess {
  * Spawns and manages two long-running processes:
  * - watch: Monitors file changes with throttling
  * - branch-watch: Monitors git branch switches
+ *
+ * Extends EventEmitter to emit parsed watch events from processes.
  */
-export class ProcessOrchestrator {
+export class ProcessOrchestrator extends EventEmitter {
   private readonly outputChannel: OutputChannel
   private readonly config: OrchestratorConfig
   private readonly binaryPath: string
@@ -91,6 +107,7 @@ export class ProcessOrchestrator {
    * @throws ProcessError if platform is unsupported or binary not found
    */
   constructor(outputChannel: OutputChannel, config: OrchestratorConfig) {
+    super()
     this.outputChannel = outputChannel
     this.config = config
 
@@ -287,13 +304,28 @@ export class ProcessOrchestrator {
         crashed: false,
       }
 
-      // Handle stdout - log to output channel
+      // Handle stdout - parse NDJSON events and log
       if (child.stdout) {
-        child.stdout.on('data', (chunk: Buffer) => {
-          const text = chunk.toString('utf8').trim()
-          if (text) {
-            this.log(`[${name}] ${text}`)
-          }
+        // Create parser for structured events
+        const parser = new StdoutParser(child.stdout)
+        managed.parser = parser
+
+        // Emit parsed events from orchestrator
+        parser.on('event', (event: WatchEvent) => {
+          this.log(`[${name}] Event: ${JSON.stringify(event)}`)
+          this.emit('watchEvent', name, event)
+        })
+
+        // Log parse errors
+        parser.on('parseError', (error: Error, line: string) => {
+          this.log(`[${name}] Parse error: ${error.message}`)
+          this.log(`[${name}] Invalid line: ${line}`)
+          this.emit('parseError', name, error, line)
+        })
+
+        // Log when parser closes
+        parser.on('close', () => {
+          this.log(`[${name}] Parser closed`)
         })
       }
 
@@ -384,6 +416,10 @@ export class ProcessOrchestrator {
       const cleanup = () => {
         if (!isResolved) {
           isResolved = true
+          // Close parser if it exists
+          if (managed.parser) {
+            managed.parser.close()
+          }
           // Remove all event listeners
           child.removeAllListeners()
           child.stdout?.removeAllListeners()

@@ -10,6 +10,7 @@ import { ProcessOrchestrator, ProcessError, type OrchestratorConfig } from './or
 import type { OutputChannel } from 'vscode'
 import * as platform from '../utils/platform.js'
 import { EventEmitter } from 'node:events'
+import { Readable } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
 
 // Mock fs/promises module
@@ -71,8 +72,15 @@ class MockChildProcess extends EventEmitter implements Partial<ChildProcess> {
   pid = 12345
   exitCode: number | null = null
   killed = false
-  stdout = new EventEmitter() as any
-  stderr = new EventEmitter() as any
+  stdout: Readable
+  stderr: Readable
+
+  constructor() {
+    super()
+    // Create proper Readable streams for stdout/stderr
+    this.stdout = new Readable({ read() {} })
+    this.stderr = new Readable({ read() {} })
+  }
 
   kill(signal?: NodeJS.Signals | number): boolean {
     this.killed = true
@@ -84,12 +92,13 @@ class MockChildProcess extends EventEmitter implements Partial<ChildProcess> {
   }
 
   simulateSuccess(): void {
-    this.stdout.emit('data', Buffer.from('Process started successfully\n'))
+    this.stdout.push('{"type":"status","state":"idle"}\n')
   }
 
   simulateCrash(code: number = 1): void {
     this.exitCode = code
-    this.stderr.emit('data', Buffer.from('Fatal error\n'))
+    this.stderr.push('Fatal error\n')
+    this.stderr.push(null)
     this.emit('exit', code, null)
   }
 }
@@ -239,7 +248,8 @@ describe('ProcessOrchestrator', () => {
         count++
         const child = count === 1 ? mockChild1 : mockChild2
         setTimeout(() => {
-          child.stdout.emit('data', Buffer.from('Test log\n'))
+          // Push valid NDJSON event
+          child.stdout.push('{"type":"progress","files":100,"complete":50}\n')
           child.simulateSuccess()
         }, 10)
         return child as any
@@ -248,7 +258,8 @@ describe('ProcessOrchestrator', () => {
       await orchestrator.startWatching()
       await new Promise(resolve => setTimeout(resolve, 50))
 
-      expect(outputChannel.hasLine('[watch] Test log')).toBe(true)
+      // Check for logged event (parser logs the event as JSON)
+      expect(outputChannel.hasLine('[watch] Event:')).toBe(true)
     })
 
     it('should throw ProcessError if binary not found', async () => {

@@ -1,9 +1,9 @@
 # Ticket: VSMAP-1004: Implement NDJSON stdout parser for process output
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,12 +26,12 @@ The Rust binary outputs NDJSON events with progress info, errors, and status. We
 This ticket completes **Milestone 1.2: Binary Spawner** from Phase 1 of the VSMAP project plan by implementing the communication layer between Rust processes and TypeScript UI.
 
 ## Acceptance Criteria
-- [ ] Parse NDJSON lines from stdout stream
-- [ ] Extract event types: `progress`, `error`, `complete`, `status`
-- [ ] Emit TypeScript events via EventEmitter
-- [ ] Handle malformed JSON gracefully (log warning, continue)
-- [ ] Buffer incomplete lines (handle partial writes)
-- [ ] Line-by-line parsing (no buffering entire stdout)
+- [x] Parse NDJSON lines from stdout stream
+- [x] Extract event types: `progress`, `error`, `complete`, `status`
+- [x] Emit TypeScript events via EventEmitter
+- [x] Handle malformed JSON gracefully (log warning, continue)
+- [x] Buffer incomplete lines (handle partial writes)
+- [x] Line-by-line parsing (no buffering entire stdout)
 
 ## Technical Requirements
 - Use Node.js `readline.createInterface()` for line-by-line parsing

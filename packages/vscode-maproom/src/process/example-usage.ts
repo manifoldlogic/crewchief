@@ -44,14 +44,49 @@ export async function activateProcessOrchestrator(
       postgres: postgresConfig,
     })
 
-    // 5. Start watch processes
+    // 5. Set up event listeners for watch events
+    orchestrator.on('watchEvent', (processName, event) => {
+      // Handle different event types
+      switch (event.type) {
+        case 'progress':
+          outputChannel.appendLine(
+            `[${processName}] Progress: ${event.complete}/${event.files} files indexed`
+          )
+          break
+        case 'error':
+          outputChannel.appendLine(`[${processName}] Error: ${event.message}`)
+          if (event.file) {
+            outputChannel.appendLine(`  File: ${event.file}`)
+          }
+          break
+        case 'complete':
+          outputChannel.appendLine(
+            `[${processName}] Complete: ${event.files} files indexed in ${event.duration}ms`
+          )
+          vscode.window.showInformationMessage(
+            `Maproom: Indexed ${event.files} files in ${event.duration}ms`
+          )
+          break
+        case 'status':
+          outputChannel.appendLine(`[${processName}] Status: ${event.state}`)
+          break
+      }
+    })
+
+    // Handle parse errors (malformed NDJSON from binary)
+    orchestrator.on('parseError', (processName, error, line) => {
+      outputChannel.appendLine(`[${processName}] Parse error: ${error.message}`)
+      outputChannel.appendLine(`  Invalid line: ${line}`)
+    })
+
+    // 6. Start watch processes
     outputChannel.appendLine('Starting watch processes...')
     await orchestrator.startWatching()
 
     outputChannel.show()
     vscode.window.showInformationMessage('Maproom: Watch processes started successfully')
 
-    // 6. Register cleanup on extension deactivation
+    // 7. Register cleanup on extension deactivation
     context.subscriptions.push({
       dispose: async () => {
         outputChannel.appendLine('Stopping watch processes...')
@@ -61,7 +96,7 @@ export async function activateProcessOrchestrator(
       },
     })
 
-    // 7. Optional: Monitor process status
+    // 8. Optional: Monitor process status
     const statusCheckInterval = setInterval(() => {
       if (!orchestrator.isRunning()) {
         outputChannel.appendLine('WARNING: Watch processes are not running!')
