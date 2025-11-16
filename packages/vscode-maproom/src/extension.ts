@@ -29,6 +29,11 @@ import * as vscode from 'vscode'
 import { DockerManager } from './docker/manager.js'
 import { ProcessOrchestrator } from './process/orchestrator.js'
 import { StatusBarManager } from './ui/statusBar.js'
+import {
+  runSetupWizard,
+  getConfiguredProvider,
+  registerSetupCommand,
+} from './ui/setupWizard.js'
 
 /**
  * Output channel for extension logging
@@ -95,15 +100,74 @@ export function activate(context: vscode.ExtensionContext): void {
     outputChannel?.show()
   })
   context.subscriptions.push(showOutputCommand)
+
+  // Register setup wizard command
+  registerSetupCommand(context)
   outputChannel.appendLine('Commands registered')
 
-  // Step 5: Return immediately (FAST ACTIVATION - under 500ms)
+  // Step 5: Check for provider configuration (fast, synchronous)
+  const configuredProvider = getConfiguredProvider(context)
+  if (!configuredProvider) {
+    // No provider configured - show setup wizard
+    outputChannel.appendLine('No provider configured, showing setup wizard...')
+    void runFirstTimeSetup(context, workspaceFolder.uri.fsPath)
+  } else {
+    // Provider already configured - proceed with normal initialization
+    outputChannel.appendLine(`Provider configured: ${configuredProvider}`)
+    void initializeServices(context, workspaceFolder.uri.fsPath)
+  }
+
+  // Step 6: Return immediately (FAST ACTIVATION - under 500ms)
   console.log('Maproom extension activated (background initialization starting...)')
   outputChannel.appendLine('Extension activated, starting services in background...')
+}
 
-  // Step 6: Start background initialization with progress UI
-  // This doesn't block activation - runs asynchronously
-  void initializeServices(context, workspaceFolder.uri.fsPath)
+/**
+ * First-time setup flow
+ *
+ * Runs the setup wizard to select embedding provider, then proceeds with
+ * normal service initialization. If user cancels setup, initialization is skipped.
+ *
+ * @param context - Extension context
+ * @param workspaceRoot - Workspace root path
+ */
+async function runFirstTimeSetup(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string
+): Promise<void> {
+  try {
+    // Run setup wizard
+    const provider = await runSetupWizard(context)
+
+    if (!provider) {
+      // User cancelled setup
+      outputChannel?.appendLine('Setup cancelled by user')
+      vscode.window.showInformationMessage(
+        'Maproom setup cancelled. Run "Maproom: Setup" to configure later.'
+      )
+      statusBar?.setState('idle')
+      return
+    }
+
+    // Setup complete - show success message
+    outputChannel?.appendLine(`Setup complete: ${provider} selected`)
+    vscode.window.showInformationMessage(
+      `Maproom configured to use ${provider.toUpperCase()} for embeddings`
+    )
+
+    // Proceed with normal initialization
+    await initializeServices(context, workspaceRoot)
+  } catch (error: any) {
+    const errorMessage = `Setup failed: ${error.message}`
+    outputChannel?.appendLine(`ERROR: ${errorMessage}`)
+    console.error(errorMessage, error)
+
+    // Show error notification
+    vscode.window.showErrorMessage(errorMessage)
+
+    // Set status bar to error state
+    statusBar?.setState('error', error.message)
+  }
 }
 
 /**

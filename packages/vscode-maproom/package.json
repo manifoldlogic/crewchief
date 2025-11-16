@@ -20,6 +20,10 @@
       {
         "command": "maproom.showOutput",
         "title": "Maproom: Show Output"
+      },
+      {
+        "command": "maproom.setup",
+        "title": "Maproom: Setup"
       }
     ]
   },

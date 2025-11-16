@@ -1,9 +1,9 @@
 # Ticket: VSMAP-2001: Implement provider selection QuickPick UI
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,12 +26,12 @@ This implements Phase 2 (Setup Wizard) of the VSMAP plan. Users need a first-run
 Reference: VSMAP_PLAN.md Phase 2 "Setup Wizard - Provider Selection"
 
 ## Acceptance Criteria
-- [ ] QuickPick shown on first activation when no saved config exists
-- [ ] Three provider options displayed: Ollama (recommended if running), OpenAI, Google
-- [ ] Selection persisted to VSCode workspace settings
-- [ ] Ollama detection works via HTTP ping to localhost:11434
-- [ ] Setup wizard re-runnable via command palette command `Maproom: Setup`
-- [ ] QuickPick items include detail text with provider descriptions
+- [x] QuickPick shown on first activation when no saved config exists
+- [x] Three provider options displayed: Ollama (recommended if running), OpenAI, Google
+- [x] Selection persisted to VSCode workspace settings
+- [x] Ollama detection works via HTTP ping to localhost:11434
+- [x] Setup wizard re-runnable via command palette command `Maproom: Setup`
+- [x] QuickPick items include detail text with provider descriptions
 
 ## Technical Requirements
 - Use `vscode.window.showQuickPick()` API for provider selection
