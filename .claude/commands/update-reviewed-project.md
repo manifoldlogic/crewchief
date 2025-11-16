@@ -19,11 +19,12 @@ Read the project review and systematically update planning documents to address 
 
 Address issues in this order:
 1. **Critical Issues (Blockers)** - Must fix immediately
-2. **High-Risk Areas** - Should address to reduce project risk
-3. **Gaps & Ambiguities** - Fill in missing information
-4. **Scope & Feasibility** - Adjust scope for success
-5. **Alignment Issues** - Improve MVP discipline and pragmatism
-6. **Documentation Gaps** - Enhance clarity and completeness
+2. **Boundary Violations** - Fix improper integrations
+3. **High-Risk Areas** - Should address to reduce project risk
+4. **Gaps & Ambiguities** - Fill in missing information
+5. **Scope & Feasibility** - Adjust scope for success
+6. **Alignment Issues** - Improve MVP discipline and pragmatism
+7. **Documentation Gaps** - Enhance clarity and completeness
 
 ## Preparation
 
@@ -72,7 +73,39 @@ For each critical issue from the review:
    - Note why the change addresses the issue
    - Track which documents were modified
 
-### Phase 2: Risk Mitigation Implementation
+### Phase 2: Boundary Violation Fixes
+
+For each boundary violation from the review:
+
+1. **Identify improper integration:**
+   - Note where direct function calls are used
+   - Find tight coupling between components
+   - Locate internal API usage
+
+2. **Determine proper integration method:**
+   - CLI for high-level orchestration
+   - Public APIs for service communication
+   - Library imports only for utilities
+   - Binary execution for standalone operations
+
+3. **Update architecture.md:**
+   - Specify correct integration approach
+   - Define public interfaces clearly
+   - Document component boundaries
+   - Add integration diagrams if helpful
+
+4. **Update plan.md:**
+   - Revise implementation approach
+   - Specify integration method for each touchpoint
+   - Update agent instructions for proper boundaries
+   - Add verification that boundaries are maintained
+
+5. **Document rationale:**
+   - Explain why this integration method was chosen
+   - Note benefits of proper separation
+   - Identify what problems this prevents
+
+### Phase 3: Risk Mitigation Implementation
 
 For each high-risk area:
 
@@ -91,7 +124,26 @@ For each high-risk area:
    - Define failure handling
    - Specify monitoring points
 
-### Phase 3: Gap Filling
+### Phase 3: Risk Mitigation Implementation
+
+For each high-risk area:
+
+1. **Apply mitigation strategies:**
+   - Implement suggested mitigations from review
+   - Add risk management sections where missing
+   - Define fallback approaches for dependencies
+
+2. **Strengthen weak areas:**
+   - Add specificity to vague requirements
+   - Define concrete acceptance criteria
+   - Clarify technical specifications
+
+3. **Add contingency planning:**
+   - Document rollback procedures
+   - Define failure handling
+   - Specify monitoring points
+
+### Phase 4: Gap Filling
 
 For each identified gap:
 
@@ -110,7 +162,7 @@ For each identified gap:
    - Clarify agent handoffs
    - Add verification procedures
 
-### Phase 4: Scope Optimization
+### Phase 5: Scope Optimization
 
 Based on scope concerns:
 
@@ -129,7 +181,7 @@ Based on scope concerns:
    - Remove ceremonial processes
    - Focus on shipping working software
 
-### Phase 5: Alignment Improvements
+### Phase 6: Alignment Improvements
 
 Address alignment issues:
 
@@ -173,11 +225,22 @@ AFTER: "The system must process 1000 records/second with <100ms latency per reco
 - Define clear interfaces and contracts
 - Specify error handling approaches
 - Include performance requirements
+- **Define component boundaries explicitly**
+- **Specify public APIs vs internal implementations**
+- **Document integration methods for each touchpoint**
 
 **Example transformation:**
 ```markdown
 BEFORE: "Use appropriate caching strategy"
 AFTER: "Use Redis for session cache (5min TTL) and PostgreSQL materialized views for report cache (1hr refresh)"
+
+BEFORE: "Integrate with CLI tool for processing"
+AFTER: "Execute CLI tool via subprocess with JSON output format. 
+DO NOT import CLI internals. Use: `cli-tool process --format=json`"
+
+BEFORE: "Share data with reporting service"
+AFTER: "Call reporting service REST API at POST /api/v1/reports. 
+Never access reporting database directly."
 ```
 
 ### For plan.md
@@ -250,6 +313,17 @@ Create `review-updates.md` with this structure:
 **Result:** Issue resolved - {how it's now fixed}
 
 ### Issue 2: {Continue for all critical issues}
+
+## Boundary Violations Fixed
+
+### Violation 1: {Component boundary violation}
+**Original Problem:** Direct function calls to {component}
+**Changes Made:**
+- architecture.md: Changed to use {CLI/API/library} instead
+- plan.md: Updated integration approach
+**Result:** Proper separation maintained via {method}
+
+### Violation 2: {Continue for all violations}
 
 ## High-Risk Mitigations Implemented
 
@@ -369,14 +443,45 @@ Create `review-updates.md` with this structure:
 - Implied requirements → Stated specifications
 - Hidden dependencies → Clear prerequisites
 
+### Tight Coupling → Proper Boundaries
+- "Import and use parser function" → "Execute CLI with structured output"
+- "Direct database access" → "REST API calls"
+- "Shared memory/state" → "Message passing"
+- "Internal function calls" → "Public API usage"
+
+## Boundary Anti-Patterns to Fix
+
+**AVOID these patterns when updating:**
+- ❌ Importing internal modules from other tools
+- ❌ Direct database access across service boundaries
+- ❌ Sharing configuration objects between tools
+- ❌ Bypassing authentication by using internals
+- ❌ Creating circular dependencies
+- ❌ Exposing implementation details in interfaces
+- ❌ Using private APIs that may change
+- ❌ Tight coupling via shared state
+
+**REPLACE with these patterns:**
+- ✅ Use CLI interfaces for tool orchestration
+- ✅ Call REST APIs for service communication
+- ✅ Use environment variables for configuration
+- ✅ Authenticate properly through public APIs
+- ✅ Create unidirectional dependencies
+- ✅ Hide implementation behind interfaces
+- ✅ Use documented, stable public APIs
+- ✅ Achieve loose coupling via message passing
+
 ## Success Criteria
 
 Updates are complete when:
 - ✓ All critical issues have been addressed
+- ✓ All boundary violations have been fixed
 - ✓ All high-risk areas have mitigations
 - ✓ All identified gaps are filled
 - ✓ Scope is appropriate for MVP
 - ✓ Documents are consistent and complete
+- ✓ Integration methods are properly specified
+- ✓ Component boundaries are clearly defined
 - ✓ Review-updates.md documents all changes
 - ✓ Project is ready for ticket creation (or execution if tickets exist)
 
@@ -390,6 +495,10 @@ After completing updates, provide concise summary:
 ✅ CRITICAL ISSUES RESOLVED: {X}/{X}
 • {Most significant fix}
 • {Second major fix}
+
+🔧 BOUNDARY VIOLATIONS FIXED: {X}/{X}
+• {Changed from direct calls to CLI interface}
+• {Switched from internals to public API}
 
 ⚠️ RISKS MITIGATED: {X}/{X}  
 • {Key mitigation implemented}
