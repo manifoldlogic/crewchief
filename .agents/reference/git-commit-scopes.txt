@@ -27,6 +27,7 @@ research
 search
 search-opt
 security
+test
 tests
 tools
 ui

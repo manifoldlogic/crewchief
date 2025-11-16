@@ -1,0 +1,20 @@
+# Source files
+src/**
+tsconfig.json
+
+# Development files
+.gitignore
+.git
+.vscode/**
+.vscode-test/**
+
+# Build artifacts
+**/*.map
+*.vsix
+
+# Dependencies
+node_modules/
+
+# Documentation (uncomment if you want to exclude)
+# README.md
+# CHANGELOG.md
