@@ -95,10 +95,12 @@ This plan outlines the phased development of the Maproom VSCode extension, focus
 - Development launch configuration
 
 **Acceptance Criteria:**
-- [ ] Extension activates in Extension Development Host
-- [ ] Activation time <500ms
-- [ ] Logging to Output channel works
-- [ ] Clean deactivation with no errors
+- [ ] Extension activates in Extension Development Host (F5 debug works)
+- [ ] Activation time <500ms (measured with `console.time('activation')` in activate function)
+- [ ] Logging to Output channel works (verify "Maproom" channel exists, shows "Extension activated")
+- [ ] Clean deactivation with no errors (deactivate() called, all dispose() methods called, no leaked resources)
+- [ ] TypeScript compiles with zero errors (`npm run compile` exits 0)
+- [ ] Extension can be packaged (`vsce package` succeeds, produces .vsix file)
 
 **Testing:** Unit tests for activation lifecycle
 
@@ -138,10 +140,12 @@ This plan outlines the phased development of the Maproom VSCode extension, focus
 - `packages/vscode-maproom/src/docker/types.ts`
 
 **Acceptance Criteria:**
-- [ ] Services start successfully on localhost
-- [ ] Health checks detect when services are ready
-- [ ] Graceful errors when Docker unavailable
-- [ ] Unused services removed on provider switch
+- [ ] Services start successfully on localhost (postgres reachable at localhost:5433 within 30s)
+- [ ] Health checks detect when services are ready (pg_isready returns 0, status === 'healthy')
+- [ ] Graceful errors when Docker unavailable (show error: "Docker not installed" or "Docker daemon not running")
+- [ ] Unused services removed on provider switch (switching Ollama→OpenAI stops ollama container, verified with `docker ps`)
+- [ ] Total startup time <120s for all services (measured from `docker compose up` to all healthy)
+- [ ] Services bind to 127.0.0.1 only (not 0.0.0.0, verify with `docker port maproom-postgres 5432`)
 
 **Testing:**
 - Integration tests with real Docker
@@ -185,11 +189,13 @@ This plan outlines the phased development of the Maproom VSCode extension, focus
 - Platform-specific binary checksums
 
 **Acceptance Criteria:**
-- [ ] Correct binary selected for each platform
-- [ ] Binary checksum validated before spawn
-- [ ] Progress reported during scan
-- [ ] Cancellation works within 5 seconds
-- [ ] No shell injection vulnerabilities
+- [ ] Correct binary selected for each platform (darwin-arm64 on M1 Mac, linux-amd64 on Ubuntu x64, etc.)
+- [ ] Binary checksum validated before spawn (SHA-256 hash matches expected value from package.json)
+- [ ] Progress reported during scan (stdout parser emits 'progress' events, percent value 0-100)
+- [ ] Cancellation works within 5 seconds (SIGTERM sent, process exits, then SIGKILL after 5s if needed)
+- [ ] No shell injection vulnerabilities (use `spawn()` not `exec()`, no shell: true, args validated)
+- [ ] Binary spawn overhead <100ms (measured from spawn() call to first stdout line)
+- [ ] Exit code 0 = success, non-zero = error with specific meaning (2=database, 3=args, 10=provider, etc.)
 
 **Testing:**
 - Unit tests for platform detection
@@ -294,10 +300,12 @@ This plan outlines the phased development of the Maproom VSCode extension, focus
 - `packages/vscode-maproom/src/utils/git.ts`
 
 **Acceptance Criteria:**
-- [ ] Scan completes for test repository
-- [ ] Progress notification shows percentage
-- [ ] Cancellation stops binary cleanly
-- [ ] Status bar reflects completion
+- [ ] Scan completes for test repository (100 TypeScript files in <5 minutes)
+- [ ] Progress notification shows percentage (updates at least every 10%, shows "Indexing... 45%")
+- [ ] Cancellation stops binary cleanly (click Cancel → binary killed within 5s → notification dismissed)
+- [ ] Status bar reflects completion (shows "✓ Indexed (just now)" immediately after scan completes)
+- [ ] Git metadata extracted correctly (repo name from remote URL, branch from .git/HEAD, commit SHA from HEAD)
+- [ ] Scan respects .gitignore (files in .gitignore not passed to binary)
 
 **Testing:**
 - Integration tests with test repositories
@@ -339,10 +347,12 @@ This plan outlines the phased development of the Maproom VSCode extension, focus
 - `packages/vscode-maproom/src/indexing/debouncer.ts`
 
 **Acceptance Criteria:**
-- [ ] File save triggers update after 3s
-- [ ] Multiple rapid saves batched correctly
-- [ ] .git directory changes ignored
-- [ ] Watcher survives errors
+- [ ] File save triggers update after 3s (tolerance ±100ms, measured with timestamps in logs)
+- [ ] Multiple rapid saves batched correctly (save 10 files in 2s → results in 1 upsert call with all 10 files)
+- [ ] .git directory changes ignored (modify .git/index file → no upsert triggered)
+- [ ] Watcher survives errors (binary fails during upsert → error shown, but watcher continues for next change)
+- [ ] MAX_WAIT prevents indefinite delay (save 100 files continuously → forces flush after 10s max)
+- [ ] Binary files skipped (save .png file → not included in upsert, no error)
 
 **Testing:**
 - Unit tests for debouncing algorithm
@@ -383,10 +393,12 @@ This plan outlines the phased development of the Maproom VSCode extension, focus
 - `packages/vscode-maproom/src/indexing/branchWatcher.ts`
 
 **Acceptance Criteria:**
-- [ ] Branch switch detected within 1 second
-- [ ] Incremental scan triggered automatically
-- [ ] Detached HEAD handled gracefully
-- [ ] Concurrent switches queued properly
+- [ ] Branch switch detected within 1 second (measured: `git checkout` timestamp to watcher callback)
+- [ ] Incremental scan triggered automatically (scan spawned with `--worktree=<new-branch>` parameter)
+- [ ] Detached HEAD handled gracefully (parse SHA, truncate to 7 chars, show in status bar)
+- [ ] Concurrent switches queued properly (checkout A → checkout B rapidly → only B scan runs, A cancelled)
+- [ ] Corrupted .git/HEAD handled (invalid content → error notification, watching disabled, manual scan offered)
+- [ ] Rebase operations debounced (HEAD changes 10 times during rebase → only 1 scan after 500ms stable)
 
 **Testing:**
 - Unit tests for HEAD parsing
@@ -999,19 +1011,148 @@ code --install-extension maproom-0.1.0.vsix
 
 ## Timeline Summary
 
-| Phase | Duration | Deliverables |
-|-------|----------|-------------|
-| **Phase 0: Agent Creation** | 1-2 days | 3 specialized agents |
-| **Phase 1: Foundation** | 5-7 days | Extension scaffold, Docker, binary spawning, status bar |
-| **Phase 2: Indexing** | 6-7 days | File/branch watching, auto-start, automatic indexing |
-| **Phase 3: Configuration** | 5-7 days | Config schema, SecretStorage, setup wizard |
-| **Phase 4: Testing & Polish** | 7-10 days | Tests, docs, security, polish |
-| **Release Preparation** | 1-2 days | Packaging, testing, distribution |
-| **TOTAL** | **25-35 days** | **Functional MVP extension** |
+| Phase | Original Est. | Realistic Est. (50% buffer) | Deliverables |
+|-------|--------------|----------------------------|-------------|
+| **Phase 0: Agent Creation** | 1-2 days | 2-3 days | 3 specialized agents, tested and ready |
+| **Phase 1: Foundation** | 5-7 days | 7-10 days | Extension scaffold, Docker, binary spawning, status bar |
+| **Phase 2: Indexing** | 6-7 days | 9-11 days | File/branch watching, auto-start, automatic indexing |
+| **Phase 3: Configuration** | 5-7 days | 8-11 days | Config schema, SecretStorage, setup wizard |
+| **Phase 4: Testing & Polish** | 7-10 days | 10-15 days | Tests, docs, security, polish |
+| **Release Preparation** | 1-2 days | 1-2 days | Packaging, testing, distribution |
+| **TOTAL** | **25-35 days** | **37-52 days** | **Functional MVP extension** |
 
-**Calendar Estimate:** 5-7 weeks (accounting for delays, reviews, iterations)
+**Calendar Estimate:** 7.5-10.5 weeks (with 50% buffer for learning curve, coordination, edge cases)
+
+**MVP-Minus Option:** If we defer Google Vertex AI, Windows support, and advanced error handling:
+- Timeline: 28-40 days (5.5-8 weeks)
+- Scope: Ollama + OpenAI only, macOS + Linux only, basic error handling
 
 ---
+
+## Project Management
+
+### Bi-Weekly Checkpoint Criteria
+
+**Week 2 Checkpoint (End of Phase 1):**
+- [ ] Extension activates in <500ms (measured with `console.time()`)
+- [ ] Docker postgres service reaches "healthy" status within 30s
+- [ ] Rust binary spawns successfully and exits with code 0
+- [ ] Status bar displays all 4 states (NOT_CONFIGURED, INDEXING, HEALTHY, ERROR)
+- [ ] All Phase 1 unit tests pass (>80% coverage for Phase 1 code)
+- [ ] No TypeScript compilation errors
+- [ ] Docker cleanup works (no orphaned containers after deactivation)
+
+**Week 4 Checkpoint (End of Phase 2):**
+- [ ] File save triggers upsert exactly 3s after last change (tolerance: ±100ms)
+- [ ] Batch of 10 file saves results in single upsert call (check logs)
+- [ ] Branch switch detected within 1s of `git checkout` (measured)
+- [ ] Branch switch triggers scan with correct `--worktree` parameter (verify CLI args)
+- [ ] Index update completes for 100-file test repo in <5 minutes
+- [ ] All Phase 1+2 tests pass (>70% cumulative coverage)
+- [ ] Manual test: Save file → wait 3s → see "Indexing" → see "Indexed (just now)"
+
+**Week 6 Checkpoint (End of Phase 3):**
+- [ ] Setup wizard completes for Ollama in <30s (no credentials)
+- [ ] Setup wizard validates OpenAI key (test with invalid key → error shown)
+- [ ] API keys stored in SecretStorage (verify with `secrets.get()` test)
+- [ ] API keys never appear in VSCode Output panel (grep logs for "sk-")
+- [ ] Provider switch from Ollama → OpenAI stops ollama container (verify with `docker ps`)
+- [ ] All Phase 1+2+3 tests pass (>70% cumulative coverage)
+- [ ] Manual test: Run wizard → configure provider → see services start → scan prompted
+
+**Week 8 Checkpoint (End of Phase 4):**
+- [ ] All tests pass (unit: >60%, integration: >70%, E2E: 100% of critical paths)
+- [ ] Test execution time <5 minutes for full suite
+- [ ] Installation docs tested on 3 platforms (macOS, Linux, Windows/devcontainer)
+- [ ] Security audit checklist 100% complete (all high-priority gaps addressed)
+- [ ] Performance benchmarks met (activation <500ms, memory <50MB, scan >100 files/min)
+- [ ] Manual testing checklist 100% complete (all scenarios pass)
+- [ ] Zero credentials found in logs across all test runs
+
+**Failed Checkpoint Protocol:**
+1. Document what failed and why
+2. Estimate time to fix (if >2 days, escalate)
+3. Decide: Fix now, defer to later phase, or descope
+4. Update timeline if necessary
+5. Add regression test to prevent recurrence
+
+### Agent Handoff Protocol
+
+**When handing off code between agents:**
+
+1. **Outgoing Agent Responsibilities:**
+   - [ ] All code compiles without errors
+   - [ ] All existing tests still pass
+   - [ ] New tests added for new functionality (if applicable)
+   - [ ] Code documented with JSDoc comments
+   - [ ] Create handoff document listing:
+     - Files created/modified
+     - Key design decisions
+     - Open questions/TODOs
+     - Integration points for next agent
+     - Known issues/limitations
+
+2. **Incoming Agent Responsibilities:**
+   - [ ] Read handoff document
+   - [ ] Review code changes (ask questions if unclear)
+   - [ ] Run existing tests to verify starting state
+   - [ ] Understand integration points
+   - [ ] Acknowledge receipt of handoff
+
+3. **Handoff Document Template:**
+   ```markdown
+   # Handoff: [Previous Milestone] → [Next Milestone]
+
+   ## Files Modified
+   - src/docker/manager.ts (created, implements DockerManager)
+   - src/docker/health.ts (created, health check logic)
+
+   ## Key Decisions
+   - Used phased startup (postgres → provider → mcp) to handle dependencies
+   - Health checks poll every 2s with 120s total timeout
+
+   ## Integration Points
+   - DockerManager.ensureServicesRunning() should be called in extension activate()
+   - Emits 'servicesReady' event when healthy
+
+   ## Open Questions
+   - Should we support remote Docker daemons? (deferred to post-MVP)
+
+   ## Known Issues
+   - Windows: Docker Desktop must be started manually (no auto-start)
+
+   ## Next Agent
+   - Need binary spawner that uses env vars from DockerManager
+   ```
+
+4. **Human Review Points:**
+   - After each phase completion (review architecture alignment)
+   - Before security-critical code (credential handling, binary spawning)
+   - Before E2E test implementation (validate test scenarios)
+   - Before release (final code review)
+
+### Dependency Tracking
+
+**Critical Dependencies:**
+
+1. **Phase 1 → Phase 2:**
+   - DockerManager must be complete before IndexingManager
+   - BinarySpawner must be complete before FileWatcher
+   - StatusBar must exist before IndexingManager
+
+2. **Phase 2 → Phase 3:**
+   - IndexingManager must work before SetupWizard (wizard uses it)
+   - Git utilities must exist before configuration (repo name extraction)
+
+3. **Phase 3 → Phase 4:**
+   - All features complete before E2E tests
+   - SecretStorage complete before security audit
+
+**Parallel Work Opportunities:**
+- Phase 1: StatusBar can be built in parallel with DockerManager
+- Phase 2: FileWatcher and BranchWatcher can be built in parallel
+- Phase 3: ConfigSchema and SecretsManager can be built in parallel
+- Phase 4: Unit tests can be written as code is completed (not all at end)
 
 ## Risk Management
 

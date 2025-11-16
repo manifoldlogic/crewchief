@@ -522,22 +522,40 @@ code --install-extension maproom-0.1.0.vsix
 
 ## MVP-Appropriate Mitigations
 
-**What We WILL Implement:**
-1. ✅ Credential storage via SecretStorage API
-2. ✅ Path validation for all file operations
-3. ✅ Binary integrity checksums
-4. ✅ HTTPS for cloud APIs
-5. ✅ No shell execution (spawn only)
-6. ✅ Localhost-only Docker binding
-7. ✅ Minimal dependencies
-8. ✅ .gitignore pattern respect
+**What We WILL Implement (MVP Focus):**
 
-**What We WON'T Implement (Acceptable Risk):**
-1. ❌ Audit logging (low value for MVP)
-2. ❌ Advanced rate limiting (handled by providers)
-3. ❌ Custom TLS certificate pinning (Node.js defaults sufficient)
-4. ❌ Sandboxing (VSCode provides isolation)
-5. ❌ Code signing for VSIX (marketplace will provide)
+**Top 3 Security Gaps (Must Address):**
+1. ✅ **GAP-1: Credential Logging Prevention**
+   - Automated test: Scan all logs for API key patterns
+   - Never log credentials in any code path
+   - Redact sensitive values in error messages
+
+2. ✅ **GAP-2: Path Traversal Prevention**
+   - Validate all file paths are within workspace
+   - Use `path.resolve()` and `fs.realpathSync()`
+   - Test with malicious inputs (../../etc/passwd)
+
+3. ✅ **GAP-3: Binary Integrity Verification**
+   - **Simplified for MVP:** Verify checksum at install time only (not every spawn)
+   - Store checksums in package.json
+   - Fail extension activation if checksum mismatch
+
+**Additional MVP Mitigations:**
+4. ✅ Credential storage via SecretStorage API
+5. ✅ HTTPS for cloud APIs (OpenAI, Google)
+6. ✅ No shell execution (spawn only, never exec)
+7. ✅ Localhost-only Docker binding (127.0.0.1)
+8. ✅ .gitignore pattern respect
+9. ✅ Environment variable fallback (for credentials)
+
+**What We WON'T Implement (Defer to Post-MVP):**
+1. ❌ Audit logging (GAP-7) - low value for MVP, add later
+2. ❌ Per-spawn binary verification - install-time only for MVP
+3. ❌ Advanced rate limiting (handled by providers)
+4. ❌ Custom TLS certificate pinning (Node.js defaults sufficient)
+5. ❌ Sandboxing (VSCode provides isolation)
+6. ❌ Code signing for VSIX (marketplace will provide)
+7. ❌ Sensitive file warnings (GAP-6) - defer to post-MVP
 
 ## Security Testing
 

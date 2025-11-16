@@ -91,28 +91,84 @@ This document identifies specialized agents that would accelerate development of
 - VSCode Extension API expertise
 - Activation event optimization
 - Extension packaging (VSIX)
-- Marketplace publishing
+- Marketplace publishing (post-MVP)
 - Extension best practices
 
 **Specific Capabilities:**
-- Optimize extension activation time
+- Optimize extension activation time (<500ms)
 - Implement StatusBarItem patterns
 - Create QuickPick wizards
 - Handle extension lifecycle events
 - Debug extension host issues
 
 **Why Needed:**
-- VSCode Extension API is complex
+- VSCode Extension API is complex (unfamiliar domain)
 - Activation performance critical
 - Packaging has gotchas
 - Marketplace has specific requirements
 
-**Knowledge Requirements:**
-- `vscode.ExtensionContext` patterns
-- `package.json` contribution points
-- Extension activation events
-- WebView API (for future features)
-- Extension testing (`@vscode/test-electron`)
+**Enhanced Knowledge Requirements:**
+- `vscode.ExtensionContext` patterns and lifecycle
+- `package.json` contribution points (commands, configuration, activation events)
+- Extension activation events (onStartupFinished, workspaceContains)
+- Extension testing (`@vscode/test-electron`, E2E patterns)
+- StatusBarItem API (text, tooltip, command, color, priority)
+- QuickPick API (multi-step wizards, validation, progress)
+- SecretStorage API (encrypted credential storage)
+- FileSystemWatcher API (efficient file watching)
+- **NOT WebView API** (out of scope for MVP, no search UI in extension)
+
+**Testing Protocol for Agent:**
+1. Create agent definition with above knowledge
+2. Test with simple task: "Create extension that shows 'Hello World' in status bar"
+3. Verify agent can:
+   - Generate correct package.json
+   - Implement activate/deactivate
+   - Create StatusBarItem
+   - Package with vsce
+4. If successful → ready for VSMAP project
+5. If fails → enhance training data, retry
+
+**State Machine Examples for Training:**
+```typescript
+// Extension lifecycle state machine
+enum ExtensionState {
+  NOT_ACTIVATED,
+  ACTIVATING,
+  ACTIVE,
+  DEACTIVATING,
+  DEACTIVATED,
+  ERROR
+}
+
+// Transitions:
+// NOT_ACTIVATED → ACTIVATING (VSCode calls activate())
+// ACTIVATING → ACTIVE (activate() completes successfully)
+// ACTIVATING → ERROR (activate() throws error)
+// ACTIVE → DEACTIVATING (VSCode calls deactivate())
+// DEACTIVATING → DEACTIVATED (cleanup complete)
+```
+
+**Error Taxonomy Examples for Training:**
+```typescript
+// Extension activation errors
+class ActivationError extends Error {
+  constructor(
+    message: string,
+    public readonly cause: Error,
+    public readonly recoverable: boolean
+  ) {
+    super(message);
+  }
+}
+
+// Usage:
+throw new ActivationError(
+  'Failed to start Docker services',
+  dockerError,
+  true  // User can retry
+);
+```
 
 **Example Expertise:**
 ```typescript

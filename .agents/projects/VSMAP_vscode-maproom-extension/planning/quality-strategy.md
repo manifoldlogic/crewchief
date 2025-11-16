@@ -10,11 +10,18 @@
 - Mock sparingly, prefer real dependencies when fast
 
 **Confidence Over Coverage:**
-- 70% coverage target (not 100%)
-- Critical paths: 100% coverage
-- Trivial code: Skip tests
-- Complex logic: Comprehensive tests
-- Integration boundaries: Extensive tests
+- 60% coverage target for MVP (not 100%)
+- Critical paths: 100% coverage (activation, scanning, Docker startup)
+- Trivial code: Skip tests (getters/setters, simple formatting)
+- Complex logic: Comprehensive tests (debouncing, state machines, error handling)
+- Integration boundaries: Extensive tests (Docker, binary spawning, database health)
+
+**Coverage Targets by Component:**
+- Core logic (debouncer, branch watcher): 90-100%
+- Managers (Docker, Indexing, Config): 70-80%
+- UI components (status bar, wizard): 50-60%
+- Utilities: 60-70%
+- **Overall MVP target: 60% (reduced from 70% for pragmatic MVP)**
 
 **Ship Without Meaningful Risk:**
 - Block regressions in core workflows
@@ -111,12 +118,14 @@ git checkout → .git/HEAD changes → Watcher detects → Incremental scan → 
 **Test Coverage:** 100%
 
 **Tests:**
-1. Branch switch detected within 1s
-2. Incremental scan triggered
-3. Content-addressed deduplication works
-4. Detached HEAD handled
-5. .git/HEAD parse errors handled
-6. Concurrent branch switches queued
+1. Branch switch detected within 1s (measure time from `git checkout` to callback)
+2. Incremental scan triggered (verify `--worktree` parameter in spawned command)
+3. Content-addressed deduplication works (binary handles this, verify scan completes)
+4. Detached HEAD handled (40-char SHA parsed correctly, truncated to 7 chars for display)
+5. .git/HEAD parse errors handled (empty file, corrupted ref, missing file)
+6. Concurrent branch switches queued (rapid checkout A→B→C results in only C scan)
+7. Rebase operations debounced (10 HEAD changes during rebase → 1 scan after 500ms stable)
+8. Branch switch during active scan (existing scan cancelled, new scan starts)
 
 ### CP5: Docker Service Management
 
@@ -601,6 +610,8 @@ export async function waitForNotification(
 
 ### CI Configuration
 
+**MVP CI Strategy:** Linux-only for E2E tests (pragmatic for MVP)
+
 **File:** `.github/workflows/test-extension.yml`
 ```yaml
 name: Test VSCode Extension
@@ -611,7 +622,9 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # MVP: Test on Linux only (devcontainer environment)
+        # Post-MVP: Add macOS and Windows
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -627,9 +640,10 @@ jobs:
           pnpm install
 
       - name: Start Docker services
-        if: matrix.os != 'windows-latest'
         run: |
           docker compose -f packages/maproom-mcp/config/docker-compose.yml up -d postgres
+          # Wait for healthy
+          timeout 60 bash -c 'until docker exec maproom-postgres pg_isready -U maproom; do sleep 2; done'
 
       - name: Run unit tests
         run: |
@@ -641,8 +655,7 @@ jobs:
           cd packages/vscode-maproom
           pnpm test:integration
 
-      - name: Run E2E tests (Linux only)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Run E2E tests
         run: |
           cd packages/vscode-maproom
           xvfb-run -a pnpm test:e2e
@@ -653,7 +666,47 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: ./packages/vscode-maproom/coverage/coverage-final.json
+          flags: unittests
+          fail_ci_if_error: false  # Don't fail on coverage upload errors (MVP)
+
+      - name: Check coverage threshold
+        run: |
+          cd packages/vscode-maproom
+          # Fail if coverage below 60%
+          pnpm run coverage:check --lines 60 --functions 60 --branches 60
 ```
+
+**Devcontainer Testing:**
+
+Test in devcontainer environment (matches user environment):
+
+```json
+// .devcontainer/devcontainer.json (test configuration)
+{
+  "name": "Maproom Extension Test",
+  "image": "mcr.microsoft.com/vscode/devcontainers/typescript-node:18",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "pnpm install && pnpm build",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
+```
+
+**Manual Cross-Platform Testing:**
+
+Before release, manual testing checklist on:
+- [ ] macOS Intel (local machine)
+- [ ] macOS Apple Silicon (local machine or CI runner)
+- [ ] Linux x64 (devcontainer or CI)
+- [ ] Windows x64 (local machine or skip for MVP)
 
 ## Manual Testing Checklist
 
@@ -706,12 +759,38 @@ jobs:
 - [ ] Retry buttons work
 
 ### Platform-Specific
-- [ ] Works on macOS (Intel)
-- [ ] Works on macOS (Apple Silicon)
-- [ ] Works on Linux (x64)
-- [ ] Works on Windows (x64)
-- [ ] Works in devcontainer
-- [ ] Correct binary selected for each platform
+- [ ] Works on macOS (Apple Silicon) - primary development platform
+- [ ] Works on Linux (x64) in devcontainer - CI environment
+- [ ] Works on macOS (Intel) - manual test before release
+- [ ] Correct binary selected for each platform (test platform detection code)
+- [ ] Devcontainer DinD mode works (Docker-in-Docker)
+- [ ] Devcontainer DooD mode works (Docker-outside-of-Docker with socket mount)
+- [ ] Windows x64 - defer to post-MVP (document as experimental)
+
+**Edge Cases to Test:**
+
+1. **Detached HEAD State:**
+   - Test: `git checkout <commit-sha>` → verify status bar shows truncated SHA
+   - Test: Scan triggered with detached HEAD → verify `--worktree` uses SHA
+
+2. **Corrupted .git/HEAD:**
+   - Test: Write empty file to .git/HEAD → verify error notification
+   - Test: Write invalid content to .git/HEAD → verify retry logic
+   - Test: Delete .git/HEAD → verify error state, watching disabled
+
+3. **Concurrent Operations:**
+   - Test: Branch switch during active scan → verify cancel + restart
+   - Test: File save during branch switch scan → verify queued for next batch
+   - Test: Multiple rapid branch switches → verify only last one scanned
+
+4. **Resource Constraints:**
+   - Test: Scan repository with 10,000 files → verify doesn't crash
+   - Test: Save 1000 files rapidly → verify MAX_WAIT flush
+   - Test: Binary crashes mid-scan → verify error handling, retry offered
+
+5. **Network Filesystem (NFS/SMB):**
+   - Document as known limitation (file watcher may miss changes)
+   - Provide manual rescan command as workaround
 
 ## Performance Benchmarks
 

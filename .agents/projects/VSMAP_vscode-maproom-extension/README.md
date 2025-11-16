@@ -73,13 +73,32 @@ A VSCode extension that:
 
 ## Success Criteria
 
-1. ✅ Extension installs and activates in VSCode
-2. ✅ Setup wizard configures provider and credentials
-3. ✅ Docker services start automatically on workspace open
-4. ✅ Repository scans complete successfully
-5. ✅ File changes trigger index updates within 5 seconds
-6. ✅ Branch switches trigger incremental re-indexing
-7. ✅ Status bar reflects accurate index state
+**Functional:**
+1. ✅ Extension installs and activates in <500ms
+2. ✅ Setup wizard completes in <2 minutes
+3. ✅ Docker services start automatically and reach healthy state
+4. ✅ Repository scans complete successfully (100 files in <5 min)
+5. ✅ File changes trigger index updates within 3-5 seconds
+6. ✅ Branch switches detected within 1 second, trigger re-indexing
+7. ✅ Status bar reflects accurate index state in real-time
 8. ✅ MCP searches return results from extension-managed index
 9. ✅ Works identically in local and devcontainer environments
-10. ✅ Development installation documented with clear steps
+10. ✅ Development installation documented with step-by-step guide
+
+**Technical:**
+- Test coverage: >60%
+- Memory usage: <50MB idle
+- Zero security vulnerabilities (credential leaks, path traversal)
+- Supports: macOS (Intel + ARM64), Linux (x64 + ARM64)
+
+## Timeline
+
+**Estimated Duration:** 37-52 days (7.5-10.5 weeks)
+
+This includes 50% buffer for:
+- VSCode Extension API learning curve
+- Cross-platform testing
+- Edge case discovery
+- Agent coordination
+
+**MVP-Minus Option:** 28-40 days (defer Google Vertex AI, Windows support)
