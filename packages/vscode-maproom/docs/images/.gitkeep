@@ -1,0 +1,42 @@
+# Screenshot Placeholders
+
+This directory will contain screenshots for the README:
+
+## Required Screenshots
+
+1. **setup-wizard.png**
+   - QuickPick dialog showing provider selection
+   - Should show: Ollama (Recommended), OpenAI, Google Gemini
+   - Capture when Ollama is running to show "Recommended" badge
+
+2. **progress-notification.png**
+   - VSCode notification showing indexing progress
+   - Should show: "Indexing workspace..." with file count
+   - Capture during initial scan
+
+3. **status-bar.png**
+   - Maproom status bar item in different states
+   - Composite image showing:
+     - "Starting..." (gray)
+     - "Indexing: 1,234 files" (blue)
+     - "Watching: 5,678 files (Updated: 2m ago)" (green)
+     - "Error" (red)
+
+4. **error-notification.png** (optional)
+   - Error notification with action buttons
+   - Example: "Docker services failed to start" with "Show Output" button
+
+## How to Capture
+
+1. Install the extension in development mode
+2. Open a sample workspace
+3. Use VSCode's built-in screenshot capability or external tool
+4. Save as PNG files with exact names above
+5. Optimal size: 600-800px width, maintain aspect ratio
+
+## Notes
+
+- Screenshots should be taken on a clean, professional theme
+- Avoid revealing sensitive information (file paths, tokens, etc.)
+- Use light or dark theme consistently
+- Ensure text is readable at thumbnail size

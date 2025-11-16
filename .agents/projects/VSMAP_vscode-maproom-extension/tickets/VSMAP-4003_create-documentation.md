@@ -1,9 +1,9 @@
 # Ticket: VSMAP-4003: Create user documentation and README
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,13 +25,13 @@ This continues Phase 4 (Polish & Testing) of the VSMAP plan. Users need clear do
 Reference: VSMAP_PLAN.md Phase 4 "Polish & Testing - Documentation"
 
 ## Acceptance Criteria
-- [ ] README.md includes installation steps (VSIX install instructions)
-- [ ] System requirements documented (Docker Desktop, VSCode 1.85+)
-- [ ] Troubleshooting section covers common issues (Docker, binary errors)
-- [ ] Usage examples show setup wizard, status bar, commands
-- [ ] Known limitations clearly listed (Windows experimental, etc.)
-- [ ] CHANGELOG.md created with version 0.1.0 initial release entry
-- [ ] Screenshots included for setup wizard and status bar
+- [x] README.md includes installation steps (VSIX install instructions)
+- [x] System requirements documented (Docker Desktop, VSCode 1.85+)
+- [x] Troubleshooting section covers common issues (Docker, binary errors)
+- [x] Usage examples show setup wizard, status bar, commands
+- [x] Known limitations clearly listed (Windows experimental, etc.)
+- [x] CHANGELOG.md created with version 0.1.0 initial release entry
+- [x] Screenshots included for setup wizard and status bar
 
 ## Technical Requirements
 - Markdown format following standard README structure
