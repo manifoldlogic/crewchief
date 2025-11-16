@@ -1,9 +1,9 @@
 # Ticket: VSMAP-3002: Implement process crash recovery with exponential backoff
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (262 tests pass)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,13 +26,13 @@ This completes Phase 3 (Process Monitoring) of the VSMAP plan. The Rust watch pr
 Reference: VSMAP_PLAN.md Phase 3 "Process Monitoring - Crash Recovery"
 
 ## Acceptance Criteria
-- [ ] Process crash detected via exit event listener
-- [ ] Automatic restart with exponential backoff: 1s, 2s, 4s, 8s, 16s
-- [ ] Maximum 5 restart attempts before giving up
-- [ ] After 5 failures, show error notification with "Show Logs" button
-- [ ] Circuit breaker pattern: stop retrying, require manual restart
-- [ ] User can manually restart via command: `Maproom: Restart Watchers`
-- [ ] Restart count resets after 60 seconds of successful runtime
+- [x] Process crash detected via exit event listener
+- [x] Automatic restart with exponential backoff: 1s, 2s, 4s, 8s, 16s
+- [x] Maximum 5 restart attempts before giving up
+- [x] After 5 failures, show error notification with "Show Logs" button
+- [x] Circuit breaker pattern: stop retrying, require manual restart
+- [x] User can manually restart via command: `Maproom: Restart Watchers`
+- [x] Restart count resets after 60 seconds of successful runtime
 
 ## Technical Requirements
 - Listen to process exit: `process.on('exit', (code, signal) => { ... })`

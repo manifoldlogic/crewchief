@@ -13,6 +13,16 @@ import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
 
+// Mock vscode module
+vi.mock('vscode', () => ({
+  window: {
+    showErrorMessage: vi.fn(),
+  },
+  commands: {
+    executeCommand: vi.fn(),
+  },
+}))
+
 // Mock fs/promises module
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),

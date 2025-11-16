@@ -24,6 +24,11 @@
       {
         "command": "maproom.setup",
         "title": "Maproom: Setup"
+      },
+      {
+        "command": "maproom.restartWatchers",
+        "title": "Maproom: Restart Watchers",
+        "category": "Maproom"
       }
     ]
   },

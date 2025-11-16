@@ -103,6 +103,20 @@ export function activate(context: vscode.ExtensionContext): void {
   })
   context.subscriptions.push(showOutputCommand)
 
+  // Register restart watchers command
+  const restartWatchersCommand = vscode.commands.registerCommand('maproom.restartWatchers', async () => {
+    if (orchestrator) {
+      try {
+        await orchestrator.restartWatchers()
+      } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to restart watchers: ${error.message}`)
+      }
+    } else {
+      vscode.window.showWarningMessage('Maproom watchers are not running')
+    }
+  })
+  context.subscriptions.push(restartWatchersCommand)
+
   // Register setup wizard command
   registerSetupCommand(context)
   outputChannel.appendLine('Commands registered')

@@ -16,11 +16,13 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import type { OutputChannel } from 'vscode'
+import * as vscode from 'vscode'
 import path from 'node:path'
 import { access, constants } from 'node:fs/promises'
 import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform.js'
 import { StdoutParser } from './parser.js'
 import type { WatchEvent } from './events.js'
+import { CrashRecovery } from './recovery.js'
 
 import type { SecretsManager } from '../config/secrets.js'
 import type { EmbeddingProvider } from '../ui/setupWizard.js'
@@ -104,6 +106,7 @@ export class ProcessOrchestrator extends EventEmitter {
   private readonly config: OrchestratorConfig
   private readonly binaryPath: string
   private readonly processes: Map<string, ManagedProcess> = new Map()
+  private readonly recoveryManagers: Map<string, CrashRecovery> = new Map()
   private isShuttingDown = false
 
   /**
@@ -171,6 +174,7 @@ export class ProcessOrchestrator extends EventEmitter {
    * Stop all watching processes gracefully
    *
    * Implements graceful shutdown with SIGTERM → wait 5s → SIGKILL cascade.
+   * Also disposes all recovery managers to clean up timers.
    */
   async stopWatching(): Promise<void> {
     if (this.isShuttingDown) {
@@ -190,6 +194,14 @@ export class ProcessOrchestrator extends EventEmitter {
     await Promise.all(stopPromises)
 
     this.processes.clear()
+
+    // Dispose recovery managers to clean up timers
+    for (const [name, recovery] of this.recoveryManagers) {
+      recovery.dispose()
+      this.log(`Disposed recovery manager for ${name}`)
+    }
+    this.recoveryManagers.clear()
+
     this.isShuttingDown = false
     this.log('All watch processes stopped')
   }
@@ -385,6 +397,9 @@ export class ProcessOrchestrator extends EventEmitter {
               `Process ${name} exited unexpectedly with code ${code ?? 'unknown'}` +
                 (signal ? ` (signal: ${signal})` : '')
             )
+
+            // Attempt crash recovery
+            void this.handleProcessCrash(name, code ?? -1, signal)
           } else {
             this.log(`Process ${name} exited normally`)
           }
@@ -522,6 +537,114 @@ export class ProcessOrchestrator extends EventEmitter {
       if (error.stack) {
         this.log(`  ${error.stack}`)
       }
+    }
+  }
+
+  /**
+   * Handle process crash with recovery logic
+   *
+   * Implements automatic restart with exponential backoff and circuit breaker.
+   * Shows error notification after max attempts exceeded.
+   *
+   * @param processName - Name of crashed process
+   * @param exitCode - Process exit code
+   * @param signal - Signal that caused exit (if any)
+   */
+  private async handleProcessCrash(
+    processName: string,
+    exitCode: number,
+    signal: string | null
+  ): Promise<void> {
+    // Get or create recovery manager for this process
+    let recovery = this.recoveryManagers.get(processName)
+    if (!recovery) {
+      recovery = new CrashRecovery({
+        maxAttempts: 5,
+        maxBackoffMs: 16000,
+        successResetMs: 60000,
+      })
+      this.recoveryManagers.set(processName, recovery)
+    }
+
+    // Attempt recovery
+    const restarted = await recovery.handleCrash(
+      processName,
+      exitCode,
+      signal,
+      async () => {
+        // Restart function - rebuild environment and restart process
+        const managed = this.processes.get(processName)
+        if (!managed) {
+          throw new Error(`Process ${processName} not found in managed processes`)
+        }
+
+        // Remove crashed process from map
+        this.processes.delete(processName)
+
+        // Rebuild environment (includes credentials)
+        const env = await this.buildEnvironment()
+
+        // Restart the process
+        await this.startProcess(processName, managed.args, env)
+
+        this.log(`Process ${processName} restarted successfully after crash`)
+      }
+    )
+
+    // Check if recovery is blocked (max attempts exceeded)
+    if (!restarted && recovery.isBlocked()) {
+      this.log(
+        `Process ${processName} recovery blocked after ${recovery.getAttemptCount()} attempts`
+      )
+
+      // Show error notification with actionable buttons
+      const selection = await vscode.window.showErrorMessage(
+        `Maproom watcher "${processName}" crashed after ${recovery.getAttemptCount()} restart attempts`,
+        'Show Logs',
+        'Restart Manually'
+      )
+
+      if (selection === 'Show Logs') {
+        this.outputChannel.show()
+      } else if (selection === 'Restart Manually') {
+        await this.restartWatchers()
+      }
+    }
+  }
+
+  /**
+   * Manually restart all watchers
+   *
+   * Stops all processes, resets recovery state, and starts fresh.
+   * Used when user manually triggers restart or recovery is blocked.
+   */
+  async restartWatchers(): Promise<void> {
+    this.log('Manual restart requested...')
+
+    try {
+      // Stop all processes
+      await this.stopWatching()
+
+      // Reset all recovery managers
+      for (const [name, recovery] of this.recoveryManagers) {
+        recovery.reset()
+        this.log(`Reset recovery state for ${name}`)
+      }
+
+      // Clear recovery managers
+      this.recoveryManagers.clear()
+
+      // Start watching again
+      await this.startWatching()
+
+      this.log('Manual restart completed successfully')
+
+      vscode.window.showInformationMessage('Maproom watchers restarted successfully')
+    } catch (error: any) {
+      const errorMessage = `Failed to restart watchers: ${error.message}`
+      this.logError(errorMessage, error)
+      vscode.window.showErrorMessage(errorMessage)
+      throw error
     }
   }
 
