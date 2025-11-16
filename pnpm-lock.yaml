@@ -119,6 +119,21 @@ importers:
         specifier: ^5.3.3
         version: 5.9.2
 
+  packages/vscode-maproom:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.10
+      '@types/vscode':
+        specifier: ^1.85.0
+        version: 1.106.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.2
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.10)(happy-dom@12.10.3)
+
 packages:
 
   '@anthropic-ai/claude-agent-sdk@0.1.30':
@@ -709,6 +724,9 @@ packages:
 
   '@types/through@0.0.33':
     resolution: {integrity: sha512-HsJ+z3QuETzP3cswwtzt2vEIiHBk/dCcHGhbmG5X3ecnwFD/lPrMpliGXxSCg03L9AhrdwA4Oz/qfspkDW+xGQ==}
+
+  '@types/vscode@1.106.0':
+    resolution: {integrity: sha512-88oUcEl9Wmlyt64pbvjLzyyFuFuPotdjwy+P+5ggg3DyTJSMWJD3ShX2ppya5mqrAYTKEhcaJBerdc5JTeb32w==}
 
   '@typescript-eslint/eslint-plugin@8.39.1':
     resolution: {integrity: sha512-yYegZ5n3Yr6eOcqgj2nJH8cH/ZZgF+l0YIdKILSDjYFRjgYQMgv/lRjV5Z7Up04b9VYUondt8EPMqg7kTWgJ2g==}
@@ -3147,6 +3165,8 @@ snapshots:
   '@types/through@0.0.33':
     dependencies:
       '@types/node': 20.19.10
+
+  '@types/vscode@1.106.0': {}
 
   '@typescript-eslint/eslint-plugin@8.39.1(@typescript-eslint/parser@8.39.1(eslint@8.57.1)(typescript@5.9.2))(eslint@8.57.1)(typescript@5.9.2)':
     dependencies:
