@@ -9,12 +9,15 @@
  * - QuickPick selection UI with provider options
  * - Ollama auto-detection via HTTP ping (localhost:11434)
  * - Provider selection saved to workspace state
+ * - Secure API credential collection for OpenAI/Google
+ * - Password-masked input for API keys
  * - Re-runnable via command palette
  * - Graceful error handling for network issues
  */
 
 import * as vscode from 'vscode'
 import * as http from 'http'
+import { SecretsManager } from '../config/secrets.js'
 
 /**
  * Supported embedding providers
@@ -41,10 +44,21 @@ const OLLAMA_DETECTION_TIMEOUT_MS = 2000
 const PROVIDER_STATE_KEY = 'maproom.provider'
 
 /**
+ * Provider documentation URLs for API key help
+ */
+const PROVIDER_DOCS = {
+  openai: 'https://platform.openai.com/api-keys',
+  google: 'https://cloud.google.com/vertex-ai/docs/authentication',
+} as const
+
+/**
  * Run the setup wizard to select embedding provider
  *
  * Shows a QuickPick with three provider options. If Ollama is detected
  * running on localhost:11434, it will be marked as "Recommended".
+ *
+ * For OpenAI/Google providers, prompts for API credentials with password-masked
+ * input and stores them securely in VSCode SecretStorage.
  *
  * The selected provider is saved to workspace state for future use.
  *
@@ -70,6 +84,16 @@ export async function runSetupWizard(
   // User cancelled
   if (!selected) {
     return undefined
+  }
+
+  // Collect API credentials if needed
+  if (selected.value !== 'ollama') {
+    const credentialCollected = await collectApiCredential(context, selected.value)
+
+    // User cancelled credential input
+    if (!credentialCollected) {
+      return undefined
+    }
   }
 
   // Save selection to workspace state
@@ -160,6 +184,81 @@ export async function detectOllama(): Promise<boolean> {
 
     req.end()
   })
+}
+
+/**
+ * Collect API credential for a provider
+ *
+ * Shows password-masked InputBox to collect API key from user.
+ * Provides helpful prompts with links to provider documentation.
+ *
+ * SECURITY: Input is password-masked and stored in encrypted SecretStorage.
+ *
+ * @param context - Extension context for secret storage
+ * @param provider - Provider requiring credentials (openai or google)
+ * @returns true if credential collected, false if user cancelled
+ */
+async function collectApiCredential(
+  context: vscode.ExtensionContext,
+  provider: 'openai' | 'google'
+): Promise<boolean> {
+  const secretsManager = new SecretsManager(context.secrets)
+
+  // Check if credential already exists
+  const hasExisting = await secretsManager.hasApiKey(provider)
+
+  // Build prompt based on provider
+  let prompt: string
+  let placeholder: string
+
+  if (provider === 'openai') {
+    prompt = hasExisting
+      ? 'OpenAI API Key (leave empty to keep existing)'
+      : `OpenAI API Key (get yours at ${PROVIDER_DOCS.openai})`
+    placeholder = 'sk-...'
+  } else {
+    // google
+    prompt = hasExisting
+      ? 'Google API Key (leave empty to keep existing)'
+      : `Google API Key (get yours at ${PROVIDER_DOCS.google})`
+    placeholder = 'Your Google API key'
+  }
+
+  // Show password-masked input box
+  const apiKey = await vscode.window.showInputBox({
+    prompt,
+    placeHolder: placeholder,
+    password: true, // Mask input for security
+    ignoreFocusOut: true,
+    validateInput: (value: string) => {
+      // Allow empty if credential already exists (keep existing)
+      if (hasExisting && value.trim() === '') {
+        return null
+      }
+
+      // Require non-empty input for new credentials
+      if (value.trim() === '') {
+        return 'API key cannot be empty'
+      }
+
+      return null
+    },
+  })
+
+  // User cancelled
+  if (apiKey === undefined) {
+    return false
+  }
+
+  // If empty and credential exists, keep existing (no-op)
+  if (apiKey.trim() === '' && hasExisting) {
+    return true
+  }
+
+  // Store new credential
+  await secretsManager.storeApiKey(provider, apiKey.trim())
+
+  return true
 }
 
 /**

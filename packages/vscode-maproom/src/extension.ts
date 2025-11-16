@@ -34,6 +34,7 @@ import {
   getConfiguredProvider,
   registerSetupCommand,
 } from './ui/setupWizard.js'
+import { SecretsManager } from './config/secrets.js'
 
 /**
  * Output channel for extension logging
@@ -222,10 +223,16 @@ async function initializeServices(
           database: 'maproom',
         }
 
+        // Get configured provider and create secrets manager
+        const provider = getConfiguredProvider(context)
+        const secretsManager = new SecretsManager(context.secrets)
+
         orchestrator = new ProcessOrchestrator(outputChannel!, {
           extensionRoot: context.extensionPath,
           workspaceRoot,
           postgres: postgresConfig,
+          secretsManager,
+          provider,
         })
 
         // Step 4: Start watch processes

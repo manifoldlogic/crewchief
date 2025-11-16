@@ -22,6 +22,9 @@ import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform
 import { StdoutParser } from './parser.js'
 import type { WatchEvent } from './events.js'
 
+import type { SecretsManager } from '../config/secrets.js'
+import type { EmbeddingProvider } from '../ui/setupWizard.js'
+
 /**
  * PostgreSQL connection configuration
  */
@@ -43,6 +46,10 @@ export interface OrchestratorConfig {
   workspaceRoot: string
   /** PostgreSQL connection configuration */
   postgres: PostgresConfig
+  /** Secrets manager for API credentials (optional) */
+  secretsManager?: SecretsManager
+  /** Embedding provider (optional) */
+  provider?: EmbeddingProvider
 }
 
 /**
@@ -142,8 +149,8 @@ export class ProcessOrchestrator extends EventEmitter {
       // Verify binary exists and is executable
       await this.verifyBinary()
 
-      // Prepare environment variables
-      const env = this.buildEnvironment()
+      // Prepare environment variables (includes credentials if configured)
+      const env = await this.buildEnvironment()
 
       // Start watch process (file change monitoring)
       await this.startProcess('watch', ['watch', '--throttle', '3s'], env)
@@ -261,14 +268,23 @@ export class ProcessOrchestrator extends EventEmitter {
   /**
    * Build environment variables for spawned processes
    *
-   * Includes PostgreSQL connection details and inherits parent environment.
+   * Includes:
+   * - PostgreSQL connection details
+   * - Embedding provider API credentials (if configured)
+   * - Parent process environment
    *
-   * @returns Environment object for child process
+   * SECURITY: API credentials are retrieved from encrypted SecretStorage
+   * and passed as environment variables to Rust binary. While env vars
+   * are visible in process listings, this is the standard mechanism for
+   * passing credentials to child processes.
+   *
+   * @returns Promise resolving to environment object for child process
    */
-  private buildEnvironment(): NodeJS.ProcessEnv {
-    const { postgres } = this.config
+  private async buildEnvironment(): Promise<NodeJS.ProcessEnv> {
+    const { postgres, secretsManager, provider } = this.config
 
-    return {
+    // Start with PostgreSQL config
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       PGHOST: postgres.host,
       PGPORT: postgres.port.toString(),
@@ -276,6 +292,25 @@ export class ProcessOrchestrator extends EventEmitter {
       PGPASSWORD: postgres.password,
       PGDATABASE: postgres.database,
     }
+
+    // Add embedding provider credentials if available
+    if (secretsManager && provider) {
+      try {
+        const credentialEnv = await secretsManager.getEnvironmentVars(provider)
+        Object.assign(env, credentialEnv)
+
+        // Log credential env var names (NOT values) for debugging
+        const credentialKeys = Object.keys(credentialEnv)
+        if (credentialKeys.length > 0) {
+          this.log(`Embedding credentials configured: ${credentialKeys.join(', ')}`)
+        }
+      } catch (error: any) {
+        // Log error but don't fail - Ollama doesn't need credentials
+        this.log(`Warning: Failed to retrieve embedding credentials: ${error.message}`)
+      }
+    }
+
+    return env
   }
 
   /**

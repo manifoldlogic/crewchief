@@ -1,9 +1,9 @@
 # Ticket: VSMAP-2002: Implement SecretStorage for API credentials
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,12 +26,12 @@ This implements Phase 2 (Setup Wizard) of the VSMAP plan. After users select the
 Reference: VSMAP_PLAN.md Phase 2 "Setup Wizard - Credential Management"
 
 ## Acceptance Criteria
-- [ ] Credentials stored in VSCode SecretStorage (encrypted at rest)
-- [ ] API key input shown after provider selection for OpenAI/Google providers
-- [ ] Credentials never logged to Output channel or debug console
-- [ ] Environment variables set correctly when spawning Rust processes
-- [ ] Credentials retrievable for binary spawn operations
-- [ ] Input box masks password characters during entry
+- [x] Credentials stored in VSCode SecretStorage (encrypted at rest)
+- [x] API key input shown after provider selection for OpenAI/Google providers
+- [x] Credentials never logged to Output channel or debug console
+- [x] Environment variables set correctly when spawning Rust processes
+- [x] Credentials retrievable for binary spawn operations
+- [x] Input box masks password characters during entry
 
 ## Technical Requirements
 - Use `context.secrets.store('maproom.api_key', key)` for storage

@@ -6,10 +6,32 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as http from 'http'
 
 /**
+ * Mock SecretStorage
+ */
+class MockSecretStorage {
+  private storage = new Map<string, string>()
+
+  async get(key: string): Promise<string | undefined> {
+    return this.storage.get(key)
+  }
+
+  async store(key: string, value: string): Promise<void> {
+    this.storage.set(key, value)
+  }
+
+  async delete(key: string): Promise<void> {
+    this.storage.delete(key)
+  }
+
+  onDidChange: any = () => ({ dispose: () => {} })
+}
+
+/**
  * Mock ExtensionContext
  */
 class MockExtensionContext {
   private workspaceStateData = new Map<string, any>()
+  private mockSecrets = new MockSecretStorage()
 
   workspaceState = {
     get: (key: string) => this.workspaceStateData.get(key),
@@ -19,6 +41,8 @@ class MockExtensionContext {
     },
     keys: () => Array.from(this.workspaceStateData.keys()),
   }
+
+  secrets = this.mockSecrets
 
   // Mock other required properties
   subscriptions: any[] = []
@@ -61,6 +85,11 @@ const registeredCommands = new Map<string, Function>()
 let lastInfoMessage: string | undefined = undefined
 
 /**
+ * Track showInputBox calls
+ */
+let inputBoxResult: string | undefined = 'test-api-key'
+
+/**
  * Mock vscode module
  */
 vi.mock('vscode', () => ({
@@ -72,6 +101,9 @@ vi.mock('vscode', () => ({
     showInformationMessage: (message: string) => {
       lastInfoMessage = message
       return Promise.resolve()
+    },
+    showInputBox: async (_options?: any) => {
+      return inputBoxResult
     },
   },
   commands: {
@@ -99,6 +131,7 @@ describe('Setup Wizard', () => {
     quickPickResult = undefined
     registeredCommands.clear()
     lastInfoMessage = undefined
+    inputBoxResult = 'test-api-key'
   })
 
   describe('detectOllama', () => {
