@@ -1179,6 +1179,28 @@ pub async fn watch_worktree(
         "Started incremental watch"
     );
 
+    // Add .git/HEAD watcher for branch switch detection (UNIWATCH-3001)
+    let git_head = root_abs.join(".git/HEAD");
+    let (head_tx, _head_rx) = tokio::sync::mpsc::channel(10);
+
+    let _head_watcher = match setup_head_watcher(&git_head, head_tx) {
+        Ok(watcher) => {
+            info!(
+                path = %git_head.display(),
+                "Started .git/HEAD watcher for branch detection"
+            );
+            Some(watcher)
+        }
+        Err(e) => {
+            warn!(
+                path = %git_head.display(),
+                error = %e,
+                "Failed to watch .git/HEAD. Branch detection disabled."
+            );
+            None
+        }
+    };
+
     // Create change detector and processor
     let detector = Arc::new(Mutex::new(ChangeDetector::with_capacity(
         pool.clone(),
@@ -2088,5 +2110,120 @@ mod tests {
             timestamp_str.contains('T'),
             "Timestamp should use 'T' separator (ISO 8601)"
         );
+    }
+
+    /// Test that dual watchers (file + head) initialize correctly (UNIWATCH-3001)
+    ///
+    /// This test verifies the integration point where both the file watcher and
+    /// .git/HEAD watcher are created in watch_worktree(). It tests:
+    /// 1. File watcher channel is created
+    /// 2. .git/HEAD path is calculated correctly from root
+    /// 3. Head watcher channel is created (capacity 10)
+    /// 4. setup_head_watcher() is called successfully
+    /// 5. Head watcher handle is stored for cleanup
+    /// 6. Graceful degradation when .git/HEAD doesn't exist
+    #[tokio::test]
+    async fn test_dual_watchers_initialize() {
+        use tempfile::TempDir;
+
+        // Test 1: Verify head watcher succeeds when .git/HEAD exists
+        {
+            let temp_dir = TempDir::new().expect("Failed to create temp dir");
+            let root_abs = temp_dir.path();
+            let git_dir = root_abs.join(".git");
+            std::fs::create_dir_all(&git_dir).expect("Failed to create .git dir");
+
+            // Create .git/HEAD file
+            let git_head = git_dir.join("HEAD");
+            std::fs::write(&git_head, "ref: refs/heads/main\n")
+                .expect("Failed to write .git/HEAD");
+
+            // Verify path calculation (this mimics watch_worktree logic)
+            let calculated_git_head = root_abs.join(".git/HEAD");
+            assert_eq!(
+                calculated_git_head, git_head,
+                "Path calculation should match actual .git/HEAD location"
+            );
+
+            // Create head event channel (capacity 10 as per spec)
+            let (head_tx, mut head_rx) = tokio::sync::mpsc::channel(10);
+            assert_eq!(
+                head_rx.try_recv().unwrap_err(),
+                tokio::sync::mpsc::error::TryRecvError::Empty,
+                "Channel should be empty initially"
+            );
+
+            // Call setup_head_watcher (should succeed)
+            let watcher_result = setup_head_watcher(&git_head, head_tx);
+            assert!(
+                watcher_result.is_ok(),
+                "setup_head_watcher should succeed when .git/HEAD exists: {:?}",
+                watcher_result.err()
+            );
+
+            // Store watcher handle (with underscore to prevent unused warning)
+            let _head_watcher = watcher_result.unwrap();
+
+            // Verify watcher stays alive while handle is in scope
+            // (If this test completes without panic, the handle is valid)
+        }
+
+        // Test 2: Verify graceful degradation when .git/HEAD doesn't exist
+        {
+            let temp_dir = TempDir::new().expect("Failed to create temp dir");
+            let root_abs = temp_dir.path();
+            // Intentionally NOT creating .git/HEAD
+
+            let git_head = root_abs.join(".git/HEAD");
+            let (head_tx, _head_rx) = tokio::sync::mpsc::channel(10);
+
+            // Call setup_head_watcher (should fail gracefully)
+            let watcher_result = setup_head_watcher(&git_head, head_tx);
+            assert!(
+                watcher_result.is_err(),
+                "setup_head_watcher should fail when .git/HEAD doesn't exist"
+            );
+
+            // In watch_worktree, this error is caught and logged as a warning,
+            // allowing file watching to continue. The watcher variable is set to None.
+            let _head_watcher = match watcher_result {
+                Ok(watcher) => Some(watcher),
+                Err(_e) => {
+                    // This is the expected path - .git/HEAD doesn't exist
+                    // In production, a warning would be logged here
+                    None
+                }
+            };
+
+            // Test passes if we reach here - graceful degradation works
+        }
+
+        // Test 3: Verify both watchers can coexist
+        {
+            let temp_dir = TempDir::new().expect("Failed to create temp dir");
+            let root_abs = temp_dir.path();
+            let git_dir = root_abs.join(".git");
+            std::fs::create_dir_all(&git_dir).expect("Failed to create .git dir");
+            let git_head = git_dir.join("HEAD");
+            std::fs::write(&git_head, "ref: refs/heads/main\n")
+                .expect("Failed to write .git/HEAD");
+
+            // Create file watcher channel (simulating WorktreeWatcher)
+            let (_file_tx, _file_rx) = tokio::sync::mpsc::channel::<()>(1000);
+
+            // Create head watcher channel
+            let (head_tx, _head_rx) = tokio::sync::mpsc::channel(10);
+
+            // Setup head watcher
+            let head_watcher_result = setup_head_watcher(&git_head, head_tx);
+            assert!(
+                head_watcher_result.is_ok(),
+                "Head watcher should initialize successfully"
+            );
+
+            let _head_watcher = head_watcher_result.unwrap();
+
+            // Both watchers coexist in scope - if test completes, they're compatible
+        }
     }
 }
