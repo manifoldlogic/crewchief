@@ -123,11 +123,14 @@ enum Commands {
     },
 
     /// Watch a worktree for changes and incrementally upsert
+    ///
+    /// Auto-detects the current branch and watches for branch switches.
+    /// The --worktree flag is deprecated and will be ignored if provided.
     Watch {
         /// Repository name (defaults to git remote origin name)
         #[arg(long)]
         repo: Option<String>,
-        /// Worktree name (defaults to current branch name)
+        /// Worktree name (deprecated: auto-detected from current branch)
         #[arg(long)]
         worktree: Option<String>,
         /// Path to watch (defaults to current directory)
@@ -869,10 +872,22 @@ async fn main() -> anyhow::Result<()> {
             // Default path to current directory if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
 
-            // Derive repo/worktree defaults from git if not provided
-            let (repo_name, branch_name, _commit_hash) = get_git_info(&path)?;
+            // Get repository name from git remote
+            let (repo_name, _, _) = get_git_info(&path)?;
             let repo = repo.unwrap_or(repo_name);
-            let worktree = worktree.unwrap_or(branch_name);
+
+            // Auto-detect current branch using get_current_branch()
+            let detected_branch = crewchief_maproom::git::get_current_branch(&path)?;
+
+            // Handle deprecation warning if --worktree flag is provided
+            let worktree = if let Some(_wt) = worktree {
+                eprintln!("Warning: --worktree flag is deprecated and ignored.");
+                eprintln!("The watch command now auto-detects branch switches.");
+                eprintln!("Using auto-detected branch: {}", detected_branch);
+                detected_branch
+            } else {
+                detected_branch
+            };
 
             tracing::info!(
                 repo = %repo,
@@ -887,6 +902,11 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::BranchWatch { repo, verbose } => {
+            eprintln!("⚠️  Warning: 'branch-watch' is deprecated.");
+            eprintln!("The 'watch' command now handles branch switches automatically.");
+            eprintln!("Use 'maproom watch' instead for unified file and branch watching.");
+            eprintln!();
+
             branch_watch_command(repo, verbose).await?;
         }
 
