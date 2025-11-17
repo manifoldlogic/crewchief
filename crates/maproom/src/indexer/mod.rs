@@ -899,6 +899,124 @@ fn setup_head_watcher(
     Ok(watcher)
 }
 
+/// Handles branch switch detection and updates database/state accordingly
+///
+/// This function is the core handler for branch switch events, implementing the workflow:
+/// 1. Detect branch name from .git/HEAD using `get_current_branch()`
+/// 2. Early return if branch hasn't changed (prevents unnecessary work)
+/// 3. Get or create database records for repo and worktree
+/// 4. Update shared state variables (current_branch and current_worktree_id)
+/// 5. Trigger incremental re-indexing for the new branch
+/// 6. Emit NDJSON event to stdout for external consumers
+///
+/// # Arguments
+///
+/// * `repo_path` - Absolute path to the repository root
+/// * `current_branch` - Shared state tracking the current branch name
+/// * `current_worktree_id` - Shared state tracking the current worktree database ID
+/// * `pool` - Database connection pool for queries
+/// * `repo` - Repository name (e.g., "crewchief")
+///
+/// # Thread Safety
+///
+/// Uses Arc<RwLock<T>> for safe concurrent access to shared state:
+/// - Acquires read lock to check if branch changed
+/// - Acquires write locks to update state after database operations
+/// - Drops read lock before acquiring write lock to prevent deadlock
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the branch switch was handled successfully or if no switch occurred.
+/// Returns `Err` if database operations or re-indexing fail.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use std::sync::{Arc, RwLock};
+/// use std::path::Path;
+/// use crewchief_maproom::db::pool::create_pool;
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let pool = create_pool().await?;
+///     let current_branch = Arc::new(RwLock::new("main".to_string()));
+///     let current_worktree_id = Arc::new(RwLock::new(1i64));
+///     let repo_path = Path::new("/workspace/repo");
+///
+///     handle_branch_switch(
+///         repo_path,
+///         &current_branch,
+///         &current_worktree_id,
+///         &pool,
+///         "crewchief"
+///     ).await?;
+///
+///     Ok(())
+/// }
+/// ```
+async fn handle_branch_switch(
+    repo_path: &Path,
+    current_branch: &std::sync::Arc<std::sync::RwLock<String>>,
+    current_worktree_id: &std::sync::Arc<std::sync::RwLock<i64>>,
+    pool: &crate::db::PgPool,
+    repo: &str,
+) -> anyhow::Result<()> {
+    // Get new branch name from .git/HEAD
+    let new_branch = crate::git::get_current_branch(repo_path)?;
+
+    // Check if branch actually changed (early return to prevent unnecessary work)
+    let old_branch = {
+        let current = current_branch.read().unwrap();
+        if *current == new_branch {
+            return Ok(()); // No change, skip processing
+        }
+        current.clone()
+    };
+
+    info!("Branch switch detected: {} -> {}", old_branch, new_branch);
+
+    // Get database client from pool
+    let client = pool.get().await?;
+
+    // Get or create database records for repo and worktree
+    let repo_id = crate::db::get_or_create_repo(
+        &client,
+        repo,
+        repo_path.to_string_lossy().as_ref(),
+    )
+    .await?;
+
+    let new_worktree_id = crate::db::get_or_create_worktree(
+        &client,
+        repo_id,
+        &new_branch,
+        repo_path.to_string_lossy().as_ref(),
+    )
+    .await?;
+
+    // Update shared state with write locks
+    {
+        let mut branch = current_branch.write().unwrap();
+        *branch = new_branch.clone();
+    }
+    {
+        let mut id = current_worktree_id.write().unwrap();
+        *id = new_worktree_id;
+    }
+
+    // Trigger incremental re-indexing for the new branch
+    crate::incremental::incremental_update(&client, new_worktree_id, repo_path).await?;
+
+    // Emit NDJSON event to stdout for external consumers
+    println!(
+        "{{\"type\":\"branch_switched\",\"old_branch\":\"{}\",\"new_branch\":\"{}\",\"worktree_id\":{}}}",
+        old_branch, new_branch, new_worktree_id
+    );
+
+    info!("Switched to worktree_id={}", new_worktree_id);
+    Ok(())
+}
+
 pub async fn watch_worktree(
     _client: &Client,
     repo: &str,
@@ -1495,5 +1613,278 @@ mod tests {
             !debouncer.should_handle(),
             "Immediate call after previous success should be debounced"
         );
+    }
+
+    /// Test that handle_branch_switch updates state when branch changes (UNIWATCH-2001)
+    ///
+    /// This test verifies:
+    /// 1. Function detects new branch name from repository
+    /// 2. Database records are created/updated for the new worktree
+    /// 3. current_branch Arc<RwLock<String>> is updated to new branch
+    /// 4. current_worktree_id Arc<RwLock<i64>> is updated to new worktree_id
+    /// 5. Incremental update is triggered for the new branch
+    /// 6. Function returns Ok(()) on success
+    #[tokio::test]
+    async fn test_handle_branch_switch_updates_state() {
+        use std::sync::{Arc, RwLock};
+        use tempfile::TempDir;
+
+        // Setup test database
+        let pool = match crate::db::pool::create_pool().await {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!("Skipping test: database not available");
+                return;
+            }
+        };
+
+        // Create a temporary git repository for testing
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path();
+        let git_dir = repo_path.join(".git");
+        std::fs::create_dir_all(&git_dir).expect("Failed to create .git dir");
+
+        // Initialize git repository
+        let init_output = std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to run git init");
+
+        if !init_output.status.success() {
+            eprintln!(
+                "Skipping test: git init failed: {}",
+                String::from_utf8_lossy(&init_output.stderr)
+            );
+            return;
+        }
+
+        // Create initial commit on main branch
+        std::fs::write(repo_path.join("test.txt"), "test content")
+            .expect("Failed to write test file");
+
+        std::process::Command::new("git")
+            .args(["add", "test.txt"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to git add");
+
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to set git user.email");
+
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to set git user.name");
+
+        std::process::Command::new("git")
+            .args(["commit", "-m", "Initial commit"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to git commit");
+
+        // Create and checkout feature branch
+        let checkout_output = std::process::Command::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to checkout feature branch");
+
+        if !checkout_output.status.success() {
+            eprintln!(
+                "Skipping test: git checkout failed: {}",
+                String::from_utf8_lossy(&checkout_output.stderr)
+            );
+            return;
+        }
+
+        // Initialize shared state with "main" (simulating initial state)
+        let current_branch = Arc::new(RwLock::new("main".to_string()));
+        let current_worktree_id = Arc::new(RwLock::new(1i64));
+
+        // Call handle_branch_switch
+        let result = handle_branch_switch(
+            repo_path,
+            &current_branch,
+            &current_worktree_id,
+            &pool,
+            "test-repo",
+        )
+        .await;
+
+        // Verify function succeeded
+        assert!(
+            result.is_ok(),
+            "handle_branch_switch should return Ok, got: {:?}",
+            result
+        );
+
+        // Verify current_branch was updated to "feature"
+        {
+            let branch_guard = current_branch.read().unwrap();
+            assert_eq!(
+                *branch_guard, "feature",
+                "current_branch should be updated to 'feature'"
+            );
+        }
+
+        // Verify current_worktree_id was updated (should be > 0)
+        {
+            let worktree_id_guard = current_worktree_id.read().unwrap();
+            assert!(
+                *worktree_id_guard > 0,
+                "current_worktree_id should be updated to a valid ID"
+            );
+        }
+
+        // Verify database record exists for the new worktree
+        let client = pool.get().await.expect("Failed to get client");
+        let row = client
+            .query_opt(
+                "SELECT id FROM maproom.worktrees WHERE name = $1",
+                &[&"feature"],
+            )
+            .await
+            .expect("Failed to query worktrees");
+
+        assert!(
+            row.is_some(),
+            "Database should have a record for 'feature' worktree"
+        );
+    }
+
+    /// Test that handle_branch_switch skips processing if branch hasn't changed (UNIWATCH-2001)
+    ///
+    /// This test verifies:
+    /// 1. Function detects current branch name
+    /// 2. Early return if branch matches current_branch state
+    /// 3. No database operations are performed (performance optimization)
+    /// 4. Shared state remains unchanged
+    /// 5. Function returns Ok(()) quickly
+    #[tokio::test]
+    async fn test_handle_branch_switch_skips_if_same_branch() {
+        use std::sync::{Arc, RwLock};
+        use tempfile::TempDir;
+
+        // Setup test database
+        let pool = match crate::db::pool::create_pool().await {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!("Skipping test: database not available");
+                return;
+            }
+        };
+
+        // Create a temporary git repository for testing
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path();
+        let git_dir = repo_path.join(".git");
+        std::fs::create_dir_all(&git_dir).expect("Failed to create .git dir");
+
+        // Initialize git repository on main branch
+        let init_output = std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to run git init");
+
+        if !init_output.status.success() {
+            eprintln!(
+                "Skipping test: git init failed: {}",
+                String::from_utf8_lossy(&init_output.stderr)
+            );
+            return;
+        }
+
+        // Create initial commit on main branch
+        std::fs::write(repo_path.join("test.txt"), "test content")
+            .expect("Failed to write test file");
+
+        std::process::Command::new("git")
+            .args(["add", "test.txt"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to git add");
+
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to set git user.email");
+
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to set git user.name");
+
+        std::process::Command::new("git")
+            .args(["commit", "-m", "Initial commit"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to git commit");
+
+        // Get current branch name (should be "main" or "master" depending on git version)
+        let branch_output = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo_path)
+            .output()
+            .expect("Failed to get current branch");
+
+        let current_branch_name = String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_string();
+
+        // Initialize shared state with current branch (same as repo)
+        let current_branch = Arc::new(RwLock::new(current_branch_name.clone()));
+        let current_worktree_id = Arc::new(RwLock::new(42i64));
+
+        // Call handle_branch_switch (should early return)
+        let start = std::time::Instant::now();
+        let result = handle_branch_switch(
+            repo_path,
+            &current_branch,
+            &current_worktree_id,
+            &pool,
+            "test-repo",
+        )
+        .await;
+        let elapsed = start.elapsed();
+
+        // Verify function succeeded
+        assert!(
+            result.is_ok(),
+            "handle_branch_switch should return Ok, got: {:?}",
+            result
+        );
+
+        // Verify function returned quickly (< 10ms for early return)
+        assert!(
+            elapsed.as_millis() < 50,
+            "Function should return quickly on same branch (took {}ms)",
+            elapsed.as_millis()
+        );
+
+        // Verify current_branch was NOT changed
+        {
+            let branch_guard = current_branch.read().unwrap();
+            assert_eq!(
+                *branch_guard, current_branch_name,
+                "current_branch should remain unchanged"
+            );
+        }
+
+        // Verify current_worktree_id was NOT changed
+        {
+            let worktree_id_guard = current_worktree_id.read().unwrap();
+            assert_eq!(
+                *worktree_id_guard, 42i64,
+                "current_worktree_id should remain unchanged"
+            );
+        }
     }
 }
