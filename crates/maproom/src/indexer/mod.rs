@@ -1215,7 +1215,7 @@ pub async fn watch_worktree(
     let pool_clone = pool.clone();
     let root_clone = root_abs.clone();
     let repo_clone = repo.to_string();
-    let worktree_clone = worktree.to_string();
+    let _worktree_clone = worktree.to_string(); // Kept for potential future use
     let current_branch_clone = current_branch.clone();
     let current_worktree_id_clone = current_worktree_id.clone();
 
@@ -1225,6 +1225,10 @@ pub async fn watch_worktree(
         loop {
             tokio::select! {
                 Some(indexing_event) = event_rx.recv() => {
+                    // UNIWATCH-3003: Read dynamic worktree_id at point of use
+                    // This ensures file events are indexed to the correct worktree after branch switches
+                    let worktree_id = *current_worktree_id_clone.read().unwrap();
+
                     // CRITICAL FIX (WATCHFIX-1002): Normalize path ONCE at event entry
                     // The database stores relative paths (e.g., "packages/cli/src/main.ts")
                     // but events arrive with absolute paths (e.g., "/workspace/packages/cli/src/main.ts").
@@ -1276,10 +1280,10 @@ pub async fn watch_worktree(
                             // CRITICAL FIX (WATCHFIX-1002): Use normalized relpath for database lookup
                             // Previously this used absolute path, causing lookups to fail and files
                             // to be misclassified as NEW when they were actually MODIFIED.
-                            match get_file_id_by_path(
+                            // UNIWATCH-3003: Use dynamic worktree_id instead of static name lookup
+                            match get_file_id_by_worktree_id(
                                 &pool_clone,
-                                &repo_clone,
-                                &worktree_clone,
+                                worktree_id,
                                 relpath_str,
                             )
                             .await
@@ -1321,10 +1325,10 @@ pub async fn watch_worktree(
                         }
                         FileEvent::Deleted(ref path) => {
                             // Use normalized relpath for database lookup
-                            match get_file_id_by_path(
+                            // UNIWATCH-3003: Use dynamic worktree_id instead of static name lookup
+                            match get_file_id_by_worktree_id(
                                 &pool_clone,
-                                &repo_clone,
-                                &worktree_clone,
+                                worktree_id,
                                 relpath_str,
                             )
                             .await
@@ -1498,6 +1502,8 @@ pub async fn watch_worktree(
 }
 
 /// Helper function to get file_id from database by path
+/// Kept for potential use in other parts of codebase (UNIWATCH-3003)
+#[allow(dead_code)]
 async fn get_file_id_by_path(
     pool: &crate::db::PgPool,
     repo: &str,
@@ -1514,6 +1520,27 @@ async fn get_file_id_by_path(
          WHERE r.name = $1 AND w.name = $2 AND f.relpath = $3
          ORDER BY f.id DESC LIMIT 1",
             &[&repo, &worktree, &relpath],
+        )
+        .await?;
+
+    Ok(row.map(|r| r.get(0)))
+}
+
+/// Get file ID by worktree_id and relpath (UNIWATCH-3003)
+/// More efficient than name-based lookup - uses numeric worktree_id directly
+async fn get_file_id_by_worktree_id(
+    pool: &crate::db::PgPool,
+    worktree_id: i64,
+    relpath: &str,
+) -> anyhow::Result<Option<i64>> {
+    let client = pool.get().await?;
+
+    let row = client
+        .query_opt(
+            "SELECT id FROM maproom.files
+             WHERE worktree_id = $1 AND relpath = $2
+             ORDER BY id DESC LIMIT 1",
+            &[&worktree_id, &relpath],
         )
         .await?;
 
