@@ -124,6 +124,7 @@ enum Commands {
     /// Watch a worktree for changes and incrementally upsert
     ///
     /// Auto-detects the current branch and watches for branch switches.
+    /// Emits NDJSON events to stdout (including branch_switched events).
     /// The --worktree flag is deprecated and will be ignored if provided.
     Watch {
         /// Repository name (defaults to git remote origin name)

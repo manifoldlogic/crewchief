@@ -34,6 +34,11 @@ cargo run --bin crewchief-maproom -- scan /path/to/repo
 cargo run --bin crewchief-maproom -- search "query"
 cargo run --bin crewchief-maproom -- context <chunk-id>
 
+# Watch command (unified file and branch watching)
+cargo run --bin crewchief-maproom -- watch
+# Auto-detects current branch, watches for file changes and branch switches
+# Emits NDJSON events to stdout (including branch_switched events)
+
 # Test
 cargo test
 cargo test -- --nocapture
@@ -110,3 +115,38 @@ GOOGLE_APPLICATION_CREDENTIALS=... # If using Google provider
 ```
 
 Config: `~/.config/crewchief/maproom.json`
+
+## Watch Command (Unified)
+
+The `watch` command provides unified file and branch watching:
+
+```bash
+maproom watch
+```
+
+**Features:**
+- Auto-detects the current branch
+- Watches for file changes (incremental indexing)
+- Detects branch switches and automatically re-indexes
+- Emits NDJSON events to stdout for integration with tools
+
+**NDJSON Events:**
+- `branch_switched`: Emitted when a branch switch is detected
+  - Includes: old/new branch names, old/new worktree IDs, timestamp
+  - Used by VSCode extension to update UI and refresh context
+
+**Migration from separate commands:**
+
+Before (required two separate commands):
+```bash
+maproom watch --repo myproject --worktree main
+# Plus separately running branch-watch in another terminal
+```
+
+After (single unified command):
+```bash
+maproom watch
+# Handles both file watching and branch detection automatically
+```
+
+**Note:** The `--worktree` flag is deprecated but still supported with a warning. Branch auto-detection is now automatic.

@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-4003: Update Documentation for Unified Watch Command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,12 +29,12 @@ With unified watching, we need to update documentation to:
 This ticket completes Phase 4 (CLI Integration & Polish) of the UNIWATCH project by ensuring all documentation reflects the unified watch command behavior.
 
 ## Acceptance Criteria
-- [ ] `crates/maproom/CLAUDE.md` updated with unified watch behavior
-- [ ] CLI help text updated (`--help` output for watch command)
-- [ ] NDJSON events documented (branch_switched event format)
-- [ ] Migration examples provided showing before/after usage
-- [ ] No broken documentation links
-- [ ] Markdown formatting correct and validated
+- [x] `crates/maproom/CLAUDE.md` updated with unified watch behavior
+- [x] CLI help text updated (`--help` output for watch command)
+- [x] NDJSON events documented (branch_switched event format)
+- [x] Migration examples provided showing before/after usage
+- [x] No broken documentation links
+- [x] Markdown formatting correct and validated
 
 ## Technical Requirements
 - Files to modify:
