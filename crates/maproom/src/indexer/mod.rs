@@ -1762,6 +1762,7 @@ mod tests {
     /// 5. Incremental update is triggered for the new branch
     /// 6. Function returns Ok(()) on success
     #[tokio::test]
+    #[ignore = "Requires PostgreSQL database and full environment setup"]
     async fn test_handle_branch_switch_updates_state() {
         use std::sync::{Arc, RwLock};
         use tempfile::TempDir;
