@@ -88,6 +88,41 @@ impl DebouncedHandler {
     }
 }
 
+/// NDJSON event emitted when a branch switch is detected (UNIWATCH-2002)
+///
+/// This struct is serialized to JSON and written to stdout for consumption
+/// by external tools (e.g., VSCode extension, CLI orchestrator).
+///
+/// # JSON Format
+///
+/// Serializes to single-line NDJSON (newline-delimited JSON):
+/// ```json
+/// {"type":"branch_switched","timestamp":"2025-01-16T10:30:00Z","repo":"crewchief","old_branch":"main","new_branch":"feature-auth","old_worktree_id":1,"new_worktree_id":42,"worktree_created":false}
+/// ```
+///
+/// # Fields
+///
+/// - `event_type`: Always "branch_switched" (serialized as "type")
+/// - `timestamp`: ISO 8601 timestamp of when the event occurred
+/// - `repo`: Repository name (e.g., "crewchief")
+/// - `old_branch`: Branch name before the switch
+/// - `new_branch`: Branch name after the switch
+/// - `old_worktree_id`: Database worktree ID before the switch (BIGINT/i64)
+/// - `new_worktree_id`: Database worktree ID after the switch (BIGINT/i64)
+/// - `worktree_created`: Whether a new worktree record was created in the database
+#[derive(serde::Serialize)]
+struct BranchSwitchEvent {
+    #[serde(rename = "type")]
+    event_type: &'static str,
+    timestamp: String,
+    repo: String,
+    old_branch: String,
+    new_branch: String,
+    old_worktree_id: i64,
+    new_worktree_id: i64,
+    worktree_created: bool,
+}
+
 /// Process Python imports from chunk metadata and create import edges in chunk_edges table
 async fn process_python_imports(
     client: &Client,
@@ -964,13 +999,15 @@ async fn handle_branch_switch(
     // Get new branch name from .git/HEAD
     let new_branch = crate::git::get_current_branch(repo_path)?;
 
-    // Check if branch actually changed (early return to prevent unnecessary work)
-    let old_branch = {
+    // Check if branch actually changed and capture old state BEFORE updating
+    // (early return to prevent unnecessary work)
+    let (old_branch, old_worktree_id) = {
         let current = current_branch.read().unwrap();
         if *current == new_branch {
             return Ok(()); // No change, skip processing
         }
-        current.clone()
+        let old_wt_id = *current_worktree_id.read().unwrap();
+        (current.clone(), old_wt_id)
     };
 
     info!("Branch switch detected: {} -> {}", old_branch, new_branch);
@@ -986,6 +1023,15 @@ async fn handle_branch_switch(
     )
     .await?;
 
+    // Check if worktree exists before creating
+    let worktree_existed = client
+        .query_opt(
+            "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
+            &[&repo_id, &new_branch],
+        )
+        .await?
+        .is_some();
+
     let new_worktree_id = crate::db::get_or_create_worktree(
         &client,
         repo_id,
@@ -993,6 +1039,8 @@ async fn handle_branch_switch(
         repo_path.to_string_lossy().as_ref(),
     )
     .await?;
+
+    let worktree_created = !worktree_existed;
 
     // Update shared state with write locks
     {
@@ -1007,11 +1055,23 @@ async fn handle_branch_switch(
     // Trigger incremental re-indexing for the new branch
     crate::incremental::incremental_update(&client, new_worktree_id, repo_path).await?;
 
-    // Emit NDJSON event to stdout for external consumers
-    println!(
-        "{{\"type\":\"branch_switched\",\"old_branch\":\"{}\",\"new_branch\":\"{}\",\"worktree_id\":{}}}",
-        old_branch, new_branch, new_worktree_id
-    );
+    // Emit NDJSON event to stdout for external consumers (UNIWATCH-2002)
+    let event = BranchSwitchEvent {
+        event_type: "branch_switched",
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: repo.to_string(),
+        old_branch,
+        new_branch,
+        old_worktree_id,
+        new_worktree_id,
+        worktree_created,
+    };
+
+    // Serialize to single-line JSON and emit to stdout
+    match serde_json::to_string(&event) {
+        Ok(json) => println!("{}", json),
+        Err(e) => warn!("Failed to serialize BranchSwitchEvent: {}", e),
+    }
 
     info!("Switched to worktree_id={}", new_worktree_id);
     Ok(())
@@ -1886,5 +1946,147 @@ mod tests {
                 "current_worktree_id should remain unchanged"
             );
         }
+    }
+
+    /// Test BranchSwitchEvent serialization to NDJSON (UNIWATCH-2002)
+    ///
+    /// This test verifies:
+    /// 1. BranchSwitchEvent struct serializes successfully to JSON
+    /// 2. JSON is valid and can be parsed back
+    /// 3. All fields are present with correct names
+    /// 4. "event_type" field is renamed to "type" in JSON
+    /// 5. Timestamp is in ISO 8601 format
+    /// 6. Worktree IDs are i64 (BIGINT)
+    /// 7. JSON is single-line (no newlines in output)
+    #[test]
+    fn test_branch_switch_event_serialization() {
+        // Create a test event with sample data
+        let event = BranchSwitchEvent {
+            event_type: "branch_switched",
+            timestamp: "2025-01-16T10:30:00Z".to_string(),
+            repo: "crewchief".to_string(),
+            old_branch: "main".to_string(),
+            new_branch: "feature-auth".to_string(),
+            old_worktree_id: 1,
+            new_worktree_id: 42,
+            worktree_created: false,
+        };
+
+        // Serialize to JSON string
+        let json_result = serde_json::to_string(&event);
+
+        // Test 1: Serialization should succeed
+        assert!(
+            json_result.is_ok(),
+            "BranchSwitchEvent serialization should succeed, got: {:?}",
+            json_result.err()
+        );
+
+        let json = json_result.unwrap();
+
+        // Test 2: JSON should be single-line (no newlines)
+        assert!(
+            !json.contains('\n'),
+            "JSON should be single-line, got: {}",
+            json
+        );
+
+        // Test 3: Parse JSON back to verify structure
+        let parsed: serde_json::Value = serde_json::from_str(&json)
+            .expect("JSON should be valid and parseable");
+
+        // Test 4: Verify "type" field (not "event_type")
+        assert_eq!(
+            parsed.get("type").and_then(|v| v.as_str()),
+            Some("branch_switched"),
+            "JSON should have 'type' field with value 'branch_switched'"
+        );
+
+        // Test 5: Verify event_type field does NOT exist (should be renamed)
+        assert!(
+            parsed.get("event_type").is_none(),
+            "JSON should NOT have 'event_type' field (should be renamed to 'type')"
+        );
+
+        // Test 6: Verify timestamp field
+        assert_eq!(
+            parsed.get("timestamp").and_then(|v| v.as_str()),
+            Some("2025-01-16T10:30:00Z"),
+            "JSON should have 'timestamp' field"
+        );
+
+        // Test 7: Verify repo field
+        assert_eq!(
+            parsed.get("repo").and_then(|v| v.as_str()),
+            Some("crewchief"),
+            "JSON should have 'repo' field"
+        );
+
+        // Test 8: Verify old_branch field
+        assert_eq!(
+            parsed.get("old_branch").and_then(|v| v.as_str()),
+            Some("main"),
+            "JSON should have 'old_branch' field"
+        );
+
+        // Test 9: Verify new_branch field
+        assert_eq!(
+            parsed.get("new_branch").and_then(|v| v.as_str()),
+            Some("feature-auth"),
+            "JSON should have 'new_branch' field"
+        );
+
+        // Test 10: Verify old_worktree_id field (should be i64)
+        assert_eq!(
+            parsed.get("old_worktree_id").and_then(|v| v.as_i64()),
+            Some(1),
+            "JSON should have 'old_worktree_id' field as i64"
+        );
+
+        // Test 11: Verify new_worktree_id field (should be i64)
+        assert_eq!(
+            parsed.get("new_worktree_id").and_then(|v| v.as_i64()),
+            Some(42),
+            "JSON should have 'new_worktree_id' field as i64"
+        );
+
+        // Test 12: Verify worktree_created field
+        assert_eq!(
+            parsed.get("worktree_created").and_then(|v| v.as_bool()),
+            Some(false),
+            "JSON should have 'worktree_created' field"
+        );
+
+        // Test 13: Verify all expected fields are present
+        let expected_fields = vec![
+            "type", "timestamp", "repo", "old_branch", "new_branch",
+            "old_worktree_id", "new_worktree_id", "worktree_created"
+        ];
+        for field in expected_fields {
+            assert!(
+                parsed.get(field).is_some(),
+                "JSON should have '{}' field",
+                field
+            );
+        }
+
+        // Test 14: Verify no extra fields
+        let field_count = parsed.as_object().map(|o| o.len()).unwrap_or(0);
+        assert_eq!(
+            field_count, 8,
+            "JSON should have exactly 8 fields, got {}",
+            field_count
+        );
+
+        // Test 15: Verify timestamp format matches ISO 8601
+        let timestamp_str = parsed.get("timestamp").and_then(|v| v.as_str()).unwrap();
+        assert!(
+            timestamp_str.ends_with('Z'),
+            "Timestamp should be in UTC (end with 'Z')"
+        );
+        assert!(
+            timestamp_str.contains('T'),
+            "Timestamp should use 'T' separator (ISO 8601)"
+        );
     }
 }
