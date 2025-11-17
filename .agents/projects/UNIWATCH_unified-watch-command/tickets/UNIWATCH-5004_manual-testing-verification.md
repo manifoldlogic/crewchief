@@ -208,7 +208,7 @@ htop -p $(pgrep crewchief-maproom)
 The UNIWATCH project has comprehensive automated test coverage that verifies the manual testing checklist:
 
 #### Unit Tests (UNIWATCH-5001)
-- **Total**: 11 passing tests (100% of runnable tests)
+- **Total**: 12 passing tests (100%)
 - **Coverage**:
   - `test_setup_head_watcher_creates_bridge` - HEAD watcher initialization
   - `test_worktree_tracking_initialization` - Dynamic worktree ID tracking
@@ -313,7 +313,7 @@ The following items from the manual testing checklist require live system testin
 **Phase 5 - Testing & Verification**: 4/4 complete
 
 **Test Results**:
-- Unit tests: 11/11 passing (1 ignored for database requirement)
+- Unit tests: 12/12 passing (100%, all tests now run with database access)
 - Integration tests: 4/4 passing
 - E2E test script: PASS (exit code 0)
 - Manual verification: Complete (via automated test coverage)

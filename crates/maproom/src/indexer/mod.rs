@@ -1762,7 +1762,6 @@ mod tests {
     /// 5. Incremental update is triggered for the new branch
     /// 6. Function returns Ok(()) on success
     #[tokio::test]
-    #[ignore = "Requires PostgreSQL database and full environment setup"]
     async fn test_handle_branch_switch_updates_state() {
         use std::sync::{Arc, RwLock};
         use tempfile::TempDir;
@@ -1840,6 +1839,12 @@ mod tests {
             return;
         }
 
+        // Use unique repo name to avoid conflicts with previous test runs
+        let repo_name = format!("test-repo-{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs());
+
         // Initialize shared state with "main" (simulating initial state)
         let current_branch = Arc::new(RwLock::new("main".to_string()));
         let current_worktree_id = Arc::new(RwLock::new(1i64));
@@ -1850,7 +1855,7 @@ mod tests {
             &current_branch,
             &current_worktree_id,
             &pool,
-            "test-repo",
+            &repo_name,
         )
         .await;
 
@@ -1879,20 +1884,38 @@ mod tests {
             );
         }
 
-        // Verify database record exists for the new worktree
+        // Verify database record exists for the new worktree using the worktree_id that was set
         let client = pool.get().await.expect("Failed to get client");
+        let worktree_id = *current_worktree_id.read().unwrap();
         let row = client
             .query_opt(
-                "SELECT id FROM maproom.worktrees WHERE name = $1",
-                &[&"feature"],
+                "SELECT id, name FROM maproom.worktrees WHERE id = $1",
+                &[&worktree_id],
             )
-            .await
-            .expect("Failed to query worktrees");
+            .await;
 
-        assert!(
-            row.is_some(),
-            "Database should have a record for 'feature' worktree"
-        );
+        match row {
+            Ok(Some(r)) => {
+                let id: i64 = r.get(0);
+                let name: String = r.get(1);
+                assert_eq!(id, worktree_id, "Worktree ID should match");
+                assert_eq!(name, "feature", "Worktree name should be 'feature'");
+            }
+            Ok(None) => {
+                panic!("Worktree with ID {} not found in database", worktree_id);
+            }
+            Err(e) => {
+                panic!("Database query failed: {:?}", e);
+            }
+        }
+
+        // Cleanup: Delete the test repo from database (CASCADE will delete worktrees)
+        let _ = client
+            .execute(
+                "DELETE FROM maproom.repos WHERE name = $1",
+                &[&repo_name],
+            )
+            .await;
     }
 
     /// Test that handle_branch_switch skips processing if branch hasn't changed (UNIWATCH-2001)

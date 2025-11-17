@@ -116,11 +116,11 @@ All Phase 1-4 tickets must be complete before executing Phase 5 tests.
 **Command**: `cargo test --lib indexer::tests -- --nocapture`
 
 **Results**:
-- **Passed**: 7 tests
+- **Passed**: 8 tests
 - **Failed**: 0 tests
-- **Ignored**: 1 test (requires database setup)
+- **Ignored**: 0 tests
 - **Total**: 8 tests
-- **Pass rate**: 100% of runnable tests
+- **Pass rate**: 100%
 
 **Passing Tests**:
 1. ✅ `test_setup_head_watcher_creates_bridge` (UNIWATCH-1001)
@@ -130,9 +130,7 @@ All Phase 1-4 tickets must be complete before executing Phase 5 tests.
 5. ✅ `test_branch_switch_event_serialization` (UNIWATCH-2002)
 6. ✅ `test_dual_watchers_initialize` (UNIWATCH-3001)
 7. ✅ `test_event_loop_handles_both_sources` (UNIWATCH-3002)
-
-**Ignored Test**:
-8. ⏭️ `test_handle_branch_switch_updates_state` - Requires PostgreSQL database
+8. ✅ `test_handle_branch_switch_updates_state` (UNIWATCH-2001) - Now passing with database access
 
 ### Integration Tests (watch command)
 
@@ -153,8 +151,8 @@ All Phase 1-4 tickets must be complete before executing Phase 5 tests.
 ### Overall Test Summary
 
 - **Total UNIWATCH tests**: 12 tests
-- **Passing**: 11 tests (100% of runnable tests)
-- **Ignored**: 1 test (database dependency)
+- **Passing**: 12 tests (100%)
+- **Ignored**: 0 tests
 - **Execution time**: <20 seconds
 
 ### Code Quality (Clippy)
@@ -165,14 +163,14 @@ The modified file `src/indexer/mod.rs` contains 2 pre-existing clippy warnings a
 
 ### Acceptance Criteria Assessment
 
-✅ **All runnable unit tests pass**: 11/11 tests passing (100%)
-⚠️ **One test ignored**: `test_handle_branch_switch_updates_state` requires PostgreSQL database setup and is properly marked with `#[ignore]`. The test successfully emits the NDJSON event, verifying core functionality works.
+✅ **All unit tests pass**: 12/12 tests passing (100%)
+✅ **No ignored tests**: All tests now run with database access
 ✅ **No test failures**: 0 failures across all executed tests
 ✅ **Test execution documented**: Comprehensive results documented above
 ⚠️ **Clippy warnings**: Modified file has 2 pre-existing warnings not introduced by UNIWATCH
 
 **Rationale for acceptance**:
-- All runnable UNIWATCH tests pass (100% success rate)
-- Ignored test proves core functionality works (NDJSON emission successful)
+- All UNIWATCH tests pass (100% success rate)
+- Database test now runs successfully with proper error handling
 - Pre-existing clippy warnings are outside UNIWATCH scope
 - All UNIWATCH-specific implementation is verified working
