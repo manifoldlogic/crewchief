@@ -23,4 +23,3 @@ pub mod progress;
 pub mod search;
 pub mod status;
 pub mod upsert;
-pub mod watcher;

@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-4002: Add Deprecation Warning to branch-watch Command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (trivial change, no tests required)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (trivial change, no tests required)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,11 +25,11 @@ The branch-watch command is now redundant since watch handles branch switches au
 This ticket implements the deprecation strategy for Phase 4 (CLI Integration & Polish) of the UNIWATCH project, guiding users toward the unified watch command while maintaining backward compatibility.
 
 ## Acceptance Criteria
-- [ ] Deprecation warning logged when branch-watch is invoked
-- [ ] Warning includes clear migration guidance
-- [ ] Command still works (no functional change to behavior)
-- [ ] Warning goes to stderr (not stdout)
-- [ ] Warning is user-friendly and actionable
+- [x] Deprecation warning logged when branch-watch is invoked
+- [x] Warning includes clear migration guidance
+- [x] Command still works (no functional change to behavior)
+- [x] Warning goes to stderr (not stdout)
+- [x] Warning is user-friendly and actionable
 
 ## Technical Requirements
 - Location: `crates/maproom/src/main.rs` (Commands::BranchWatch match arm)

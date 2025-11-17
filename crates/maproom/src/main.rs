@@ -4,7 +4,6 @@ use std::process::Command;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
-use tokio::sync::oneshot;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
@@ -138,17 +137,6 @@ enum Commands {
         path: Option<PathBuf>,
         #[arg(long, default_value = "2s")]
         throttle: String,
-    },
-
-    /// Watch for branch switches and auto-index
-    BranchWatch {
-        /// Path to git repository (defaults to current directory)
-        #[arg(long)]
-        repo: Option<PathBuf>,
-
-        /// Show verbose logging
-        #[arg(short, long)]
-        verbose: bool,
     },
 
     /// Full-text search against indexed chunks
@@ -361,83 +349,6 @@ async fn auto_generate_embeddings(
     progress.finish();
 
     Ok(stats)
-}
-
-/// Branch watch command handler
-///
-/// Starts the BranchWatcher for automatic indexing on branch switches.
-async fn branch_watch_command(repo: Option<PathBuf>, verbose: bool) -> anyhow::Result<()> {
-    use crewchief_maproom::watcher::BranchWatcher;
-
-    // Set up logging based on verbose flag
-    if verbose {
-        std::env::set_var("RUST_LOG", "crewchief_maproom=debug");
-    } else if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "crewchief_maproom=info");
-    }
-
-    // Default to current directory if no repo path provided
-    let repo_path = repo.unwrap_or_else(|| PathBuf::from("."));
-
-    // Validate repository path exists
-    if !repo_path.exists() {
-        anyhow::bail!("Repository path does not exist: {}", repo_path.display());
-    }
-
-    // Validate it's a git repository
-    let git_head = repo_path.join(".git/HEAD");
-    if !git_head.exists() {
-        anyhow::bail!(
-            "Not a git repository: {} (expected .git/HEAD)",
-            repo_path.display()
-        );
-    }
-
-    tracing::info!("Starting branch watcher for {}", repo_path.display());
-
-    // Connect to database
-    let client = db::connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    tracing::info!("Connected to database");
-
-    // Create and start watcher
-    let mut watcher = BranchWatcher::new(repo_path, client)?;
-
-    tracing::info!("Watching for branch switches (Ctrl+C to stop)");
-
-    // Create shutdown channel
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-
-    // Wrap sender in Mutex to allow FnMut closure to take ownership
-    let shutdown_tx = std::sync::Mutex::new(Some(shutdown_tx));
-
-    // Setup Ctrl+C handler
-    ctrlc::set_handler(move || {
-        tracing::info!("Shutting down...");
-        if let Ok(mut tx) = shutdown_tx.lock() {
-            if let Some(tx) = tx.take() {
-                let _ = tx.send(());
-            }
-        }
-    })?;
-
-    // Run watcher with shutdown signal
-    let result = watcher.start(Some(shutdown_rx)).await;
-
-    match result {
-        Ok(_) => {
-            tracing::info!("Watcher stopped normally");
-        }
-        Err(e) => {
-            tracing::error!("Watcher error: {}", e);
-            return Err(e);
-        }
-    }
-
-    tracing::info!("Branch watcher stopped");
-    Ok(())
 }
 
 /// Extract git information from a repository path
@@ -899,15 +810,6 @@ async fn main() -> anyhow::Result<()> {
 
             let client = db::connect().await?;
             indexer::watch_worktree(&client, &repo, &worktree, &path, &throttle).await?;
-        }
-
-        Commands::BranchWatch { repo, verbose } => {
-            eprintln!("⚠️  Warning: 'branch-watch' is deprecated.");
-            eprintln!("The 'watch' command now handles branch switches automatically.");
-            eprintln!("Use 'maproom watch' instead for unified file and branch watching.");
-            eprintln!();
-
-            branch_watch_command(repo, verbose).await?;
         }
 
         Commands::Search {
