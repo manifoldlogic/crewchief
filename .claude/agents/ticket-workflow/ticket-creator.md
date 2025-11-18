@@ -1,7 +1,7 @@
 ---
 name: ticket-creator
 description: Use this agent when the user wants to create a standardized work ticket to document planned work. This agent should be invoked proactively when:\n\n<example>\nContext: User has described a new feature or task that needs to be documented.\nuser: "I need to add caching middleware to the SLIM project. The caching-specialist agent should handle this."\nassistant: "I'll use the Task tool to launch the ticket-creator agent to document this work."\n</example>\n\n<example>\nContext: User mentions work but hasn't provided all details.\nuser: "We should add better error handling to the tools"\nassistant: "I'll use the Task tool to launch the ticket-creator agent to gather information and create a proper work ticket."\n</example>\n\n<example>\nContext: User is planning a Phase 2 feature.\nuser: "Let's create a ticket for implementing the Worker build pipeline in Phase 2. The worker-build-pipeline-engineer should handle this."\nassistant: "I'll use the Task tool to launch the ticket-creator agent to create a Phase 2 work ticket (starting at 2001)."\n</example>
-tools: Glob, Grep, Read, Edit, Write
+tools: Bash,Glob, Grep, Read, Edit, Write
 model: sonnet
 color: pink
 ---

@@ -2,6 +2,7 @@
 //!
 //! This module provides database connectivity, connection pooling, and query utilities.
 
+pub mod cleanup;
 pub mod columns;
 pub mod connection;
 pub mod index_state;
