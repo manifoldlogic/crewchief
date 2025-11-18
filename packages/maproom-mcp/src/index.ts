@@ -649,7 +649,24 @@ async function handleSearch(params: any): Promise<any> {
       }
     }
     const repoId = repoRows[0].id
-    let worktreeId: number | null = null
+
+    // Resolve worktree ID using four-tier logic
+    const resolution = await resolveWorktreeId(client, repo, worktree)
+    let worktreeId: number | null = resolution.id
+    const resolutionMetadata = resolution.metadata
+
+    // Generate hint message for fallback scenarios
+    let hint: string | undefined
+    if (resolutionMetadata.fallback && resolutionMetadata.detected_branch) {
+      hint = `Current branch '${resolutionMetadata.detected_branch}' is not indexed.\n\n` +
+        `To search your current code:\n` +
+        `1. Run: mcp__maproom__scan({repo: "${repo}", worktree: "${resolutionMetadata.detected_branch}"})\n\n` +
+        `Searching '${resolutionMetadata.worktree}' worktree instead.`
+    } else if (resolutionMetadata.mode === 'all' && resolutionMetadata.fallback) {
+      hint = `Failed to detect current branch (not in git repository or detached HEAD).\n\n` +
+        `Searching all indexed worktrees.`
+    }
+
     let worktreeInfo: any = null
 
     // Handle worktree filtering (from parameter or advanced filters)
@@ -729,7 +746,16 @@ async function handleSearch(params: any): Promise<any> {
         }
 
         return hit
-      })
+      }),
+
+      // Add resolution metadata
+      auto_detected: resolutionMetadata.auto_detected ?? false,
+      worktree: resolutionMetadata.worktree,
+      mode: resolutionMetadata.mode,
+      hint: hint,
+
+      // Existing fields...
+      total: rows.length
     }
 
     // Add debug info if requested
@@ -792,11 +818,13 @@ async function handleSearch(params: any): Promise<any> {
       
       // Check index status suggestion
       const statusHint = 'Run the status tool first to see what\'s indexed and available for search'
-      
-      // Build comprehensive hint
-      result.hint = worktreeInfo
-        ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use scan tool to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
-        : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Use scan tool to index it first`
+
+      // Build comprehensive hint - preserve fallback hint if present, otherwise use standard hint
+      if (!hint) {
+        result.hint = worktreeInfo
+          ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use scan tool to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
+          : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Use scan tool to index it first`
+      }
       
       if (suggestions.length > 0) {
         result.suggestions = suggestions
@@ -814,11 +842,15 @@ async function handleSearch(params: any): Promise<any> {
         recommendation: termCount > 3 ? 'simplify' : termCount === 1 ? 'try related terms' : 'good length'
       }
     } else if (rows.length === 1) {
-      // Single result - suggest how to find more
-      result.hint = 'Found 1 result. To find more: try broader terms or increase k parameter'
+      // Single result - suggest how to find more (only if no fallback hint)
+      if (!hint) {
+        result.hint = 'Found 1 result. To find more: try broader terms or increase k parameter'
+      }
     } else if (rows.length === k) {
-      // Hit the limit - suggest increasing k
-      result.hint = `Showing top ${k} results. More may exist - increase k parameter to see more`
+      // Hit the limit - suggest increasing k (only if no fallback hint)
+      if (!hint) {
+        result.hint = `Showing top ${k} results. More may exist - increase k parameter to see more`
+      }
     }
     
     return result

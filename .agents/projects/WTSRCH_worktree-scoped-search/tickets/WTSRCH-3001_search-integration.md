@@ -1,9 +1,9 @@
 # Ticket: WTSRCH-3001: Integrate Worktree Resolution into Search Tool Handler
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,20 +28,20 @@ This integration completes Phase 3 of the WTSRCH project, which adds auto-detect
 This integration must preserve backward compatibility - existing code that passes explicit worktree parameters must continue to work unchanged.
 
 ## Acceptance Criteria
-- [ ] Search tool handler calls `resolveWorktreeId()` before executing search
-- [ ] Resolution happens BEFORE existing worktree parameter handling code (around line 655)
-- [ ] When `worktree` parameter is undefined, auto-detection triggers
-- [ ] When `worktree` parameter is provided (string or null), it's used directly (no auto-detection)
-- [ ] Resolved worktree ID is passed to search executor functions (FTS, vector, hybrid)
-- [ ] Search result metadata includes resolution information:
+- [x] Search tool handler calls `resolveWorktreeId()` before executing search
+- [x] Resolution happens BEFORE existing worktree parameter handling code (around line 655)
+- [x] When `worktree` parameter is undefined, auto-detection triggers
+- [x] When `worktree` parameter is provided (string or null), it's used directly (no auto-detection)
+- [x] Resolved worktree ID is passed to search executor functions (FTS, vector, hybrid)
+- [x] Search result metadata includes resolution information:
   - `auto_detected: boolean` - Was worktree auto-detected?
   - `worktree: string` - Which worktree was searched
   - `mode: string` - Resolution mode (explicit/auto/fallback/all)
   - `hint: string` - Helpful message when fallback occurs
-- [ ] Helpful hints provided for common scenarios (branch not indexed, detection failed)
-- [ ] Integration tests pass for all resolution tiers
-- [ ] Existing tests continue to pass (backward compatibility verified)
-- [ ] No breaking changes to MCP tool schema
+- [x] Helpful hints provided for common scenarios (branch not indexed, detection failed)
+- [x] Integration tests pass for all resolution tiers
+- [x] Existing tests continue to pass (backward compatibility verified)
+- [x] No breaking changes to MCP tool schema
 
 ## Technical Requirements
 
