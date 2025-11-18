@@ -7,8 +7,37 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio_postgres::Client;
 use tracing::{debug, warn};
+
+/// Errors specific to cleanup operations
+#[derive(Error, Debug)]
+pub enum CleanupError {
+    /// Database transaction failed during cleanup
+    #[error("Database transaction failed during cleanup: {0}")]
+    TransactionFailed(#[source] tokio_postgres::Error),
+
+    /// Failed to validate worktree path on disk
+    #[error("Failed to validate worktree path {path}: {source}")]
+    ValidationFailed {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// Worktree not found in database
+    #[error("Worktree {id} not found in database")]
+    WorktreeNotFound { id: i64 },
+
+    /// Database connection failed
+    #[error("Database connection failed: {0}")]
+    ConnectionFailed(#[from] tokio_postgres::Error),
+
+    /// Cleanup operation cancelled by user
+    #[error("Cleanup operation cancelled by user")]
+    Cancelled,
+}
 
 /// Information about a worktree from the database
 #[derive(Debug, Clone)]
@@ -218,6 +247,13 @@ impl CleanupReport {
             return 1.0;
         }
         self.deleted_count as f64 / self.total_stale as f64
+    }
+
+    /// Check if any deletions failed
+    ///
+    /// Returns true if failed_count > 0
+    pub fn has_failures(&self) -> bool {
+        self.failed_count > 0
     }
 }
 
@@ -540,5 +576,41 @@ mod tests {
         assert_eq!(deserialized.total_stale, 5);
         assert_eq!(deserialized.deleted_count, 3);
         assert_eq!(deserialized.chunks_cleaned, 42);
+    }
+
+    #[test]
+    fn test_cleanup_error_messages() {
+        let err = CleanupError::WorktreeNotFound { id: 42 };
+        let msg = err.to_string();
+        assert!(msg.contains("Worktree 42 not found"), "Error message should contain worktree ID");
+        assert!(msg.contains("database"), "Error message should mention database");
+
+        let err = CleanupError::Cancelled;
+        let msg = err.to_string();
+        assert!(msg.contains("cancelled"), "Error message should contain 'cancelled'");
+        assert!(msg.contains("user"), "Error message should mention user");
+    }
+
+    #[test]
+    fn test_has_failures_method() {
+        let report_no_failures = CleanupReport {
+            total_stale: 10,
+            deleted_count: 10,
+            chunks_cleaned: 100,
+            failed_count: 0,
+            deleted_ids: vec![],
+            failed_deletions: vec![],
+        };
+        assert!(!report_no_failures.has_failures(), "Should return false when no failures");
+
+        let report_with_failures = CleanupReport {
+            total_stale: 10,
+            deleted_count: 8,
+            chunks_cleaned: 80,
+            failed_count: 2,
+            deleted_ids: vec![],
+            failed_deletions: vec![],
+        };
+        assert!(report_with_failures.has_failures(), "Should return true when failures exist");
     }
 }
