@@ -244,6 +244,25 @@ enum MigrateCommand {
 enum DbCommand {
     /// Apply SQL migrations to the configured database
     Migrate,
+
+    /// Clean up stale worktree data from the database
+    ///
+    /// By default, runs in dry-run mode showing what would be deleted.
+    /// Use --confirm to actually perform deletions.
+    ///
+    /// Examples:
+    ///   maproom db cleanup-stale              # Dry-run mode (show what would be deleted)
+    ///   maproom db cleanup-stale --confirm    # Actually delete stale data
+    ///   maproom db cleanup-stale --verbose    # Show detailed information
+    CleanupStale {
+        /// Actually delete stale data (default is dry-run)
+        #[arg(long, help = "Actually delete (default is dry-run)")]
+        confirm: bool,
+
+        /// Show detailed information during cleanup
+        #[arg(long, short, help = "Show detailed information")]
+        verbose: bool,
+    },
 }
 
 /// Auto-generate embeddings for chunks with NULL embeddings.
@@ -447,6 +466,18 @@ async fn main() -> anyhow::Result<()> {
                 let client = db::connect().await?;
                 db::migrate(&client).await?;
                 tracing::info!("migrations applied");
+            }
+            DbCommand::CleanupStale { confirm, verbose } => {
+                // TODO: Implementation in IDXCLEAN-2002
+                let _client = db::connect().await?;
+                if confirm {
+                    println!("Would run cleanup with confirmation");
+                } else {
+                    println!("Would run cleanup in dry-run mode");
+                }
+                if verbose {
+                    println!("Verbose mode enabled");
+                }
             }
         },
 
@@ -1018,4 +1049,52 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cleanup_stale_defaults() {
+        let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale"]);
+        if let Commands::Db { command: DbCommand::CleanupStale { confirm, verbose } } = cli.command {
+            assert_eq!(confirm, false, "confirm should default to false");
+            assert_eq!(verbose, false, "verbose should default to false");
+        } else {
+            panic!("Expected cleanup-stale command");
+        }
+    }
+
+    #[test]
+    fn test_cleanup_stale_with_confirm() {
+        let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale", "--confirm"]);
+        if let Commands::Db { command: DbCommand::CleanupStale { confirm, verbose } } = cli.command {
+            assert_eq!(confirm, true);
+            assert_eq!(verbose, false);
+        } else {
+            panic!("Expected cleanup-stale command");
+        }
+    }
+
+    #[test]
+    fn test_cleanup_stale_with_verbose() {
+        let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale", "--verbose"]);
+        if let Commands::Db { command: DbCommand::CleanupStale { confirm, verbose } } = cli.command {
+            assert_eq!(confirm, false);
+            assert_eq!(verbose, true);
+        } else {
+            panic!("Expected cleanup-stale command");
+        }
+    }
+
+    #[test]
+    fn test_cleanup_stale_short_verbose() {
+        let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale", "-v"]);
+        if let Commands::Db { command: DbCommand::CleanupStale { confirm: _, verbose } } = cli.command {
+            assert_eq!(verbose, true);
+        } else {
+            panic!("Expected cleanup-stale command");
+        }
+    }
 }
