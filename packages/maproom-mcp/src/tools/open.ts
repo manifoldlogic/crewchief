@@ -77,7 +77,9 @@ async function getWorktreePath(
       )
     } else {
       throw new ValidationError(
-        `File '${relpath}' not found in worktree '${worktreeName}'. Use search tool to find the correct path.`,
+        `File '${relpath}' not found in worktree '${worktreeName}'. ` +
+        `No matching worktree found in database. ` +
+        `Ensure the repository is indexed and the worktree name is correct.`,
         'FILE_NOT_FOUND'
       )
     }
@@ -86,12 +88,33 @@ async function getWorktreePath(
   // Try each candidate until we find one that exists
   for (const row of rows) {
     const fullPath = path.join(row.abs_path, relpath)
-    if (await fileExists(fullPath)) {
+    const exists = await fileExists(fullPath)
+
+    log.debug({
+      candidate: row.abs_path,
+      relpath,
+      fullPath,
+      exists
+    }, 'Checking candidate worktree path')
+
+    if (exists) {
+      log.info({
+        selected: row.abs_path,
+        relpath,
+        worktreeName
+      }, 'Selected valid worktree path')
       return row.abs_path as string
     }
   }
 
-  // All candidates failed
+  // All candidates failed - log error with context
+  log.error({
+    relpath,
+    worktreeName,
+    candidatesAttempted: rows.length,
+    issue: 'database_pollution'
+  }, 'All candidate worktree paths failed filesystem validation')
+
   throw new ValidationError(
     `File '${relpath}' not accessible in worktree '${worktreeName}'. ` +
     `Tried ${rows.length} candidate paths but none exist on disk. ` +
