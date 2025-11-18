@@ -1,9 +1,9 @@
 # Ticket: IDXCLEAN-3002: Integration Tests for Deletion Safety and Multi-Worktree Protection
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -37,15 +37,15 @@ These tests validate the implementation of IDXCLEAN-1002 (WorktreeCleaner module
 - `quality-strategy.md`: Scenario 5 - Garbage Collection Accuracy (lines 472-512)
 
 ## Acceptance Criteria
-- [ ] Test: Deletes only stale worktrees (not valid ones)
-- [ ] Test: Transaction rollback on error (failure mid-transaction reverts all changes)
-- [ ] Test: **Multi-worktree chunk safety** (chunk in 2 worktrees, delete 1, verify chunk preserved with updated worktree_ids)
-- [ ] Test: **Single-worktree garbage collection** (chunk in 1 worktree, delete it, verify chunk deleted)
-- [ ] Test: Array-based removal updates `worktree_ids` correctly (JSONB array manipulation)
-- [ ] Test: Dry-run mode makes no database changes
-- [ ] Test: Audit logging captures all deletions with proper context
-- [ ] Test: Handles concurrent operations safely
-- [ ] All tests pass
+- [x] Test: Deletes only stale worktrees (not valid ones)
+- [x] Test: Transaction rollback on error (failure mid-transaction reverts all changes)
+- [x] Test: **Multi-worktree chunk safety** (chunk in 2 worktrees, delete 1, verify chunk preserved with updated worktree_ids)
+- [x] Test: **Single-worktree garbage collection** (chunk in 1 worktree, delete it, verify chunk deleted)
+- [x] Test: Array-based removal updates `worktree_ids` correctly (JSONB array manipulation)
+- [x] Test: Dry-run mode makes no database changes
+- [x] Test: Audit logging captures all deletions with proper context
+- [x] Test: Handles concurrent operations safely
+- [x] All tests pass
 
 ## Technical Requirements
 - Real PostgreSQL database with `chunks.worktree_ids` as JSONB arrays
