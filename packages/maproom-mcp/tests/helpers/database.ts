@@ -115,11 +115,12 @@ export async function cleanTestData(client: Client): Promise<void> {
  */
 export async function createTestRepo(
   client: Client,
-  name: string
+  name: string,
+  rootPath: string = '/test'
 ): Promise<number> {
   const { rows } = await client.query(
-    'INSERT INTO maproom.repos (name) VALUES ($1) RETURNING id',
-    [name]
+    'INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2) RETURNING id',
+    [name, rootPath]
   )
   return rows[0].id as number
 }
@@ -142,6 +143,8 @@ export async function createTestWorktree(
 
 /**
  * Create a test file
+ *
+ * @deprecated Use createTestFileWithCommit instead for schema-compliant file creation
  */
 export async function createTestFile(
   client: Client,
@@ -152,6 +155,31 @@ export async function createTestFile(
   const { rows } = await client.query(
     'INSERT INTO maproom.files (worktree_id, relpath, last_modified) VALUES ($1, $2, $3) RETURNING id',
     [worktreeId, relpath, lastModified]
+  )
+  return rows[0].id as number
+}
+
+/**
+ * Create a test file with proper commit tracking
+ * This matches the current database schema which requires repo_id, commit_id, and content_hash
+ */
+export async function createTestFileWithCommit(
+  client: Client,
+  repoId: number,
+  worktreeId: number,
+  relpath: string
+): Promise<number> {
+  // Create a commit for this repo
+  const commitResult = await client.query(
+    'INSERT INTO maproom.commits (repo_id, sha) VALUES ($1, $2) RETURNING id',
+    [repoId, 'test-commit-' + Math.random()]
+  )
+  const commitId = commitResult.rows[0].id
+
+  // Create the file
+  const { rows } = await client.query(
+    'INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, content_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [repoId, worktreeId, commitId, relpath, 'test-hash-' + Math.random()]
   )
   return rows[0].id as number
 }
