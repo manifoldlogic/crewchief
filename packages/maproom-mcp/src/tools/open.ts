@@ -46,13 +46,15 @@ const DEFAULT_CONFIG: OpenToolConfig = {
  * @param client - PostgreSQL client
  * @param worktreeName - Name of worktree
  * @param relpath - Relative path to file (for validation)
+ * @param expectedRoot - Optional root path; skips candidates outside this path
  * @returns Absolute path to worktree
  * @throws Error if worktree not found
  */
 async function getWorktreePath(
   client: Client,
   worktreeName: string,
-  relpath: string
+  relpath: string,
+  expectedRoot?: string
 ): Promise<string> {
   const { rows } = await client.query(
     `SELECT w.abs_path
@@ -87,6 +89,15 @@ async function getWorktreePath(
 
   // Try each candidate until we find one that exists
   for (const row of rows) {
+    // Optional root validation - skip suspicious paths
+    if (expectedRoot && !row.abs_path.startsWith(expectedRoot)) {
+      log.warn({
+        abs_path: row.abs_path,
+        expectedRoot
+      }, 'Skipping worktree with suspicious abs_path')
+      continue
+    }
+
     const fullPath = path.join(row.abs_path, relpath)
     const exists = await fileExists(fullPath)
 

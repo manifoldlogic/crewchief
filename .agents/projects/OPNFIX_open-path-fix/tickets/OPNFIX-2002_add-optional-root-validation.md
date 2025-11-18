@@ -1,9 +1,9 @@
 # Ticket: OPNFIX-2002: Add Optional Root Validation to getWorktreePath
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -34,13 +34,13 @@ This security threat was identified in `.agents/projects/OPNFIX_open-path-fix/pl
 **Reference:** OPNFIX Phase 2: Security Enhancements (security-review.md lines 202-239)
 
 ## Acceptance Criteria
-- [ ] Optional `expectedRoot?: string` parameter added to function signature
-- [ ] When provided, skips candidates where `abs_path` does not start with `expectedRoot`
-- [ ] Warning logged when suspicious path is skipped
-- [ ] Function continues checking remaining candidates (doesn't throw immediately)
-- [ ] Existing calls work without parameter (backward compatible)
-- [ ] All candidates validated if `expectedRoot` not provided (no behavior change)
-- [ ] No breaking changes to function behavior or return type
+- [x] Optional `expectedRoot?: string` parameter added to function signature
+- [x] When provided, skips candidates where `abs_path` does not start with `expectedRoot`
+- [x] Warning logged when suspicious path is skipped
+- [x] Function continues checking remaining candidates (doesn't throw immediately)
+- [x] Existing calls work without parameter (backward compatible)
+- [x] All candidates validated if `expectedRoot` not provided (no behavior change)
+- [x] No breaking changes to function behavior or return type
 
 ## Technical Requirements
 - Parameter type: `expectedRoot?: string` (optional)
