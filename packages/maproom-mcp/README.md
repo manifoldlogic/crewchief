@@ -556,6 +556,126 @@ Higher = faster but more memory. Lower = slower but less memory.
 
 ---
 
+## Open Tool - File Retrieval
+
+The `open` MCP tool retrieves file contents from your indexed codebase with intelligent path resolution and security validation.
+
+###  Multi-Candidate Fallback
+
+When multiple worktrees exist with the same name (common after repeated indexing), the open tool automatically tries each candidate in order:
+
+1. Queries database for all matching worktrees (ordered by most recent ID first)
+2. Validates each candidate path against the filesystem
+3. Returns content from the first valid worktree found
+
+This gracefully handles database pollution from:
+- Repeated indexing from different working directories
+- Repository moves or renames
+- Stale database entries
+
+### Security Features
+
+**Path Traversal Protection:**
+- Validates all relative paths before filesystem access
+- Rejects paths containing `../`, absolute paths, or null bytes
+- Prevents access outside repository boundaries
+
+**Symlink Validation:**
+- Detects symlinks using `fs.lstat()` before reading
+- Resolves symlink targets with `fs.realpath()`
+- Blocks symlinks pointing outside repository boundaries
+- Allows legitimate internal symlinks (e.g., shared configs)
+
+**File Type Checking:**
+- Only returns content for regular files
+- Directories and special files are rejected
+- Ensures `fileExists()` helper validates both readability AND file type
+
+### Error Messages
+
+| Error Message | Meaning | Recommended Action |
+|--------------|---------|-------------------|
+| `File exists in other worktrees: main, develop` | File not found in specified worktree but exists in others | Check worktree parameter spelling or use suggested worktree |
+| `File 'X' not found in worktree 'Y'` | No matching database entry | Ensure repository is indexed and file path is correct |
+| `File 'X' not accessible in worktree 'Y'. Tried N candidates...` | Database pollution detected - multiple entries but none valid on disk | Run `maproom db cleanup-stale` to remove stale entries |
+| `Path traversal detected: ../../../etc/passwd` | Security violation in input | Use relative paths only, no parent directory references |
+| `Path is outside repository boundaries` | Symlink or resolved path escapes repo | Check symlink targets or file paths |
+| `Null bytes not allowed in path` | Invalid characters in path parameter | Remove null bytes from file path |
+
+### Troubleshooting
+
+**Issue: "Tried N candidate paths but none exist on disk"**
+
+This indicates database pollution - the database has multiple entries for the same worktree name, but none correspond to valid paths on the filesystem.
+
+**Diagnosis:**
+```bash
+# Check for duplicate worktree entries
+docker exec -it maproom-postgres psql -U maproom -d maproom -c \
+  "SELECT w.name, w.abs_path, COUNT(*)
+   FROM maproom.worktrees w
+   GROUP BY w.name, w.abs_path
+   HAVING COUNT(*) > 1;"
+```
+
+**Solution:**
+```bash
+# Clean up stale database entries
+maproom db cleanup-stale
+```
+
+**Issue: File not found but file definitely exists**
+
+**Diagnosis:**
+- Verify the repository is indexed: Check `maproom status` output
+- Verify worktree name: The `worktree` parameter must match the database entry exactly
+- Check file path: Path must be relative to repository root
+
+**Issue: Symlink outside repository**
+
+**Diagnosis:**
+```bash
+# Check where symlink points
+readlink /path/to/symlink
+
+# Verify it's within repo boundaries
+# Should start with repository root path
+```
+
+**Solution:**
+- Move symlink target inside repository, or
+- Access target file directly instead of via symlink
+
+### Path Resolution Flow
+
+```
+1. Input Validation
+   ├─ Reject path traversal (../)
+   ├─ Reject absolute paths (/)
+   └─ Reject null bytes (\0)
+
+2. Database Query
+   └─ SELECT all matching (worktree, relpath) pairs
+      ORDER BY worktree.id DESC
+
+3. Multi-Candidate Validation
+   ├─ For each candidate:
+   │  ├─ Check filesystem existence
+   │  ├─ Validate within repo boundaries
+   │  └─ Return if valid
+   └─ Error if all candidates fail
+
+4. Security Checks
+   ├─ Detect symlinks (fs.lstat)
+   ├─ Validate symlink target (validateWithinRepo)
+   └─ Verify file type (stats.isFile)
+
+5. Content Retrieval
+   └─ Read file with size limit validation
+```
+
+---
+
 ## Environment Variables
 
 ### Provider Configuration

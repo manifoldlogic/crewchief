@@ -1,9 +1,9 @@
 # Ticket: OPNFIX-4001: Update Tool Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -22,12 +22,12 @@ The open tool has been enhanced with significant improvements to path resolution
 This ticket implements the documentation requirements from Phase 4, Ticket 4.1 of the OPNFIX project plan. Users and developers need clear documentation to understand the new behavior, interpret error messages, and troubleshoot path resolution issues.
 
 ## Acceptance Criteria
-- [ ] README.md explains the open tool's multi-candidate fallback behavior
-- [ ] README.md documents all error messages and their meanings
-- [ ] README.md includes a troubleshooting guide for common path resolution issues
-- [ ] JSDoc comments in open.ts are complete and accurate for all modified functions
-- [ ] Documentation follows existing formatting and style conventions
-- [ ] All new features (symlink validation, path validation) are documented
+- [x] README.md explains the open tool's multi-candidate fallback behavior
+- [x] README.md documents all error messages and their meanings
+- [x] README.md includes a troubleshooting guide for common path resolution issues
+- [x] JSDoc comments in open.ts are complete and accurate for all modified functions
+- [x] Documentation follows existing formatting and style conventions
+- [x] All new features (symlink validation, path validation) are documented
 
 ## Technical Requirements
 - Update `packages/maproom-mcp/README.md` with:

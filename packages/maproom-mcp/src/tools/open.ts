@@ -42,13 +42,36 @@ const DEFAULT_CONFIG: OpenToolConfig = {
 }
 
 /**
- * Get worktree absolute path from database
+ * Get worktree absolute path from database with multi-candidate fallback
+ *
+ * Handles database pollution gracefully by trying all matching worktrees in order
+ * until a valid filesystem path is found.
+ *
  * @param client - PostgreSQL client
- * @param worktreeName - Name of worktree
- * @param relpath - Relative path to file (for validation)
- * @param expectedRoot - Optional root path; skips candidates outside this path
- * @returns Absolute path to worktree
- * @throws Error if worktree not found
+ * @param worktreeName - Name of worktree to lookup
+ * @param relpath - Relative path to file (used for database join and validation)
+ * @param expectedRoot - Optional root path for security validation; skips candidates with abs_path outside this directory
+ *
+ * @returns Absolute path to the first valid worktree found
+ *
+ * @throws {ValidationError} FILE_NOT_FOUND - No worktree found with the given name
+ * @throws {ValidationError} FILE_NOT_FOUND - All candidate worktrees failed filesystem validation (database pollution detected)
+ *
+ * @example
+ * // Single valid worktree
+ * const path = await getWorktreePath(client, 'main', 'src/index.ts')
+ * // Returns: '/workspace/myproject'
+ *
+ * @example
+ * // Multiple candidates (database pollution) - returns first valid
+ * const path = await getWorktreePath(client, 'main', 'src/index.ts')
+ * // Tries: /old/path (fails), /workspace/myproject (succeeds)
+ * // Returns: '/workspace/myproject'
+ *
+ * @example
+ * // With security root validation
+ * const path = await getWorktreePath(client, 'main', 'src/index.ts', '/workspace')
+ * // Skips candidates with abs_path outside /workspace (e.g., /etc, /tmp)
  */
 async function getWorktreePath(
   client: Client,
@@ -135,12 +158,32 @@ async function getWorktreePath(
 }
 
 /**
- * Read file from filesystem
- * @param worktreePath - Absolute path to worktree
- * @param relpath - Relative path to file
- * @param config - Configuration options
- * @returns File contents as string
- * @throws ValidationError if file not found or too large
+ * Read file from filesystem with security validation
+ *
+ * Performs multiple security checks before reading:
+ * - Path traversal validation (prevents ../../../etc/passwd)
+ * - Symlink detection and target validation (blocks symlinks escaping repo)
+ * - File size validation (prevents reading huge files)
+ *
+ * @param worktreePath - Absolute path to worktree root
+ * @param relpath - Relative path to file from worktree root
+ * @param config - Configuration options (maxFileSize)
+ *
+ * @returns File contents as UTF-8 string
+ *
+ * @throws {ValidationError} INVALID_PATH - Path traversal or escapes repository
+ * @throws {ValidationError} FILE_NOT_FOUND - File doesn't exist
+ * @throws {ValidationError} INVALID_PATH - Path is a directory
+ * @throws {ValidationError} FILE_TOO_LARGE - File exceeds size limit
+ *
+ * @example
+ * // Read regular file
+ * const content = await readFileFromFilesystem('/workspace/repo', 'src/index.ts', config)
+ *
+ * @example
+ * // Symlink within repository (allowed)
+ * const content = await readFileFromFilesystem('/workspace/repo', 'link-to-config.ts', config)
+ * // Validates symlink target is within /workspace/repo
  */
 async function readFileFromFilesystem(
   worktreePath: string,
