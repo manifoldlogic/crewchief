@@ -60,15 +60,16 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "chokidar": "^3.5.3",
+    "execa": "^8.0.1",
+    "lru-cache": "^11.2.2",
     "pg": "^8.11.3",
     "pino": "^8.16.2",
-    "zod": "^3.22.4",
-    "execa": "^8.0.1",
-    "chokidar": "^3.5.3"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
     "@types/node": "^20.10.5",
-    "@types/pg": "^8.10.9"
+    "@types/pg": "^8.10.9",
+    "typescript": "^5.3.3"
   }
 }

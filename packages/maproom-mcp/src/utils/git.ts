@@ -8,6 +8,25 @@
  */
 
 import { execa } from 'execa'
+import { LRUCache } from 'lru-cache'
+
+/**
+ * Module-level cache for branch detection
+ * - Max 100 different directories cached
+ * - 60 second TTL per entry
+ */
+const branchCache = new LRUCache<string, string>({
+  max: 100,
+  ttl: 60_000,
+})
+
+/**
+ * Clear the branch cache (primarily for testing)
+ * @internal
+ */
+export function clearBranchCache(): void {
+  branchCache.clear()
+}
 
 /**
  * Execute a git command and return stdout
@@ -76,5 +95,43 @@ export async function getRepoRoot(cwd?: string): Promise<string> {
     return root.trim()
   } catch (error: any) {
     throw new Error(`Not in a git repository: ${error.message}`)
+  }
+}
+
+/**
+ * Get the current git branch name with LRU caching
+ * @param cwd - Working directory for git operations (defaults to process.cwd())
+ * @returns Current branch name
+ * @throws Error if in detached HEAD state or not in a git repository
+ */
+export async function getCurrentBranch(cwd?: string): Promise<string> {
+  // Use absolute path for cache key
+  const workingDir = cwd || process.cwd()
+
+  // Check cache first
+  const cached = branchCache.get(workingDir)
+  if (cached) {
+    return cached
+  }
+
+  // Execute git command
+  try {
+    const branch = await execGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+    const trimmedBranch = branch.trim()
+
+    // Handle detached HEAD state
+    if (trimmedBranch === 'HEAD') {
+      throw new Error('Detached HEAD state - not on a branch')
+    }
+
+    // Store in cache before returning
+    branchCache.set(workingDir, trimmedBranch)
+    return trimmedBranch
+  } catch (error: any) {
+    // Provide clear error for non-git directories
+    if (error.message?.includes('not a git repository')) {
+      throw new Error('Not in a git repository')
+    }
+    throw error
   }
 }
