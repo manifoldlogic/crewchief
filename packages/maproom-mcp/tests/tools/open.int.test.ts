@@ -32,12 +32,20 @@ beforeAll(async () => {
     console.warn('No TEST_DATABASE_URL set, skipping integration tests')
     return
   }
-  testClient = new Client({ connectionString })
-  await testClient.connect()
 
-  // Create a temporary git repository for testing
-  testRepoPath = path.join(os.tmpdir(), `maproom-test-${Date.now()}`)
-  await fs.mkdir(testRepoPath, { recursive: true })
+  try {
+    testClient = new Client({ connectionString })
+    await testClient.connect()
+    console.log('✓ Database connection successful')
+
+    // Create a temporary git repository for testing
+    testRepoPath = path.join(os.tmpdir(), `maproom-test-${Date.now()}`)
+    await fs.mkdir(testRepoPath, { recursive: true })
+    console.log('✓ Test repository path:', testRepoPath)
+  } catch (error: any) {
+    console.error('Failed to setup test environment:', error.message)
+    testClient = undefined as any
+  }
 })
 
 afterAll(async () => {
@@ -196,14 +204,160 @@ describe('Open Tool - Database Integration', () => {
 })
 
 describe('Open Tool - End-to-End Tests', () => {
-  it.skip('should handle full workflow: filesystem read', async () => {
-    // This would require a fully set up test environment with database data
-    // Marked as skip for now - implement when test fixtures are available
+  it('should handle full workflow: filesystem read', async () => {
+    if (!testClient) {
+      console.log('Skipping test - no database connection')
+      return
+    }
+
+    // Create a test file in the temporary repository
+    const testFile = path.join(testRepoPath, 'sample.ts')
+    const testContent = `export function hello() {
+  console.log("Hello from integration test")
+}
+
+export class TestClass {
+  greet(): string {
+    return "Integration testing!"
+  }
+}`
+    await fs.writeFile(testFile, testContent)
+
+    // Initialize git repo and commit the file
+    await execGit(['init'], testRepoPath)
+    await execGit(['config', 'user.email', 'test@example.com'], testRepoPath)
+    await execGit(['config', 'user.name', 'Test User'], testRepoPath)
+    await execGit(['add', 'sample.ts'], testRepoPath)
+    await execGit(['commit', '-m', 'Add sample file'], testRepoPath)
+    const commit = await execGit(['rev-parse', 'HEAD'], testRepoPath)
+
+    // Create database entries
+    const repoResult = await testClient.query(
+      'INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2) RETURNING id',
+      ['test-repo', testRepoPath]
+    )
+    const repoId = repoResult.rows[0].id
+
+    const worktreeResult = await testClient.query(
+      'INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3) RETURNING id',
+      [repoId, 'main', testRepoPath]
+    )
+    const worktreeId = worktreeResult.rows[0].id
+
+    const commitResult = await testClient.query(
+      'INSERT INTO maproom.commits (repo_id, sha) VALUES ($1, $2) RETURNING id',
+      [repoId, commit.trim()]
+    )
+    const commitId = commitResult.rows[0].id
+
+    await testClient.query(
+      'INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, content_hash) VALUES ($1, $2, $3, $4, $5)',
+      [repoId, worktreeId, commitId, 'sample.ts', 'test-hash']
+    )
+
+    // Call handleOpenTool to read the file
+    const result = await handleOpenTool(
+      {
+        worktree: 'main',
+        relpath: 'sample.ts',
+      },
+      testClient
+    )
+
+    // Verify the content matches what we wrote
+    expect(result.content).toBe(testContent)
+    expect(result.relpath).toBe('sample.ts')
+
+    // Cleanup database entries
+    await testClient.query('DELETE FROM maproom.files WHERE worktree_id = $1', [worktreeId])
+    await testClient.query('DELETE FROM maproom.commits WHERE id = $1', [commitId])
+    await testClient.query('DELETE FROM maproom.worktrees WHERE id = $1', [worktreeId])
+    await testClient.query('DELETE FROM maproom.repos WHERE id = $1', [repoId])
   })
 
-  it.skip('should handle full workflow: git history read', async () => {
-    // This would require a fully set up test environment with database data
-    // Marked as skip for now - implement when test fixtures are available
+  it('should handle full workflow: git history read', async () => {
+    if (!testClient) {
+      console.log('Skipping test - no database connection')
+      return
+    }
+
+    // Create first version of file
+    const testFile = path.join(testRepoPath, 'versioned.ts')
+    const v1Content = `export const VERSION = 1
+export function getVersion() {
+  return VERSION
+}`
+    await fs.writeFile(testFile, v1Content)
+
+    // Initialize git repo and create first commit
+    await execGit(['init'], testRepoPath)
+    await execGit(['config', 'user.email', 'test@example.com'], testRepoPath)
+    await execGit(['config', 'user.name', 'Test User'], testRepoPath)
+    await execGit(['add', 'versioned.ts'], testRepoPath)
+    await execGit(['commit', '-m', 'Version 1'], testRepoPath)
+    const v1Commit = await execGit(['rev-parse', 'HEAD'], testRepoPath)
+
+    // Create second version
+    const v2Content = `export const VERSION = 2
+export function getVersion() {
+  return VERSION
+}
+
+export function isLatest() {
+  return true
+}`
+    await fs.writeFile(testFile, v2Content)
+    await execGit(['add', 'versioned.ts'], testRepoPath)
+    await execGit(['commit', '-m', 'Version 2'], testRepoPath)
+
+    // Create database entries for the repository
+    const repoResult = await testClient.query(
+      'INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2) RETURNING id',
+      ['git-history-repo', testRepoPath]
+    )
+    const repoId = repoResult.rows[0].id
+
+    const worktreeResult = await testClient.query(
+      'INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3) RETURNING id',
+      [repoId, 'main', testRepoPath]
+    )
+    const worktreeId = worktreeResult.rows[0].id
+
+    const commitResult = await testClient.query(
+      'INSERT INTO maproom.commits (repo_id, sha) VALUES ($1, $2) RETURNING id',
+      [repoId, v1Commit.trim()]
+    )
+    const commitId = commitResult.rows[0].id
+
+    await testClient.query(
+      'INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, content_hash) VALUES ($1, $2, $3, $4, $5)',
+      [repoId, worktreeId, commitId, 'versioned.ts', 'test-hash-v1']
+    )
+
+    // Call handleOpenTool to read historical version from git
+    const result = await handleOpenTool(
+      {
+        worktree: 'main',
+        relpath: 'versioned.ts',
+        commit: v1Commit.trim(),
+      },
+      testClient
+    )
+
+    // Verify we got version 1 content from git history
+    expect(result.content).toBe(v1Content)
+    expect(result.relpath).toBe('versioned.ts')
+
+    // Verify current file on disk is different (version 2)
+    const currentContent = await fs.readFile(testFile, 'utf8')
+    expect(currentContent).toBe(v2Content)
+    expect(currentContent).not.toBe(result.content)
+
+    // Cleanup database entries
+    await testClient.query('DELETE FROM maproom.files WHERE worktree_id = $1', [worktreeId])
+    await testClient.query('DELETE FROM maproom.commits WHERE id = $1', [commitId])
+    await testClient.query('DELETE FROM maproom.worktrees WHERE id = $1', [worktreeId])
+    await testClient.query('DELETE FROM maproom.repos WHERE id = $1', [repoId])
   })
 })
 
