@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker defaults**: Removed default `EMBEDDING_API_ENDPOINT` from docker-compose.yml (PROVFIX-4001)
   - Prevents Docker Compose defaults from polluting environment for all providers
   - Provider-specific defaults now handled cleanly by Rust code
+- **Open tool path resolution**: Fixed database pollution bug where multiple worktrees with same name caused incorrect path selection (OPNFIX-1001, OPNFIX-1002, OPNFIX-1003)
+  - Added multi-candidate fallback mechanism that tries all matching worktrees in order (most recent first)
+  - Open tool now validates file existence for each candidate path and returns first valid result
+  - Enhanced error messages provide actionable guidance including suggestion to run `maproom db cleanup-stale`
+  - Fixed issue where stale database entries from deleted worktrees caused "file not found" errors
 
 ### Added
 
@@ -65,6 +70,17 @@ Processing: 45/100 files (45%)
   - Clear precedence rules for endpoint configuration
   - Provider-specific endpoint behavior documented
   - Troubleshooting section covers common misconfigurations
+- **Open tool enhancements** (OPNFIX-2001, OPNFIX-2002):
+  - Symlink validation ensures symlink targets remain within repository boundaries
+  - Debug logging throughout path resolution process aids troubleshooting
+  - Comprehensive test suite covering E2E workflows, security scenarios, and edge cases (OPNFIX-3001, 3002, 3003, 3004)
+  - User documentation explaining multi-candidate fallback behavior and error messages (OPNFIX-4001)
+
+### Security
+- **Open tool symlink protection** (OPNFIX-2001):
+  - Symlinks are now validated to prevent path traversal attacks
+  - Symlink targets outside repository boundaries are rejected with clear error messages
+  - Protects against malicious symlinks pointing to sensitive system files (e.g., `/etc/passwd`)
 
 ### Improved
 - Clear environment variable precedence rules for all providers
