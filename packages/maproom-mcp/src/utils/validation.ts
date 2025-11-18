@@ -176,3 +176,17 @@ export function extractRange(content: string, start: number, end: number): strin
   // But we want [start, end] inclusive, so we use slice(start-1, end)
   return lines.slice(start - 1, end).join('\n')
 }
+
+/**
+ * Check if a file exists and is readable
+ * @param filePath - Absolute path to file
+ * @returns true if file exists and is readable, false otherwise
+ */
+export async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath, fs.constants.R_OK)
+    return true
+  } catch {
+    return false
+  }
+}

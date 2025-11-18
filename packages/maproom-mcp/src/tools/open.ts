@@ -21,6 +21,7 @@ import {
   validateRange,
   extractRange,
   ValidationError,
+  fileExists,
 } from '../utils/validation.js'
 import {
   isCommitCheckedOut,
@@ -58,7 +59,7 @@ async function getWorktreePath(
      FROM maproom.worktrees w
      JOIN maproom.files f ON f.worktree_id = w.id
      WHERE f.relpath = $1 AND w.name = $2
-     LIMIT 1`,
+     ORDER BY w.id DESC`,
     [relpath, worktreeName]
   )
 
@@ -82,7 +83,21 @@ async function getWorktreePath(
     }
   }
 
-  return rows[0].abs_path as string
+  // Try each candidate until we find one that exists
+  for (const row of rows) {
+    const fullPath = path.join(row.abs_path, relpath)
+    if (await fileExists(fullPath)) {
+      return row.abs_path as string
+    }
+  }
+
+  // All candidates failed
+  throw new ValidationError(
+    `File '${relpath}' not accessible in worktree '${worktreeName}'. ` +
+    `Tried ${rows.length} candidate paths but none exist on disk. ` +
+    `This may indicate database pollution. Run 'maproom db cleanup-stale' to fix.`,
+    'FILE_NOT_FOUND'
+  )
 }
 
 /**
