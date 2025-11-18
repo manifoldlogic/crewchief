@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process'
 import { Readable } from 'node:stream'
 import path from 'node:path'
 import fs from 'node:fs'
+import { LRUCache } from 'lru-cache'
+import { getCurrentBranch } from './utils/git.js'
 
 // IMPORTANT: Never write logs to stdout; MCP JSON-RPC must be the only stdout output.
 // Route pino logs to stderr to avoid corrupting the protocol stream.
@@ -1196,6 +1198,194 @@ process.stdin.on('data', async (chunk) => {
     try { await handleMessage(msg) } catch (err) { log.error({ err }, 'handler error'); respond(msg.id ?? null, undefined, err) }
   }
 })
+
+/**
+ * Metadata about worktree resolution
+ */
+interface ResolutionMetadata {
+  mode: 'explicit' | 'auto' | 'fallback' | 'all'
+  auto_detected?: boolean
+  detected_branch?: string
+  fallback?: boolean
+  fallback_reason?: string
+  worktree?: string
+}
+
+/**
+ * LRU cache for worktree ID lookups
+ * - Max 500 repo+worktree combinations
+ * - 5 minute TTL per entry
+ */
+const worktreeIdCache = new LRUCache<string, number>({
+  max: 500,
+  ttl: 300_000,
+})
+
+/**
+ * Look up worktree ID from database with LRU caching
+ * @param client - PostgreSQL client
+ * @param repo - Repository name
+ * @param worktreeName - Worktree name to lookup
+ * @returns Worktree ID
+ * @throws Error if worktree not found
+ */
+async function lookupWorktreeId(
+  client: Client,
+  repo: string,
+  worktreeName: string
+): Promise<number> {
+  const cacheKey = `${repo}:${worktreeName}`
+
+  // Check cache first
+  const cached = worktreeIdCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  // Look up repo_id first
+  const { rows: repoRows } = await client.query(
+    'SELECT id FROM maproom.repos WHERE name = $1',
+    [repo]
+  )
+  if (repoRows.length === 0) {
+    throw new Error(`Repository '${repo}' not found`)
+  }
+  const repoId = repoRows[0].id
+
+  // Look up worktree
+  const { rows: worktreeRows } = await client.query(
+    'SELECT id, name FROM maproom.worktrees WHERE repo_id=$1 AND name=$2',
+    [repoId, worktreeName]
+  )
+
+  if (worktreeRows.length === 0) {
+    throw new Error(`Worktree '${worktreeName}' not found in repository '${repo}'`)
+  }
+
+  const worktreeId = worktreeRows[0].id
+
+  // Cache the result
+  worktreeIdCache.set(cacheKey, worktreeId)
+
+  return worktreeId
+}
+
+/**
+ * Resolve worktree ID using four-tier resolution logic
+ *
+ * Tier 1 (Explicit): Use provided parameter directly
+ * Tier 2 (Auto-detect): Call getCurrentBranch() and lookup
+ * Tier 3 (Fallback): Try "main" worktree
+ * Tier 4 (Last resort): Return null (search all)
+ *
+ * @param client - PostgreSQL client
+ * @param repo - Repository name
+ * @param explicitWorktree - Optional explicit worktree parameter (string or null)
+ * @returns Object with worktree ID and resolution metadata
+ */
+async function resolveWorktreeId(
+  client: Client,
+  repo: string,
+  explicitWorktree: string | null | undefined
+): Promise<{ id: number | null; metadata: ResolutionMetadata }> {
+  // Tier 1: Explicit parameter
+  if (explicitWorktree !== undefined) {
+    if (explicitWorktree === null) {
+      log.debug({ repo }, 'Tier 1: Explicit null - searching all worktrees')
+      return {
+        id: null,
+        metadata: {
+          mode: 'all',
+          worktree: 'all'
+        }
+      }
+    }
+
+    // Explicit string worktree
+    try {
+      const id = await lookupWorktreeId(client, repo, explicitWorktree)
+      log.debug({ repo, worktree: explicitWorktree, id }, 'Tier 1: Explicit worktree found')
+      return {
+        id,
+        metadata: {
+          mode: 'explicit',
+          worktree: explicitWorktree
+        }
+      }
+    } catch (error: any) {
+      // Explicit worktree specified but not found - this is an error
+      throw new Error(
+        `Explicit worktree '${explicitWorktree}' not found in repository '${repo}'. ` +
+        `Use the status tool to see available worktrees.`
+      )
+    }
+  }
+
+  // Tier 2: Auto-detection via getCurrentBranch()
+  try {
+    const detectedBranch = await getCurrentBranch()
+    log.debug({ repo, detectedBranch }, 'Tier 2: Auto-detected current branch')
+
+    try {
+      const id = await lookupWorktreeId(client, repo, detectedBranch)
+      log.info({ repo, branch: detectedBranch, id }, 'Tier 2: Auto-detected worktree found')
+      return {
+        id,
+        metadata: {
+          mode: 'auto',
+          auto_detected: true,
+          detected_branch: detectedBranch,
+          worktree: detectedBranch
+        }
+      }
+    } catch (error: any) {
+      log.warn(
+        { repo, branch: detectedBranch, error: error.message },
+        'Tier 2: Auto-detected branch not indexed, falling back to main'
+      )
+      // Fall through to Tier 3
+    }
+  } catch (error: any) {
+    log.warn(
+      { error: error.message },
+      'Tier 2: Could not auto-detect branch, falling back to main'
+    )
+    // Fall through to Tier 3
+  }
+
+  // Tier 3: Fallback to "main"
+  try {
+    const id = await lookupWorktreeId(client, repo, 'main')
+    log.info({ repo, id }, 'Tier 3: Fallback to main worktree')
+    return {
+      id,
+      metadata: {
+        mode: 'fallback',
+        fallback: true,
+        fallback_reason: 'Auto-detection failed, using main',
+        worktree: 'main'
+      }
+    }
+  } catch (error: any) {
+    log.warn(
+      { repo, error: error.message },
+      'Tier 3: Main worktree not found, falling back to search all'
+    )
+    // Fall through to Tier 4
+  }
+
+  // Tier 4: Last resort - search all worktrees
+  log.warn({ repo }, 'Tier 4: No worktree found, searching all')
+  return {
+    id: null,
+    metadata: {
+      mode: 'all',
+      fallback: true,
+      fallback_reason: 'Main worktree not found, searching all worktrees',
+      worktree: 'all'
+    }
+  }
+}
 
 // Do not log to stdout here; keep idle.
 
