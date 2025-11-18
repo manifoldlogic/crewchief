@@ -468,15 +468,69 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("migrations applied");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
-                // TODO: Implementation in IDXCLEAN-2002
-                let _client = db::connect().await?;
-                if confirm {
-                    println!("Would run cleanup with confirmation");
-                } else {
-                    println!("Would run cleanup in dry-run mode");
+                // Phase 1: Detection
+                println!("🔍 Detecting stale worktrees...");
+                let mut client = db::connect().await?;
+                let detector = db::cleanup::StaleWorktreeDetector::new(&client);
+
+                let stale = match detector.detect_stale_worktrees().await {
+                    Ok(worktrees) => worktrees,
+                    Err(e) => {
+                        eprintln!("❌ Error detecting stale worktrees: {}", e);
+                        std::process::exit(1);
+                    }
+                };
+
+                // Phase 2: Report
+                if stale.is_empty() {
+                    println!("✅ No stale worktrees found!");
+                    std::process::exit(2); // Informational exit code
                 }
-                if verbose {
-                    println!("Verbose mode enabled");
+
+                println!("📊 Found {} stale worktree(s):", stale.len());
+                for wt in &stale {
+                    println!(
+                        "  - {} (path: {}, chunks: {})",
+                        wt.name, wt.abs_path, wt.chunk_count
+                    );
+                    if verbose {
+                        println!(
+                            "    ID: {}, Repo ID: {}, Exists: {}",
+                            wt.id, wt.repo_id, wt.exists
+                        );
+                    }
+                }
+
+                // Phase 3: Deletion (if confirmed)
+                if confirm {
+                    println!("🗑️  Deleting {} stale worktree(s)...", stale.len());
+                    let mut cleaner = db::cleanup::WorktreeCleaner::new(&mut client, false);
+
+                    match cleaner.cleanup_stale_worktrees(stale).await {
+                        Ok(report) => {
+                            println!("✅ Cleanup complete!");
+                            println!(
+                                "   Deleted: {}/{}",
+                                report.deleted_count, report.total_stale
+                            );
+                            println!("   Chunks cleaned: {}", report.chunks_cleaned);
+                            if report.has_failures() {
+                                println!("   ⚠️  Failures: {}", report.failed_count);
+                                if verbose {
+                                    for (id, err) in &report.failed_deletions {
+                                        println!("      Worktree {}: {}", id, err);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Error during cleanup: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    println!("⚠️  This was a dry-run. Use --confirm to actually delete.");
+                    println!("   Command: maproom db cleanup-stale --confirm");
                 }
             }
         },
