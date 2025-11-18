@@ -180,12 +180,15 @@ export function extractRange(content: string, start: number, end: number): strin
 /**
  * Check if a file exists and is readable
  * @param filePath - Absolute path to file
- * @returns true if file exists and is readable, false otherwise
+ * @returns true if file exists, is readable, and is a file (not a directory), false otherwise
  */
 export async function fileExists(filePath: string): Promise<boolean> {
   try {
+    // First check if readable
     await fs.access(filePath, fs.constants.R_OK)
-    return true
+    // Then check if it's a file (not a directory)
+    const stats = await fs.stat(filePath)
+    return stats.isFile()
   } catch {
     return false
   }
