@@ -10,6 +10,9 @@ pub mod materialized_views;
 pub mod pool;
 pub mod queries;
 
+// Re-export cleanup types for convenience
+pub use cleanup::{CleanupReport, StaleWorktree, StaleWorktreeDetector, WorktreeCleaner};
+
 // Re-export column selection types for convenience
 pub use columns::{select_columns_for_dimension, ColumnSet};
 

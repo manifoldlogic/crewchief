@@ -194,6 +194,242 @@ impl<'a> StaleWorktreeDetector<'a> {
     }
 }
 
+/// Report of cleanup operations with statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanupReport {
+    /// Total number of stale worktrees found
+    pub total_stale: usize,
+    /// Number of worktrees successfully deleted
+    pub deleted_count: usize,
+    /// Total number of chunks cleaned (deleted or had worktree removed)
+    pub chunks_cleaned: i64,
+    /// Number of deletions that failed
+    pub failed_count: usize,
+    /// IDs of successfully deleted worktrees
+    pub deleted_ids: Vec<i64>,
+    /// Failed deletions with error messages
+    pub failed_deletions: Vec<(i64, String)>,
+}
+
+impl CleanupReport {
+    /// Success rate as percentage (0.0-1.0)
+    pub fn success_rate(&self) -> f64 {
+        if self.total_stale == 0 {
+            return 1.0;
+        }
+        self.deleted_count as f64 / self.total_stale as f64
+    }
+}
+
+/// Cleaner for safely deleting stale worktrees
+pub struct WorktreeCleaner<'a> {
+    client: &'a mut Client,
+    dry_run: bool,
+}
+
+impl<'a> WorktreeCleaner<'a> {
+    /// Create a new worktree cleaner
+    ///
+    /// # Arguments
+    /// * `client` - PostgreSQL database client (requires mutable reference for transactions)
+    /// * `dry_run` - If true, no actual deletions are performed
+    ///
+    /// # Example
+    /// ```no_run
+    /// use crewchief_maproom::db::cleanup::{WorktreeCleaner, StaleWorktreeDetector};
+    /// use tokio_postgres::NoTls;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let (mut client, connection) = tokio_postgres::connect("postgresql://...", NoTls).await?;
+    /// tokio::spawn(async move { connection.await });
+    ///
+    /// // Detect stale worktrees
+    /// let detector = StaleWorktreeDetector::new(&client);
+    /// let stale_worktrees = detector.detect_stale_worktrees().await?;
+    ///
+    /// // Clean up stale worktrees
+    /// let mut cleaner = WorktreeCleaner::new(&mut client, false);
+    /// let report = cleaner.cleanup_stale_worktrees(stale_worktrees).await?;
+    ///
+    /// println!("Deleted {} worktrees, cleaned {} chunks",
+    ///     report.deleted_count, report.chunks_cleaned);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(client: &'a mut Client, dry_run: bool) -> Self {
+        Self { client, dry_run }
+    }
+
+    /// Clean up stale worktrees
+    ///
+    /// Deletes stale worktrees from the database using array-based deletion pattern
+    /// to protect multi-worktree chunks. All deletions occur within a single transaction
+    /// for atomicity.
+    ///
+    /// # Algorithm
+    /// For each stale worktree:
+    /// 1. Remove worktree ID from all chunks' worktree_ids arrays
+    /// 2. Garbage collect chunks with empty worktree_ids arrays
+    /// 3. Delete the worktree record
+    ///
+    /// # Safety
+    /// - Multi-worktree chunks are preserved (array removal, not CASCADE)
+    /// - Single-worktree chunks are garbage collected
+    /// - All operations in transaction (atomic commit)
+    /// - Partial failures are collected but don't abort transaction
+    ///
+    /// # Performance
+    /// Uses GIN index on worktree_ids for fast chunk queries.
+    /// Target: <2 seconds for 95 deletions with 500,000 chunks.
+    ///
+    /// # Arguments
+    /// * `stale` - Vector of stale worktrees to delete
+    ///
+    /// # Returns
+    /// CleanupReport with statistics and any failures
+    pub async fn cleanup_stale_worktrees(
+        &mut self,
+        stale: Vec<StaleWorktree>,
+    ) -> Result<CleanupReport> {
+        if self.dry_run {
+            return Ok(self.create_dry_run_report(&stale));
+        }
+
+        // Create a single transaction for all deletions
+        let mut tx = self.client.transaction().await
+            .context("Failed to create cleanup transaction")?;
+
+        let mut deleted_ids = Vec::new();
+        let mut chunks_cleaned = 0i64;
+        let mut failed_deletions = Vec::new();
+
+        // Process each worktree deletion within the same transaction
+        for wt in &stale {
+            match Self::delete_worktree_tx(&mut tx, wt.id).await {
+                Ok(cleaned) => {
+                    deleted_ids.push(wt.id);
+                    chunks_cleaned += cleaned;
+                    tracing::info!(
+                        worktree_id = wt.id,
+                        name = %wt.name,
+                        abs_path = %wt.abs_path,
+                        chunks_cleaned = cleaned,
+                        "Deleted stale worktree"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        worktree_id = wt.id,
+                        name = %wt.name,
+                        error = %e,
+                        "Failed to delete stale worktree"
+                    );
+                    failed_deletions.push((wt.id, e.to_string()));
+                }
+            }
+        }
+
+        // Commit all deletions at once
+        tx.commit().await
+            .context("Failed to commit cleanup transaction")?;
+
+        Ok(CleanupReport {
+            total_stale: stale.len(),
+            deleted_count: deleted_ids.len(),
+            chunks_cleaned,
+            failed_count: failed_deletions.len(),
+            deleted_ids,
+            failed_deletions,
+        })
+    }
+
+    /// Delete a single worktree within a transaction
+    ///
+    /// Uses array-based deletion pattern from incremental/tree_sha_update.rs::remove_worktree_from_chunks
+    /// but operates at worktree-level scope (all chunks) instead of file-level scope.
+    ///
+    /// # Steps
+    /// 1. Remove worktree_id from chunks.worktree_ids arrays
+    /// 2. Garbage collect chunks with empty arrays
+    /// 3. Delete worktree record
+    ///
+    /// # Arguments
+    /// * `tx` - Transaction to execute deletions within
+    /// * `worktree_id` - ID of worktree to delete
+    ///
+    /// # Returns
+    /// Number of chunks garbage collected (had empty worktree_ids after removal)
+    async fn delete_worktree_tx(
+        tx: &mut tokio_postgres::Transaction<'_>,
+        worktree_id: i64,
+    ) -> Result<i64> {
+        // Step 1: Remove worktree from chunks.worktree_ids JSONB arrays
+        // Uses JSONB operator: worktree_ids - 'X'::TEXT removes X from array
+        // WHERE clause uses GIN index: worktree_ids ? 'X' checks if array contains X
+        let _affected = tx
+            .execute(
+                r#"
+                UPDATE maproom.chunks
+                SET worktree_ids = worktree_ids - $1::TEXT,
+                    updated_at = NOW()
+                WHERE worktree_ids ? $1::TEXT
+                "#,
+                &[&worktree_id.to_string()],
+            )
+            .await
+            .with_context(|| {
+                format!("Failed to remove worktree {} from chunks", worktree_id)
+            })?;
+
+        // Step 2: Garbage collection - delete chunks with empty worktree_ids
+        // These are chunks that belonged ONLY to the deleted worktree
+        let deleted = tx
+            .execute(
+                r#"
+                DELETE FROM maproom.chunks
+                WHERE jsonb_array_length(worktree_ids) = 0
+                "#,
+                &[],
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to garbage collect chunks for worktree {}",
+                    worktree_id
+                )
+            })?;
+
+        // Step 3: Delete worktree record
+        // This also cascades to worktree_index_state via ON DELETE CASCADE
+        tx.execute(
+            "DELETE FROM maproom.worktrees WHERE id = $1",
+            &[&worktree_id],
+        )
+        .await
+        .with_context(|| format!("Failed to delete worktree record {}", worktree_id))?;
+
+        Ok(deleted as i64)
+    }
+
+    /// Create dry-run report without making any changes
+    fn create_dry_run_report(&self, stale: &[StaleWorktree]) -> CleanupReport {
+        tracing::info!(
+            stale_count = stale.len(),
+            "Dry-run mode: would delete {} worktrees",
+            stale.len()
+        );
+
+        CleanupReport {
+            total_stale: stale.len(),
+            deleted_count: 0,
+            chunks_cleaned: 0,
+            failed_count: 0,
+            deleted_ids: Vec::new(),
+            failed_deletions: Vec::new(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,5 +487,58 @@ mod tests {
 
         assert_eq!(stale1, stale2);
         assert_ne!(stale1, stale3);
+    }
+
+    #[test]
+    fn test_cleanup_report_success_rate() {
+        let report = CleanupReport {
+            total_stale: 10,
+            deleted_count: 8,
+            chunks_cleaned: 150,
+            failed_count: 2,
+            deleted_ids: vec![1, 2, 3, 4, 5, 6, 7, 8],
+            failed_deletions: vec![(9, "error1".to_string()), (10, "error2".to_string())],
+        };
+
+        assert_eq!(report.success_rate(), 0.8);
+    }
+
+    #[test]
+    fn test_cleanup_report_success_rate_empty() {
+        let report = CleanupReport {
+            total_stale: 0,
+            deleted_count: 0,
+            chunks_cleaned: 0,
+            failed_count: 0,
+            deleted_ids: Vec::new(),
+            failed_deletions: Vec::new(),
+        };
+
+        assert_eq!(report.success_rate(), 1.0);
+    }
+
+    #[test]
+    fn test_cleanup_report_serialization() {
+        let report = CleanupReport {
+            total_stale: 5,
+            deleted_count: 3,
+            chunks_cleaned: 42,
+            failed_count: 2,
+            deleted_ids: vec![1, 2, 3],
+            failed_deletions: vec![
+                (4, "Database connection lost".to_string()),
+                (5, "Permission denied".to_string()),
+            ],
+        };
+
+        let json = serde_json::to_string(&report).unwrap();
+        assert!(json.contains("\"total_stale\":5"));
+        assert!(json.contains("\"deleted_count\":3"));
+        assert!(json.contains("\"chunks_cleaned\":42"));
+
+        let deserialized: CleanupReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.total_stale, 5);
+        assert_eq!(deserialized.deleted_count, 3);
+        assert_eq!(deserialized.chunks_cleaned, 42);
     }
 }
