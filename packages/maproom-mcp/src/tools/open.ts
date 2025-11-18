@@ -141,6 +141,14 @@ async function readFileFromFilesystem(
   // Validate file is within worktree boundaries
   validateWithinRepo(absolutePath, worktreePath)
 
+  // Check if it's a symlink and validate target
+  const stats = await fs.lstat(absolutePath)
+  if (stats.isSymbolicLink()) {
+    const realPath = await fs.realpath(absolutePath)
+    validateWithinRepo(realPath, worktreePath)
+    log.debug({ path: absolutePath, target: realPath }, 'Following symlink within repository')
+  }
+
   // Check file size before reading
   await validateFileSize(absolutePath, config.maxFileSize)
 

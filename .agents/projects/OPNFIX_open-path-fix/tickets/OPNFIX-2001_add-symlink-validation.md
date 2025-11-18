@@ -1,9 +1,9 @@
 # Ticket: OPNFIX-2001: Add Symlink Validation to File Reading
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -24,13 +24,13 @@ This ticket implements **Security Improvement 3: Symlink Detection** from the se
 **Reference:** OPNFIX Phase 2: Security Enhancements (security-review.md lines 241-286)
 
 ## Acceptance Criteria
-- [ ] Symlinks are detected before file reading (using fs.lstat)
-- [ ] Symlink targets are resolved to absolute paths (using fs.realpath)
-- [ ] Targets are validated against repository root (validateWithinRepo)
-- [ ] Symlinks within repository are allowed and read successfully
-- [ ] Symlinks outside repository throw ValidationError with clear message
-- [ ] Debug logs show symlink detection and resolution
-- [ ] No performance impact for non-symlink files (lstat is fast)
+- [x] Symlinks are detected before file reading (using fs.lstat)
+- [x] Symlink targets are resolved to absolute paths (using fs.realpath)
+- [x] Targets are validated against repository root (validateWithinRepo)
+- [x] Symlinks within repository are allowed and read successfully
+- [x] Symlinks outside repository throw ValidationError with clear message
+- [x] Debug logs show symlink detection and resolution
+- [x] No performance impact for non-symlink files (lstat is fast)
 
 ## Technical Requirements
 - Use `fs.lstat()` to get stats without following symlinks
