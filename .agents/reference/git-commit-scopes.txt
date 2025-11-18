@@ -20,6 +20,7 @@ docs
 deps
 embedding
 git
+idxclean
 incremental
 perf
 release

@@ -136,13 +136,16 @@ async fn run_migrations(client: &Client) -> Result<()> {
 /// Insert test data: repo, worktree, and chunks
 async fn insert_test_data(
     client: &Client,
+    worktree_name: &str,
     abs_path: &str,
     chunk_count: i32,
 ) -> Result<(i64, i64)> {
-    // Insert repo
+    // Insert or get repo (idempotent)
     let repo_id: i64 = client
         .query_one(
-            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2) RETURNING id",
+            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2)
+             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+             RETURNING id",
             &[&"test-repo", &"/tmp/test-repo"],
         )
         .await?
@@ -152,16 +155,17 @@ async fn insert_test_data(
     let worktree_id: i64 = client
         .query_one(
             "INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3) RETURNING id",
-            &[&repo_id, &"test-branch", &abs_path],
+            &[&repo_id, &worktree_name, &abs_path],
         )
         .await?
         .get(0);
 
-    // Insert commit
+    // Insert commit with unique SHA based on worktree name
+    let commit_sha = format!("commit-{}", worktree_name.replace("-", ""));
     let commit_id: i64 = client
         .query_one(
             "INSERT INTO maproom.commits (repo_id, sha, committed_at) VALUES ($1, $2, NOW()) RETURNING id",
-            &[&repo_id, &"abc123"],
+            &[&repo_id, &commit_sha],
         )
         .await?
         .get(0);
@@ -176,18 +180,19 @@ async fn insert_test_data(
         .await?
         .get(0);
 
-    // Insert chunks with worktree_ids
+    // Insert chunks with worktree_ids and blob_sha
     for i in 0..chunk_count {
         client
             .execute(
-                "INSERT INTO maproom.chunks (file_id, symbol_name, kind, start_line, end_line, preview, worktree_ids)
-                 VALUES ($1, $2, 'func', $3, $4, $5, $6)",
+                "INSERT INTO maproom.chunks (file_id, symbol_name, kind, start_line, end_line, preview, blob_sha, worktree_ids)
+                 VALUES ($1, $2, 'func', $3, $4, $5, $6, $7)",
                 &[
                     &file_id,
                     &format!("test_func_{}", i),
                     &(i * 10),
                     &((i + 1) * 10),
                     &format!("fn test_func_{}() {{}}", i),
+                    &format!("test_blob_sha_{}", i), // Add blob_sha
                     &serde_json::json!([worktree_id.to_string()]),
                 ],
             )
@@ -209,7 +214,7 @@ async fn test_detects_stale_worktree() -> Result<()> {
 
     // Insert test data with non-existent path
     let non_existent_path = "/tmp/non_existent_worktree_12345";
-    insert_test_data(&client, non_existent_path, 5).await?;
+    insert_test_data(&client, "test-branch", non_existent_path, 5).await?;
 
     // Run detection
     let detector = StaleWorktreeDetector::new(&client);
@@ -250,7 +255,7 @@ async fn test_preserves_valid_worktree() -> Result<()> {
     let existing_path = temp_dir.path().to_str().unwrap();
 
     // Insert test data with existing path
-    insert_test_data(&client, existing_path, 3).await?;
+    insert_test_data(&client, "test-branch", existing_path, 3).await?;
 
     // Run detection
     let detector = StaleWorktreeDetector::new(&client);
@@ -284,11 +289,11 @@ async fn test_mixed_worktrees() -> Result<()> {
     // Create one valid worktree
     let temp_dir = TempDir::new()?;
     let valid_path = temp_dir.path().to_str().unwrap();
-    insert_test_data(&client, valid_path, 10).await?;
+    insert_test_data(&client, "valid-branch", valid_path, 10).await?;
 
-    // Create two stale worktrees
-    insert_test_data(&client, "/tmp/stale_worktree_1_xyz", 5).await?;
-    insert_test_data(&client, "/tmp/stale_worktree_2_xyz", 8).await?;
+    // Create two stale worktrees with unique names
+    insert_test_data(&client, "stale-branch-1", "/tmp/stale_worktree_1_xyz", 5).await?;
+    insert_test_data(&client, "stale-branch-2", "/tmp/stale_worktree_2_xyz", 8).await?;
 
     // Run detection
     let detector = StaleWorktreeDetector::new(&client);
@@ -391,9 +396,9 @@ async fn test_parallel_performance() -> Result<()> {
     // Run migrations
     run_migrations(&client).await?;
 
-    // Insert 50 worktrees (a reasonable test size)
+    // Insert 50 worktrees (a reasonable test size) with unique names
     for i in 0..50 {
-        insert_test_data(&client, &format!("/tmp/test_worktree_{}", i), 2).await?;
+        insert_test_data(&client, &format!("test-branch-{}", i), &format!("/tmp/test_worktree_{}", i), 2).await?;
     }
 
     // Run detection and measure time
