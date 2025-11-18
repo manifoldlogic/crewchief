@@ -22,6 +22,23 @@ fn validate_provider(s: &str) -> Result<String, String> {
     }
 }
 
+/// Format number with thousands separator.
+///
+/// Converts a number like 487329 to "487,329" for better readability.
+fn format_number(n: i64) -> String {
+    let s = n.to_string();
+    let mut result = String::new();
+    let chars: Vec<char> = s.chars().collect();
+
+    for (i, ch) in chars.iter().enumerate() {
+        if i > 0 && (chars.len() - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(*ch);
+    }
+    result
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "crewchief-maproom", version, about = "Maproom indexer & CLI")]
 struct Cli {
@@ -468,6 +485,9 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("migrations applied");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
+                // Start timer for elapsed time tracking
+                let start_time = std::time::Instant::now();
+
                 // Phase 1: Detection
                 println!("🔍 Detecting stale worktrees...");
                 let mut client = db::connect().await?;
@@ -490,8 +510,8 @@ async fn main() -> anyhow::Result<()> {
                 println!("📊 Found {} stale worktree(s):", stale.len());
                 for wt in &stale {
                     println!(
-                        "  - {} (path: {}, chunks: {})",
-                        wt.name, wt.abs_path, wt.chunk_count
+                        "  • {} (path: {}, chunks: {})",
+                        wt.name, wt.abs_path, format_number(wt.chunk_count)
                     );
                     if verbose {
                         println!(
@@ -501,6 +521,10 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
+                // Calculate and display total chunks
+                let total_chunks: i64 = stale.iter().map(|wt| wt.chunk_count).sum();
+                println!("\n💾 Total chunks to delete: {}", format_number(total_chunks));
+
                 // Phase 3: Deletion (if confirmed)
                 if confirm {
                     println!("🗑️  Deleting {} stale worktree(s)...", stale.len());
@@ -508,12 +532,14 @@ async fn main() -> anyhow::Result<()> {
 
                     match cleaner.cleanup_stale_worktrees(stale).await {
                         Ok(report) => {
+                            let elapsed = start_time.elapsed();
                             println!("✅ Cleanup complete!");
                             println!(
                                 "   Deleted: {}/{}",
                                 report.deleted_count, report.total_stale
                             );
-                            println!("   Chunks cleaned: {}", report.chunks_cleaned);
+                            println!("   Chunks cleaned: {}", format_number(report.chunks_cleaned));
+                            println!("   Time taken: {:.2}s", elapsed.as_secs_f64());
                             if report.has_failures() {
                                 println!("   ⚠️  Failures: {}", report.failed_count);
                                 if verbose {
@@ -529,8 +555,10 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 } else {
+                    let elapsed = start_time.elapsed();
                     println!("⚠️  This was a dry-run. Use --confirm to actually delete.");
                     println!("   Command: maproom db cleanup-stale --confirm");
+                    println!("   Time taken: {:.2}s", elapsed.as_secs_f64());
                 }
             }
         },
