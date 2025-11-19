@@ -1,9 +1,9 @@
 # Ticket: SEMRANK-0002: Validate Baseline FTS Implementation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (validation/documentation task, no code tests required)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (validation/documentation task, no code tests required)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,12 +26,12 @@ Current FTS issue: tests rank higher than implementations due to term frequency,
 This ticket implements Phase 0 (MCP Tool Creation & Baseline) from the SEMRANK project plan.
 
 ## Acceptance Criteria
-- [ ] Search tool successfully returns results for 10+ test queries
-- [ ] Current ranking behavior documented: For query "validate_provider", record top 3 results (kind, relpath, score)
-- [ ] Known failure cases confirmed: Tests ranking above implementations for exact function name searches
-- [ ] MCP protocol integration verified: Tool callable via MCP client, proper error handling
-- [ ] Debug mode confirmed functional: Returns score breakdown (base_fts score visible)
-- [ ] Documentation created: `baseline-behavior.md` with current FTS ranking examples
+- [x] Search tool successfully returns results for 10+ test queries
+- [x] Current ranking behavior documented: For query "validate_provider", record top 3 results (kind, relpath, score)
+- [x] Known failure cases confirmed: Tests ranking above implementations for exact function name searches
+- [x] MCP protocol integration verified: Tool callable via MCP client, proper error handling
+- [x] Debug mode confirmed functional: Returns score breakdown (base_fts score visible)
+- [x] Documentation created: `baseline-behavior.md` with current FTS ranking examples
 
 ## Technical Requirements
 - Use test corpus from existing maproom codebase (don't wait for SEMRANK-1003)
