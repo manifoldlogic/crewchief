@@ -111,6 +111,55 @@ export async function cleanTestData(client: Client): Promise<void> {
 }
 
 /**
+ * Ensure test-corpus is indexed for SEMRANK tests
+ * This makes tests self-contained and resilient to parallel execution
+ */
+export async function ensureTestCorpusIndexed(client: Client): Promise<void> {
+  // Check if test-corpus exists
+  const { rows } = await client.query(
+    "SELECT COUNT(*) as count FROM maproom.repos WHERE name = 'test-corpus'"
+  )
+  const repoExists = parseInt(rows[0].count) > 0
+
+  if (!repoExists) {
+    console.log('📦 Test corpus not found, indexing /tmp/semrank-test-corpus...')
+
+    // Use the Rust binary to index test corpus
+    const binaryPath = path.join(__dirname, '..', '..', '..', 'cli', 'bin', 'crewchief-maproom')
+
+    try {
+      execSync(
+        `"${binaryPath}" scan --repo test-corpus --worktree main --path /tmp/semrank-test-corpus --commit HEAD --force --generate-embeddings false`,
+        {
+          stdio: 'inherit',
+          env: {
+            ...process.env,
+            MAPROOM_DATABASE_URL: getDatabaseUrl(),
+          },
+        }
+      )
+
+      // Verify indexing succeeded
+      const { rows: verifyRows } = await client.query(
+        "SELECT COUNT(*) as count FROM maproom.chunks c JOIN maproom.files f ON c.file_id = f.id JOIN maproom.worktrees w ON f.worktree_id = w.id JOIN maproom.repos r ON w.repo_id = r.id WHERE r.name = 'test-corpus'"
+      )
+      const chunkCount = parseInt(verifyRows[0].count)
+
+      if (chunkCount === 0) {
+        throw new Error('Test corpus indexed but no chunks found')
+      }
+
+      console.log(`✅ Test corpus indexed successfully (${chunkCount} chunks)`)
+    } catch (error: any) {
+      throw new Error(
+        `Failed to index test corpus: ${error.message}\n` +
+        'Ensure /tmp/semrank-test-corpus exists and contains TypeScript test fixtures.'
+      )
+    }
+  }
+}
+
+/**
  * Create a test repository
  */
 export async function createTestRepo(

@@ -22,21 +22,12 @@ describe('Regression Tests - SEMRANK-3006', () => {
   let client: Client
 
   beforeAll(async () => {
-    const { createClient, setupTestSchema } = await import('../helpers/database.js')
+    const { createClient, setupTestSchema, ensureTestCorpusIndexed } = await import('../helpers/database.js')
     client = await createClient()
     await setupTestSchema(client)
 
-    // Verify test-corpus exists
-    const { rows } = await client.query(
-      "SELECT COUNT(*) as count FROM maproom.repos WHERE name = 'test-corpus'"
-    )
-    const repoExists = parseInt(rows[0].count) > 0
-
-    if (!repoExists) {
-      throw new Error(
-        'Test corpus not indexed. Run: /workspace/packages/cli/bin/linux-arm64/crewchief-maproom scan --repo test-corpus --worktree main --path /tmp/semrank-test-corpus --commit HEAD --force --generate-embeddings false'
-      )
-    }
+    // Ensure test-corpus is indexed (auto-index if missing)
+    await ensureTestCorpusIndexed(client)
   })
 
   afterAll(async () => {

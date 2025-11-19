@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/e2e/**/*_test.ts'],
+    env: {
+      MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -20,12 +23,13 @@ export default defineConfig({
     // E2E tests may need longer timeout
     testTimeout: 30000,
     hookTimeout: 30000,
-    // Allow database tests to run sequentially to avoid connection issues
+    // Run tests sequentially to avoid database race conditions
+    // The test-corpus is shared between test files, parallel execution causes cleanup/index conflicts
     poolOptions: {
       threads: {
-        singleThread: false,
+        singleThread: true,
         minThreads: 1,
-        maxThreads: 4
+        maxThreads: 1
       }
     }
   }
