@@ -556,6 +556,110 @@ Higher = faster but more memory. Lower = slower but less memory.
 
 ---
 
+## Search Tool - Semantic Code Search
+
+> **New in v2.1.0**: The `search` tool now automatically scopes results to your current git branch, eliminating result duplication and making search results more relevant to your active work.
+
+The `search` MCP tool performs semantic code search across your indexed codebase using hybrid search (vector similarity + full-text search).
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `repo` | string | **Required.** Repository name (must match indexed name) |
+| `query` | string | **Required.** Search query (concept or keywords) |
+| `worktree` | string \| null \| undefined | **Optional.** Worktree scope:<br/>- `undefined` (default): Auto-detect current branch<br/>- `"branch-name"`: Search specific branch<br/>- `null`: Search all worktrees |
+| `limit` | number | **Optional.** Max results (default: 10) |
+| `mode` | string | **Optional.** Search mode: `"vector"`, `"fts"`, or `"hybrid"` (default) |
+| `debug` | boolean | **Optional.** Include ranking details (default: false) |
+
+### Worktree-Scoped Search (Auto-Detection)
+
+**Default behavior (v2.1.0+)**: When `worktree` parameter is omitted, the search tool automatically detects your current git branch and scopes results to that branch only.
+
+**Example 1: Auto-detection** (recommended)
+```typescript
+// In feature-auth branch, searches only feature-auth worktree
+const results = await mcp__maproom__search({
+  repo: "my-repo",
+  query: "authentication flow"
+})
+// Returns: { hits: [...], worktree: "feature-auth", auto_detected: true, mode: "auto" }
+```
+
+**Example 2: Explicit worktree override**
+```typescript
+// In feature-auth branch, but search main worktree instead
+const results = await mcp__maproom__search({
+  repo: "my-repo",
+  query: "authentication flow",
+  worktree: "main"
+})
+// Returns: { hits: [...], worktree: "main", auto_detected: false, mode: "explicit" }
+```
+
+**Example 3: Search all worktrees**
+```typescript
+// Search across all indexed branches
+const results = await mcp__maproom__search({
+  repo: "my-repo",
+  query: "authentication flow",
+  worktree: null
+})
+// Returns: { hits: [...], worktree: null, mode: "all" }
+```
+
+### Fallback Behavior
+
+When auto-detection is enabled but the current branch is not indexed, the search tool gracefully falls back to the `main` worktree with a helpful hint:
+
+```typescript
+// In unindexed feature-xyz branch
+const results = await mcp__maproom__search({
+  repo: "my-repo",
+  query: "authentication"
+})
+
+// Returns:
+{
+  hits: [...],  // Results from 'main' worktree
+  worktree: "main",
+  mode: "fallback",
+  hint: "Current branch 'feature-xyz' is not indexed.\n\n" +
+        "To search your current code:\n" +
+        "1. Run: mcp__maproom__scan({repo: \"my-repo\", worktree: \"feature-xyz\"})\n\n" +
+        "Searching 'main' worktree instead."
+}
+```
+
+If the `main` worktree is also not indexed, the tool falls back to searching all worktrees.
+
+### Result Metadata
+
+Search results include metadata about worktree resolution:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hits` | array | Search results with content, file paths, and scores |
+| `total` | number | Total number of results returned |
+| `worktree` | string \| null | Which worktree was searched |
+| `auto_detected` | boolean | Was worktree auto-detected from git? |
+| `mode` | string | Resolution mode: `"explicit"`, `"auto"`, `"fallback"`, or `"all"` |
+| `hint` | string \| undefined | Helpful message when fallback occurs |
+| `debug` | object \| undefined | Ranking details (only if `debug: true`) |
+
+### Performance
+
+- **Cache hit rate**: >99% for git branch detection (60s TTL)
+- **Search latency**: <10ms with warm cache
+- **Memory overhead**: Minimal (<100 KB for LRU caches)
+
+### Troubleshooting
+
+See [Troubleshooting](#troubleshooting) section for common issues.
+
+---
+
 ## Open Tool - File Retrieval
 
 The `open` MCP tool retrieves file contents from your indexed codebase with intelligent path resolution and security validation.

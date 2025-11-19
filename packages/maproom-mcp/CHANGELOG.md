@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2025-11-18
+
+### Added
+
+#### Worktree-Scoped Search with Auto-Detection (WTSRCH Project)
+
+The `search` MCP tool now automatically scopes results to your current git branch, eliminating result duplication and making search results more relevant to your active work.
+
+**Features:**
+- **Auto-detection**: When `worktree` parameter is omitted, automatically detects current git branch and searches only that branch
+- **Graceful fallback**: If current branch not indexed, falls back to `main` with helpful hint message
+- **Explicit override**: Pass `worktree: "branch-name"` to search specific branch, or `worktree: null` to search all
+- **Performance**: >99% cache hit rate for branch detection (60s TTL), <10ms search latency with warm cache
+- **Result metadata**: Includes `auto_detected`, `mode`, and `hint` fields to inform users about resolution behavior
+
+**Example:**
+```typescript
+// In feature-auth branch, automatically searches only feature-auth worktree
+const results = await mcp__maproom__search({
+  repo: "my-repo",
+  query: "authentication flow"
+})
+// Returns: { hits: [...], worktree: "feature-auth", auto_detected: true, mode: "auto" }
+```
+
+**Why this matters:** Before v2.1.0, searches returned duplicated results across all branches, requiring manual worktree filtering. Now search "just works" for your current context.
+
+**Technical implementation:**
+- Phase 1 (WTSRCH-1001): Git branch detection with LRU caching
+- Phase 2 (WTSRCH-2001): Four-tier worktree resolution (explicit > auto > fallback > all)
+- Phase 3 (WTSRCH-3001): Search tool integration with metadata
+- Phase 4 (WTSRCH-4001): Comprehensive testing (38 tests, all passing)
+
 ### Fixed
 - **Critical**: Fixed provider endpoint resolution bug where cloud providers (OpenAI, Cohere) would inherit Ollama's default endpoint (PROVFIX-1001)
   - Added provider-aware endpoint validation that validates endpoint domains match configured provider

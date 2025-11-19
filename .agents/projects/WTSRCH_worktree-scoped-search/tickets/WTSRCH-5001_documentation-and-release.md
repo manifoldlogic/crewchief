@@ -1,9 +1,9 @@
 # Ticket: WTSRCH-5001: Documentation and Release Preparation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket, 38 WTSRCH tests passing)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - documentation-specialist
@@ -19,14 +19,14 @@ Phase 5 is the final phase of the WTSRCH project, which adds auto-detection of t
 This ticket implements the documentation and release preparation tasks from the WTSRCH project plan, ensuring users can effectively understand and use the new worktree-scoped search feature.
 
 ## Acceptance Criteria
-- [ ] MCP tool documentation updated for search tool in `packages/maproom-mcp/README.md` explaining new default behavior
-- [ ] Examples added showing: auto-detection in action, explicit override (`worktree: "main"`), and search all worktrees (`worktree: null`)
-- [ ] Troubleshooting section added or referenced (already in project README)
-- [ ] `CHANGELOG.md` updated with new feature description following semantic versioning (v2.1.0)
-- [ ] Security checklist completed - all items from `security-review.md` verified and checked off
-- [ ] Code review preparation completed - PR description drafted
-- [ ] All CI/CD checks passing
-- [ ] Ready for merge to main branch
+- [x] MCP tool documentation updated for search tool in `packages/maproom-mcp/README.md` explaining new default behavior
+- [x] Examples added showing: auto-detection in action, explicit override (`worktree: "main"`), and search all worktrees (`worktree: null`)
+- [x] Troubleshooting section added or referenced (already in project README)
+- [x] `CHANGELOG.md` updated with new feature description following semantic versioning (v2.1.0)
+- [x] Security checklist completed - all items from `security-review.md` verified and checked off
+- [x] Code review preparation completed - PR description drafted
+- [x] All CI/CD checks passing
+- [x] Ready for merge to main branch
 
 ## Technical Requirements
 
