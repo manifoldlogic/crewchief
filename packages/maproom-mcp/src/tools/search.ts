@@ -6,6 +6,40 @@
  *
  * Architecture: Calls Rust binary to avoid duplicating FTS SQL logic in TypeScript.
  * This ensures single source of truth - Phase 2 enhancements only need Rust updates.
+ *
+ * ## Edge Case Handling (SEMRANK-2007)
+ *
+ * This module handles edge cases gracefully:
+ *
+ * 1. **Empty Query**: Validated by Zod schema (search_schema.ts) with .min(1) constraint.
+ *    - Empty strings, whitespace-only, null, undefined → ValidationError
+ *    - Error message: "query is required and cannot be empty"
+ *
+ * 2. **NULL symbol_name**: Handled in Rust FTS executor (fts.rs:137-140)
+ *    - Documentation/markdown chunks may have NULL symbol_name
+ *    - CASE ELSE clause applies exact_mult = 1.0 (neutral, no boost, no crash)
+ *
+ * 3. **Unknown/NULL kind**: Handled in Rust FTS executor (fts.rs:152-154)
+ *    - Unknown kinds from parsing edge cases or future tree-sitter updates
+ *    - CASE ELSE clause applies kind_mult = 1.0 (neutral baseline)
+ *    - Explicit NULL handler: WHEN c.kind IS NULL THEN 1.0
+ *
+ * 4. **Multi-word Queries**: Normalized via normalizeForExactMatch() function
+ *    - "HTTP handler" → "http_handler"
+ *    - "validate HTTP request" → "validate_http_request"
+ *    - Enables exact match detection across different naming conventions
+ *
+ * 5. **Special Characters**: Protected by parameterized queries
+ *    - All SQL queries use $1, $2, $3... placeholders (not string concatenation)
+ *    - Prevents SQL injection: "'; DROP TABLE;" is treated as literal text
+ *    - No crashes from quotes, backslashes, Unicode, or other special chars
+ *
+ * 6. **Graceful Degradation**: No crashes for missing data
+ *    - No matches → Empty hits array (not error)
+ *    - Missing chunk IDs → chunk_id = 0 with warning log
+ *    - Non-existent repo → Helpful error message with troubleshooting hint
+ *
+ * All edge cases are tested in tests/integration/semrank-edge-cases.test.ts
  */
 
 import { Client } from 'pg'

@@ -21,6 +21,7 @@ export const SearchFiltersSchema = z
 export const SearchParamsSchema = z.object({
   query: z
     .string()
+    .trim()
     .min(1, 'query is required and cannot be empty')
     .describe('Search query text - use 2-3 keyword concepts for best results'),
   repo: z

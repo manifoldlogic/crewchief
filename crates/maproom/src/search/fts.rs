@@ -3,6 +3,35 @@
 //! This module implements full-text search using PostgreSQL's tsvector/tsquery
 //! with ts_rank_cd ranking. It applies proximity boost for phrase matching
 //! and exact match bonuses for symbol names.
+//!
+//! ## Edge Case Handling (SEMRANK-2007)
+//!
+//! This executor handles edge cases gracefully via SQL CASE statements:
+//!
+//! 1. **NULL symbol_name** (lines 137-140):
+//!    - Documentation/markdown chunks have NULL symbol_name
+//!    - CASE ELSE clause: `ELSE 1.0` (neutral multiplier, no boost)
+//!    - No crash, no SQL error, degrades gracefully
+//!
+//! 2. **Unknown kind** (lines 152-154):
+//!    - Future tree-sitter updates may introduce new kinds
+//!    - CASE ELSE clause: `ELSE 1.0` (neutral baseline)
+//!    - Unknown kinds get baseline multiplier (no penalty, no crash)
+//!
+//! 3. **NULL kind** (line 153):
+//!    - Explicit handler: `WHEN c.kind IS NULL THEN 1.0`
+//!    - Ensures NULL is not treated differently from unknown kinds
+//!
+//! 4. **Empty query** (lines 117-120):
+//!    - Returns empty RankedResults (not error)
+//!    - Prevents invalid tsquery execution
+//!
+//! 5. **Parameterized queries** (lines 180-189):
+//!    - All query parameters use $1, $2, $3... placeholders
+//!    - Prevents SQL injection attacks
+//!    - Special characters in queries are treated as literal text
+//!
+//! All edge cases validated in tests/integration/semrank-edge-cases.test.ts
 
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use regex::Regex;
