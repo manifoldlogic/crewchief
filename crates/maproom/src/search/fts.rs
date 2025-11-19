@@ -96,10 +96,13 @@ impl FTSExecutor {
     /// )
     /// SELECT
     ///   id,
-    ///   (base_score * exact_mult) as score,
-    ///   ROW_NUMBER() OVER (ORDER BY base_score * exact_mult DESC) as rank
+    ///   base_score,
+    ///   kind_mult,
+    ///   exact_mult,
+    ///   (base_score * kind_mult * exact_mult) as final_score,
+    ///   ROW_NUMBER() OVER (ORDER BY base_score * kind_mult * exact_mult DESC) as rank
     /// FROM fts_results
-    /// ORDER BY score DESC
+    /// ORDER BY final_score DESC
     /// LIMIT $5;
     /// ```
     #[instrument(skip(client), fields(query_len = fts_query.len()))]
@@ -158,10 +161,13 @@ impl FTSExecutor {
             )
             SELECT
               id,
-              (base_score * exact_mult) as score,
-              ROW_NUMBER() OVER (ORDER BY base_score * exact_mult DESC) as rank
+              base_score,
+              kind_mult,
+              exact_mult,
+              (base_score * kind_mult * exact_mult) as final_score,
+              ROW_NUMBER() OVER (ORDER BY base_score * kind_mult * exact_mult DESC) as rank
             FROM fts_results
-            ORDER BY score DESC
+            ORDER BY final_score DESC
             LIMIT $5
         "#;
 
@@ -194,27 +200,28 @@ impl FTSExecutor {
         }
 
         // Extract results and normalize scores
-        let results: Vec<(i64, f32, i64)> = rows
+        // Columns: id (0), base_score (1), kind_mult (2), exact_mult (3), final_score (4), rank (5)
+        let results: Vec<(i64, f64, i64)> = rows
             .iter()
             .map(|row| {
                 let chunk_id: i64 = row.get(0);
-                let score: f32 = row.get(1);
-                let rank: i64 = row.get(2);
-                (chunk_id, score, rank)
+                let final_score: f64 = row.get(4);
+                let rank: i64 = row.get(5);
+                (chunk_id, final_score, rank)
             })
             .collect();
 
         // Find max score for normalization
-        let max_score = results.iter().map(|(_, s, _)| *s).fold(0.0f32, f32::max);
+        let max_score = results.iter().map(|(_, s, _)| *s).fold(0.0f64, f64::max);
 
         // Normalize scores to 0.0-1.0 range
         let ranked_results: Vec<RankedResult> = results
             .iter()
             .map(|(chunk_id, score, rank)| {
                 let normalized_score = if max_score > 0.0 {
-                    score / max_score
+                    (score / max_score) as f32
                 } else {
-                    0.0
+                    0.0f32
                 };
                 RankedResult::new(*chunk_id, normalized_score, *rank as usize)
             })
