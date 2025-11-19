@@ -491,7 +491,7 @@ export function parseFileTypeFilter(input: string): string[] {
 }
 
 // Helper function to build filter WHERE clauses
-function buildFilterClauses(filters: any, filter: string, args: any[]): string {
+export function buildFilterClauses(filters: any, filter: string, args: any[]): string {
   let clauses = ''
 
   // Legacy file type filter

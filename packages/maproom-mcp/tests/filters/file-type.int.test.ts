@@ -1,49 +1,5 @@
-# Ticket: FILETYPE-2002: Create Integration Tests for SQL Generation
-
-## Status
-- [x] **Task completed** - acceptance criteria met
-- [x] **Tests pass** - tests executed and passing (10/10 tests passed in 3ms)
-- [x] **Verified** - by the verify-ticket agent
-
-## Agents
-- typescript-test-engineer
-- unit-test-runner
-- verify-ticket
-- commit-ticket
-
-## Summary
-Create 10 integration tests in a new test file verifying correct SQL query generation for file_type filter, including single/multi extensions, parameterization safety, and filter combinations.
-
-## Background
-Integration tests verify that buildFilterClauses() generates correct SQL for all file_type filter scenarios. These tests ensure SQL structure, parameterization (security), and interaction with other filters are correct before E2E testing.
-
-**Reference:**
-- quality-strategy.md - "Integration Tests: SQL Generation (10 tests)" section (lines 258-398)
-- quality-strategy.md - "Test File Organization" - NEW FILE in filters/ directory (lines 71-78)
-
-## Acceptance Criteria
-- [x] All 10 integration tests pass
-- [x] Single extension SQL verified (LIKE clause)
-- [x] Multi-extension SQL verified (OR clause with parentheses)
-- [x] Parameterized queries confirmed (SQL injection safe)
-- [x] Filter combination tested (file_type + recency, file_type + repo_id)
-- [x] Tests run in <2 seconds
-
-## Technical Requirements
-
-**Location:** `packages/maproom-mcp/tests/filters/file-type.int.test.ts` (NEW FILE)
-
-**Action:** CREATE new file in NEW directory `tests/filters/`
-
-**Directory setup:**
-```bash
-mkdir -p packages/maproom-mcp/tests/filters
-```
-
-**Test suite structure:**
-```typescript
 import { describe, it, expect } from 'vitest'
-import { buildFilterClauses } from '../src/index.js'
+import { buildFilterClauses } from '../../src/index.js'
 
 describe('buildFilterClauses - File Type Integration Tests', () => {
   // Single extension SQL (P0)
@@ -109,17 +65,18 @@ describe('buildFilterClauses - File Type Integration Tests', () => {
     expect(args.length).toBe(3) // repoId, file_type, recency
   })
 
-  // Filter combination - worktree (P1)
-  it('combines file_type with worktree_id', () => {
+  // Filter combination - repo_id (P1)
+  it('combines file_type with repo_id', () => {
     const args: any[] = [1]
     const filters = {
       file_type: 'ts',
-      worktree_id: 42
+      repo_id: 42
     }
     const clauses = buildFilterClauses(filters, 'all', args)
 
     expect(clauses).toContain('f.relpath LIKE')
-    expect(clauses).toContain('worktree_id')
+    expect(clauses).toContain('f.repo_id =')
+    expect(args.length).toBe(3) // initial repoId + file_type + repo_id filter
   })
 
   // Legacy filter coexistence (P1)
@@ -167,46 +124,3 @@ describe('buildFilterClauses - File Type Integration Tests', () => {
     expect(args).not.toContain('%..ts') // No double dot
   })
 })
-```
-
-## Implementation Notes
-
-**File organization:**
-- NEW directory: `tests/filters/`
-- NEW file: `file-type.int.test.ts`
-- Pattern: `{feature}.{test-type}.test.ts`
-
-**Naming convention rationale:**
-- `.int.test.ts` suffix indicates integration tests
-- Distinguishes from unit tests in search_tool.test.ts
-- Distinguishes from E2E tests in file-type.e2e.test.ts
-
-**What these tests verify:**
-1. Correct SQL structure (LIKE clauses, OR logic, parentheses)
-2. Parameterization (security critical)
-3. Filter combination (composability)
-4. Edge case handling (empty, case, dots)
-
-**Test execution:**
-```bash
-# Run only integration tests
-pnpm test filters/*.int.test.ts
-
-# Run all file-type tests
-pnpm test file-type
-```
-
-## Dependencies
-- **FILETYPE-1002** (parseFileTypeFilter implemented)
-- **FILETYPE-1003** (buildFilterClauses updated)
-
-## Risk Assessment
-- **Risk**: Tests coupled to SQL implementation details
-  - **Mitigation:** Test SQL behavior (LIKE clauses, parameters) not exact string format
-
-- **Risk**: buildFilterClauses not exported (can't import for testing)
-  - **Mitigation:** May need to temporarily export for testing or test via handleSearch
-
-## Files/Packages Affected
-- `packages/maproom-mcp/tests/filters/` (NEW DIRECTORY)
-- `packages/maproom-mcp/tests/filters/file-type.int.test.ts` (NEW FILE)
