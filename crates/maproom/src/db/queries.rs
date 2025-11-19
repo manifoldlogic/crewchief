@@ -648,6 +648,57 @@ pub struct SearchHit {
     pub kind: String,
     pub start_line: i32,
     pub end_line: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_score: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind_mult: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exact_mult: Option<f64>,
+}
+
+/// Normalize query for exact match detection (SEMRANK-2004b)
+///
+/// Handles acronym-aware camelCase to snake_case conversion:
+/// - "validateProvider" → "validate_provider"
+/// - "XMLParser" → "xml_parser"
+/// - "validateHTTPRequest" → "validate_http_request"
+/// - "HTTPSHandler" → "https_handler"
+/// - "Base64Encoder" → "base64_encoder"
+/// - "validate-provider" → "validate_provider"
+fn normalize_for_exact_match(query: &str) -> String {
+    use regex::Regex;
+
+    let mut normalized = query.to_string();
+
+    // Step 1: Handle consecutive uppercase (acronyms) before lowercase
+    // "XMLParser" → "XML_Parser", "HTTPSHandler" → "HTTPS_Handler"
+    let re1 = Regex::new(r"([A-Z]+)([A-Z][a-z])").unwrap();
+    normalized = re1.replace_all(&normalized, "${1}_${2}").to_string();
+
+    // Step 2: Handle transition from lowercase to multiple capitals (acronym after lowercase)
+    // "validateHTTP" → "validate_HTTP"
+    let re2 = Regex::new(r"([a-z\d])([A-Z]{2,})").unwrap();
+    normalized = re2.replace_all(&normalized, "${1}_${2}").to_string();
+
+    // Step 3: Handle camelCase → snake_case (single capital after lowercase)
+    // "validateProvider" → "validate_Provider"
+    let re3 = Regex::new(r"([a-z\d])([A-Z])").unwrap();
+    normalized = re3.replace_all(&normalized, "${1}_${2}").to_string();
+
+    // Step 4: Handle kebab-case, spaces, and dots → snake_case
+    let re4 = Regex::new(r"[\s\-\.]").unwrap();
+    normalized = re4.replace_all(&normalized, "_").to_string();
+
+    // Step 5: Lowercase everything
+    normalized = normalized.to_lowercase();
+
+    // Step 6: Clean up multiple/trailing/leading underscores
+    let re5 = Regex::new(r"_+").unwrap();
+    normalized = re5.replace_all(&normalized, "_").to_string();
+    let re6 = Regex::new(r"^_|_$").unwrap();
+    normalized = re6.replace_all(&normalized, "").to_string();
+
+    normalized
 }
 
 /// Insert a chunk edge representing a relationship between two chunks
@@ -933,12 +984,30 @@ pub async fn batch_upsert_embeddings(
     Ok(())
 }
 
+/// Search chunks using full-text search with SEMRANK enhancements
+///
+/// Implements SEMRANK semantic ranking with:
+/// - Kind-based multipliers (SEMRANK-2003): Functions/classes rank higher than tests/docs
+/// - Exact match multipliers (SEMRANK-2004a/b): Symbol name exact matches get 3.0× boost
+/// - Combined final score (SEMRANK-2005): base_score × kind_mult × exact_mult
+///
+/// # Parameters
+/// - `client`: Database client
+/// - `repo`: Repository name
+/// - `worktree`: Optional worktree filter
+/// - `query`: Search query string
+/// - `k`: Maximum number of results
+/// - `debug`: If true, include base_score, kind_mult, exact_mult in results (SEMRANK-2006)
+///
+/// # Returns
+/// Vector of SearchHit results ordered by final_score DESC
 pub async fn search_chunks_fts(
     client: &Client,
     repo: &str,
     worktree: Option<&str>,
     query: &str,
     k: i64,
+    debug: bool,
 ) -> anyhow::Result<Vec<SearchHit>> {
     // Resolve repo/worktree ids
     let repo_row = client
@@ -957,71 +1026,92 @@ pub async fn search_chunks_fts(
         None
     };
 
-    let ts = query
+    // Build FTS query string (simple tokenization with prefix matching)
+    let fts_query = query
         .split_whitespace()
         .map(|t| format!("{}:*", t.replace("'", "")))
         .collect::<Vec<_>>()
         .join(" & ");
 
-    let rows = if let Some(wid) = worktree_id {
-        client
-            .query(
-                "SELECT c.start_line, c.end_line, c.symbol_name, c.kind::text, f.relpath,
-                        CASE 
-                            WHEN c.kind IN ('heading_1', 'heading_2') THEN 
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 2.0
-                            WHEN c.kind = 'heading_3' THEN
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 1.5
-                            WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 1.2
-                            WHEN c.kind = 'json_key' THEN
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4)) * 1.3
-                            ELSE 
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $4))
-                        END AS score
-                 FROM maproom.chunks c
-                 JOIN maproom.files f ON f.id = c.file_id
-                 WHERE f.repo_id = $1 AND f.worktree_id = $2 AND c.ts_doc @@ to_tsquery('simple', $4)
-                 ORDER BY score DESC
-                 LIMIT $3",
-                &[&repo_id, &wid, &k, &ts],
-            )
-            .await?
-    } else {
-        client
-            .query(
-                "SELECT c.start_line, c.end_line, c.symbol_name, c.kind::text, f.relpath,
-                        CASE 
-                            WHEN c.kind IN ('heading_1', 'heading_2') THEN 
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 2.0
-                            WHEN c.kind = 'heading_3' THEN
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 1.5
-                            WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 1.2
-                            WHEN c.kind = 'json_key' THEN
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3)) * 1.3
-                            ELSE 
-                                ts_rank_cd(c.ts_doc, to_tsquery('simple', $3))
-                        END AS score
-                 FROM maproom.chunks c
-                 JOIN maproom.files f ON f.id = c.file_id
-                 WHERE f.repo_id = $1 AND c.ts_doc @@ to_tsquery('simple', $3)
-                 ORDER BY score DESC
-                 LIMIT $2",
-                &[&repo_id, &k, &ts],
-            )
-            .await?
-    };
+    // Normalize query for exact match detection (SEMRANK-2004b)
+    let normalized_query = normalize_for_exact_match(query);
 
+    // SEMRANK-enhanced SQL query with kind multiplier, exact match multiplier, and final score
+    // Based on FTSExecutor implementation in src/search/fts.rs
+    let sql = r#"
+        WITH fts_results AS (
+          SELECT
+            c.id,
+            c.start_line,
+            c.end_line,
+            c.symbol_name,
+            c.kind::text,
+            f.relpath,
+            ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
+            -- SEMRANK-2004a/b: Exact match multiplier (3.0× boost for exact symbol_name match)
+            CASE
+              WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
+              ELSE 1.0
+            END as exact_mult,
+            -- SEMRANK-2003: Kind-based multiplier (source: 0001_init.sql:45 maproom.symbol_kind enum)
+            CASE
+              WHEN c.kind IN ('func', 'async_func') THEN 2.5
+              WHEN c.kind IN ('class', 'component') THEN 2.0
+              WHEN c.kind = 'hook' THEN 1.8
+              WHEN c.kind IN ('module', 'type', 'struct', 'trait', 'enum') THEN 1.5
+              WHEN c.kind IN ('var', 'variable', 'constant', 'method', 'async_method') THEN 1.0
+              WHEN c.kind = 'heading_1' THEN 0.6
+              WHEN c.kind = 'heading_2' THEN 0.5
+              WHEN c.kind = 'heading_3' THEN 0.4
+              WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN 0.3
+              WHEN c.kind = 'other' THEN 1.0
+              WHEN c.kind IS NULL THEN 1.0
+              ELSE 1.0
+            END as kind_mult
+          FROM maproom.chunks c
+          JOIN maproom.files f ON f.id = c.file_id
+          WHERE c.ts_doc @@ to_tsquery('simple', $1)
+            AND f.repo_id = $3
+            AND ($4::bigint IS NULL OR f.worktree_id = $4)
+        )
+        SELECT
+          start_line,
+          end_line,
+          symbol_name,
+          kind,
+          relpath,
+          base_score::float8,
+          kind_mult::float8,
+          exact_mult::float8,
+          (base_score * kind_mult * exact_mult)::float8 as final_score
+        FROM fts_results
+        ORDER BY final_score DESC
+        LIMIT $5
+    "#;
+
+    let rows = client
+        .query(
+            sql,
+            &[&fts_query, &normalized_query, &repo_id, &worktree_id, &k],
+        )
+        .await?;
+
+    // Extract results with optional debug fields (SEMRANK-2006)
     let hits = rows
         .into_iter()
-        .map(|r| SearchHit {
-            start_line: r.get(0),
-            end_line: r.get(1),
-            symbol_name: r.get::<_, Option<String>>(2),
-            kind: r.get::<_, String>(3),
-            file_relpath: r.get::<_, String>(4),
-            score: r.get::<_, f64>(5),
+        .map(|r| {
+            let final_score: f64 = r.get(8);
+            SearchHit {
+                start_line: r.get(0),
+                end_line: r.get(1),
+                symbol_name: r.get(2),
+                kind: r.get(3),
+                file_relpath: r.get(4),
+                score: final_score,
+                base_score: if debug { Some(r.get(5)) } else { None },
+                kind_mult: if debug { Some(r.get(6)) } else { None },
+                exact_mult: if debug { Some(r.get(7)) } else { None },
+            }
         })
         .collect();
     Ok(hits)

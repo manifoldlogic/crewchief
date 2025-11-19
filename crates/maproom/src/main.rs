@@ -167,6 +167,9 @@ enum Commands {
         query: String,
         #[arg(long, default_value_t = 10)]
         k: i64,
+        /// Include score breakdown (base_fts, kind_multiplier, exact_match_multiplier, final)
+        #[arg(long, default_value_t = false)]
+        debug: bool,
     },
 
     /// Show status of indexed repositories and worktrees
@@ -931,10 +934,12 @@ async fn main() -> anyhow::Result<()> {
             worktree,
             query,
             k,
+            debug,
         } => {
             let client = db::connect().await?;
             let hits =
-                db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k).await?;
+                db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k, debug)
+                    .await?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?

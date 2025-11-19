@@ -184,13 +184,12 @@ export interface SearchResult {
   /** Optional preview text */
   preview?: string
 
-  /** Debug information (only if debug=true) */
-  debug?: {
-    fts_score: number | null
-    vector_score: number | null
-    recency_score: number | null
-    churn_score: number | null
-    final_score: number
+  /** Debug information (only if debug=true) - SEMRANK-2006 */
+  score_breakdown?: {
+    base_fts: number
+    kind_multiplier: number
+    exact_match_multiplier: number
+    final: number
   }
 }
 

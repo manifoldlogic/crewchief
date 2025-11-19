@@ -67,7 +67,7 @@ export function normalizeForExactMatch(query: string): string {
 }
 
 /**
- * Rust binary search result format
+ * Rust binary search result format (SEMRANK-2006: includes optional debug fields)
  */
 interface RustSearchHit {
   score: number
@@ -76,6 +76,9 @@ interface RustSearchHit {
   kind: string
   start_line: number
   end_line: number
+  base_score?: number
+  kind_mult?: number
+  exact_mult?: number
 }
 
 /**
@@ -164,6 +167,17 @@ export async function handleSearchTool(
 
   log.debug({ query, repo, worktree, limit, mode, debug }, 'handleSearchTool called')
 
+  // SEMRANK-2006: Permission check for debug mode
+  // If auth system exists in the future, check user.hasPermission('debug_mode')
+  // For now, log warning when debug is enabled (acceptable for MVP, metadata not sensitive)
+  if (debug) {
+    log.warn(
+      'Debug mode enabled without permission check. ' +
+        'In production, this should verify user.hasPermission("debug_mode"). ' +
+        'Score breakdown metadata is not sensitive for MVP.'
+    )
+  }
+
   // Validate repo parameter is provided
   if (!repo) {
     throw new ValidationError(
@@ -207,8 +221,10 @@ export async function handleSearchTool(
     args.push('--worktree', worktree)
   }
 
-  // Note: Rust binary doesn't support --debug flag yet
-  // Debug mode will need to be added to Rust in Phase 2
+  // SEMRANK-2006: Add debug flag to get score breakdown
+  if (debug) {
+    args.push('--debug')
+  }
 
   log.debug({ args }, 'Spawning Rust binary for search')
 
@@ -254,7 +270,7 @@ export async function handleSearchTool(
   // Fetch chunk IDs from database
   const chunkIdMap = await fetchChunkIds(client, repo, rustOutput.hits)
 
-  // Transform Rust hits to SearchResult format
+  // Transform Rust hits to SearchResult format (SEMRANK-2006: include score_breakdown if debug=true)
   const hits: SearchResult[] = rustOutput.hits.map((hit) => {
     const key = `${hit.file_relpath}:${hit.start_line}:${hit.end_line}`
     const chunk_id = chunkIdMap.get(key) || 0
@@ -263,7 +279,8 @@ export async function handleSearchTool(
       log.warn({ hit }, 'Chunk ID not found for search result')
     }
 
-    return {
+    // Build SearchResult with optional score_breakdown (SEMRANK-2006)
+    const result: SearchResult = {
       chunk_id,
       symbol_name: hit.symbol_name,
       kind: hit.kind,
@@ -274,6 +291,18 @@ export async function handleSearchTool(
       // preview field not available from Rust binary yet
       // Will be added in Phase 2
     }
+
+    // Add score breakdown if debug mode enabled and fields are present
+    if (debug && hit.base_score !== undefined && hit.kind_mult !== undefined && hit.exact_mult !== undefined) {
+      result.score_breakdown = {
+        base_fts: hit.base_score,
+        kind_multiplier: hit.kind_mult,
+        exact_match_multiplier: hit.exact_mult,
+        final: hit.score,
+      }
+    }
+
+    return result
   })
 
   const bundle: SearchBundle = {
