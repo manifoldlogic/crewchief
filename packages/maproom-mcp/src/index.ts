@@ -509,28 +509,27 @@ export function buildFilterClauses(filters: any, filter: string, args: any[]): s
   if (filters.file_type) {
     const extensions = parseFileTypeFilter(filters.file_type)
 
-    // Handle empty result (invalid input or all-commas string)
+    // Skip filter if parsing produced no valid extensions
     if (extensions.length === 0) {
-      // Silent ignore - skip this filter entirely
-      // This matches existing filter pattern (no errors for bad input)
+      // Graceful fallback - search all files
     } else {
-      // Enforce extension count limit (prevent DoS via complex OR queries)
+      // Enforce extension count limit to prevent DoS via complex OR queries
       if (extensions.length > 20) {
-        // Graceful degradation - truncate to 20
-        extensions.splice(20)
+        extensions.splice(20)  // Truncate to maximum allowed
       }
 
-      // Single extension: simple LIKE clause (backward compatible)
+      // Single extension: backward-compatible simple LIKE clause
       if (extensions.length === 1) {
         args.push(`%.${extensions[0]}`)
         clauses += ` AND f.relpath LIKE $${args.length}`
       }
-      // Multiple extensions: OR clause
+      // Multiple extensions: OR clause for union of all types
       else {
         const likeConditions = extensions.map(ext => {
           args.push(`%.${ext}`)
           return `f.relpath LIKE $${args.length}`
         })
+        // Use parentheses to ensure correct precedence with other filters
         clauses += ` AND (${likeConditions.join(' OR ')})`
       }
     }

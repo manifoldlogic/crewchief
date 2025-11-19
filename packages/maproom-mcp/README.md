@@ -609,6 +609,60 @@ const results = await mcp__maproom__search({
 // Returns: { hits: [...], worktree: null, mode: "all" }
 ```
 
+### File Type Filtering
+
+Filter search results by file extension to focus on specific languages or file types.
+
+**Single extension:**
+```typescript
+const result = await mcp__maproom__search({
+  repo: 'crewchief',
+  query: 'authentication',
+  filters: { file_type: 'ts' }
+})
+// Returns only TypeScript (.ts) files
+```
+
+**Multiple extensions:**
+```typescript
+const result = await mcp__maproom__search({
+  repo: 'crewchief',
+  query: 'authentication',
+  filters: { file_type: 'ts,tsx,js' }
+})
+// Returns TypeScript or JavaScript files
+```
+
+**Common patterns:**
+```typescript
+// Search only documentation
+filters: { file_type: 'md,mdx' }
+
+// Search Rust code
+filters: { file_type: 'rs' }
+
+// Search frontend code
+filters: { file_type: 'tsx,jsx,vue,svelte' }
+
+// Combine with recency filter
+filters: {
+  file_type: 'ts,tsx',
+  recency_threshold: '7 days'
+}
+// Returns recent TypeScript files only
+```
+
+**Syntax:**
+- Comma-separated for multiple extensions
+- Case insensitive: `"TS"` same as `"ts"`
+- With or without dot: `".ts"` same as `"ts"`
+- Maximum 20 extensions per filter
+
+**Error handling:**
+- Empty filter (`""`) searches all files (no error)
+- Too many extensions (>20) returns error with helpful message
+- Invalid input normalized or filtered out gracefully
+
 ### Fallback Behavior
 
 When auto-detection is enabled but the current branch is not indexed, the search tool gracefully falls back to the `main` worktree with a helpful hint:
