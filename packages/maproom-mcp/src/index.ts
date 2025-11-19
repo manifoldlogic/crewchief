@@ -726,6 +726,37 @@ async function handleSearch(params: any): Promise<any> {
         `Searching all indexed worktrees.`
     }
 
+    // Validate file_type filter if provided
+    if (filters.file_type) {
+      try {
+        const extensions = parseFileTypeFilter(filters.file_type)
+
+        // Warn user if filter produced no valid extensions
+        if (extensions.length === 0) {
+          // Don't fail - add warning to hint and continue
+          hint = hint || ''
+          hint += `\n⚠️ file_type filter "${filters.file_type}" produced no valid extensions. Searching all files.`
+        }
+
+        // Enforce hard limit on extension count
+        if (extensions.length > 20) {
+          return {
+            hits: [],
+            error: 'Too many file extensions',
+            hint: `file_type filter has ${extensions.length} extensions (maximum 20 allowed).\n\nTry: filters: {file_type: "ts,tsx,js"} instead of listing 50+ extensions`,
+            suggestion: 'Use broader filter or multiple searches'
+          }
+        }
+      } catch (error: any) {
+        // Catch any unexpected errors from parsing
+        return {
+          hits: [],
+          error: 'Invalid file_type filter',
+          hint: error.message || 'file_type must be a comma-separated list of extensions (e.g., "ts,tsx,js")'
+        }
+      }
+    }
+
     let worktreeInfo: any = null
 
     // Handle worktree filtering (from parameter or advanced filters)
