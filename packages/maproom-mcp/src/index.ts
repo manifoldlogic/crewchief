@@ -164,6 +164,23 @@ SEARCH MODES:
 - Very long queries (>4 words)
 
 FILTERS: Narrow by file_type, recency, repo_id, worktree_id
+
+Examples:
+  filters: {file_type: "ts"}          → Only TypeScript files
+  filters: {file_type: "ts,tsx,js"}   → TypeScript or JavaScript files
+  filters: {file_type: "md,mdx"}      → Markdown documentation
+  filters: {file_type: "rs"}          → Rust source files
+  filters: {
+    file_type: "ts,tsx",
+    recency_threshold: "7 days"
+  }                                   → Recent TypeScript files only
+
+FILTER SYNTAX:
+- Comma-separated for multiple types: "ts,tsx,js"
+- Case insensitive: "TS" same as "ts"
+- With or without dot: ".ts" same as "ts"
+- Max 20 extensions per filter
+
 DEBUG: Set debug=true to see score breakdowns`,
     inputSchema: {
       type: 'object',
@@ -190,7 +207,7 @@ DEBUG: Set debug=true to see score breakdowns`,
           properties: {
             repo_id: { type: 'integer', description: 'Filter by specific repository ID' },
             worktree_id: { type: 'integer', description: 'Filter by specific worktree ID' },
-            file_type: { type: 'string', description: 'Filter by file extension (e.g., "ts", "rs", "md")' },
+            file_type: { type: 'string', description: 'Filter by file extension(s). Single: "ts" or multiple: "ts,tsx,js" (comma-separated, max 20 extensions)' },
             recency_threshold: { type: 'string', description: 'Filter by file modification time (PostgreSQL interval, e.g., "7 days", "1 month")' }
           }
         },
