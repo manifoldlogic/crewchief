@@ -45,8 +45,7 @@ async fn test_fts_executor_basic() -> Result<(), Box<dyn std::error::Error>> {
     let results = FTSExecutor::execute(
         &client,
         "test & function",
-        "test function", // normalized_query
-        "test function", // original_query
+        "test_function", // normalized_query
         1,
         None,
         10,
@@ -226,7 +225,7 @@ async fn test_empty_query_handling() -> Result<(), Box<dyn std::error::Error>> {
     let client = get_test_client().await?;
 
     // FTS with empty query
-    let fts_results = FTSExecutor::execute(&client, "", "", "", 1, None, 10).await?;
+    let fts_results = FTSExecutor::execute(&client, "", "", 1, None, 10).await?;
     assert!(fts_results.is_empty());
 
     // Vector with empty embedding
@@ -326,8 +325,7 @@ async fn test_individual_executor_timing() -> Result<(), Box<dyn std::error::Err
     let fts_results = FTSExecutor::execute(
         &client,
         "authentication & function",
-        "authentication function", // normalized_query
-        "authentication function", // original_query
+        "authentication_function", // normalized_query
         1,
         None,
         10,
@@ -409,8 +407,7 @@ async fn test_parallel_vs_sequential_timing() -> Result<(), Box<dyn std::error::
     let _fts = FTSExecutor::execute(
         executors.client(),
         "search & test",
-        "search test", // normalized_query
-        "search test", // original_query
+        "search_test", // normalized_query
         1,
         None,
         10,
@@ -547,7 +544,7 @@ async fn test_search_executor_timeout_handling() -> Result<(), Box<dyn std::erro
     let timeout = tokio::time::Duration::from_secs(5);
     let result = tokio::time::timeout(
         timeout,
-        FTSExecutor::execute(&client, "test", "test", "test", 1, None, 10),
+        FTSExecutor::execute(&client, "test", "test", 1, None, 10),
     )
     .await;
 

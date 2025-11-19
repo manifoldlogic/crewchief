@@ -26,6 +26,47 @@ const log = LOG_FILE
   : pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(2))
 
 /**
+ * Normalize query for exact match detection
+ *
+ * Handles acronym-aware camelCase to snake_case conversion:
+ * - "validateProvider" → "validate_provider"
+ * - "XMLParser" → "xml_parser"
+ * - "validateHTTPRequest" → "validate_http_request"
+ * - "HTTPSHandler" → "https_handler"
+ * - "Base64Encoder" → "base64_encoder"
+ * - "validate-provider" → "validate_provider"
+ *
+ * @param query - Original search query
+ * @returns Normalized snake_case query for ILIKE matching
+ */
+export function normalizeForExactMatch(query: string): string {
+  let normalized = query
+
+  // Step 1: Handle consecutive uppercase (acronyms) before lowercase
+  // "XMLParser" → "XML_Parser", "HTTPSHandler" → "HTTPS_Handler"
+  normalized = normalized.replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+
+  // Step 2: Handle transition from lowercase to multiple capitals (acronym after lowercase)
+  // "validateHTTP" → "validate_HTTP"
+  normalized = normalized.replace(/([a-z\d])([A-Z]{2,})/g, '$1_$2')
+
+  // Step 3: Handle camelCase → snake_case (single capital after lowercase)
+  // "validateProvider" → "validate_Provider"
+  normalized = normalized.replace(/([a-z\d])([A-Z])/g, '$1_$2')
+
+  // Step 4: Handle kebab-case, spaces, and dots → snake_case
+  normalized = normalized.replace(/[\s\-\.]/g, '_')
+
+  // Step 5: Lowercase everything
+  normalized = normalized.toLowerCase()
+
+  // Step 6: Clean up multiple/trailing/leading underscores
+  normalized = normalized.replace(/_+/g, '_').replace(/^_|_$/g, '')
+
+  return normalized
+}
+
+/**
  * Rust binary search result format
  */
 interface RustSearchHit {

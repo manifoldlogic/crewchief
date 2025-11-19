@@ -1,9 +1,9 @@
 # Ticket: SEMRANK-2004b: Implement Query Normalization (TypeScript)
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - 66 tests executed and passing (17 Rust normalization + 49 integration)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,18 +28,18 @@ This ticket implements the TypeScript side of exact matching: normalization algo
 References SEMRANK plan Section 3.2.2 (Exact Match Multiplier Implementation).
 
 ## Acceptance Criteria
-- [ ] normalizeForExactMatch() function created in TypeScript with acronym handling
-- [ ] Handles all test cases correctly:
+- [x] normalizeForExactMatch() function created in TypeScript with acronym handling
+- [x] Handles all test cases correctly:
   - camelCase → snake_case: "validateProvider" → "validate_provider"
   - Acronyms at start: "XMLParser" → "xml_parser"
   - Acronyms in middle: "validateHTTPRequest" → "validate_http_request"
   - Consecutive capitals: "HTTPSHandler" → "https_handler"
   - Numbers with capitals: "Base64Encoder" → "base64_encoder"
   - kebab-case → snake_case: "validate-provider" → "validate_provider"
-- [ ] Normalized query passed to SQL as $normalized_query parameter
-- [ ] Old exact bonus logic removed from Rust fts.rs (lines containing ILIKE substring logic)
-- [ ] Verified no conflicting bonus logic remains (grep for ILIKE to confirm)
-- [ ] Unit tests created for normalization function with all edge cases
+- [x] Normalized query passed to SQL as $normalized_query parameter
+- [x] Old exact bonus logic removed from Rust fts.rs (lines containing ILIKE substring logic)
+- [x] Verified no conflicting bonus logic remains (grep for ILIKE to confirm)
+- [x] Unit tests created for normalization function with all edge cases
 
 ## Technical Requirements
 - Location: `/packages/maproom-mcp/src/tools/search.ts`

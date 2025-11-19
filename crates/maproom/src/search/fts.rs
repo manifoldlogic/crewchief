@@ -5,8 +5,52 @@
 //! and exact match bonuses for symbol names.
 
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
+use regex::Regex;
 use tokio_postgres::Client;
 use tracing::{debug, instrument, warn};
+
+/// Normalize query for exact match detection
+///
+/// Handles acronym-aware camelCase to snake_case conversion:
+/// - "validateProvider" → "validate_provider"
+/// - "XMLParser" → "xml_parser"
+/// - "validateHTTPRequest" → "validate_http_request"
+/// - "HTTPSHandler" → "https_handler"
+/// - "Base64Encoder" → "base64_encoder"
+/// - "validate-provider" → "validate_provider"
+pub fn normalize_for_exact_match(query: &str) -> String {
+    let mut normalized = query.to_string();
+
+    // Step 1: Handle consecutive uppercase (acronyms) before lowercase
+    // "XMLParser" → "XML_Parser", "HTTPSHandler" → "HTTPS_Handler"
+    let re1 = Regex::new(r"([A-Z]+)([A-Z][a-z])").unwrap();
+    normalized = re1.replace_all(&normalized, "${1}_${2}").to_string();
+
+    // Step 2: Handle transition from lowercase to multiple capitals (acronym after lowercase)
+    // "validateHTTP" → "validate_HTTP"
+    let re2 = Regex::new(r"([a-z\d])([A-Z]{2,})").unwrap();
+    normalized = re2.replace_all(&normalized, "${1}_${2}").to_string();
+
+    // Step 3: Handle camelCase → snake_case (single capital after lowercase)
+    // "validateProvider" → "validate_Provider"
+    let re3 = Regex::new(r"([a-z\d])([A-Z])").unwrap();
+    normalized = re3.replace_all(&normalized, "${1}_${2}").to_string();
+
+    // Step 4: Handle kebab-case, spaces, and dots → snake_case
+    let re4 = Regex::new(r"[\s\-\.]").unwrap();
+    normalized = re4.replace_all(&normalized, "_").to_string();
+
+    // Step 5: Lowercase everything
+    normalized = normalized.to_lowercase();
+
+    // Step 6: Clean up multiple/trailing/leading underscores
+    let re5 = Regex::new(r"_+").unwrap();
+    normalized = re5.replace_all(&normalized, "_").to_string();
+    let re6 = Regex::new(r"^_|_$").unwrap();
+    normalized = re6.replace_all(&normalized, "").to_string();
+
+    normalized
+}
 
 /// Full-text search executor.
 ///
@@ -20,8 +64,7 @@ impl FTSExecutor {
     /// # Parameters
     /// - `client`: Database client
     /// - `fts_query`: PostgreSQL tsquery string (e.g., "auth & login")
-    /// - `normalized_query`: Normalized query for exact match detection
-    /// - `original_query`: Original query for substring matching
+    /// - `normalized_query`: Normalized query for exact match detection (snake_case)
     /// - `repo_id`: Repository ID to filter results
     /// - `worktree_id`: Optional worktree ID for additional filtering
     /// - `limit`: Maximum number of results (will over-fetch by 3x)
@@ -40,10 +83,6 @@ impl FTSExecutor {
     ///       ELSE 1.0
     ///     END as exact_mult,
     ///     CASE
-    ///       WHEN c.symbol_name ILIKE '%' || $3 || '%' THEN 0.2
-    ///       ELSE 0.0
-    ///     END as exact_bonus,
-    ///     CASE
     ///       WHEN c.kind IN ('func', 'async_func') THEN 2.5
     ///       WHEN c.kind IN ('class', 'component') THEN 2.0
     ///       WHEN c.kind = 'hook' THEN 1.8
@@ -52,23 +91,22 @@ impl FTSExecutor {
     ///   FROM maproom.chunks c
     ///   JOIN maproom.files f ON f.id = c.file_id
     ///   WHERE c.ts_doc @@ to_tsquery('simple', $1)
-    ///     AND f.repo_id = $4
-    ///     AND ($5::bigint IS NULL OR f.worktree_id = $5)
+    ///     AND f.repo_id = $3
+    ///     AND ($4::bigint IS NULL OR f.worktree_id = $4)
     /// )
     /// SELECT
     ///   id,
-    ///   (base_score + exact_bonus) as score,
-    ///   ROW_NUMBER() OVER (ORDER BY base_score + exact_bonus DESC) as rank
+    ///   (base_score * exact_mult) as score,
+    ///   ROW_NUMBER() OVER (ORDER BY base_score * exact_mult DESC) as rank
     /// FROM fts_results
     /// ORDER BY score DESC
-    /// LIMIT $6;
+    /// LIMIT $5;
     /// ```
     #[instrument(skip(client), fields(query_len = fts_query.len()))]
     pub async fn execute(
         client: &Client,
         fts_query: &str,
         normalized_query: &str,
-        original_query: &str,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
@@ -92,16 +130,11 @@ impl FTSExecutor {
               SELECT
                 c.id,
                 ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
-                -- SEMRANK-2004a: Exact match multiplier (3.0× boost for exact symbol_name match)
+                -- SEMRANK-2004: Exact match multiplier (3.0× boost for exact symbol_name match)
                 CASE
                   WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
                   ELSE 1.0
                 END as exact_mult,
-                -- Legacy exact bonus (will be removed in SEMRANK-2004b)
-                CASE
-                  WHEN c.symbol_name ILIKE '%' || $3 || '%' THEN 0.2
-                  ELSE 0.0
-                END as exact_bonus,
                 -- Source: 0001_init.sql:45 + migrations (maproom.symbol_kind enum)
                 CASE
                   WHEN c.kind IN ('func', 'async_func') THEN 2.5
@@ -120,16 +153,16 @@ impl FTSExecutor {
               FROM maproom.chunks c
               JOIN maproom.files f ON f.id = c.file_id
               WHERE c.ts_doc @@ to_tsquery('simple', $1)
-                AND f.repo_id = $4
-                AND ($5::bigint IS NULL OR f.worktree_id = $5)
+                AND f.repo_id = $3
+                AND ($4::bigint IS NULL OR f.worktree_id = $4)
             )
             SELECT
               id,
-              (base_score + exact_bonus) as score,
-              ROW_NUMBER() OVER (ORDER BY base_score + exact_bonus DESC) as rank
+              (base_score * exact_mult) as score,
+              ROW_NUMBER() OVER (ORDER BY base_score * exact_mult DESC) as rank
             FROM fts_results
             ORDER BY score DESC
-            LIMIT $6
+            LIMIT $5
         "#;
 
         let stmt = client.prepare(sql).await.map_err(|e| {
@@ -143,7 +176,6 @@ impl FTSExecutor {
                 &[
                     &fts_query,
                     &normalized_query,
-                    &original_query,
                     &repo_id,
                     &worktree_id,
                     &fetch_limit,
@@ -218,6 +250,121 @@ mod tests {
     fn test_fts_executor_exists() {
         // Verify the executor type exists
         let _executor = FTSExecutor;
+    }
+
+    // SEMRANK-2004b: Query normalization tests
+    mod normalize_tests {
+        use super::*;
+
+        #[test]
+        fn test_simple_camelcase() {
+            assert_eq!(normalize_for_exact_match("validateProvider"), "validate_provider");
+        }
+
+        #[test]
+        fn test_single_word() {
+            assert_eq!(normalize_for_exact_match("provider"), "provider");
+        }
+
+        #[test]
+        fn test_multiple_camelcase_transitions() {
+            assert_eq!(
+                normalize_for_exact_match("getUserNameFromDatabase"),
+                "get_user_name_from_database"
+            );
+        }
+
+        #[test]
+        fn test_acronym_at_start() {
+            assert_eq!(normalize_for_exact_match("XMLParser"), "xml_parser");
+            assert_eq!(normalize_for_exact_match("HTTPClient"), "http_client");
+            assert_eq!(normalize_for_exact_match("FTPUploader"), "ftp_uploader");
+        }
+
+        #[test]
+        fn test_acronym_in_middle() {
+            assert_eq!(
+                normalize_for_exact_match("validateHTTPRequest"),
+                "validate_http_request"
+            );
+            assert_eq!(normalize_for_exact_match("sendSMTPMessage"), "send_smtp_message");
+            assert_eq!(normalize_for_exact_match("parseJSONData"), "parse_json_data");
+        }
+
+        #[test]
+        fn test_consecutive_capitals() {
+            assert_eq!(normalize_for_exact_match("HTTPSHandler"), "https_handler");
+            assert_eq!(normalize_for_exact_match("XMLHTTPRequest"), "xmlhttp_request");
+            assert_eq!(normalize_for_exact_match("SSLContext"), "ssl_context");
+        }
+
+        #[test]
+        fn test_numbers_with_capitals() {
+            assert_eq!(normalize_for_exact_match("Base64Encoder"), "base64_encoder");
+            assert_eq!(normalize_for_exact_match("MD5Hash"), "md5_hash");
+            assert_eq!(normalize_for_exact_match("SHA256Digest"), "sha256_digest");
+        }
+
+        #[test]
+        fn test_kebab_case() {
+            assert_eq!(normalize_for_exact_match("validate-provider"), "validate_provider");
+            assert_eq!(
+                normalize_for_exact_match("user-auth-service-factory"),
+                "user_auth_service_factory"
+            );
+        }
+
+        #[test]
+        fn test_spaces() {
+            assert_eq!(normalize_for_exact_match("validate provider"), "validate_provider");
+            assert_eq!(
+                normalize_for_exact_match("user  auth   service"),
+                "user_auth_service"
+            );
+        }
+
+        #[test]
+        fn test_dots() {
+            assert_eq!(normalize_for_exact_match("user.auth.service"), "user_auth_service");
+        }
+
+        #[test]
+        fn test_edge_cases() {
+            assert_eq!(normalize_for_exact_match(""), "");
+            assert_eq!(normalize_for_exact_match("HTTP"), "http");
+            assert_eq!(normalize_for_exact_match("validate"), "validate");
+            assert_eq!(normalize_for_exact_match("user__auth___service"), "user_auth_service");
+            assert_eq!(normalize_for_exact_match("_privateMethod"), "private_method");
+            assert_eq!(normalize_for_exact_match("method_"), "method");
+        }
+
+        #[test]
+        fn test_mixed_separators() {
+            assert_eq!(
+                normalize_for_exact_match("user-auth.service Provider"),
+                "user_auth_service_provider"
+            );
+        }
+
+        #[test]
+        fn test_real_world_examples() {
+            assert_eq!(
+                normalize_for_exact_match("ValidationErrorHandler"),
+                "validation_error_handler"
+            );
+            assert_eq!(
+                normalize_for_exact_match("UserAuthFormContainer"),
+                "user_auth_form_container"
+            );
+            assert_eq!(
+                normalize_for_exact_match("execute_fts_search"),
+                "execute_fts_search"
+            );
+            assert_eq!(
+                normalize_for_exact_match("user-profile-service"),
+                "user_profile_service"
+            );
+        }
     }
 
     // Note: Full integration tests with real database are in tests/search/executors_test.rs

@@ -75,15 +75,16 @@ impl SearchExecutors {
         let query_embedding = query.embedding.clone();
         let search_mode = query.mode;
 
+        // Normalize query for exact match detection (SEMRANK-2004b)
+        let normalized_query = crate::search::fts::normalize_for_exact_match(&original_query);
+
         // Execute all searches in parallel using tokio::join!
         let (fts_result, vector_result, graph_result, signal_result) = tokio::join!(
-            // Full-text search
-            // Note: normalized_query will be properly implemented in SEMRANK-2004b
+            // Full-text search with normalized query for exact matching
             FTSExecutor::execute(
                 &self.client,
                 &fts_query,
-                &original_query, // normalized_query (temporary - will be normalized in SEMRANK-2004b)
-                &original_query, // original_query
+                &normalized_query,
                 repo_id,
                 worktree_id,
                 limit
@@ -185,13 +186,15 @@ impl SearchExecutors {
         let query_embedding = query.embedding.clone();
         let search_mode = query.mode;
 
+        // Normalize query for exact match detection (SEMRANK-2004b)
+        let normalized_query = crate::search::fts::normalize_for_exact_match(&original_query);
+
         let (fts_result, vector_result) = tokio::join!(
-            // Note: normalized_query will be properly implemented in SEMRANK-2004b
+            // Full-text search with normalized query for exact matching
             FTSExecutor::execute(
                 &self.client,
                 &fts_query,
-                &original_query, // normalized_query (temporary - will be normalized in SEMRANK-2004b)
-                &original_query, // original_query
+                &normalized_query,
                 repo_id,
                 worktree_id,
                 limit
