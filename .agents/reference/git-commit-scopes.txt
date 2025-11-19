@@ -28,6 +28,7 @@ research
 search
 search-opt
 security
+semrank
 test
 tests
 tools
