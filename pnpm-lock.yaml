@@ -108,6 +108,9 @@ importers:
       pino:
         specifier: ^8.16.2
         version: 8.21.0
+      tsx:
+        specifier: ^4.20.3
+        version: 4.20.3
       zod:
         specifier: ^3.22.4
         version: 3.25.76

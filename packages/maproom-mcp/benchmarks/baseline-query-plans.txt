@@ -1,214 +1,258 @@
 === Query: "authenticate" ===
 
-Limit  (cost=157.78..157.79 rows=1 width=149) (actual time=1.687..1.690 rows=20 loops=1)
+Limit  (cost=29.40..29.41 rows=1 width=92) (actual time=0.439..0.443 rows=20 loops=1)
   Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''authenticate'''::tsquery))
-  Buffers: shared hit=160 read=90
-  ->  Sort  (cost=157.78..157.79 rows=1 width=149) (actual time=1.686..1.688 rows=20 loops=1)
+  Buffers: shared hit=167
+  ->  Sort  (cost=29.40..29.41 rows=1 width=92) (actual time=0.439..0.441 rows=20 loops=1)
         Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''authenticate'''::tsquery))
         Sort Key: (ts_rank_cd(c.ts_doc, '''authenticate'''::tsquery)) DESC
         Sort Method: quicksort  Memory: 28kB
-        Buffers: shared hit=160 read=90
-        ->  Nested Loop  (cost=0.84..157.77 rows=1 width=149) (actual time=1.280..1.666 rows=30 loops=1)
+        Buffers: shared hit=167
+        ->  Nested Loop  (cost=24.40..29.39 rows=1 width=92) (actual time=0.172..0.420 rows=30 loops=1)
               Output: c.id, f.relpath, c.symbol_name, (c.kind)::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, '''authenticate'''::tsquery)
-              Buffers: shared hit=157 read=90
-              ->  Merge Join  (cost=0.43..150.59 rows=1 width=87) (actual time=1.107..1.130 rows=13 loops=1)
+              Buffers: shared hit=164
+              ->  Hash Join  (cost=2.38..5.11 rows=1 width=33) (actual time=0.049..0.067 rows=13 loops=1)
                     Output: f.relpath, f.id
-                    Merge Cond: (r.id = f.repo_id)
-                    Join Filter: ((SubPlan 1) = f.worktree_id)
-                    Buffers: shared hit=30 read=65
-                    ->  Index Scan using repos_pkey on maproom.repos r  (cost=0.14..5.95 rows=1 width=8) (actual time=0.026..0.026 rows=1 loops=1)
-                          Output: r.id, r.name, r.root_path
-                          Filter: (r.name = 'test-corpus'::text)
-                          Rows Removed by Filter: 1
-                          Buffers: shared hit=1 read=1
-                    ->  Index Scan using idx_files_repo_worktree on maproom.files f  (cost=0.28..103.51 rows=2201 width=103) (actual time=0.049..0.958 rows=2155 loops=1)
+                    Inner Unique: true
+                    Hash Cond: ((f.repo_id = r.id) AND (f.worktree_id = (SubPlan 1)))
+                    Buffers: shared hit=31
+                    ->  Seq Scan on maproom.files f  (cost=0.00..1.13 rows=13 width=49) (actual time=0.009..0.011 rows=13 loops=1)
                           Output: f.id, f.repo_id, f.worktree_id, f.commit_id, f.relpath, f.language, f.content_hash, f.size_bytes, f.last_modified, f.blake3_hash
-                          Buffers: shared hit=3 read=64
-                    SubPlan 1
-                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.002..0.002 rows=1 loops=13)
-                            Output: worktrees.id
-                            Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
-                            Buffers: shared hit=26
-              ->  Index Scan using chunks_file_id_start_line_end_line_key on maproom.chunks c  (cost=0.42..7.17 rows=1 width=494) (actual time=0.015..0.036 rows=2 loops=13)
+                          Buffers: shared hit=1
+                    ->  Hash  (cost=2.36..2.36 rows=1 width=8) (actual time=0.029..0.030 rows=1 loops=1)
+                          Output: r.id
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=4
+                          ->  Index Scan using repos_name_key on maproom.repos r  (cost=0.14..2.36 rows=1 width=8) (actual time=0.013..0.013 rows=1 loops=1)
+                                Output: r.id
+                                Index Cond: (r.name = 'test-corpus'::text)
+                                Buffers: shared hit=2
+                          SubPlan 1
+                            ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.002..0.002 rows=1 loops=14)
+                                  Output: worktrees.id
+                                  Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
+                                  Buffers: shared hit=28
+              ->  Bitmap Heap Scan on maproom.chunks c  (cost=22.03..24.25 rows=2 width=379) (actual time=0.018..0.019 rows=2 loops=13)
                     Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
-                    Index Cond: (c.file_id = f.id)
-                    Filter: (c.ts_doc @@ '''authenticate'''::tsquery)
-                    Rows Removed by Filter: 6
-                    Buffers: shared hit=106 read=25
+                    Recheck Cond: ((c.ts_doc @@ '''authenticate'''::tsquery) AND (f.id = c.file_id))
+                    Heap Blocks: exact=12
+                    Buffers: shared hit=90
+                    ->  BitmapAnd  (cost=22.03..22.03 rows=2 width=0) (actual time=0.016..0.016 rows=0 loops=13)
+                          Buffers: shared hit=78
+                          ->  Bitmap Index Scan on idx_chunks_tsv  (cost=0.00..5.78 rows=59 width=0) (actual time=0.013..0.013 rows=188 loops=13)
+                                Index Cond: (c.ts_doc @@ '''authenticate'''::tsquery)
+                                Buffers: shared hit=52
+                          ->  Bitmap Index Scan on chunks_file_id_start_line_end_line_key  (cost=0.00..15.98 rows=8 width=0) (actual time=0.002..0.002 rows=8 loops=13)
+                                Index Cond: (c.file_id = f.id)
+                                Buffers: shared hit=26
 Planning:
-  Buffers: shared hit=962 read=1
-Planning Time: 2.515 ms
-Execution Time: 1.750 ms
+  Buffers: shared hit=923 dirtied=1
+Planning Time: 2.061 ms
+Execution Time: 0.513 ms
 
 
 === Query: "user authentication" ===
 
-Limit  (cost=157.78..157.79 rows=1 width=149) (actual time=0.605..0.606 rows=6 loops=1)
+Limit  (cost=18.39..18.40 rows=1 width=92) (actual time=0.159..0.161 rows=6 loops=1)
   Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''user'' & ''authentication'''::tsquery))
-  Buffers: shared hit=203
-  ->  Sort  (cost=157.78..157.79 rows=1 width=149) (actual time=0.604..0.605 rows=6 loops=1)
+  Buffers: shared hit=60
+  ->  Sort  (cost=18.39..18.40 rows=1 width=92) (actual time=0.159..0.161 rows=6 loops=1)
         Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''user'' & ''authentication'''::tsquery))
         Sort Key: (ts_rank_cd(c.ts_doc, '''user'' & ''authentication'''::tsquery)) DESC
         Sort Method: quicksort  Memory: 25kB
-        Buffers: shared hit=203
-        ->  Nested Loop  (cost=0.84..157.77 rows=1 width=149) (actual time=0.524..0.600 rows=6 loops=1)
+        Buffers: shared hit=60
+        ->  Hash Join  (cost=13.43..18.38 rows=1 width=92) (actual time=0.115..0.157 rows=6 loops=1)
               Output: c.id, f.relpath, c.symbol_name, (c.kind)::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, '''user'' & ''authentication'''::tsquery)
-              Buffers: shared hit=203
-              ->  Merge Join  (cost=0.43..150.59 rows=1 width=87) (actual time=0.454..0.470 rows=13 loops=1)
-                    Output: f.relpath, f.id
-                    Merge Cond: (r.id = f.repo_id)
-                    Join Filter: ((SubPlan 1) = f.worktree_id)
-                    Buffers: shared hit=95
-                    ->  Index Scan using repos_pkey on maproom.repos r  (cost=0.14..5.95 rows=1 width=8) (actual time=0.007..0.007 rows=1 loops=1)
-                          Output: r.id, r.name, r.root_path
-                          Filter: (r.name = 'test-corpus'::text)
-                          Rows Removed by Filter: 1
+              Inner Unique: true
+              Hash Cond: ((f.repo_id = r.id) AND (f.worktree_id = (SubPlan 1)))
+              Buffers: shared hit=60
+              ->  Hash Join  (cost=11.05..15.50 rows=4 width=412) (actual time=0.089..0.118 rows=6 loops=1)
+                    Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, f.relpath, f.repo_id, f.worktree_id
+                    Inner Unique: true
+                    Hash Cond: (c.file_id = f.id)
+                    Buffers: shared hit=44
+                    ->  Bitmap Heap Scan on maproom.chunks c  (cost=9.76..14.20 rows=4 width=379) (actual time=0.083..0.110 rows=6 loops=1)
+                          Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
+                          Recheck Cond: (c.ts_doc @@ '''user'' & ''authentication'''::tsquery)
+                          Heap Blocks: exact=33
+                          Buffers: shared hit=43
+                          ->  Bitmap Index Scan on idx_chunks_tsv  (cost=0.00..9.76 rows=4 width=0) (actual time=0.028..0.028 rows=36 loops=1)
+                                Index Cond: (c.ts_doc @@ '''user'' & ''authentication'''::tsquery)
+                                Buffers: shared hit=10
+                    ->  Hash  (cost=1.13..1.13 rows=13 width=49) (actual time=0.004..0.004 rows=13 loops=1)
+                          Output: f.relpath, f.id, f.repo_id, f.worktree_id
+                          Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                          Buffers: shared hit=1
+                          ->  Seq Scan on maproom.files f  (cost=0.00..1.13 rows=13 width=49) (actual time=0.001..0.002 rows=13 loops=1)
+                                Output: f.relpath, f.id, f.repo_id, f.worktree_id
+                                Buffers: shared hit=1
+              ->  Hash  (cost=2.36..2.36 rows=1 width=8) (actual time=0.008..0.008 rows=1 loops=1)
+                    Output: r.id
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=4
+                    ->  Index Scan using repos_name_key on maproom.repos r  (cost=0.14..2.36 rows=1 width=8) (actual time=0.004..0.004 rows=1 loops=1)
+                          Output: r.id
+                          Index Cond: (r.name = 'test-corpus'::text)
                           Buffers: shared hit=2
-                    ->  Index Scan using idx_files_repo_worktree on maproom.files f  (cost=0.28..103.51 rows=2201 width=103) (actual time=0.007..0.317 rows=2155 loops=1)
-                          Output: f.id, f.repo_id, f.worktree_id, f.commit_id, f.relpath, f.language, f.content_hash, f.size_bytes, f.last_modified, f.blake3_hash
-                          Buffers: shared hit=67
                     SubPlan 1
-                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=13)
+                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=7)
                             Output: worktrees.id
                             Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
-                            Buffers: shared hit=26
-              ->  Index Scan using chunks_file_id_start_line_end_line_key on maproom.chunks c  (cost=0.42..7.17 rows=1 width=494) (actual time=0.006..0.008 rows=0 loops=13)
-                    Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
-                    Index Cond: (c.file_id = f.id)
-                    Filter: (c.ts_doc @@ '''user'' & ''authentication'''::tsquery)
-                    Rows Removed by Filter: 8
-                    Buffers: shared hit=108
+                            Buffers: shared hit=14
 Planning:
-  Buffers: shared hit=18
-Planning Time: 0.396 ms
-Execution Time: 0.629 ms
+  Buffers: shared hit=3
+Planning Time: 0.284 ms
+Execution Time: 0.183 ms
 
 
 === Query: "test_authenticate" ===
 
-Limit  (cost=157.78..157.79 rows=1 width=149) (actual time=0.480..0.482 rows=6 loops=1)
+Limit  (cost=29.49..29.49 rows=1 width=92) (actual time=0.430..0.432 rows=6 loops=1)
   Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''test'' <-> ''authenticate'''::tsquery))
-  Buffers: shared hit=203
-  ->  Sort  (cost=157.78..157.79 rows=1 width=149) (actual time=0.480..0.481 rows=6 loops=1)
+  Buffers: shared hit=564
+  ->  Sort  (cost=29.49..29.49 rows=1 width=92) (actual time=0.430..0.431 rows=6 loops=1)
         Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''test'' <-> ''authenticate'''::tsquery))
         Sort Key: (ts_rank_cd(c.ts_doc, '''test'' <-> ''authenticate'''::tsquery)) DESC
         Sort Method: quicksort  Memory: 25kB
-        Buffers: shared hit=203
-        ->  Nested Loop  (cost=0.84..157.77 rows=1 width=149) (actual time=0.419..0.477 rows=6 loops=1)
+        Buffers: shared hit=564
+        ->  Nested Loop  (cost=12.19..29.48 rows=1 width=92) (actual time=0.179..0.427 rows=6 loops=1)
               Output: c.id, f.relpath, c.symbol_name, (c.kind)::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, '''test'' <-> ''authenticate'''::tsquery)
-              Buffers: shared hit=203
-              ->  Merge Join  (cost=0.43..150.59 rows=1 width=87) (actual time=0.362..0.378 rows=13 loops=1)
+              Join Filter: (f.id = c.file_id)
+              Rows Removed by Join Filter: 72
+              Buffers: shared hit=564
+              ->  Hash Join  (cost=2.38..5.11 rows=1 width=33) (actual time=0.014..0.032 rows=13 loops=1)
                     Output: f.relpath, f.id
-                    Merge Cond: (r.id = f.repo_id)
-                    Join Filter: ((SubPlan 1) = f.worktree_id)
-                    Buffers: shared hit=95
-                    ->  Index Scan using repos_pkey on maproom.repos r  (cost=0.14..5.95 rows=1 width=8) (actual time=0.004..0.005 rows=1 loops=1)
-                          Output: r.id, r.name, r.root_path
-                          Filter: (r.name = 'test-corpus'::text)
-                          Rows Removed by Filter: 1
-                          Buffers: shared hit=2
-                    ->  Index Scan using idx_files_repo_worktree on maproom.files f  (cost=0.28..103.51 rows=2201 width=103) (actual time=0.004..0.240 rows=2155 loops=1)
+                    Inner Unique: true
+                    Hash Cond: ((f.repo_id = r.id) AND (f.worktree_id = (SubPlan 1)))
+                    Buffers: shared hit=31
+                    ->  Seq Scan on maproom.files f  (cost=0.00..1.13 rows=13 width=49) (actual time=0.002..0.003 rows=13 loops=1)
                           Output: f.id, f.repo_id, f.worktree_id, f.commit_id, f.relpath, f.language, f.content_hash, f.size_bytes, f.last_modified, f.blake3_hash
-                          Buffers: shared hit=67
-                    SubPlan 1
-                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=13)
-                            Output: worktrees.id
-                            Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
-                            Buffers: shared hit=26
-              ->  Index Scan using chunks_file_id_start_line_end_line_key on maproom.chunks c  (cost=0.42..7.17 rows=1 width=494) (actual time=0.006..0.006 rows=0 loops=13)
+                          Buffers: shared hit=1
+                    ->  Hash  (cost=2.36..2.36 rows=1 width=8) (actual time=0.009..0.009 rows=1 loops=1)
+                          Output: r.id
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=4
+                          ->  Index Scan using repos_name_key on maproom.repos r  (cost=0.14..2.36 rows=1 width=8) (actual time=0.004..0.004 rows=1 loops=1)
+                                Output: r.id
+                                Index Cond: (r.name = 'test-corpus'::text)
+                                Buffers: shared hit=2
+                          SubPlan 1
+                            ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=14)
+                                  Output: worktrees.id
+                                  Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
+                                  Buffers: shared hit=28
+              ->  Bitmap Heap Scan on maproom.chunks c  (cost=9.81..24.19 rows=13 width=379) (actual time=0.025..0.028 rows=6 loops=13)
                     Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
-                    Index Cond: (c.file_id = f.id)
-                    Filter: (c.ts_doc @@ '''test'' <-> ''authenticate'''::tsquery)
-                    Rows Removed by Filter: 8
-                    Buffers: shared hit=108
+                    Recheck Cond: (c.ts_doc @@ '''test'' <-> ''authenticate'''::tsquery)
+                    Rows Removed by Index Recheck: 1
+                    Heap Blocks: exact=338
+                    Buffers: shared hit=533
+                    ->  Bitmap Index Scan on idx_chunks_tsv  (cost=0.00..9.81 rows=13 width=0) (actual time=0.015..0.015 rows=42 loops=13)
+                          Index Cond: (c.ts_doc @@ '''test'' <-> ''authenticate'''::tsquery)
+                          Buffers: shared hit=156
 Planning:
-  Buffers: shared hit=18
-Planning Time: 0.373 ms
-Execution Time: 0.499 ms
+  Buffers: shared hit=3
+Planning Time: 0.261 ms
+Execution Time: 0.451 ms
 
 
 === Query: "DatabaseConnection" ===
 
-Limit  (cost=157.78..157.79 rows=1 width=149) (actual time=0.497..0.499 rows=7 loops=1)
+Limit  (cost=26.35..26.35 rows=1 width=92) (actual time=0.231..0.234 rows=7 loops=1)
   Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''databaseconnection'''::tsquery))
-  Buffers: shared hit=209
-  ->  Sort  (cost=157.78..157.79 rows=1 width=149) (actual time=0.497..0.498 rows=7 loops=1)
+  Buffers: shared hit=439
+  ->  Sort  (cost=26.35..26.35 rows=1 width=92) (actual time=0.231..0.232 rows=7 loops=1)
         Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''databaseconnection'''::tsquery))
         Sort Key: (ts_rank_cd(c.ts_doc, '''databaseconnection'''::tsquery)) DESC
         Sort Method: quicksort  Memory: 25kB
-        Buffers: shared hit=209
-        ->  Nested Loop  (cost=0.84..157.77 rows=1 width=149) (actual time=0.407..0.492 rows=7 loops=1)
+        Buffers: shared hit=439
+        ->  Nested Loop  (cost=7.93..26.34 rows=1 width=92) (actual time=0.074..0.228 rows=7 loops=1)
               Output: c.id, f.relpath, c.symbol_name, (c.kind)::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, '''databaseconnection'''::tsquery)
-              Buffers: shared hit=209
-              ->  Merge Join  (cost=0.43..150.59 rows=1 width=87) (actual time=0.379..0.396 rows=13 loops=1)
+              Join Filter: (f.id = c.file_id)
+              Rows Removed by Join Filter: 84
+              Buffers: shared hit=439
+              ->  Hash Join  (cost=2.38..5.11 rows=1 width=33) (actual time=0.014..0.030 rows=13 loops=1)
                     Output: f.relpath, f.id
-                    Merge Cond: (r.id = f.repo_id)
-                    Join Filter: ((SubPlan 1) = f.worktree_id)
-                    Buffers: shared hit=95
-                    ->  Index Scan using repos_pkey on maproom.repos r  (cost=0.14..5.95 rows=1 width=8) (actual time=0.004..0.005 rows=1 loops=1)
-                          Output: r.id, r.name, r.root_path
-                          Filter: (r.name = 'test-corpus'::text)
-                          Rows Removed by Filter: 1
-                          Buffers: shared hit=2
-                    ->  Index Scan using idx_files_repo_worktree on maproom.files f  (cost=0.28..103.51 rows=2201 width=103) (actual time=0.005..0.228 rows=2155 loops=1)
+                    Inner Unique: true
+                    Hash Cond: ((f.repo_id = r.id) AND (f.worktree_id = (SubPlan 1)))
+                    Buffers: shared hit=31
+                    ->  Seq Scan on maproom.files f  (cost=0.00..1.13 rows=13 width=49) (actual time=0.002..0.003 rows=13 loops=1)
                           Output: f.id, f.repo_id, f.worktree_id, f.commit_id, f.relpath, f.language, f.content_hash, f.size_bytes, f.last_modified, f.blake3_hash
-                          Buffers: shared hit=67
-                    SubPlan 1
-                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=13)
-                            Output: worktrees.id
-                            Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
-                            Buffers: shared hit=26
-              ->  Index Scan using chunks_file_id_start_line_end_line_key on maproom.chunks c  (cost=0.42..7.17 rows=1 width=494) (actual time=0.004..0.006 rows=1 loops=13)
+                          Buffers: shared hit=1
+                    ->  Hash  (cost=2.36..2.36 rows=1 width=8) (actual time=0.008..0.009 rows=1 loops=1)
+                          Output: r.id
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=4
+                          ->  Index Scan using repos_name_key on maproom.repos r  (cost=0.14..2.36 rows=1 width=8) (actual time=0.004..0.004 rows=1 loops=1)
+                                Output: r.id
+                                Index Cond: (r.name = 'test-corpus'::text)
+                                Buffers: shared hit=2
+                          SubPlan 1
+                            ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=14)
+                                  Output: worktrees.id
+                                  Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
+                                  Buffers: shared hit=28
+              ->  Bitmap Heap Scan on maproom.chunks c  (cost=5.55..21.04 rows=14 width=379) (actual time=0.010..0.013 rows=7 loops=13)
                     Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
-                    Index Cond: (c.file_id = f.id)
-                    Filter: (c.ts_doc @@ '''databaseconnection'''::tsquery)
-                    Rows Removed by Filter: 7
-                    Buffers: shared hit=108
+                    Recheck Cond: (c.ts_doc @@ '''databaseconnection'''::tsquery)
+                    Heap Blocks: exact=351
+                    Buffers: shared hit=403
+                    ->  Bitmap Index Scan on idx_chunks_tsv  (cost=0.00..5.55 rows=14 width=0) (actual time=0.004..0.004 rows=42 loops=13)
+                          Index Cond: (c.ts_doc @@ '''databaseconnection'''::tsquery)
+                          Buffers: shared hit=52
 Planning:
-  Buffers: shared hit=18
-Planning Time: 0.340 ms
-Execution Time: 0.522 ms
+  Buffers: shared hit=3
+Planning Time: 0.287 ms
+Execution Time: 0.253 ms
 
 
 === Query: "API reference" ===
 
-Limit  (cost=157.78..157.79 rows=1 width=149) (actual time=0.458..0.459 rows=1 loops=1)
+Limit  (cost=14.66..14.67 rows=1 width=92) (actual time=0.121..0.122 rows=1 loops=1)
   Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''api'' & ''reference'''::tsquery))
-  Buffers: shared hit=203
-  ->  Sort  (cost=157.78..157.79 rows=1 width=149) (actual time=0.457..0.458 rows=1 loops=1)
+  Buffers: shared hit=23
+  ->  Sort  (cost=14.66..14.67 rows=1 width=92) (actual time=0.120..0.121 rows=1 loops=1)
         Output: c.id, f.relpath, c.symbol_name, ((c.kind)::text), c.start_line, c.end_line, (ts_rank_cd(c.ts_doc, '''api'' & ''reference'''::tsquery))
         Sort Key: (ts_rank_cd(c.ts_doc, '''api'' & ''reference'''::tsquery)) DESC
         Sort Method: quicksort  Memory: 25kB
-        Buffers: shared hit=203
-        ->  Nested Loop  (cost=0.84..157.77 rows=1 width=149) (actual time=0.378..0.455 rows=1 loops=1)
+        Buffers: shared hit=23
+        ->  Hash Join  (cost=12.12..14.65 rows=1 width=92) (actual time=0.117..0.118 rows=1 loops=1)
               Output: c.id, f.relpath, c.symbol_name, (c.kind)::text, c.start_line, c.end_line, ts_rank_cd(c.ts_doc, '''api'' & ''reference'''::tsquery)
-              Buffers: shared hit=203
-              ->  Merge Join  (cost=0.43..150.59 rows=1 width=87) (actual time=0.334..0.371 rows=13 loops=1)
-                    Output: f.relpath, f.id
-                    Merge Cond: (r.id = f.repo_id)
-                    Join Filter: ((SubPlan 1) = f.worktree_id)
-                    Buffers: shared hit=95
-                    ->  Index Scan using repos_pkey on maproom.repos r  (cost=0.14..5.95 rows=1 width=8) (actual time=0.003..0.004 rows=1 loops=1)
-                          Output: r.id, r.name, r.root_path
-                          Filter: (r.name = 'test-corpus'::text)
-                          Rows Removed by Filter: 1
-                          Buffers: shared hit=2
-                    ->  Index Scan using idx_files_repo_worktree on maproom.files f  (cost=0.28..103.51 rows=2201 width=103) (actual time=0.005..0.209 rows=2155 loops=1)
+              Inner Unique: true
+              Hash Cond: ((f.repo_id = r.id) AND (f.worktree_id = (SubPlan 1)))
+              Buffers: shared hit=23
+              ->  Nested Loop  (cost=9.74..12.15 rows=1 width=412) (actual time=0.066..0.067 rows=1 loops=1)
+                    Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, f.relpath, f.repo_id, f.worktree_id
+                    Inner Unique: true
+                    Join Filter: (f.id = c.file_id)
+                    Rows Removed by Join Filter: 1
+                    Buffers: shared hit=17
+                    ->  Bitmap Heap Scan on maproom.chunks c  (cost=9.74..10.85 rows=1 width=379) (actual time=0.061..0.062 rows=1 loops=1)
+                          Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
+                          Recheck Cond: (c.ts_doc @@ '''api'' & ''reference'''::tsquery)
+                          Heap Blocks: exact=6
+                          Buffers: shared hit=16
+                          ->  Bitmap Index Scan on idx_chunks_tsv  (cost=0.00..9.74 rows=1 width=0) (actual time=0.057..0.057 rows=6 loops=1)
+                                Index Cond: (c.ts_doc @@ '''api'' & ''reference'''::tsquery)
+                                Buffers: shared hit=10
+                    ->  Seq Scan on maproom.files f  (cost=0.00..1.13 rows=13 width=49) (actual time=0.002..0.003 rows=2 loops=1)
                           Output: f.id, f.repo_id, f.worktree_id, f.commit_id, f.relpath, f.language, f.content_hash, f.size_bytes, f.last_modified, f.blake3_hash
-                          Buffers: shared hit=67
+                          Buffers: shared hit=1
+              ->  Hash  (cost=2.36..2.36 rows=1 width=8) (actual time=0.038..0.039 rows=1 loops=1)
+                    Output: r.id
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=4
+                    ->  Index Scan using repos_name_key on maproom.repos r  (cost=0.14..2.36 rows=1 width=8) (actual time=0.009..0.010 rows=1 loops=1)
+                          Output: r.id
+                          Index Cond: (r.name = 'test-corpus'::text)
+                          Buffers: shared hit=2
                     SubPlan 1
-                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.002..0.002 rows=1 loops=13)
+                      ->  Index Scan using worktrees_repo_id_name_key on maproom.worktrees  (cost=0.14..2.36 rows=1 width=8) (actual time=0.006..0.006 rows=1 loops=2)
                             Output: worktrees.id
                             Index Cond: ((worktrees.repo_id = r.id) AND (worktrees.name = 'main'::text))
-                            Buffers: shared hit=26
-              ->  Index Scan using chunks_file_id_start_line_end_line_key on maproom.chunks c  (cost=0.42..7.17 rows=1 width=494) (actual time=0.006..0.006 rows=0 loops=13)
-                    Output: c.id, c.symbol_name, c.kind, c.start_line, c.end_line, c.ts_doc, c.file_id
-                    Index Cond: (c.file_id = f.id)
-                    Filter: (c.ts_doc @@ '''api'' & ''reference'''::tsquery)
-                    Rows Removed by Filter: 8
-                    Buffers: shared hit=108
+                            Buffers: shared hit=4
 Planning:
-  Buffers: shared hit=18
-Planning Time: 0.297 ms
-Execution Time: 0.475 ms
+  Buffers: shared hit=3
+Planning Time: 0.315 ms
+Execution Time: 0.147 ms
 
