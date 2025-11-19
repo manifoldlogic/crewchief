@@ -488,10 +488,35 @@ function buildFilterClauses(filters: any, filter: string, args: any[]): string {
     }
   }
 
-  // Advanced filters
+  // Advanced file_type filter with multi-extension support
   if (filters.file_type) {
-    args.push(`%.${filters.file_type}`)
-    clauses += ` AND f.relpath LIKE $${args.length}`
+    const extensions = parseFileTypeFilter(filters.file_type)
+
+    // Handle empty result (invalid input or all-commas string)
+    if (extensions.length === 0) {
+      // Silent ignore - skip this filter entirely
+      // This matches existing filter pattern (no errors for bad input)
+    } else {
+      // Enforce extension count limit (prevent DoS via complex OR queries)
+      if (extensions.length > 20) {
+        // Graceful degradation - truncate to 20
+        extensions.splice(20)
+      }
+
+      // Single extension: simple LIKE clause (backward compatible)
+      if (extensions.length === 1) {
+        args.push(`%.${extensions[0]}`)
+        clauses += ` AND f.relpath LIKE $${args.length}`
+      }
+      // Multiple extensions: OR clause
+      else {
+        const likeConditions = extensions.map(ext => {
+          args.push(`%.${ext}`)
+          return `f.relpath LIKE $${args.length}`
+        })
+        clauses += ` AND (${likeConditions.join(' OR ')})`
+      }
+    }
   }
 
   if (filters.recency_threshold) {
