@@ -121,3 +121,107 @@ export interface ExplainToolConfig {
   /** Cache TTL in milliseconds (default: 5 minutes) */
   cacheTtlMs?: number
 }
+
+/**
+ * Parameters for the Search tool
+ */
+export interface SearchParams {
+  /** Search query text - use 2-3 keyword concepts for best results */
+  query: string
+
+  /** Repository name to search (e.g., "crewchief") */
+  repo?: string
+
+  /** Worktree/branch name to search (e.g., "main") */
+  worktree?: string
+
+  /** Maximum number of results to return (default: 20, max: 100) */
+  limit?: number
+
+  /** Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: fts) */
+  mode?: 'fts' | 'vector' | 'hybrid'
+
+  /** Content type filter */
+  filter?: 'all' | 'code' | 'docs' | 'config' | 'tests'
+
+  /** Advanced filters */
+  filters?: {
+    /** Comma-separated list of file extensions (e.g., "ts,tsx,js") */
+    file_type?: string
+    /** Filter by specific worktree ID */
+    worktree_id?: number
+  }
+
+  /** Include score breakdown and debug information in results */
+  debug?: boolean
+}
+
+/**
+ * Search result item
+ */
+export interface SearchResult {
+  /** Chunk ID for further context retrieval */
+  chunk_id: number
+
+  /** Symbol name (function, class, etc.) */
+  symbol_name: string | null
+
+  /** Chunk kind (function, class, module, etc.) */
+  kind: string
+
+  /** Relative path to file from repository root */
+  relpath: string
+
+  /** Start line number of the chunk */
+  start_line: number
+
+  /** End line number of the chunk */
+  end_line: number
+
+  /** Relevance score */
+  score: number
+
+  /** Optional preview text */
+  preview?: string
+
+  /** Debug information (only if debug=true) */
+  debug?: {
+    fts_score: number | null
+    vector_score: number | null
+    recency_score: number | null
+    churn_score: number | null
+    final_score: number
+  }
+}
+
+/**
+ * Return type for the Search tool
+ */
+export interface SearchBundle {
+  /** Array of search results */
+  hits: SearchResult[]
+
+  /** Total number of hits returned */
+  total: number
+
+  /** Echo back the query */
+  query: string
+
+  /** Echo back the search mode */
+  mode: string
+
+  /** Echo back the repository filter */
+  repo?: string
+
+  /** Echo back the worktree filter */
+  worktree?: string
+
+  /** Optional hint/warning messages */
+  hint?: string
+
+  /** Error message if search failed */
+  error?: string
+
+  /** Suggestion for fixing the error */
+  suggestion?: string
+}

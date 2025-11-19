@@ -688,13 +688,31 @@ export async function handleSearch(params: any): Promise<any> {
     query,
     k = 10,
     filter = 'all',
-    mode = 'hybrid',
+    mode = 'fts', // Changed default to 'fts' to use Rust binary
     filters = {},
     debug = false
   } = params
 
   const client = await getPg()
   try {
+    // Use new Rust-based search tool for FTS mode
+    if (mode === 'fts') {
+      const { handleSearchTool } = await import('./tools/search.js')
+      const result = await handleSearchTool(
+        { query, repo, worktree, limit: k, mode, debug },
+        client
+      )
+      // Transform SearchBundle to old format for backward compatibility
+      return {
+        hits: result.hits,
+        error: result.error,
+        hint: result.hint,
+        suggestion: result.suggestion,
+      }
+    }
+
+    // Fall back to TypeScript SQL implementation for vector/hybrid modes
+    // TODO: These modes will be migrated to Rust in Phase 2
     // Validate mode parameter
     if (!['fts', 'vector', 'hybrid'].includes(mode)) {
       return {
@@ -1216,9 +1234,16 @@ async function handleMessage(msg: JsonRpcRequest) {
         respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
         log.info({ id: msg.id, tool: name }, 'sent tool result')
       } else if (name === 'search') {
-        const res = await handleSearch(args)
-        respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
-        log.info({ id: msg.id, tool: name }, 'sent tool result')
+        try {
+          const res = await handleSearch(args)
+          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res) }] })
+          log.info({ id: msg.id, tool: name }, 'sent tool result')
+        } catch (error) {
+          const { formatSearchError } = await import('./tools/search.js')
+          const errorResponse = formatSearchError(error)
+          respond(msg.id ?? null, errorResponse)
+          log.error({ id: msg.id, tool: name, error }, 'tool error')
+        }
       } else if (name === 'open') {
         try {
           const res = await handleOpen(args)
