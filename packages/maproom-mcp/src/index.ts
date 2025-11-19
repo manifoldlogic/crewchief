@@ -439,6 +439,40 @@ async function handleStatus(params: any): Promise<any> {
   }
 }
 
+/**
+ * Parse and normalize file type filter input into array of extensions.
+ *
+ * Handles comma-separated extension lists with flexible formatting:
+ * - Case insensitive: "TS" → "ts"
+ * - Dot tolerant: ".ts" → "ts"
+ * - Whitespace tolerant: " ts , tsx " → ["ts", "tsx"]
+ * - Empty safe: "" → [], ",,," → []
+ *
+ * @param input - Raw file_type filter string from MCP request
+ * @returns Array of normalized extension strings (lowercase, no dots)
+ *
+ * @example Single extension
+ * parseFileTypeFilter("ts") → ["ts"]
+ *
+ * @example Multi-extension
+ * parseFileTypeFilter("ts,tsx,js") → ["ts", "tsx", "js"]
+ *
+ * @example Flexible formatting
+ * parseFileTypeFilter(".TS, .tsx , js") → ["ts", "tsx", "js"]
+ *
+ * @example Empty handling
+ * parseFileTypeFilter("") → []
+ * parseFileTypeFilter(",,,") → []
+ */
+function parseFileTypeFilter(input: string): string[] {
+  return input
+    .split(',')                           // Split on comma delimiter
+    .map(ext => ext.trim())               // Remove leading/trailing whitespace
+    .map(ext => ext.replace(/^\./, ''))   // Strip leading dot if present
+    .map(ext => ext.toLowerCase())        // Normalize to lowercase
+    .filter(ext => ext.length > 0)        // Remove empty strings after processing
+}
+
 // Helper function to build filter WHERE clauses
 function buildFilterClauses(filters: any, filter: string, args: any[]): string {
   let clauses = ''
