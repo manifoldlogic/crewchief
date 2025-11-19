@@ -20,6 +20,8 @@ impl FTSExecutor {
     /// # Parameters
     /// - `client`: Database client
     /// - `fts_query`: PostgreSQL tsquery string (e.g., "auth & login")
+    /// - `normalized_query`: Normalized query for exact match detection
+    /// - `original_query`: Original query for substring matching
     /// - `repo_id`: Repository ID to filter results
     /// - `worktree_id`: Optional worktree ID for additional filtering
     /// - `limit`: Maximum number of results (will over-fetch by 3x)
@@ -34,7 +36,11 @@ impl FTSExecutor {
     ///     c.id,
     ///     ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
     ///     CASE
-    ///       WHEN c.symbol_name ILIKE '%' || $2 || '%' THEN 0.2
+    ///       WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
+    ///       ELSE 1.0
+    ///     END as exact_mult,
+    ///     CASE
+    ///       WHEN c.symbol_name ILIKE '%' || $3 || '%' THEN 0.2
     ///       ELSE 0.0
     ///     END as exact_bonus,
     ///     CASE
@@ -46,8 +52,8 @@ impl FTSExecutor {
     ///   FROM maproom.chunks c
     ///   JOIN maproom.files f ON f.id = c.file_id
     ///   WHERE c.ts_doc @@ to_tsquery('simple', $1)
-    ///     AND f.repo_id = $3
-    ///     AND ($4::bigint IS NULL OR f.worktree_id = $4)
+    ///     AND f.repo_id = $4
+    ///     AND ($5::bigint IS NULL OR f.worktree_id = $5)
     /// )
     /// SELECT
     ///   id,
@@ -55,12 +61,13 @@ impl FTSExecutor {
     ///   ROW_NUMBER() OVER (ORDER BY base_score + exact_bonus DESC) as rank
     /// FROM fts_results
     /// ORDER BY score DESC
-    /// LIMIT $5;
+    /// LIMIT $6;
     /// ```
     #[instrument(skip(client), fields(query_len = fts_query.len()))]
     pub async fn execute(
         client: &Client,
         fts_query: &str,
+        normalized_query: &str,
         original_query: &str,
         repo_id: i64,
         worktree_id: Option<i64>,
@@ -85,8 +92,14 @@ impl FTSExecutor {
               SELECT
                 c.id,
                 ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
+                -- SEMRANK-2004a: Exact match multiplier (3.0× boost for exact symbol_name match)
                 CASE
-                  WHEN c.symbol_name ILIKE '%' || $2 || '%' THEN 0.2
+                  WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
+                  ELSE 1.0
+                END as exact_mult,
+                -- Legacy exact bonus (will be removed in SEMRANK-2004b)
+                CASE
+                  WHEN c.symbol_name ILIKE '%' || $3 || '%' THEN 0.2
                   ELSE 0.0
                 END as exact_bonus,
                 -- Source: 0001_init.sql:45 + migrations (maproom.symbol_kind enum)
@@ -107,8 +120,8 @@ impl FTSExecutor {
               FROM maproom.chunks c
               JOIN maproom.files f ON f.id = c.file_id
               WHERE c.ts_doc @@ to_tsquery('simple', $1)
-                AND f.repo_id = $3
-                AND ($4::bigint IS NULL OR f.worktree_id = $4)
+                AND f.repo_id = $4
+                AND ($5::bigint IS NULL OR f.worktree_id = $5)
             )
             SELECT
               id,
@@ -116,7 +129,7 @@ impl FTSExecutor {
               ROW_NUMBER() OVER (ORDER BY base_score + exact_bonus DESC) as rank
             FROM fts_results
             ORDER BY score DESC
-            LIMIT $5
+            LIMIT $6
         "#;
 
         let stmt = client.prepare(sql).await.map_err(|e| {
@@ -129,6 +142,7 @@ impl FTSExecutor {
                 &stmt,
                 &[
                     &fts_query,
+                    &normalized_query,
                     &original_query,
                     &repo_id,
                     &worktree_id,

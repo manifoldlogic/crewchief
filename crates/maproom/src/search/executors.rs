@@ -78,10 +78,12 @@ impl SearchExecutors {
         // Execute all searches in parallel using tokio::join!
         let (fts_result, vector_result, graph_result, signal_result) = tokio::join!(
             // Full-text search
+            // Note: normalized_query will be properly implemented in SEMRANK-2004b
             FTSExecutor::execute(
                 &self.client,
                 &fts_query,
-                &original_query,
+                &original_query, // normalized_query (temporary - will be normalized in SEMRANK-2004b)
+                &original_query, // original_query
                 repo_id,
                 worktree_id,
                 limit
@@ -184,10 +186,12 @@ impl SearchExecutors {
         let search_mode = query.mode;
 
         let (fts_result, vector_result) = tokio::join!(
+            // Note: normalized_query will be properly implemented in SEMRANK-2004b
             FTSExecutor::execute(
                 &self.client,
                 &fts_query,
-                &original_query,
+                &original_query, // normalized_query (temporary - will be normalized in SEMRANK-2004b)
+                &original_query, // original_query
                 repo_id,
                 worktree_id,
                 limit
