@@ -682,7 +682,7 @@ async function executeHybridSearch(
   return result
 }
 
-async function handleSearch(params: any): Promise<any> {
+export async function handleSearch(params: any): Promise<any> {
   const {
     repo,
     worktree,
