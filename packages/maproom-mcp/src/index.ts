@@ -481,7 +481,7 @@ async function handleStatus(params: any): Promise<any> {
  * parseFileTypeFilter("") → []
  * parseFileTypeFilter(",,,") → []
  */
-function parseFileTypeFilter(input: string): string[] {
+export function parseFileTypeFilter(input: string): string[] {
   return input
     .split(',')                           // Split on comma delimiter
     .map(ext => ext.trim())               // Remove leading/trailing whitespace

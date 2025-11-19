@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Client } from 'pg'
+import { parseFileTypeFilter } from '../src/index.js'
 
 // Mock database client for testing
 let testClient: Client
@@ -258,5 +259,76 @@ describe.skip('Search Tool - Performance Tests', () => {
   it('should complete hybrid search within 150ms', async () => {
     // TODO: Implement performance benchmarks
     expect(true).toBe(true)
+  })
+})
+
+describe('parseFileTypeFilter - File Type Parsing', () => {
+  // Basic functionality (P0) - 2 tests
+  it('parses single extension', () => {
+    expect(parseFileTypeFilter('ts')).toEqual(['ts'])
+  })
+
+  it('parses multiple extensions', () => {
+    expect(parseFileTypeFilter('ts,tsx,js')).toEqual(['ts', 'tsx', 'js'])
+  })
+
+  // Case normalization (P0) - 2 tests
+  it('normalizes to lowercase', () => {
+    expect(parseFileTypeFilter('TS,TSX')).toEqual(['ts', 'tsx'])
+  })
+
+  it('handles mixed case', () => {
+    expect(parseFileTypeFilter('Ts,TSX,js')).toEqual(['ts', 'tsx', 'js'])
+  })
+
+  // Whitespace handling (P1) - 2 tests
+  it('trims whitespace', () => {
+    expect(parseFileTypeFilter('  ts  ,  tsx  ')).toEqual(['ts', 'tsx'])
+  })
+
+  it('handles spaces around commas', () => {
+    expect(parseFileTypeFilter('ts , tsx , js')).toEqual(['ts', 'tsx', 'js'])
+  })
+
+  // Dot handling (P1) - 2 tests
+  it('strips leading dots', () => {
+    expect(parseFileTypeFilter('.ts,.tsx')).toEqual(['ts', 'tsx'])
+  })
+
+  it('handles mixed dot/no-dot', () => {
+    expect(parseFileTypeFilter('.ts,tsx,.js')).toEqual(['ts', 'tsx', 'js'])
+  })
+
+  // Empty input (P0) - 3 tests
+  it('returns empty array for empty string', () => {
+    expect(parseFileTypeFilter('')).toEqual([])
+  })
+
+  it('returns empty array for whitespace only', () => {
+    expect(parseFileTypeFilter('   ')).toEqual([])
+  })
+
+  it('returns empty array for commas only', () => {
+    expect(parseFileTypeFilter(',,,')).toEqual([])
+  })
+
+  // Trailing/leading comma (P1) - 2 tests
+  it('ignores trailing comma', () => {
+    expect(parseFileTypeFilter('ts,tsx,')).toEqual(['ts', 'tsx'])
+  })
+
+  it('ignores leading comma', () => {
+    expect(parseFileTypeFilter(',ts,tsx')).toEqual(['ts', 'tsx'])
+  })
+
+  // Complex combinations - 1 test
+  it('handles all edge cases at once', () => {
+    expect(parseFileTypeFilter('  .TS , tsx,  , .JS  ,')).toEqual(['ts', 'tsx', 'js'])
+  })
+
+  // Limit validation (P1) - 1 test
+  it('handles exactly 20 extensions', () => {
+    const twentyExt = Array(20).fill('ts').join(',')
+    expect(parseFileTypeFilter(twentyExt).length).toBe(20)
   })
 })
