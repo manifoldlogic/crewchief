@@ -32,11 +32,17 @@ impl FTSExecutor {
     /// WITH fts_results AS (
     ///   SELECT
     ///     c.id,
-    ///     ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as fts_score,
+    ///     ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
     ///     CASE
     ///       WHEN c.symbol_name ILIKE '%' || $2 || '%' THEN 0.2
     ///       ELSE 0.0
-    ///     END as exact_bonus
+    ///     END as exact_bonus,
+    ///     CASE
+    ///       WHEN c.kind IN ('func', 'async_func') THEN 2.5
+    ///       WHEN c.kind IN ('class', 'component') THEN 2.0
+    ///       WHEN c.kind = 'hook' THEN 1.8
+    ///       -- ... (see source for full mapping)
+    ///     END as kind_mult
     ///   FROM maproom.chunks c
     ///   JOIN maproom.files f ON f.id = c.file_id
     ///   WHERE c.ts_doc @@ to_tsquery('simple', $1)
@@ -45,8 +51,8 @@ impl FTSExecutor {
     /// )
     /// SELECT
     ///   id,
-    ///   (fts_score + exact_bonus) as score,
-    ///   ROW_NUMBER() OVER (ORDER BY fts_score + exact_bonus DESC) as rank
+    ///   (base_score + exact_bonus) as score,
+    ///   ROW_NUMBER() OVER (ORDER BY base_score + exact_bonus DESC) as rank
     /// FROM fts_results
     /// ORDER BY score DESC
     /// LIMIT $5;
@@ -78,11 +84,26 @@ impl FTSExecutor {
             WITH fts_results AS (
               SELECT
                 c.id,
-                ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as fts_score,
+                ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
                 CASE
                   WHEN c.symbol_name ILIKE '%' || $2 || '%' THEN 0.2
                   ELSE 0.0
-                END as exact_bonus
+                END as exact_bonus,
+                -- Source: 0001_init.sql:45 + migrations (maproom.symbol_kind enum)
+                CASE
+                  WHEN c.kind IN ('func', 'async_func') THEN 2.5
+                  WHEN c.kind IN ('class', 'component') THEN 2.0
+                  WHEN c.kind = 'hook' THEN 1.8
+                  WHEN c.kind IN ('module', 'type', 'struct', 'trait', 'enum') THEN 1.5
+                  WHEN c.kind IN ('var', 'variable', 'constant', 'method', 'async_method') THEN 1.0
+                  WHEN c.kind = 'heading_1' THEN 0.6
+                  WHEN c.kind = 'heading_2' THEN 0.5
+                  WHEN c.kind = 'heading_3' THEN 0.4
+                  WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN 0.3
+                  WHEN c.kind = 'other' THEN 1.0
+                  WHEN c.kind IS NULL THEN 1.0
+                  ELSE 1.0
+                END as kind_mult
               FROM maproom.chunks c
               JOIN maproom.files f ON f.id = c.file_id
               WHERE c.ts_doc @@ to_tsquery('simple', $1)
@@ -91,8 +112,8 @@ impl FTSExecutor {
             )
             SELECT
               id,
-              (fts_score + exact_bonus) as score,
-              ROW_NUMBER() OVER (ORDER BY fts_score + exact_bonus DESC) as rank
+              (base_score + exact_bonus) as score,
+              ROW_NUMBER() OVER (ORDER BY base_score + exact_bonus DESC) as rank
             FROM fts_results
             ORDER BY score DESC
             LIMIT $5
