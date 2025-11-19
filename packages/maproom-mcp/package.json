@@ -27,6 +27,7 @@
     "test:connection": "node tests/connection-fallback.test.cjs",
     "test:blob-sha": "node tests/run-blob-sha-tests.cjs",
     "test:vitest": "vitest run",
+    "test:integration": "vitest run tests/integration/",
     "dev": "node bin/cli.cjs",
     "prepublishOnly": "tsc && npm audit --audit-level=high --production",
     "security-check": "pnpm audit --audit-level=moderate",
