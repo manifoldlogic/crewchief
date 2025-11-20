@@ -204,6 +204,62 @@ Restart Claude Code or Cursor to connect to Maproom.
 
 ---
 
+## Database Setup
+
+Maproom uses a **dual-database architecture** with separate PostgreSQL instances for development and testing:
+
+- **Development Database** (port 5433) - For manual work, CLI commands, and MCP operations
+- **Test Database** (port 5434) - Isolated database for automated tests only
+
+### Starting Databases
+
+Both databases start automatically when you run `setup`:
+
+```bash
+npx @crewchief/maproom-mcp setup --provider=openai
+```
+
+Or start manually:
+
+```bash
+cd ~/.maproom-mcp
+docker compose up -d
+```
+
+### Running Tests
+
+Tests automatically use the test database (port 5434):
+
+```bash
+cd packages/maproom-mcp
+pnpm test
+```
+
+The test database connection is configured via `TEST_MAPROOM_DATABASE_URL` environment variable and defaults to the test database.
+
+### Schema Initialization
+
+Both databases require manual schema initialization after first start:
+
+```bash
+# Development database
+docker exec -i maproom-postgres psql -U maproom -d maproom < ~/.maproom-mcp/init.sql
+
+# Test database
+docker exec -i maproom-postgres-test psql -U maproom -d maproom_test < ~/.maproom-mcp/init.sql
+```
+
+### Need More Details?
+
+See the comprehensive [Test Database Setup Guide](../../docs/development/TEST_DATABASE_SETUP.md) for:
+- Troubleshooting connection issues
+- Resetting test database
+- Volume management
+- CI/CD configuration
+- Advanced workflows
+
+---
+
 ## System Requirements
 
 - **Docker Desktop 4.x+** ([Install Docker](https://docs.docker.com/get-docker/))
