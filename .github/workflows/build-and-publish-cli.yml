@@ -327,6 +327,10 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org/'
 
+      # Step 6a: Upgrade npm to latest version for OIDC support
+      - name: Upgrade npm to latest
+        run: npm install -g npm@latest
+
       # Step 7: Setup pnpm
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
