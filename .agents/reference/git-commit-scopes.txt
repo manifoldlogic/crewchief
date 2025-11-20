@@ -25,6 +25,7 @@ incremental
 perf
 release
 research
+scripts
 search
 search-opt
 security
