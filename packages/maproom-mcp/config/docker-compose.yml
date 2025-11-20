@@ -46,6 +46,49 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: maproom-postgres-test
+    environment:
+      POSTGRES_DB: maproom_test
+      POSTGRES_USER: maproom
+      POSTGRES_PASSWORD: maproom
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - maproom-test-data:/var/lib/postgresql/data
+      # Note: init.sql mount disabled (matches current dev setup)
+      # Schema will be initialized manually after container starts
+    ports:
+      - "0.0.0.0:5434:5432"  # Bind to all interfaces for Docker-in-Docker compatibility
+    command: >
+      postgres
+      -c max_connections=50
+      -c shared_buffers=512MB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c maintenance_io_concurrency=100
+      -c work_mem=16MB
+      -c min_wal_size=512MB
+      -c max_wal_size=2GB
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+    networks:
+      maproom-network:
+        aliases:
+          - maproom-postgres-test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maproom -d maproom_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   ollama:
     image: ollama/ollama:latest
     container_name: maproom-ollama
@@ -132,6 +175,8 @@ services:
 
 volumes:
   maproom-data:
+    driver: local
+  maproom-test-data:
     driver: local
   ollama-models:
     driver: local
