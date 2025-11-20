@@ -223,6 +223,9 @@ jobs:
     name: Validate and Publish to npm
     runs-on: ubuntu-latest
     needs: build-binaries
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC Trusted Publishers
     steps:
       # Step 1: Checkout code
       - name: Checkout code
@@ -323,8 +326,6 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org/'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Step 7: Create npm tarball
       - name: Create npm tarball
@@ -363,12 +364,10 @@ jobs:
       - name: Publish to npm
         if: inputs.dry_run != 'true'
         working-directory: packages/maproom-mcp
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # Retry logic for network resilience
           for i in 1 2 3; do
-            npm publish --access public && break || {
+            npm publish --access public --provenance && break || {
               if [ $i -lt 3 ]; then
                 echo "Publish attempt $i failed, retrying in 10 seconds..."
                 sleep 10
