@@ -6,7 +6,13 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/e2e/**/*_test.ts'],
     env: {
-      MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+      // Use TEST_MAPROOM_DATABASE_URL if set, fall back to default test database
+      // NOTE: Uses container hostname (maproom-postgres-test) because tests run
+      // on host but connect through Docker network. When TEST_MAPROOM_DATABASE_URL
+      // is not set, tests should use the test database by default.
+      MAPROOM_DATABASE_URL:
+        process.env.TEST_MAPROOM_DATABASE_URL ||
+        'postgresql://maproom:maproom@maproom-postgres-test:5432/maproom_test'
     },
     coverage: {
       provider: 'v8',
