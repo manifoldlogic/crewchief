@@ -1,0 +1,130 @@
+name: Test
+
+# Run tests on push to main and all pull request events
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    # Service container for isolated test database
+    # Matches local development postgres-test configuration
+    services:
+      postgres-test:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: maproom_test
+          POSTGRES_USER: maproom
+          POSTGRES_PASSWORD: maproom
+        ports:
+          # Map container port 5432 to host port 5434 to match local dev
+          - 5434:5432
+        # Health checks ensure database is ready before tests run
+        options: >-
+          --health-cmd "pg_isready -U maproom -d maproom_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Test database connection URL - matches local docker-compose setup
+      # Uses localhost:5434 from runner perspective
+      TEST_MAPROOM_DATABASE_URL: postgresql://maproom:maproom@localhost:5434/maproom_test
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Setup Node.js 20
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Step 3: Setup pnpm v10 (matches packageManager in package.json)
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # Step 4: Install dependencies
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Step 5: Initialize test database schema
+      # Critical: Service containers start fresh on each run, need schema setup
+      # This step waits for postgres to be fully ready and applies init.sql
+      - name: Initialize test database schema
+        run: |
+          echo "Waiting for PostgreSQL to be fully ready..."
+
+          # Additional readiness check beyond health checks
+          # Ensures database is accepting connections and ready for schema init
+          max_attempts=30
+          attempt=0
+
+          until PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test -c '\q' 2>/dev/null; do
+            attempt=$((attempt + 1))
+            if [ $attempt -ge $max_attempts ]; then
+              echo "ERROR: PostgreSQL failed to become ready after $max_attempts attempts"
+              exit 1
+            fi
+            echo "Waiting for PostgreSQL... (attempt $attempt/$max_attempts)"
+            sleep 1
+          done
+
+          echo "PostgreSQL is ready. Initializing schema..."
+
+          # Apply schema from init.sql
+          # Use psql directly since we're on the same network as the service
+          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
+            -f packages/maproom-mcp/config/init.sql
+
+          echo "Schema initialization complete"
+
+          # Verify schema was created successfully
+          echo "Verifying schema..."
+          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
+            -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'maproom';"
+
+      # Step 6: Run tests
+      # Runs from packages/maproom-mcp directory
+      # Uses TEST_MAPROOM_DATABASE_URL from environment
+      - name: Run tests
+        working-directory: packages/maproom-mcp
+        run: pnpm test
+
+      # Step 7: Verify test database usage (optional diagnostic step)
+      # Shows that tests actually used the isolated test database
+      # Helpful for debugging test isolation issues
+      - name: Verify test database usage
+        if: always()
+        run: |
+          echo "Test database statistics:"
+
+          # Show basic connection info
+          echo "Database connection test:"
+          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
+            -c "SELECT current_database(), current_user, version();"
+
+          # Show table counts (if any data was created during tests)
+          echo ""
+          echo "Checking for test data:"
+          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
+            -c "SELECT
+                  (SELECT COUNT(*) FROM maproom.repos) as repos,
+                  (SELECT COUNT(*) FROM maproom.worktrees) as worktrees,
+                  (SELECT COUNT(*) FROM maproom.chunks) as chunks,
+                  (SELECT COUNT(*) FROM maproom.symbols) as symbols;" \
+            || echo "Note: No test data found (expected for some test suites)"
