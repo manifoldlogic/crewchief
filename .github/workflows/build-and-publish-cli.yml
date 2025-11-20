@@ -405,13 +405,15 @@ jobs:
           echo "✓ All binaries and build artifacts present in tarball"
 
       # Step 12: Publish to npm (conditional)
+      # Note: --provenance removed because it requires public repository
+      # OIDC authentication still works for private repos without provenance
       - name: Publish to npm
         if: '!inputs.dry_run'
         working-directory: packages/cli
         run: |
           # Retry logic for network resilience
           for i in 1 2 3; do
-            npm publish --access public --provenance && break || {
+            npm publish --access public && break || {
               if [ $i -lt 3 ]; then
                 echo "Publish attempt $i failed, retrying in 10 seconds..."
                 sleep 10

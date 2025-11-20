@@ -365,13 +365,15 @@ jobs:
         run: npm install --ignore-scripts
 
       # Step 10: Publish to npm (conditional)
+      # Note: --provenance removed because it requires public repository
+      # OIDC authentication still works for private repos without provenance
       - name: Publish to npm
         if: inputs.dry_run != 'true'
         working-directory: packages/maproom-mcp
         run: |
           # Retry logic for network resilience
           for i in 1 2 3; do
-            npm publish --access public --provenance && break || {
+            npm publish --access public && break || {
               if [ $i -lt 3 ]; then
                 echo "Publish attempt $i failed, retrying in 10 seconds..."
                 sleep 10
