@@ -22,12 +22,14 @@ Comprehensive guide to Maproom's dual-database architecture for development and 
 
 Maproom uses **two separate PostgreSQL instances** to isolate development and test data:
 
-| Database | Port | Container Name | Database Name | Purpose |
-|----------|------|----------------|---------------|---------|
-| **Development** | 5433 | `maproom-postgres` | `maproom` | Manual work, CLI commands, MCP operations |
-| **Test** | 5434 | `maproom-postgres-test` | `maproom_test` | Automated tests only (vitest, integration tests) |
+| Database | Port | Container Name | Database Name | Purpose | Startup |
+|----------|------|----------------|---------------|---------|---------|
+| **Development** | 5433 | `maproom-postgres` | `maproom` | Manual work, CLI commands, MCP operations | **Automatic** (via setup) |
+| **Test** | 5434 | `maproom-postgres-test` | `maproom_test` | Automated tests only (vitest, integration tests) | **Manual** (opt-in) |
 
-Both databases:
+**Key difference**: The development database starts automatically when you run `setup` (via `depends_on` in docker-compose.yml). The test database is **opt-in** and must be started manually - regular maproom users don't need it running.
+
+Both databases share these characteristics:
 - Run the same `pgvector/pgvector:pg16` image
 - Use identical configuration (shared_buffers, connections, etc.)
 - Have separate Docker volumes for complete data isolation
@@ -103,7 +105,39 @@ This was discovered and fixed in **TESTISO-1003**.
 
 ## Common Workflows
 
+### Starting Test Database
+
+The test database is **opt-in** and must be started manually before running tests. Regular maproom users don't need this step.
+
+**Start test database** (developers/CI only):
+
+```bash
+cd packages/maproom-mcp/config  # or ~/.maproom-mcp
+docker compose up -d postgres-test
+
+# Wait for healthy status
+docker compose ps | grep postgres-test
+```
+
+**Initialize schema** (first time only):
+
+```bash
+# From repository root
+docker exec -i maproom-postgres-test psql -U maproom -d maproom_test < packages/maproom-mcp/config/init.sql
+
+# Or from config directory
+docker exec -i maproom-postgres-test psql -U maproom -d maproom_test < init.sql
+```
+
+**Verify connection**:
+
+```bash
+docker exec maproom-postgres-test psql -U maproom -d maproom_test -c "\dt maproom.*"
+```
+
 ### Running Tests
+
+**Prerequisites**: Test database must be running (see [Starting Test Database](#starting-test-database) above).
 
 **Basic test run** (uses test database automatically):
 

@@ -213,18 +213,20 @@ Maproom uses a **dual-database architecture** with separate PostgreSQL instances
 
 ### Starting Databases
 
-Both databases start automatically when you run `setup`:
+The `setup` command starts the **development database only** (automatic via `depends_on` in docker-compose.yml):
 
 ```bash
 npx @crewchief/maproom-mcp setup --provider=openai
 ```
 
-Or start manually:
+**For developers/CI needing test isolation**, the test database must be started manually (opt-in):
 
 ```bash
-cd ~/.maproom-mcp
-docker compose up -d
+cd ~/.maproom-mcp  # or packages/maproom-mcp/config in monorepo
+docker compose up -d postgres-test
 ```
+
+Regular maproom users don't need the test database running.
 
 ### Running Tests
 
