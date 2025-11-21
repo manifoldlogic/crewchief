@@ -25,9 +25,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 
 # Monitoring and metrics
-# Note: prometheus 0.13 uses vulnerable protobuf 2.28, but no newer version available
-# Accepting this risk as prometheus is not processing untrusted data
-prometheus = { version = "0.13", features = ["process"] }
+# Updated to 0.14 to resolve protobuf vulnerability (RUSTSEC-2024-0437)
+prometheus = { version = "0.14", features = ["process"] }
 lazy_static = "1.4"
 base64ct = "1.8.0"
 globset = "0.4.18"
