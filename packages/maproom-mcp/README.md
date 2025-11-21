@@ -705,6 +705,45 @@ The `search` MCP tool performs semantic code search across your indexed codebase
 | `mode` | string | **Optional.** Search mode: `"vector"`, `"fts"`, or `"hybrid"` (default) |
 | `debug` | boolean | **Optional.** Include ranking details (default: false) |
 
+### Search Modes
+
+The search tool supports three modes:
+
+- **FTS (Full-Text Search)**: Fast keyword-based search using PostgreSQL FTS
+  - Best for: Finding specific function names, error messages, exact terms
+  - Latency: ~50-100ms
+  - Requires: Indexed repository
+
+- **Vector (Semantic Search)**: AI-powered similarity search using embeddings
+  - Best for: Conceptual queries, "code that does X", finding similar patterns
+  - Latency: ~100-200ms
+  - Requires: Indexed repository + generated embeddings (run `generate-embeddings`)
+
+- **Hybrid (Combined)**: Merges FTS and vector results with reciprocal rank fusion
+  - Best for: Most searches - combines precision of FTS with recall of vector
+  - Latency: ~200-300ms (runs both searches)
+  - Requires: Same as vector mode
+
+#### Examples
+
+```typescript
+// Fast keyword search
+{ mode: "fts", query: "handleSearch", repo: "crewchief" }
+
+// Semantic similarity search
+{ mode: "vector", query: "authentication logic", repo: "crewchief" }
+
+// Best of both worlds
+{ mode: "hybrid", query: "error handling patterns", repo: "crewchief" }
+```
+
+#### Mode Selection Guide
+
+- Use **FTS** when: Looking for specific identifiers, known terms
+- Use **Vector** when: Exploring concepts, finding related code
+- Use **Hybrid** when: Unsure which mode fits, or want comprehensive results
+```
+
 ### Worktree-Scoped Search (Auto-Detection)
 
 **Default behavior (v2.1.0+)**: When `worktree` parameter is omitted, the search tool automatically detects your current git branch and scopes results to that branch only.

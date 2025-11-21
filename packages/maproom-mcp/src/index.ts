@@ -193,7 +193,7 @@ DEBUG: Set debug=true to see score breakdowns`,
           type: 'string',
           enum: ['fts', 'vector', 'hybrid'],
           default: 'hybrid',
-          description: 'Search mode: "fts" for full-text keyword search, "vector" for semantic similarity, "hybrid" (default) for combined approach'
+          description: 'Search mode: "fts" for keyword search (fast), "vector" for semantic similarity (requires embeddings), "hybrid" (default) for combined ranking (slower but comprehensive)'
         },
         filter: {
           type: 'string',
