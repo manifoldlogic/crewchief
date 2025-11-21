@@ -172,6 +172,37 @@ enum Commands {
         debug: bool,
     },
 
+    /// Vector similarity search using embeddings
+    ///
+    /// Searches for code chunks using semantic similarity based on vector embeddings.
+    /// Returns results ranked by cosine similarity score.
+    ///
+    /// Examples:
+    ///   maproom vector-search --repo myproject --query "authentication logic"
+    ///   maproom vector-search --repo myproject --worktree main --query "error handling" --k 20
+    VectorSearch {
+        /// Repository name to search within
+        #[arg(long)]
+        repo: String,
+        
+        /// Worktree name to filter results (optional)
+        #[arg(long)]
+        worktree: Option<String>,
+        
+        /// Search query text (will be converted to embedding)
+        #[arg(long)]
+        query: String,
+        
+        /// Number of results to return (default: 10)
+        #[arg(long, default_value_t = 10)]
+        k: usize,
+        
+        /// Similarity threshold (0.0-1.0, optional)
+        /// Only return results with similarity >= threshold
+        #[arg(long)]
+        threshold: Option<f32>,
+    },
+
     /// Show status of indexed repositories and worktrees
     Status {
         /// Filter by repository name
@@ -944,6 +975,25 @@ async fn main() -> anyhow::Result<()> {
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
             );
+        }
+
+        Commands::VectorSearch {
+            repo,
+            worktree,
+            query,
+            k,
+            threshold,
+        } => {
+            // TODO: VECSRCH-2003 - Implement vector search handler
+            // This is a placeholder to satisfy the exhaustive match requirement
+            // Full implementation will:
+            // 1. Generate query embedding using EmbeddingService
+            // 2. Execute VectorExecutor::execute()
+            // 3. Format and output JSON results
+            eprintln!("Vector search not yet implemented. See VECSRCH-2003.");
+            eprintln!("Params: repo={}, worktree={:?}, query={}, k={}, threshold={:?}",
+                     repo, worktree, query, k, threshold);
+            std::process::exit(1);
         }
 
         Commands::Status {
