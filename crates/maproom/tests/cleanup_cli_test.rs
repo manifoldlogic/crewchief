@@ -9,7 +9,8 @@ use crewchief_maproom::db::cleanup::{StaleWorktreeDetector, WorktreeCleaner};
 
 /// Helper to get test database connection string
 fn get_test_db_url() -> String {
-    let host = std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "localhost:5433".to_string());
+    let host =
+        std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "localhost:5433".to_string());
     // If host already includes port, use it as-is; otherwise add default port
     if host.contains(':') {
         format!("postgresql://maproom:maproom@{}/maproom", host)
@@ -151,10 +152,7 @@ async fn test_cleanup_confirm_deletes_worktrees() -> Result<()> {
     let stale = detector.detect_stale_worktrees().await?;
 
     // Verify detection found the stale worktree
-    let found_stale = stale
-        .iter()
-        .find(|wt| wt.id == stale_worktree_id)
-        .cloned();
+    let found_stale = stale.iter().find(|wt| wt.id == stale_worktree_id).cloned();
     assert!(
         found_stale.is_some(),
         "Detection phase should find the stale worktree"
@@ -169,10 +167,7 @@ async fn test_cleanup_confirm_deletes_worktrees() -> Result<()> {
 
     // Verify cleanup report
     assert_eq!(report.total_stale, 1, "Should have 1 stale worktree");
-    assert_eq!(
-        report.deleted_count, 1,
-        "Should have deleted 1 worktree"
-    );
+    assert_eq!(report.deleted_count, 1, "Should have deleted 1 worktree");
     assert_eq!(report.failed_count, 0, "Should have no failures");
 
     // Phase 4: Verify worktree no longer exists in database
@@ -184,10 +179,7 @@ async fn test_cleanup_confirm_deletes_worktrees() -> Result<()> {
         .await?
         .is_some();
 
-    assert!(
-        !exists,
-        "Confirm mode should delete worktree from database"
-    );
+    assert!(!exists, "Confirm mode should delete worktree from database");
 
     // Cleanup: Delete test repository
     client

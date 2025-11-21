@@ -54,10 +54,7 @@ async fn setup_test_database(test_name: &str) -> Result<(String, String)> {
 
     // Create test database
     client
-        .execute(
-            &format!("CREATE DATABASE {}", test_db_name),
-            &[],
-        )
+        .execute(&format!("CREATE DATABASE {}", test_db_name), &[])
         .await
         .with_context(|| format!("Failed to create test database {}", test_db_name))?;
 
@@ -84,7 +81,9 @@ async fn connect_to_test_database(conn_string: &str) -> Result<Client> {
 
     // Enable pgvector and unaccent extensions
     client
-        .batch_execute("CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS unaccent;")
+        .batch_execute(
+            "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS unaccent;",
+        )
         .await
         .context("Failed to create extensions")?;
 
@@ -126,10 +125,7 @@ async fn cleanup_test_database(test_db_name: &str) -> Result<()> {
 
     // Drop test database
     client
-        .execute(
-            &format!("DROP DATABASE IF EXISTS {}", test_db_name),
-            &[],
-        )
+        .execute(&format!("DROP DATABASE IF EXISTS {}", test_db_name), &[])
         .await
         .with_context(|| format!("Failed to drop test database {}", test_db_name))?;
 
@@ -148,10 +144,7 @@ async fn run_migrations_up_to_17(client: &Client) -> Result<()> {
 /// Verify schema_migrations table shows correct version.
 async fn verify_migration_version(client: &Client, expected_version: i32) -> Result<()> {
     let row = client
-        .query_one(
-            "SELECT MAX(version) FROM maproom.schema_migrations",
-            &[]
-        )
+        .query_one("SELECT MAX(version) FROM maproom.schema_migrations", &[])
         .await
         .context("Failed to query schema_migrations")?;
 
@@ -205,9 +198,8 @@ async fn verify_column(
         .await
         .context("Failed to query column information")?;
 
-    let row = row.ok_or_else(|| {
-        anyhow::anyhow!("Column {}.{} does not exist", table_name, column_name)
-    })?;
+    let row =
+        row.ok_or_else(|| anyhow::anyhow!("Column {}.{} does not exist", table_name, column_name))?;
 
     let data_type: String = row.get(0);
     let is_nullable: String = row.get(1);
@@ -278,7 +270,8 @@ async fn test_fresh_database_migrations() -> Result<()> {
 
         println!("✅ Test 1 passed: Fresh database migrations (all 20 migrations)");
         Ok(())
-    }.await;
+    }
+    .await;
 
     cleanup_test_database(&test_db_name).await?;
     result
@@ -297,10 +290,7 @@ async fn test_migration_idempotency() -> Result<()> {
         run_migrations_up_to_17(&client).await?;
 
         let version_after_first: i32 = client
-            .query_one(
-                "SELECT MAX(version) FROM maproom.schema_migrations",
-                &[],
-            )
+            .query_one("SELECT MAX(version) FROM maproom.schema_migrations", &[])
             .await?
             .get(0);
 
@@ -313,10 +303,7 @@ async fn test_migration_idempotency() -> Result<()> {
         run_migrations_up_to_17(&client).await?;
 
         let version_after_second: i32 = client
-            .query_one(
-                "SELECT MAX(version) FROM maproom.schema_migrations",
-                &[],
-            )
+            .query_one("SELECT MAX(version) FROM maproom.schema_migrations", &[])
             .await?
             .get(0);
 
@@ -344,7 +331,8 @@ async fn test_migration_idempotency() -> Result<()> {
 
         println!("✅ Test 2 passed: Migration idempotency verified");
         Ok(())
-    }.await;
+    }
+    .await;
 
     cleanup_test_database(&test_db_name).await?;
     result
@@ -394,7 +382,14 @@ async fn test_schema_validation() -> Result<()> {
         // Migration 0019: code_embeddings table
         verify_table_exists(&client, "code_embeddings").await?;
         verify_column(&client, "code_embeddings", "blob_sha", "text", false).await?;
-        verify_column(&client, "code_embeddings", "embedding", "USER-DEFINED", false).await?; // vector(1536)
+        verify_column(
+            &client,
+            "code_embeddings",
+            "embedding",
+            "USER-DEFINED",
+            false,
+        )
+        .await?; // vector(1536)
         verify_index_exists(&client, "idx_embeddings_vector").await?; // HNSW index
 
         // Migration 0020: worktree tracking
@@ -406,7 +401,8 @@ async fn test_schema_validation() -> Result<()> {
 
         println!("✅ Test 3 passed: Schema validation complete (all 20 migrations)");
         Ok(())
-    }.await;
+    }
+    .await;
 
     cleanup_test_database(&test_db_name).await?;
     result

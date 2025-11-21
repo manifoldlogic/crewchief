@@ -355,8 +355,8 @@ struct ChunkRecord {
 #[tokio::test]
 #[ignore] // Requires running PostgreSQL database
 async fn test_complete_branch_switch_workflow() -> Result<()> {
-    let test_repo = TestGitRepo::new_with_branches("test-complete-workflow", &["main", "feature"])
-        .await?;
+    let test_repo =
+        TestGitRepo::new_with_branches("test-complete-workflow", &["main", "feature"]).await?;
 
     // Create worktrees in database for both branches
     let main_worktree_id = test_repo.get_or_create_worktree("main").await?;

@@ -113,10 +113,7 @@ async fn get_index_state(
 ) -> Result<Option<String>, tokio_postgres::Error> {
     // Get repo ID
     let repo_row = db
-        .query_one(
-            "SELECT id FROM maproom.repos WHERE name = $1",
-            &[&repo],
-        )
+        .query_one("SELECT id FROM maproom.repos WHERE name = $1", &[&repo])
         .await?;
     let repo_id: i64 = repo_row.get(0);
 
@@ -150,12 +147,9 @@ async fn cleanup_test_repo(repo: &Path) {
 /// Clean up test database records
 async fn cleanup_test_db(db: &Client, repo: &str) {
     // Delete from worktree_index_state via worktrees -> repos cascade
-    db.execute(
-        "DELETE FROM maproom.repos WHERE name = $1",
-        &[&repo],
-    )
-    .await
-    .ok();
+    db.execute("DELETE FROM maproom.repos WHERE name = $1", &[&repo])
+        .await
+        .ok();
 }
 
 // ============================================================================
@@ -273,8 +267,11 @@ async fn test_changed_tree_scan() {
 
     // Modify a file and commit (tree SHA changes)
     let file_path = temp_repo.join("test0.ts");
-    fs::write(&file_path, "// Modified content\nexport function modified() {}")
-        .expect("Failed to modify file");
+    fs::write(
+        &file_path,
+        "// Modified content\nexport function modified() {}",
+    )
+    .expect("Failed to modify file");
     let commit2 = git_commit(&temp_repo, "Modified file").await;
 
     // Second scan: should process files (tree changed)
@@ -337,7 +334,10 @@ async fn test_force_flag_override() {
     .await
     .expect("First scan should succeed");
 
-    assert!(progress1.files_processed() > 0, "First scan should process files");
+    assert!(
+        progress1.files_processed() > 0,
+        "First scan should process files"
+    );
 
     // Note: The force flag is passed to the scan command, not to scan_worktree function
     // This test verifies that when force is NOT set, unchanged scans skip
@@ -406,7 +406,10 @@ async fn test_first_scan_state_creation() {
     .expect("First scan should succeed");
 
     // Verify scan executed
-    assert!(progress.files_processed() > 0, "First scan should process files");
+    assert!(
+        progress.files_processed() > 0,
+        "First scan should process files"
+    );
 
     // Verify state was created
     let state_after = get_index_state(&db, &repo_name, "main")

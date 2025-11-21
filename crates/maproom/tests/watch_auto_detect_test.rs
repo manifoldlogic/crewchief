@@ -79,7 +79,10 @@ fn test_watch_shows_deprecation_warning() -> Result<()> {
     );
 
     println!("✓ Watch command accepts deprecated --worktree flag");
-    println!("  Current branch would be auto-detected as: {}", current_branch);
+    println!(
+        "  Current branch would be auto-detected as: {}",
+        current_branch
+    );
     Ok(())
 }
 
@@ -96,10 +99,7 @@ fn test_watch_backward_compatibility() -> Result<()> {
         .args(["watch", "--help"])
         .output()?;
 
-    assert!(
-        output.status.success(),
-        "Watch command help should succeed"
-    );
+    assert!(output.status.success(), "Watch command help should succeed");
 
     let help_text = String::from_utf8_lossy(&output.stdout);
 

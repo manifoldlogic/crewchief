@@ -103,9 +103,14 @@ async fn create_test_embedding_service() -> Result<EmbeddingService> {
     // Set environment variables for Ollama configuration
     std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
-    std::env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", format!("{}/api/embed", OLLAMA_ENDPOINT));
+    std::env::set_var(
+        "MAPROOM_EMBEDDING_API_ENDPOINT",
+        format!("{}/api/embed", OLLAMA_ENDPOINT),
+    );
 
-    EmbeddingService::from_env().await.map_err(|e| anyhow::anyhow!("{:?}", e))
+    EmbeddingService::from_env()
+        .await
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
 }
 
 // =============================================================================
@@ -510,7 +515,9 @@ async fn test_06_embedding_service_integration() {
         return;
     };
 
-    let service = create_test_embedding_service().await.expect("Failed to create embedding service");
+    let service = create_test_embedding_service()
+        .await
+        .expect("Failed to create embedding service");
 
     // Test single embedding
     let text = "async function processData(input: string): Promise<Result>";

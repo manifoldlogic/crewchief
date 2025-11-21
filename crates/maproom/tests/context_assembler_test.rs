@@ -39,7 +39,9 @@ impl AssemblerTestFixture {
     async fn setup() -> Result<Self> {
         // Skip if MAPROOM_DATABASE_URL not set
         if should_skip_db_test() {
-            return Err(anyhow::anyhow!("MAPROOM_DATABASE_URL not set, skipping test setup"));
+            return Err(anyhow::anyhow!(
+                "MAPROOM_DATABASE_URL not set, skipping test setup"
+            ));
         }
 
         // Create temporary directory for test files

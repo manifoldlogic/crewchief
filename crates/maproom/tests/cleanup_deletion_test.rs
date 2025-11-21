@@ -18,7 +18,8 @@ const POSTGRES_PASSWORD: &str = "maproom";
 
 /// Get postgres connection parameters from environment or defaults
 fn get_postgres_params() -> (String, u16) {
-    let host = std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "maproom-postgres".to_string());
+    let host =
+        std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "maproom-postgres".to_string());
     let port = std::env::var("MAPROOM_TEST_DB_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -191,8 +192,10 @@ async fn create_test_chunk(
         .unwrap()
         .get(0);
 
-    let worktree_ids_json: serde_json::Value =
-        serde_json::json!(worktree_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>());
+    let worktree_ids_json: serde_json::Value = serde_json::json!(worktree_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>());
 
     // Insert chunk
     let row = client
@@ -262,10 +265,7 @@ async fn worktree_exists(client: &tokio_postgres::Client, worktree_id: i64) -> b
 }
 
 /// Test helper: Get chunk's worktree_ids array
-async fn get_chunk_worktree_ids(
-    client: &tokio_postgres::Client,
-    chunk_id: i64,
-) -> Vec<String> {
+async fn get_chunk_worktree_ids(client: &tokio_postgres::Client, chunk_id: i64) -> Vec<String> {
     let row = client
         .query_one(
             "SELECT worktree_ids FROM maproom.chunks WHERE id = $1",
@@ -607,7 +607,8 @@ async fn test_complex_multi_worktree_scenario() -> Result<()> {
     // - chunk_12: shared by wt1 and wt2
     // - chunk_23: shared by wt2 and wt3
     // - chunk_2: only in wt2
-    let chunk_all_id = create_test_chunk(&client, repo_id, &[wt1_id, wt2_id, wt3_id], "common.rs").await;
+    let chunk_all_id =
+        create_test_chunk(&client, repo_id, &[wt1_id, wt2_id, wt3_id], "common.rs").await;
     let chunk_12_id = create_test_chunk(&client, repo_id, &[wt1_id, wt2_id], "shared_1_2.rs").await;
     let chunk_23_id = create_test_chunk(&client, repo_id, &[wt2_id, wt3_id], "shared_2_3.rs").await;
     let chunk_2_id = create_test_chunk(&client, repo_id, &[wt2_id], "exclusive_2.rs").await;
@@ -691,8 +692,10 @@ async fn test_deletes_only_stale_worktrees() -> Result<()> {
     let valid_id = create_test_worktree(&client, repo_id, "valid", valid_path).await;
 
     // Create 2 stale worktrees (with non-existent paths)
-    let stale1_id = create_test_worktree(&client, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
-    let stale2_id = create_test_worktree(&client, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
+    let stale1_id =
+        create_test_worktree(&client, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
+    let stale2_id =
+        create_test_worktree(&client, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
 
     // Create chunks: valid worktree has 2 chunks, stale worktrees have 1 each
     let valid_chunk1_id = create_test_chunk(&client, repo_id, &[valid_id], "valid1.rs").await;
@@ -802,8 +805,10 @@ async fn test_transaction_rollback_on_error() -> Result<()> {
 
     // Setup: Create repo and 2 stale worktrees with chunks
     let repo_id = create_test_repo(&client, "test_transaction_rollback").await;
-    let stale1_id = create_test_worktree(&client, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
-    let stale2_id = create_test_worktree(&client, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
+    let stale1_id =
+        create_test_worktree(&client, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
+    let stale2_id =
+        create_test_worktree(&client, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
 
     // Create chunks for both worktrees
     let chunk1_id = create_test_chunk(&client, repo_id, &[stale1_id], "stale1.rs").await;
@@ -995,7 +1000,8 @@ async fn test_concurrent_operations() -> Result<()> {
             &format!("/tmp/concurrent{}", i),
         )
         .await;
-        let chunk_id = create_test_chunk(&client, repo_id, &[wt_id], &format!("concurrent{}.rs", i)).await;
+        let chunk_id =
+            create_test_chunk(&client, repo_id, &[wt_id], &format!("concurrent{}.rs", i)).await;
         worktree_ids.push(wt_id);
         chunk_ids.push(chunk_id);
     }
@@ -1051,8 +1057,14 @@ async fn test_concurrent_operations() -> Result<()> {
     });
 
     // Wait for both operations to complete
-    let report1 = handle1.await.context("Task 1 panicked")?.context("Task 1 failed")?;
-    let report2 = handle2.await.context("Task 2 panicked")?.context("Task 2 failed")?;
+    let report1 = handle1
+        .await
+        .context("Task 1 panicked")?
+        .context("Task 1 failed")?;
+    let report2 = handle2
+        .await
+        .context("Task 2 panicked")?
+        .context("Task 2 failed")?;
 
     // Verify both operations succeeded
     assert_eq!(report1.deleted_count, 3);

@@ -306,9 +306,11 @@ async fn scan_worktree(
     repo_name: &str,
     worktree_name: &str,
 ) -> Result<i64> {
-    use crewchief_maproom::db::queries::{get_or_create_commit, get_or_create_repo, get_or_create_worktree};
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use crewchief_maproom::db::queries::{
+        get_or_create_commit, get_or_create_repo, get_or_create_worktree,
+    };
     use crewchief_maproom::indexer::detect_language_from_path;
+    use crewchief_maproom::indexer::parser::extract_chunks;
 
     // Get or create repo
     let repo_id = get_or_create_repo(client, repo_name, repo_path.to_str().unwrap()).await?;
@@ -442,7 +444,9 @@ async fn verify_embeddings_exist(client: &Client, worktree_id: i64) -> Result<bo
 #[ignore] // Requires database and may be slow
 async fn test_variant_worktree_embedding_copy() -> Result<()> {
     // Check if embedding service is configured
-    if std::env::var("OPENAI_API_KEY").is_err() && std::env::var("MAPROOM_EMBEDDING_PROVIDER").is_err() {
+    if std::env::var("OPENAI_API_KEY").is_err()
+        && std::env::var("MAPROOM_EMBEDDING_PROVIDER").is_err()
+    {
         eprintln!("Skipping test: No embedding provider configured");
         eprintln!("Set OPENAI_API_KEY or configure MAPROOM_EMBEDDING_PROVIDER");
         return Ok(());
@@ -545,7 +549,10 @@ export class Calculator {
     let variant_worktree_id = scan_worktree(&client, &repo_path, "test-repo", "variant-1").await?;
 
     let variant_chunk_count = count_chunks_needing_embeddings(&client, variant_worktree_id).await?;
-    println!("   Variant worktree has {} chunks needing embeddings", variant_chunk_count);
+    println!(
+        "   Variant worktree has {} chunks needing embeddings",
+        variant_chunk_count
+    );
 
     // Create new embedding service for variant
     let embedding_service_variant = EmbeddingService::from_env().await?;
@@ -558,7 +565,8 @@ export class Calculator {
         max_cost_usd: None,
     };
 
-    let pipeline_variant = EmbeddingPipeline::new(embedding_service_variant, pipeline_config_variant);
+    let pipeline_variant =
+        EmbeddingPipeline::new(embedding_service_variant, pipeline_config_variant);
 
     // Generate embeddings for variant (should mostly copy)
     let variant_stats = pipeline_variant.run(&client).await?;
@@ -567,8 +575,14 @@ export class Calculator {
     println!("\n✅ Variant scan completed!");
     println!("   Statistics:");
     println!("     - Total chunks: {}", variant_stats.total_chunks);
-    println!("     - Generated new: {}", variant_stats.embeddings_generated);
-    println!("     - Copied from cache: {}", variant_stats.copied_from_cache);
+    println!(
+        "     - Generated new: {}",
+        variant_stats.embeddings_generated
+    );
+    println!(
+        "     - Copied from cache: {}",
+        variant_stats.copied_from_cache
+    );
     println!("     - Duration: {:.2}s", elapsed.as_secs_f64());
 
     // Step 5: Assertions

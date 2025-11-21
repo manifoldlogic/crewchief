@@ -20,7 +20,7 @@ mod vector_search_cli_tests {
     fn test_vector_search_help() {
         let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
         cmd.arg("vector-search").arg("--help");
-        
+
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("vector-search"))
@@ -36,20 +36,27 @@ mod vector_search_cli_tests {
     fn test_vector_search_returns_json() {
         let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
         cmd.arg("vector-search")
-            .arg("--repo").arg("test-repo")
-            .arg("--query").arg("test query");
-        
+            .arg("--repo")
+            .arg("test-repo")
+            .arg("--query")
+            .arg("test query");
+
         let output = cmd.assert().success();
-        
+
         // Verify output is valid JSON
         let stdout = std::str::from_utf8(&output.get_output().stdout).unwrap();
-        let json: Value = serde_json::from_str(stdout)
-            .expect("Output should be valid JSON");
-        
+        let json: Value = serde_json::from_str(stdout).expect("Output should be valid JSON");
+
         // Verify JSON schema
         assert!(json.get("hits").is_some(), "JSON should have 'hits' field");
-        assert!(json.get("total").is_some(), "JSON should have 'total' field");
-        assert!(json.get("query").is_some(), "JSON should have 'query' field");
+        assert!(
+            json.get("total").is_some(),
+            "JSON should have 'total' field"
+        );
+        assert!(
+            json.get("query").is_some(),
+            "JSON should have 'query' field"
+        );
         assert!(json.get("mode").is_some(), "JSON should have 'mode' field");
         assert_eq!(json["mode"], "vector", "Mode should be 'vector'");
     }
@@ -60,22 +67,27 @@ mod vector_search_cli_tests {
     fn test_vector_search_with_parameters() {
         let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
         cmd.arg("vector-search")
-            .arg("--repo").arg("test-repo")
-            .arg("--worktree").arg("main")
-            .arg("--query").arg("authentication function")
-            .arg("--k").arg("5")
-            .arg("--threshold").arg("0.7");
-        
+            .arg("--repo")
+            .arg("test-repo")
+            .arg("--worktree")
+            .arg("main")
+            .arg("--query")
+            .arg("authentication function")
+            .arg("--k")
+            .arg("5")
+            .arg("--threshold")
+            .arg("0.7");
+
         let output = cmd.assert().success();
-        
+
         let stdout = std::str::from_utf8(&output.get_output().stdout).unwrap();
         let json: Value = serde_json::from_str(stdout).unwrap();
-        
+
         // Verify parameters in output
         assert_eq!(json["query"], "authentication function");
         assert_eq!(json["k"], 5);
         assert_eq!(json["threshold"], 0.7);
-        
+
         // Verify all results meet threshold
         if let Some(hits) = json["hits"].as_array() {
             for hit in hits {
@@ -91,10 +103,13 @@ mod vector_search_cli_tests {
     fn test_vector_search_worktree_filter() {
         let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
         cmd.arg("vector-search")
-            .arg("--repo").arg("test-repo")
-            .arg("--worktree").arg("feature-branch")
-            .arg("--query").arg("test");
-        
+            .arg("--repo")
+            .arg("test-repo")
+            .arg("--worktree")
+            .arg("feature-branch")
+            .arg("--query")
+            .arg("test");
+
         cmd.assert().success();
     }
 
@@ -104,9 +119,11 @@ mod vector_search_cli_tests {
     fn test_vector_search_missing_repo_error() {
         let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
         cmd.arg("vector-search")
-            .arg("--repo").arg("nonexistent-repo")
-            .arg("--query").arg("test");
-        
+            .arg("--repo")
+            .arg("nonexistent-repo")
+            .arg("--query")
+            .arg("test");
+
         cmd.assert()
             .failure()
             .stderr(predicate::str::contains("not found"));
@@ -118,30 +135,44 @@ mod vector_search_cli_tests {
     fn test_vector_search_hit_schema() {
         let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
         cmd.arg("vector-search")
-            .arg("--repo").arg("test-repo")
-            .arg("--query").arg("function");
-        
+            .arg("--repo")
+            .arg("test-repo")
+            .arg("--query")
+            .arg("function");
+
         let output = cmd.assert().success();
         let stdout = std::str::from_utf8(&output.get_output().stdout).unwrap();
         let json: Value = serde_json::from_str(stdout).unwrap();
-        
+
         if let Some(hits) = json["hits"].as_array() {
-            assert!(!hits.is_empty(), "Should return at least one hit for seeded data");
-            
+            assert!(
+                !hits.is_empty(),
+                "Should return at least one hit for seeded data"
+            );
+
             for hit in hits {
                 // Verify required fields
                 assert!(hit.get("chunk_id").is_some(), "Hit should have chunk_id");
                 assert!(hit.get("score").is_some(), "Hit should have score");
                 assert!(hit.get("file_path").is_some(), "Hit should have file_path");
-                assert!(hit.get("start_line").is_some(), "Hit should have start_line");
+                assert!(
+                    hit.get("start_line").is_some(),
+                    "Hit should have start_line"
+                );
                 assert!(hit.get("end_line").is_some(), "Hit should have end_line");
                 assert!(hit.get("kind").is_some(), "Hit should have kind");
                 // symbol_name can be null, so just check it exists
-                assert!(hit.get("symbol_name").is_some(), "Hit should have symbol_name field");
-                
+                assert!(
+                    hit.get("symbol_name").is_some(),
+                    "Hit should have symbol_name field"
+                );
+
                 // Verify score is in valid range
                 let score = hit["score"].as_f64().unwrap();
-                assert!(score >= 0.0 && score <= 1.0, "Score should be between 0.0 and 1.0");
+                assert!(
+                    score >= 0.0 && score <= 1.0,
+                    "Score should be between 0.0 and 1.0"
+                );
             }
         }
     }

@@ -20,7 +20,8 @@ const POSTGRES_PASSWORD: &str = "maproom";
 
 /// Get postgres connection parameters from environment or defaults
 fn get_postgres_params() -> (String, u16) {
-    let host = std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "maproom-postgres".to_string());
+    let host =
+        std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "maproom-postgres".to_string());
     let port = std::env::var("MAPROOM_TEST_DB_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -309,7 +310,10 @@ async fn test_mixed_worktrees() -> Result<()> {
 
     // Verify chunk counts are correct
     let total_chunks: i64 = stale_worktrees.iter().map(|w| w.chunk_count).sum();
-    assert_eq!(total_chunks, 13, "Expected 13 total chunks in stale worktrees");
+    assert_eq!(
+        total_chunks, 13,
+        "Expected 13 total chunks in stale worktrees"
+    );
 
     // Cleanup
     drop(temp_dir);
@@ -398,7 +402,13 @@ async fn test_parallel_performance() -> Result<()> {
 
     // Insert 50 worktrees (a reasonable test size) with unique names
     for i in 0..50 {
-        insert_test_data(&client, &format!("test-branch-{}", i), &format!("/tmp/test_worktree_{}", i), 2).await?;
+        insert_test_data(
+            &client,
+            &format!("test-branch-{}", i),
+            &format!("/tmp/test_worktree_{}", i),
+            2,
+        )
+        .await?;
     }
 
     // Run detection and measure time
