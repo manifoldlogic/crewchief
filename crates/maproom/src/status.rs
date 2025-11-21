@@ -25,8 +25,8 @@ pub async fn get_status(
     repo_filter: Option<String>,
     worktree_filter: Option<String>,
 ) -> Result<StatusResponse> {
-    let database_url = env::var("MAPROOM_DATABASE_URL")
-        .context("MAPROOM_DATABASE_URL must be set")?;
+    let database_url =
+        env::var("MAPROOM_DATABASE_URL").context("MAPROOM_DATABASE_URL must be set")?;
 
     let (client, connection) = tokio_postgres::connect(&database_url, tokio_postgres::NoTls)
         .await
@@ -133,7 +133,10 @@ pub fn format_text(status: &StatusResponse) -> String {
         } else {
             for worktree in &repo.worktrees {
                 output.push_str(&format!("  Worktree: {}\n", worktree.name));
-                output.push_str(&format!("    Chunks: {}\n", format_number(worktree.chunk_count)));
+                output.push_str(&format!(
+                    "    Chunks: {}\n",
+                    format_number(worktree.chunk_count)
+                ));
 
                 if let Some(ref last_updated) = worktree.last_updated {
                     output.push_str(&format!("    Last Updated: {}\n", last_updated));

@@ -1016,12 +1016,8 @@ async fn handle_branch_switch(
     let client = pool.get().await?;
 
     // Get or create database records for repo and worktree
-    let repo_id = crate::db::get_or_create_repo(
-        &client,
-        repo,
-        repo_path.to_string_lossy().as_ref(),
-    )
-    .await?;
+    let repo_id =
+        crate::db::get_or_create_repo(&client, repo, repo_path.to_string_lossy().as_ref()).await?;
 
     // Check if worktree exists before creating
     let worktree_existed = client
@@ -1144,12 +1140,9 @@ pub async fn watch_worktree(
     let current_branch = std::sync::Arc::new(std::sync::RwLock::new(worktree.to_string()));
     let current_worktree_id = std::sync::Arc::new(std::sync::RwLock::new({
         let client = pool.get().await?;
-        let repo_id = crate::db::get_or_create_repo(
-            &client,
-            repo,
-            root_abs.to_string_lossy().as_ref(),
-        )
-        .await?;
+        let repo_id =
+            crate::db::get_or_create_repo(&client, repo, root_abs.to_string_lossy().as_ref())
+                .await?;
         let worktree_id = crate::db::get_or_create_worktree(
             &client,
             repo_id,
@@ -1590,7 +1583,11 @@ mod tests {
         let watcher_result = setup_head_watcher(&temp_path, tx);
 
         // Verify the watcher was created successfully
-        assert!(watcher_result.is_ok(), "Failed to create watcher: {:?}", watcher_result.err());
+        assert!(
+            watcher_result.is_ok(),
+            "Failed to create watcher: {:?}",
+            watcher_result.err()
+        );
 
         // Drop the watcher to stop watching and close the sync channel
         // This will cause the bridging task to exit when sync_rx.recv() returns Err
@@ -1689,7 +1686,10 @@ mod tests {
                 .expect("Failed to acquire write lock on current_branch");
             let new_branch = "feature-branch";
             *branch_guard = new_branch.to_string();
-            assert_eq!(*branch_guard, new_branch, "Write lock should allow mutation");
+            assert_eq!(
+                *branch_guard, new_branch,
+                "Write lock should allow mutation"
+            );
         }
 
         // Test 5: Verify value persisted after write lock released
@@ -1840,10 +1840,13 @@ mod tests {
         }
 
         // Use unique repo name to avoid conflicts with previous test runs
-        let repo_name = format!("test-repo-{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
+        let repo_name = format!(
+            "test-repo-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
 
         // Initialize shared state with "main" (simulating initial state)
         let current_branch = Arc::new(RwLock::new("main".to_string()));
@@ -1911,10 +1914,7 @@ mod tests {
 
         // Cleanup: Delete the test repo from database (CASCADE will delete worktrees)
         let _ = client
-            .execute(
-                "DELETE FROM maproom.repos WHERE name = $1",
-                &[&repo_name],
-            )
+            .execute("DELETE FROM maproom.repos WHERE name = $1", &[&repo_name])
             .await;
     }
 
@@ -2093,8 +2093,8 @@ mod tests {
         );
 
         // Test 3: Parse JSON back to verify structure
-        let parsed: serde_json::Value = serde_json::from_str(&json)
-            .expect("JSON should be valid and parseable");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json).expect("JSON should be valid and parseable");
 
         // Test 4: Verify "type" field (not "event_type")
         assert_eq!(
@@ -2160,8 +2160,14 @@ mod tests {
 
         // Test 13: Verify all expected fields are present
         let expected_fields = vec![
-            "type", "timestamp", "repo", "old_branch", "new_branch",
-            "old_worktree_id", "new_worktree_id", "worktree_created"
+            "type",
+            "timestamp",
+            "repo",
+            "old_branch",
+            "new_branch",
+            "old_worktree_id",
+            "new_worktree_id",
+            "worktree_created",
         ];
         for field in expected_fields {
             assert!(
@@ -2214,8 +2220,7 @@ mod tests {
 
             // Create .git/HEAD file
             let git_head = git_dir.join("HEAD");
-            std::fs::write(&git_head, "ref: refs/heads/main\n")
-                .expect("Failed to write .git/HEAD");
+            std::fs::write(&git_head, "ref: refs/heads/main\n").expect("Failed to write .git/HEAD");
 
             // Verify path calculation (this mimics watch_worktree logic)
             let calculated_git_head = root_abs.join(".git/HEAD");
@@ -2284,8 +2289,7 @@ mod tests {
             let git_dir = root_abs.join(".git");
             std::fs::create_dir_all(&git_dir).expect("Failed to create .git dir");
             let git_head = git_dir.join("HEAD");
-            std::fs::write(&git_head, "ref: refs/heads/main\n")
-                .expect("Failed to write .git/HEAD");
+            std::fs::write(&git_head, "ref: refs/heads/main\n").expect("Failed to write .git/HEAD");
 
             // Create file watcher channel (simulating WorktreeWatcher)
             let (_file_tx, _file_rx) = tokio::sync::mpsc::channel::<()>(1000);
@@ -2374,7 +2378,10 @@ mod tests {
                 timestamp: std::time::SystemTime::now(),
                 old_path: None,
             };
-            file_tx.send(event).await.expect("Failed to send file event");
+            file_tx
+                .send(event)
+                .await
+                .expect("Failed to send file event");
         }
 
         // Wait briefly for processing
@@ -2416,10 +2423,7 @@ mod tests {
         drop(head_tx);
 
         // Wait for event loop to exit
-        let result = tokio::time::timeout(
-            tokio::time::Duration::from_secs(1),
-            event_task
-        ).await;
+        let result = tokio::time::timeout(tokio::time::Duration::from_secs(1), event_task).await;
 
         assert!(
             result.is_ok(),
@@ -2432,10 +2436,7 @@ mod tests {
 
         // Test 6: Verify file events were processed
         let file_count = *file_events_processed.lock().await;
-        assert_eq!(
-            file_count, 3,
-            "All 3 file events should be processed"
-        );
+        assert_eq!(file_count, 3, "All 3 file events should be processed");
 
         // Test 7: Verify head events were processed with debouncing
         // First batch of 5 events: only first should process

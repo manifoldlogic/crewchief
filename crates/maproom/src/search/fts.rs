@@ -294,7 +294,10 @@ mod tests {
 
         #[test]
         fn test_simple_camelcase() {
-            assert_eq!(normalize_for_exact_match("validateProvider"), "validate_provider");
+            assert_eq!(
+                normalize_for_exact_match("validateProvider"),
+                "validate_provider"
+            );
         }
 
         #[test]
@@ -323,14 +326,23 @@ mod tests {
                 normalize_for_exact_match("validateHTTPRequest"),
                 "validate_http_request"
             );
-            assert_eq!(normalize_for_exact_match("sendSMTPMessage"), "send_smtp_message");
-            assert_eq!(normalize_for_exact_match("parseJSONData"), "parse_json_data");
+            assert_eq!(
+                normalize_for_exact_match("sendSMTPMessage"),
+                "send_smtp_message"
+            );
+            assert_eq!(
+                normalize_for_exact_match("parseJSONData"),
+                "parse_json_data"
+            );
         }
 
         #[test]
         fn test_consecutive_capitals() {
             assert_eq!(normalize_for_exact_match("HTTPSHandler"), "https_handler");
-            assert_eq!(normalize_for_exact_match("XMLHTTPRequest"), "xmlhttp_request");
+            assert_eq!(
+                normalize_for_exact_match("XMLHTTPRequest"),
+                "xmlhttp_request"
+            );
             assert_eq!(normalize_for_exact_match("SSLContext"), "ssl_context");
         }
 
@@ -343,7 +355,10 @@ mod tests {
 
         #[test]
         fn test_kebab_case() {
-            assert_eq!(normalize_for_exact_match("validate-provider"), "validate_provider");
+            assert_eq!(
+                normalize_for_exact_match("validate-provider"),
+                "validate_provider"
+            );
             assert_eq!(
                 normalize_for_exact_match("user-auth-service-factory"),
                 "user_auth_service_factory"
@@ -352,7 +367,10 @@ mod tests {
 
         #[test]
         fn test_spaces() {
-            assert_eq!(normalize_for_exact_match("validate provider"), "validate_provider");
+            assert_eq!(
+                normalize_for_exact_match("validate provider"),
+                "validate_provider"
+            );
             assert_eq!(
                 normalize_for_exact_match("user  auth   service"),
                 "user_auth_service"
@@ -361,7 +379,10 @@ mod tests {
 
         #[test]
         fn test_dots() {
-            assert_eq!(normalize_for_exact_match("user.auth.service"), "user_auth_service");
+            assert_eq!(
+                normalize_for_exact_match("user.auth.service"),
+                "user_auth_service"
+            );
         }
 
         #[test]
@@ -369,8 +390,14 @@ mod tests {
             assert_eq!(normalize_for_exact_match(""), "");
             assert_eq!(normalize_for_exact_match("HTTP"), "http");
             assert_eq!(normalize_for_exact_match("validate"), "validate");
-            assert_eq!(normalize_for_exact_match("user__auth___service"), "user_auth_service");
-            assert_eq!(normalize_for_exact_match("_privateMethod"), "private_method");
+            assert_eq!(
+                normalize_for_exact_match("user__auth___service"),
+                "user_auth_service"
+            );
+            assert_eq!(
+                normalize_for_exact_match("_privateMethod"),
+                "private_method"
+            );
             assert_eq!(normalize_for_exact_match("method_"), "method");
         }
 
