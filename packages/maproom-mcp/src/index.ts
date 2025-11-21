@@ -627,34 +627,75 @@ async function executeVectorSearch(
   filters: any,
   debug: boolean
 ): Promise<{ rows: any[], debugInfo: any }> {
-  // For vector search, we need to generate an embedding for the query
-  // Since we don't have an embedding service integrated yet, we'll return an informative error
+  // Delegate to search tool handler (same pattern as FTS)
+  const { handleSearchTool } = await import('./tools/search.js')
 
-  // Check if any embeddings exist in code_embeddings table
-  const { rows: embeddingCheck } = await client.query(
-    'SELECT COUNT(*) as count FROM maproom.code_embeddings LIMIT 1'
+  // We need repo name, not just ID - query it
+  const { rows: repoRows } = await client.query(
+    'SELECT name FROM maproom.repos WHERE id = $1',
+    [repoId]
   )
 
-  if (embeddingCheck[0].count === '0') {
-    throw new Error(
-      'Vector search requires embeddings. No embeddings found in database.\n\n' +
-      'To use vector search:\n' +
-      '1. Generate embeddings using the embedding generation pipeline\n' +
-      '2. Run: crewchief maproom:generate-embeddings\n\n' +
-      'Falling back to FTS mode is recommended.'
-    )
+  if (repoRows.length === 0) {
+    throw new Error(`Repository with ID ${repoId} not found`)
   }
 
-  // TODO: Integrate with embedding service to generate query embedding
-  // For now, return a placeholder response
-  throw new Error(
-    'Vector search requires query embedding generation.\n\n' +
-    'This feature requires:\n' +
-    '1. Integration with OpenAI text-embedding-3-small API\n' +
-    '2. Query text → vector(1536) conversion\n\n' +
-    'Use mode:"fts" or mode:"hybrid" as alternatives.\n' +
-    'Vector search implementation is in progress (HYBRID_SEARCH-2001).'
+  const repo = repoRows[0].name
+
+  // Get worktree name if worktreeId is provided
+  let worktree: string | undefined
+  if (worktreeId) {
+    const { rows: wtRows } = await client.query(
+      'SELECT name FROM maproom.worktrees WHERE id = $1',
+      [worktreeId]
+    )
+    if (wtRows.length > 0) {
+      worktree = wtRows[0].name
+    }
+  }
+
+  // Call search tool with vector mode
+  const result = await handleSearchTool(
+    {
+      query,
+      repo,
+      worktree,
+      limit: k,
+      mode: 'vector',
+      debug,
+    },
+    client
   )
+
+  // Transform SearchBundle format to old row format
+  // handleSearchTool returns: { hits: SearchResult[], total, query, mode, ... }
+  // Caller expects: { rows: any[], debugInfo: any }
+
+  const rows = result.hits.map((hit) => ({
+    id: hit.chunk_id,
+    relpath: hit.relpath,
+    symbol_name: hit.symbol_name,
+    kind: hit.kind,
+    start_line: hit.start_line,
+    end_line: hit.end_line,
+    vector_score: hit.score,
+    // Add score_breakdown if present (debug mode)
+    ...(hit.score_breakdown && {
+      base_score: hit.score_breakdown.base_fts,
+      kind_mult: hit.score_breakdown.kind_multiplier,
+      exact_mult: hit.score_breakdown.exact_match_multiplier,
+    }),
+  }))
+
+  const debugInfo = debug
+    ? {
+        mode: 'vector',
+        total: result.total,
+        query: result.query,
+      }
+    : null
+
+  return { rows, debugInfo }
 }
 
 // Hybrid search implementation (FTS + Vector with RRF fusion)
