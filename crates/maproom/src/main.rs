@@ -9,6 +9,8 @@ use tracing_subscriber::{fmt, EnvFilter};
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{db, indexer};
 
+mod daemon;
+
 /// Validate provider name against supported providers.
 ///
 /// Returns the provider name if valid, or an error message if invalid.
@@ -184,19 +186,19 @@ enum Commands {
         /// Repository name to search within
         #[arg(long)]
         repo: String,
-        
+
         /// Worktree name to filter results (optional)
         #[arg(long)]
         worktree: Option<String>,
-        
+
         /// Search query text (will be converted to embedding)
         #[arg(long)]
         query: String,
-        
+
         /// Number of results to return (default: 10)
         #[arg(long, default_value_t = 10)]
         k: usize,
-        
+
         /// Similarity threshold (0.0-1.0, optional)
         /// Only return results with similarity >= threshold
         #[arg(long)]
@@ -252,6 +254,9 @@ enum Commands {
         #[command(subcommand)]
         command: MigrateCommand,
     },
+
+    /// Start the Maproom daemon (JSON-RPC over Stdio)
+    Serve,
 }
 
 #[derive(Subcommand, Debug)]
@@ -545,7 +550,9 @@ async fn main() -> anyhow::Result<()> {
                 for wt in &stale {
                     println!(
                         "  • {} (path: {}, chunks: {})",
-                        wt.name, wt.abs_path, format_number(wt.chunk_count)
+                        wt.name,
+                        wt.abs_path,
+                        format_number(wt.chunk_count)
                     );
                     if verbose {
                         println!(
@@ -557,7 +564,10 @@ async fn main() -> anyhow::Result<()> {
 
                 // Calculate and display total chunks
                 let total_chunks: i64 = stale.iter().map(|wt| wt.chunk_count).sum();
-                println!("\n💾 Total chunks to delete: {}", format_number(total_chunks));
+                println!(
+                    "\n💾 Total chunks to delete: {}",
+                    format_number(total_chunks)
+                );
 
                 // Phase 3: Deletion (if confirmed)
                 if confirm {
@@ -572,7 +582,10 @@ async fn main() -> anyhow::Result<()> {
                                 "   Deleted: {}/{}",
                                 report.deleted_count, report.total_stale
                             );
-                            println!("   Chunks cleaned: {}", format_number(report.chunks_cleaned));
+                            println!(
+                                "   Chunks cleaned: {}",
+                                format_number(report.chunks_cleaned)
+                            );
                             println!("   Time taken: {:.2}s", elapsed.as_secs_f64());
                             if report.has_failures() {
                                 println!("   ⚠️  Failures: {}", report.failed_count);
@@ -687,8 +700,10 @@ async fn main() -> anyhow::Result<()> {
                 let repo_id = match db::get_or_create_repo(
                     &client,
                     &repo,
-                    root_abs.to_string_lossy().as_ref()
-                ).await {
+                    root_abs.to_string_lossy().as_ref(),
+                )
+                .await
+                {
                     Ok(id) => Some(id),
                     Err(e) => {
                         tracing::warn!("Could not get repo ID: {}, proceeding with full scan", e);
@@ -701,11 +716,16 @@ async fn main() -> anyhow::Result<()> {
                         &client,
                         repo_id,
                         &worktree,
-                        root_abs.to_string_lossy().as_ref()
-                    ).await {
+                        root_abs.to_string_lossy().as_ref(),
+                    )
+                    .await
+                    {
                         Ok(id) => Some(id),
                         Err(e) => {
-                            tracing::warn!("Could not get worktree ID: {}, proceeding with full scan", e);
+                            tracing::warn!(
+                                "Could not get worktree ID: {}, proceeding with full scan",
+                                e
+                            );
                             None
                         }
                     };
@@ -715,8 +735,11 @@ async fn main() -> anyhow::Result<()> {
                         match db::get_last_indexed_tree(&client, wt_id).await {
                             Ok(last_sha) if last_sha == *current_sha && !force => {
                                 println!("✓ No changes detected (tree SHA match), skipping scan");
-                                tracing::info!("Scan skipped: tree {} already indexed", current_sha);
-                                return Ok(());  // Early return!
+                                tracing::info!(
+                                    "Scan skipped: tree {} already indexed",
+                                    current_sha
+                                );
+                                return Ok(()); // Early return!
                             }
                             Ok(last_sha) if last_sha != "init" => {
                                 tracing::info!("Tree changed: {} -> {}", last_sha, current_sha);
@@ -725,7 +748,10 @@ async fn main() -> anyhow::Result<()> {
                                 tracing::info!("First-time indexing (no cached state)");
                             }
                             Err(e) => {
-                                tracing::warn!("Could not query index state: {}, proceeding with full scan", e);
+                                tracing::warn!(
+                                    "Could not query index state: {}, proceeding with full scan",
+                                    e
+                                );
                             }
                         }
                     }
@@ -829,7 +855,10 @@ async fn main() -> anyhow::Result<()> {
                         let root_abs = match path.canonicalize() {
                             Ok(p) => p,
                             Err(e) => {
-                                tracing::warn!("Could not canonicalize path for state update: {}", e);
+                                tracing::warn!(
+                                    "Could not canonicalize path for state update: {}",
+                                    e
+                                );
                                 path.clone()
                             }
                         };
@@ -838,8 +867,10 @@ async fn main() -> anyhow::Result<()> {
                         let repo_id = match db::get_or_create_repo(
                             &state_client,
                             &repo,
-                            root_abs.to_string_lossy().as_ref()
-                        ).await {
+                            root_abs.to_string_lossy().as_ref(),
+                        )
+                        .await
+                        {
                             Ok(id) => Some(id),
                             Err(e) => {
                                 tracing::warn!("Could not get repo ID for state update: {}", e);
@@ -853,18 +884,30 @@ async fn main() -> anyhow::Result<()> {
                                 &state_client,
                                 repo_id,
                                 &worktree,
-                                root_abs.to_string_lossy().as_ref()
-                            ).await {
+                                root_abs.to_string_lossy().as_ref(),
+                            )
+                            .await
+                            {
                                 Ok(id) => Some(id),
                                 Err(e) => {
-                                    tracing::warn!("Could not get worktree ID for state update: {}", e);
+                                    tracing::warn!(
+                                        "Could not get worktree ID for state update: {}",
+                                        e
+                                    );
                                     None
                                 }
                             };
 
                             if let Some(wt_id) = worktree_id {
                                 // Update index state with current tree SHA and stats
-                                match db::update_index_state(&state_client, wt_id, current_tree_sha, &scan_stats).await {
+                                match db::update_index_state(
+                                    &state_client,
+                                    wt_id,
+                                    current_tree_sha,
+                                    &scan_stats,
+                                )
+                                .await
+                                {
                                     Ok(_) => {
                                         tracing::info!(
                                             "✓ Updated index state: tree {} ({} files, {} chunks, {} embeddings)",
@@ -968,9 +1011,8 @@ async fn main() -> anyhow::Result<()> {
             debug,
         } => {
             let client = db::connect().await?;
-            let hits =
-                db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k, debug)
-                    .await?;
+            let hits = db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k, debug)
+                .await?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
@@ -1015,13 +1057,17 @@ async fn main() -> anyhow::Result<()> {
             let embedding_service = EmbeddingService::from_env()
                 .await
                 .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
-            
+
             let query_embedding = embedding_service
                 .embed_text(&query)
                 .await
                 .context("Failed to generate query embedding")?;
 
-            tracing::info!("Executing vector search (k={}, threshold={:?})", k, threshold);
+            tracing::info!(
+                "Executing vector search (k={}, threshold={:?})",
+                k,
+                threshold
+            );
 
             // Execute vector search
             let ranked_results = VectorExecutor::execute(
@@ -1294,6 +1340,9 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Serve => {
+            daemon::run().await?;
+        }
     }
 
     Ok(())
@@ -1306,7 +1355,10 @@ mod tests {
     #[test]
     fn test_cleanup_stale_defaults() {
         let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale"]);
-        if let Commands::Db { command: DbCommand::CleanupStale { confirm, verbose } } = cli.command {
+        if let Commands::Db {
+            command: DbCommand::CleanupStale { confirm, verbose },
+        } = cli.command
+        {
             assert_eq!(confirm, false, "confirm should default to false");
             assert_eq!(verbose, false, "verbose should default to false");
         } else {
@@ -1317,7 +1369,10 @@ mod tests {
     #[test]
     fn test_cleanup_stale_with_confirm() {
         let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale", "--confirm"]);
-        if let Commands::Db { command: DbCommand::CleanupStale { confirm, verbose } } = cli.command {
+        if let Commands::Db {
+            command: DbCommand::CleanupStale { confirm, verbose },
+        } = cli.command
+        {
             assert_eq!(confirm, true);
             assert_eq!(verbose, false);
         } else {
@@ -1328,7 +1383,10 @@ mod tests {
     #[test]
     fn test_cleanup_stale_with_verbose() {
         let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale", "--verbose"]);
-        if let Commands::Db { command: DbCommand::CleanupStale { confirm, verbose } } = cli.command {
+        if let Commands::Db {
+            command: DbCommand::CleanupStale { confirm, verbose },
+        } = cli.command
+        {
             assert_eq!(confirm, false);
             assert_eq!(verbose, true);
         } else {
@@ -1339,7 +1397,14 @@ mod tests {
     #[test]
     fn test_cleanup_stale_short_verbose() {
         let cli = Cli::parse_from(&["maproom", "db", "cleanup-stale", "-v"]);
-        if let Commands::Db { command: DbCommand::CleanupStale { confirm: _, verbose } } = cli.command {
+        if let Commands::Db {
+            command:
+                DbCommand::CleanupStale {
+                    confirm: _,
+                    verbose,
+                },
+        } = cli.command
+        {
             assert_eq!(verbose, true);
         } else {
             panic!("Expected cleanup-stale command");
