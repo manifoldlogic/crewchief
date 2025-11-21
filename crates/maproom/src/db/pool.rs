@@ -187,7 +187,9 @@ pub async fn create_pool() -> anyhow::Result<PgPool> {
                 .push_str("\n    Example: postgresql://postgres:postgres@postgres:5432/crewchief");
         }
 
-        error_msg.push_str("\n  - Check that MAPROOM_DATABASE_URL points to the correct hostname and port");
+        error_msg.push_str(
+            "\n  - Check that MAPROOM_DATABASE_URL points to the correct hostname and port",
+        );
         error_msg.push_str("\n  - Verify database credentials are correct");
 
         anyhow::anyhow!(error_msg)

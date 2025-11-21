@@ -116,9 +116,7 @@ impl<'a> StaleWorktreeDetector<'a> {
         debug!("Found {} worktrees in database", worktrees.len());
 
         // Validate all worktrees in parallel
-        let validation_futures = worktrees
-            .into_iter()
-            .map(|wt| self.validate_worktree(wt));
+        let validation_futures = worktrees.into_iter().map(|wt| self.validate_worktree(wt));
 
         let results = futures::future::join_all(validation_futures).await;
 
@@ -332,7 +330,10 @@ impl<'a> WorktreeCleaner<'a> {
         }
 
         // Create a single transaction for all deletions
-        let mut tx = self.client.transaction().await
+        let mut tx = self
+            .client
+            .transaction()
+            .await
             .context("Failed to create cleanup transaction")?;
 
         let mut deleted_ids = Vec::new();
@@ -366,7 +367,8 @@ impl<'a> WorktreeCleaner<'a> {
         }
 
         // Commit all deletions at once
-        tx.commit().await
+        tx.commit()
+            .await
             .context("Failed to commit cleanup transaction")?;
 
         Ok(CleanupReport {
@@ -413,9 +415,7 @@ impl<'a> WorktreeCleaner<'a> {
                 &[&worktree_id.to_string()],
             )
             .await
-            .with_context(|| {
-                format!("Failed to remove worktree {} from chunks", worktree_id)
-            })?;
+            .with_context(|| format!("Failed to remove worktree {} from chunks", worktree_id))?;
 
         // Step 2: Garbage collection - delete chunks with empty worktree_ids
         // These are chunks that belonged ONLY to the deleted worktree
@@ -582,12 +582,21 @@ mod tests {
     fn test_cleanup_error_messages() {
         let err = CleanupError::WorktreeNotFound { id: 42 };
         let msg = err.to_string();
-        assert!(msg.contains("Worktree 42 not found"), "Error message should contain worktree ID");
-        assert!(msg.contains("database"), "Error message should mention database");
+        assert!(
+            msg.contains("Worktree 42 not found"),
+            "Error message should contain worktree ID"
+        );
+        assert!(
+            msg.contains("database"),
+            "Error message should mention database"
+        );
 
         let err = CleanupError::Cancelled;
         let msg = err.to_string();
-        assert!(msg.contains("cancelled"), "Error message should contain 'cancelled'");
+        assert!(
+            msg.contains("cancelled"),
+            "Error message should contain 'cancelled'"
+        );
         assert!(msg.contains("user"), "Error message should mention user");
     }
 
@@ -601,7 +610,10 @@ mod tests {
             deleted_ids: vec![],
             failed_deletions: vec![],
         };
-        assert!(!report_no_failures.has_failures(), "Should return false when no failures");
+        assert!(
+            !report_no_failures.has_failures(),
+            "Should return false when no failures"
+        );
 
         let report_with_failures = CleanupReport {
             total_stale: 10,
@@ -611,6 +623,9 @@ mod tests {
             deleted_ids: vec![],
             failed_deletions: vec![],
         };
-        assert!(report_with_failures.has_failures(), "Should return true when failures exist");
+        assert!(
+            report_with_failures.has_failures(),
+            "Should return true when failures exist"
+        );
     }
 }
