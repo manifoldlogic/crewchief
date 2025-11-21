@@ -844,7 +844,10 @@ mod config_endpoint_tests {
     fn test_openai_ignores_ollama_endpoint() {
         // THIS IS THE BUG TEST - verify fix prevents regression
         // Set up: Ollama endpoint in environment (like Docker Compose default)
-        env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://localhost:11434/api/embed",
+        );
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
 
         let config = EmbeddingConfig::from_env().unwrap();
@@ -898,7 +901,10 @@ mod config_endpoint_tests {
     #[test]
     fn test_cohere_ignores_wrong_endpoint() {
         // Cohere should ignore Ollama endpoint
-        env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://localhost:11434/api/embed",
+        );
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "cohere");
 
         let config = EmbeddingConfig::from_env().unwrap();
@@ -913,7 +919,10 @@ mod config_endpoint_tests {
 
     #[test]
     fn test_ollama_uses_custom_endpoint() {
-        env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", "http://custom:8080/api/embed");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://custom:8080/api/embed",
+        );
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
 
         let config = EmbeddingConfig::from_env().unwrap();
@@ -943,7 +952,10 @@ mod config_endpoint_tests {
 
     #[test]
     fn test_google_ignores_embedding_api_endpoint() {
-        env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://localhost:11434/api/embed",
+        );
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
         env::set_var("GOOGLE_REGION", "us-central1");
         env::set_var("GOOGLE_PROJECT_ID", "test-project");

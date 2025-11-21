@@ -200,7 +200,10 @@ impl EmbeddingPipeline {
         let count = rows.len();
 
         if count > 0 {
-            info!("Copied embeddings for {} chunks from code_embeddings table", count);
+            info!(
+                "Copied embeddings for {} chunks from code_embeddings table",
+                count
+            );
         } else {
             debug!("No embeddings to copy from code_embeddings table");
         }
@@ -470,12 +473,8 @@ impl EmbeddingPipeline {
 
                 // Populate code_embeddings cache for deduplication
                 if let Some(blob_sha) = &chunk.blob_sha {
-                    self.populate_embedding_cache(
-                        client,
-                        blob_sha,
-                        &code_embeddings[i],
-                    )
-                    .await?;
+                    self.populate_embedding_cache(client, blob_sha, &code_embeddings[i])
+                        .await?;
                 }
             }
 
@@ -1093,14 +1092,17 @@ mod tests {
             .await?;
         let chunk_id: i64 = chunk_row.get(0);
 
-        Ok((repo_id, worktree_id, file_id, chunk_id, blob_sha.to_string()))
+        Ok((
+            repo_id,
+            worktree_id,
+            file_id,
+            chunk_id,
+            blob_sha.to_string(),
+        ))
     }
 
     /// Helper function to insert a code_embeddings cache entry
-    async fn insert_cache_entry(
-        client: &Client,
-        blob_sha: &str,
-    ) -> Result<()> {
+    async fn insert_cache_entry(client: &Client, blob_sha: &str) -> Result<()> {
         let embedding_vec = pgvector::Vector::from(vec![0.5; 1536]);
         client
             .execute(
@@ -1117,11 +1119,18 @@ mod tests {
 
     /// Helper function to clean up test data
     /// Also accepts the blob_sha to ensure we clean up code_embeddings even if chunks are deleted
-    async fn cleanup_test_data(client: &Client, repo_id: i64, blob_sha: Option<&str>) -> Result<()> {
+    async fn cleanup_test_data(
+        client: &Client,
+        repo_id: i64,
+        blob_sha: Option<&str>,
+    ) -> Result<()> {
         // Delete code_embeddings entry if blob_sha provided
         if let Some(sha) = blob_sha {
             client
-                .execute("DELETE FROM maproom.code_embeddings WHERE blob_sha = $1", &[&sha])
+                .execute(
+                    "DELETE FROM maproom.code_embeddings WHERE blob_sha = $1",
+                    &[&sha],
+                )
                 .await?;
         }
 
@@ -1133,10 +1142,16 @@ mod tests {
             .execute("DELETE FROM maproom.files WHERE worktree_id IN (SELECT id FROM maproom.worktrees WHERE repo_id = $1)", &[&repo_id])
             .await?;
         client
-            .execute("DELETE FROM maproom.worktrees WHERE repo_id = $1", &[&repo_id])
+            .execute(
+                "DELETE FROM maproom.worktrees WHERE repo_id = $1",
+                &[&repo_id],
+            )
             .await?;
         client
-            .execute("DELETE FROM maproom.commits WHERE repo_id = $1", &[&repo_id])
+            .execute(
+                "DELETE FROM maproom.commits WHERE repo_id = $1",
+                &[&repo_id],
+            )
             .await?;
         client
             .execute("DELETE FROM maproom.repos WHERE id = $1", &[&repo_id])
@@ -1147,18 +1162,27 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_copy_existing_embeddings_success() {
-        let client = create_test_client().await.expect("Failed to connect to test database");
+        let client = create_test_client()
+            .await
+            .expect("Failed to connect to test database");
 
         // Setup: Create chunk with NULL embeddings
         let (repo_id, _worktree_id, _file_id, chunk_id, blob_sha) =
-            setup_test_chunk(&client, false).await.expect("Failed to setup test chunk");
+            setup_test_chunk(&client, false)
+                .await
+                .expect("Failed to setup test chunk");
 
         // Insert matching code_embeddings entry
-        insert_cache_entry(&client, &blob_sha).await.expect("Failed to insert cache entry");
+        insert_cache_entry(&client, &blob_sha)
+            .await
+            .expect("Failed to insert cache entry");
 
         // Get initial updated_at timestamp
         let initial_row = client
-            .query_one("SELECT updated_at FROM maproom.chunks WHERE id = $1", &[&chunk_id])
+            .query_one(
+                "SELECT updated_at FROM maproom.chunks WHERE id = $1",
+                &[&chunk_id],
+            )
             .await
             .expect("Failed to get initial timestamp");
         let initial_updated_at: std::time::SystemTime = initial_row.get(0);
@@ -1171,7 +1195,10 @@ mod tests {
         let config = PipelineConfig::default();
         let pipeline = EmbeddingPipeline::new(service, config);
 
-        let count = pipeline.copy_existing_embeddings(&client).await.expect("Failed to copy embeddings");
+        let count = pipeline
+            .copy_existing_embeddings(&client)
+            .await
+            .expect("Failed to copy embeddings");
 
         // Assert: Return count should be 1
         assert_eq!(count, 1, "Expected to copy 1 embedding");
@@ -1191,31 +1218,51 @@ mod tests {
 
         assert!(code_emb.is_some(), "Code embedding should be populated");
         assert!(text_emb.is_some(), "Text embedding should be populated");
-        assert_eq!(code_emb.unwrap().to_vec().len(), 1536, "Code embedding should have correct dimension");
-        assert_eq!(text_emb.unwrap().to_vec().len(), 1536, "Text embedding should have correct dimension");
+        assert_eq!(
+            code_emb.unwrap().to_vec().len(),
+            1536,
+            "Code embedding should have correct dimension"
+        );
+        assert_eq!(
+            text_emb.unwrap().to_vec().len(),
+            1536,
+            "Text embedding should have correct dimension"
+        );
 
         // Assert: updated_at timestamp should have changed
-        assert!(updated_at > initial_updated_at, "updated_at timestamp should have changed");
+        assert!(
+            updated_at > initial_updated_at,
+            "updated_at timestamp should have changed"
+        );
 
         // Cleanup
-        cleanup_test_data(&client, repo_id, Some(&blob_sha)).await.expect("Failed to cleanup test data");
+        cleanup_test_data(&client, repo_id, Some(&blob_sha))
+            .await
+            .expect("Failed to cleanup test data");
     }
 
     #[tokio::test]
     #[serial_test::serial]
     async fn test_copy_skips_without_cache() {
-        let client = create_test_client().await.expect("Failed to connect to test database");
+        let client = create_test_client()
+            .await
+            .expect("Failed to connect to test database");
 
         // Setup: Create chunk with NULL embeddings, but NO matching cache entry
         let (repo_id, _worktree_id, _file_id, chunk_id, blob_sha) =
-            setup_test_chunk(&client, false).await.expect("Failed to setup test chunk");
+            setup_test_chunk(&client, false)
+                .await
+                .expect("Failed to setup test chunk");
 
         // Create pipeline and execute copy (no cache entry exists)
         let service = create_test_service(1536, "openai");
         let config = PipelineConfig::default();
         let pipeline = EmbeddingPipeline::new(service, config);
 
-        let count = pipeline.copy_existing_embeddings(&client).await.expect("Should not error when no cache entry");
+        let count = pipeline
+            .copy_existing_embeddings(&client)
+            .await
+            .expect("Should not error when no cache entry");
 
         // Assert: Return count should be 0
         assert_eq!(count, 0, "Expected to copy 0 embeddings (no cache entry)");
@@ -1236,20 +1283,27 @@ mod tests {
         assert!(text_emb.is_none(), "Text embedding should still be NULL");
 
         // Cleanup
-        cleanup_test_data(&client, repo_id, Some(&blob_sha)).await.expect("Failed to cleanup test data");
+        cleanup_test_data(&client, repo_id, Some(&blob_sha))
+            .await
+            .expect("Failed to cleanup test data");
     }
 
     #[tokio::test]
     #[serial_test::serial]
     async fn test_copy_idempotent() {
-        let client = create_test_client().await.expect("Failed to connect to test database");
+        let client = create_test_client()
+            .await
+            .expect("Failed to connect to test database");
 
         // Setup: Create chunk with embeddings already set
-        let (repo_id, _worktree_id, _file_id, chunk_id, blob_sha) =
-            setup_test_chunk(&client, true).await.expect("Failed to setup test chunk");
+        let (repo_id, _worktree_id, _file_id, chunk_id, blob_sha) = setup_test_chunk(&client, true)
+            .await
+            .expect("Failed to setup test chunk");
 
         // Insert matching code_embeddings entry (with different values)
-        insert_cache_entry(&client, &blob_sha).await.expect("Failed to insert cache entry");
+        insert_cache_entry(&client, &blob_sha)
+            .await
+            .expect("Failed to insert cache entry");
 
         // Get initial embedding values
         let initial_row = client
@@ -1260,8 +1314,10 @@ mod tests {
             .await
             .expect("Failed to get initial embeddings");
 
-        let initial_code_emb: pgvector::Vector = initial_row.get::<_, Option<pgvector::Vector>>(0).unwrap();
-        let initial_text_emb: pgvector::Vector = initial_row.get::<_, Option<pgvector::Vector>>(1).unwrap();
+        let initial_code_emb: pgvector::Vector =
+            initial_row.get::<_, Option<pgvector::Vector>>(0).unwrap();
+        let initial_text_emb: pgvector::Vector =
+            initial_row.get::<_, Option<pgvector::Vector>>(1).unwrap();
 
         // Create pipeline
         let service = create_test_service(1536, "openai");
@@ -1269,13 +1325,22 @@ mod tests {
         let pipeline = EmbeddingPipeline::new(service, config);
 
         // Execute copy first time
-        let count1 = pipeline.copy_existing_embeddings(&client).await.expect("First copy should not error");
+        let count1 = pipeline
+            .copy_existing_embeddings(&client)
+            .await
+            .expect("First copy should not error");
 
         // Assert: Return count should be 0 (chunk already has embeddings)
-        assert_eq!(count1, 0, "Expected to copy 0 embeddings (chunk already has embeddings)");
+        assert_eq!(
+            count1, 0,
+            "Expected to copy 0 embeddings (chunk already has embeddings)"
+        );
 
         // Execute copy second time (idempotent test)
-        let count2 = pipeline.copy_existing_embeddings(&client).await.expect("Second copy should not error");
+        let count2 = pipeline
+            .copy_existing_embeddings(&client)
+            .await
+            .expect("Second copy should not error");
 
         // Assert: Return count should still be 0
         assert_eq!(count2, 0, "Expected second copy to also return 0");
@@ -1289,13 +1354,23 @@ mod tests {
             .await
             .expect("Failed to get final embeddings");
 
-        let final_code_emb: pgvector::Vector = final_row.get::<_, Option<pgvector::Vector>>(0).unwrap();
-        let final_text_emb: pgvector::Vector = final_row.get::<_, Option<pgvector::Vector>>(1).unwrap();
+        let final_code_emb: pgvector::Vector =
+            final_row.get::<_, Option<pgvector::Vector>>(0).unwrap();
+        let final_text_emb: pgvector::Vector =
+            final_row.get::<_, Option<pgvector::Vector>>(1).unwrap();
 
-        assert_eq!(final_code_emb, initial_code_emb, "Code embedding should be unchanged");
-        assert_eq!(final_text_emb, initial_text_emb, "Text embedding should be unchanged");
+        assert_eq!(
+            final_code_emb, initial_code_emb,
+            "Code embedding should be unchanged"
+        );
+        assert_eq!(
+            final_text_emb, initial_text_emb,
+            "Text embedding should be unchanged"
+        );
 
         // Cleanup
-        cleanup_test_data(&client, repo_id, Some(&blob_sha)).await.expect("Failed to cleanup test data");
+        cleanup_test_data(&client, repo_id, Some(&blob_sha))
+            .await
+            .expect("Failed to cleanup test data");
     }
 }

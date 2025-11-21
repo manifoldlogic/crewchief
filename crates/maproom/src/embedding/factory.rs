@@ -155,7 +155,10 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
 
     let provider_name = match explicit_provider.as_deref() {
         Some(p) => {
-            tracing::debug!("Using explicit provider from MAPROOM_EMBEDDING_PROVIDER: {}", p);
+            tracing::debug!(
+                "Using explicit provider from MAPROOM_EMBEDDING_PROVIDER: {}",
+                p
+            );
             p.to_lowercase()
         }
         None => {
@@ -182,8 +185,8 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
         "ollama" => {
             let endpoint = env::var("MAPROOM_EMBEDDING_API_ENDPOINT")
                 .unwrap_or_else(|_| "http://localhost:11434/api/embed".to_string());
-            let model =
-                env::var("MAPROOM_EMBEDDING_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
+            let model = env::var("MAPROOM_EMBEDDING_MODEL")
+                .unwrap_or_else(|_| "nomic-embed-text".to_string());
 
             tracing::info!(
                 "Using provider: ollama (model: {}, endpoint: {})",
