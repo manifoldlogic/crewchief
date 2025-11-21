@@ -3,6 +3,11 @@ set -e
 
 echo "🔄 Running post-start setup..."
 
+# Detect and export the host path for /workspace (needed for Docker-in-Docker volume mounts)
+WORKSPACE_HOST_PATH=$(docker inspect $(hostname) --format '{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo "/workspace")
+export WORKSPACE_HOST_PATH
+echo "✓ WORKSPACE_HOST_PATH: $WORKSPACE_HOST_PATH"
+
 # Ensure .bashrc points to the repository-managed configuration
 BASHRC_SOURCE="/workspace/.devcontainer/.bashrc"
 if [ -f "$BASHRC_SOURCE" ]; then

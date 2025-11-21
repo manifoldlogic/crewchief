@@ -161,6 +161,10 @@ services:
       NODE_ENV: production
     volumes:
       - maproom-logs:/app/logs
+      # Mount workspace for open/context tools
+      # In devcontainer: use WORKSPACE_HOST_PATH from devcontainer environment
+      # In production: defaults to /workspace (assumes running on host)
+      - ${WORKSPACE_HOST_PATH:-/workspace}:/workspace:ro
     networks:
       - maproom-network
     stdin_open: true

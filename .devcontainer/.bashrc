@@ -45,5 +45,10 @@ case $- in
   ;;
 esac
 
-# End of CrewChief Bash configuration
+# Docker-in-Docker workspace path (auto-detected on container start)
+# This is set by post-start.sh and used by maproom-mcp docker-compose volume mount
+if [ -z "$WORKSPACE_HOST_PATH" ]; then
+  export WORKSPACE_HOST_PATH=$(docker inspect $(hostname) --format '{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo "/workspace")
+fi
 
+# End of CrewChief Bash configuration

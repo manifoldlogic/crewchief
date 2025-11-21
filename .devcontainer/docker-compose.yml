@@ -32,6 +32,8 @@ services:
       - MAPROOM_EMBEDDING_PROVIDER=${MAPROOM_EMBEDDING_PROVIDER:-}
       # TEMPORARY UNTIL WE INCLUDE IT AUTOMATICALLY IN THE CLI
       - CREWCHIEF_MAPROOM_BIN=/workspace/packages/cli/bin/crewchief-maproom
+      # Docker-in-Docker workspace path (needed for maproom-mcp container volume mount)
+      - WORKSPACE_HOST_PATH=${WORKSPACE_HOST_PATH:-}
     command: sleep infinity
     networks:
       - crewchief-network
