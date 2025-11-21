@@ -2,6 +2,7 @@
   "name": "vscode-maproom",
   "displayName": "Maproom Semantic Search",
   "description": "Semantic code search powered by Maproom - find code by concept, not just text",
+  "icon": "icon.png",
   "version": "0.1.0",
   "publisher": "crewchief",
   "engines": {
