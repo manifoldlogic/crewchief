@@ -29,9 +29,12 @@ We will treat the binary as a black box and test its IO behavior.
 
 ### 4. Risk Mitigation
 *   **Stdout Pollution:** This is the biggest risk. Any `println!` or logging to stdout will break the client.
-    *   **Test:** Configure logging to `info` or `debug` and run the integration test. Assert that stdout *only* contains valid JSON.
+    *   **Test:** Configure logging to `info` or `debug` (via `RUST_LOG` env var) and run the integration test.
+    *   **Assertion:** Parse every line of stdout as JSON. If parsing fails, the test fails. Assert that stdout *only* contains valid JSON-RPC responses.
 *   **Orphaned Processes:**
-    *   **Test:** Kill the parent test process (simulating MCP server crash). Ensure the daemon detects the broken pipe/EOF and exits.
+    *   **Test:** Start the daemon, then close the stdin pipe from the test harness.
+    *   **Assertion:** Wait 1 second. Check if the daemon process ID is still running. It MUST be gone.
+    *   **Test:** Send `SIGPIPE` to the daemon's stdout (simulate reader death). Daemon should exit.
 
 ## MVP Testing Checklist
 - [ ] Unit tests for JSON-RPC types.

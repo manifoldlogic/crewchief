@@ -93,5 +93,7 @@ The main event loop:
 
 ## Constraints & Trade-offs
 *   **Logs:** All logging **MUST** go to `stderr`. Any output to `stdout` will break the JSON-RPC protocol parser on the client side. We must configure the logger (tracing/env_logger) to strictly use stderr.
+    *   **Rule:** No `println!` macros allowed in daemon code. Use `eprintln!` or `tracing` macros configured for stderr.
+*   **Process Lifecycle:** The daemon must exit cleanly when `stdin` is closed (EOF). This prevents zombie processes if the parent crashes.
 *   **State:** For now, state is just the DB pool. In the future, we can add in-memory caches.
 *   **Client:** This project does *not* update the Node.js client. That is a future integration step. We are building the capability first.
