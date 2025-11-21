@@ -112,6 +112,8 @@ serial_test = "3"
 wiremock = "0.6"
 proptest = "1.4"
 sysinfo = "0.32"
+assert_cmd = "2.0"
+predicates = "3.0"
 
 [target.'cfg(unix)'.dev-dependencies]
 nix = { version = "0.29", features = ["signal"] }
