@@ -11,22 +11,25 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// Mock modules BEFORE any imports that use them
+vi.mock('fs')
+vi.mock('child_process')
+
+// Now import the mocked modules
 import * as fs from 'fs'
 import { execFileSync } from 'child_process'
 
-// Mock modules
-vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn()
-}))
+// Import functions from TypeScript utils (ESM - easier to mock)
+import { isInsideDocker } from '../../src/utils/docker-detection'
 
-vi.mock('child_process', () => ({
-  execFileSync: vi.fn()
-}))
-
-// Import functions from bin/cli.cjs
-// These functions don't exist yet - tests will fail
-const { isInsideDocker, getWorkspaceHostPath, resolveWorkspacePath } = require('../../bin/cli.cjs')
+// These functions will be implemented in future tickets
+const getWorkspaceHostPath = (): string | null => {
+  throw new Error('getWorkspaceHostPath is not a function')
+}
+const resolveWorkspacePath = (): string => {
+  throw new Error('resolveWorkspacePath is not a function')
+}
 
 describe('Workspace Path Detection', () => {
   // Store original environment

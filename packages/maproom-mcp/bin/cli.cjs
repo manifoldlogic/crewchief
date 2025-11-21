@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { needsConfigUpdate, updateConfigs } = require('../dist/config-manager.js');
+const { isInsideDocker: isInsideDockerImpl } = require('../dist/utils/docker-detection.js');
 
 // Diagnostic Mode: Log environment variables for troubleshooting
 const DIAGNOSTIC_MODE = process.env.MAPROOM_MCP_DEBUG === 'true';
@@ -100,6 +101,17 @@ function diagnosticLog(message, data) {
       console.error('   ', JSON.stringify(redactedData, null, 2));
     }
   }
+}
+
+/**
+ * Check if currently running inside a Docker container
+ *
+ * Wraps the TypeScript implementation from src/utils/docker-detection.ts
+ *
+ * @returns {boolean} True if inside Docker, false otherwise
+ */
+function isInsideDocker() {
+  return isInsideDockerImpl();
 }
 
 // Log environment variables immediately on startup
@@ -1906,5 +1918,13 @@ async function main() {
   }
 }
 
-// Run main
-main();
+// Export functions for testing
+module.exports = {
+  isInsideDocker,
+  runSetup
+};
+
+// Run main (only if not being required as a module)
+if (require.main === module) {
+  main();
+}
