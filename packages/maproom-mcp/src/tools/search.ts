@@ -222,9 +222,9 @@ export async function handleSearchTool(
 
   // Note: Rust binary only supports FTS mode currently
   // Vector and hybrid modes are handled by TypeScript SQL in index.ts
-  if (mode !== 'fts') {
+  if (!['fts', 'vector'].includes(mode)) {
     throw new ValidationError(
-      `Search mode "${mode}" not supported by Rust binary. Only "fts" mode is available via binary. Use TypeScript implementation for vector/hybrid modes.`,
+      `Search mode "${mode}" not supported. Use mode="fts" or mode="vector".`,
       'UNSUPPORTED_MODE'
     )
   }
@@ -240,9 +240,12 @@ export async function handleSearchTool(
 
   log.debug({ candidates }, 'Found binary candidates')
 
+  // Determine command based on mode
+  const command = mode === 'vector' ? 'vector-search' : 'search'
+
   // Build command arguments
   const args = [
-    'search',
+    command,
     '--repo',
     repo,
     '--query',
@@ -260,7 +263,7 @@ export async function handleSearchTool(
     args.push('--debug')
   }
 
-  log.debug({ args }, 'Spawning Rust binary for search')
+  log.debug({ args, mode, command }, 'Spawning Rust binary for search')
 
   // Spawn Rust binary and collect output
   let result: ProcessResult
@@ -384,7 +387,7 @@ export function formatSearchError(error: unknown): any {
                   : error.code === 'MISSING_REPO'
                     ? 'The repo parameter is required. Example: {repo: "crewchief", query: "search"}'
                     : error.code === 'UNSUPPORTED_MODE'
-                      ? 'Currently only "fts" mode is supported via Rust binary. Vector and hybrid modes coming in Phase 2.'
+                      ? 'Use mode="fts" for keyword search or mode="vector" for semantic search.'
                       : 'Check your parameters and try again.',
             },
             null,
