@@ -14,7 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { needsConfigUpdate, updateConfigs } = require('../dist/config-manager.js');
-const { isInsideDocker: isInsideDockerImpl } = require('../dist/utils/docker-detection.js');
+const {
+  isInsideDocker: isInsideDockerImpl,
+  getWorkspaceHostPath: getWorkspaceHostPathImpl
+} = require('../dist/utils/docker-detection.js');
 
 // Diagnostic Mode: Log environment variables for troubleshooting
 const DIAGNOSTIC_MODE = process.env.MAPROOM_MCP_DEBUG === 'true';
@@ -112,6 +115,17 @@ function diagnosticLog(message, data) {
  */
 function isInsideDocker() {
   return isInsideDockerImpl();
+}
+
+/**
+ * Discover the host path for /workspace by inspecting the current container
+ *
+ * Wraps the TypeScript implementation from src/utils/docker-detection.ts
+ *
+ * @returns {string|null} Host path or null if not found/not in container
+ */
+function getWorkspaceHostPath() {
+  return getWorkspaceHostPathImpl();
 }
 
 // Log environment variables immediately on startup
@@ -1921,6 +1935,7 @@ async function main() {
 // Export functions for testing
 module.exports = {
   isInsideDocker,
+  getWorkspaceHostPath,
   runSetup
 };
 

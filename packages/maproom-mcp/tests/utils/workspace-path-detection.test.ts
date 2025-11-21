@@ -21,12 +21,12 @@ import * as fs from 'fs'
 import { execFileSync } from 'child_process'
 
 // Import functions from TypeScript utils (ESM - easier to mock)
-import { isInsideDocker } from '../../src/utils/docker-detection'
+import {
+  isInsideDocker,
+  getWorkspaceHostPath
+} from '../../src/utils/docker-detection'
 
-// These functions will be implemented in future tickets
-const getWorkspaceHostPath = (): string | null => {
-  throw new Error('getWorkspaceHostPath is not a function')
-}
+// This function will be implemented in future ticket
 const resolveWorkspacePath = (): string => {
   throw new Error('resolveWorkspacePath is not a function')
 }
@@ -136,8 +136,8 @@ describe('Workspace Path Detection', () => {
       const mockedExecFileSync = vi.mocked(execFileSync)
 
       mockedExecFileSync
-        .mockReturnValueOnce(Buffer.from('container-abc123'))
-        .mockReturnValueOnce(Buffer.from('/host_mnt/Users/user/project'))
+        .mockReturnValueOnce('container-abc123')
+        .mockReturnValueOnce('/host_mnt/Users/user/project')
 
       // WHEN: getting workspace host path
       const result = getWorkspaceHostPath()
@@ -175,7 +175,7 @@ describe('Workspace Path Detection', () => {
       const mockedExecFileSync = vi.mocked(execFileSync)
 
       mockedExecFileSync
-        .mockReturnValueOnce(Buffer.from('container-abc123'))
+        .mockReturnValueOnce('container-abc123')
         .mockImplementation(() => {
           throw new Error('docker: command not found')
         })
@@ -207,8 +207,8 @@ describe('Workspace Path Detection', () => {
       const mockedExecFileSync = vi.mocked(execFileSync)
 
       mockedExecFileSync
-        .mockReturnValueOnce(Buffer.from('container-abc123'))
-        .mockReturnValueOnce(Buffer.from(''))
+        .mockReturnValueOnce('container-abc123')
+        .mockReturnValueOnce('')
 
       // WHEN: getting workspace host path
       const result = getWorkspaceHostPath()
@@ -222,8 +222,8 @@ describe('Workspace Path Detection', () => {
       const mockedExecFileSync = vi.mocked(execFileSync)
 
       mockedExecFileSync
-        .mockReturnValueOnce(Buffer.from('container-abc123'))
-        .mockReturnValueOnce(Buffer.from('  /host_mnt/Users/user/project  \n'))
+        .mockReturnValueOnce('container-abc123')
+        .mockReturnValueOnce('  /host_mnt/Users/user/project  \n')
 
       // WHEN: getting workspace host path
       const result = getWorkspaceHostPath()
@@ -253,8 +253,8 @@ describe('Workspace Path Detection', () => {
 
       mockedExistsSync.mockImplementation((path) => path === '/.dockerenv')
       mockedExecFileSync
-        .mockReturnValueOnce(Buffer.from('container-abc123'))
-        .mockReturnValueOnce(Buffer.from('/host_mnt/Users/user/project'))
+        .mockReturnValueOnce('container-abc123')
+        .mockReturnValueOnce('/host_mnt/Users/user/project')
 
       // WHEN: resolving workspace path
       const result = resolveWorkspacePath()
@@ -314,8 +314,8 @@ describe('Workspace Path Detection', () => {
 
       mockedExistsSync.mockImplementation((path) => path === '/.dockerenv')
       mockedExecFileSync
-        .mockReturnValueOnce(Buffer.from('container-abc123'))
-        .mockReturnValueOnce(Buffer.from('/host_mnt/Users/user/project'))
+        .mockReturnValueOnce('container-abc123')
+        .mockReturnValueOnce('/host_mnt/Users/user/project')
 
       // Note: diagnosticLog is tested indirectly through integration tests
       // This test verifies the function completes without errors
