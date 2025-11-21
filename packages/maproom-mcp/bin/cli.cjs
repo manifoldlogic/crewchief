@@ -1831,7 +1831,12 @@ async function runSetup() {
   // Copy configs
   setupConfigDirectory();
 
-  // Start Docker Compose (respects MAPROOM_EMBEDDING_PROVIDER)
+  // Detect and set workspace path for Docker volume mounting
+  const workspacePath = resolveWorkspacePath();
+  process.env.WORKSPACE_HOST_PATH = workspacePath;
+  console.error('✓ Workspace path:', workspacePath);
+
+  // Start Docker Compose (respects MAPROOM_EMBEDDING_PROVIDER and WORKSPACE_HOST_PATH)
   await startDockerCompose();
 
   // Wait for services
