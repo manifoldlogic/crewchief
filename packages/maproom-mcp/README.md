@@ -89,6 +89,33 @@ This will (2-5 minutes on first run):
 - Initialize PostgreSQL with pgvector
 - Validate everything works
 
+## Devcontainer Support
+
+The maproom-mcp setup command automatically detects Docker-in-Docker environments (devcontainers) and configures the correct workspace path for volume mounting.
+
+**How it works:**
+1. Detects if running inside a Docker container
+2. Discovers the actual host path where `/workspace` is mounted
+3. Automatically sets `WORKSPACE_HOST_PATH` before starting containers
+4. No manual configuration required
+
+**Supported environments:**
+- VS Code devcontainers
+- GitHub Codespaces
+- Cursor devcontainers
+- Local Docker Desktop
+
+**Manual override (if needed):**
+```bash
+export WORKSPACE_HOST_PATH=/path/to/workspace
+npx @crewchief/maproom-mcp setup --provider=openai
+```
+
+**Troubleshooting:**
+- If detection fails, manually set `WORKSPACE_HOST_PATH`
+- Verify Docker socket access: `docker ps`
+- Check container mounts: `docker inspect $(hostname)`
+
 ### 2. Index Your Codebase
 
 #### Automatic Indexing (Recommended) ✨ NEW
