@@ -984,16 +984,127 @@ async fn main() -> anyhow::Result<()> {
             k,
             threshold,
         } => {
-            // TODO: VECSRCH-2003 - Implement vector search handler
-            // This is a placeholder to satisfy the exhaustive match requirement
-            // Full implementation will:
-            // 1. Generate query embedding using EmbeddingService
-            // 2. Execute VectorExecutor::execute()
-            // 3. Format and output JSON results
-            eprintln!("Vector search not yet implemented. See VECSRCH-2003.");
-            eprintln!("Params: repo={}, worktree={:?}, query={}, k={}, threshold={:?}",
-                     repo, worktree, query, k, threshold);
-            std::process::exit(1);
+            use crewchief_maproom::embedding::EmbeddingService;
+            use crewchief_maproom::search::{SearchMode, VectorExecutor};
+
+            // Connect to database
+            let client = db::connect().await?;
+
+            // Resolve repo_id
+            let repo_row = client
+                .query_one("SELECT id FROM maproom.repos WHERE name = $1", &[&repo])
+                .await
+                .context(format!("Repository '{}' not found", repo))?;
+            let repo_id: i64 = repo_row.get(0);
+
+            // Resolve worktree_id if specified
+            let worktree_id: Option<i64> = if let Some(w) = &worktree {
+                let row = client
+                    .query_opt(
+                        "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
+                        &[&repo_id, w],
+                    )
+                    .await?;
+                row.map(|r| r.get(0))
+            } else {
+                None
+            };
+
+            // Generate query embedding
+            tracing::info!("Generating embedding for query: {}", query);
+            let embedding_service = EmbeddingService::from_env()
+                .await
+                .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
+            
+            let query_embedding = embedding_service
+                .embed_text(&query)
+                .await
+                .context("Failed to generate query embedding")?;
+
+            tracing::info!("Executing vector search (k={}, threshold={:?})", k, threshold);
+
+            // Execute vector search
+            let ranked_results = VectorExecutor::execute(
+                &client,
+                &query_embedding,
+                SearchMode::Code, // Use Code mode for now (can be parameterized later)
+                repo_id,
+                worktree_id,
+                k,
+            )
+            .await
+            .context("Vector search execution failed")?;
+
+            // Get chunk details for each result
+            let mut hits = Vec::new();
+            for result in ranked_results.results {
+                // Apply threshold filter if specified
+                if let Some(thresh) = threshold {
+                    if result.score < thresh {
+                        continue;
+                    }
+                }
+
+                // Query chunk details
+                let chunk_row = client
+                    .query_opt(
+                        r#"
+                        SELECT 
+                            c.start_line,
+                            c.end_line,
+                            c.symbol_name,
+                            c.kind::text,
+                            f.relpath
+                        FROM maproom.chunks c
+                        JOIN maproom.files f ON f.id = c.file_id
+                        WHERE c.id = $1
+                        "#,
+                        &[&result.chunk_id],
+                    )
+                    .await?;
+
+                if let Some(row) = chunk_row {
+                    hits.push(serde_json::json!({
+                        "chunk_id": result.chunk_id,
+                        "score": result.score,
+                        "start_line": row.get::<_, i32>(0),
+                        "end_line": row.get::<_, i32>(1),
+                        "symbol_name": row.get::<_, Option<String>>(2),
+                        "kind": row.get::<_, String>(3),
+                        "file_path": row.get::<_, String>(4),
+                    }));
+                }
+            }
+
+            // Output JSON schema for MCP client consumption:
+            // {
+            //   "hits": [
+            //     {
+            //       "chunk_id": i64,
+            //       "score": f32 (0.0-1.0 similarity),
+            //       "start_line": i32,
+            //       "end_line": i32,
+            //       "symbol_name": string | null,
+            //       "kind": string (symbol_kind enum),
+            //       "file_path": string (relative path)
+            //     }
+            //   ],
+            //   "total": usize,
+            //   "query": string,
+            //   "mode": "vector",
+            //   "k": usize,
+            //   "threshold": f32 | null
+            // }
+            let output = serde_json::json!({
+                "hits": hits,
+                "total": hits.len(),
+                "query": query,
+                "mode": "vector",
+                "k": k,
+                "threshold": threshold,
+            });
+
+            println!("{}", serde_json::to_string_pretty(&output)?);
         }
 
         Commands::Status {
