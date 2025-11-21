@@ -1,0 +1,58 @@
+[0m[0m[1m[32m    Fetching[0m advisory database from `https://github.com/RustSec/advisory-db.git`
+[0m[0m[1m[32m      Loaded[0m 873 security advisories (from /Users/danielbushman/.cargo/advisory-db)
+[0m[0m[1m[32m    Updating[0m crates.io index
+[0m[0m[1m[32m    Scanning[0m Cargo.lock for vulnerabilities (421 crate dependencies)
+[0m[0m[1m[31mCrate:    [0m ring
+[0m[0m[1m[31mVersion:  [0m 0.17.9
+[0m[0m[1m[31mTitle:    [0m Some AES functions may panic when overflow checking is enabled.
+[0m[0m[1m[31mDate:     [0m 2025-03-06
+[0m[0m[1m[31mID:       [0m RUSTSEC-2025-0009
+[0m[0m[1m[31mURL:      [0m https://rustsec.org/advisories/RUSTSEC-2025-0009
+[0m[0m[1m[31mSolution: [0m Upgrade to >=0.17.12
+[0m[0m[1m[31mDependency tree:
+[0mring 0.17.9
+├── rustls-webpki 0.103.8
+│   └── rustls 0.23.35
+│       ├── tokio-rustls 0.26.4
+│       │   └── hyper-rustls 0.27.7
+│       │       ├── reqwest 0.12.24
+│       │       │   └── crewchief-maproom 0.1.0
+│       │       └── gcp_auth 0.12.4
+│       │           └── crewchief-maproom 0.1.0
+│       └── hyper-rustls 0.27.7
+├── rustls 0.23.35
+└── gcp_auth 0.12.4
+
+[0m[0m[1m[33mCrate:    [0m atty
+[0m[0m[1m[33mVersion:  [0m 0.2.14
+[0m[0m[1m[33mWarning:  [0m unmaintained
+[0m[0m[1m[33mTitle:    [0m `atty` is unmaintained
+[0m[0m[1m[33mDate:     [0m 2024-09-25
+[0m[0m[1m[33mID:       [0m RUSTSEC-2024-0375
+[0m[0m[1m[33mURL:      [0m https://rustsec.org/advisories/RUSTSEC-2024-0375
+[0m[0m[1m[33mDependency tree:
+[0matty 0.2.14
+└── crewchief-maproom 0.1.0
+
+[0m[0m[1m[33mCrate:    [0m json5
+[0m[0m[1m[33mVersion:  [0m 0.4.1
+[0m[0m[1m[33mWarning:  [0m unmaintained
+[0m[0m[1m[33mTitle:    [0m json5 crate is unmaintained
+[0m[0m[1m[33mDate:     [0m 2025-11-16
+[0m[0m[1m[33mID:       [0m RUSTSEC-2025-0120
+[0m[0m[1m[33mURL:      [0m https://rustsec.org/advisories/RUSTSEC-2025-0120
+[0m[0m[1m[33mDependency tree:
+[0mjson5 0.4.1
+└── config 0.14.1
+    └── crewchief-maproom 0.1.0
+
+[0m[0m[1m[33mCrate:    [0m atty
+[0m[0m[1m[33mVersion:  [0m 0.2.14
+[0m[0m[1m[33mWarning:  [0m unsound
+[0m[0m[1m[33mTitle:    [0m Potential unaligned read
+[0m[0m[1m[33mDate:     [0m 2021-07-04
+[0m[0m[1m[33mID:       [0m RUSTSEC-2021-0145
+[0m[0m[1m[33mURL:      [0m https://rustsec.org/advisories/RUSTSEC-2021-0145
+
+[0m[0m[1m[31merror:[0m 1 vulnerability found!
+[0m[0m[1m[33mwarning:[0m 3 allowed warnings found
