@@ -323,4 +323,85 @@ describe('Workspace Path Detection', () => {
       expect(result).toBe('/host_mnt/Users/user/project')
     })
   })
+
+  describe('Security', () => {
+    it('should warn about path traversal patterns', () => {
+      // GIVEN: user-provided path with .. pattern
+      process.env.WORKSPACE_HOST_PATH = '../../etc'
+
+      // Spy on console.warn
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      // WHEN: resolving workspace path
+      const result = resolveWorkspacePath()
+
+      // THEN: should warn about path traversal
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('..')
+      )
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('path traversal risk')
+      )
+
+      // AND: should return path without blocking
+      expect(result).toBe('../../etc')
+
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('should warn about relative paths', () => {
+      // GIVEN: user-provided relative path
+      process.env.WORKSPACE_HOST_PATH = 'relative/path'
+
+      // Spy on console.warn
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      // WHEN: resolving workspace path
+      const result = resolveWorkspacePath()
+
+      // THEN: should warn about relative path
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('not absolute')
+      )
+
+      // AND: should return path without blocking
+      expect(result).toBe('relative/path')
+
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('should safely handle special characters in hostname', () => {
+      // GIVEN: hostname with shell metacharacters (injection attempt)
+      const mockedExistsSync = vi.mocked(fs.existsSync)
+      const mockedExecFileSync = vi.mocked(execFileSync)
+
+      // Setup: inside Docker
+      mockedExistsSync.mockImplementation((path) => path === '/.dockerenv')
+
+      // Mock hostname with malicious characters
+      mockedExecFileSync
+        .mockReturnValueOnce('host; rm -rf /')
+        .mockReturnValueOnce('/host_mnt/path')
+
+      // WHEN: getting workspace host path
+      const result = getWorkspaceHostPath()
+
+      // THEN: execFileSync passes hostname as argument (not executed)
+      expect(result).toBe('/host_mnt/path')
+
+      // Verify docker inspect was called with the malicious string as an argument
+      expect(mockedExecFileSync).toHaveBeenNthCalledWith(
+        2,
+        'docker',
+        expect.arrayContaining([
+          'inspect',
+          'host; rm -rf /', // Passed as argument, not executed
+          '--format'
+        ]),
+        expect.objectContaining({
+          encoding: 'utf8'
+        })
+      )
+    })
+  })
 })

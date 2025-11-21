@@ -140,7 +140,7 @@ function getWorkspaceHostPath() {
  * using a three-tier priority system.
  *
  * Wraps the TypeScript implementation from src/utils/docker-detection.ts
- * (TypeScript implementation uses injected diagnosticLog function)
+ * (TypeScript implementation includes path validation and uses injected diagnosticLog function)
  *
  * @returns {string} Workspace path to use for volume mounting
  */

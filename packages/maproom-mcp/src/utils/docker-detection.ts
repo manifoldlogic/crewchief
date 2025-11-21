@@ -122,6 +122,36 @@ export function getWorkspaceHostPath(): string | null {
 }
 
 /**
+ * Validate and warn about potentially dangerous workspace paths
+ *
+ * Provides minimal security monitoring by warning about suspicious patterns:
+ * - Path traversal (..)
+ * - Relative paths (not starting with /)
+ *
+ * Does NOT block or throw errors (primary security is read-only mount)
+ * Does NOT verify path exists (container can't see host filesystem)
+ *
+ * @param path - Workspace path to validate
+ * @returns Same path (validation warns but doesn't modify)
+ */
+function validateAndWarnPath(path: string): string {
+  // Check for path traversal patterns
+  if (path.includes('..')) {
+    console.warn(`⚠️  Workspace path contains ".." (path traversal risk): ${path}`)
+    console.warn('    Proceeding with caution. Read-only mount limits risk.')
+  }
+
+  // Warn if relative path (not absolute)
+  if (!path.startsWith('/')) {
+    console.warn(`⚠️  Workspace path is not absolute: ${path}`)
+    console.warn('    May cause unexpected behavior.')
+  }
+
+  // Don't verify path exists - container can't see host filesystem
+  return path
+}
+
+/**
  * Resolve the appropriate workspace path for the current environment
  *
  * Handles devcontainer (Docker-in-Docker), host, and custom override scenarios
@@ -142,7 +172,7 @@ export function resolveWorkspacePath(): string {
     diagnosticLog('Using user-provided WORKSPACE_HOST_PATH', {
       path: process.env.WORKSPACE_HOST_PATH
     })
-    return process.env.WORKSPACE_HOST_PATH
+    return validateAndWarnPath(process.env.WORKSPACE_HOST_PATH)
   }
 
   // Priority 2: Docker-in-Docker detection
@@ -156,7 +186,7 @@ export function resolveWorkspacePath(): string {
         hostPath,
         source: 'docker inspect'
       })
-      return hostPath
+      return validateAndWarnPath(hostPath)
     }
 
     // Inside Docker but couldn't find mount - warn and use /workspace
@@ -166,11 +196,11 @@ export function resolveWorkspacePath(): string {
     console.warn(
       '    Volume mount may fail. Set WORKSPACE_HOST_PATH manually if needed.'
     )
-    return '/workspace'
+    return validateAndWarnPath('/workspace')
   }
 
   // Priority 3: Running on host - use current directory
   const hostPath = process.cwd()
   diagnosticLog('Running on host, using current directory', { hostPath })
-  return hostPath
+  return validateAndWarnPath(hostPath)
 }
