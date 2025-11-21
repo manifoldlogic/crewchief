@@ -16,7 +16,9 @@ const os = require('os');
 const { needsConfigUpdate, updateConfigs } = require('../dist/config-manager.js');
 const {
   isInsideDocker: isInsideDockerImpl,
-  getWorkspaceHostPath: getWorkspaceHostPathImpl
+  getWorkspaceHostPath: getWorkspaceHostPathImpl,
+  resolveWorkspacePath: resolveWorkspacePathImpl,
+  setDiagnosticLog
 } = require('../dist/utils/docker-detection.js');
 
 // Diagnostic Mode: Log environment variables for troubleshooting
@@ -106,6 +108,9 @@ function diagnosticLog(message, data) {
   }
 }
 
+// Inject diagnostic log function into TypeScript module
+setDiagnosticLog(diagnosticLog);
+
 /**
  * Check if currently running inside a Docker container
  *
@@ -126,6 +131,21 @@ function isInsideDocker() {
  */
 function getWorkspaceHostPath() {
   return getWorkspaceHostPathImpl();
+}
+
+/**
+ * Resolve the appropriate workspace path for the current environment
+ *
+ * Handles devcontainer (Docker-in-Docker), host, and custom override scenarios
+ * using a three-tier priority system.
+ *
+ * Wraps the TypeScript implementation from src/utils/docker-detection.ts
+ * (TypeScript implementation uses injected diagnosticLog function)
+ *
+ * @returns {string} Workspace path to use for volume mounting
+ */
+function resolveWorkspacePath() {
+  return resolveWorkspacePathImpl();
 }
 
 // Log environment variables immediately on startup
@@ -1936,6 +1956,7 @@ async function main() {
 module.exports = {
   isInsideDocker,
   getWorkspaceHostPath,
+  resolveWorkspacePath,
   runSetup
 };
 

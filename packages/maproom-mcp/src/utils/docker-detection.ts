@@ -8,6 +8,28 @@
 import * as fs from 'fs'
 import { execFileSync } from 'child_process'
 
+// Diagnostic logging callback - can be set by cli.cjs to use its diagnosticLog function
+type DiagnosticLogFn = (message: string, data?: any) => void
+let diagnosticLogFn: DiagnosticLogFn | null = null
+
+/**
+ * Set the diagnostic logging function
+ * Called by cli.cjs to provide its diagnosticLog implementation
+ */
+export function setDiagnosticLog(fn: DiagnosticLogFn): void {
+  diagnosticLogFn = fn
+}
+
+/**
+ * Internal diagnostic log helper
+ * Uses the injected diagnosticLog function if available, otherwise no-op
+ */
+function diagnosticLog(message: string, data?: any): void {
+  if (diagnosticLogFn) {
+    diagnosticLogFn(message, data)
+  }
+}
+
 /**
  * Check if currently running inside a Docker container
  *
@@ -97,4 +119,58 @@ export function getWorkspaceHostPath(): string | null {
     // or we're not in a devcontainer setup
     return null
   }
+}
+
+/**
+ * Resolve the appropriate workspace path for the current environment
+ *
+ * Handles devcontainer (Docker-in-Docker), host, and custom override scenarios
+ * using a three-tier priority system:
+ *
+ * Priority 1: User override via WORKSPACE_HOST_PATH environment variable
+ * Priority 2: Auto-detect in Docker-in-Docker using container inspection
+ * Priority 3: Use current working directory when running on host
+ *
+ * This function orchestrates isInsideDocker() and getWorkspaceHostPath()
+ * to provide intelligent defaults while respecting user configuration.
+ *
+ * @returns Workspace path to use for volume mounting
+ */
+export function resolveWorkspacePath(): string {
+  // Priority 1: User override (for custom setups)
+  if (process.env.WORKSPACE_HOST_PATH) {
+    diagnosticLog('Using user-provided WORKSPACE_HOST_PATH', {
+      path: process.env.WORKSPACE_HOST_PATH
+    })
+    return process.env.WORKSPACE_HOST_PATH
+  }
+
+  // Priority 2: Docker-in-Docker detection
+  if (isInsideDocker()) {
+    diagnosticLog('Detected running inside Docker container')
+
+    const hostPath = getWorkspaceHostPath()
+
+    if (hostPath) {
+      diagnosticLog('Discovered host workspace path', {
+        hostPath,
+        source: 'docker inspect'
+      })
+      return hostPath
+    }
+
+    // Inside Docker but couldn't find mount - warn and use /workspace
+    console.warn(
+      '⚠️  Running inside Docker but could not discover workspace host path.'
+    )
+    console.warn(
+      '    Volume mount may fail. Set WORKSPACE_HOST_PATH manually if needed.'
+    )
+    return '/workspace'
+  }
+
+  // Priority 3: Running on host - use current directory
+  const hostPath = process.cwd()
+  diagnosticLog('Running on host, using current directory', { hostPath })
+  return hostPath
 }

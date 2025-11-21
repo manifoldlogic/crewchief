@@ -23,13 +23,9 @@ import { execFileSync } from 'child_process'
 // Import functions from TypeScript utils (ESM - easier to mock)
 import {
   isInsideDocker,
-  getWorkspaceHostPath
+  getWorkspaceHostPath,
+  resolveWorkspacePath
 } from '../../src/utils/docker-detection'
-
-// This function will be implemented in future ticket
-const resolveWorkspacePath = (): string => {
-  throw new Error('resolveWorkspacePath is not a function')
-}
 
 describe('Workspace Path Detection', () => {
   // Store original environment

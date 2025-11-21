@@ -1,9 +1,9 @@
 # Ticket: DINDFX-2003: Implement resolveWorkspacePath() with priority logic
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (5/5 resolveWorkspacePath tests + 10 previous tests = 15/15 total)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,17 +26,17 @@ After implementing Docker detection (DINDFX-2001) and host path discovery (DINDF
 The resolution function provides a robust priority system that respects user overrides while providing intelligent defaults for both Docker-in-Docker and host environments. It leverages the existing `diagnosticLog()` function (lines 95-102 of bin/cli.cjs) for logging, ensuring consistent diagnostic behavior across the codebase.
 
 ## Acceptance Criteria
-- [ ] `resolveWorkspacePath()` function added to `packages/maproom-mcp/bin/cli.cjs` with proper JSDoc
-- [ ] All 5 unit tests for `resolveWorkspacePath()` pass
-- [ ] Returns user-provided WORKSPACE_HOST_PATH if set (Priority 1)
-- [ ] Calls `isInsideDocker()` when no user override exists
-- [ ] Calls `getWorkspaceHostPath()` when inside Docker
-- [ ] Returns discovered host path when available
-- [ ] Warns and falls back to '/workspace' if inside Docker but discovery fails
-- [ ] Returns `process.cwd()` when running on host (not in Docker)
-- [ ] Uses existing `diagnosticLog()` for all logging (not a new function)
-- [ ] Diagnostic logs only appear when DIAGNOSTIC_MODE enabled or provider not set
-- [ ] Verification: `pnpm test resolveWorkspacePath` shows 5/5 passing
+- [x] `resolveWorkspacePath()` function added to `packages/maproom-mcp/bin/cli.cjs` with proper JSDoc
+- [x] All 5 unit tests for `resolveWorkspacePath()` pass
+- [x] Returns user-provided WORKSPACE_HOST_PATH if set (Priority 1)
+- [x] Calls `isInsideDocker()` when no user override exists
+- [x] Calls `getWorkspaceHostPath()` when inside Docker
+- [x] Returns discovered host path when available
+- [x] Warns and falls back to '/workspace' if inside Docker but discovery fails
+- [x] Returns `process.cwd()` when running on host (not in Docker)
+- [x] Uses existing `diagnosticLog()` for all logging (not a new function)
+- [x] Diagnostic logs only appear when DIAGNOSTIC_MODE enabled or provider not set
+- [x] Verification: `pnpm test resolveWorkspacePath` shows 5/5 passing
 
 ## Technical Requirements
 
