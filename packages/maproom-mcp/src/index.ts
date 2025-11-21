@@ -709,14 +709,31 @@ async function executeHybridSearch(
   filters: any,
   debug: boolean
 ): Promise<{ rows: any[], debugInfo: any }> {
-  // For now, fall back to FTS until vector embedding service is integrated
-  // This maintains backward compatibility while the hybrid search backend is being completed
+  // UNISRCH-2003 Decision: Defer RRF fusion to MAPDAEMON project
+  //
+  // Rationale:
+  // - RRF fusion requires running both FTS and vector search (2x overhead)
+  // - Each search spawns a process (subprocess overhead)
+  // - MAPDAEMON will optimize this with persistent connection pools
+  // - For MVP, FTS fallback provides acceptable experience
+  //
+  // Implementation plan:
+  // - MAPDAEMON will add persistent Rust daemon with connection pooling
+  // - Daemon can run both searches efficiently and merge in-process
+  // - Will reduce latency from ~200ms to ~20ms for hybrid search
+  //
+  // See: .agents/projects/mapdaemon_maproom-daemon-architecture/
 
   const result = await executeFtsSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
 
   if (debug && result.debugInfo) {
-    result.debugInfo.mode = 'hybrid (fts-only fallback)'
-    result.debugInfo.note = 'Hybrid search falls back to FTS until vector embeddings are available. Full hybrid implementation with RRF fusion is in progress.'
+    result.debugInfo.mode = 'hybrid (fts-fallback)'
+    result.debugInfo.note = [
+      'Hybrid search currently falls back to FTS mode for performance.',
+      'True hybrid (RRF fusion) deferred to MAPDAEMON project.',
+      'Reason: Process overhead from dual subprocess spawning.',
+      'See MAPDAEMON for persistent daemon implementation.',
+    ].join(' ')
   }
 
   return result
