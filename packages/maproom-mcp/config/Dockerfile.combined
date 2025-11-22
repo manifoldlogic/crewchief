@@ -60,7 +60,8 @@ COPY packages/daemon-client/dist ./packages/daemon-client/dist/
 COPY packages/daemon-client/tsconfig.json ./packages/daemon-client/
 
 # Install dependencies with workspace resolution
-RUN pnpm install --frozen-lockfile --filter @crewchief/maproom-mcp...
+# Use --ignore-scripts to skip prepare/husky hooks in Docker builds
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter @crewchief/maproom-mcp...
 
 # Copy TypeScript config and source code
 COPY packages/maproom-mcp/tsconfig.json ./packages/maproom-mcp/
@@ -84,26 +85,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
-RUN mkdir -p /app/dist /app/logs && \
-    chown -R node:node /app
+RUN mkdir -p /build/packages/maproom-mcp/logs && \
+    chown -R node:node /build
 
 # Copy Rust binary from rust-builder stage
 COPY --from=rust-builder --chown=node:node /build/target/release/crewchief-maproom /usr/local/bin/crewchief-maproom
 
-# Set working directory for Node.js app
-WORKDIR /app
+# Set working directory to match build structure (for symlink compatibility)
+# pnpm creates symlinks like: packages/maproom-mcp/node_modules/pg -> ../../../node_modules/.pnpm/...
+# We must preserve the same relative path structure
+WORKDIR /build
 
-# Copy package.json for production dependency installation
-COPY --chown=node:node packages/maproom-mcp/package.json ./
+# Copy workspace node_modules (contains .pnpm store)
+COPY --from=node-builder --chown=node:node /build/node_modules ./node_modules
 
-# Install production dependencies only (no devDependencies)
-RUN npm install --production --no-audit --no-fund --no-optional
+# Copy maproom-mcp package with its node_modules symlinks
+COPY --chown=node:node packages/maproom-mcp/package.json ./packages/maproom-mcp/
+COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/node_modules ./packages/maproom-mcp/node_modules
+COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/dist ./packages/maproom-mcp/dist
+COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/src/tools ./packages/maproom-mcp/src/tools
 
-# Copy compiled JavaScript from node-builder stage
-COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/dist ./dist
-
-# Copy tools directory (if needed by index.js)
-COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/src/tools ./src/tools
+# Set working directory to the package
+WORKDIR /build/packages/maproom-mcp
 
 # Switch to non-root user for security
 USER node
@@ -114,6 +117,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD pg_isready -h maproom-postgres -U maproom || exit 1
 
 # Set the entrypoint to Node.js running the MCP server
-ENTRYPOINT ["node", "/app/dist/index.js"]
+ENTRYPOINT ["node", "/build/packages/maproom-mcp/dist/index.js"]
 
 # No CMD needed - MCP server runs in stdio mode by default

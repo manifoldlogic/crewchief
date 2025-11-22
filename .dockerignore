@@ -58,7 +58,7 @@ Dockerfile*
 # Package manager cache
 .npm/
 .cargo/
-pnpm-lock.yaml
+# pnpm-lock.yaml  # Required by Dockerfile for reproducible builds
 package-lock.json
 yarn.lock
 
