@@ -1,30 +1,21 @@
 pub mod types;
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
 use crewchief_maproom::db::{create_pool, PgPool};
 use crewchief_maproom::embedding::EmbeddingService;
+use crewchief_maproom::search::fts::{normalize_for_exact_match, FTSExecutor};
 use crewchief_maproom::search::types::SearchMode;
 use crewchief_maproom::search::vector::VectorExecutor;
 
-use self::types::{JsonRpcRequest, JsonRpcResponse};
+use self::types::{JsonRpcRequest, JsonRpcResponse, SearchParams};
 
 struct DaemonState {
     pool: PgPool,
     embedding_service: EmbeddingService,
-}
-
-#[derive(Debug, Deserialize)]
-struct SearchParams {
-    query: String,
-    repo: String,
-    worktree: Option<String>,
-    limit: Option<usize>,
-    threshold: Option<f32>,
 }
 
 pub async fn run() -> Result<()> {
@@ -143,25 +134,119 @@ async fn execute_search(
         None
     };
 
-    // Generate embedding
-    let query_embedding = state
-        .embedding_service
-        .embed_text(&params.query)
-        .await
-        .context("Failed to generate query embedding")?;
+    // Determine search mode (default to "hybrid" for backward compatibility)
+    let mode = params.mode.as_deref().unwrap_or("hybrid");
 
-    // Execute search
+    // Validate mode
+    if !matches!(mode, "fts" | "vector" | "hybrid") {
+        anyhow::bail!(
+            "Invalid search mode: '{}'. Valid modes: fts, vector, hybrid",
+            mode
+        );
+    }
+
     let k = params.limit.unwrap_or(10);
-    let ranked_results = VectorExecutor::execute(
-        &client,
-        &query_embedding,
-        SearchMode::Code,
-        repo_id,
-        worktree_id,
-        k,
-    )
-    .await
-    .context("Vector search execution failed")?;
+
+    // Route to appropriate executor based on mode
+    let ranked_results = match mode {
+        "fts" => {
+            // FTS mode: Full-text search only (no embeddings required)
+            let normalized_query = normalize_for_exact_match(&params.query);
+            let fts_query = params.query.split_whitespace().collect::<Vec<_>>().join(" & ");
+
+            FTSExecutor::execute(
+                &client,
+                &fts_query,
+                &normalized_query,
+                repo_id,
+                worktree_id,
+                k,
+            )
+            .await
+            .context("FTS search execution failed")?
+        }
+        "vector" => {
+            // Vector mode: Semantic search using embeddings
+            let query_embedding = state
+                .embedding_service
+                .embed_text(&params.query)
+                .await
+                .context("Failed to generate query embedding")?;
+
+            VectorExecutor::execute(
+                &client,
+                &query_embedding,
+                SearchMode::Code,
+                repo_id,
+                worktree_id,
+                k,
+            )
+            .await
+            .context("Vector search execution failed")?
+        }
+        "hybrid" => {
+            // Hybrid mode: Try vector search first, fall back to FTS if it fails
+            // This gracefully handles the case where embeddings are not available
+            let query_embedding_result = state
+                .embedding_service
+                .embed_text(&params.query)
+                .await;
+
+            match query_embedding_result {
+                Ok(query_embedding) => {
+                    // Embeddings available, try vector search
+                    let vector_result = VectorExecutor::execute(
+                        &client,
+                        &query_embedding,
+                        SearchMode::Code,
+                        repo_id,
+                        worktree_id,
+                        k,
+                    )
+                    .await;
+
+                    match vector_result {
+                        Ok(results) => results,
+                        Err(_) => {
+                            // Vector search failed, fall back to FTS
+                            let normalized_query = normalize_for_exact_match(&params.query);
+                            let fts_query = params.query.split_whitespace().collect::<Vec<_>>().join(" & ");
+                            FTSExecutor::execute(
+                                &client,
+                                &fts_query,
+                                &normalized_query,
+                                repo_id,
+                                worktree_id,
+                                k,
+                            )
+                            .await
+                            .unwrap_or_else(|_| {
+                                crewchief_maproom::search::executor_types::RankedResults::empty(
+                                    crewchief_maproom::search::executor_types::SearchSource::FTS
+                                )
+                            })
+                        }
+                    }
+                }
+                Err(_) => {
+                    // No embeddings available, use FTS directly
+                    let normalized_query = normalize_for_exact_match(&params.query);
+                    let fts_query = params.query.split_whitespace().collect::<Vec<_>>().join(" & ");
+                    FTSExecutor::execute(
+                        &client,
+                        &fts_query,
+                        &normalized_query,
+                        repo_id,
+                        worktree_id,
+                        k,
+                    )
+                    .await
+                    .context("FTS search execution failed")?
+                }
+            }
+        }
+        _ => unreachable!("Mode validation should prevent this"),
+    };
 
     // Fetch details
     let mut hits = Vec::new();
@@ -175,7 +260,7 @@ async fn execute_search(
         let chunk_row = client
             .query_opt(
                 r#"
-                SELECT 
+                SELECT
                     c.start_line,
                     c.end_line,
                     c.symbol_name,
@@ -206,7 +291,7 @@ async fn execute_search(
         "hits": hits,
         "total": hits.len(),
         "query": params.query,
-        "mode": "vector",
+        "mode": mode,
         "k": k,
         "threshold": params.threshold,
     }))

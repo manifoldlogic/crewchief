@@ -8,6 +8,16 @@ pub struct JsonRpcRequest {
     pub id: Option<serde_json::Value>, // ID can be number, string, or null
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SearchParams {
+    pub query: String,
+    pub repo: String,
+    pub worktree: Option<String>,
+    pub limit: Option<usize>,
+    pub threshold: Option<f32>,
+    pub mode: Option<String>, // "fts", "vector", or "hybrid"
+}
+
 #[derive(Debug, Serialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: String,
