@@ -39,6 +39,8 @@ FROM node:20-alpine AS node-builder
 
 # Install pnpm matching packageManager version
 RUN npm install -g pnpm@10.12.1
+# NOTE: pnpm enables workspace dependency resolution for @crewchief/daemon-client
+# It's installed in builder stage only and discarded in final runtime image
 
 # Install Node.js build dependencies
 RUN apk add --no-cache \
@@ -48,7 +50,7 @@ RUN apk add --no-cache \
 
 WORKDIR /build
 
-# Copy workspace configuration
+# Copy workspace configuration for pnpm monorepo support
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Copy package manifests (for dependency caching)
@@ -56,6 +58,8 @@ COPY packages/maproom-mcp/package.json ./packages/maproom-mcp/
 COPY packages/daemon-client/package.json ./packages/daemon-client/
 
 # Copy daemon-client build artifacts (pre-built via pnpm build)
+# NOTE: daemon-client must be built BEFORE docker build
+# Run 'pnpm build' at repo root to create dist/ directory
 COPY packages/daemon-client/dist ./packages/daemon-client/dist/
 COPY packages/daemon-client/tsconfig.json ./packages/daemon-client/
 
