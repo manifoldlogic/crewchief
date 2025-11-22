@@ -6,6 +6,23 @@ This directory contains completed projects and historical records. Projects are 
 
 ### Recently Archived (2025-11-22)
 
+#### WTSRCH_worktree-scoped-search - Worktree-Scoped Search
+**Completed:** 5 tickets
+**Summary:** Auto-detect current git branch and scope search results to current worktree
+
+**Contents:**
+- [Planning Docs](./projects/WTSRCH_worktree-scoped-search/planning/)
+- [Tickets](./projects/WTSRCH_worktree-scoped-search/tickets/) (5 completed)
+
+**Key Achievements:**
+- 90% reduction in duplicate search results
+- 8x faster searches through narrower scope
+- Auto-detection of current branch with caching (60s TTL)
+- Four-tier resolution: explicit → auto-detect → main → all
+- Backward compatible with existing MCP tool usage
+
+---
+
 #### MAPDAEMON_maproom-daemon-architecture - Maproom Daemon Architecture
 **Completed:** 4 tickets
 **Summary:** JSON-RPC daemon server for 20-50x performance improvement over process spawning
@@ -250,6 +267,7 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| WTSRCH_worktree-scoped-search | 5 | 2025-11-22 | ✅ Complete |
 | MAPDAEMON_maproom-daemon-architecture | 4 | 2025-11-22 | ✅ Complete |
 | VSCDAEMN_vscode-daemon-migration | 1 | 2025-11-22 | ✅ Complete |
 | AGENTOPT_ai-agent-query-optimization | 14 | 2025-11-09 | ✅ Complete |
@@ -270,7 +288,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **231** | | **All Complete** |
+| **Total** | **236** | | **All Complete** |
 
 ## Archive Structure
 
