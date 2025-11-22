@@ -47,12 +47,7 @@ import pino from 'pino'
 import type { SearchParams, SearchResult, SearchBundle } from '../types.js'
 import { validateSearchParams } from './search_schema.js'
 import { ValidationError } from '../utils/validation.js'
-import {
-  getBinarycandidates,
-  trySpawnWithCandidates,
-  ProcessError,
-  type ProcessResult,
-} from '../utils/process.js'
+import { ProcessError } from '../utils/process.js'
 import { getDaemonClient } from '../daemon.js'
 import {
   DaemonError,

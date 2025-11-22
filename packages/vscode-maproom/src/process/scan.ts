@@ -63,6 +63,11 @@ export class ScanError extends Error {
  * file counts and percentage. The notification is dismissible but the
  * scan continues in the background.
  *
+ * NOTE: Spawning is the appropriate pattern here. Scan is a one-time operation
+ * at workspace activation. Spawn overhead (~100-200ms) is negligible compared to
+ * scan time (seconds to minutes for large repositories). daemon-client is for
+ * repeated operations (like search), not one-time operations.
+ *
  * Progress notification structure:
  * - Location: Notification (visible popup)
  * - Title: "Indexing workspace"

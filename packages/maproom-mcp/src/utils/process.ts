@@ -293,12 +293,11 @@ export async function spawnProcess(
 /**
  * Try spawning a process with multiple candidate binaries
  *
- * @deprecated MCP server has migrated to DaemonClient for 20-50x performance improvement.
- * This function is retained ONLY for VSCode extension compatibility.
- * DO NOT REMOVE until VSCode extension is migrated (DAEMIGR Phase 2).
+ * Used by upsert tool for one-time file indexing operations. Spawning is the appropriate
+ * pattern for one-time operations where spawn overhead (~100-200ms) is negligible.
  *
- * For new code, use DaemonClient instead:
- * @see packages/maproom-mcp/src/daemon.ts - Singleton daemon pattern
+ * For repeated operations (like search), use DaemonClient instead:
+ * @see packages/maproom-mcp/src/daemon.ts - Singleton daemon pattern for repeated operations
  * @see packages/daemon-client/README.md - Migration guide and API documentation
  *
  * @param candidateBinaries - Array of {cmd, description} to try

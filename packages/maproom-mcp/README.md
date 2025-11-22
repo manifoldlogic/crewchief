@@ -349,6 +349,42 @@ Leave running in a terminal. Press Ctrl+C to stop.
 
 ---
 
+## When to Use Spawning vs Daemon
+
+Maproom uses two execution patterns depending on the operation type:
+
+### Use Spawning When:
+- **One-time operations** (scan, upsert single files)
+- **Startup/initialization tasks**
+- **Operations where spawn overhead (<200ms) is negligible**
+- Example: Initial workspace scan at startup
+
+**Why**: Spawning overhead (~100-200ms) is negligible compared to operation time (seconds to minutes for scan).
+
+### Use Daemon When:
+- **Repeated operations** (search queries)
+- **Low-latency requirements** (<50ms response time)
+- **Connection pooling beneficial** (reuse database connections)
+- Example: MCP server search operations (20-50x faster)
+
+**Why**: Daemon eliminates spawn overhead for every request, achieving <50ms latency for search.
+
+### Current Implementation:
+- **MCP search tool**: Uses daemon (correct - repeated operations)
+- **MCP upsert tool**: Uses spawning (correct - one-time file indexing)
+- **VSCode scan**: Uses spawning (correct - one-time workspace indexing)
+- **VSCode search** (future): Will use MCP daemon via extension API
+
+**Performance comparison**:
+- Spawning: ~100-200ms overhead per operation
+- Daemon: <1ms overhead per operation (after initial startup)
+
+**When NOT to migrate**:
+- If operation takes >10 seconds (scan, large upserts), spawn overhead is <2% of total time
+- If operation runs once at startup (workspace scan), daemon provides no benefit
+
+---
+
 ## Progress Indicators
 
 The `scan` command now shows real-time progress during indexing, making it easy to track what's happening without slowing down performance.
