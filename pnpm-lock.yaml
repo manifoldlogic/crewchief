@@ -122,6 +122,9 @@ importers:
 
   packages/maproom-mcp:
     dependencies:
+      '@maproom/daemon-client':
+        specifier: workspace:*
+        version: link:../daemon-client
       chokidar:
         specifier: ^3.5.3
         version: 3.6.0

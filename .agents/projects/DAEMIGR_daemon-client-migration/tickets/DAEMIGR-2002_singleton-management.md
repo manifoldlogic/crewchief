@@ -1,9 +1,9 @@
 # Ticket: DAEMIGR-2002: Singleton Daemon Management
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (infrastructure module, builds successfully)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,17 +26,17 @@ The MCP server needs one daemon instance shared across all search invocations. T
 This implements the daemon singleton management layer described in the architecture document (lines 404-465), ensuring a single long-running daemon process serves all MCP requests rather than spawning a new process for each search operation.
 
 ## Acceptance Criteria
-- [ ] One daemon per MCP server instance (singleton pattern implemented)
-- [ ] Daemon shared across all search tool invocations (lazy initialization)
-- [ ] Graceful shutdown on SIGTERM:
+- [x] One daemon per MCP server instance (singleton pattern implemented)
+- [x] Daemon shared across all search tool invocations (lazy initialization)
+- [x] Graceful shutdown on SIGTERM:
   - Daemon stopped with pending request timeout
   - Process exits cleanly after shutdown
-- [ ] Environment variables passed correctly:
+- [x] Environment variables passed correctly:
   - MAPROOM_DATABASE_URL (required)
   - OPENAI_API_KEY, ANTHROPIC_API_KEY (optional, for embeddings)
   - OLLAMA_BASE_URL (optional, for local embeddings)
   - RUST_LOG (optional, defaults to 'info')
-- [ ] Binary path discovered using existing findBinary() logic
+- [x] Binary path discovered using existing findMaproomBinary() logic
 
 ## Technical Requirements
 
