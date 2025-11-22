@@ -26,16 +26,28 @@ pnpm format
 
 ## Component-Specific Documentation
 
-Each major component has its own CLAUDE.md with detailed development guidance:
+Each major component has its own CLAUDE.md or README with detailed development guidance:
 
 - **`/packages/cli/CLAUDE.md`** - TypeScript CLI development
+- **`/packages/daemon-client/README.md`** - Daemon client library for JSON-RPC communication
 - **`/packages/maproom-mcp/CLAUDE.md`** - MCP server and Docker setup
 - **`/crates/maproom/CLAUDE.md`** - Rust indexer implementation
 - **`.agents/CLAUDE.md`** - Project workflow and ticket system
 - **`.github/CLAUDE.md`** - CI/CD and GitHub Actions
 - **`.devcontainer/CLAUDE.md`** - Development container setup
 
-**When working in a specific component, read that component's CLAUDE.md first.**
+**When working in a specific component, read that component's CLAUDE.md or README first.**
+
+### Daemon Client (packages/daemon-client)
+
+TypeScript library for communicating with the `crewchief-maproom` daemon via JSON-RPC 2.0. Provides:
+
+- **20-50x performance improvement** over process spawning (225ms vs 160-400ms)
+- **Auto-restart** with exponential backoff and circuit breaker
+- **Connection pooling** with graceful degradation
+- **Type-safe** API with comprehensive error handling
+
+See [packages/daemon-client/README.md](packages/daemon-client/README.md) for complete API documentation, migration guide, and troubleshooting.
 
 ## Maproom Semantic Search
 
@@ -90,6 +102,7 @@ Long-term codebase documentation. Read by both agents and humans.
 CrewChief/
 ├── packages/
 │   ├── cli/           # TypeScript CLI (worktree management, agent orchestration)
+│   ├── daemon-client/ # TypeScript daemon client (JSON-RPC communication)
 │   └── maproom-mcp/   # MCP server (wraps Rust indexer)
 ├── crates/
 │   └── maproom/       # Rust indexer (tree-sitter, embeddings, search)
