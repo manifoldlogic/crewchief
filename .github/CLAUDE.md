@@ -53,6 +53,54 @@ gh run rerun <run-id>
 - **Cause**: packageManager field missing or malformed
 - **Fix**: Verify `jq -r '.packageManager' package.json` returns valid value
 - **Format**: Must be `pnpm@<version>+sha512...`
+- **Verify**: `grep -A 3 "pnpm/action-setup" .github/workflows/test.yml` should not show `with: version:`
+
+---
+
+### Docker Build
+
+**Prerequisites:**
+- **CRITICAL**: Run `pnpm build` before `docker build`
+- daemon-client must be compiled to dist/ directory
+- Failure results in "COPY failed: file not found" error
+
+**Common Issues:**
+
+#### "Unsupported URL Type workspace:"
+- **Cause**: npm used instead of pnpm (doesn't understand workspace: protocol)
+- **Fix**: Verify Dockerfile has `RUN npm install -g pnpm@10.12.1`
+- **Verify**: `grep "npm install -g pnpm" packages/maproom-mcp/config/Dockerfile.combined`
+
+#### "daemon-client dist not found" in Docker
+- **Cause**: daemon-client dist/ not built or not copied to Docker context
+- **Fix**: Run `pnpm build` at repository root before `docker build`
+- **Verify**: `ls -la packages/daemon-client/dist/` shows index.js, client.js
+
+#### "pnpm version mismatch" warning
+- **Cause**: Dockerfile pnpm version doesn't match package.json
+- **Fix**: Update Dockerfile line 41: `RUN npm install -g pnpm@<version>`
+- **Check versions**:
+  ```bash
+  PACKAGE_PNPM=$(jq -r '.packageManager | split("@")[1] | split("+")[0]' package.json)
+  DOCKERFILE_PNPM=$(grep "npm install -g pnpm@" packages/maproom-mcp/config/Dockerfile.combined | grep -oP 'pnpm@\K[0-9.]+')
+  echo "package.json: $PACKAGE_PNPM"
+  echo "Dockerfile: $DOCKERFILE_PNPM"
+  ```
+
+---
+
+### Best Practices
+
+**Updating pnpm Version:**
+1. Update `package.json` packageManager field
+2. Update `packages/maproom-mcp/config/Dockerfile.combined` (line 41)
+3. Verify versions match with validation script above
+4. Test locally before pushing to CI
+
+**Before Pushing:**
+- Run `yamllint .github/workflows/*.yml` to validate workflow syntax
+- Run `pnpm build` to ensure workspace packages build
+- Run local Docker build to verify Dockerfile changes
 
 ## Secrets Used
 

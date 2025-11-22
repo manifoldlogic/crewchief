@@ -1,9 +1,9 @@
 # Ticket: CIFIX-3001: Update project documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - documentation-specialist
@@ -24,12 +24,12 @@ Phases 1 and 2 fixed critical CI failures related to pnpm version management (CI
 This ticket consolidates implementation knowledge into a single authoritative troubleshooting guide in `.github/CLAUDE.md`.
 
 ## Acceptance Criteria
-- [ ] `.github/CLAUDE.md` has "Troubleshooting Workflows" section added
-- [ ] Test workflow pnpm management documented with examples
-- [ ] Docker build prerequisites clearly explained
-- [ ] Common failure scenarios listed with fixes (minimum 4 scenarios)
-- [ ] Prevention strategies and best practices documented
-- [ ] Markdown syntax is valid (verified with markdownlint or manual review)
+- [x] `.github/CLAUDE.md` has "Troubleshooting Workflows" section added
+- [x] Test workflow pnpm management documented with examples
+- [x] Docker build prerequisites clearly explained
+- [x] Common failure scenarios listed with fixes (5 scenarios total)
+- [x] Prevention strategies and best practices documented
+- [x] Markdown syntax is valid (verified with markdownlint or manual review)
 
 ## Technical Requirements
 
