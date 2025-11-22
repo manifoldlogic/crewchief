@@ -1,9 +1,9 @@
-# Ticket: CIFIX-2001: Update release workflow with pnpm build step
+# Ticket: CIFIX-2005: Update release workflow with pnpm build step
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (workflow validation only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (workflow validation only)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - github-actions-specialist
@@ -28,13 +28,13 @@ This is a CRITICAL BLOCKER - Docker builds will fail 100% of the time without th
 This ticket implements the workflow preparation step from the Phase 2 plan, ensuring the build environment is properly configured before Docker builds execute.
 
 ## Acceptance Criteria
-- [ ] Node.js setup step added to workflow (node-version: '20')
-- [ ] pnpm setup step added (uses pnpm/action-setup@v4 with auto-detection)
-- [ ] `pnpm install --frozen-lockfile` step added
-- [ ] `pnpm build` step added BEFORE Docker build step
-- [ ] All steps inserted after "Checkout code" and before "Build and push Docker image"
-- [ ] Workflow YAML validates (yamllint passes)
-- [ ] daemon-client dist/ will exist when Docker build starts
+- [x] Node.js setup step added to workflow (node-version: '20')
+- [x] pnpm setup step added (uses pnpm/action-setup@v4 with auto-detection)
+- [x] `pnpm install --frozen-lockfile` step added
+- [x] `pnpm build` step added BEFORE Docker build step
+- [x] All steps inserted after "Checkout code" and before "Build and push Docker image"
+- [x] Workflow YAML validates (yamllint passes)
+- [x] daemon-client dist/ will exist when Docker build starts
 
 ## Technical Requirements
 - **File**: `.github/workflows/publish-maproom-mcp-image.yml`

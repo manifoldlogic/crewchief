@@ -37,13 +37,31 @@ jobs:
         with:
           fetch-depth: 0  # Full history for git metadata
 
-      # 2. Set up QEMU for multi-platform emulation
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Setup pnpm (auto-detects from packageManager field)
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      # 4. Install dependencies
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 5. Build all workspace packages (creates daemon-client dist/)
+      - name: Build packages
+        run: pnpm build
+
+      # 6. Set up QEMU for multi-platform emulation
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
           platforms: linux/amd64,linux/arm64
 
-      # 3. Set up Docker Buildx (multi-platform builder)
+      # 7. Set up Docker Buildx (multi-platform builder)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -51,14 +69,14 @@ jobs:
             image=moby/buildkit:latest
             network=host
 
-      # 4. Login to Docker Hub
+      # 8. Login to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 5. Extract version from git tag or workflow_dispatch input
+      # 9. Extract version from git tag or workflow_dispatch input
       - name: Extract version
         id: version
         run: |
@@ -79,7 +97,7 @@ jobs:
           echo "  Minor: $(echo ${VERSION} | cut -d. -f1-2)"
           echo "  Major: $(echo ${VERSION} | cut -d. -f1)"
 
-      # 6. Generate Docker metadata (tags and labels)
+      # 10. Generate Docker metadata (tags and labels)
       - name: Generate Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -96,7 +114,7 @@ jobs:
             org.opencontainers.image.vendor=CrewChief
             org.opencontainers.image.version=${{ steps.version.outputs.full }}
 
-      # 7. Build and push Docker image
+      # 11. Build and push Docker image
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -113,7 +131,7 @@ jobs:
             COMMIT_SHA=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
 
-      # 8. Run Trivy security scan
+      # 12. Run Trivy security scan
       - name: Run Trivy security scan
         uses: aquasecurity/trivy-action@master
         with:
