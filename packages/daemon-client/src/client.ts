@@ -219,44 +219,50 @@ export class DaemonClient {
     const requestLine = RpcProtocol.serializeRequest(request)
 
     // Create promise for response
+    let promiseResolve: (value: T) => void
+    let promiseReject: (error: Error) => void
+
     const promise = new Promise<T>((resolve, reject) => {
-      const timeout = this.config.timeout ?? 30000
-      const timestamp = Date.now()
-
-      // Set up timeout
-      const timer = setTimeout(() => {
-        this.pendingRequests.delete(id)
-        reject(
-          new DaemonTimeoutError(
-            `Request ${id} (${method}) timed out after ${timeout}ms`
-          )
-        )
-      }, timeout)
-
-      // Store pending request
-      this.pendingRequests.set(id, {
-        promise,
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        timestamp,
-        timer,
-      })
-
-      // Send request to daemon
-      try {
-        this.daemonProcess!.stdin.write(requestLine)
-      } catch (error) {
-        this.pendingRequests.delete(id)
-        clearTimeout(timer)
-        reject(
-          new DaemonError(
-            `Failed to send request to daemon: ${error instanceof Error ? error.message : String(error)}`,
-            'WRITE_FAILED',
-            error instanceof Error ? error : undefined
-          )
-        )
-      }
+      promiseResolve = resolve
+      promiseReject = reject
     })
+
+    const timeout = this.config.timeout ?? 30000
+    const timestamp = Date.now()
+
+    // Set up timeout
+    const timer = setTimeout(() => {
+      this.pendingRequests.delete(id)
+      promiseReject(
+        new DaemonTimeoutError(
+          `Request ${id} (${method}) timed out after ${timeout}ms`
+        )
+      )
+    }, timeout)
+
+    // Store pending request
+    this.pendingRequests.set(id, {
+      promise,
+      resolve: promiseResolve! as (value: unknown) => void,
+      reject: promiseReject!,
+      timestamp,
+      timer,
+    })
+
+    // Send request to daemon
+    try {
+      this.daemonProcess!.stdin.write(requestLine)
+    } catch (error) {
+      this.pendingRequests.delete(id)
+      clearTimeout(timer)
+      promiseReject!(
+        new DaemonError(
+          `Failed to send request to daemon: ${error instanceof Error ? error.message : String(error)}`,
+          'WRITE_FAILED',
+          error instanceof Error ? error : undefined
+        )
+      )
+    }
 
     return promise
   }
