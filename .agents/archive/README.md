@@ -6,6 +6,25 @@ This directory contains completed projects and historical records. Projects are 
 
 ### Recently Archived (2025-11-22)
 
+#### FILETYPE_file-type-filtering - File Type Filtering
+**Completed:** 11 tickets
+**Summary:** Multi-extension file type filtering for semantic code search with comprehensive test coverage
+
+**Contents:**
+- [Planning Docs](./projects/FILETYPE_file-type-filtering/planning/)
+- [Tickets](./projects/FILETYPE_file-type-filtering/tickets/) (11 completed)
+
+**Key Achievements:**
+- Single and multi-extension filtering (e.g., "ts", "ts,tsx,js")
+- Case-insensitive extension matching with normalization
+- SQL generation with OR clauses for multiple extensions
+- Input validation with helpful error messages
+- 30 comprehensive tests (15 unit + 10 integration + 5 E2E)
+- <20% performance overhead vs baseline
+- Complete JSDoc documentation and usage examples
+
+---
+
 #### TESTISO_test-database-isolation - Test Database Isolation
 **Completed:** 7 tickets
 **Summary:** Isolated test database infrastructure for true test isolation without dev data contamination
@@ -286,6 +305,7 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| FILETYPE_file-type-filtering | 11 | 2025-11-22 | ✅ Complete |
 | TESTISO_test-database-isolation | 7 | 2025-11-22 | ✅ Complete |
 | WTSRCH_worktree-scoped-search | 5 | 2025-11-22 | ✅ Complete |
 | MAPDAEMON_maproom-daemon-architecture | 4 | 2025-11-22 | ✅ Complete |
@@ -308,7 +328,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **243** | | **All Complete** |
+| **Total** | **254** | | **All Complete** |
 
 ## Archive Structure
 
