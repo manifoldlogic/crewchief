@@ -48,18 +48,27 @@ RUN apk add --no-cache \
 
 WORKDIR /build
 
-# Copy package files for dependency caching
-COPY packages/maproom-mcp/package.json ./
+# Copy workspace configuration
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install all dependencies (including devDependencies for TypeScript)
-RUN npm install --production=false --no-audit --no-fund
+# Copy package manifests (for dependency caching)
+COPY packages/maproom-mcp/package.json ./packages/maproom-mcp/
+COPY packages/daemon-client/package.json ./packages/daemon-client/
+
+# Copy daemon-client build artifacts (pre-built via pnpm build)
+COPY packages/daemon-client/dist ./packages/daemon-client/dist/
+COPY packages/daemon-client/tsconfig.json ./packages/daemon-client/
+
+# Install dependencies with workspace resolution
+RUN pnpm install --frozen-lockfile --filter @crewchief/maproom-mcp...
 
 # Copy TypeScript config and source code
-COPY packages/maproom-mcp/tsconfig.json ./
-COPY packages/maproom-mcp/src/ ./src/
+COPY packages/maproom-mcp/tsconfig.json ./packages/maproom-mcp/
+COPY packages/maproom-mcp/src/ ./packages/maproom-mcp/src/
 
-# Compile TypeScript to JavaScript
-RUN npx tsc
+# Change to package directory and build
+WORKDIR /build/packages/maproom-mcp
+RUN pnpm build
 
 # ========================================
 # Stage 3: Runtime Image (Combined)
@@ -91,10 +100,10 @@ COPY --chown=node:node packages/maproom-mcp/package.json ./
 RUN npm install --production --no-audit --no-fund --no-optional
 
 # Copy compiled JavaScript from node-builder stage
-COPY --from=node-builder --chown=node:node /build/dist ./dist
+COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/dist ./dist
 
 # Copy tools directory (if needed by index.js)
-COPY --from=node-builder --chown=node:node /build/src/tools ./src/tools
+COPY --from=node-builder --chown=node:node /build/packages/maproom-mcp/src/tools ./src/tools
 
 # Switch to non-root user for security
 USER node

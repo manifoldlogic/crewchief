@@ -1,9 +1,9 @@
 # Ticket: CIFIX-2002: Update Dockerfile for workspace dependencies
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (Dockerfile configuration only, no test execution required)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,14 +30,14 @@ This ticket implements the complete workspace-aware build strategy, including co
 Reference: `.agents/projects/CIFIX_ci-workflow-fixes/planning/architecture.md` Section "Precise Dockerfile Implementation" (lines 131-220)
 
 ## Acceptance Criteria
-- [ ] Workspace root configs copied (package.json, pnpm-lock.yaml, pnpm-workspace.yaml)
-- [ ] Both package manifests copied (maproom-mcp + daemon-client)
-- [ ] daemon-client dist/ directory copied to correct location
-- [ ] daemon-client tsconfig.json copied
-- [ ] `npm install` replaced with `pnpm install --frozen-lockfile --filter @crewchief/maproom-mcp...`
-- [ ] WORKDIR changed to `packages/maproom-mcp` before build
-- [ ] Build command changed from `npx tsc` to `pnpm build`
-- [ ] All validation commands pass
+- [x] Workspace root configs copied (package.json, pnpm-lock.yaml, pnpm-workspace.yaml)
+- [x] Both package manifests copied (maproom-mcp + daemon-client)
+- [x] daemon-client dist/ directory copied to correct location
+- [x] daemon-client tsconfig.json copied
+- [x] `npm install` replaced with `pnpm install --frozen-lockfile --filter @crewchief/maproom-mcp...`
+- [x] WORKDIR changed to `packages/maproom-mcp` before build
+- [x] Build command changed from `npx tsc` to `pnpm build`
+- [x] All validation commands pass
 
 ## Technical Requirements
 
