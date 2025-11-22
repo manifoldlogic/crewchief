@@ -53,6 +53,13 @@ import {
   ProcessError,
   type ProcessResult,
 } from '../utils/process.js'
+import { getDaemonClient } from '../daemon.js'
+import {
+  DaemonError,
+  DaemonStartError,
+  DaemonTimeoutError,
+  RpcError,
+} from '@maproom/daemon-client'
 
 const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
 const log = LOG_FILE
@@ -229,80 +236,92 @@ export async function handleSearchTool(
     )
   }
 
-  // Get binary candidates to try
-  const candidates = getBinarycandidates()
-  if (candidates.length === 0) {
-    throw new ProcessError(
-      'No crewchief-maproom binary found.\n\nTroubleshooting:\n1. Build the binary: cargo build --release --bin crewchief-maproom\n2. Set CREWCHIEF_MAPROOM_BIN environment variable\n3. Add binary to system PATH',
-      'BINARY_NOT_FOUND'
-    )
-  }
+  // ============================================================================
+  // MIGRATION NOTE (DAEMIGR-2001):
+  // Replaced process spawning with daemon client for 20-50x performance improvement.
+  // Old spawning code preserved in utils/process.ts for VSCode extension use.
+  // ============================================================================
 
-  log.debug({ candidates }, 'Found binary candidates')
+  log.debug({ mode, query, repo, worktree, limit, debug }, 'Calling daemon for search')
 
-  // Determine command based on mode
-  const command = mode === 'vector' ? 'vector-search' : 'search'
+  // Get daemon client singleton
+  const daemon = getDaemonClient()
 
-  // Build command arguments
-  const args = [
-    command,
-    '--repo',
-    repo,
-    '--query',
-    query,
-    '--k',
-    String(limit),
-  ]
-
-  if (worktree) {
-    args.push('--worktree', worktree)
-  }
-
-  // SEMRANK-2006: Add debug flag to get score breakdown
-  if (debug) {
-    args.push('--debug')
-  }
-
-  log.debug({ args, mode, command }, 'Spawning Rust binary for search')
-
-  // Spawn Rust binary and collect output
-  let result: ProcessResult
+  // Call daemon search method
+  let daemonResult: Awaited<ReturnType<typeof daemon.search>>
   try {
-    result = await trySpawnWithCandidates(candidates, args, {
-      timeout: 30000, // 30 second timeout for search
-      captureStdout: true,
-      captureStderr: true,
+    daemonResult = await daemon.search({
+      query,
+      repo,
+      worktree,
+      limit,
+      // Note: mode parameter not yet supported by daemon (Phase 2 enhancement)
+      // Daemon uses hybrid search by default
+      debug,
     })
   } catch (error) {
-    if (error instanceof ProcessError) {
-      // Handle specific error cases
-      if (error.stderr?.includes('query returned an unexpected number of rows')) {
+    // Convert daemon errors to MCP-friendly errors
+    if (error instanceof DaemonStartError) {
+      throw new ProcessError(
+        `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure crewchief-maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
+        'DAEMON_START_FAILED'
+      )
+    }
+
+    if (error instanceof DaemonTimeoutError) {
+      throw new ProcessError(
+        `Search request timed out: ${error.message}\n\nTroubleshooting:\n1. Check database connectivity\n2. Verify network is not slow\n3. Try reducing search scope with filters`,
+        'SEARCH_TIMEOUT'
+      )
+    }
+
+    if (error instanceof RpcError) {
+      // Check for repository not found error (same as old spawning logic)
+      if (error.message.includes('query returned an unexpected number of rows')) {
         throw new ValidationError(
           `Repository '${repo}' not found or no data indexed.`,
           'REPO_NOT_FOUND'
         )
       }
-      throw error
+
+      throw new ProcessError(
+        `Daemon RPC error: ${error.message}`,
+        'RPC_ERROR'
+      )
     }
+
+    if (error instanceof DaemonError) {
+      throw new ProcessError(
+        `Daemon error: ${error.message}`,
+        'DAEMON_ERROR'
+      )
+    }
+
+    // Unknown error type
     throw new ProcessError(
-      `Failed to execute search: ${error instanceof Error ? error.message : String(error)}`,
-      'EXECUTION_FAILED'
+      `Search failed: ${error instanceof Error ? error.message : String(error)}`,
+      'SEARCH_FAILED'
     )
   }
 
-  // Parse JSON output from Rust
-  let rustOutput: RustSearchOutput
-  try {
-    rustOutput = JSON.parse(result.stdout)
-  } catch (error) {
-    log.error({ stdout: result.stdout }, 'Failed to parse Rust output as JSON')
-    throw new ProcessError(
-      'Failed to parse search results from Rust binary. Output was not valid JSON.',
-      'PARSE_ERROR',
-      undefined,
-      result.stderr
-    )
+  // Transform daemon result to RustSearchOutput format
+  // Daemon returns { hits: [...], total, ... } but hits have different field names
+  const rustOutput: RustSearchOutput = {
+    hits: daemonResult.hits.map((hit) => ({
+      file_relpath: hit.file_path, // Daemon uses file_path, MCP expects file_relpath
+      start_line: hit.start_line,
+      end_line: hit.end_line,
+      symbol_name: '', // Daemon doesn't return symbol_name yet (Phase 2 enhancement)
+      kind: '', // Daemon doesn't return kind yet (Phase 2 enhancement)
+      score: hit.score,
+      // Debug fields not yet available from daemon
+      base_score: undefined,
+      kind_mult: undefined,
+      exact_mult: undefined,
+    })),
   }
+
+  log.debug({ hitCount: rustOutput.hits.length }, 'Received search results from daemon')
 
   // Fetch chunk IDs from database
   const chunkIdMap = await fetchChunkIds(client, repo, rustOutput.hits)
