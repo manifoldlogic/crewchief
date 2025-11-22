@@ -6,6 +6,25 @@ This directory contains completed projects and historical records. Projects are 
 
 ### Recently Archived (2025-11-22)
 
+#### TESTISO_test-database-isolation - Test Database Isolation
+**Completed:** 7 tickets
+**Summary:** Isolated test database infrastructure for true test isolation without dev data contamination
+
+**Contents:**
+- [Planning Docs](./projects/TESTISO_test-database-isolation/planning/)
+- [Tickets](./projects/TESTISO_test-database-isolation/tickets/) (7 completed)
+
+**Key Achievements:**
+- Dual-database architecture (dev: port 5433, test: port 5434)
+- Separate Docker volumes for complete data isolation
+- Environment variable priority: TEST_MAPROOM_DATABASE_URL fallback
+- Zero-config test experience: `docker compose up && pnpm test`
+- CI integration with isolated test database
+- Comprehensive documentation and validation scripts
+- Backward compatible with existing test setup
+
+---
+
 #### WTSRCH_worktree-scoped-search - Worktree-Scoped Search
 **Completed:** 5 tickets
 **Summary:** Auto-detect current git branch and scope search results to current worktree
@@ -267,6 +286,7 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| TESTISO_test-database-isolation | 7 | 2025-11-22 | ✅ Complete |
 | WTSRCH_worktree-scoped-search | 5 | 2025-11-22 | ✅ Complete |
 | MAPDAEMON_maproom-daemon-architecture | 4 | 2025-11-22 | ✅ Complete |
 | VSCDAEMN_vscode-daemon-migration | 1 | 2025-11-22 | ✅ Complete |
@@ -288,7 +308,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **236** | | **All Complete** |
+| **Total** | **243** | | **All Complete** |
 
 ## Archive Structure
 
