@@ -556,6 +556,286 @@ The daemon uses PostgreSQL connection pooling internally, sized based on databas
 
 For detailed performance testing methodology, see [DAEMIGR-3901 Performance Testing](../../.agents/projects/DAEMIGR_daemon-client-migration/tickets/DAEMIGR-3901_performance-testing.md).
 
+## Security Considerations
+
+**Overall Risk Level: LOW** - The daemon-client architecture uses local process communication over stdin/stdout, avoiding network exposure and most common attack vectors. However, users should follow security best practices for production deployments.
+
+### Environment Variables and Credentials
+
+**Risk:** Database credentials and API keys are passed to the daemon process via environment variables, which are visible to local processes via `/proc/<pid>/environ` (Linux/Unix).
+
+**Best Practices:**
+
+1. **Use Secrets Management** (Production)
+   ```typescript
+   // ❌ BAD: Hardcoded credentials
+   const client = new DaemonClient({
+     binaryPath: '/path/to/binary',
+     env: {
+       MAPROOM_DATABASE_URL: 'postgresql://maproom:password@localhost/maproom',
+       OPENAI_API_KEY: 'sk-1234567890abcdef',
+     },
+   })
+
+   // ✅ GOOD: Load from secrets manager
+   import { getSecret } from '@aws/aws-sdk' // or similar
+
+   const dbUrl = await getSecret('maproom/database-url')
+   const apiKey = await getSecret('maproom/openai-key')
+
+   const client = new DaemonClient({
+     binaryPath: '/path/to/binary',
+     env: {
+       MAPROOM_DATABASE_URL: dbUrl,
+       OPENAI_API_KEY: apiKey,
+     },
+   })
+   ```
+
+2. **Avoid .env Files in Production**
+   - `.env` files are acceptable for development
+   - Use platform-specific secrets for production:
+     - AWS: AWS Secrets Manager, Parameter Store
+     - GCP: Secret Manager
+     - Azure: Key Vault
+     - Kubernetes: Secrets
+
+3. **Rotate Credentials Regularly**
+   - Routine rotation: Every 30-90 days
+   - Immediate rotation: On suspected compromise
+   - Automated rotation: Use secrets manager features
+
+**Mitigation Status:**
+- ✅ Binary path from hardcoded candidates (not user-configurable)
+- ✅ No network exposure for credentials
+- ⚠️ Environment variables visible to local processes (document risk)
+- 🔮 Future: Platform-specific secrets (Keychain, Credential Manager)
+
+### Resource Limits
+
+**Risk:** Daemon processes can consume unbounded memory, CPU, and file descriptors if not properly configured.
+
+**Best Practices:**
+
+1. **Set Process Limits** (systemd example)
+   ```ini
+   [Service]
+   ExecStart=/usr/bin/node /app/server.js
+   MemoryLimit=1G
+   CPUQuota=50%
+   LimitNOFILE=1024
+   ```
+
+2. **Docker Resource Limits**
+   ```yaml
+   version: '3.8'
+   services:
+     app:
+       image: my-app
+       deploy:
+         resources:
+           limits:
+             cpus: '0.5'
+             memory: 1G
+           reservations:
+             memory: 512M
+   ```
+
+3. **Monitor Resource Usage**
+   ```typescript
+   // Log daemon health metrics
+   setInterval(async () => {
+     const healthy = await client.isHealthy()
+     const memory = process.memoryUsage()
+
+     console.log({
+       daemonHealthy: healthy,
+       heapUsed: memory.heapUsed / 1024 / 1024, // MB
+       timestamp: new Date(),
+     })
+   }, 60000) // Every minute
+   ```
+
+4. **Circuit Breaker Limits**
+   - Default: 5 restart attempts before circuit breaker triggers
+   - Adjust based on environment stability:
+     ```typescript
+     const client = new DaemonClient({
+       binaryPath: '/path/to/binary',
+       maxRestartAttempts: 3, // Stricter limit for critical services
+       restartBackoffMs: 2000, // 2s, 4s, 8s backoff
+     })
+     ```
+
+**Mitigation Status:**
+- ✅ Circuit breaker prevents restart storms (max 5 attempts)
+- ✅ Connection pool limits database connections
+- ⚠️ No memory limits enforced (use OS-level controls)
+- 🔮 Future: Built-in memory limits, request queue backpressure
+
+### Binary Integrity
+
+**Risk:** Malicious or corrupted binaries could be executed if not properly validated.
+
+**Best Practices:**
+
+1. **Verify Binary Checksum**
+   ```bash
+   # Before deployment, verify binary integrity
+   sha256sum packages/cli/bin/linux-x64/crewchief-maproom
+   # Compare against known-good checksum
+   ```
+
+2. **Restrict Binary Permissions**
+   ```bash
+   # Binary should be owned by root, executable by all
+   sudo chown root:root /usr/local/bin/crewchief-maproom
+   sudo chmod 755 /usr/local/bin/crewchief-maproom
+   ```
+
+3. **Validate Binary Before Use** (in application)
+   ```typescript
+   import { createHash } from 'node:crypto'
+   import { readFile } from 'node:fs/promises'
+
+   async function validateBinary(path: string, expectedHash: string): Promise<boolean> {
+     const contents = await readFile(path)
+     const hash = createHash('sha256').update(contents).digest('hex')
+     return hash === expectedHash
+   }
+
+   // Validate before creating client
+   const binaryPath = '/path/to/crewchief-maproom'
+   const expectedHash = 'abc123...' // From secure source
+
+   if (await validateBinary(binaryPath, expectedHash)) {
+     const client = new DaemonClient({ binaryPath })
+   } else {
+     throw new Error('Binary integrity check failed')
+   }
+   ```
+
+**Mitigation Status:**
+- ✅ Binary path from hardcoded candidates (not user input)
+- ✅ Binary existence validated before spawn
+- ⚠️ No signature verification (manual checksum recommended)
+- 🔮 Future: Signed binaries with automatic verification
+
+### Incident Response
+
+**Monitoring Checklist:**
+
+| Metric | Threshold | Action |
+|--------|-----------|--------|
+| Restart rate | >10% of requests | Investigate daemon crashes |
+| Circuit breaker triggered | Any occurrence | Manual investigation required |
+| Request timeout rate | >5% of requests | Check database performance |
+| Memory growth | >50MB/hour sustained | Potential memory leak |
+| Error rate | >1% of requests | Check logs, database connectivity |
+
+**Incident Response Procedures:**
+
+1. **Daemon Crash Detected**
+   ```bash
+   # Check daemon logs
+   journalctl -u my-app -n 100 | grep crewchief-maproom
+
+   # Check database connectivity
+   psql $MAPROOM_DATABASE_URL -c "SELECT 1"
+
+   # Test binary manually
+   echo '{"jsonrpc":"2.0","method":"ping","id":1}' | /path/to/crewchief-maproom serve
+   ```
+
+2. **Circuit Breaker Triggered**
+   ```typescript
+   // Investigate root cause (database, configuration, binary)
+   // Fix issue, then restart client
+   await client.restart()
+   ```
+
+3. **Memory Leak Detected**
+   ```bash
+   # Get heap dump (if v8 available)
+   kill -USR2 <daemon-pid>
+
+   # Monitor memory over time
+   watch -n 5 'ps aux | grep crewchief-maproom'
+   ```
+
+4. **Security Incident (Credential Leak)**
+   - **Immediate**: Rotate all credentials (database, API keys)
+   - **Investigate**: Check logs for unauthorized access
+   - **Audit**: Review recent search queries for suspicious patterns
+   - **Notify**: Follow organizational incident response procedures
+
+### Compliance Considerations
+
+**Data Residency:**
+- Code chunks stored in PostgreSQL database
+- Ensure database in compliant region/jurisdiction
+- Vector embeddings may be processed by external APIs (OpenAI, etc.)
+
+**Credential Storage:**
+- Environment variables not encrypted at rest
+- Use secrets manager for encryption (AWS KMS, etc.)
+- Rotate credentials regularly (30-90 day intervals)
+
+**Audit Logging:**
+- Daemon logs to stderr (structured logging recommended)
+- Log search queries for compliance if required:
+  ```typescript
+  const originalSearch = client.search.bind(client)
+  client.search = async (params) => {
+    console.log({
+      event: 'search',
+      user: getCurrentUser(),
+      query: params.query,
+      repo: params.repo,
+      timestamp: new Date(),
+    })
+    return originalSearch(params)
+  }
+  ```
+
+**Access Control:**
+- Daemon inherits permissions of spawning process
+- Restrict who can start Node.js application
+- Use service accounts with minimal permissions
+- Consider AppArmor/SELinux profiles for additional isolation
+
+## Production Deployment Checklist
+
+Use this checklist before deploying to production:
+
+**Security:**
+- [ ] Secrets stored in secrets manager (not .env files or hardcoded)
+- [ ] Resource limits configured (memory, CPU, file descriptors)
+- [ ] Monitoring and alerting enabled (restart rate, error rate, memory)
+- [ ] Binary integrity verified (checksum matches known-good hash)
+- [ ] Binary permissions restricted (755, owned by root or service account)
+- [ ] Access control policies defined (who can start daemon)
+- [ ] Audit logging configured (if compliance required)
+- [ ] Credential rotation schedule established (30-90 days)
+
+**Operations:**
+- [ ] Circuit breaker limits reviewed (default: 5 restarts)
+- [ ] Request timeout appropriate for workload (default: 30s)
+- [ ] Connection pool size appropriate (formula: concurrent/2)
+- [ ] Isolated deployment environment (Docker, systemd, or equivalent)
+- [ ] Health check endpoint/monitoring (ping daemon regularly)
+- [ ] Incident response procedures documented
+- [ ] Runbook for common failures (daemon won't start, timeouts, etc.)
+- [ ] Backup and recovery plan for database
+
+**Documentation:**
+- [ ] Team trained on troubleshooting procedures
+- [ ] Secrets access documented (who has access, how to rotate)
+- [ ] Architecture documented (how components interact)
+- [ ] Security review completed (this checklist)
+
+For detailed security analysis, see [Security Review](../../.agents/projects/DAEMIGR_daemon-client-migration/planning/security-review.md).
+
 ## Architecture
 
 ### Component Diagram
