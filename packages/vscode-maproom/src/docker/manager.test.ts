@@ -51,7 +51,15 @@ describe('DockerManager', () => {
   let outputChannel: MockOutputChannel
   let manager: DockerManager
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Clean up any existing containers before starting tests
+    const { execSync } = await import('node:child_process')
+    try {
+      execSync('docker rm -f maproom-postgres 2>/dev/null || true', { stdio: 'ignore' })
+    } catch {
+      // Ignore cleanup errors
+    }
+
     outputChannel = new MockOutputChannel()
     // Note: In production, you would pass the actual extension root
     // For testing, we use the test environment's path and test compose file

@@ -34,9 +34,14 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 // Mock child_process module
-vi.mock('node:child_process', () => ({
-  spawn: vi.fn(),
-}))
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = (await importOriginal()) as any
+  return {
+    ...actual,
+    spawn: vi.fn(),
+    execFile: vi.fn(),
+  }
+})
 
 // Mock OutputChannel for testing
 class MockOutputChannel {
