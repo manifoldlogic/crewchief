@@ -35,8 +35,8 @@
 export { DaemonClient } from './client.js'
 export type { SearchParams, SearchResult } from './client.js'
 
-// Configuration
-export type {DaemonConfig } from './lifecycle.js'
+// Configuration and types
+export type { DaemonConfig, DaemonProcessDef, PendingRequest } from './types.js'
 
 // Errors
 export {

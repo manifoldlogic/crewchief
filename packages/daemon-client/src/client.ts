@@ -10,11 +10,8 @@ import {
   DaemonUnhealthyError,
 } from './errors.js'
 import { RpcProtocol, type JsonRpcResponse } from './rpc.js'
-import {
-  DaemonLifecycle,
-  type DaemonConfig,
-  type DaemonProcessDef,
-} from './lifecycle.js'
+import { DaemonLifecycle } from './lifecycle.js'
+import type { DaemonConfig, DaemonProcessDef, PendingRequest } from './types.js'
 
 /**
  * Search parameters for daemon search method
@@ -43,15 +40,6 @@ export interface SearchResult {
   total: number
   query_embedding_time_ms?: number
   search_time_ms?: number
-}
-
-/**
- * Pending request waiting for response
- */
-interface PendingRequest {
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: NodeJS.Timeout
 }
 
 /**
@@ -112,6 +100,9 @@ export class DaemonClient {
 
   /**
    * Stop the daemon gracefully
+   *
+   * Waits for in-flight requests to complete (up to shutdownTimeout),
+   * then stops the daemon process. New requests are rejected during shutdown.
    */
   async stop(): Promise<void> {
     if (!this.daemonProcess || this.isShuttingDown) {
@@ -121,7 +112,36 @@ export class DaemonClient {
     this.isShuttingDown = true
 
     try {
-      // Reject all pending requests
+      // Wait for in-flight requests to complete (with timeout)
+      if (this.pendingRequests.size > 0) {
+        const shutdownTimeout = this.config.shutdownTimeout ?? 5000
+        const pendingPromises = Array.from(this.pendingRequests.values()).map(
+          (req) =>
+            new Promise<void>((resolve) => {
+              // Wrap in timeout to ensure we don't wait forever
+              const originalResolve = req.resolve
+              const originalReject = req.reject
+
+              req.resolve = (value: unknown) => {
+                originalResolve(value)
+                resolve()
+              }
+
+              req.reject = (error: Error) => {
+                originalReject(error)
+                resolve()
+              }
+            })
+        )
+
+        // Wait for all requests to complete OR timeout
+        await Promise.race([
+          Promise.all(pendingPromises),
+          new Promise<void>((resolve) => setTimeout(resolve, shutdownTimeout)),
+        ])
+      }
+
+      // Reject any remaining pending requests (if timeout occurred)
       for (const pending of this.pendingRequests.values()) {
         clearTimeout(pending.timer)
         pending.reject(
@@ -158,9 +178,33 @@ export class DaemonClient {
   }
 
   /**
+   * Get next request ID with rollover handling
+   *
+   * Request IDs are sequential integers (1, 2, 3...) that reset to 1
+   * when reaching Number.MAX_SAFE_INTEGER to prevent overflow.
+   *
+   * Note: Node.js is single-threaded, so no mutex needed for increment.
+   */
+  private getNextRequestId(): number {
+    this.requestId++
+
+    // Handle overflow - rollover to 1 (not 0, which is reserved for notifications)
+    if (this.requestId > Number.MAX_SAFE_INTEGER) {
+      this.requestId = 1
+    }
+
+    return this.requestId
+  }
+
+  /**
    * Send a JSON-RPC request to the daemon
    */
   private async sendRequest<T>(method: string, params?: unknown): Promise<T> {
+    // Reject new requests during shutdown
+    if (this.isShuttingDown) {
+      throw new DaemonError('Daemon is shutting down', 'DAEMON_SHUTTING_DOWN')
+    }
+
     // Ensure daemon is running
     if (!this.daemonProcess) {
       await this.start()
@@ -170,13 +214,14 @@ export class DaemonClient {
       throw new DaemonUnhealthyError('Failed to start daemon')
     }
 
-    const id = ++this.requestId
+    const id = this.getNextRequestId()
     const request = RpcProtocol.createRequest(method, params, id)
     const requestLine = RpcProtocol.serializeRequest(request)
 
     // Create promise for response
-    return new Promise<T>((resolve, reject) => {
+    const promise = new Promise<T>((resolve, reject) => {
       const timeout = this.config.timeout ?? 30000
+      const timestamp = Date.now()
 
       // Set up timeout
       const timer = setTimeout(() => {
@@ -190,8 +235,10 @@ export class DaemonClient {
 
       // Store pending request
       this.pendingRequests.set(id, {
+        promise,
         resolve: resolve as (value: unknown) => void,
         reject,
+        timestamp,
         timer,
       })
 
@@ -210,6 +257,8 @@ export class DaemonClient {
         )
       }
     })
+
+    return promise
   }
 
   /**

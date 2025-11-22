@@ -2,48 +2,12 @@
  * Daemon process lifecycle management
  */
 
-import { spawn,type ChildProcess } from 'node:child_process'
-import type { Readable, Writable } from 'node:stream'
+import { spawn } from 'node:child_process'
 import { DaemonStartError, DaemonCrashError } from './errors.js'
+import type { DaemonConfig, DaemonProcessDef } from './types.js'
 
-/**
- * Configuration for daemon process
- */
-export interface DaemonConfig {
-  /** Path to the daemon binary */
-  binaryPath: string
-
-  /** Environment variables for the daemon */
-  env?: NodeJS.ProcessEnv
-
-  /** Timeout for daemon startup (ms) */
-  startTimeout?: number
-
-  /** Timeout for graceful shutdown (ms) */
-  shutdownTimeout?: number
-
-  /** Maximum number of restart attempts */
-  maxRestartAttempts?: number
-
-  /** Initial backoff delay for restarts (ms) */
-  restartBackoffMs?: number
-
-  /** Request timeout (ms) */
-  timeout?: number
-
-  /** Enable auto-restart on crash */
-  autoRestart?: boolean
-}
-
-/**
- * Daemon process handle with streams
- */
-export interface DaemonProcessDef {
-  process: ChildProcess
-  stdin: Writable
-  stdout: Readable
-  stderr: Readable
-}
+// Re-export types for backward compatibility
+export type { DaemonConfig, DaemonProcessDef } from './types.js'
 
 /**
  * Manages daemon process lifecycle
@@ -132,6 +96,13 @@ export class DaemonLifecycle {
 
   /**
    * Stop the daemon process gracefully
+   *
+   * Cleanup sequence:
+   * 1. Send SIGTERM for graceful shutdown
+   * 2. Wait for process exit (up to shutdownTimeout)
+   * 3. Send SIGKILL if still running
+   * 4. Close all streams (stdin, stdout, stderr)
+   * 5. Remove process event listeners
    */
   async stop(daemonProcess: DaemonProcessDef): Promise<void> {
     const shutdownTimeout = this.config.shutdownTimeout ?? 5000
@@ -139,8 +110,9 @@ export class DaemonLifecycle {
     return new Promise<void>((resolve) => {
       const { process } = daemonProcess
 
-      // Process already exited
+      // Process already exited - just cleanup resources
       if (process.exitCode !== null || process.killed) {
+        this.cleanupResources(daemonProcess)
         resolve()
         return
       }
@@ -152,15 +124,49 @@ export class DaemonLifecycle {
         }
       }, shutdownTimeout)
 
-      // Wait for exit
+      // Wait for exit, then cleanup
       process.once('exit', () => {
         clearTimeout(killTimer)
+        this.cleanupResources(daemonProcess)
         resolve()
       })
 
       // Send SIGTERM for graceful shutdown
       process.kill('SIGTERM')
     })
+  }
+
+  /**
+   * Clean up process resources
+   *
+   * Closes streams and removes event listeners to prevent memory leaks.
+   */
+  private cleanupResources(daemonProcess: DaemonProcessDef): void {
+    const { process, stdin, stdout, stderr } = daemonProcess
+
+    // Close streams (safe to call even if already closed)
+    try {
+      stdin.destroy()
+    } catch (error) {
+      // Ignore errors - stream may already be destroyed
+    }
+
+    try {
+      stdout.destroy()
+    } catch (error) {
+      // Ignore errors
+    }
+
+    try {
+      stderr.destroy()
+    } catch (error) {
+      // Ignore errors
+    }
+
+    // Remove all listeners to prevent memory leaks
+    process.removeAllListeners('exit')
+    process.removeAllListeners('error')
+    process.removeAllListeners('close')
   }
 
   /**
