@@ -6,6 +6,28 @@ This directory contains completed projects and historical records. Projects are 
 
 ### Recently Archived (2025-11-22)
 
+#### SEMRANK_semantic-entry-point-ranking - Semantic Entry Point Ranking
+**Completed:** 21 tickets
+**Summary:** Enhanced FTS search to return implementations over tests/docs using kind-based and exact-match multipliers for better entry point discovery
+
+**Contents:**
+- [Planning Docs](./projects/SEMRANK_semantic-entry-point-ranking/planning/)
+- [Tickets](./projects/SEMRANK_semantic-entry-point-ranking/tickets/) (21 completed)
+
+**Key Achievements:**
+- Kind-based multipliers (function: 2.5×, test: 0.6×, doc: 0.3×)
+- Exact match multipliers (3.0× when symbol_name matches query)
+- Query normalization (camelCase→snake_case, acronym handling)
+- Multiplicative scoring: final_score = ts_rank_cd() × kind_mult × exact_mult
+- Search quality >90% top-1 accuracy for exact symbol searches
+- Performance <10% p95 latency increase vs baseline
+- Comprehensive test suite (integration, edge cases, regression, benchmarks)
+- Complete documentation (search ranking, deployment runbook, baseline behavior)
+- CI/CD integration with automated search quality validation
+- No schema changes, stateless deployment, clean rollback capability
+
+---
+
 #### OPNFIX_open-path-fix - Open Tool Path Resolution Fix
 **Completed:** 15 tickets
 **Summary:** Comprehensive fix for maproom-mcp open tool path resolution with multi-candidate fallback, security enhancements, and extensive testing
@@ -327,6 +349,7 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| SEMRANK_semantic-entry-point-ranking | 21 | 2025-11-22 | ✅ Complete |
 | OPNFIX_open-path-fix | 15 | 2025-11-22 | ✅ Complete |
 | FILETYPE_file-type-filtering | 11 | 2025-11-22 | ✅ Complete |
 | TESTISO_test-database-isolation | 7 | 2025-11-22 | ✅ Complete |
@@ -351,7 +374,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **269** | | **All Complete** |
+| **Total** | **290** | | **All Complete** |
 
 ## Archive Structure
 
