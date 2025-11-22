@@ -33,6 +33,27 @@ gh run view <run-id> --log
 gh run rerun <run-id>
 ```
 
+## Troubleshooting Workflows
+
+### Test Workflow
+
+**pnpm Version Management:**
+- pnpm version is auto-detected from `package.json` packageManager field
+- To change pnpm version: Update `package.json` ONLY (not workflow YAML)
+- Do NOT add explicit `version:` to `pnpm/action-setup@v4`
+
+**Common Issues:**
+
+#### "Multiple versions of pnpm specified"
+- **Cause**: Explicit version in workflow + packageManager in package.json
+- **Fix**: Remove explicit `with: version:` from `.github/workflows/test.yml`
+- **Prevention**: Never add version field to pnpm/action-setup step
+
+#### "pnpm command not found"
+- **Cause**: packageManager field missing or malformed
+- **Fix**: Verify `jq -r '.packageManager' package.json` returns valid value
+- **Format**: Must be `pnpm@<version>+sha512...`
+
 ## Secrets Used
 
 Set in repository settings (Settings → Secrets and variables → Actions):

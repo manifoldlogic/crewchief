@@ -1,9 +1,9 @@
 # Ticket: CIFIX-1002: Update workflow documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only change)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only change)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - github-actions-specialist
@@ -22,11 +22,11 @@ After fixing the pnpm version conflict in CIFIX-1001, developers need clear docu
 This prevents future regressions and helps onboard new developers. This ticket implements documentation improvements identified in the CIFIX project plan.
 
 ## Acceptance Criteria
-- [ ] `.github/CLAUDE.md` has new "Troubleshooting Workflows" section
-- [ ] Documentation explains pnpm auto-detection mechanism
-- [ ] Clear instructions on how to update pnpm version
-- [ ] Troubleshooting guide for "Multiple versions of pnpm" error
-- [ ] Explains that workflow YAML should never specify pnpm version
+- [x] `.github/CLAUDE.md` has new "Troubleshooting Workflows" section
+- [x] Documentation explains pnpm auto-detection mechanism
+- [x] Clear instructions on how to update pnpm version
+- [x] Troubleshooting guide for "Multiple versions of pnpm" error
+- [x] Explains that workflow YAML should never specify pnpm version
 
 ## Technical Requirements
 - **File**: `.github/CLAUDE.md`
