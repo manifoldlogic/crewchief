@@ -6,6 +6,28 @@ This directory contains completed projects and historical records. Projects are 
 
 ### Recently Archived (2025-11-22)
 
+#### OPNFIX_open-path-fix - Open Tool Path Resolution Fix
+**Completed:** 15 tickets
+**Summary:** Comprehensive fix for maproom-mcp open tool path resolution with multi-candidate fallback, security enhancements, and extensive testing
+
+**Contents:**
+- [Planning Docs](./projects/OPNFIX_open-path-fix/planning/)
+- [Tickets](./projects/OPNFIX_open-path-fix/tickets/) (15 completed)
+
+**Key Achievements:**
+- Multi-candidate fallback path resolution (worktree → repo → absolute)
+- Symlink validation and security enhancements
+- Optional root path validation for enhanced security
+- fileExists helper with fs.access for proper permission checking
+- 4 comprehensive test suites (E2E, security, integration, unit)
+- Enhanced error messages with actionable suggestions
+- Complete tool documentation with examples
+- Debug logging for troubleshooting
+- Full test suite execution and manual verification
+- Production build and package verification
+
+---
+
 #### FILETYPE_file-type-filtering - File Type Filtering
 **Completed:** 11 tickets
 **Summary:** Multi-extension file type filtering for semantic code search with comprehensive test coverage
@@ -305,6 +327,7 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| OPNFIX_open-path-fix | 15 | 2025-11-22 | ✅ Complete |
 | FILETYPE_file-type-filtering | 11 | 2025-11-22 | ✅ Complete |
 | TESTISO_test-database-isolation | 7 | 2025-11-22 | ✅ Complete |
 | WTSRCH_worktree-scoped-search | 5 | 2025-11-22 | ✅ Complete |
@@ -328,7 +351,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **254** | | **All Complete** |
+| **Total** | **269** | | **All Complete** |
 
 ## Archive Structure
 
