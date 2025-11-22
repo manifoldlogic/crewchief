@@ -1478,9 +1478,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION maproom.evict_expired_cache_entries IS
-  'Removes cache entries older than the specified TTL in seconds. ' ||
-  'Returns the number of entries evicted.';
+COMMENT ON FUNCTION maproom.evict_expired_cache_entries IS 'Removes cache entries older than the specified TTL in seconds. Returns the number of entries evicted.';
 
 -- Function to evict least recently used entries when cache is full
 CREATE OR REPLACE FUNCTION maproom.evict_lru_cache_entries(
@@ -1511,10 +1509,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION maproom.evict_lru_cache_entries IS
-  'Evicts the least recently used cache entries when total entries exceeds max_entries. ' ||
-  'evict_count determines how many entries to remove at once (default: 100). ' ||
-  'Returns the number of entries evicted.';
+COMMENT ON FUNCTION maproom.evict_lru_cache_entries IS 'Evicts the least recently used cache entries when total entries exceeds max_entries. evict_count determines how many entries to remove at once (default: 100). Returns the number of entries evicted.';
 
 -- Function to invalidate cache entries for a specific chunk
 -- (useful when a chunk is updated)
@@ -1530,10 +1525,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION maproom.invalidate_chunk_cache IS
-  'Invalidates all cache entries for a specific chunk. ' ||
-  'Used when a chunk is updated to ensure cache consistency. ' ||
-  'Returns the number of entries invalidated.';
+COMMENT ON FUNCTION maproom.invalidate_chunk_cache IS 'Invalidates all cache entries for a specific chunk. Used when a chunk is updated to ensure cache consistency. Returns the number of entries invalidated.';
 
 -- Function to clear the entire cache
 CREATE OR REPLACE FUNCTION maproom.clear_context_cache()
@@ -1547,10 +1539,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION maproom.clear_context_cache IS
-  'Clears the entire context cache. ' ||
-  'Useful for manual cache clearing or testing. ' ||
-  'Returns the number of entries cleared.';
+COMMENT ON FUNCTION maproom.clear_context_cache IS 'Clears the entire context cache. Useful for manual cache clearing or testing. Returns the number of entries cleared.';
 -- Add blake3_hash column to files table for incremental indexing
 --
 -- This migration adds a BYTEA column to store blake3 content hashes,
