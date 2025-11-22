@@ -32,11 +32,11 @@
  */
 
 // Main client
-export { DaemonClient } from './client'
-export type { SearchParams, SearchResult } from './client'
+export { DaemonClient } from './client.js'
+export type { SearchParams, SearchResult } from './client.js'
 
 // Configuration
-export type {DaemonConfig } from './lifecycle'
+export type {DaemonConfig } from './lifecycle.js'
 
 // Errors
 export {
@@ -46,12 +46,12 @@ export {
   DaemonTimeoutError,
   RpcError,
   DaemonUnhealthyError,
-} from './errors'
+} from './errors.js'
 
 // JSON-RPC protocol (for advanced usage)
-export { RpcProtocol } from './rpc'
+export { RpcProtocol } from './rpc.js'
 export type {
   JsonRpcRequest,
   JsonRpcResponse,
   JsonRpcErrorObject,
-} from './rpc'
+} from './rpc.js'

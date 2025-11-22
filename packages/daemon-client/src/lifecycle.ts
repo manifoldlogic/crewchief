@@ -4,7 +4,7 @@
 
 import { spawn,type ChildProcess } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
-import { DaemonStartError, DaemonCrashError } from './errors'
+import { DaemonStartError, DaemonCrashError } from './errors.js'
 
 /**
  * Configuration for daemon process
@@ -62,7 +62,7 @@ export class DaemonLifecycle {
     const startTimeout = this.config.startTimeout ?? 5000
 
     try {
-      const process = spawn(this.config.binaryPath, ['serve'], {
+      const daemonProcess = spawn(this.config.binaryPath, ['serve'], {
         env: {
           ...process.env,
           ...this.config.env,
@@ -72,7 +72,7 @@ export class DaemonLifecycle {
       })
 
       // Ensure streams are available
-      if (!process.stdin || !process.stdout || !process.stderr) {
+      if (!daemonProcess.stdin || !daemonProcess.stdout || !daemonProcess.stderr) {
         throw new DaemonStartError(
           'Failed to create daemon process streams',
           new Error('stdio pipes not available')
@@ -89,8 +89,8 @@ export class DaemonLifecycle {
 
         const cleanup = () => {
           clearTimeout(timer)
-          process.off('error', onError)
-          process.off('exit', onExit)
+          daemonProcess.off('error', onError)
+          daemonProcess.off('exit', onExit)
         }
 
         const onError = (error: Error) => {
@@ -109,15 +109,15 @@ export class DaemonLifecycle {
           )
         }
 
-        process.once('error', onError)
-        process.once('exit', onExit)
+        daemonProcess.once('error', onError)
+        daemonProcess.once('exit', onExit)
       })
 
       return {
-        process,
-        stdin: process.stdin,
-        stdout: process.stdout,
-        stderr: process.stderr,
+        process: daemonProcess,
+        stdin: daemonProcess.stdin,
+        stdout: daemonProcess.stdout,
+        stderr: daemonProcess.stderr,
       }
     } catch (error) {
       if (error instanceof DaemonStartError || error instanceof DaemonCrashError) {

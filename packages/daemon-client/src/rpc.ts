@@ -2,7 +2,7 @@
  * JSON-RPC 2.0 protocol implementation for daemon communication
  */
 
-import { RpcError } from './errors'
+import { RpcError } from './errors.js'
 
 /**
  * JSON-RPC 2.0 request structure

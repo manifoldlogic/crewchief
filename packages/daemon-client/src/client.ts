@@ -8,13 +8,13 @@ import {
   DaemonTimeoutError,
   DaemonCrashError,
   DaemonUnhealthyError,
-} from './errors'
-import { RpcProtocol, type JsonRpcResponse } from './rpc'
+} from './errors.js'
+import { RpcProtocol, type JsonRpcResponse } from './rpc.js'
 import {
   DaemonLifecycle,
   type DaemonConfig,
   type DaemonProcessDef,
-} from './lifecycle'
+} from './lifecycle.js'
 
 /**
  * Search parameters for daemon search method
@@ -122,7 +122,7 @@ export class DaemonClient {
 
     try {
       // Reject all pending requests
-      for (const [id, pending] of this.pendingRequests.entries()) {
+      for (const pending of this.pendingRequests.values()) {
         clearTimeout(pending.timer)
         pending.reject(
           new DaemonError('Daemon is shutting down', 'DAEMON_SHUTTING_DOWN')
@@ -309,7 +309,7 @@ export class DaemonClient {
     this.daemonProcess = undefined
 
     // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests.entries()) {
+    for (const pending of this.pendingRequests.values()) {
       clearTimeout(pending.timer)
       pending.reject(
         new DaemonCrashError(
