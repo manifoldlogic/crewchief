@@ -18,7 +18,7 @@ The DAEMIGR project completes the MAPDAEMON architecture by migrating TypeScript
 
 ## Problem Statement
 
-The MAPDAEMON project successfully implemented a high-performance Rust daemon with JSON-RPC over stdio, connection pooling, and optimized search execution. However, **TypeScript clients still spawn new processes for each search request**, preventing us from realizing the performance benefits.
+The MAPDAEMON project (✅ **complete and archived** - see `.agents/archive/projects/MAPDAEMON_maproom-daemon-architecture/`) successfully implemented a high-performance Rust daemon with JSON-RPC over stdio, connection pooling, and optimized search execution. However, **TypeScript clients still spawn new processes for each search request**, preventing us from realizing the performance benefits.
 
 **Current Performance:**
 - MCP Server search: 160-400ms per request (process spawn + DB connection + query)

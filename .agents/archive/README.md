@@ -4,7 +4,42 @@ This directory contains completed projects and historical records. Projects are 
 
 ## Archived Projects
 
-### Recently Archived (2025-11-09)
+### Recently Archived (2025-11-22)
+
+#### MAPDAEMON_maproom-daemon-architecture - Maproom Daemon Architecture
+**Completed:** 4 tickets
+**Summary:** JSON-RPC daemon server for 20-50x performance improvement over process spawning
+
+**Contents:**
+- [Planning Docs](./projects/MAPDAEMON_maproom-daemon-architecture/planning/)
+- [Tickets](./projects/MAPDAEMON_maproom-daemon-architecture/tickets/) (4 completed)
+
+**Key Achievements:**
+- Tokio async event loop with JSON-RPC 2.0 protocol
+- Vector search integration via VectorExecutor
+- Foundation for daemon-client migration (DAEMIGR)
+- Performance: <50ms warm search latency
+
+---
+
+#### VSCDAEMN_vscode-daemon-migration - VSCode Extension Cleanup
+**Completed:** 1 ticket
+**Summary:** Documented spawning vs daemon patterns, removed dead code from MCP utilities
+
+**Contents:**
+- [Planning Docs](./projects/VSCDAEMN_vscode-daemon-migration/planning/)
+- [Tickets](./projects/VSCDAEMN_vscode-daemon-migration/tickets/) (1 completed)
+
+**Key Achievements:**
+- Documented when to use spawning vs daemon patterns
+- Clarified VSCode extension keeps spawning (appropriate for one-time scan operations)
+- Removed dead imports from search.ts after daemon migration
+
+**Decision:** Simplified cleanup only - spawning is appropriate for one-time operations (scan), daemon for repeated operations (search)
+
+---
+
+### Previously Archived (2025-11-09)
 
 #### AGENTOPT_ai-agent-query-optimization - AI Agent Query Optimization
 **Completed:** 14 tickets
@@ -215,6 +250,8 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| MAPDAEMON_maproom-daemon-architecture | 4 | 2025-11-22 | ✅ Complete |
+| VSCDAEMN_vscode-daemon-migration | 1 | 2025-11-22 | ✅ Complete |
 | AGENTOPT_ai-agent-query-optimization | 14 | 2025-11-09 | ✅ Complete |
 | BLOBSHA_content-addressed-chunk-storage | 11 | 2025-11-09 | ✅ Complete |
 | BRANCHX_branch-aware-indexing | 18 | 2025-11-09 | ✅ Complete |
@@ -233,7 +270,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **226** | | **All Complete** |
+| **Total** | **231** | | **All Complete** |
 
 ## Archive Structure
 
