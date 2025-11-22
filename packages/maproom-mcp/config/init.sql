@@ -1422,10 +1422,7 @@ CREATE INDEX IF NOT EXISTS idx_context_cache_access_count
   ON maproom.context_cache(access_count DESC);
 
 -- Add comment explaining the table
-COMMENT ON TABLE maproom.context_cache IS
-  'Caches assembled context bundles to improve performance. ' ||
-  'Key: (chunk_id, options_hash) where options_hash is SHA-256 of ExpandOptions. ' ||
-  'Supports TTL and LRU eviction strategies.';
+COMMENT ON TABLE maproom.context_cache IS 'Caches assembled context bundles to improve performance. Key: (chunk_id, options_hash) where options_hash is SHA-256 of ExpandOptions. Supports TTL and LRU eviction strategies.';
 
 COMMENT ON COLUMN maproom.context_cache.chunk_id IS
   'ID of the primary chunk for which context was assembled';
