@@ -1,9 +1,9 @@
 # Ticket: CIFIX-3002: Add troubleshooting guides
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-implementation-agent
@@ -25,12 +25,12 @@ This provides developers with a systematic approach to diagnosing and fixing iss
 **Reference**: This ticket implements the documentation portion of Phase 3 in the CIFIX project plan, providing comprehensive troubleshooting procedures beyond the basic documentation in CIFIX-3001.
 
 ## Acceptance Criteria
-- [ ] "Common CI Issues" section added to `.github/CLAUDE.md`
-- [ ] Step-by-step procedure for diagnosing test workflow failures
-- [ ] Step-by-step procedure for diagnosing Docker build failures
-- [ ] CI health check commands documented
-- [ ] Rollback procedures documented for both fixes
-- [ ] Each procedure includes validation commands
+- [x] "Common CI Issues" section added to `.github/CLAUDE.md`
+- [x] Step-by-step procedure for diagnosing test workflow failures (5 steps)
+- [x] Step-by-step procedure for diagnosing Docker build failures (5 steps)
+- [x] CI health check commands documented
+- [x] Rollback procedures documented for both fixes
+- [x] Each procedure includes validation commands
 
 ## Technical Requirements
 

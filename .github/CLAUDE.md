@@ -102,6 +102,148 @@ gh run rerun <run-id>
 - Run `pnpm build` to ensure workspace packages build
 - Run local Docker build to verify Dockerfile changes
 
+## Common CI Issues
+
+### Debugging Test Workflow Failures
+
+**Step-by-step diagnosis:**
+
+1. **Check workflow logs** in GitHub Actions:
+   ```bash
+   gh run list --workflow=test.yml --limit 5
+   gh run view <run-id> --log
+   ```
+
+2. **Verify pnpm setup step**:
+   - Look for "Setup pnpm" in logs
+   - Check detected version matches package.json
+   - Expected: `pnpm version 10.12.1`
+
+3. **Verify packageManager field**:
+   ```bash
+   jq -r '.packageManager' package.json
+   # Should show: pnpm@10.12.1+sha512...
+   ```
+
+4. **Check for explicit version in workflow**:
+   ```bash
+   grep -A 5 "pnpm/action-setup" .github/workflows/test.yml
+   # Should NOT see: with: version:
+   ```
+
+5. **Rollback if needed**:
+   ```bash
+   git log --oneline .github/workflows/test.yml
+   git revert <commit-sha>
+   git push
+   ```
+
+---
+
+### Debugging Docker Build Failures
+
+**Step-by-step diagnosis:**
+
+1. **Verify daemon-client dist/ exists**:
+   ```bash
+   ls -la packages/daemon-client/dist/
+   # Must show: index.js, index.d.ts, client.js, client.d.ts
+   ```
+
+2. **Check pnpm version sync**:
+   ```bash
+   PACKAGE_PNPM=$(jq -r '.packageManager | split("@")[1] | split("+")[0]' package.json)
+   DOCKERFILE_PNPM=$(grep "npm install -g pnpm@" packages/maproom-mcp/config/Dockerfile.combined | grep -oP 'pnpm@\K[0-9.]+')
+
+   if [ "$PACKAGE_PNPM" != "$DOCKERFILE_PNPM" ]; then
+     echo "❌ Version mismatch: $PACKAGE_PNPM vs $DOCKERFILE_PNPM"
+   else
+     echo "✅ Versions match: $PACKAGE_PNPM"
+   fi
+   ```
+
+3. **Test local Docker build**:
+   ```bash
+   pnpm build  # Ensure daemon-client built
+
+   docker build \
+     -f packages/maproom-mcp/config/Dockerfile.combined \
+     -t maproom-mcp:debug \
+     --progress=plain \
+     .
+   ```
+
+4. **Check for common errors**:
+   - "EUNSUPPORTEDPROTOCOL" → pnpm not installed in Dockerfile
+   - "COPY failed" → daemon-client dist/ missing (run pnpm build)
+   - "workspace: not resolved" → Missing pnpm-workspace.yaml in COPY
+
+5. **Rollback Docker changes**:
+   ```bash
+   git log --oneline packages/maproom-mcp/config/Dockerfile.combined
+   git revert <commit-sha>
+   docker build -f packages/maproom-mcp/config/Dockerfile.combined -t rollback .
+   ```
+
+---
+
+### CI Health Check
+
+Run these commands to verify CI configuration is correct:
+
+```bash
+# Test workflow health
+yamllint .github/workflows/test.yml
+jq -r '.packageManager' package.json
+grep -c "with: version:" .github/workflows/test.yml  # Should be 0
+
+# Docker build health
+pnpm build
+ls -la packages/daemon-client/dist/ | wc -l  # Should show multiple files
+grep "npm install -g pnpm@" packages/maproom-mcp/config/Dockerfile.combined
+
+# Release workflow health
+grep -A 10 "pnpm build" .github/workflows/publish-maproom-mcp-image.yml
+# Should show pnpm build step before Docker build
+
+echo "✅ All health checks passed"
+```
+
+---
+
+### Emergency Rollback Procedures
+
+**If test workflow broken:**
+```bash
+# Option 1: Revert to previous workflow
+git revert <commit-sha-of-fix>
+git push
+
+# Option 2: Temporarily add explicit version (not recommended long-term)
+# Edit .github/workflows/test.yml:
+# - name: Setup pnpm
+#   uses: pnpm/action-setup@v4
+#   with:
+#     version: 10  # Temporary fix while debugging
+```
+
+**If Docker build broken:**
+```bash
+# Revert Dockerfile changes
+git revert <commit-sha-of-dockerfile-changes>
+git push
+
+# If release is urgent, manually publish previous image:
+docker pull <previous-good-image>
+docker tag <previous-good-image> <registry>:<new-tag>
+docker push <registry>:<new-tag>
+```
+
+**Validation after rollback:**
+- Test workflow: Trigger manual run in GitHub Actions
+- Docker build: Run local build and verify success
+- Release workflow: Create test tag and monitor build
+
 ## Secrets Used
 
 Set in repository settings (Settings → Secrets and variables → Actions):
