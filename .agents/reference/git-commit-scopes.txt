@@ -12,6 +12,7 @@ cache
 ci
 cli
 config
+daemon-client
 db
 deprecation
 deploy
