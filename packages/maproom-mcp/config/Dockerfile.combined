@@ -37,6 +37,9 @@ RUN strip --strip-all /build/target/release/crewchief-maproom 2>/dev/null || \
 # ========================================
 FROM node:20-alpine AS node-builder
 
+# Install pnpm matching packageManager version
+RUN npm install -g pnpm@10.12.1
+
 # Install Node.js build dependencies
 RUN apk add --no-cache \
     python3 \

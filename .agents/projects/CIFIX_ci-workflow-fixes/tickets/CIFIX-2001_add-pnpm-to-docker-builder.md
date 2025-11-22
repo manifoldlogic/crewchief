@@ -1,9 +1,9 @@
 # Ticket: CIFIX-2001: Add pnpm to Docker builder stage
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (infrastructure change, validated via build)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (infrastructure change, validated via build)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -21,11 +21,11 @@ By installing pnpm in the builder stage, we can use `pnpm install --filter` whic
 This ticket implements Phase 2 (Docker Build Fix) of the CIFIX project plan, specifically addressing the missing pnpm installation required for workspace protocol support.
 
 ## Acceptance Criteria
-- [ ] pnpm installation line added to Dockerfile after `FROM node:20-alpine AS node-builder`
-- [ ] Version matches package.json packageManager field (10.12.1)
-- [ ] Installation placed BEFORE `apk add` command (npm is needed for pnpm install)
-- [ ] Exact command used: `RUN npm install -g pnpm@10.12.1`
-- [ ] Verification: grep command successfully finds the pnpm install line in Dockerfile
+- [x] pnpm installation line added to Dockerfile after `FROM node:20-alpine AS node-builder`
+- [x] Version matches package.json packageManager field (10.12.1)
+- [x] Installation placed BEFORE `apk add` command (npm is needed for pnpm install)
+- [x] Exact command used: `RUN npm install -g pnpm@10.12.1`
+- [x] Verification: grep command successfully finds the pnpm install line in Dockerfile
 
 ## Technical Requirements
 - **File**: `packages/maproom-mcp/config/Dockerfile.combined`
