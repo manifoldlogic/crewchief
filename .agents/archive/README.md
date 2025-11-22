@@ -6,6 +6,30 @@ This directory contains completed projects and historical records. Projects are 
 
 ### Recently Archived (2025-11-22)
 
+#### UNIWATCH_unified-watch-command - Unified Watch Command
+**Completed:** 16 tickets
+**Summary:** Unified watch and branch-watch into single command with automatic branch detection and dynamic worktree tracking
+
+**Contents:**
+- [Planning Docs](./projects/UNIWATCH_unified-watch-command/planning/)
+- [Tickets](./projects/UNIWATCH_unified-watch-command/tickets/) (16 completed)
+
+**Key Achievements:**
+- Single unified `watch` command replaces separate watch + branch-watch processes
+- Automatic branch detection via .git/HEAD monitoring (<2s detection latency)
+- Dynamic worktree tracking with thread-safe Arc<RwLock> state management
+- tokio::select! event multiplexing for dual event sources (file changes + branch switches)
+- NDJSON event streaming for VSCode extension integration
+- Debounced branch switch handling (prevents rapid-fire events)
+- Zero manual intervention: "watch and forget" developer experience
+- 50% memory reduction (single process vs two: <20MB vs ~35MB)
+- Backward compatible with deprecated --worktree flag
+- Comprehensive test coverage: 12 unit, 4 integration, 1 E2E bash script
+- Complete documentation (CLAUDE.md, NDJSON_EVENTS.md, help text)
+- branch-watch command removed (functionality absorbed into watch)
+
+---
+
 #### SEMRANK_semantic-entry-point-ranking - Semantic Entry Point Ranking
 **Completed:** 21 tickets
 **Summary:** Enhanced FTS search to return implementations over tests/docs using kind-based and exact-match multipliers for better entry point discovery
@@ -349,6 +373,7 @@ Historical session summaries and progress reports:
 
 | Project | Tickets | Archived | Status |
 |---------|---------|----------|--------|
+| UNIWATCH_unified-watch-command | 16 | 2025-11-22 | ✅ Complete |
 | SEMRANK_semantic-entry-point-ranking | 21 | 2025-11-22 | ✅ Complete |
 | OPNFIX_open-path-fix | 15 | 2025-11-22 | ✅ Complete |
 | FILETYPE_file-type-filtering | 11 | 2025-11-22 | ✅ Complete |
@@ -374,7 +399,7 @@ Historical session summaries and progress reports:
 | PERF_OPT_performance-optimization | 10 | (earlier) | ✅ Complete |
 | MAPROOM_misc-fixes | 3 | (earlier) | ✅ Complete |
 | CODE_QUALITY_code-quality-improvements | 1 | (earlier) | ✅ Complete |
-| **Total** | **290** | | **All Complete** |
+| **Total** | **306** | | **All Complete** |
 
 ## Archive Structure
 
