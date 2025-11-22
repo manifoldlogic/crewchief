@@ -39,8 +39,11 @@ describe('DaemonLifecycle', () => {
 
     // Create mock process
     mockProcess = new EventEmitter() as Partial<ChildProcess> & EventEmitter
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockProcess.stdin = mockStdin as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockProcess.stdout = mockStdout as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockProcess.stderr = mockStderr as any
     Object.defineProperty(mockProcess, 'exitCode', { value: null, writable: true, configurable: true })
     Object.defineProperty(mockProcess, 'killed', { value: false, writable: true, configurable: true })
@@ -106,6 +109,7 @@ describe('DaemonLifecycle', () => {
     })
 
     it('should throw DaemonStartError if streams not available', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockProcess.stdin = null as any
 
       const config: DaemonConfig = { binaryPath: '/path/to/daemon' }
@@ -137,6 +141,7 @@ describe('DaemonLifecycle', () => {
       // Simulate error
       setTimeout(() => {
         const error = new Error('ENOENT')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(error as any).code = 'ENOENT'
         mockProcess.emit('error', error)
       }, 50)

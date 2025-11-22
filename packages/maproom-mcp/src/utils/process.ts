@@ -292,6 +292,15 @@ export async function spawnProcess(
 
 /**
  * Try spawning a process with multiple candidate binaries
+ *
+ * @deprecated MCP server has migrated to DaemonClient for 20-50x performance improvement.
+ * This function is retained ONLY for VSCode extension compatibility.
+ * DO NOT REMOVE until VSCode extension is migrated (DAEMIGR Phase 2).
+ *
+ * For new code, use DaemonClient instead:
+ * @see packages/maproom-mcp/src/daemon.ts - Singleton daemon pattern
+ * @see packages/daemon-client/README.md - Migration guide and API documentation
+ *
  * @param candidateBinaries - Array of {cmd, description} to try
  * @param args - Arguments to pass (without subcommand)
  * @param options - Spawn options

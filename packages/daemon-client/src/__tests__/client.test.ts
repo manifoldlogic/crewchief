@@ -8,7 +8,6 @@ import {
   DaemonError,
   DaemonTimeoutError,
   DaemonCrashError,
-  DaemonUnhealthyError,
 } from '../errors.js'
 import type { DaemonConfig } from '../types.js'
 import { EventEmitter } from 'node:events'
@@ -44,8 +43,11 @@ describe('DaemonClient', () => {
 
     // Create mock process
     mockProcess = new EventEmitter() as Partial<ChildProcess> & EventEmitter
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockProcess.stdin = mockStdin as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockProcess.stdout = mockStdout as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockProcess.stderr = mockStderr as any
     Object.defineProperty(mockProcess, 'exitCode', { value: null, writable: true })
     Object.defineProperty(mockProcess, 'killed', { value: false, writable: true })
