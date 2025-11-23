@@ -28,7 +28,7 @@ const TEST_CASES = [
 ];
 
 async function runTests() {
-  const connectionString = process.env.MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@localhost:5432/maproom';
+  const connectionString = process.env.TEST_MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres-test:5432/maproom_test';
 
   const client = new Client({ connectionString });
 

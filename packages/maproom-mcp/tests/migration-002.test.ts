@@ -29,7 +29,7 @@ let testClient: Client | null = null
 
 beforeAll(async () => {
   // Setup test database connection
-  const connectionString = process.env.MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@localhost:5432/maproom'
+  const connectionString = process.env.TEST_MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres-test:5432/maproom_test'
 
   try {
     testClient = new Client({ connectionString })

@@ -9,7 +9,7 @@
 import pg from 'pg'
 const { Client } = pg
 
-const DATABASE_URL = process.env.MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+const DATABASE_URL = process.env.TEST_MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres-test:5432/maproom_test'
 
 /**
  * Execute a full-text search query and measure timing
