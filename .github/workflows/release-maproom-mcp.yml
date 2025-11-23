@@ -154,6 +154,9 @@ jobs:
           echo "✓ daemon-client dist found"
           ls -la packages/daemon-client/dist/
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Pack package
         run: |
           cd packages/maproom-mcp
