@@ -31,16 +31,8 @@ scripts/**
 .git/**
 .github/**
 
-# Parent directories - exclude specific paths
-../../node_modules/**
-../../packages/*
-!../../packages/vscode-maproom
-
-# Configuration files that may contain secrets or paths
-.mcp.json
-../../.mcp.json
-../../pnpm-workspace.yaml
-../../pnpm-lock.yaml
+# Exclude all parent directories completely
+../../**
 
 # Other
 .DS_Store
