@@ -70,13 +70,25 @@ jobs:
           # List all dist directories for verification
           find packages -name "dist" -type d
 
+      - name: Create artifact structure
+        run: |
+          # Create a temporary directory with only dist/ contents
+          mkdir -p /tmp/artifact
+          find packages -name "dist" -type d | while read dist_dir; do
+            # Get the package directory (e.g., packages/vscode-maproom)
+            package_dir=$(dirname "$dist_dir")
+            # Create the same structure in /tmp/artifact
+            mkdir -p "/tmp/artifact/$package_dir"
+            # Copy dist contents preserving structure
+            cp -r "$dist_dir" "/tmp/artifact/$package_dir/"
+          done
+          ls -la /tmp/artifact/packages/
+
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
-          path: |
-            packages/*/dist/**
-            !packages/*/node_modules/
+          path: /tmp/artifact/packages
           if-no-files-found: error
           retention-days: 7
           include-hidden-files: false
