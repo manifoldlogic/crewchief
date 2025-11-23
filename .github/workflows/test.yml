@@ -60,9 +60,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Step 5: Initialize test database schema
+      # Step 5: Setup Rust toolchain for migration runner
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      # Step 6: Cache cargo dependencies to speed up builds
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+
+      # Step 7: Initialize test database schema using Rust migrations
       # Critical: Service containers start fresh on each run, need schema setup
-      # This step waits for postgres to be fully ready and applies init.sql
+      # This step builds the Rust binary and runs all migrations from crates/maproom/migrations/
       - name: Initialize test database schema
         run: |
           echo "Waiting for PostgreSQL to be fully ready..."
@@ -82,28 +94,34 @@ jobs:
             sleep 1
           done
 
-          echo "PostgreSQL is ready. Initializing schema..."
+          echo "PostgreSQL is ready. Building Rust migration runner..."
 
-          # Apply schema from init.sql
-          # Use psql directly since we're on the same network as the service
-          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
-            -f packages/maproom-mcp/config/init.sql
+          # Build the Rust binary with migration support
+          cargo build --release --bin crewchief-maproom
 
-          echo "Schema initialization complete"
+          echo "Running database migrations..."
+
+          # Run all migrations from crates/maproom/migrations/
+          # This applies migrations 0000-0020, including the new BLOBSHA/BRANCHX migrations
+          # that are missing from init.sql
+          MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5434/maproom_test \
+            ./target/release/crewchief-maproom db migrate
+
+          echo "Schema initialization via migrations complete"
 
           # Verify schema was created successfully
           echo "Verifying schema..."
           PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
             -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'maproom';"
 
-      # Step 6: Run tests
+      # Step 8: Run tests
       # Runs from packages/maproom-mcp directory
       # Uses TEST_MAPROOM_DATABASE_URL from environment
       - name: Run tests
         working-directory: packages/maproom-mcp
         run: pnpm test
 
-      # Step 7: Verify test database usage (optional diagnostic step)
+      # Step 9: Verify test database usage (optional diagnostic step)
       # Shows that tests actually used the isolated test database
       # Helpful for debugging test isolation issues
       - name: Verify test database usage

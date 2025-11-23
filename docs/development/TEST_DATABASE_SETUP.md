@@ -374,10 +374,24 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+
       - name: Initialize test database schema
         run: |
-          docker exec $(docker ps -q -f "ancestor=pgvector/pgvector:pg16") \
-            psql -U maproom -d maproom_test < packages/maproom-mcp/config/init.sql
+          # Build Rust binary with migration runner
+          cargo build --release --bin crewchief-maproom
+
+          # Run migrations (applies all migrations from crates/maproom/migrations/)
+          MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5434/maproom_test \
+            ./target/release/crewchief-maproom db migrate
 
       - name: Run tests
         env:
@@ -389,7 +403,9 @@ jobs:
 - Use `localhost:5434` in CI (not `host.docker.internal`)
 - Service containers run on the same Docker network as the job container
 - Wait for health check before running tests
-- Initialize schema manually in a setup step
+- **Schema initialized via Rust migration system** (single source of truth)
+- Cargo dependencies cached for faster builds on subsequent runs
+- Migration runner applies all migrations from `crates/maproom/migrations/`
 
 ### Local CI Simulation
 
