@@ -70,6 +70,13 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      # 5a. Cache Rust dependencies (Docker build uses internal Rust compilation)
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          cache-on-failure: true
+
       # 6. Set up QEMU for multi-platform emulation
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
