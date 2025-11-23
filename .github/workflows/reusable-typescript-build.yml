@@ -1,0 +1,81 @@
+name: Reusable TypeScript Build
+
+on:
+  workflow_call:
+    inputs:
+      workspace_filter:
+        description: 'pnpm filter for packages to build (e.g., ./packages/*, @crewchief/cli...)'
+        required: false
+        type: string
+        default: './packages/*'
+
+      artifact_name:
+        description: 'Name for dist artifacts'
+        required: false
+        type: string
+        default: 'typescript-dist'
+
+    outputs:
+      artifact_name:
+        description: 'Name of uploaded artifact'
+        value: ${{ jobs.build.outputs.artifact_name }}
+
+jobs:
+  build:
+    name: Build TypeScript
+    runs-on: ubuntu-latest
+
+    outputs:
+      artifact_name: ${{ inputs.artifact_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter='${{ inputs.workspace_filter }}' build
+
+      - name: Verify dist directories exist
+        run: |
+          # Check that at least one dist/ directory was created
+          if ! find packages -name "dist" -type d | grep -q .; then
+            echo "ERROR: No dist/ directories found after build"
+            exit 1
+          fi
+
+          # List all dist directories for verification
+          find packages -name "dist" -type d
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            packages/*/dist/
+            !packages/*/node_modules/
+          if-no-files-found: error
+          retention-days: 7

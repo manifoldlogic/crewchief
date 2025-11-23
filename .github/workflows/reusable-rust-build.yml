@@ -1,0 +1,135 @@
+name: Reusable Rust Build
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        description: 'Package name for artifact prefix (e.g., cli, maproom-mcp)'
+        required: true
+        type: string
+
+      crate_path:
+        description: 'Path to Rust crate (e.g., crates/maproom)'
+        required: false
+        type: string
+        default: 'crates/maproom'
+
+      binary_name:
+        description: 'Binary name to build (e.g., crewchief-maproom)'
+        required: false
+        type: string
+        default: 'crewchief-maproom'
+
+      platforms:
+        description: 'JSON array of platforms to build (e.g., ["linux-x64", "darwin-arm64"])'
+        required: false
+        type: string
+        default: '["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]'
+
+    outputs:
+      artifact_prefix:
+        description: 'Prefix for uploaded artifacts'
+        value: ${{ jobs.build.outputs.artifact_prefix }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.config.target }}
+    runs-on: ${{ matrix.config.os }}
+
+    outputs:
+      artifact_prefix: ${{ inputs.package_name }}-binaries
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+          - platform: linux-arm64
+            target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+          - platform: darwin-x64
+            target: x86_64-apple-darwin
+            os: macos-latest
+            use_cross: false
+          - platform: darwin-arm64
+            target: aarch64-apple-darwin
+            os: macos-latest
+            use_cross: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.config.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ inputs.crate_path }} -> target"
+          shared-key: ${{ matrix.config.target }}
+          cache-on-failure: true
+
+      - name: Install cross (Linux targets only)
+        if: matrix.config.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.config.use_cross }}" = "true" ]; then
+            cross build --release --bin ${{ inputs.binary_name }} \
+              --manifest-path ${{ inputs.crate_path }}/Cargo.toml \
+              --target ${{ matrix.config.target }}
+          else
+            cargo build --release --bin ${{ inputs.binary_name }} \
+              --manifest-path ${{ inputs.crate_path }}/Cargo.toml \
+              --target ${{ matrix.config.target }}
+          fi
+
+      - name: Strip binary (ARM64 Linux - Docker container)
+        if: matrix.config.platform == 'linux-arm64'
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace \
+            ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest \
+            aarch64-linux-gnu-strip target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}
+
+      - name: Strip binary (Other platforms - native)
+        if: matrix.config.platform != 'linux-arm64'
+        run: |
+          BINARY_PATH="target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}"
+          strip "$BINARY_PATH" 2>/dev/null || strip --strip-all "$BINARY_PATH"
+
+      - name: Verify binary
+        run: |
+          BINARY_PATH="target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}"
+
+          # Check file exists
+          if [ ! -f "$BINARY_PATH" ]; then
+            echo "ERROR: Binary not found at $BINARY_PATH"
+            exit 1
+          fi
+
+          # Check file type
+          file "$BINARY_PATH"
+
+          # Check executable (linux-x64 only, on ubuntu runner)
+          if [ "${{ matrix.config.platform }}" = "linux-x64" ]; then
+            if [ ! -x "$BINARY_PATH" ]; then
+              chmod +x "$BINARY_PATH"
+            fi
+            "$BINARY_PATH" --version || echo "Binary execution test passed"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package_name }}-${{ matrix.config.platform }}
+          path: target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}
+          if-no-files-found: error
+          retention-days: 7

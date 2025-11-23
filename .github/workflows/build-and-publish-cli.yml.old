@@ -57,6 +57,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Cache Rust dependencies and build artifacts
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          shared-key: ${{ matrix.target }}
+          cache-on-failure: true
+
       # Linux x64 build steps
       - name: Setup Rust toolchain
         if: matrix.platform == 'linux-x64'
@@ -336,6 +344,21 @@ jobs:
         uses: pnpm/action-setup@v2
         with:
           version: 10
+
+      # Step 7a: Get pnpm store directory for caching
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      # Step 7b: Setup pnpm cache
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       # Step 8: Install dependencies and build TypeScript
       - name: Install dependencies and build TypeScript

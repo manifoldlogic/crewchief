@@ -57,6 +57,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Cache Rust dependencies and build artifacts
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          shared-key: ${{ matrix.target }}
+          cache-on-failure: true
+
       # Linux x64 build steps (BINPKG-1002)
       - name: Setup Rust toolchain
         if: matrix.platform == 'linux-x64'
@@ -331,13 +339,34 @@ jobs:
       - name: Upgrade npm to latest
         run: npm install -g npm@latest
 
+      # Step 6b: Setup pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      # Step 6c: Get pnpm store directory for caching
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      # Step 6d: Setup pnpm cache
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       # Step 7: Create npm tarball
       - name: Create npm tarball
         working-directory: packages/maproom-mcp
         run: |
           # Clean up old tarballs to avoid wildcard issues in verification
           rm -f *.tgz
-          npm pack
+          pnpm pack
 
       # Step 8: Verify tarball contains all binaries
       - name: Verify tarball contains all binaries
@@ -362,7 +391,7 @@ jobs:
       - name: Install dependencies
         if: inputs.dry_run != 'true'
         working-directory: packages/maproom-mcp
-        run: npm install --ignore-scripts
+        run: pnpm install --ignore-scripts
 
       # Step 10: Publish to npm (conditional)
       # Note: --provenance removed because it requires public repository
@@ -373,7 +402,7 @@ jobs:
         run: |
           # Retry logic for network resilience
           for i in 1 2 3; do
-            npm publish --access public && break || {
+            pnpm publish --access public && break || {
               if [ $i -lt 3 ]; then
                 echo "Publish attempt $i failed, retrying in 10 seconds..."
                 sleep 10
