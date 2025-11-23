@@ -82,6 +82,17 @@ jobs:
           name: maproom-mcp-typescript
           path: .
 
+      - name: Debug - Show downloaded files
+        run: |
+          echo "=== Root directory structure ==="
+          ls -la
+          echo "=== packages/ directory ==="
+          ls -la packages/ || echo "packages/ not found"
+          echo "=== packages/maproom-mcp/ ==="
+          ls -la packages/maproom-mcp/ || echo "packages/maproom-mcp/ not found"
+          echo "=== packages/daemon-client/ ==="
+          ls -la packages/daemon-client/ || echo "packages/daemon-client/ not found"
+
       - name: Verify binary structure
         run: |
           echo "Checking binary structure..."
