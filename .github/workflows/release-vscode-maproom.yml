@@ -25,7 +25,7 @@ jobs:
     name: Build TypeScript
     uses: ./.github/workflows/reusable-typescript-build.yml
     with:
-      workspace_filter: '@crewchief/vscode-maproom...'
+      workspace_filter: 'vscode-maproom...'
       artifact_name: 'vscode-extension-dist'
 
   # Job 2: Package extension with vsce and run smoke tests
