@@ -169,3 +169,66 @@ jobs:
           echo "Package: ${{ steps.package.outputs.vsix_filename }}"
           echo "Artifact: vscode-extension-vsix"
           echo "Ready for publishing to marketplaces"
+
+  # Job 3: Publish to VS Code Marketplace
+  publish-vscode:
+    name: Publish to VS Code Marketplace
+    runs-on: ubuntu-latest
+    needs: package-extension
+    if: secrets.VSCE_PAT != ''
+
+    steps:
+      - name: Download .vsix artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-vsix
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Publish to VS Code Marketplace
+        run: |
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+
+          if [ "${{ github.event.inputs.pre_release }}" = "true" ]; then
+            echo "Publishing pre-release version..."
+            if ! vsce publish --packagePath "$VSIX_FILE" --pre-release -p ${{ secrets.VSCE_PAT }}; then
+              echo "ERROR: Failed to publish pre-release extension"
+              echo "Common causes:"
+              echo "  - Invalid or expired VSCE_PAT"
+              echo "  - Version already published"
+              echo "  - Publisher not found or insufficient permissions"
+              echo "  - Package validation failures"
+              exit 1
+            fi
+          else
+            echo "Publishing stable version..."
+            if ! vsce publish --packagePath "$VSIX_FILE" -p ${{ secrets.VSCE_PAT }}; then
+              echo "ERROR: Failed to publish stable extension"
+              echo "Common causes:"
+              echo "  - Invalid or expired VSCE_PAT"
+              echo "  - Version already published"
+              echo "  - Publisher not found or insufficient permissions"
+              echo "  - Package validation failures"
+              exit 1
+            fi
+          fi
+
+      - name: Output marketplace URL
+        run: |
+          PUBLISHER="manifoldlogic"
+          EXTENSION="vscode-maproom"
+          VERSION="${{ needs.package-extension.outputs.version }}"
+
+          echo "=== VS Code Marketplace Publish Complete ==="
+          echo "Extension: ${PUBLISHER}.${EXTENSION}"
+          echo "Version: ${VERSION}"
+          echo "URL: https://marketplace.visualstudio.com/items?itemName=${PUBLISHER}.${EXTENSION}"
+          echo ""
+          echo "Users can install with:"
+          echo "  code --install-extension ${PUBLISHER}.${EXTENSION}"
