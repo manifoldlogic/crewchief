@@ -175,7 +175,7 @@ jobs:
     name: Publish to VS Code Marketplace
     runs-on: ubuntu-latest
     needs: package-extension
-    if: secrets.VSCE_PAT != ''
+    if: ${{ secrets.VSCE_PAT != '' }}
 
     steps:
       - name: Download .vsix artifact
@@ -238,7 +238,7 @@ jobs:
     name: Publish to Open VSX Registry
     runs-on: ubuntu-latest
     needs: package-extension
-    if: secrets.OVSX_PAT != ''
+    if: ${{ secrets.OVSX_PAT != '' }}
 
     steps:
       - name: Download .vsix artifact
