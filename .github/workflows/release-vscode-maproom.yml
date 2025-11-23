@@ -16,7 +16,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write  # For creating GitHub releases
 
 jobs:
   # Job 1: Build TypeScript (reusable)
@@ -282,3 +282,137 @@ jobs:
           echo "URL: https://open-vsx.org/extension/${NAMESPACE}/${EXTENSION}"
           echo ""
           echo "Available for VSCodium, Gitpod, Eclipse Theia, and other VS Code-compatible editors"
+
+  # Job 5: Create GitHub Release (runs after publishers complete)
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [package-extension, publish-vscode, publish-ovsx]
+    if: always() && (needs.publish-vscode.result == 'success' || needs.publish-ovsx.result == 'success')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download .vsix artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-vsix
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Extract from tag: @crewchief/vscode-maproom@v1.0.0 -> 1.0.0
+            VERSION="${GITHUB_REF#refs/tags/@crewchief/vscode-maproom@v}"
+          else
+            # Use workflow_dispatch input
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${VERSION}"
+
+      - name: Prepare release tag
+        id: tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="@crewchief/vscode-maproom@v${VERSION}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Release tag: ${TAG}"
+
+      - name: Check for existing release
+        id: check_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Release already exists: $TAG"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✓ No existing release found"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.tag.outputs.tag }}"
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+
+          # Build pre-release flag
+          PRERELEASE_FLAG=""
+          if [ "${{ github.event.inputs.pre_release }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+            echo "Creating pre-release..."
+          else
+            echo "Creating stable release..."
+          fi
+
+          # Create release with .vsix attachment
+          gh release create "$TAG" \
+            --title "VSCode Maproom v${VERSION}" \
+            --notes "$(cat <<'RELEASE_NOTES'
+## VSCode Maproom Extension v${VERSION}
+
+### Installation
+
+**From VS Code Marketplace:**
+\`\`\`bash
+code --install-extension manifoldlogic.vscode-maproom
+\`\`\`
+
+**From Open VSX Registry:**
+Available for VSCodium, Gitpod, Eclipse Theia, and other VS Code-compatible editors.
+- URL: https://open-vsx.org/extension/manifoldlogic/vscode-maproom
+
+**Manual Installation:**
+Download the .vsix file below and install using:
+\`\`\`bash
+code --install-extension vscode-maproom-${VERSION}.vsix
+\`\`\`
+
+### Changelog
+See [CHANGELOG.md](https://github.com/danielbushman/crewchief/blob/main/packages/vscode-maproom/CHANGELOG.md) for full details.
+
+### Links
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=manifoldlogic.vscode-maproom)
+- [Open VSX Registry](https://open-vsx.org/extension/manifoldlogic/vscode-maproom)
+- [Documentation](https://github.com/danielbushman/crewchief/tree/main/packages/vscode-maproom#readme)
+RELEASE_NOTES
+)" \
+            $PRERELEASE_FLAG \
+            "$VSIX_FILE"
+
+          echo "✓ Release created successfully: $TAG"
+
+      - name: Update existing release
+        if: steps.check_release.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+
+          echo "Updating existing release with new .vsix file..."
+          gh release upload "$TAG" "$VSIX_FILE" --clobber
+          echo "✓ Release updated with new .vsix file"
+
+      - name: Output release URL
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          echo "=== GitHub Release Complete ==="
+          echo "Tag: ${TAG}"
+          echo "Version: ${VERSION}"
+          echo "URL: https://github.com/danielbushman/crewchief/releases/tag/${TAG}"
+          echo ""
+          echo "Release includes:"
+          echo "  - .vsix file for manual installation"
+          echo "  - Changelog and version information"
+          echo "  - Links to VS Code Marketplace and Open VSX Registry"
