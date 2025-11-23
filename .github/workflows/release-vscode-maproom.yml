@@ -232,3 +232,53 @@ jobs:
           echo ""
           echo "Users can install with:"
           echo "  code --install-extension ${PUBLISHER}.${EXTENSION}"
+
+  # Job 4: Publish to Open VSX Registry (parallel with publish-vscode)
+  publish-ovsx:
+    name: Publish to Open VSX Registry
+    runs-on: ubuntu-latest
+    needs: package-extension
+    if: secrets.OVSX_PAT != ''
+
+    steps:
+      - name: Download .vsix artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-vsix
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install ovsx
+        run: npm install -g ovsx
+
+      - name: Publish to Open VSX Registry
+        run: |
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+
+          echo "Publishing to Open VSX Registry..."
+          if ! ovsx publish "$VSIX_FILE" -p ${{ secrets.OVSX_PAT }}; then
+            echo "ERROR: Failed to publish to Open VSX Registry"
+            echo "Common causes:"
+            echo "  - Invalid or expired OVSX_PAT"
+            echo "  - Version already published"
+            echo "  - Namespace not found or insufficient permissions"
+            echo "  - Package validation failures"
+            echo "  - Registry temporarily unavailable"
+            exit 1
+          fi
+
+      - name: Output Open VSX URL
+        run: |
+          NAMESPACE="manifoldlogic"
+          EXTENSION="vscode-maproom"
+          VERSION="${{ needs.package-extension.outputs.version }}"
+
+          echo "=== Open VSX Registry Publish Complete ==="
+          echo "Extension: ${NAMESPACE}.${EXTENSION}"
+          echo "Version: ${VERSION}"
+          echo "URL: https://open-vsx.org/extension/${NAMESPACE}/${EXTENSION}"
+          echo ""
+          echo "Available for VSCodium, Gitpod, Eclipse Theia, and other VS Code-compatible editors"
