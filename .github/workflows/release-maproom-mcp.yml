@@ -30,7 +30,7 @@ jobs:
     name: Build TypeScript
     uses: ./.github/workflows/reusable-typescript-build.yml
     with:
-      workspace_filter: '@crewchief/maproom-mcp... @maproom/daemon-client...'
+      workspace_filter: '@crewchief/maproom-mcp...'
       artifact_name: 'maproom-mcp-typescript'
 
   # Job 3: Validate and publish (depends on both builds)
