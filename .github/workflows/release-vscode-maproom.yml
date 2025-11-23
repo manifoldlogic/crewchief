@@ -353,38 +353,10 @@ jobs:
             echo "Creating stable release..."
           fi
 
-          # Create release with .vsix attachment
+          # Create release with simple notes
           gh release create "$TAG" \
             --title "VSCode Maproom v${VERSION}" \
-            --notes "$(cat <<'RELEASE_NOTES'
-## VSCode Maproom Extension v${VERSION}
-
-### Installation
-
-**From VS Code Marketplace:**
-\`\`\`bash
-code --install-extension manifoldlogic.vscode-maproom
-\`\`\`
-
-**From Open VSX Registry:**
-Available for VSCodium, Gitpod, Eclipse Theia, and other VS Code-compatible editors.
-- URL: https://open-vsx.org/extension/manifoldlogic/vscode-maproom
-
-**Manual Installation:**
-Download the .vsix file below and install using:
-\`\`\`bash
-code --install-extension vscode-maproom-${VERSION}.vsix
-\`\`\`
-
-### Changelog
-See [CHANGELOG.md](https://github.com/danielbushman/crewchief/blob/main/packages/vscode-maproom/CHANGELOG.md) for full details.
-
-### Links
-- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=manifoldlogic.vscode-maproom)
-- [Open VSX Registry](https://open-vsx.org/extension/manifoldlogic/vscode-maproom)
-- [Documentation](https://github.com/danielbushman/crewchief/tree/main/packages/vscode-maproom#readme)
-RELEASE_NOTES
-)" \
+            --notes "See [CHANGELOG.md](https://github.com/danielbushman/crewchief/blob/main/packages/vscode-maproom/CHANGELOG.md) for details. Install from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=manifoldlogic.vscode-maproom) or [Open VSX Registry](https://open-vsx.org/extension/manifoldlogic/vscode-maproom)." \
             $PRERELEASE_FLAG \
             "$VSIX_FILE"
 
