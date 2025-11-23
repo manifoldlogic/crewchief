@@ -31,6 +31,13 @@ scripts/**
 .git/**
 .github/**
 
+# Parent directories (workspace root)
+../**
+
+# Configuration files that may contain secrets
+.mcp.json
+../../.mcp.json
+
 # Other
 .DS_Store
 *.log
