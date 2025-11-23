@@ -31,12 +31,15 @@ scripts/**
 .git/**
 .github/**
 
-# Parent directories (workspace root)
-../**
+# Parent directories - exclude specific paths
+../../node_modules/**
+../../packages/*
+!../../packages/vscode-maproom
 
 # Configuration files that may contain secrets
 .mcp.json
 ../../.mcp.json
+../../pnpm-workspace.yaml
 
 # Other
 .DS_Store
