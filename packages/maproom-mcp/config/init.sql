@@ -3,6 +3,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE SCHEMA IF NOT EXISTS maproom;
 
@@ -2917,3 +2918,39 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_text_vec_ollama
   ON maproom.chunks
   USING ivfflat (text_embedding_ollama vector_cosine_ops)
   WITH (lists = 200);
+
+-- Git blob SHA computation function
+-- Computes SHA-256 hash of content in git blob format: "blob {size}\0{content}"
+-- Used for content-addressable storage and deduplication
+-- IMMUTABLE: Always returns same output for same input, allows optimization
+CREATE OR REPLACE FUNCTION maproom.compute_git_blob_sha(content TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  blob_header BYTEA;
+  blob_content BYTEA;
+  blob_data BYTEA;
+  hash_bytes BYTEA;
+BEGIN
+  -- Convert content to bytea
+  blob_content := convert_to(content, 'UTF8');
+
+  -- Compute git blob header: "blob {byte_length}\0"
+  blob_header := convert_to('blob ' || octet_length(blob_content), 'UTF8') || '\x00'::bytea;
+
+  -- Concatenate header and content
+  blob_data := blob_header || blob_content;
+
+  -- Compute SHA-256 hash
+  hash_bytes := sha256(blob_data);
+
+  -- Return as lowercase hex string
+  RETURN encode(hash_bytes, 'hex');
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+COMMENT ON FUNCTION maproom.compute_git_blob_sha(TEXT) IS
+'Computes SHA-256 hash of content in git blob format. Returns lowercase hex string (64 chars).';
+
+-- Test cases (for validation):
+-- SELECT maproom.compute_git_blob_sha('') = '473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813';
+-- SELECT maproom.compute_git_blob_sha('test') = 'aa19560d465e7d43915547490a1f6b73eb55702e3d12cb82fb577df60bad4928';
