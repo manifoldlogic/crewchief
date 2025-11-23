@@ -57,6 +57,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Cache Rust dependencies and build artifacts
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          shared-key: ${{ matrix.target }}
+          cache-on-failure: true
+
       # Linux x64 build steps (BINPKG-1002)
       - name: Setup Rust toolchain
         if: matrix.platform == 'linux-x64'
