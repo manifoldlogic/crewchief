@@ -49,10 +49,10 @@ on:
       - 'packages/maproom-mcp/config/init.sql'
       - 'crates/maproom/migrations/**'
 
-# Cancel in-progress runs for the same branch/PR
+# Cancel in-progress runs for PRs only (let main builds complete)
 concurrency:
-  group: test-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

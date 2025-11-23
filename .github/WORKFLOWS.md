@@ -116,14 +116,15 @@ Release Workflows
   - Workflows: `test.yml`, `reusable-rust-build.yml`, `reusable-typescript-build.yml`
   - Database: `packages/maproom-mcp/config/init.sql`, `crates/maproom/migrations/**`
 
-**Duration**: 3-5 minutes (with cache hit)
+**Duration**: 3-5 minutes (with cache hit), 6-9 minutes cold
 
 **Key Features**:
-- pnpm store caching (40-60% faster installs)
-- Rust dependency caching
-- Isolated PostgreSQL test database (service container)
-- Rust migrations for schema setup
-- Path filters reduce unnecessary runs by 80%
+- **Concurrency control**: Cancels outdated PR runs, allows main builds to complete
+- **pnpm store caching**: 40-60% faster installs
+- **Rust dependency caching**: `Swatinem/rust-cache@v2` for cargo dependencies
+- **Isolated PostgreSQL test database**: pgvector/pgvector:pg16 service container
+- **Rust migrations for schema setup**: Ensures test DB matches production schema
+- **Path filters**: Reduce unnecessary runs by 80% (only trigger on code/dependency changes)
 
 **Example Output**:
 ```bash
