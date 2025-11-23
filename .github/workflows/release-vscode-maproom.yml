@@ -97,7 +97,7 @@ jobs:
         run: |
           # Package extension
           VSIX_FILE="vscode-maproom-${{ steps.version.outputs.version }}.vsix"
-          vsce package --out "$VSIX_FILE"
+          vsce package --no-dependencies --out "$VSIX_FILE"
 
           echo "vsix_filename=$VSIX_FILE" >> $GITHUB_OUTPUT
           echo "✓ Package created: $VSIX_FILE"
