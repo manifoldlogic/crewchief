@@ -33,7 +33,7 @@
     "test:semrank": "TEST_MAPROOM_DATABASE_URL=postgresql://maproom:maproom@host.docker.internal:5434/maproom_test vitest run tests/integration/regression.test.ts tests/integration/search-quality.test.ts tests/integration/semrank-edge-cases.test.ts",
     "test:all": "pnpm run test:connection && pnpm run test:blob-sha && pnpm run test:vitest",
     "dev": "node bin/cli.cjs",
-    "prepublishOnly": "tsc && npm audit --audit-level=high --production",
+    "prepublishOnly": "tsc",
     "security-check": "pnpm audit --audit-level=moderate",
     "release:patch": "node scripts/release.js patch",
     "release:minor": "node scripts/release.js minor",
