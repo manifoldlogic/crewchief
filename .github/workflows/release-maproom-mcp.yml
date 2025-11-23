@@ -160,12 +160,14 @@ jobs:
       - name: Pack package
         run: |
           cd packages/maproom-mcp
+          # Clean up old tarballs
+          rm -f *.tgz
           pnpm pack
 
       - name: Verify package
         run: |
           cd packages/maproom-mcp
-          TARBALL=$(ls crewchief-maproom-mcp-*.tgz)
+          TARBALL=$(ls crewchief-maproom-mcp-*.tgz | head -1)
           echo "Package created: $TARBALL"
           tar -tzf "$TARBALL" | head -20
 
