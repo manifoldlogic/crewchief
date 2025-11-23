@@ -26,6 +26,8 @@
  */
 
 import * as vscode from 'vscode'
+import * as path from 'path'
+import * as fs from 'fs'
 import { ProcessOrchestrator } from './process/orchestrator'
 import { StatusBarManager } from './ui/statusBar'
 import {
@@ -156,7 +158,10 @@ export function activate(context: vscode.ExtensionContext): void {
     void initializeServices(context, workspaceFolder.uri.fsPath)
   }
 
-  // Step 6: Return immediately (FAST ACTIVATION - under 500ms)
+  // Step 6: Check and prompt for MCP setup if needed (fast, asynchronous)
+  void checkAndPromptForSetup(context)
+
+  // Step 7: Return immediately (FAST ACTIVATION - under 500ms)
   console.log('Maproom extension activated (background initialization starting...)')
   outputChannel.appendLine('Extension activated, starting services in background...')
 }
@@ -415,6 +420,43 @@ async function startWatchProcesses(
   statusBar?.connectOrchestrator(orchestrator)
   statusBar?.setState('watching')
   outputChannel?.appendLine('Status bar connected (Watching)')
+}
+
+/**
+ * Check and prompt for MCP setup if needed
+ *
+ * Shows a one-time prompt to run setup if the MCP configuration file is missing.
+ * Uses workspace state to ensure the prompt is only shown once per workspace.
+ *
+ * @param context - Extension context
+ */
+async function checkAndPromptForSetup(context: vscode.ExtensionContext): Promise<void> {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  if (!workspaceRoot) {
+    return // No workspace, skip prompt
+  }
+
+  const mcpConfigPath = path.join(workspaceRoot, '.vscode', 'mcp.json')
+  const configExists = fs.existsSync(mcpConfigPath)
+
+  if (!configExists) {
+    const workspaceState = context.workspaceState
+    const hasPrompted = workspaceState.get<boolean>('maproom.hasPromptedSetup', false)
+
+    if (!hasPrompted) {
+      const action = await vscode.window.showInformationMessage(
+        'Maproom MCP server not configured. Run setup to enable semantic code search?',
+        'Run Setup',
+        'Remind Me Later'
+      )
+
+      await workspaceState.update('maproom.hasPromptedSetup', true)
+
+      if (action === 'Run Setup') {
+        await vscode.commands.executeCommand('maproom.setup')
+      }
+    }
+  }
 }
 
 /**

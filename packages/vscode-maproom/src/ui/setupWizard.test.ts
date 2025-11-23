@@ -4,6 +4,9 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as http from 'http'
+import * as fs from 'fs/promises'
+import * as path from 'path'
+import * as os from 'os'
 
 /**
  * Mock SecretStorage
@@ -90,6 +93,26 @@ let lastInfoMessage: string | undefined = undefined
 let inputBoxResult: string | undefined = 'test-api-key'
 
 /**
+ * Track workspace folders
+ */
+let mockWorkspaceFolders: any[] | undefined = undefined
+
+/**
+ * Track information message action results
+ */
+let infoMessageAction: string | undefined = undefined
+
+/**
+ * Track command executions
+ */
+const executedCommands: string[] = []
+
+/**
+ * Track error messages
+ */
+let lastErrorMessage: string | undefined = undefined
+
+/**
  * Mock vscode module
  */
 vi.mock('vscode', () => ({
@@ -98,18 +121,31 @@ vi.mock('vscode', () => ({
       lastQuickPickOptions = items
       return quickPickResult
     },
-    showInformationMessage: (message: string) => {
+    showInformationMessage: (message: string, ...actions: string[]) => {
       lastInfoMessage = message
-      return Promise.resolve()
+      return Promise.resolve(infoMessageAction)
     },
     showInputBox: async (_options?: any) => {
       return inputBoxResult
+    },
+    showErrorMessage: (message: string) => {
+      lastErrorMessage = message
+      return Promise.resolve()
     },
   },
   commands: {
     registerCommand: (command: string, callback: Function) => {
       registeredCommands.set(command, callback)
       return { dispose: () => registeredCommands.delete(command) }
+    },
+    executeCommand: (command: string) => {
+      executedCommands.push(command)
+      return Promise.resolve()
+    },
+  },
+  workspace: {
+    get workspaceFolders() {
+      return mockWorkspaceFolders
     },
   },
 }))
@@ -124,14 +160,31 @@ const {
 
 describe('Setup Wizard', () => {
   let context: MockExtensionContext
+  let tempDir: string
 
-  beforeEach(() => {
+  beforeEach(async () => {
     context = new MockExtensionContext()
     lastQuickPickOptions = []
     quickPickResult = undefined
     registeredCommands.clear()
     lastInfoMessage = undefined
+    lastErrorMessage = undefined
     inputBoxResult = 'test-api-key'
+    infoMessageAction = undefined
+    executedCommands.length = 0
+    mockWorkspaceFolders = undefined
+
+    // Create temp directory for MCP config tests
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'setup-wizard-test-'))
+  })
+
+  afterEach(async () => {
+    // Clean up temp directory
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    } catch (error) {
+      // Ignore cleanup errors
+    }
   })
 
   describe('detectOllama', () => {
@@ -231,6 +284,9 @@ describe('Setup Wizard', () => {
     }, 5000)
 
     it('should save selected provider to workspace state', async () => {
+      // Set up mock workspace folder
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
       quickPickResult = {
         label: '$(cloud) OpenAI',
         detail: 'API key required',
@@ -256,6 +312,9 @@ describe('Setup Wizard', () => {
     })
 
     it('should handle Google Vertex AI selection', async () => {
+      // Set up mock workspace folder
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
       quickPickResult = {
         label: '$(cloud) Google Vertex AI',
         detail: 'API key required',
@@ -305,6 +364,9 @@ describe('Setup Wizard', () => {
     })
 
     it('should run setup wizard when command executed', async () => {
+      // Set up mock workspace folder
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
       registerSetupCommand(context)
 
       quickPickResult = {
@@ -322,7 +384,8 @@ describe('Setup Wizard', () => {
       // Should save selection
       expect(context.workspaceState.get('maproom.provider')).toBe('ollama')
 
-      // Should show success message
+      // Should show success message (from registerSetupCommand wrapper)
+      expect(lastInfoMessage).toBeDefined()
       expect(lastInfoMessage).toContain('OLLAMA')
     })
 
@@ -387,6 +450,140 @@ describe('Setup Wizard', () => {
       cloudOptions.forEach((opt) => {
         expect(opt.detail).toContain('API key required')
       })
+    })
+  })
+
+  describe('MCP Configuration Integration', () => {
+    it('should write MCP configuration after provider selection', async () => {
+      // Set up mock workspace folder
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
+      quickPickResult = {
+        label: '$(zap) Ollama',
+        detail: 'Local inference - requires Ollama installation',
+        value: 'ollama',
+      }
+
+      const result = await runSetupWizard(context)
+
+      expect(result).toBe('ollama')
+
+      // Verify MCP config was written
+      const configPath = path.join(tempDir, '.vscode', 'mcp.json')
+      const configContent = await fs.readFile(configPath, 'utf-8')
+      const config = JSON.parse(configContent)
+
+      expect(config.mcpServers.maproom).toBeDefined()
+      expect(config.mcpServers.maproom.command).toBe('npx')
+    })
+
+    it('should show restart prompt after MCP configuration', async () => {
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
+      quickPickResult = {
+        label: '$(zap) Ollama',
+        detail: 'Local inference - requires Ollama installation',
+        value: 'ollama',
+      }
+
+      await runSetupWizard(context)
+
+      // Should show restart prompt
+      expect(lastInfoMessage).toContain('MCP server configured')
+      expect(lastInfoMessage).toContain('Restart VS Code')
+    })
+
+    it('should execute reload command when "Restart Now" clicked', async () => {
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
+      quickPickResult = {
+        label: '$(zap) Ollama',
+        detail: 'Local inference - requires Ollama installation',
+        value: 'ollama',
+      }
+
+      infoMessageAction = 'Restart Now'
+
+      await runSetupWizard(context)
+
+      // Should execute reload command
+      expect(executedCommands).toContain('workbench.action.reloadWindow')
+    })
+
+    it('should not execute reload command when "Later" clicked', async () => {
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
+      quickPickResult = {
+        label: '$(zap) Ollama',
+        detail: 'Local inference - requires Ollama installation',
+        value: 'ollama',
+      }
+
+      infoMessageAction = 'Later'
+
+      await runSetupWizard(context)
+
+      // Should not execute reload command
+      expect(executedCommands).not.toContain('workbench.action.reloadWindow')
+    })
+
+    it('should handle no workspace open gracefully', async () => {
+      // No workspace folders
+      mockWorkspaceFolders = undefined
+
+      quickPickResult = {
+        label: '$(zap) Ollama',
+        detail: 'Local inference - requires Ollama installation',
+        value: 'ollama',
+      }
+
+      const result = await runSetupWizard(context)
+
+      // Should return undefined
+      expect(result).toBeUndefined()
+
+      // Should show error message
+      expect(lastErrorMessage).toContain('No workspace folder open')
+    })
+
+    it('should write provider-specific environment variables', async () => {
+      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
+
+      quickPickResult = {
+        label: '$(cloud) OpenAI',
+        detail: 'API key required',
+        value: 'openai',
+      }
+
+      await runSetupWizard(context)
+
+      // Verify OpenAI env var in config
+      const configPath = path.join(tempDir, '.vscode', 'mcp.json')
+      const configContent = await fs.readFile(configPath, 'utf-8')
+      const config = JSON.parse(configContent)
+
+      expect(config.mcpServers.maproom.env).toEqual({
+        OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
+      })
+    })
+
+    it('should handle MCP writer errors gracefully', async () => {
+      // Set workspace to invalid path to trigger error
+      mockWorkspaceFolders = [{ uri: { fsPath: '/etc/invalid-path' } }]
+
+      quickPickResult = {
+        label: '$(zap) Ollama',
+        detail: 'Local inference - requires Ollama installation',
+        value: 'ollama',
+      }
+
+      const result = await runSetupWizard(context)
+
+      // Should return undefined on error
+      expect(result).toBeUndefined()
+
+      // Should show error message
+      expect(lastErrorMessage).toContain('Failed to configure MCP server')
     })
   })
 })

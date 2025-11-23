@@ -18,6 +18,7 @@
 import * as vscode from 'vscode'
 import * as http from 'http'
 import { SecretsManager } from '../config/secrets'
+import { MCPConfigWriter } from '../config/mcp-writer'
 
 /**
  * Supported embedding providers
@@ -98,6 +99,35 @@ export async function runSetupWizard(
 
   // Save selection to workspace state
   await context.workspaceState.update(PROVIDER_STATE_KEY, selected.value)
+
+  // Write MCP configuration
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  if (!workspaceRoot) {
+    vscode.window.showErrorMessage(
+      'No workspace folder open. Open a folder or workspace to configure Maproom.'
+    )
+    return undefined
+  }
+
+  try {
+    const writer = new MCPConfigWriter()
+    await writer.registerMCPServer(workspaceRoot, selected.value)
+
+    const action = await vscode.window.showInformationMessage(
+      'Maproom MCP server configured! Restart VS Code to activate the MCP server.',
+      'Restart Now',
+      'Later'
+    )
+
+    if (action === 'Restart Now') {
+      await vscode.commands.executeCommand('workbench.action.reloadWindow')
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Failed to configure MCP server: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return undefined
+  }
 
   return selected.value
 }
