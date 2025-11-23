@@ -52,12 +52,29 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Download Rust binaries
+      - name: Download Rust binaries (Linux x64)
         uses: actions/download-artifact@v4
         with:
-          pattern: maproom-mcp-*
-          path: packages/maproom-mcp/bin/
-          merge-multiple: true
+          name: maproom-mcp-linux-x64
+          path: packages/maproom-mcp/bin/linux-x64/
+
+      - name: Download Rust binaries (Linux ARM64)
+        uses: actions/download-artifact@v4
+        with:
+          name: maproom-mcp-linux-arm64
+          path: packages/maproom-mcp/bin/linux-arm64/
+
+      - name: Download Rust binaries (Darwin x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: maproom-mcp-darwin-x64
+          path: packages/maproom-mcp/bin/darwin-x64/
+
+      - name: Download Rust binaries (Darwin ARM64)
+        uses: actions/download-artifact@v4
+        with:
+          name: maproom-mcp-darwin-arm64
+          path: packages/maproom-mcp/bin/darwin-arm64/
 
       - name: Download TypeScript dist
         uses: actions/download-artifact@v4
