@@ -39,6 +39,8 @@ import {
   checkPostgresAvailable,
   getPostgresUnavailableMessage,
   DEFAULT_POSTGRES_CONFIG,
+  getPostgresConfigFromSettings,
+  getPostgresUrl,
 } from './services/postgres-checker'
 
 /**
@@ -302,15 +304,16 @@ async function initializeServices(
 /**
  * Ensure PostgreSQL is available
  *
- * Checks if PostgreSQL is listening at maproom-postgres:5432 (Docker network).
+ * Checks if PostgreSQL is listening at the configured host/port.
  * Throws error with helpful message if not available.
  *
  * @throws Error if PostgreSQL is not available
  */
 async function ensurePostgresAvailable(): Promise<void> {
-  outputChannel?.appendLine('Checking PostgreSQL availability at maproom-postgres:5432...')
+  const config = getPostgresConfigFromSettings()
+  outputChannel?.appendLine(`Checking PostgreSQL availability at ${config.host}:${config.port}...`)
 
-  const available = await checkPostgresAvailable(DEFAULT_POSTGRES_CONFIG)
+  const available = await checkPostgresAvailable(config)
 
   if (!available) {
     const message = getPostgresUnavailableMessage()
@@ -351,11 +354,15 @@ async function runInitialWorkspaceScan(
     Object.assign(env, credentialEnv)
   }
 
+  // Get database URL from settings
+  const config = getPostgresConfigFromSettings()
+  const databaseUrl = getPostgresUrl(config)
+
   // Run scan with progress notification
   const filesIndexed = await runInitialScan({
     extensionRoot: context.extensionPath,
     workspaceRoot,
-    databaseUrl: 'postgresql://maproom:maproom@maproom-postgres:5432/maproom',
+    databaseUrl,
     outputChannel: outputChannel!,
     statusBarManager: statusBar,
     env,

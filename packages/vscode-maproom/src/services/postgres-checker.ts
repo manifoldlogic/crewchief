@@ -1,13 +1,14 @@
 /**
  * PostgreSQL availability checker for Maproom VSCode extension
  *
- * Checks if PostgreSQL is available at localhost:5433 (maproom-mcp standard port).
+ * Checks if PostgreSQL is available at the configured host/port.
  * Does NOT start Docker containers - assumes maproom-mcp is already running.
  *
  * This lightweight approach avoids container conflicts and keeps the extension simple.
  */
 
 import { createConnection, type Socket } from 'node:net'
+import * as vscode from 'vscode'
 
 /**
  * PostgreSQL connection configuration
@@ -24,11 +25,52 @@ export interface PostgresConfig {
  * Default postgres configuration matching maproom-mcp
  */
 export const DEFAULT_POSTGRES_CONFIG: PostgresConfig = {
-  host: 'maproom-postgres', // Docker network hostname
-  port: 5432, // Internal postgres port
+  host: 'localhost', // Default to localhost for local development
+  port: 5432,
   user: 'maproom',
   password: 'maproom',
   database: 'maproom',
+}
+
+/**
+ * Detect if running inside a devcontainer
+ *
+ * @returns true if running in a devcontainer, false otherwise
+ */
+function isDevcontainer(): boolean {
+  // Check for devcontainer environment variables
+  return (
+    process.env.REMOTE_CONTAINERS === 'true' ||
+    process.env.CODESPACES === 'true' ||
+    vscode.env.remoteName === 'dev-container'
+  )
+}
+
+/**
+ * Get appropriate default host based on environment
+ *
+ * @returns 'maproom-postgres' if in devcontainer, 'localhost' otherwise
+ */
+function getDefaultHost(): string {
+  return isDevcontainer() ? 'maproom-postgres' : 'localhost'
+}
+
+/**
+ * Get PostgreSQL configuration from VSCode settings
+ *
+ * @returns PostgreSQL configuration from user settings or defaults
+ */
+export function getPostgresConfigFromSettings(): PostgresConfig {
+  const config = vscode.workspace.getConfiguration('maproom.database')
+  const defaultHost = getDefaultHost()
+
+  return {
+    host: config.get<string>('host') ?? defaultHost,
+    port: config.get<number>('port') ?? DEFAULT_POSTGRES_CONFIG.port,
+    user: config.get<string>('user') ?? DEFAULT_POSTGRES_CONFIG.user,
+    password: config.get<string>('password') ?? DEFAULT_POSTGRES_CONFIG.password,
+    database: config.get<string>('name') ?? DEFAULT_POSTGRES_CONFIG.database,
+  }
 }
 
 /**

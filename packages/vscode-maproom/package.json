@@ -53,7 +53,37 @@
         "title": "Maproom: Show Status",
         "category": "Maproom"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Maproom",
+      "properties": {
+        "maproom.database.host": {
+          "type": "string",
+          "default": "localhost",
+          "description": "PostgreSQL host. Use 'localhost' when running outside containers, 'maproom-postgres' when inside Docker network."
+        },
+        "maproom.database.port": {
+          "type": "number",
+          "default": 5432,
+          "description": "PostgreSQL port."
+        },
+        "maproom.database.user": {
+          "type": "string",
+          "default": "maproom",
+          "description": "PostgreSQL username."
+        },
+        "maproom.database.password": {
+          "type": "string",
+          "default": "maproom",
+          "description": "PostgreSQL password."
+        },
+        "maproom.database.name": {
+          "type": "string",
+          "default": "maproom",
+          "description": "PostgreSQL database name."
+        }
+      }
+    }
   },
   "scripts": {
     "prepare:binaries": "node scripts/prepare-binaries.js",
