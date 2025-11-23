@@ -54,11 +54,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: vscode-extension-dist
-          path: .
+          path: packages
 
       - name: Verify dist structure
         run: |
           echo "Checking TypeScript dist..."
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of packages:"
+          ls -la packages/
           if [ ! -d "packages/vscode-maproom/dist" ]; then
             echo "ERROR: vscode-maproom dist not found"
             exit 1
