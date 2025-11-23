@@ -3,7 +3,7 @@ name: Release VSCode Extension
 on:
   push:
     tags:
-      - '@crewchief/vscode-maproom@v*.*.*'
+      - '@crewchief/vscode-maproom@v*'
   workflow_dispatch:
     inputs:
       version:
