@@ -75,7 +75,8 @@ jobs:
         with:
           name: ${{ inputs.artifact_name }}
           path: |
-            packages/*/dist/
+            packages/*/dist/**
             !packages/*/node_modules/
           if-no-files-found: error
           retention-days: 7
+          include-hidden-files: false
