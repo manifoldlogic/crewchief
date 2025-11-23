@@ -288,7 +288,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [package-extension, publish-vscode, publish-ovsx]
-    if: always() && (needs.publish-vscode.result == 'success' || needs.publish-ovsx.result == 'success')
+    if: ${{ always() && (needs.publish-vscode.result == 'success' || needs.publish-ovsx.result == 'success') }}
 
     steps:
       - name: Checkout code
@@ -336,7 +336,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        if: steps.check_release.outputs.exists == 'false'
+        if: ${{ steps.check_release.outputs.exists == 'false' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -391,7 +391,7 @@ RELEASE_NOTES
           echo "✓ Release created successfully: $TAG"
 
       - name: Update existing release
-        if: steps.check_release.outputs.exists == 'true'
+        if: ${{ steps.check_release.outputs.exists == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
