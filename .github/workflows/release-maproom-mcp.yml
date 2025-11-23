@@ -181,11 +181,8 @@ jobs:
 
       - name: Publish to npm
         if: ${{ !inputs.dry_run }}
-        run: |
-          cd packages/maproom-mcp
-          pnpm publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: packages/maproom-mcp
+        run: pnpm publish --no-git-checks --access public
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
