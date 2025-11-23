@@ -1,0 +1,120 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - '@crewchief/cli@v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip actual publish)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write  # For npm provenance
+
+jobs:
+  # Job 1: Build Rust binaries (reusable)
+  build-rust:
+    name: Build Rust Binaries
+    uses: ./.github/workflows/reusable-rust-build.yml
+    with:
+      package_name: cli
+      binary_name: crewchief-maproom
+      crate_path: crates/maproom
+
+  # Job 2: Build TypeScript (reusable)
+  build-typescript:
+    name: Build TypeScript
+    uses: ./.github/workflows/reusable-typescript-build.yml
+    with:
+      workspace_filter: '@crewchief/cli...'
+      artifact_name: 'cli-typescript'
+
+  # Job 3: Validate and publish (depends on both builds)
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [build-rust, build-typescript]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Download Rust binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: packages/cli/bin/
+          merge-multiple: true
+
+      - name: Download TypeScript dist
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-typescript
+          path: .
+
+      - name: Verify binary structure
+        run: |
+          echo "Checking binary structure..."
+          ls -R packages/cli/bin/
+
+          # Verify all 4 platforms present
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            if [ ! -f "packages/cli/bin/$platform/crewchief-maproom" ]; then
+              echo "ERROR: Missing binary for $platform"
+              exit 1
+            fi
+            echo "✓ $platform binary found"
+          done
+
+      - name: Set executable permissions
+        run: |
+          find packages/cli/bin -name "crewchief-maproom" -exec chmod +x {} \;
+
+      - name: Verify TypeScript dist
+        run: |
+          if [ ! -d "packages/cli/dist" ]; then
+            echo "ERROR: TypeScript dist not found"
+            exit 1
+          fi
+          echo "✓ TypeScript dist found"
+          ls -la packages/cli/dist/
+
+      - name: Pack package
+        run: |
+          cd packages/cli
+          pnpm pack
+
+      - name: Verify package
+        run: |
+          cd packages/cli
+          TARBALL=$(ls crewchief-cli-*.tgz)
+          echo "Package created: $TARBALL"
+          tar -tzf "$TARBALL" | head -20
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        run: |
+          cd packages/cli
+          pnpm publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package-cli
+          path: packages/cli/*.tgz
+          retention-days: 90
