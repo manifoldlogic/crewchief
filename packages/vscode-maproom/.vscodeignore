@@ -36,10 +36,11 @@ scripts/**
 ../../packages/*
 !../../packages/vscode-maproom
 
-# Configuration files that may contain secrets
+# Configuration files that may contain secrets or paths
 .mcp.json
 ../../.mcp.json
 ../../pnpm-workspace.yaml
+../../pnpm-lock.yaml
 
 # Other
 .DS_Store
