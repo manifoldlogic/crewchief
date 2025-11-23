@@ -1,11 +1,53 @@
 name: Test
 
 # Run tests on push to main and all pull request events
+# Path filters: Only run tests when code, dependencies, workflows, or schemas change
 on:
   push:
     branches:
       - main
+    paths:
+      # Rust code
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '**.rs'
+
+      # TypeScript code
+      - 'packages/*/src/**'
+      - 'packages/*/tests/**'
+      - 'packages/**/package.json'
+      - '**.ts'
+
+      # Dependencies
+      - 'pnpm-lock.yaml'
+
+      # Workflows (self + reusables)
+      - '.github/workflows/test.yml'
+      - '.github/workflows/reusable-rust-build.yml'
+      - '.github/workflows/reusable-typescript-build.yml'
+
+      # Database schemas and migrations
+      - 'packages/maproom-mcp/config/init.sql'
+      - 'crates/maproom/migrations/**'
+
   pull_request:
+    paths:
+      # Same paths as push (keep in sync!)
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '**.rs'
+      - 'packages/*/src/**'
+      - 'packages/*/tests/**'
+      - 'packages/**/package.json'
+      - '**.ts'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/test.yml'
+      - '.github/workflows/reusable-rust-build.yml'
+      - '.github/workflows/reusable-typescript-build.yml'
+      - 'packages/maproom-mcp/config/init.sql'
+      - 'crates/maproom/migrations/**'
 
 # Cancel in-progress runs for the same branch/PR
 concurrency:
