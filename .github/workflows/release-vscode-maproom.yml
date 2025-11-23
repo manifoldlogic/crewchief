@@ -1,0 +1,171 @@
+name: Release VSCode Extension
+
+on:
+  push:
+    tags:
+      - '@crewchief/vscode-maproom@v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: true
+        type: string
+      pre_release:
+        description: 'Publish as pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Job 1: Build TypeScript (reusable)
+  build-extension:
+    name: Build TypeScript
+    uses: ./.github/workflows/reusable-typescript-build.yml
+    with:
+      workspace_filter: '@crewchief/vscode-maproom...'
+      artifact_name: 'vscode-extension-dist'
+
+  # Job 2: Package extension (.vsix)
+  package-extension:
+    name: Package Extension
+    runs-on: ubuntu-latest
+    needs: build-extension
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      vsix_filename: ${{ steps.package.outputs.vsix_filename }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Download TypeScript dist
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-dist
+          path: .
+
+      - name: Verify dist structure
+        run: |
+          echo "Checking TypeScript dist..."
+          if [ ! -d "packages/vscode-maproom/dist" ]; then
+            echo "ERROR: vscode-maproom dist not found"
+            exit 1
+          fi
+          echo "✓ vscode-maproom dist found"
+          ls -la packages/vscode-maproom/dist/
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract from tag: @crewchief/vscode-maproom@v1.0.0 -> 1.0.0
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG_NAME##*@v}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Extension version: ${VERSION}"
+
+      - name: Verify package.json version
+        working-directory: packages/vscode-maproom
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "ERROR: Version mismatch!"
+            echo "  package.json: $PACKAGE_VERSION"
+            echo "  Expected:     $EXPECTED_VERSION"
+            exit 1
+          fi
+          echo "✓ Version matches: $PACKAGE_VERSION"
+
+      - name: Install vsce
+        run: pnpm add -g @vscode/vsce
+
+      - name: Package extension
+        id: package
+        working-directory: packages/vscode-maproom
+        run: |
+          # Package extension
+          vsce package --out vscode-maproom-${{ steps.version.outputs.version }}.vsix
+
+          VSIX_FILE="vscode-maproom-${{ steps.version.outputs.version }}.vsix"
+          echo "vsix_filename=${VSIX_FILE}" >> $GITHUB_OUTPUT
+          echo "✓ Package created: ${VSIX_FILE}"
+
+      - name: Verify package contents
+        working-directory: packages/vscode-maproom
+        run: |
+          VSIX_FILE="${{ steps.package.outputs.vsix_filename }}"
+
+          # Verify .vsix exists
+          if [ ! -f "$VSIX_FILE" ]; then
+            echo "ERROR: .vsix file not created"
+            exit 1
+          fi
+          echo "✓ .vsix file exists"
+
+          # Show file size
+          SIZE=$(du -h "$VSIX_FILE" | cut -f1)
+          echo "✓ Package size: $SIZE"
+
+          # List contents
+          echo "Package contents:"
+          unzip -l "$VSIX_FILE" | head -20
+
+      - name: Run smoke tests
+        working-directory: packages/vscode-maproom
+        run: |
+          VSIX_FILE="${{ steps.package.outputs.vsix_filename }}"
+
+          # Test 1: Verify package.json in package
+          if ! unzip -l "$VSIX_FILE" | grep -q "extension/package.json"; then
+            echo "ERROR: package.json not found in .vsix"
+            exit 1
+          fi
+          echo "✓ package.json present in package"
+
+          # Test 2: Verify dist/ directory in package
+          if ! unzip -l "$VSIX_FILE" | grep -q "extension/dist/"; then
+            echo "ERROR: dist/ directory not found in .vsix"
+            exit 1
+          fi
+          echo "✓ dist/ directory present in package"
+
+          # Test 3: Verify extension.js exists
+          if ! unzip -l "$VSIX_FILE" | grep -q "extension/dist/extension.js"; then
+            echo "ERROR: extension.js not found in .vsix"
+            exit 1
+          fi
+          echo "✓ extension.js present in package"
+
+          echo "✓ All smoke tests passed"
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension-vsix
+          path: packages/vscode-maproom/*.vsix
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          echo "=== VSCode Extension Package Complete ==="
+          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Package: ${{ steps.package.outputs.vsix_filename }}"
+          echo "Artifact: vscode-extension-vsix"
+          echo "Ready for publishing to marketplaces"
