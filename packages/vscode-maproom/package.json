@@ -57,6 +57,7 @@
   },
   "scripts": {
     "prepare:binaries": "node scripts/prepare-binaries.js",
+    "build": "pnpm run prepare:binaries && tsc -p ./",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "prepackage": "pnpm run prepare:binaries && pnpm run compile",
