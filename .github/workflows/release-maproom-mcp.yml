@@ -80,7 +80,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: maproom-mcp-typescript
-          path: .
+          path: packages
 
       - name: Debug - Show downloaded files
         run: |
