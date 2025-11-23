@@ -1,0 +1,305 @@
+name: Release VSCode Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (must match package.json)'
+        required: true
+        type: string
+      pre_release:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Build and package only (skip publishing)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write  # For creating GitHub releases
+
+jobs:
+  # Job 1: Build TypeScript using proven reusable workflow
+  build-extension:
+    name: Build TypeScript
+    uses: ./.github/workflows/reusable-typescript-build.yml
+    with:
+      workspace_filter: '@crewchief/vscode-maproom...'
+      artifact_name: 'vscode-extension-dist'
+
+  # Job 2: Package extension with vsce and run smoke tests
+  package-extension:
+    name: Package Extension
+    runs-on: ubuntu-latest
+    needs: build-extension
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      vsix_filename: ${{ steps.package.outputs.vsix_filename }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Download TypeScript dist
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-dist
+          path: .
+
+      - name: Verify dist structure
+        run: |
+          echo "Checking TypeScript dist..."
+          if [ ! -d "packages/vscode-maproom/dist" ]; then
+            echo "ERROR: vscode-maproom dist not found"
+            exit 1
+          fi
+          echo "✓ vscode-maproom dist found"
+          ls -la packages/vscode-maproom/dist/
+
+      - name: Verify version matches input
+        id: version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./packages/vscode-maproom/package.json').version")
+          EXPECTED_VERSION="${{ inputs.version }}"
+
+          if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "ERROR: Version mismatch!"
+            echo "  package.json: $PACKAGE_VERSION"
+            echo "  Expected:     $EXPECTED_VERSION"
+            echo ""
+            echo "Please update version in package.json to match input or fix input version."
+            exit 1
+          fi
+
+          echo "✓ Version verified: $PACKAGE_VERSION"
+          echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Package extension
+        id: package
+        working-directory: packages/vscode-maproom
+        run: |
+          # Package extension
+          VSIX_FILE="vscode-maproom-${{ steps.version.outputs.version }}.vsix"
+          vsce package --out "$VSIX_FILE"
+
+          echo "vsix_filename=$VSIX_FILE" >> $GITHUB_OUTPUT
+          echo "✓ Package created: $VSIX_FILE"
+
+      - name: Run smoke tests
+        working-directory: packages/vscode-maproom
+        run: |
+          VSIX_FILE="${{ steps.package.outputs.vsix_filename }}"
+
+          # Test 1: Verify .vsix exists
+          if [ ! -f "$VSIX_FILE" ]; then
+            echo "ERROR: .vsix file not created"
+            exit 1
+          fi
+          echo "✓ .vsix file exists"
+
+          # Test 2: Verify package.json in package
+          if ! unzip -l "$VSIX_FILE" | grep -q "extension/package.json"; then
+            echo "ERROR: package.json not found in .vsix"
+            exit 1
+          fi
+          echo "✓ package.json present in package"
+
+          # Test 3: Verify dist/ directory in package
+          if ! unzip -l "$VSIX_FILE" | grep -q "extension/dist/"; then
+            echo "ERROR: dist/ directory not found in .vsix"
+            exit 1
+          fi
+          echo "✓ dist/ directory present in package"
+
+          # Test 4: Verify extension.js exists
+          if ! unzip -l "$VSIX_FILE" | grep -q "extension/dist/extension.js"; then
+            echo "ERROR: extension.js not found in .vsix"
+            exit 1
+          fi
+          echo "✓ extension.js present in package"
+
+          # Test 5: Check package size
+          SIZE=$(stat -f%z "$VSIX_FILE" 2>/dev/null || stat -c%s "$VSIX_FILE")
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "✓ Package size: ${SIZE_MB}MB"
+          if [ "$SIZE" -gt 10485760 ]; then
+            echo "WARNING: Package size ${SIZE_MB}MB exceeds 10MB"
+          fi
+
+          echo "✓ All smoke tests passed"
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension-vsix
+          path: packages/vscode-maproom/*.vsix
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          echo "=== VSCode Extension Package Complete ==="
+          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Package: ${{ steps.package.outputs.vsix_filename }}"
+          echo "Artifact: vscode-extension-vsix"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Mode: DRY RUN (publishing will be skipped)"
+          else
+            echo "Ready for publishing to marketplaces"
+          fi
+
+  # Job 3: Publish to marketplaces and create GitHub release
+  publish-extension:
+    name: Publish Extension
+    runs-on: ubuntu-latest
+    needs: package-extension
+    if: ${{ !inputs.dry_run }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download .vsix artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-vsix
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          echo "Publishing to VS Code Marketplace..."
+          npm install -g @vscode/vsce
+
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+
+          if [ "${{ inputs.pre_release }}" = "true" ]; then
+            echo "Publishing as pre-release..."
+            vsce publish --packagePath "$VSIX_FILE" --pre-release -p "$VSCE_PAT"
+          else
+            echo "Publishing as stable release..."
+            vsce publish --packagePath "$VSIX_FILE" -p "$VSCE_PAT"
+          fi
+
+          echo "✓ Published to VS Code Marketplace"
+        continue-on-error: true
+        id: publish_vscode
+
+      - name: Publish to Open VSX Registry
+        if: ${{ env.OVSX_PAT != '' }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          echo "Publishing to Open VSX Registry..."
+          npm install -g ovsx
+
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+          ovsx publish "$VSIX_FILE" -p "$OVSX_PAT"
+
+          echo "✓ Published to Open VSX Registry"
+        continue-on-error: true
+        id: publish_ovsx
+
+      - name: Report Publishing Results
+        run: |
+          echo "=== Publishing Results ==="
+
+          if [ "${{ steps.publish_vscode.outcome }}" = "success" ]; then
+            echo "✅ VS Code Marketplace: Published"
+          elif [ "${{ env.VSCE_PAT }}" = "" ]; then
+            echo "⏭️  VS Code Marketplace: Skipped (no VSCE_PAT secret)"
+          else
+            echo "❌ VS Code Marketplace: Failed (see logs above)"
+          fi
+
+          if [ "${{ steps.publish_ovsx.outcome }}" = "success" ]; then
+            echo "✅ Open VSX Registry: Published"
+          elif [ "${{ env.OVSX_PAT }}" = "" ]; then
+            echo "⏭️  Open VSX Registry: Skipped (no OVSX_PAT secret)"
+          else
+            echo "❌ Open VSX Registry: Failed (see logs above)"
+          fi
+
+          # Fail job if both failed
+          if [ "${{ steps.publish_vscode.outcome }}" != "success" ] && [ "${{ steps.publish_ovsx.outcome }}" != "success" ]; then
+            echo ""
+            echo "ERROR: Both marketplace publishes failed or were skipped"
+            echo "Check logs above for details or verify secrets are configured"
+            exit 1
+          fi
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Create GitHub Release
+        if: ${{ steps.publish_vscode.outcome == 'success' || steps.publish_ovsx.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="vscode-maproom-v${VERSION}"
+          VSIX_FILE="${{ needs.package-extension.outputs.vsix_filename }}"
+
+          echo "Creating GitHub release: $TAG"
+
+          # Build pre-release flag
+          PRERELEASE_FLAG=""
+          if [ "${{ inputs.pre_release }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+            echo "Marking as pre-release"
+          fi
+
+          # Create release
+          gh release create "$TAG" \
+            --title "VSCode Maproom v${VERSION}" \
+            --notes "Extension release v${VERSION}. See [CHANGELOG.md](https://github.com/danielbushman/crewchief/blob/main/packages/vscode-maproom/CHANGELOG.md) for details." \
+            $PRERELEASE_FLAG \
+            "$VSIX_FILE"
+
+          echo "✓ GitHub release created: $TAG"
+
+      - name: Output Links
+        if: ${{ steps.publish_vscode.outcome == 'success' || steps.publish_ovsx.outcome == 'success' }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="vscode-maproom-v${VERSION}"
+
+          echo "=== VSCode Maproom v${VERSION} Published ==="
+          echo ""
+          echo "Install from:"
+
+          if [ "${{ steps.publish_vscode.outcome }}" = "success" ]; then
+            echo "  VS Code Marketplace:"
+            echo "    https://marketplace.visualstudio.com/items?itemName=manifoldlogic.vscode-maproom"
+            echo "    code --install-extension manifoldlogic.vscode-maproom"
+            echo ""
+          fi
+
+          if [ "${{ steps.publish_ovsx.outcome }}" = "success" ]; then
+            echo "  Open VSX Registry:"
+            echo "    https://open-vsx.org/extension/manifoldlogic/vscode-maproom"
+            echo ""
+          fi
+
+          echo "  GitHub Release:"
+          echo "    https://github.com/danielbushman/crewchief/releases/tag/${TAG}"
+          echo "    (download .vsix for manual install)"
