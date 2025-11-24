@@ -97,7 +97,13 @@ async function main() {
   console.log('\nBinaries prepared successfully!');
 
   // Exit with error if no binaries were found at all
+  // EXCEPTION: In CI, allow TypeScript build to proceed without binaries
+  // (they'll be downloaded later in the package step after Rust build completes)
   if (successful.length === 0) {
+    if (process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true') {
+      console.log('\n⚠ Running in CI: No binaries found, but continuing (binaries will be downloaded in package step)');
+      return;
+    }
     console.error('\n✗ ERROR: No binaries found! Cannot package extension.');
     process.exit(1);
   }
