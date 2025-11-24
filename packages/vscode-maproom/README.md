@@ -24,7 +24,7 @@ Maproom brings AI-powered semantic search to Visual Studio Code. Index your work
 | RAM | 4GB | 8GB |
 | Free Disk Space | 2GB | 5GB |
 
-**Note**: Docker Desktop must be running before activating the extension.
+**Critical**: Docker Desktop must be installed and running before activating the extension. The extension automatically starts PostgreSQL and MCP server containers on activation.
 
 ## Platform Support
 
@@ -170,6 +170,39 @@ Currently configured via setup wizard. Future versions may add workspace setting
 For detailed troubleshooting, see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ### Quick Solutions
+
+#### "Maproom requires Docker Desktop to be running" error
+
+**Cause**: Docker Desktop is not installed or not running when the extension activates.
+
+**Solutions**:
+1. Install Docker Desktop from https://www.docker.com/products/docker-desktop
+2. Start Docker Desktop and wait for it to fully initialize
+3. Verify Docker is running: `docker ps` in terminal should show no errors
+4. Reload VSCode window (Command Palette → "Developer: Reload Window")
+5. If the error persists, click "Show Logs" in the error dialog to view detailed diagnostics
+
+#### Port conflicts (5432, 3000)
+
+**Cause**: Another service is already using ports that Maproom's Docker containers need.
+
+**Solutions**:
+1. Check what's using the ports:
+   - Linux/macOS: `lsof -i :5432` and `lsof -i :3000`
+   - Windows: `netstat -ano | findstr :5432` and `netstat -ano | findstr :3000`
+2. Stop the conflicting service (e.g., local PostgreSQL installation)
+3. Or modify the port mappings in `~/.vscode/extensions/crewchief.vscode-maproom-*/config/docker-compose.yml`
+4. Restart VSCode to apply changes
+
+#### Containers not stopping on deactivation
+
+**Cause**: Docker containers persist across VSCode sessions by design (for faster restarts).
+
+**Solutions**:
+1. To manually stop containers: `docker compose down` in extension directory
+2. Or stop specific containers: `docker stop maproom-postgres maproom-mcp`
+3. To force cleanup: `docker compose down -v` (Warning: deletes indexed data)
+4. This is normal behavior - containers are reused across sessions for performance
 
 #### Docker services failed to start
 

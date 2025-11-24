@@ -1,9 +1,9 @@
 # Ticket: DOCKERUP-1001: Wire DockerManager into Extension Activation Flow
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output

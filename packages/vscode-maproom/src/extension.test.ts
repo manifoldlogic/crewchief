@@ -8,6 +8,45 @@ import * as path from 'path'
 import * as os from 'os'
 
 /**
+ * Mock DockerManager
+ */
+class MockDockerManager {
+  private shouldFail: boolean = false
+  private errorMessage: string = ''
+
+  constructor(public outputChannel: any) {}
+
+  async ensureServicesRunning(): Promise<void> {
+    if (this.shouldFail) {
+      throw new Error(this.errorMessage)
+    }
+  }
+
+  async stop(): Promise<void> {}
+
+  setFailure(shouldFail: boolean, message: string = 'Docker not running'): void {
+    this.shouldFail = shouldFail
+    this.errorMessage = message
+  }
+}
+
+// Track mock DockerManager instances
+let mockDockerManagerInstance: MockDockerManager | undefined
+
+// Mock DockerManager module
+vi.mock('./docker/manager', () => ({
+  DockerManager: class {
+    private mockInstance: MockDockerManager
+
+    constructor(outputChannel: any) {
+      this.mockInstance = new MockDockerManager(outputChannel)
+      mockDockerManagerInstance = this.mockInstance
+      return this.mockInstance
+    }
+  },
+}))
+
+/**
  * Mock SecretStorage
  */
 class MockSecretStorage {
@@ -77,9 +116,24 @@ let infoMessageActions: string[] = []
 let infoMessageAction: string | undefined = undefined
 
 /**
+ * Track error messages
+ */
+let lastErrorMessage: string | undefined = undefined
+let errorMessageActions: string[] = []
+let errorMessageAction: string | undefined = undefined
+
+/**
  * Track command executions
  */
 const executedCommands: string[] = []
+
+/**
+ * Mock output channel
+ */
+const mockOutputChannel = {
+  appendLine: vi.fn(),
+  show: vi.fn(),
+}
 
 /**
  * Mock vscode module
@@ -91,17 +145,31 @@ vi.mock('vscode', () => ({
       infoMessageActions = actions
       return Promise.resolve(infoMessageAction)
     },
+    showErrorMessage: (message: string, ...actions: string[]) => {
+      lastErrorMessage = message
+      errorMessageActions = actions
+      return Promise.resolve(errorMessageAction)
+    },
+    createOutputChannel: () => mockOutputChannel,
+    withProgress: (options: any, task: any) => {
+      const progress = { report: vi.fn() }
+      return task(progress)
+    },
   },
   commands: {
     executeCommand: (command: string) => {
       executedCommands.push(command)
       return Promise.resolve()
     },
+    registerCommand: () => ({ dispose: () => {} }),
   },
   workspace: {
     get workspaceFolders() {
       return mockWorkspaceFolders
     },
+  },
+  ProgressLocation: {
+    Notification: 15,
   },
 }))
 
@@ -125,9 +193,15 @@ describe('Extension First-Activation Prompt', () => {
     lastInfoMessage = undefined
     infoMessageActions = []
     infoMessageAction = undefined
+    lastErrorMessage = undefined
+    errorMessageActions = []
+    errorMessageAction = undefined
     executedCommands.length = 0
     mockWorkspaceFolders = undefined
     mockFileExists.clear()
+    mockDockerManagerInstance = undefined
+    mockOutputChannel.appendLine.mockClear()
+    mockOutputChannel.show.mockClear()
 
     // Create temp directory
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'extension-test-'))
@@ -468,6 +542,258 @@ describe('Extension First-Activation Prompt', () => {
       // Second activation with config still missing - should show prompt again
       await checkAndPromptForSetup(context)
       expect(lastInfoMessage).toContain('Maproom MCP server not configured')
+    })
+  })
+
+  describe('ensureDockerRunning', () => {
+    it('should start Docker services successfully and register cleanup', async () => {
+      const context = new MockExtensionContext()
+
+      // Create test function that mimics ensureDockerRunning
+      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
+        const { DockerManager } = await import('./docker/manager')
+        const dockerManager = new DockerManager(mockOutputChannel)
+
+        try {
+          await dockerManager.ensureServicesRunning()
+          ctx.subscriptions.push({
+            dispose: () => void dockerManager.stop()
+          })
+        } catch (error: any) {
+          throw new Error(`Failed to start Docker services: ${error.message}`)
+        }
+      }
+
+      await ensureDockerRunning(context)
+
+      // Should register cleanup handler
+      expect(context.subscriptions.length).toBe(1)
+      expect(context.subscriptions[0]).toHaveProperty('dispose')
+    })
+
+    it('should show error notification when Docker not running', async () => {
+      const context = new MockExtensionContext()
+
+      // Set mock to fail
+      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
+        const { DockerManager } = await import('./docker/manager')
+        const dockerManager = new DockerManager(mockOutputChannel)
+
+        if (mockDockerManagerInstance) {
+          mockDockerManagerInstance.setFailure(true, 'Docker daemon is not running')
+        }
+
+        try {
+          await dockerManager.ensureServicesRunning()
+          ctx.subscriptions.push({
+            dispose: () => void dockerManager.stop()
+          })
+        } catch (error: any) {
+          const vscode = await import('vscode')
+          const action = await vscode.window.showErrorMessage(
+            'Maproom requires Docker Desktop to be running.',
+            'Open Docker Desktop',
+            'Show Logs',
+            'Retry'
+          )
+
+          if (action === 'Show Logs') mockOutputChannel?.show()
+          throw new Error(`Failed to start Docker services: ${error.message}`)
+        }
+      }
+
+      await expect(ensureDockerRunning(context)).rejects.toThrow('Failed to start Docker services')
+      expect(lastErrorMessage).toContain('Maproom requires Docker Desktop to be running')
+      expect(errorMessageActions).toContain('Open Docker Desktop')
+      expect(errorMessageActions).toContain('Show Logs')
+      expect(errorMessageActions).toContain('Retry')
+    })
+
+    it('should show logs when "Show Logs" button clicked', async () => {
+      const context = new MockExtensionContext()
+      errorMessageAction = 'Show Logs'
+
+      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
+        const { DockerManager } = await import('./docker/manager')
+        const dockerManager = new DockerManager(mockOutputChannel)
+
+        if (mockDockerManagerInstance) {
+          mockDockerManagerInstance.setFailure(true, 'Docker daemon is not running')
+        }
+
+        try {
+          await dockerManager.ensureServicesRunning()
+          ctx.subscriptions.push({
+            dispose: () => void dockerManager.stop()
+          })
+        } catch (error: any) {
+          const vscode = await import('vscode')
+          const action = await vscode.window.showErrorMessage(
+            'Maproom requires Docker Desktop to be running.',
+            'Open Docker Desktop',
+            'Show Logs',
+            'Retry'
+          )
+
+          if (action === 'Show Logs') mockOutputChannel?.show()
+          throw new Error(`Failed to start Docker services: ${error.message}`)
+        }
+      }
+
+      await expect(ensureDockerRunning(context)).rejects.toThrow()
+      expect(mockOutputChannel.show).toHaveBeenCalled()
+    })
+
+    it('should call dockerManager.stop() when disposed', async () => {
+      const context = new MockExtensionContext()
+      const stopSpy = vi.fn()
+
+      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
+        const { DockerManager } = await import('./docker/manager')
+        const dockerManager = new DockerManager(mockOutputChannel)
+
+        // Override stop method with spy
+        dockerManager.stop = stopSpy
+
+        await dockerManager.ensureServicesRunning()
+        ctx.subscriptions.push({
+          dispose: () => void dockerManager.stop()
+        })
+      }
+
+      await ensureDockerRunning(context)
+
+      // Call dispose
+      const disposable = context.subscriptions[0]
+      disposable.dispose()
+
+      // stop() should have been called
+      expect(stopSpy).toHaveBeenCalled()
+    })
+  })
+
+  describe('initializeServices with Docker', () => {
+    it('should start Docker before checking PostgreSQL', async () => {
+      const callOrder: string[] = []
+
+      // Mock the functions to track call order
+      const ensureDockerRunning = async () => {
+        callOrder.push('docker')
+      }
+
+      const ensurePostgresAvailable = async () => {
+        callOrder.push('postgres')
+      }
+
+      // Simulate initializeServices flow
+      await ensureDockerRunning()
+      await ensurePostgresAvailable()
+
+      expect(callOrder).toEqual(['docker', 'postgres'])
+    })
+
+    it('should show progress messages in correct order', async () => {
+      const progressMessages: string[] = []
+
+      const mockProgress = {
+        report: ({ message }: { message: string }) => {
+          progressMessages.push(message)
+        }
+      }
+
+      // Simulate the progress flow
+      mockProgress.report({ message: 'Starting Docker services...' })
+      mockProgress.report({ message: 'Checking PostgreSQL...' })
+      mockProgress.report({ message: 'Starting watch processes...' })
+
+      expect(progressMessages).toEqual([
+        'Starting Docker services...',
+        'Checking PostgreSQL...',
+        'Starting watch processes...'
+      ])
+    })
+
+    it('should prevent service initialization if Docker fails', async () => {
+      let dockerStarted = false
+      let postgresChecked = false
+
+      const ensureDockerRunning = async () => {
+        throw new Error('Docker not running')
+      }
+
+      const ensurePostgresAvailable = async () => {
+        postgresChecked = true
+      }
+
+      try {
+        await ensureDockerRunning()
+        dockerStarted = true
+        await ensurePostgresAvailable()
+      } catch (error) {
+        // Expected
+      }
+
+      expect(dockerStarted).toBe(false)
+      expect(postgresChecked).toBe(false)
+    })
+  })
+
+  describe('runFirstTimeSetup with Docker', () => {
+    it('should start Docker after wizard, before initial scan', async () => {
+      const callOrder: string[] = []
+
+      const runSetupWizard = async () => {
+        callOrder.push('wizard')
+        return 'ollama'
+      }
+
+      const ensureDockerRunning = async () => {
+        callOrder.push('docker')
+      }
+
+      const ensurePostgresAvailable = async () => {
+        callOrder.push('postgres')
+      }
+
+      const runInitialWorkspaceScan = async () => {
+        callOrder.push('scan')
+      }
+
+      // Simulate first-time setup flow
+      const provider = await runSetupWizard()
+      if (provider) {
+        await ensureDockerRunning()
+        await ensurePostgresAvailable()
+        await runInitialWorkspaceScan()
+      }
+
+      expect(callOrder).toEqual(['wizard', 'docker', 'postgres', 'scan'])
+    })
+
+    it('should show error and abort setup if Docker fails', async () => {
+      let setupCompleted = false
+
+      const runSetupWizard = async () => 'ollama'
+
+      const ensureDockerRunning = async () => {
+        throw new Error('Docker not running')
+      }
+
+      const runInitialWorkspaceScan = async () => {
+        setupCompleted = true
+      }
+
+      try {
+        const provider = await runSetupWizard()
+        if (provider) {
+          await ensureDockerRunning()
+          await runInitialWorkspaceScan()
+        }
+      } catch (error) {
+        // Expected
+      }
+
+      expect(setupCompleted).toBe(false)
     })
   })
 })

@@ -44,6 +44,7 @@ import {
   getPostgresConfigFromSettings,
   getPostgresUrl,
 } from './services/postgres-checker'
+import { DockerManager } from './docker/manager'
 
 /**
  * Output channel for extension logging
@@ -199,6 +200,9 @@ async function runFirstTimeSetup(
       `Maproom configured to use ${provider.toUpperCase()} for embeddings`
     )
 
+    // Start Docker services before checking PostgreSQL
+    await ensureDockerRunning(context)
+
     // Check if PostgreSQL is available
     await ensurePostgresAvailable()
 
@@ -217,6 +221,42 @@ async function runFirstTimeSetup(
 
     // Set status bar to error state
     statusBar?.setState('error', error.message)
+  }
+}
+
+/**
+ * Ensure Docker services are running
+ *
+ * Multi-workspace behavior:
+ * - Multiple VSCode workspaces share the same Docker containers
+ * - DockerManager.ensureServicesRunning() is idempotent (safe to call multiple times)
+ * - Containers remain running until last workspace closes
+ * - Each workspace registers its own cleanup handler
+ *
+ * @param context - Extension context
+ * @throws Error if Docker services cannot be started
+ */
+async function ensureDockerRunning(context: vscode.ExtensionContext): Promise<void> {
+  const dockerManager = new DockerManager(outputChannel!)
+
+  try {
+    await dockerManager.ensureServicesRunning()
+    context.subscriptions.push({
+      dispose: () => void dockerManager.stop()
+    })
+  } catch (error: any) {
+    // Error message templates:
+    // - "Maproom requires Docker Desktop to be running." (Docker not running)
+    // - "Failed to start Docker services: [specific error]" (other errors)
+    const action = await vscode.window.showErrorMessage(
+      'Maproom requires Docker Desktop to be running.',
+      'Open Docker Desktop',
+      'Show Logs',
+      'Retry'
+    )
+
+    if (action === 'Show Logs') outputChannel?.show()
+    throw new Error(`Failed to start Docker services: ${error.message}`)
   }
 }
 
@@ -242,11 +282,15 @@ async function initializeServices(
         cancellable: false,
       },
       async (progress) => {
-        // Step 1: Check PostgreSQL availability
+        // Step 1: Start Docker services
+        progress.report({ message: 'Starting Docker services...' })
+        await ensureDockerRunning(context)
+
+        // Step 2: Check PostgreSQL availability
         progress.report({ message: 'Checking PostgreSQL...' })
         await ensurePostgresAvailable()
 
-        // Step 2: Create process orchestrator
+        // Step 3: Create process orchestrator
         progress.report({ message: 'Starting watch processes...' })
         outputChannel?.appendLine('Creating process orchestrator...')
 

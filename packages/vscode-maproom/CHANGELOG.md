@@ -5,6 +5,25 @@ All notable changes to the Maproom Semantic Search extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-01-25
+
+### Added
+- **Automatic Docker container startup** - Extension now starts PostgreSQL and MCP server automatically
+- No manual `npx @crewchief/maproom-mcp setup` command needed
+- Clear error messages when Docker not running with recovery instructions
+- Progress notifications during Docker startup
+- Troubleshooting documentation for Docker-related issues
+
+### Changed
+- Extension activation flow now includes Docker startup step
+- Setup wizard automatically starts containers after provider selection
+- Docker services start before PostgreSQL health checks
+
+### Fixed
+- "DATABASE_URL env var is required" error on fresh installations
+- Extension failing when Docker containers not manually started
+- Improved error handling with actionable user guidance
+
 ## [0.1.0] - 2025-11-16
 
 ### Added - Phase 1: Docker Service Management
