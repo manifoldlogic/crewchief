@@ -70,23 +70,30 @@ jobs:
           echo "✓ vscode-maproom dist found"
           ls -la packages/vscode-maproom/dist/
 
-      - name: Verify version matches input
+      - name: Bump version in package.json
         id: version
+        working-directory: packages/vscode-maproom
         run: |
-          PACKAGE_VERSION=$(node -p "require('./packages/vscode-maproom/package.json').version")
           EXPECTED_VERSION="${{ inputs.version }}"
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
 
-          if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "ERROR: Version mismatch!"
-            echo "  package.json: $PACKAGE_VERSION"
-            echo "  Expected:     $EXPECTED_VERSION"
-            echo ""
-            echo "Please update version in package.json to match input or fix input version."
-            exit 1
-          fi
+          echo "Current version: $CURRENT_VERSION"
+          echo "Target version:  $EXPECTED_VERSION"
 
-          echo "✓ Version verified: $PACKAGE_VERSION"
-          echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          # Auto-bump version using npm version
+          npm version $EXPECTED_VERSION --no-git-tag-version
+
+          echo "✓ Version updated to $EXPECTED_VERSION"
+          echo "version=$EXPECTED_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/vscode-maproom/package.json
+          git commit -m "chore(vscode): bump version to ${{ inputs.version }}" || echo "No changes to commit"
+          git push origin main || echo "Nothing to push"
 
       - name: Install vsce
         run: npm install -g @vscode/vsce
