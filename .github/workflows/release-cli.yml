@@ -38,6 +38,9 @@ jobs:
     name: Publish to npm
     runs-on: ubuntu-latest
     needs: [build-rust, build-typescript]
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC Trusted Publishers
 
     steps:
       - name: Checkout code
@@ -47,23 +50,43 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Download Rust binaries
+      - name: Download Rust binaries (Linux x64)
         uses: actions/download-artifact@v4
         with:
-          pattern: cli-*
-          path: packages/cli/bin/
-          merge-multiple: true
+          name: cli-linux-x64
+          path: packages/cli/bin/linux-x64/
+
+      - name: Download Rust binaries (Linux ARM64)
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-linux-arm64
+          path: packages/cli/bin/linux-arm64/
+
+      - name: Download Rust binaries (Darwin x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-darwin-x64
+          path: packages/cli/bin/darwin-x64/
+
+      - name: Download Rust binaries (Darwin ARM64)
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-darwin-arm64
+          path: packages/cli/bin/darwin-arm64/
 
       - name: Download TypeScript dist
         uses: actions/download-artifact@v4
         with:
           name: cli-typescript
-          path: .
+          path: packages
 
       - name: Verify binary structure
         run: |
@@ -92,9 +115,14 @@ jobs:
           echo "✓ TypeScript dist found"
           ls -la packages/cli/dist/
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Pack package
         run: |
           cd packages/cli
+          # Clean up old tarballs
+          rm -f *.tgz
           pnpm pack
 
       - name: Verify package
@@ -106,11 +134,8 @@ jobs:
 
       - name: Publish to npm
         if: ${{ !inputs.dry_run }}
-        run: |
-          cd packages/cli
-          pnpm publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: packages/cli
+        run: pnpm publish --no-git-checks --access public
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
