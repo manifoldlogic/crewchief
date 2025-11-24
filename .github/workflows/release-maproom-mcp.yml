@@ -38,6 +38,9 @@ jobs:
     name: Publish to npm
     runs-on: ubuntu-latest
     needs: [build-rust, build-typescript]
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC Trusted Publishers
 
     steps:
       - name: Checkout code
