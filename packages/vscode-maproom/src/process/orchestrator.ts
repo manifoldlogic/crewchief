@@ -18,7 +18,7 @@ import { EventEmitter } from 'node:events'
 import type { OutputChannel } from 'vscode'
 import * as vscode from 'vscode'
 import path from 'node:path'
-import { access, constants } from 'node:fs/promises'
+import { access, constants, chmod } from 'node:fs/promises'
 import { detectPlatform, getBinaryExtension, isWindows } from '../utils/platform'
 import { StdoutParser } from './parser'
 import type { WatchEvent } from './events'
@@ -269,9 +269,23 @@ export class ProcessOrchestrator extends EventEmitter {
       // Check if file exists and is readable
       await access(this.binaryPath, constants.F_OK | constants.R_OK)
 
-      // On Unix-like systems, also check executable permission
+      // On Unix-like systems, ensure binary has execute permissions
+      // This is necessary because .vsix packaging doesn't preserve file permissions
       if (!isWindows()) {
-        await access(this.binaryPath, constants.X_OK)
+        try {
+          // Check current permissions
+          await access(this.binaryPath, constants.X_OK)
+          this.log(`Binary already executable: ${this.binaryPath}`)
+        } catch (error: any) {
+          if (error.code === 'EACCES') {
+            // Binary exists but isn't executable - fix it automatically
+            this.log(`Setting execute permissions on binary: ${this.binaryPath}`)
+            await chmod(this.binaryPath, 0o755)
+            this.log(`Execute permissions set successfully`)
+          } else {
+            throw error
+          }
+        }
       }
 
       this.log(`Binary verified: ${this.binaryPath}`)
@@ -285,7 +299,7 @@ export class ProcessOrchestrator extends EventEmitter {
 
       if (error.code === 'EACCES') {
         throw new ProcessError(
-          `Binary not executable: ${this.binaryPath}. Try running: chmod +x ${this.binaryPath}`,
+          `Binary not executable: ${this.binaryPath}. Permission denied even after attempting chmod.`,
           'BINARY_NOT_EXECUTABLE'
         )
       }
