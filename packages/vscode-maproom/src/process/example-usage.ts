@@ -32,7 +32,7 @@ export async function activateProcessOrchestrator(
     const dockerManager = new DockerManager(outputChannel, context.extensionPath)
 
     outputChannel.appendLine('Starting Docker services...')
-    await dockerManager.ensureServicesRunning()
+    await dockerManager.ensureServicesRunning('ollama', { MAPROOM_EMBEDDING_PROVIDER: 'ollama' })
 
     // 3. Get PostgreSQL configuration from DockerManager
     const postgresConfig = dockerManager.getPostgresConfig()

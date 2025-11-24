@@ -201,7 +201,7 @@ async function runFirstTimeSetup(
     )
 
     // Start Docker services before checking PostgreSQL
-    await ensureDockerRunning(context)
+    await ensureDockerRunning(context, provider)
 
     // Check if PostgreSQL is available
     await ensurePostgresAvailable()
@@ -234,13 +234,40 @@ async function runFirstTimeSetup(
  * - Each workspace registers its own cleanup handler
  *
  * @param context - Extension context
+ * @param provider - Embedding provider selected by user ('ollama', 'openai', 'google')
  * @throws Error if Docker services cannot be started
  */
-async function ensureDockerRunning(context: vscode.ExtensionContext): Promise<void> {
+async function ensureDockerRunning(
+  context: vscode.ExtensionContext,
+  provider: string
+): Promise<void> {
   const dockerManager = new DockerManager(outputChannel!)
 
   try {
-    await dockerManager.ensureServicesRunning()
+    // Build environment variables for docker compose
+    const envVars: Record<string, string> = {
+      MAPROOM_EMBEDDING_PROVIDER: provider,
+    }
+
+    // Get API key from secrets if needed (not for ollama)
+    if (provider !== 'ollama') {
+      const secretsManager = new SecretsManager(context.secrets)
+      const apiKey = await secretsManager.getApiKey(provider as any)
+
+      if (apiKey) {
+        // Map to environment variable names expected by docker-compose.yml
+        if (provider === 'openai') {
+          envVars.OPENAI_API_KEY = apiKey
+        } else if (provider === 'google') {
+          envVars.GOOGLE_APPLICATION_CREDENTIALS = apiKey
+        }
+      }
+    }
+
+    outputChannel?.appendLine(`Starting Docker services for provider: ${provider}`)
+    outputChannel?.appendLine(`Environment: MAPROOM_EMBEDDING_PROVIDER=${provider}`)
+
+    await dockerManager.ensureServicesRunning(provider, envVars)
     context.subscriptions.push({
       dispose: () => void dockerManager.stop()
     })
@@ -274,6 +301,12 @@ async function initializeServices(
   workspaceRoot: string
 ): Promise<void> {
   try {
+    // Get configured provider
+    const provider = getConfiguredProvider(context)
+    if (!provider) {
+      throw new Error('No embedding provider configured. Run "Maproom: Setup" to configure.')
+    }
+
     // Show progress notification
     await vscode.window.withProgress(
       {
@@ -284,7 +317,7 @@ async function initializeServices(
       async (progress) => {
         // Step 1: Start Docker services
         progress.report({ message: 'Starting Docker services...' })
-        await ensureDockerRunning(context)
+        await ensureDockerRunning(context, provider)
 
         // Step 2: Check PostgreSQL availability
         progress.report({ message: 'Checking PostgreSQL...' })
@@ -302,8 +335,7 @@ async function initializeServices(
           database: 'maproom',
         }
 
-        // Get configured provider and create secrets manager
-        const provider = getConfiguredProvider(context)
+        // Create secrets manager (provider already retrieved above)
         const secretsManager = new SecretsManager(context.secrets)
 
         orchestrator = new ProcessOrchestrator(outputChannel!, {

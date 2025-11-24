@@ -176,23 +176,37 @@ export class DockerManager {
    *
    * This method is idempotent - it will not restart services that are already running.
    *
+   * @param provider - Embedding provider ('ollama', 'openai', 'google')
+   * @param envVars - Environment variables to pass to docker compose (provider config, API keys)
    * @throws DockerError if services cannot be started or health checks fail
    */
-  async ensureServicesRunning(): Promise<void> {
-    this.log('Ensuring Docker Compose services are running...')
+  async ensureServicesRunning(
+    provider: string,
+    envVars: Record<string, string> = {}
+  ): Promise<void> {
+    this.log(`Ensuring Docker Compose services are running for provider: ${provider}...`)
 
     try {
       // Check Docker availability first
       await this.checkDockerAvailable()
 
+      // Determine which services to start based on provider
+      // Always start: postgres, maproom-mcp
+      // Conditional: ollama (only if provider === 'ollama')
+      const services = provider === 'ollama'
+        ? ['postgres', 'ollama', 'maproom-mcp']
+        : ['postgres', 'maproom-mcp']
+
+      this.log(`Starting services: ${services.join(', ')}`)
+
       // Start services with docker compose up -d
-      this.log('Starting services: docker compose up -d')
       const result = await this.spawnCommand(
         'docker',
-        ['compose', '-f', this.composeFilePath, 'up', '-d'],
+        ['compose', '-f', this.composeFilePath, 'up', '-d', ...services],
         {
           timeout: 60000, // 60s timeout for pulling images
           cwd: this.workingDirectory,
+          env: envVars,
         }
       )
 
@@ -343,9 +357,9 @@ export class DockerManager {
   private async spawnCommand(
     command: string,
     args: string[],
-    options: { timeout?: number; cwd?: string } = {}
+    options: { timeout?: number; cwd?: string; env?: Record<string, string> } = {}
   ): Promise<{ code: number; stdout: string; stderr: string }> {
-    const { timeout = 0, cwd } = options
+    const { timeout = 0, cwd, env } = options
 
     return new Promise((resolve, reject) => {
       let child: ChildProcess | undefined
@@ -372,7 +386,7 @@ export class DockerManager {
       try {
         child = spawn(command, args, {
           cwd,
-          env: process.env,
+          env: env ? { ...process.env, ...env } : process.env,
           stdio: ['ignore', 'pipe', 'pipe'],
         })
 

@@ -35,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext) {
           },
           async (progress) => {
             progress.report({ message: 'Checking Docker...' })
-            await dockerManager.ensureServicesRunning()
+            await dockerManager.ensureServicesRunning('ollama', { MAPROOM_EMBEDDING_PROVIDER: 'ollama' })
             progress.report({ message: 'Services ready!' })
           }
         )
@@ -91,7 +91,7 @@ export async function activate(context: vscode.ExtensionContext) {
   /*
   try {
     outputChannel.appendLine('Auto-starting Maproom services...')
-    await dockerManager.ensureServicesRunning()
+    await dockerManager.ensureServicesRunning('ollama', { MAPROOM_EMBEDDING_PROVIDER: 'ollama' })
     outputChannel.appendLine('Services ready')
   } catch (error) {
     outputChannel.appendLine(`Auto-start failed: ${error}`)
@@ -145,7 +145,7 @@ export class MaproomFeature {
    */
   async initialize(): Promise<void> {
     try {
-      await this.dockerManager.ensureServicesRunning()
+      await this.dockerManager.ensureServicesRunning('ollama', { MAPROOM_EMBEDDING_PROVIDER: 'ollama' })
       this.outputChannel.appendLine('Maproom feature initialized')
     } catch (error) {
       this.outputChannel.appendLine(`Failed to initialize: ${error}`)
@@ -158,7 +158,7 @@ export class MaproomFeature {
    */
   async search(query: string): Promise<any[]> {
     // Ensure services are running before searching
-    await this.dockerManager.ensureServicesRunning()
+    await this.dockerManager.ensureServicesRunning('ollama', { MAPROOM_EMBEDDING_PROVIDER: 'ollama' })
 
     // TODO: Implement actual search logic
     // This would typically connect to the MCP server or database
