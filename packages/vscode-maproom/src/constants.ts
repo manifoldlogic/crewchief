@@ -8,4 +8,4 @@
  * This should match the version published to npm and be updated when
  * upgrading the maproom-mcp package.
  */
-export const MAPROOM_MCP_VERSION = '2.2.1'
+export const MAPROOM_MCP_VERSION = '2.2.2'
