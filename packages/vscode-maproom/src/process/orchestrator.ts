@@ -315,9 +315,16 @@ export class ProcessOrchestrator extends EventEmitter {
   private async buildEnvironment(): Promise<NodeJS.ProcessEnv> {
     const { postgres, secretsManager, provider } = this.config
 
+    // Build DATABASE_URL for crewchief-maproom binary
+    // Note: Old binaries use DATABASE_URL, new binaries use MAPROOM_DATABASE_URL
+    // We set both for compatibility
+    const databaseUrl = `postgresql://${postgres.user}:${postgres.password}@${postgres.host}:${postgres.port}/${postgres.database}`
+
     // Start with PostgreSQL config
     const env: NodeJS.ProcessEnv = {
       ...process.env,
+      DATABASE_URL: databaseUrl, // For old binaries
+      MAPROOM_DATABASE_URL: databaseUrl, // For new binaries
       PGHOST: postgres.host,
       PGPORT: postgres.port.toString(),
       PGUSER: postgres.user,
