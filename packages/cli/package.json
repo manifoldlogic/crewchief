@@ -1,6 +1,6 @@
 {
   "name": "@crewchief/cli",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "private": false,
   "description": "CrewChief: Multi-agent orchestration CLI for coordinating AI agents via git worktrees.",
   "license": "MIT",
