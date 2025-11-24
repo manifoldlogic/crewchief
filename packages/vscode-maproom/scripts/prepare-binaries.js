@@ -54,6 +54,26 @@ async function copyBinary(platform, binary) {
 async function main() {
   console.log('Preparing Maproom binaries for packaging...\n');
 
+  // Check if binaries already exist (e.g., in CI where they're pre-downloaded)
+  const targetBinaries = await Promise.all(
+    PLATFORMS.map(async ({ name, binary }) => {
+      const targetPath = join(TARGET_DIR, name, binary);
+      return { platform: name, exists: await fileExists(targetPath), path: targetPath };
+    })
+  );
+
+  const existingCount = targetBinaries.filter((b) => b.exists).length;
+
+  if (existingCount > 0) {
+    console.log(`Found ${existingCount} existing binaries in target directory:`);
+    targetBinaries.filter((b) => b.exists).forEach((b) => console.log(`  - ${b.platform}`));
+    console.log('\nSkipping copy (binaries already in place from CI or previous build)');
+    console.log('Binaries prepared successfully!');
+    return;
+  }
+
+  console.log('No existing binaries found, copying from CLI package...\n');
+
   // Ensure target directory exists
   await mkdir(TARGET_DIR, { recursive: true });
 

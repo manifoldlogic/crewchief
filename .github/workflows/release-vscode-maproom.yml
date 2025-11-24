@@ -20,7 +20,16 @@ permissions:
   contents: write  # For creating GitHub releases
 
 jobs:
-  # Job 1: Build TypeScript using proven reusable workflow
+  # Job 1: Build Rust binaries for all platforms
+  build-rust:
+    name: Build Rust Binaries
+    uses: ./.github/workflows/reusable-rust-build.yml
+    with:
+      package_name: vscode-extension
+      binary_name: crewchief-maproom
+      crate_path: crates/maproom
+
+  # Job 2: Build TypeScript using proven reusable workflow
   build-extension:
     name: Build TypeScript
     uses: ./.github/workflows/reusable-typescript-build.yml
@@ -28,11 +37,11 @@ jobs:
       workspace_filter: 'vscode-maproom...'
       artifact_name: 'vscode-extension-dist'
 
-  # Job 2: Package extension with vsce and run smoke tests
+  # Job 3: Package extension with vsce and run smoke tests
   package-extension:
     name: Package Extension
     runs-on: ubuntu-latest
-    needs: build-extension
+    needs: [build-rust, build-extension]
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -50,19 +59,54 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Download Rust binaries (Linux x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-linux-x64
+          path: packages/vscode-maproom/bin/linux-x64/
+
+      - name: Download Rust binaries (Linux ARM64)
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-linux-arm64
+          path: packages/vscode-maproom/bin/linux-arm64/
+
+      - name: Download Rust binaries (Darwin x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-darwin-x64
+          path: packages/vscode-maproom/bin/darwin-x64/
+
+      - name: Download Rust binaries (Darwin ARM64)
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension-darwin-arm64
+          path: packages/vscode-maproom/bin/darwin-arm64/
+
       - name: Download TypeScript dist
         uses: actions/download-artifact@v4
         with:
           name: vscode-extension-dist
           path: packages
 
-      - name: Verify dist structure
+      - name: Verify binary and dist structure
         run: |
+          echo "Checking Rust binaries..."
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            BINARY="packages/vscode-maproom/bin/$platform/crewchief-maproom"
+            if [ ! -f "$BINARY" ]; then
+              echo "ERROR: Missing binary for $platform"
+              exit 1
+            fi
+            # Set executable permissions
+            chmod +x "$BINARY"
+            # Verify it's actually a binary
+            file "$BINARY"
+            echo "✓ $platform binary verified"
+          done
+
+          echo ""
           echo "Checking TypeScript dist..."
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of packages:"
-          ls -la packages/
           if [ ! -d "packages/vscode-maproom/dist" ]; then
             echo "ERROR: vscode-maproom dist not found"
             exit 1

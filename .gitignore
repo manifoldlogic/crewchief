@@ -1,6 +1,9 @@
 dist/
 target/
 
+# Rust binaries (built in CI, not checked into git)
+packages/*/bin/
+
 # .cursor/
 # .claude/
 # .gemini/
