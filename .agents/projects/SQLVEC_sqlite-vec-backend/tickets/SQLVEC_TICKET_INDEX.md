@@ -13,3 +13,4 @@
 | SQLVEC-3001 | Implement Backend Switching & Config | Pending | 3 |
 | SQLVEC-3002 | Shared Integration Tests & Parity Check | Pending | 3 |
 | SQLVEC-3003 | Performance Benchmarking | Pending | 3 |
+| SQLVEC-4001 | Implement SQLite Support in VSCode Extension | Pending | 4 |
