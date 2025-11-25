@@ -67,6 +67,7 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             start_line INTEGER NOT NULL,
             end_line INTEGER NOT NULL,
             preview TEXT NOT NULL,
+            ts_doc_text TEXT,
             recency_score REAL NOT NULL,
             churn_score REAL NOT NULL,
             metadata JSON,

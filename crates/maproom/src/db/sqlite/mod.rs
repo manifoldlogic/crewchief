@@ -214,8 +214,10 @@ impl VectorStore for SqliteStore {
             // SQLite UPSERT
             conn.execute(
                 "INSERT INTO chunks (
-                   file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, recency_score, churn_score, metadata, worktree_ids
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                   file_id, blob_sha, symbol_name, kind, signature, docstring,
+                   start_line, end_line, preview, ts_doc_text, recency_score,
+                   churn_score, metadata, worktree_ids
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                  ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
                    blob_sha = excluded.blob_sha,
                    symbol_name = excluded.symbol_name,
@@ -223,8 +225,9 @@ impl VectorStore for SqliteStore {
                    signature = excluded.signature,
                    docstring = excluded.docstring,
                    preview = excluded.preview,
+                   ts_doc_text = excluded.ts_doc_text,
                    metadata = excluded.metadata,
-                   worktree_ids = json_insert(chunks.worktree_ids, '$[#]', ?14) -- Append worktree_id if not exists logic needed
+                   worktree_ids = json_insert(chunks.worktree_ids, '$[#]', ?15) -- Append worktree_id if not exists logic needed
                  ",
                 params![
                     chunk.file_id,
@@ -236,6 +239,7 @@ impl VectorStore for SqliteStore {
                     chunk.start_line,
                     chunk.end_line,
                     chunk.preview,
+                    chunk.ts_doc_text,
                     chunk.recency_score,
                     chunk.churn_score,
                     metadata_json,
