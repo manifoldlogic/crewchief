@@ -1,8 +1,8 @@
 # Ticket: MCPSIMP-3001: Update CLAUDE.md
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - Tests pass - N/A (documentation only)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - Tests pass - N/A (documentation only)
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

@@ -1,8 +1,8 @@
 # Ticket: MCPSIMP-2005: Update MCP Writer Tests
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

@@ -1,8 +1,8 @@
 # Ticket: MCPSIMP-2002: Update Version Constant
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - Tests pass - N/A (constant update only)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - Tests pass - N/A (constant update only)
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

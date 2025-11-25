@@ -1,8 +1,8 @@
 # Ticket: MCPSIMP-1003: Update Package.json
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - Tests pass - N/A (configuration-only ticket)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - Tests pass - N/A (configuration-only ticket)
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

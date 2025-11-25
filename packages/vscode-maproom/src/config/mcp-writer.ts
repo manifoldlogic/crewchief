@@ -173,18 +173,31 @@ export class MCPConfigWriter {
    * @returns Environment variable mapping
    */
   private buildEnvironment(provider: EmbeddingProvider): Record<string, string> {
+    const env: Record<string, string> = {
+      // Always include database URL (required for MCP server)
+      MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+      // Always include provider selection
+      MAPROOM_EMBEDDING_PROVIDER: provider,
+    }
+
+    // Add provider-specific credentials
     switch (provider) {
       case 'openai':
-        return { OPENAI_API_KEY: '${env:OPENAI_API_KEY}' }
+        env.OPENAI_API_KEY = '${env:OPENAI_API_KEY}'
+        break
       case 'google':
-        return { GOOGLE_APPLICATION_CREDENTIALS: '${env:GOOGLE_APPLICATION_CREDENTIALS}' }
+        env.GOOGLE_APPLICATION_CREDENTIALS = '${env:GOOGLE_APPLICATION_CREDENTIALS}'
+        break
       case 'ollama':
-        return {} // Ollama doesn't need environment variables
+        // Ollama doesn't need environment variables
+        break
       default:
         // TypeScript should prevent this, but handle unknown providers gracefully
         const _exhaustive: never = provider
         throw new Error(`Unknown provider: ${_exhaustive}`)
     }
+
+    return env
   }
 
   /**

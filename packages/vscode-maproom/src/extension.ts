@@ -264,10 +264,10 @@ async function ensureDockerRunning(
       }
     }
 
-    outputChannel?.appendLine(`Starting Docker services for provider: ${provider}`)
-    outputChannel?.appendLine(`Environment: MAPROOM_EMBEDDING_PROVIDER=${provider}`)
+    outputChannel?.appendLine(`Starting Docker services (PostgreSQL only)`)
+    outputChannel?.appendLine(`Provider: ${provider}`)
 
-    await dockerManager.ensureServicesRunning(provider, envVars)
+    await dockerManager.ensureServicesRunning()
     context.subscriptions.push({
       dispose: () => void dockerManager.stop()
     })

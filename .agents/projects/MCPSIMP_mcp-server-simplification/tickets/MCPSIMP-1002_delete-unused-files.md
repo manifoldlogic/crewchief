@@ -1,8 +1,8 @@
 # Ticket: MCPSIMP-1002: Delete Unused Files
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - Tests pass - N/A (deletion-only ticket)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - Tests pass - N/A (deletion-only ticket)
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

@@ -1,8 +1,8 @@
 # Ticket: MCPSIMP-2003: Update Extension docker-compose.yml
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - Tests pass - N/A (configuration file only)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - Tests pass - N/A (configuration file only)
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents

@@ -563,6 +563,8 @@ describe('Setup Wizard', () => {
       const config = JSON.parse(configContent)
 
       expect(config.servers.maproom.env).toEqual({
+        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_EMBEDDING_PROVIDER: 'openai',
         OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
       })
     })
