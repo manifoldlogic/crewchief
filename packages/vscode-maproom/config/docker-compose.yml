@@ -1,3 +1,5 @@
+name: maproom-dev
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
