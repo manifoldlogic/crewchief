@@ -17,7 +17,7 @@
  * - Configuration inherits from existing MCP server environment
  */
 
-import { DaemonClient } from '@crewchief/daemon-client'
+import { DaemonClient } from './daemon-client/index.js'
 import { findMaproomBinary } from './utils/process.js'
 
 /**

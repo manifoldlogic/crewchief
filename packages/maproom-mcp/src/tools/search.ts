@@ -54,7 +54,7 @@ import {
   DaemonStartError,
   DaemonTimeoutError,
   RpcError,
-} from '@crewchief/daemon-client'
+} from '../daemon-client/index.js'
 
 const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
 const log = LOG_FILE
