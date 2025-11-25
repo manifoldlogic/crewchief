@@ -1,13 +1,16 @@
-# Execution Plan: Headless CLI Core
+# Plan: Headless CLI Core
 
 ## Phase 1: Interface & Factory (Tickets 1-3)
 1.  **Define Interface**: Create `TerminalProvider` interface and types.
 2.  **Implement Mock**: Create `MockProvider` for testing.
 3.  **Implement Factory**: Create `TerminalFactory` with auto-detection logic.
+    *   **Requirement**: Must support `--headless` flag to override auto-detection.
 
 ## Phase 2: Provider Implementation (Tickets 4-6)
 4.  **Migrate iTerm**: Refactor existing `src/iterm/` code into `ITermProvider` class.
-5.  **Implement Headless**: Create `HeadlessProvider` using Node `child_process`.
+5.  **Implement Headless**: Create `HeadlessProvider` using Node `child_process` (or `execa`).
+    *   **Requirement**: Implement robust signal handling (`SIGINT`, `SIGTERM`) to kill child processes and prevent zombies.
+    *   **Requirement**: Prefix logs with `[AgentName]` for readability.
 6.  **Process Management**: Implement basic signal handling and cleanup for Headless mode.
 
 ## Phase 3: Integration & Cleanup (Tickets 7-9)
@@ -23,4 +26,3 @@
 - `crewchief --headless` runs successfully.
 - Existing iTerm functionality is preserved.
 - Codebase has 0 references to `src/iterm/` from outside `src/terminal/providers/iterm.ts`.
-

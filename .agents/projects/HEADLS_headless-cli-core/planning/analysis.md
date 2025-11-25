@@ -31,9 +31,9 @@ The CrewChief CLI currently has a hard dependency on `iTerm.app` on macOS.
     - If `TERM_PROGRAM == iTerm.app` -> `ITermProvider`.
     - If `CI=true` or `--headless` flag -> `HeadlessProvider`.
     - Default fallback -> `HeadlessProvider` (safe default).
+4.  **Layout Handling**: `HeadlessProvider` should ignore layout/split requests gracefully, treating all commands as background processes mapped to a logical ID.
 
 ## 4. Risks
 - **UX Degradation**: The "Dashboard" view (multiple panes) is a key value prop. Headless mode loses this.
   - *Mitigation*: Headless mode should output a clear log stream or a simple TUI status summary.
 - **Complexity**: Managing process lifecycles in `HeadlessProvider` (zombies, signal handling) is harder than letting iTerm handle it.
-
