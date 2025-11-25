@@ -1,5 +1,5 @@
 {
-  "name": "@maproom/daemon-client",
+  "name": "@crewchief/daemon-client",
   "version": "0.1.0",
   "description": "TypeScript client library for communicating with the crewchief-maproom daemon via JSON-RPC",
   "type": "module",
@@ -11,22 +11,40 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "maproom",
     "daemon",
     "json-rpc",
     "search",
-    "code-search"
+    "code-search",
+    "crewchief"
   ],
-  "author": "Maproom",
+  "author": "CrewChief",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danielbushman/crewchief.git",
+    "directory": "packages/daemon-client"
+  },
+  "bugs": {
+    "url": "https://github.com/danielbushman/crewchief/issues"
+  },
+  "homepage": "https://github.com/danielbushman/crewchief/tree/main/packages/daemon-client#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.0.0",
