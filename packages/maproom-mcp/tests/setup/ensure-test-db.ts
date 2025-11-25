@@ -9,12 +9,13 @@
  */
 
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const CONTAINER_NAME = 'maproom-postgres-test'
 const COMPOSE_FILE = resolve(__dirname, '../../../vscode-maproom/config/docker-compose.yml')
 const SCHEMA_FILE = resolve(__dirname, './init-schema.sql')
+const FIXTURE_FILE = resolve(__dirname, './test-fixtures.sql')
 const MAX_WAIT_SECONDS = 60
 const HEALTH_CHECK_INTERVAL_MS = 1000
 
@@ -144,6 +145,72 @@ function verifySchema(): void {
   }
 
   console.log('✅ Schema verification passed (all required tables exist)')
+}
+
+/**
+ * Check if the test corpus fixtures are already loaded
+ */
+function isTestCorpusLoaded(): boolean {
+  try {
+    const result = execSync(
+      `docker exec ${CONTAINER_NAME} psql -U maproom -d maproom_test -t -c "SELECT COUNT(*) FROM maproom.repos WHERE name = 'test-corpus'"`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+    return parseInt(result.trim(), 10) > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Load test fixtures from SQL file
+ */
+function loadTestFixtures(): void {
+  if (!existsSync(FIXTURE_FILE)) {
+    console.warn('⚠️  Fixture file not found, skipping fixture load')
+    return
+  }
+
+  console.log('📦 Loading test fixtures...')
+  const startTime = Date.now()
+
+  try {
+    const fixtureSQL = readFileSync(FIXTURE_FILE, 'utf-8')
+    execSync(
+      `docker exec -i ${CONTAINER_NAME} psql -U maproom -d maproom_test`,
+      {
+        input: fixtureSQL,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        encoding: 'utf-8'
+      }
+    )
+
+    const loadTime = Date.now() - startTime
+    console.log(`✅ Fixtures loaded in ${loadTime}ms`)
+  } catch (error) {
+    throw new Error(`Failed to load test fixtures: ${error}`)
+  }
+}
+
+/**
+ * Verify test corpus was loaded successfully
+ */
+function verifyTestCorpus(): void {
+  try {
+    const result = execSync(
+      `docker exec ${CONTAINER_NAME} psql -U maproom -d maproom_test -t -c "SELECT COUNT(*) FROM maproom.chunks c JOIN maproom.files f ON c.file_id = f.id JOIN maproom.repos r ON f.repo_id = r.id WHERE r.name = 'test-corpus'"`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+    const chunkCount = parseInt(result.trim(), 10)
+
+    if (chunkCount < 40) {
+      console.warn(`⚠️  Low chunk count: ${chunkCount}. Expected ~43 chunks for test corpus.`)
+    } else {
+      console.log(`✅ Test corpus verified: ${chunkCount} chunks`)
+    }
+  } catch {
+    console.warn('⚠️  Could not verify test corpus')
+  }
 }
 
 /**
