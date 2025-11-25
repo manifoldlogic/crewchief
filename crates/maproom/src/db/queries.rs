@@ -1,6 +1,7 @@
 use anyhow::Context;
-use serde::Serialize;
 use tokio_postgres::{types::ToSql, Client, NoTls};
+
+use super::SearchHit;
 
 pub async fn connect() -> anyhow::Result<Client> {
     let database_url = crate::db::connection::get_database_url()
@@ -640,21 +641,6 @@ pub async fn insert_chunks_batch(
     Ok(rows.iter().map(|row| row.get(0)).collect())
 }
 
-#[derive(Debug, Serialize)]
-pub struct SearchHit {
-    pub score: f64,
-    pub file_relpath: String,
-    pub symbol_name: Option<String>,
-    pub kind: String,
-    pub start_line: i32,
-    pub end_line: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_score: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub kind_mult: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exact_mult: Option<f64>,
-}
 
 /// Normalize query for exact match detection (SEMRANK-2004b)
 ///

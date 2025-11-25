@@ -10,6 +10,7 @@ pub mod materialized_views;
 pub mod pool;
 pub mod queries;
 pub mod postgres;
+#[cfg(feature = "sqlite")]
 pub mod sqlite;
 pub mod factory;
 

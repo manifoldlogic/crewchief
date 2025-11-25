@@ -1,36 +1,25 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use std::collections::HashSet;
-use tokio_postgres::{Client, NoTls};
 
-use crate::db::{ChunkRecord, FileRecord, SearchHit, VectorStore};
+use crate::db::{ChunkRecord, FileRecord, PgPool, SearchHit, VectorStore};
 
 pub struct PostgresStore {
-    pub client: Client,
+    pool: PgPool,
 }
 
 impl PostgresStore {
     pub async fn connect() -> anyhow::Result<Self> {
-        let database_url = crate::db::connection::get_database_url()
-            .context("Failed to determine database connection URL")?;
-        let (client, connection) = tokio_postgres::connect(&database_url, NoTls).await?;
-        
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("postgres connection error: {e}");
-            }
-        });
-
-        client.batch_execute("SET ivfflat.probes = 10").await?;
-
-        Ok(Self { client })
+        let pool = crate::db::pool::create_pool().await?;
+        Ok(Self { pool })
     }
 }
 
 #[async_trait]
 impl VectorStore for PostgresStore {
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
-        super::queries::get_or_create_repo(&self.client, name, root_path).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_or_create_repo(&client, name, root_path).await
     }
 
     async fn get_or_create_worktree(
@@ -39,7 +28,8 @@ impl VectorStore for PostgresStore {
         name: &str,
         abs_path: &str,
     ) -> anyhow::Result<i64> {
-        super::queries::get_or_create_worktree(&self.client, repo_id, name, abs_path).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_or_create_worktree(&client, repo_id, name, abs_path).await
     }
 
     async fn get_or_create_commit(
@@ -48,12 +38,14 @@ impl VectorStore for PostgresStore {
         sha: &str,
         committed_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> anyhow::Result<i64> {
-        super::queries::get_or_create_commit(&self.client, repo_id, sha, committed_at).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_or_create_commit(&client, repo_id, sha, committed_at).await
     }
 
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::upsert_file(
-            &self.client,
+            &client,
             file.repo_id,
             file.worktree_id,
             file.commit_id,
@@ -67,8 +59,9 @@ impl VectorStore for PostgresStore {
     }
 
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::insert_chunk(
-            &self.client,
+            &client,
             chunk.file_id,
             &chunk.blob_sha,
             chunk.symbol_name.as_deref(),
@@ -88,6 +81,7 @@ impl VectorStore for PostgresStore {
     }
 
     async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
         // Transform ChunkRecord into the tuple format expected by existing insert_chunks_batch
         // This is temporary until we refactor queries.rs to use ChunkRecord directly
         let tuples: Vec<_> = chunks.iter().map(|c| (
@@ -106,8 +100,8 @@ impl VectorStore for PostgresStore {
             c.metadata.clone(),
             c.worktree_id,
         )).collect();
-        
-        super::queries::insert_chunks_batch(&self.client, &tuples).await
+
+        super::queries::insert_chunks_batch(&client, &tuples).await
     }
 
     async fn insert_chunk_edge(
@@ -116,7 +110,8 @@ impl VectorStore for PostgresStore {
         dst_chunk_id: i64,
         edge_type: &str,
     ) -> anyhow::Result<()> {
-        super::queries::insert_chunk_edge(&self.client, src_chunk_id, dst_chunk_id, edge_type).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::insert_chunk_edge(&client, src_chunk_id, dst_chunk_id, edge_type).await
     }
 
     async fn upsert_embeddings(
@@ -126,8 +121,9 @@ impl VectorStore for PostgresStore {
         text_embedding: Option<&[f32]>,
         dimension: usize,
     ) -> anyhow::Result<()> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::upsert_embeddings(
-            &self.client,
+            &client,
             chunk_id,
             code_embedding,
             text_embedding,
@@ -141,25 +137,10 @@ impl VectorStore for PostgresStore {
         embeddings: &[(i64, Option<Vec<f32>>, Option<Vec<f32>>)],
         dimension: usize,
     ) -> anyhow::Result<()> {
-        // Client::transaction is async and requires &mut self, but we only have &self.
-        // However, our `client` field is internal and `Client` methods take &self for queries.
-        // The issue is `batch_upsert_embeddings` in queries.rs takes `&mut Client`.
-        // We need to fix that signature or handle mutability.
-        // `tokio_postgres::Client` handles interior mutability for basic queries, but transaction requires `&mut`.
-        // Actually, we can't easily get &mut Client from &self in a Sync trait.
-        // We might need to clone the client (it's cheap, just a handle) or change the signature in queries.rs
-        // to take &Client and use `build_transaction` if possible? No, transaction requires mut.
-        // 
-        // Workaround: In `queries.rs`, `batch_upsert_embeddings` takes `&mut Client`.
-        // Since `PostgresStore` owns `Client`, we can't get mut ref from `&self`.
-        // But wait, `VectorStore` trait defines `batch_upsert_embeddings` taking `&self`.
-        // We might need internal mutability (Mutex) or change the implementation to not require &mut Client 
-        // if possible (e.g. simple query without explicit transaction object, or just batch statements).
-        // Or, we clone the client? `Client` is Clone? Yes, it is a handle.
-        // Let's try cloning.
-        
-        let mut client_clone = self.client.clone();
-        super::queries::batch_upsert_embeddings(&mut client_clone, embeddings, dimension).await
+        // Get a connection from the pool - we have exclusive ownership of this connection
+        // so we can get a mutable reference for transaction support
+        let mut client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::batch_upsert_embeddings(&mut client, embeddings, dimension).await
     }
 
     async fn search_chunks_fts(
@@ -170,7 +151,8 @@ impl VectorStore for PostgresStore {
         k: i64,
         debug: bool,
     ) -> anyhow::Result<Vec<SearchHit>> {
-        super::queries::search_chunks_fts(&self.client, repo, worktree, query, k, debug).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::search_chunks_fts(&client, repo, worktree, query, k, debug).await
     }
 
     async fn find_chunk_by_symbol(
@@ -180,8 +162,9 @@ impl VectorStore for PostgresStore {
         symbol_name: &str,
         relpath: Option<&str>,
     ) -> anyhow::Result<Option<i64>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::find_chunk_by_symbol(
-            &self.client,
+            &client,
             repo_id,
             worktree_id,
             symbol_name,
@@ -191,10 +174,12 @@ impl VectorStore for PostgresStore {
     }
 
     async fn migrate(&self) -> anyhow::Result<()> {
-        super::queries::migrate(&self.client).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::migrate(&client).await
     }
 
     async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
-        super::queries::get_applied_migrations(&self.client).await
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_applied_migrations(&client).await
     }
 }
