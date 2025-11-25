@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
-// Removed `init` per new spec: setup covers initialization
 import inquirer from 'inquirer'
 import { registerAgentCommands } from './agent'
 import { registerCompetitionCommands } from './competition'
@@ -13,10 +12,9 @@ import { registerOptimizationCommands } from './optimization'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerSpawnCommand } from './spawn'
 import { registerWorktreeCommands } from './worktree'
-// Backwards-compat session subcommand removed; `crewchief` is the entrypoint
-// registerSessionCommands(program);
 import { loadConfig } from '../config/loader'
 import { startOrchestratorEventBridge } from '../orchestrator/events'
+import { TerminalFactory } from '../terminal/factory'
 import { logger } from '../utils/logger'
 
 const program = new Command()
@@ -24,7 +22,6 @@ const program = new Command()
 function resolvePackageVersion(): string {
   try {
     const here = path.dirname(fileURLToPath(import.meta.url))
-    // Works in both src (dev) and dist (built) layouts
     const pkgPath = path.resolve(here, '..', '..', 'package.json')
     const raw = fs.readFileSync(pkgPath, 'utf8')
     const pkg = JSON.parse(raw)
@@ -68,16 +65,15 @@ program.action(async () => {
       }
     }
 
-    // Check if iTerm2 is available
-    if (process.env.TERM_PROGRAM !== 'iTerm.app') {
-      logger.error('❌ iTerm2 is required to run CrewChief')
-      logger.error('   The tmux implementation is incomplete and no longer under development.')
-      logger.error('   Please install iTerm2: https://iterm2.com/downloads.html')
-      logger.error('   Then run CrewChief from within iTerm2.')
-      process.exit(1)
-    }
+    // Initialize terminal provider
+    const terminal = TerminalFactory.autoDetect()
+    await terminal.initialize()
 
-    logger.success('✅ Running in iTerm2')
+    if (terminal.id === 'headless') {
+      logger.success('✅ Running in Headless Mode')
+    } else {
+      logger.success(`✅ Running in ${terminal.id}`)
+    }
 
     // Auto-launch default root agents if configured
     const defaults = (config as any).defaults
@@ -126,7 +122,7 @@ program.action(async () => {
     }
     // iTerm2 doesn't need explicit attach - already in the terminal
     logger.info('CrewChief is ready. Use `crewchief spawn` to launch agents.')
-  } catch (err) {
+  } catch (err: any) {
     logger.error('Failed to start CrewChief:', err)
     process.exitCode = 1
   }
