@@ -1,31 +1,37 @@
 # Project Review Updates
 
-**Original Review Date:** N/A (New Project)
+**Original Review Date:** November 25, 2025
 **Updates Completed:** November 25, 2025
-**Update Status:** Initial Creation
+**Update Status:** Complete
 
 ## Critical Issues Addressed
-- N/A
 
-## Boundary Violations Fixed
-- N/A
+### Issue 1: Vector Dimension Limits
+**Mitigation Applied:**
+- **plan.md**: Added **Phase 0: Prototype Build** (Ticket 0) to specifically verify 1536-dim support and static linking *before* starting the main refactor.
+- **architecture.md**: Added validation note for `vec0` table.
+
+### Issue 2: FTS Dialect Incompatibility
+**Mitigation Applied:**
+- **architecture.md**: Explicitly noted that SQL strings cannot be shared. The `VectorStore` implementation must handle dialect-specific query construction. Added `query_builder.rs` concept (impl-specific).
 
 ## High-Risk Mitigations Implemented
-- **SQL Injection**: Explicit requirement for parameterized queries in both backends added to `security-review.md`.
-- **Extension Security**: Statically linking requirement added to `architecture.md`.
 
-## Gaps Filled
-- **Test Strategy**: Defined dual-backend compliance test suite in `quality-strategy.md`.
+### Risk 1: Concurrency & Locking (SQLITE_BUSY)
+**Mitigation Applied:**
+- **architecture.md**: Added requirement for `PRAGMA journal_mode=WAL` and connection pooling (`r2d2` / `deadpool`).
+- **plan.md**: Added WAL mode setup to Ticket 4.
 
-## Scope Adjustments
-- None.
-
-## Alignment Improvements
-- **Pragmatism**: Acknowledged SQL dialect differences and chose to duplicate query logic rather than build a complex ORM/query builder abstraction layer (KISS).
-
-## Document Change Summary
-- Created all planning documents.
+### Risk 2: Build Complexity
+**Mitigation Applied:**
+- **plan.md**: Ticket 0 covers the cross-platform build verification.
 
 ## Verification
-- **Next Steps**: Run `/review-project SQLVEC` to validate.
 
+**Next Steps:**
+1. Run `/create-project-tickets SQLVEC`.
+
+**Success Metrics:**
+- [x] Phase 0 ticket added to derisk build.
+- [x] Concurrency strategy defined (WAL).
+- [x] FTS dialect strategy defined (Separate impls).

@@ -1,4 +1,4 @@
-# Ticket: Implement SQLite Schema and Migrations
+# Ticket: Implement SqliteStore Schema & Migrations
 
 **ID:** SQLVEC-2002
 **Phase:** 2
@@ -6,34 +6,27 @@
 **Assigned To:** Database Specialist
 
 ## Summary
-Create the SQLite equivalent of the Postgres schema, including FTS5 virtual tables and `vec0` vector tables.
+Implement the schema creation logic for SQLite, mirroring the Postgres schema.
 
 ## Background
-Postgres uses `pgvector` and `tsvector`. SQLite uses `sqlite-vec` virtual tables and FTS5 virtual tables. The schemas are conceptually similar but syntactically different.
+We need `files`, `chunks`, `repositories`, `worktrees` tables, plus the virtual tables for search.
 
 ## Acceptance Criteria
-- [ ] `migrations/sqlite/0001_init.sql` created.
-- [ ] Table `files` created (standard SQL).
-- [ ] Table `chunks` created.
-- [ ] Virtual table `vec_chunks` using `vec0` created.
-- [ ] Virtual table `fts_chunks` using `fts5` created.
-- [ ] Triggers (if needed) to keep FTS/Vector tables in sync with `chunks`.
+- [ ] `schema.rs` defines SQL statements for table creation.
+- [ ] `vec_chunks` created using `vec0(embedding float[1536])`.
+- [ ] `fts_chunks` created using `fts5(content, tokenizer='trigram')`.
+- [ ] Standard relational tables created (foreign keys enabled).
+- [ ] `initialize()` runs migrations idempotently.
 
 ## Technical Requirements
-- **Schema**:
-  ```sql
-  CREATE VIRTUAL TABLE vec_chunks USING vec0(
-    chunk_id INTEGER PRIMARY KEY,
-    embedding FLOAT[768]
-  );
-  ```
+- **Idempotency**: Use `CREATE TABLE IF NOT EXISTS`.
+- **FTS**: Use `trigram` tokenizer if available, or standard if not. Note: `trigram` might require extra build flags for SQLite itself. Stick to standard tokenizer first if complex.
 
 ## Implementation Notes
-- Keep relational data in standard tables (`chunks`) and only search data in virtual tables (`vec_chunks`, `fts_chunks`) linked by ID.
+- Verify `sqlite-vec` table creation syntax matches the version we vendored.
 
 ## Dependencies
 - SQLVEC-2001
 
 ## Risks
-- Trigger complexity. It might be easier to manage sync in application code (`SqliteStore`) rather than SQL triggers.
-
+- Schema divergence from Postgres over time.

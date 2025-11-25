@@ -1,25 +1,28 @@
 # Quality Strategy: SQLite-Vec Backend
 
 ## 1. Test Strategy
-Since we are abstracting the DB, we can run the *same* integration tests against both backends.
+We need to ensure **Functional Parity** between Postgres and SQLite backends.
 
-### Testing Layers
-1.  **Unit Tests**: verify SQL generation (if dynamic).
-2.  **Integration Tests (`tests/store_compliance.rs`)**:
-    - Define a standard test suite: `test_insert_and_retrieve`, `test_vector_search`, `test_fts`.
-    - Run suite twice: once with `PostgresStore` (if Docker available), once with `SqliteStore` (in-memory or temp file).
+### Levels of Testing
+1.  **Unit Tests (`src/db/sqlite/*.rs`)**:
+    - Verify schema creation.
+    - Verify basic CRUD operations.
+2.  **Integration Tests (`tests/store_compat.rs`)**:
+    - Run the *same* test suite against both backends.
+    - `test_search_quality`: Index a known codebase, search for a term, assert results overlap.
+3.  **Performance Benchmarks (`benches/store_bench.rs`)**:
+    - Compare indexing speed (100 files).
+    - Compare search latency (vector vs hybrid).
 
-## 2. Performance Benchmarks
-- Compare `sqlite-vec` search latency vs `pgvector`.
-- Compare indexing throughput (chunks/sec).
+## 2. Critical Paths
+- **Vector Search Accuracy**: Does `sqlite-vec` return the same top-K results as `pgvector`?
+- **Concurrency**: Does SQLite panic or lock under load from the indexer (rayon threads)? -> *Mitigation: Use WAL mode and a connection pool (r2d2_sqlite).*
 
 ## 3. Acceptance Criteria
-- [ ] `cargo test --features sqlite` passes.
-- [ ] `maproom search --provider sqlite` returns relevant results.
-- [ ] `maproom scan` works with SQLite backend without crashing.
-- [ ] No regression in Postgres backend.
+- [ ] `cargo test` passes for both backends.
+- [ ] `maproom search` returns valid results with `MAPROOM_DB_URL=sqlite://test.db`.
+- [ ] Binary size increase is < 2MB (sqlite-vec is tiny).
+- [ ] No runtime requirement for `libsqlite3` (static linking preferred).
 
-## 4. CI/CD
-- GitHub Actions can easily run SQLite tests (no service container needed).
-- Ensure `sqlite-vec` compiles on all target platforms (Linux, macOS, Windows).
-
+## 4. Risk Mitigation
+- **Dual-Run Mode**: For testing, we could implement a mode that writes to both and logs discrepancies, but that might be overkill for MVP. Using shared integration tests is better.

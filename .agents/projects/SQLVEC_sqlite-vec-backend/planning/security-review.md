@@ -1,19 +1,22 @@
 # Security Review: SQLite-Vec Backend
 
-## 1. File Permissions
-- **SQLite**: Database is a file (`~/.config/crewchief/maproom.db`).
-  - *Risk*: Other users on the system reading the DB.
-  - *Mitigation*: Set file permissions to `600` (owner read/write only).
+## 1. Data at Rest
+- **Postgres**: Relies on file system permissions of the data dir.
+- **SQLite**: Relies on file system permissions of the `.db` file.
+- **Risk**: `maproom.db` might contain sensitive code snippets.
+- **Mitigation**: Ensure the file is created with `0600` permissions (user read/write only).
 
-## 2. SQL Injection
-- **Risk**: Dynamic SQL generation for different dialects.
-- **Mitigation**: Always use parameterized queries (`?` for SQLite, `$1` for Postgres). Never string concatenation.
+## 2. Injection Attacks
+- **SQL Injection**: `rusqlite` supports parameterized queries just like `tokio-postgres`.
+- **Mitigation**: Strictly enforce parameterized queries. Never use `format!("SELECT ... {}", user_input)`.
 
-## 3. Extension Security
-- **SQLite Extensions**: Loading C extensions can be risky.
-- **Mitigation**: Statically link `sqlite-vec` during build time. Do not allow loading arbitrary shared libraries at runtime.
+## 3. Memory Safety
+- **C Extension**: `sqlite-vec` is written in C.
+- **Risk**: Buffer overflows in the C extension.
+- **Mitigation**:
+  - Use a pinned, reviewed version of `sqlite-vec`.
+  - Run tests with AddressSanitizer (ASAN) if possible (advanced).
+  - Rely on the fact that `sqlite-vec` is becoming standard.
 
-## 4. Data Isolation
-- **Postgres**: Relies on DB user permissions.
-- **SQLite**: Relies on filesystem permissions. This is generally sufficient for a personal CLI tool.
-
+## 4. Dependencies
+- **Supply Chain**: Vendoring `sqlite-vec.c` prevents upstream changes breaking the build, but requires manual updates. This is a security trade-off (stability vs patching). We choose **Vendoring** for build reproducibility.

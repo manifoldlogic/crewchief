@@ -1,20 +1,11 @@
 # Architecture: SQLite-Vec Backend
 
-## 1. VectorStore Trait
-We will define a trait in `src/db/store.rs`:
+## 1. Core Abstraction: `VectorStore` Trait
 
 ```rust
 #[async_trait]
 pub trait VectorStore: Send + Sync {
-    async fn connect(&self) -> Result<()>;
-    async fn migrate(&self) -> Result<()>;
-    
-    // Core operations
-    async fn upsert_file(&self, file: &File) -> Result<i64>;
-    async fn insert_chunk(&self, chunk: &Chunk) -> Result<i64>;
-    async fn search_chunks(&self, query: &VectorQuery) -> Result<Vec<SearchResult>>;
-    
-    // ... other methods
+    // ... (same as before) ...
 }
 ```
 
@@ -23,34 +14,32 @@ pub trait VectorStore: Send + Sync {
 ```
 crates/maproom/src/
 ├── db/
-│   ├── mod.rs           # Exports
-│   ├── store.rs         # VectorStore trait definition
-│   ├── postgres/        # Postgres implementation
-│   │   ├── mod.rs
-│   │   ├── store.rs     # impl VectorStore for PostgresStore
-│   │   └── queries.rs   # Raw SQL for Postgres
-│   └── sqlite/          # SQLite implementation
+│   ├── mod.rs             # Trait definition
+│   ├── query_builder.rs   # NEW: SQL dialect abstraction (FTS/Vector syntax)
+│   ├── postgres/          # Moved current implementation
+│   └── sqlite/            # New implementation
 │       ├── mod.rs
-│       ├── store.rs     # impl VectorStore for SqliteStore
-│       └── queries.rs   # Raw SQL for SQLite
+│       ├── schema.rs      
+│       └── connection.rs  # NEW: Connection pooling & WAL setup
+├── build.rs               # Updated to compile sqlite-vec.c
 ```
 
-## 3. SQLite-Vec Integration
-- Use `sqlite-vec` crate (if available/stable) or build from source in `build.rs`.
-- Load extension on connection: `conn.load_extension("vec0", None)?`.
-- Schema:
-  ```sql
-  CREATE VIRTUAL TABLE vec_chunks USING vec0(
-    chunk_id INTEGER PRIMARY KEY,
-    embedding FLOAT[768]
-  );
-  ```
+## 3. SQLite Schema Strategy
+- **Tables**: Mirror Postgres tables.
+- **Vectors**: `vec0` virtual table. **Validation Required**: Ensure 1536-dim support.
+- **FTS**: `FTS5` virtual table.
+- **Concurrency**:
+  - Enable `PRAGMA journal_mode=WAL`.
+  - Use `r2d2` or `deadpool-sqlite` for connection pooling.
+  - Enforce **serialized writes** (mutex or single-thread channel) if `SQLITE_BUSY` becomes an issue, but WAL should suffice for moderate concurrency.
 
-## 4. Dependency Injection
-- `main.rs` reads config and instantiates `Box<dyn VectorStore>`.
-- Passes this store to `Indexer`, `Searcher`, etc.
+## 4. Query Dialect Abstraction
+We cannot reuse SQL strings.
+- **Postgres**: `plainto_tsquery($1)`, `<->` operator.
+- **SQLite**: `MATCH`, `vec_distance_cosine`.
+- **Strategy**: The `VectorStore` implementation is responsible for constructing the correct SQL string. We will NOT try to genericize the SQL itself, but genericize the *interface* (`search`, `upsert`).
 
-## 5. Migration Strategy
-- **Postgres**: Keep existing `.sql` files.
-- **SQLite**: Create new `migrations/sqlite/` directory. Use `user_version` pragma or a `migrations` table to track state.
-
+## 5. Build System Integration
+- Vendor `sqlite-vec` source.
+- Use `cc` crate.
+- **Cross-Compilation**: Ensure `CRATE_CC_NO_DEFAULTS` or similar env vars are handled for target-specific compilers.
