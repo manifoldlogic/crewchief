@@ -201,3 +201,39 @@ jobs:
                   (SELECT COUNT(*) FROM maproom.chunks) as chunks,
                   (SELECT COUNT(*) FROM maproom.symbols) as symbols;" \
             || echo "Note: No test data found (expected for some test suites)"
+
+  # Rust backend feature tests
+  # Tests both sqlite and postgres features for compilation
+  # SQLite tests run in-memory (no external service needed)
+  test-rust:
+    name: Test Rust (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [sqlite, postgres]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          key: ${{ matrix.features }}
+
+      - name: Check compilation
+        run: cargo check --features ${{ matrix.features }}
+        working-directory: crates/maproom
+
+      - name: Run tests
+        run: cargo test --features ${{ matrix.features }}
+        working-directory: crates/maproom
+        # Note: postgres tests requiring DB connection will be skipped
+        # SQLite tests use :memory: and don't need external services
