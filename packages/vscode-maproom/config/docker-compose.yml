@@ -1,4 +1,4 @@
-name: maproom-dev
+name: crewchief-dev-env
 
 services:
   postgres:

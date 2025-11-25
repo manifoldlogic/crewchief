@@ -54,7 +54,7 @@ function startTestDatabase(): void {
   console.log('🐘 Starting test database container...')
   try {
     // Use -p to ensure consistent project name matching the docker-compose.yml 'name' field
-    execSync(`docker compose -p maproom-dev -f "${COMPOSE_FILE}" --profile test up -d postgres-test`, {
+    execSync(`docker compose -p crewchief-dev-env -f "${COMPOSE_FILE}" --profile test up -d postgres-test`, {
       stdio: 'inherit'
     })
   } catch (error) {
@@ -197,7 +197,7 @@ export async function teardown(): Promise<void> {
   if (process.env.STOP_TEST_DB === 'true') {
     console.log('🛑 Stopping test database container...')
     try {
-      execSync(`docker compose -p maproom-dev -f "${COMPOSE_FILE}" --profile test stop postgres-test`, {
+      execSync(`docker compose -p crewchief-dev-env -f "${COMPOSE_FILE}" --profile test stop postgres-test`, {
         stdio: 'inherit'
       })
     } catch {
