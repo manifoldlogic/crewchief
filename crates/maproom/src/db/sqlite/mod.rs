@@ -497,17 +497,17 @@ impl VectorStore for SqliteStore {
             // We join with chunks and files
             
             let sql = r#"
-                SELECT 
+                SELECT
                     c.start_line,
                     c.end_line,
                     c.symbol_name,
                     c.kind,
                     f.relpath,
-                    fts.rank as score
-                FROM fts_chunks fts
-                JOIN chunks c ON c.id = fts.rowid
+                    fts_chunks.rank as score
+                FROM fts_chunks
+                JOIN chunks c ON c.id = fts_chunks.rowid
                 JOIN files f ON f.id = c.file_id
-                WHERE fts MATCH ?1
+                WHERE fts_chunks MATCH ?1
                   AND f.repo_id = ?2
                   AND (?3 IS NULL OR f.worktree_id = ?3)
                 ORDER BY score

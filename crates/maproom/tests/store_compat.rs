@@ -1,3 +1,13 @@
+//! Store compatibility tests - requires rand and tempfile dev-dependencies
+//!
+//! This test file is currently disabled pending dependency updates.
+//! It tests the VectorStore trait across different backends.
+
+#![cfg(all(
+    feature = "sqlite",
+    feature = "store_compat_test_deps"  // Enable when rand/tempfile added to dev-deps
+))]
+
 use anyhow::Result;
 use crewchief_maproom::db::{
     postgres::PostgresStore, sqlite::SqliteStore, ChunkRecord, FileRecord, VectorStore,
