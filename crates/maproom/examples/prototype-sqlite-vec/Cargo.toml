@@ -1,0 +1,12 @@
+[package]
+name = "prototype-sqlite-vec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusqlite = { version = "0.29.0", features = ["bundled"] }
+anyhow = "1.0"
+
+[build-dependencies]
+cc = "1.0"
+

@@ -33,7 +33,7 @@ describe('MCPConfigWriter', () => {
 
   describe('registerMCPServer - unit tests', () => {
     describe('provider-specific configuration', () => {
-      it('should generate OpenAI configuration with correct environment variable', async () => {
+      it('should generate OpenAI configuration with correct environment variables', async () => {
         const configPath = path.join(tempDir, '.vscode', 'mcp.json')
 
         await writer.registerMCPServer(tempDir, 'openai')
@@ -45,12 +45,14 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
+            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_EMBEDDING_PROVIDER: 'openai',
             OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
           },
         })
       })
 
-      it('should generate Google configuration with correct environment variable', async () => {
+      it('should generate Google configuration with correct environment variables', async () => {
         const configPath = path.join(tempDir, '.vscode', 'mcp.json')
 
         await writer.registerMCPServer(tempDir, 'google')
@@ -62,12 +64,14 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
+            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_EMBEDDING_PROVIDER: 'google',
             GOOGLE_APPLICATION_CREDENTIALS: '${env:GOOGLE_APPLICATION_CREDENTIALS}',
           },
         })
       })
 
-      it('should generate Ollama configuration without environment variables', async () => {
+      it('should generate Ollama configuration with base environment variables only', async () => {
         const configPath = path.join(tempDir, '.vscode', 'mcp.json')
 
         await writer.registerMCPServer(tempDir, 'ollama')
@@ -78,10 +82,14 @@ describe('MCPConfigWriter', () => {
         expect(config.servers.maproom).toEqual({
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
+          env: {
+            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_EMBEDDING_PROVIDER: 'ollama',
+          },
         })
 
-        // Verify no env property when empty
-        expect(config.servers.maproom.env).toBeUndefined()
+        // Verify only base env vars (no provider-specific keys for ollama)
+        expect(Object.keys(config.servers.maproom.env)).toHaveLength(2)
       })
 
       it('should use versioned package reference from constant', async () => {
@@ -191,6 +199,8 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
+            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_EMBEDDING_PROVIDER: 'openai',
             OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
           },
         })
@@ -370,11 +380,14 @@ describe('MCPConfigWriter', () => {
       // Write Ollama config
       await writer.registerMCPServer(tempDir, 'ollama')
 
-      // Verify final config is Ollama
+      // Verify final config is Ollama (with base env vars only)
       const content = await fs.readFile(configPath, 'utf-8')
       const config = JSON.parse(content)
 
-      expect(config.servers.maproom.env).toBeUndefined()
+      expect(config.servers.maproom.env).toEqual({
+        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_EMBEDDING_PROVIDER: 'ollama',
+      })
     })
   })
 
@@ -389,7 +402,10 @@ describe('MCPConfigWriter', () => {
       let content = await fs.readFile(configPath, 'utf-8')
       let config = JSON.parse(content)
 
-      expect(config.servers.maproom.env).toBeUndefined()
+      expect(config.servers.maproom.env).toEqual({
+        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_EMBEDDING_PROVIDER: 'ollama',
+      })
 
       // Step 2: Add another MCP server manually
       config.servers['custom-server'] = {
@@ -406,6 +422,8 @@ describe('MCPConfigWriter', () => {
 
       // Verify Maproom updated to OpenAI
       expect(config.servers.maproom.env).toEqual({
+        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_EMBEDDING_PROVIDER: 'openai',
         OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
       })
 
@@ -423,6 +441,8 @@ describe('MCPConfigWriter', () => {
 
       // Verify Maproom updated to Google
       expect(config.servers.maproom.env).toEqual({
+        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_EMBEDDING_PROVIDER: 'google',
         GOOGLE_APPLICATION_CREDENTIALS: '${env:GOOGLE_APPLICATION_CREDENTIALS}',
       })
 

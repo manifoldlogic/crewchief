@@ -57,6 +57,15 @@
     "configuration": {
       "title": "Maproom",
       "properties": {
+        "maproom.database.provider": {
+          "type": "string",
+          "enum": [
+            "sqlite",
+            "postgres"
+          ],
+          "default": "sqlite",
+          "description": "Database backend provider. 'sqlite' uses a local embedded database (zero-dependency). 'postgres' requires a running PostgreSQL instance (e.g. via Docker)."
+        },
         "maproom.database.host": {
           "type": "string",
           "default": "localhost",

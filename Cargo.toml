@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/maproom",
+    "crates/maproom/examples/prototype-sqlite-vec",
 ]
 resolver = "2"
 

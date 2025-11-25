@@ -1,3 +1,5 @@
+name: crewchief-dev-env
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -46,96 +48,43 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: maproom-ollama
-    volumes:
-      - ollama-models:/root/.ollama
-      # Optional: Uncomment if using separate init script
-      # - ./init-ollama.sh:/usr/local/bin/init-ollama.sh:ro
-    ports:
-      - "0.0.0.0:${OLLAMA_PORT:-11434}:11434"  # Bind to all interfaces for Docker-in-Docker compatibility
-    networks:
-      - maproom-network
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s  # Allow time for model download
-    restart: unless-stopped
-    # Optional GPU support
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "ollama serve &
-      OLLAMA_PID=$$!;
-      echo 'Waiting for Ollama server...';
-      sleep 5;
-      echo 'Pulling nomic-embed-text model...';
-      ollama pull nomic-embed-text;
-      echo 'Model ready!';
-      wait $$OLLAMA_PID"
-
-  # MCP server service - required for stdio proxy connection (line 428 in cli.cjs)
-  maproom-mcp:
-    # Pull pre-built multi-platform image from Docker Hub
-    # Set MAPROOM_VERSION environment variable to pin to specific version:
-    #   MAPROOM_VERSION=1.1.10 (pin to exact version - recommended for production)
-    #   MAPROOM_VERSION=1.1 (pin to minor, get patch updates)
-    #   MAPROOM_VERSION=1 (pin to major, get minor updates)
-    #   Default: latest (always newest release)
-    image: manifoldlogic/crewchief_maproom-mcp:${MAPROOM_VERSION:-latest}
-    container_name: maproom-mcp
-    depends_on:
-      postgres:
-        condition: service_healthy
-      # Note: Ollama dependency removed - only required if MAPROOM_EMBEDDING_PROVIDER=ollama
-      # CLI ensures Ollama is started when needed via conditional service startup
+  # Test database for integration tests (opt-in, not started by default)
+  # Start with: docker compose --profile test up -d postgres-test
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: maproom-postgres-test
+    profiles:
+      - test
     environment:
-      MAPROOM_DATABASE_URL: postgresql://maproom:maproom@maproom-postgres:5432/maproom
-      # Pass through provider from environment, default to ollama for zero-config
-      MAPROOM_EMBEDDING_PROVIDER: ${MAPROOM_EMBEDDING_PROVIDER:-ollama}
-      MAPROOM_EMBEDDING_MODEL: ${MAPROOM_EMBEDDING_MODEL:-nomic-embed-text}
-      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
-      # EMBEDDING_API_ENDPOINT: Provider-specific defaults handled by Rust (PROVFIX-4001)
-      # Only set this if you need a custom endpoint for your provider
-      EMBEDDING_API_ENDPOINT: ${EMBEDDING_API_ENDPOINT:-}
-      # Google Vertex AI configuration (when MAPROOM_EMBEDDING_PROVIDER=google)
-      GOOGLE_PROJECT_ID: ${GOOGLE_PROJECT_ID:-}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
-      GOOGLE_VERTEX_REGION: ${GOOGLE_VERTEX_REGION:-us-west1}
-      # OpenAI configuration (when MAPROOM_EMBEDDING_PROVIDER=openai)
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      MAPROOM_MCP_LOG_FILE: /app/logs/mcp.log
-      NODE_ENV: production
+      POSTGRES_DB: maproom_test
+      POSTGRES_USER: maproom
+      POSTGRES_PASSWORD: maproom
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - maproom-logs:/app/logs
+      - maproom-test-data:/var/lib/postgresql/data
+    ports:
+      - "0.0.0.0:5434:5432"  # Test database on port 5434
+    command: >
+      postgres
+      -c max_connections=50
+      -c shared_buffers=256MB
+      -c work_mem=8MB
     networks:
-      - maproom-network
-    stdin_open: true
-    tty: false
+      maproom-network:
+        aliases:
+          - maproom-postgres-test
     healthcheck:
-      test: ["CMD", "sh", "-c", "pg_isready -h maproom-postgres -U maproom || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U maproom -d maproom_test"]
+      interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
       start_period: 30s
     restart: unless-stopped
 
 volumes:
   maproom-data:
     driver: local
-  ollama-models:
-    driver: local
-  maproom-logs:
+  maproom-test-data:
     driver: local
 
 networks:

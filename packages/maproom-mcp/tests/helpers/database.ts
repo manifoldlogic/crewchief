@@ -359,3 +359,35 @@ export async function waitFor(
 
   throw new Error(`Timeout waiting for condition after ${timeout}ms`)
 }
+
+/**
+ * Get the count of chunks in the test corpus
+ */
+export async function getTestCorpusChunkCount(client: Client): Promise<number> {
+  const { rows } = await client.query(
+    "SELECT COUNT(*) as count FROM maproom.chunks c JOIN maproom.files f ON c.file_id = f.id JOIN maproom.repos r ON f.repo_id = r.id WHERE r.name = 'test-corpus'"
+  )
+  return parseInt(rows[0].count, 10)
+}
+
+/**
+ * Check if test corpus fixtures are loaded
+ */
+export async function isTestCorpusLoaded(client: Client): Promise<boolean> {
+  const { rows } = await client.query(
+    "SELECT COUNT(*) as count FROM maproom.repos WHERE name = 'test-corpus'"
+  )
+  return parseInt(rows[0].count, 10) > 0
+}
+
+/**
+ * Reload test fixtures from SQL file
+ * Useful for tests that need a fresh state
+ */
+export async function reloadTestFixtures(client: Client): Promise<void> {
+  const fixtureFile = path.resolve(__dirname, '../setup/test-fixtures.sql')
+  const fixtureSQL = await import('node:fs').then(fs => fs.readFileSync(fixtureFile, 'utf-8'))
+
+  // Execute the fixture SQL (it handles cleanup internally)
+  await client.query(fixtureSQL)
+}

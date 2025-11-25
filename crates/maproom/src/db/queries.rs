@@ -386,7 +386,7 @@ fn truncate_for_display(s: &str, max_len: usize) -> String {
 }
 
 /// Get list of applied migration versions from schema_migrations table
-async fn get_applied_migrations(client: &Client) -> anyhow::Result<std::collections::HashSet<i32>> {
+pub async fn get_applied_migrations(client: &Client) -> anyhow::Result<std::collections::HashSet<i32>> {
     // First check if the schema_migrations table exists
     let table_exists = client
         .query_opt(

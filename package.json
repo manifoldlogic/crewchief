@@ -29,5 +29,8 @@
       "happy-dom": "^20.0.2",
       "esbuild": "^0.25.0"
     }
+  },
+  "dependencies": {
+    "tree-kill": "^1.2.2"
   }
 }

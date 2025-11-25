@@ -175,27 +175,19 @@ export class DockerManager {
    * Ensure Docker Compose services are running
    *
    * This method is idempotent - it will not restart services that are already running.
+   * Only starts PostgreSQL - the MCP server runs on host via npx.
    *
-   * @param provider - Embedding provider ('ollama', 'openai', 'google')
-   * @param envVars - Environment variables to pass to docker compose (provider config, API keys)
    * @throws DockerError if services cannot be started or health checks fail
    */
-  async ensureServicesRunning(
-    provider: string,
-    envVars: Record<string, string> = {}
-  ): Promise<void> {
-    this.log(`Ensuring Docker Compose services are running for provider: ${provider}...`)
+  async ensureServicesRunning(): Promise<void> {
+    this.log('Ensuring Docker Compose services are running...')
 
     try {
       // Check Docker availability first
       await this.checkDockerAvailable()
 
-      // Determine which services to start based on provider
-      // Always start: postgres, maproom-mcp
-      // Conditional: ollama (only if provider === 'ollama')
-      const services = provider === 'ollama'
-        ? ['postgres', 'ollama', 'maproom-mcp']
-        : ['postgres', 'maproom-mcp']
+      // Only start PostgreSQL - MCP server runs on host via npx
+      const services = ['postgres']
 
       this.log(`Starting services: ${services.join(', ')}`)
 
@@ -206,7 +198,6 @@ export class DockerManager {
         {
           timeout: 60000, // 60s timeout for pulling images
           cwd: this.workingDirectory,
-          env: envVars,
         }
       )
 

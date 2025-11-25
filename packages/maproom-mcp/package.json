@@ -1,28 +1,20 @@
 {
   "name": "@crewchief/maproom-mcp",
-  "version": "2.2.3",
+  "version": "3.1.0",
   "type": "module",
-  "description": "Maproom MCP server with choice of embedding providers - one setup command, then zero config",
+  "description": "MCP server for semantic code search with PostgreSQL and pgvector",
   "main": "dist/index.js",
   "bin": {
     "maproom-mcp": "./bin/cli.cjs"
   },
   "files": [
     "bin",
-    "config/docker-compose.yml",
-    "config/Dockerfile.mcp-server",
-    "config/init.sql",
     "dist/",
-    "src/",
-    "tsconfig.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
-    "setup": "node bin/cli.cjs setup",
-    "scan": "node bin/cli.cjs scan",
-    "watch": "node bin/cli.cjs watch",
     "test": "node tests/connection-fallback.test.cjs && node tests/run-blob-sha-tests.cjs",
     "test:connection": "node tests/connection-fallback.test.cjs",
     "test:blob-sha": "node tests/run-blob-sha-tests.cjs",
@@ -42,11 +34,8 @@
   "keywords": [
     "mcp",
     "embeddings",
-    "ollama",
     "semantic-search",
     "code-search",
-    "local-llm",
-    "docker",
     "postgresql",
     "pgvector"
   ],
@@ -65,7 +54,6 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "chokidar": "^3.5.3",
     "execa": "^8.0.1",
     "lru-cache": "^11.2.2",
     "pg": "^8.11.3",

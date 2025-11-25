@@ -8,7 +8,8 @@
 
 import { Client } from 'pg'
 
-const DATABASE_URL = process.env.TEST_MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres-test:5432/maproom_test'
+// MAPROOM_DATABASE_URL is set by vitest.config.ts to the correct test database
+const DATABASE_URL = process.env.MAPROOM_DATABASE_URL || 'postgresql://maproom:maproom@host.docker.internal:5434/maproom_test'
 
 interface SearchParams {
   query: string

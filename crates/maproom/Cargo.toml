@@ -85,7 +85,13 @@ rayon = "1.10"
 crossbeam = "0.8"
 futures = "0.3"
 
+# SQLite support
+rusqlite = { version = "0.29.0", features = ["bundled"], optional = true }
+r2d2 = { version = "0.8", optional = true }
+r2d2_sqlite = { version = "0.22", optional = true }
+
 [build-dependencies]
+cc = "1.0"
 
 [[bin]]
 name = "crewchief-maproom"
@@ -118,7 +124,11 @@ predicates = "3.0"
 nix = { version = "0.29", features = ["signal"] }
 
 [features]
+default = ["postgres"]
 profiling = ["puffin"]
+sqlite = ["rusqlite", "r2d2", "r2d2_sqlite"]
+postgres = []
+
 
 [[bench]]
 name = "fusion_benchmark"
@@ -169,6 +179,7 @@ name = "multi_provider_performance"
 harness = false
 
 [[bench]]
-name = "embedding_performance"
+name = "sqlite_benchmark"
 harness = false
+required-features = ["sqlite"]
 

@@ -38,7 +38,7 @@ Working with the development container at `/.devcontainer`.
 
 ## Database Access
 
-Database runs via `packages/maproom-mcp/config/docker-compose.yml`.
+Database runs via `.devcontainer/docker-compose.yml` (devcontainer) or `packages/vscode-maproom/config/docker-compose.yml` (extension).
 
 Connection from devcontainer:
 - **Host**: `maproom-postgres` (via network) or `localhost:5432`
