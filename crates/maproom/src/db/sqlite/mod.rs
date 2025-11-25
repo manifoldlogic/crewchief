@@ -468,13 +468,29 @@ impl VectorStore for SqliteStore {
                 None
             };
 
-            // FTS5 query syntax: "term1 term2" matches (term1 AND term2) by default
-            // We need prefix matching for terms: "term1* term2*"
+            // FTS5 query syntax: term1 term2 (implicit AND), term1 OR term2
+            // Prefix matching: term* (no quotes around term!)
+            // Invalid: "term"* (wildcard outside quotes is syntax error)
             let fts_query = query
                 .split_whitespace()
-                .map(|t| format!("\"{}\"*", t.replace("\"", "")))
+                .filter(|t| !t.is_empty())
+                .map(|t| {
+                    // Sanitize: remove quotes and special FTS characters
+                    let clean = t
+                        .replace('"', "")
+                        .replace('\'', "")
+                        .replace('*', "")
+                        .replace('(', "")
+                        .replace(')', "");
+                    if clean.is_empty() {
+                        return String::new();
+                    }
+                    // FTS5 prefix syntax: term* (no quotes!)
+                    format!("{}*", clean)
+                })
+                .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()
-                .join(" ");
+                .join(" OR ");  // Use OR for broader matching
 
             // SQL query with ranking
             // SQLite FTS5 rank is built-in function 'bm25' or 'rank'
