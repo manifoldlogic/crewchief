@@ -253,6 +253,16 @@ export async function setup(): Promise<void> {
 
   // Verify schema regardless (catches partial initialization)
   verifySchema()
+
+  // Load test fixtures if not already present (idempotent)
+  if (!isTestCorpusLoaded()) {
+    loadTestFixtures()
+  } else {
+    console.log('✅ Test fixtures already loaded')
+  }
+
+  // Verify test corpus
+  verifyTestCorpus()
 }
 
 /**
