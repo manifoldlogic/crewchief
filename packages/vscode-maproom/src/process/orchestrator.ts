@@ -53,6 +53,8 @@ export interface OrchestratorConfig {
   secretsManager?: SecretsManager
   /** Embedding provider (optional) */
   provider?: EmbeddingProvider
+  /** Override database URL (e.g. for sqlite) */
+  databaseUrlOverride?: string
 }
 
 /**
@@ -327,12 +329,13 @@ export class ProcessOrchestrator extends EventEmitter {
    * @returns Promise resolving to environment object for child process
    */
   private async buildEnvironment(): Promise<NodeJS.ProcessEnv> {
-    const { postgres, secretsManager, provider } = this.config
+    const { postgres, secretsManager, provider, databaseUrlOverride } = this.config
 
     // Build DATABASE_URL for crewchief-maproom binary
     // Note: Old binaries use DATABASE_URL, new binaries use MAPROOM_DATABASE_URL
     // We set both for compatibility
-    const databaseUrl = `postgresql://${postgres.user}:${postgres.password}@${postgres.host}:${postgres.port}/${postgres.database}`
+    // If override is provided (e.g. sqlite://...), use it. Otherwise construct postgres URL.
+    const databaseUrl = databaseUrlOverride || `postgresql://${postgres.user}:${postgres.password}@${postgres.host}:${postgres.port}/${postgres.database}`
 
     // Start with PostgreSQL config
     const env: NodeJS.ProcessEnv = {
