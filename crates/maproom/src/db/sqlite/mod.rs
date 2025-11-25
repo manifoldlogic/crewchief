@@ -1,3 +1,5 @@
+pub mod schema;
+
 use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -7,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use tokio::task::spawn_blocking;
 
 use crate::db::{ChunkRecord, FileRecord, SearchHit, VectorStore};
-use crate::db::sqlite::schema::init_schema;
+use schema::init_schema;
 
 // Declare the C extension init function from sqlite-vec
 // This is provided by the static link
@@ -47,6 +49,7 @@ impl SqliteStore {
                     PRAGMA journal_mode = WAL;
                     PRAGMA synchronous = NORMAL;
                     PRAGMA foreign_keys = ON;
+                    PRAGMA busy_timeout = 5000;
                     "#,
                 )?;
                 Ok(())
@@ -56,6 +59,17 @@ impl SqliteStore {
             .max_size(10) // Configurable?
             .build(manager)
             .context("Failed to create SQLite connection pool")?;
+
+        // Set secure file permissions on database file (Unix only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let db_path = std::path::Path::new(path);
+            if db_path.exists() && !path.contains(":memory:") {
+                std::fs::set_permissions(db_path, std::fs::Permissions::from_mode(0o600))
+                    .context("Failed to set database file permissions")?;
+            }
+        }
 
         Ok(Self { pool })
     }
@@ -530,9 +544,12 @@ impl VectorStore for SqliteStore {
         let symbol_name = symbol_name.to_string();
         let relpath = relpath.map(|s| s.to_string());
         self.run(move |conn| {
+            // Use reference to avoid move of relpath
+            let relpath_ref = relpath.as_deref();
+
             // Similar to Postgres logic
-            let sql = if let Some(path) = relpath {
-                if let Some(wid) = worktree_id {
+            let sql = if relpath_ref.is_some() {
+                if worktree_id.is_some() {
                     "SELECT c.id FROM chunks c
                      JOIN files f ON f.id = c.file_id
                      WHERE f.repo_id = ?1 AND f.worktree_id = ?2
@@ -546,7 +563,7 @@ impl VectorStore for SqliteStore {
                      ORDER BY c.id DESC LIMIT 1"
                 }
             } else {
-                if let Some(wid) = worktree_id {
+                if worktree_id.is_some() {
                     "SELECT c.id FROM chunks c
                      JOIN files f ON f.id = c.file_id
                      WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
@@ -559,7 +576,7 @@ impl VectorStore for SqliteStore {
                 }
             };
 
-            let id: Option<i64> = if let Some(path) = relpath {
+            let id: Option<i64> = if let Some(path) = relpath_ref {
                 if let Some(wid) = worktree_id {
                     conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| row.get(0)).optional()?
                 } else {
