@@ -111,10 +111,11 @@ export async function runSetupWizard(
 
   try {
     const writer = new MCPConfigWriter()
-    await writer.registerMCPServer(workspaceRoot, selected.value)
+    // Write config for both VS Code and Cursor
+    await writer.registerMCPServerForAllEditors(workspaceRoot, selected.value)
 
     const action = await vscode.window.showInformationMessage(
-      'Maproom MCP server configured! Restart VS Code to activate the MCP server.',
+      'Maproom MCP server configured! Restart your editor to activate the MCP server.',
       'Restart Now',
       'Later'
     )

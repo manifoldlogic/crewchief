@@ -41,7 +41,7 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers.maproom).toEqual({
+        expect(config.servers.maproom).toEqual({
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
@@ -58,7 +58,7 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers.maproom).toEqual({
+        expect(config.servers.maproom).toEqual({
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
@@ -75,13 +75,13 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers.maproom).toEqual({
+        expect(config.servers.maproom).toEqual({
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
         })
 
         // Verify no env property when empty
-        expect(config.mcpServers.maproom.env).toBeUndefined()
+        expect(config.servers.maproom.env).toBeUndefined()
       })
 
       it('should use versioned package reference from constant', async () => {
@@ -92,7 +92,7 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers.maproom.args).toContain(
+        expect(config.servers.maproom.args).toContain(
           `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`
         )
       })
@@ -121,7 +121,7 @@ describe('MCPConfigWriter', () => {
         // Create existing config with other MCP servers
         await fs.mkdir(vscodeDir, { recursive: true })
         const existingConfig = {
-          mcpServers: {
+          servers: {
             'other-server': {
               command: 'node',
               args: ['other-server.js'],
@@ -144,12 +144,12 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers['other-server']).toEqual({
+        expect(config.servers['other-server']).toEqual({
           command: 'node',
           args: ['other-server.js'],
         })
 
-        expect(config.mcpServers['another-server']).toEqual({
+        expect(config.servers['another-server']).toEqual({
           command: 'python',
           args: ['server.py'],
           env: {
@@ -158,7 +158,7 @@ describe('MCPConfigWriter', () => {
         })
 
         // Verify Maproom server added
-        expect(config.mcpServers.maproom).toBeDefined()
+        expect(config.servers.maproom).toBeDefined()
       })
 
       it('should update existing maproom entry', async () => {
@@ -168,7 +168,7 @@ describe('MCPConfigWriter', () => {
         // Create existing config with old Maproom entry
         await fs.mkdir(vscodeDir, { recursive: true })
         const existingConfig = {
-          mcpServers: {
+          servers: {
             maproom: {
               command: 'npx',
               args: ['-y', '@crewchief/maproom-mcp@1.0.0'],
@@ -187,7 +187,7 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers.maproom).toEqual({
+        expect(config.servers.maproom).toEqual({
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
@@ -211,7 +211,7 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.mcpServers.maproom).toBeDefined()
+        expect(config.servers.maproom).toBeDefined()
       })
     })
 
@@ -332,8 +332,8 @@ describe('MCPConfigWriter', () => {
       const content = await fs.readFile(configPath, 'utf-8')
       const config = JSON.parse(content) // Should not throw
 
-      expect(config.mcpServers).toBeDefined()
-      expect(config.mcpServers.maproom).toBeDefined()
+      expect(config.servers).toBeDefined()
+      expect(config.servers.maproom).toBeDefined()
     })
 
     it('should write formatted JSON with proper indentation', async () => {
@@ -344,7 +344,7 @@ describe('MCPConfigWriter', () => {
       const content = await fs.readFile(configPath, 'utf-8')
 
       // Verify formatted with 2-space indentation
-      expect(content).toContain('  "mcpServers"')
+      expect(content).toContain('  "servers"')
       expect(content).toContain('    "maproom"')
     })
 
@@ -374,7 +374,7 @@ describe('MCPConfigWriter', () => {
       const content = await fs.readFile(configPath, 'utf-8')
       const config = JSON.parse(content)
 
-      expect(config.mcpServers.maproom.env).toBeUndefined()
+      expect(config.servers.maproom.env).toBeUndefined()
     })
   })
 
@@ -389,10 +389,10 @@ describe('MCPConfigWriter', () => {
       let content = await fs.readFile(configPath, 'utf-8')
       let config = JSON.parse(content)
 
-      expect(config.mcpServers.maproom.env).toBeUndefined()
+      expect(config.servers.maproom.env).toBeUndefined()
 
       // Step 2: Add another MCP server manually
-      config.mcpServers['custom-server'] = {
+      config.servers['custom-server'] = {
         command: 'node',
         args: ['custom.js'],
       }
@@ -405,12 +405,12 @@ describe('MCPConfigWriter', () => {
       config = JSON.parse(content)
 
       // Verify Maproom updated to OpenAI
-      expect(config.mcpServers.maproom.env).toEqual({
+      expect(config.servers.maproom.env).toEqual({
         OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
       })
 
       // Verify custom server preserved
-      expect(config.mcpServers['custom-server']).toEqual({
+      expect(config.servers['custom-server']).toEqual({
         command: 'node',
         args: ['custom.js'],
       })
@@ -422,12 +422,12 @@ describe('MCPConfigWriter', () => {
       config = JSON.parse(content)
 
       // Verify Maproom updated to Google
-      expect(config.mcpServers.maproom.env).toEqual({
+      expect(config.servers.maproom.env).toEqual({
         GOOGLE_APPLICATION_CREDENTIALS: '${env:GOOGLE_APPLICATION_CREDENTIALS}',
       })
 
       // Verify custom server still preserved
-      expect(config.mcpServers['custom-server']).toEqual({
+      expect(config.servers['custom-server']).toEqual({
         command: 'node',
         args: ['custom.js'],
       })

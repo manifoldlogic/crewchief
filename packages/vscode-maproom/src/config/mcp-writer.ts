@@ -37,30 +37,48 @@ interface MCPServerConfig {
 
 /**
  * Complete MCP configuration file structure
+ * Uses "servers" key per VS Code MCP specification
  */
 interface MCPConfig {
-  mcpServers: Record<string, MCPServerConfig>
+  servers: Record<string, MCPServerConfig>
 }
+
+/**
+ * Legacy MCP configuration (for migration)
+ */
+interface LegacyMCPConfig {
+  mcpServers?: Record<string, MCPServerConfig>
+  servers?: Record<string, MCPServerConfig>
+}
+
+/**
+ * Editor type for MCP configuration
+ */
+export type EditorType = 'vscode' | 'cursor'
 
 /**
  * MCP Configuration Writer
  *
- * Writes .vscode/mcp.json to register the Maproom MCP server with VS Code's MCP client.
+ * Writes MCP configuration files to register the Maproom MCP server.
+ * Supports both VS Code (.vscode/mcp.json) and Cursor (.cursor/mcp.json).
  */
 export class MCPConfigWriter {
   /**
-   * Register the Maproom MCP server in .vscode/mcp.json
+   * Register the Maproom MCP server in MCP configuration file
    *
    * Creates or updates the MCP configuration file to include the Maproom server.
    * Preserves any existing MCP server configurations.
+   * Migrates legacy "mcpServers" key to "servers" if found.
    *
    * @param workspaceRoot - Absolute path to workspace root directory
    * @param provider - Embedding provider (determines environment variables)
+   * @param editor - Editor type ('vscode' or 'cursor'), defaults to 'vscode'
    * @throws Error if workspaceRoot is invalid or path validation fails
    */
   async registerMCPServer(
     workspaceRoot: string,
-    provider: EmbeddingProvider
+    provider: EmbeddingProvider,
+    editor: EditorType = 'vscode'
   ): Promise<void> {
     // Validate workspace root is provided
     if (!workspaceRoot || workspaceRoot.trim() === '') {
@@ -71,19 +89,28 @@ export class MCPConfigWriter {
     const resolvedWorkspace = path.resolve(workspaceRoot)
     await this.validateWorkspaceRoot(resolvedWorkspace)
 
-    // Build paths
-    const vscodeDir = path.join(workspaceRoot, '.vscode')
-    const configPath = path.join(vscodeDir, 'mcp.json')
+    // Build paths based on editor type
+    const configDir = editor === 'cursor'
+      ? path.join(workspaceRoot, '.cursor')
+      : path.join(workspaceRoot, '.vscode')
+    const configPath = path.join(configDir, 'mcp.json')
 
     // Final path validation
     this.validatePath(configPath, resolvedWorkspace)
 
-    // Read existing configuration if it exists
-    let existingConfig: MCPConfig = { mcpServers: {} }
+    // Read and migrate existing configuration if it exists
+    let existingServers: Record<string, MCPServerConfig> = {}
 
     try {
       const fileContent = await fs.readFile(configPath, 'utf-8')
-      existingConfig = JSON.parse(fileContent)
+      const parsed = JSON.parse(fileContent) as LegacyMCPConfig
+
+      // Migrate from legacy "mcpServers" to "servers"
+      if (parsed.mcpServers && !parsed.servers) {
+        existingServers = parsed.mcpServers
+      } else if (parsed.servers) {
+        existingServers = parsed.servers
+      }
     } catch (error: any) {
       // File doesn't exist or is invalid JSON - use empty config
       if (error.code !== 'ENOENT') {
@@ -104,20 +131,36 @@ export class MCPConfigWriter {
       maproomConfig.env = env
     }
 
-    // Merge with existing configuration
+    // Merge with existing configuration (always use "servers" key)
     const updatedConfig: MCPConfig = {
-      mcpServers: {
-        ...existingConfig.mcpServers,
+      servers: {
+        ...existingServers,
         maproom: maproomConfig,
       },
     }
 
-    // Ensure .vscode directory exists
-    await fs.mkdir(vscodeDir, { recursive: true })
+    // Ensure config directory exists
+    await fs.mkdir(configDir, { recursive: true })
 
     // Write configuration file
     const configJson = JSON.stringify(updatedConfig, null, 2)
     await fs.writeFile(configPath, configJson, 'utf-8')
+  }
+
+  /**
+   * Register the Maproom MCP server for both VS Code and Cursor
+   *
+   * Convenience method that writes configuration for both editors.
+   *
+   * @param workspaceRoot - Absolute path to workspace root directory
+   * @param provider - Embedding provider (determines environment variables)
+   */
+  async registerMCPServerForAllEditors(
+    workspaceRoot: string,
+    provider: EmbeddingProvider
+  ): Promise<void> {
+    await this.registerMCPServer(workspaceRoot, provider, 'vscode')
+    await this.registerMCPServer(workspaceRoot, provider, 'cursor')
   }
 
   /**

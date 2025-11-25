@@ -473,8 +473,8 @@ describe('Setup Wizard', () => {
       const configContent = await fs.readFile(configPath, 'utf-8')
       const config = JSON.parse(configContent)
 
-      expect(config.mcpServers.maproom).toBeDefined()
-      expect(config.mcpServers.maproom.command).toBe('npx')
+      expect(config.servers.maproom).toBeDefined()
+      expect(config.servers.maproom.command).toBe('npx')
     })
 
     it('should show restart prompt after MCP configuration', async () => {
@@ -490,7 +490,7 @@ describe('Setup Wizard', () => {
 
       // Should show restart prompt
       expect(lastInfoMessage).toContain('MCP server configured')
-      expect(lastInfoMessage).toContain('Restart VS Code')
+      expect(lastInfoMessage).toContain('Restart your editor')
     })
 
     it('should execute reload command when "Restart Now" clicked', async () => {
@@ -562,7 +562,7 @@ describe('Setup Wizard', () => {
       const configContent = await fs.readFile(configPath, 'utf-8')
       const config = JSON.parse(configContent)
 
-      expect(config.mcpServers.maproom.env).toEqual({
+      expect(config.servers.maproom.env).toEqual({
         OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
       })
     })
