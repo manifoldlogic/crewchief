@@ -131,10 +131,10 @@ export function getPostgresUrl(config: PostgresConfig = DEFAULT_POSTGRES_CONFIG)
  */
 export function getPostgresUnavailableMessage(): string {
   return (
-    'PostgreSQL is not running at maproom-postgres:5432. ' +
-    'Please start Maproom services:\n\n' +
-    '  npx @crewchief/maproom-mcp setup --provider=openai\n\n' +
-    'Or if using Ollama:\n\n' +
-    '  npx @crewchief/maproom-mcp setup --provider=ollama'
+    'PostgreSQL is not running. ' +
+    'Please start the database using the VSCode extension Docker controls, ' +
+    'or run manually:\n\n' +
+    '  cd packages/vscode-maproom/config && docker compose up -d\n\n' +
+    'The MCP server requires PostgreSQL to be available at localhost:5433.'
   )
 }

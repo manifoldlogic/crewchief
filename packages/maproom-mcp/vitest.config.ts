@@ -1,18 +1,31 @@
 import { defineConfig } from 'vitest/config'
 
+// Determine the correct database host based on environment
+function getTestDatabaseUrl(): string {
+  // Explicit override takes precedence
+  if (process.env.TEST_MAPROOM_DATABASE_URL) {
+    return process.env.TEST_MAPROOM_DATABASE_URL
+  }
+  // CI uses localhost (GitHub Actions service container)
+  if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+    return 'postgresql://maproom:maproom@localhost:5434/maproom_test'
+  }
+  // Default: host.docker.internal works from both devcontainers and host machines
+  // (On Mac/Windows Docker Desktop, host.docker.internal resolves to the host)
+  // (On Linux, it may need --add-host in docker run, but falls back gracefully)
+  return 'postgresql://maproom:maproom@host.docker.internal:5434/maproom_test'
+}
+
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/e2e/**/*_test.ts'],
+    // Auto-start test database before tests run
+    globalSetup: ['./tests/setup/ensure-test-db.ts'],
     env: {
-      // Use TEST_MAPROOM_DATABASE_URL if set, fall back to default test database
-      // NOTE: Uses container hostname (maproom-postgres-test) because tests run
-      // on host but connect through Docker network. When TEST_MAPROOM_DATABASE_URL
-      // is not set, tests should use the test database by default.
-      MAPROOM_DATABASE_URL:
-        process.env.TEST_MAPROOM_DATABASE_URL ||
-        'postgresql://maproom:maproom@maproom-postgres-test:5432/maproom_test'
+      // Use the appropriate test database URL
+      MAPROOM_DATABASE_URL: getTestDatabaseUrl()
     },
     coverage: {
       provider: 'v8',

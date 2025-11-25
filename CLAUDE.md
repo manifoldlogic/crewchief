@@ -116,7 +116,8 @@ CrewChief/
 
 Single PostgreSQL instance: `maproom-postgres:5432/maproom`
 - Connection: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
-- Managed via `packages/maproom-mcp/config/docker-compose.yml`
+- VSCode extension: `packages/vscode-maproom/config/docker-compose.yml`
+- Standalone: `config/docker-compose.yml`
 - Details: `docs/architecture/DATABASE_ARCHITECTURE.md`
 
 ## Development Practices

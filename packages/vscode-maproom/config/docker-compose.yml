@@ -46,8 +46,43 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Test database for integration tests (opt-in, not started by default)
+  # Start with: docker compose --profile test up -d postgres-test
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: maproom-postgres-test
+    profiles:
+      - test
+    environment:
+      POSTGRES_DB: maproom_test
+      POSTGRES_USER: maproom
+      POSTGRES_PASSWORD: maproom
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - maproom-test-data:/var/lib/postgresql/data
+    ports:
+      - "0.0.0.0:5434:5432"  # Test database on port 5434
+    command: >
+      postgres
+      -c max_connections=50
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+    networks:
+      maproom-network:
+        aliases:
+          - maproom-postgres-test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maproom -d maproom_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   maproom-data:
+    driver: local
+  maproom-test-data:
     driver: local
 
 networks:
