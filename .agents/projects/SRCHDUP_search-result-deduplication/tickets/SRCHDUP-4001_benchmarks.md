@@ -1,9 +1,9 @@
 # Ticket: SRCHDUP-4001: Add dedup benchmarks
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - benchmarks run successfully, all targets met
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -23,11 +23,11 @@ Performance is a key acceptance criterion for this project. The deduplication st
 
 ## Acceptance Criteria
 
-- [ ] New benchmark file `crates/maproom/benches/dedup_bench.rs` exists
-- [ ] Benchmark covers 100, 1000, and 10000 result sets
-- [ ] Benchmark results show <10ms for 1000 results
-- [ ] Results are documented in benchmark output or README
-- [ ] `cargo bench dedup` runs without errors
+- [x] New benchmark file `crates/maproom/benches/dedup_bench.rs` exists
+- [x] Benchmark covers 100, 1000, and 10000 result sets
+- [x] Benchmark results show <10ms for 1000 results
+- [x] Results are documented in benchmark output or README
+- [x] `cargo bench dedup` runs without errors
 
 ## Technical Requirements
 

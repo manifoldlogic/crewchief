@@ -3,7 +3,7 @@
 ## Status
 - [x] **Task completed** - acceptance criteria met
 - [x] **Tests pass** - tests executed and passing (14 tests pass)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - integration-tester
@@ -23,13 +23,13 @@ Unit tests verify the dedup module in isolation. Integration tests verify the mo
 
 ## Acceptance Criteria
 
-- [ ] New test file `crates/maproom/tests/search_dedup_integration.rs` exists
-- [ ] Test fixture creates duplicate chunks across multiple worktrees
-- [ ] Test verifies deduplication reduces duplicate count correctly
-- [ ] Test verifies highest-scoring duplicate is selected
-- [ ] Test verifies `deduplicate=false` returns all results
-- [ ] Test verifies default behavior enables deduplication
-- [ ] All tests pass: `cargo test --test search_dedup_integration`
+- [x] New test file `crates/maproom/tests/search_dedup_integration.rs` exists
+- [x] Test fixture creates duplicate chunks across multiple worktrees
+- [x] Test verifies deduplication reduces duplicate count correctly
+- [x] Test verifies highest-scoring duplicate is selected
+- [x] Test verifies `deduplicate=false` returns all results
+- [x] Test verifies default behavior enables deduplication
+- [x] All tests pass: `cargo test --test search_dedup_integration`
 
 ## Technical Requirements
 

@@ -1,9 +1,9 @@
 # Ticket: SRCHDUP-3003: Add deduplicate parameter to MCP search schema
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - pnpm build succeeds
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -23,12 +23,12 @@ The MCP server exposes search functionality to Claude and other MCP clients. Add
 
 ## Acceptance Criteria
 
-- [ ] MCP search tool schema includes `deduplicate?: boolean` parameter
-- [ ] Parameter has description in schema for MCP consumers
-- [ ] Tool handler extracts `deduplicate` and passes to daemon-client
-- [ ] Default behavior (missing param) enables deduplication
-- [ ] MCP server builds: `pnpm build` in maproom-mcp
-- [ ] Tool appears correctly with parameter in MCP tool listing
+- [x] MCP search tool schema includes `deduplicate?: boolean` parameter
+- [x] Parameter has description in schema for MCP consumers
+- [x] Tool handler extracts `deduplicate` and passes to daemon-client
+- [x] Default behavior (missing param) enables deduplication
+- [x] MCP server builds: `pnpm build` in maproom-mcp
+- [x] Tool appears correctly with parameter in MCP tool listing
 
 ## Technical Requirements
 

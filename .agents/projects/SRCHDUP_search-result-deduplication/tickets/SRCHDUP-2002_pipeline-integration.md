@@ -2,8 +2,8 @@
 
 ## Status
 - [x] **Task completed** - acceptance criteria met
-- [x] **Tests pass** - tests executed and passing (123 search tests pass)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Tests pass** - tests executed and passing (135 search tests pass)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -23,12 +23,12 @@ The search pipeline processes queries through multiple stages: parsing, executio
 
 ## Acceptance Criteria
 
-- [ ] `SearchPipeline::search()` calls `dedup::deduplicate()` after fusion
-- [ ] Deduplication is conditional on `options.deduplicate`
-- [ ] Deduplication happens BEFORE limit is applied
-- [ ] Pipeline fetches extra results (3x limit) to compensate for dedup reduction
-- [ ] Default search behavior returns deduplicated results
-- [ ] `cargo test` shows no regression in existing search tests
+- [x] `SearchPipeline::search()` calls `dedup::deduplicate()` after fusion
+- [x] Deduplication is conditional on `options.deduplicate`
+- [x] Deduplication happens BEFORE limit is applied
+- [x] Pipeline fetches extra results (3x limit) to compensate for dedup reduction
+- [x] Default search behavior returns deduplicated results
+- [x] `cargo test` shows no regression in existing search tests
 
 ## Technical Requirements
 

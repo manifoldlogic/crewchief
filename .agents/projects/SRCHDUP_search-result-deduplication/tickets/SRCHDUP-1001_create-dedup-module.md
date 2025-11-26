@@ -3,7 +3,7 @@
 ## Status
 - [x] **Task completed** - acceptance criteria met
 - [x] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -25,13 +25,13 @@ This ticket implements the core deduplication logic as specified in `architectur
 
 ## Acceptance Criteria
 
-- [ ] New file `crates/maproom/src/search/dedup.rs` exists
-- [ ] `ChunkIdentity` struct derives `Hash`, `Eq`, `PartialEq` for HashMap grouping
-- [ ] `ChunkIdentity::from_result()` extracts identity from `ChunkSearchResult`
-- [ ] `DeduplicationConfig` struct with `enabled` and `strategy` fields
-- [ ] `SelectionStrategy` enum with `HighestScore` variant (only MVP variant)
-- [ ] `deduplicate()` function groups by identity and returns unique results
-- [ ] Module exported via `mod.rs`: `pub mod dedup;`
+- [x] New file `crates/maproom/src/search/dedup.rs` exists
+- [x] `ChunkIdentity` struct derives `Hash`, `Eq`, `PartialEq` for HashMap grouping
+- [x] `ChunkIdentity::from_result()` extracts identity from `ChunkSearchResult`
+- [x] `DeduplicationConfig` struct with `enabled` and `strategy` fields
+- [x] `SelectionStrategy` enum with `HighestScore` variant (only MVP variant)
+- [x] `deduplicate()` function groups by identity and returns unique results
+- [x] Module exported via `mod.rs`: `pub mod dedup;`
 
 ## Technical Requirements
 

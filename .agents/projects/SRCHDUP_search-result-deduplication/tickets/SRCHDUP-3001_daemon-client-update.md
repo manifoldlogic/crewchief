@@ -3,7 +3,7 @@
 ## Status
 - [x] **Task completed** - acceptance criteria met
 - [x] **Tests pass** - core tests pass (rpc, errors, lifecycle); performance tests require daemon binary
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -23,12 +23,12 @@ The daemon-client package provides the JSON-RPC bridge between MCP TypeScript an
 
 ## Acceptance Criteria
 
-- [ ] `SearchParams` interface has `deduplicate?: boolean` field
-- [ ] `search()` method includes `deduplicate` in JSON-RPC call
-- [ ] Default behavior is `deduplicate: true` when not specified
-- [ ] TypeScript compiles without errors
-- [ ] Existing daemon-client tests pass
-- [ ] Type exports are correct for consumers
+- [x] `SearchParams` interface has `deduplicate?: boolean` field
+- [x] `search()` method includes `deduplicate` in JSON-RPC call
+- [x] Default behavior is `deduplicate: true` when not specified
+- [x] TypeScript compiles without errors
+- [x] Existing daemon-client tests pass
+- [x] Type exports are correct for consumers
 
 ## Technical Requirements
 

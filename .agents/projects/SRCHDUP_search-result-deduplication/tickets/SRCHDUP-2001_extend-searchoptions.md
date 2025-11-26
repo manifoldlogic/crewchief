@@ -3,7 +3,7 @@
 ## Status
 - [x] **Task completed** - acceptance criteria met
 - [x] **Tests pass** - tests executed and passing (123 search tests pass)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -23,12 +23,12 @@ The `SearchOptions` struct is the configuration passed through the search pipeli
 
 ## Acceptance Criteria
 
-- [ ] `SearchOptions` has `pub deduplicate: bool` field
-- [ ] `SearchOptions::new()` sets `deduplicate: true` by default
-- [ ] `SearchOptions::without_dedup()` builder method returns self with `deduplicate: false`
-- [ ] `SearchOptions::with_deduplicate(bool)` builder method for explicit control
-- [ ] All existing tests pass (no regression)
-- [ ] No breaking changes to existing SearchOptions usage
+- [x] `SearchOptions` has `pub deduplicate: bool` field
+- [x] `SearchOptions::new()` sets `deduplicate: true` by default
+- [x] `SearchOptions::without_dedup()` builder method returns self with `deduplicate: false`
+- [x] `SearchOptions::with_deduplicate(bool)` builder method for explicit control
+- [x] All existing tests pass (no regression)
+- [x] No breaking changes to existing SearchOptions usage
 
 ## Technical Requirements
 

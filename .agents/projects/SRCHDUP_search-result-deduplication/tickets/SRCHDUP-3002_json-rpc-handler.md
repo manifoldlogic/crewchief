@@ -1,9 +1,9 @@
 # Ticket: SRCHDUP-3002: Update Rust daemon JSON-RPC handler for deduplicate
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - cargo build succeeds, no daemon-specific tests
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
