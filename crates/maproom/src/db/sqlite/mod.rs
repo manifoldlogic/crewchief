@@ -45,6 +45,19 @@ impl SqliteStore {
             path
         };
 
+        // Create parent directory if needed (for auto-created databases)
+        // Skip for in-memory databases
+        if !path.contains(":memory:") {
+            let db_path = std::path::Path::new(path);
+            if let Some(parent) = db_path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)
+                        .context(format!("Failed to create database directory: {}", parent.display()))?;
+                    tracing::info!("Created database directory: {}", parent.display());
+                }
+            }
+        }
+
         // Register extension globally for all new connections
         unsafe {
             rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));

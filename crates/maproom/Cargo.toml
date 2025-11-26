@@ -37,6 +37,7 @@ ctrlc = "3.2"  # Graceful shutdown handling for Ctrl+C signals
 
 humantime = "2.3"
 config = "0.14"
+dirs = "5"  # Cross-platform home directory resolution for SQLite default path
 
 # Database (use tokio-postgres to avoid heavy deps)
 tokio-postgres = { version = "0.7", features = ["runtime", "with-chrono-0_4", "array-impls", "with-uuid-1", "with-serde_json-1"] }
