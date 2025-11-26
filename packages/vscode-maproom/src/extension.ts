@@ -34,6 +34,7 @@ import {
   runSetupWizard,
   getConfiguredProvider,
   registerSetupCommand,
+  showNoSqliteGuidance,
 } from './ui/setupWizard'
 import { SecretsManager } from './config/secrets'
 import { runInitialScan } from './process/scan'
@@ -468,21 +469,8 @@ async function ensureSqliteAvailable(config: DatabaseConfig): Promise<boolean> {
     const message = getDatabaseUnavailableMessage(config)
     outputChannel?.appendLine(`WARNING: ${message}`)
 
-    const action = await vscode.window.showWarningMessage(
-      'Maproom: Database Not Found',
-      { detail: message, modal: false },
-      'Open Settings',
-      'Show Logs'
-    )
-
-    if (action === 'Open Settings') {
-      await vscode.commands.executeCommand(
-        'workbench.action.openSettings',
-        'maproom.database'
-      )
-    } else if (action === 'Show Logs') {
-      outputChannel?.show()
-    }
+    // Use enhanced SQLite guidance with file picker, copy command, and terminal options
+    await showNoSqliteGuidance()
 
     // Return false but don't throw - allow graceful degradation
     return false

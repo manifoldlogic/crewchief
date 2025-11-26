@@ -17,8 +17,12 @@
 
 import * as vscode from 'vscode'
 import * as http from 'http'
+import { existsSync } from 'fs'
+import { homedir } from 'os'
+import * as path from 'path'
 import { SecretsManager } from '../config/secrets'
 import { MCPConfigWriter } from '../config/mcp-writer'
+import { resolveDatabaseConfig, type DatabaseConfig } from '../services/database-checker'
 
 /**
  * Supported embedding providers
@@ -312,4 +316,146 @@ export function registerSetupCommand(context: vscode.ExtensionContext): void {
   })
 
   context.subscriptions.push(setupCommand)
+}
+
+/**
+ * Run SQLite-specific setup flow
+ *
+ * Handles SQLite database detection and configuration:
+ * - Auto-detects existing database at default path (~/.maproom/maproom.db)
+ * - Offers to use existing database or choose different file
+ * - Shows guidance when no database exists
+ *
+ * @param config - Current database configuration
+ * @returns true if setup completed, false if user cancelled
+ */
+export async function runSqliteSetup(config: DatabaseConfig): Promise<boolean> {
+  const defaultPath = path.join(homedir(), '.maproom', 'maproom.db')
+  const defaultExists = existsSync(defaultPath)
+
+  // Check if custom path is already configured and exists
+  if (config.path && config.path !== defaultPath && existsSync(config.path)) {
+    // Custom path already configured and exists - nothing to do
+    return true
+  }
+
+  if (defaultExists) {
+    // Offer to use existing database
+    const action = await vscode.window.showInformationMessage(
+      `Found existing Maproom index at ${defaultPath}`,
+      'Use Existing',
+      'Choose Different',
+      'Cancel'
+    )
+
+    if (action === 'Use Existing') {
+      // Default path, no settings change needed (empty sqlitePath = default)
+      return true
+    } else if (action === 'Choose Different') {
+      return await promptForSqlitePath()
+    }
+    // Cancel
+    return false
+  } else {
+    // No existing database - guide user
+    return await showNoSqliteGuidance()
+  }
+}
+
+/**
+ * Prompt user to select a SQLite database file
+ *
+ * Shows file picker dialog filtered to common SQLite file extensions.
+ * Updates the maproom.database.sqlitePath setting with selected path.
+ *
+ * @returns true if file selected, false if cancelled
+ */
+export async function promptForSqlitePath(): Promise<boolean> {
+  const result = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: {
+      'SQLite Database': ['db', 'sqlite', 'sqlite3'],
+    },
+    title: 'Select Maproom SQLite Database',
+  })
+
+  if (result && result[0]) {
+    const selectedPath = result[0].fsPath
+
+    try {
+      // Update settings
+      const config = vscode.workspace.getConfiguration('maproom.database')
+      await config.update('sqlitePath', selectedPath, vscode.ConfigurationTarget.Global)
+
+      vscode.window.showInformationMessage(`Maproom will use: ${selectedPath}`)
+      return true
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Failed to update settings: ${error instanceof Error ? error.message : String(error)}`
+      )
+      return false
+    }
+  }
+
+  return false
+}
+
+/**
+ * Show guidance when no SQLite database exists
+ *
+ * Provides options to help user create or find a database:
+ * - Copy scan command to clipboard
+ * - Open terminal with scan command hint
+ * - Choose existing file
+ *
+ * @returns true if user took action, false if cancelled
+ */
+export async function showNoSqliteGuidance(): Promise<boolean> {
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '/path/to/your/repo'
+
+  const action = await vscode.window.showWarningMessage(
+    'No Maproom index found. Create one to enable code search.',
+    { modal: false, detail: 'Run crewchief-maproom scan in your terminal to index a repository.' },
+    'Copy Scan Command',
+    'Open Terminal',
+    'Choose Existing File'
+  )
+
+  if (action === 'Copy Scan Command') {
+    const command = `crewchief-maproom scan ${workspacePath}`
+    await vscode.env.clipboard.writeText(command)
+    vscode.window.showInformationMessage('Scan command copied to clipboard')
+    return true
+  } else if (action === 'Open Terminal') {
+    const terminal = vscode.window.createTerminal('Maproom Setup')
+    terminal.show()
+    terminal.sendText(`# Run: crewchief-maproom scan ${workspacePath}`, false)
+    return true
+  } else if (action === 'Choose Existing File') {
+    return await promptForSqlitePath()
+  }
+
+  return false
+}
+
+/**
+ * Run database setup based on current configuration
+ *
+ * Entry point for database-aware setup that routes to appropriate
+ * flow based on configured database provider.
+ *
+ * @returns true if setup completed successfully, false if cancelled
+ */
+export async function runDatabaseSetup(): Promise<boolean> {
+  const dbConfig = resolveDatabaseConfig()
+
+  if (dbConfig.type === 'sqlite') {
+    return await runSqliteSetup(dbConfig)
+  }
+
+  // PostgreSQL mode - no additional setup needed here
+  // (Docker setup is handled in extension.ts)
+  return true
 }
