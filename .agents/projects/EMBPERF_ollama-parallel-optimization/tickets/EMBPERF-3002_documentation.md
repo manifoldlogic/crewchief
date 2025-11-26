@@ -1,9 +1,9 @@
 # Ticket: EMBPERF-3002: Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**: N/A - Documentation-only ticket.
 
@@ -25,12 +25,12 @@ With implementation and benchmarking complete (EMBPERF-0001 through EMBPERF-3001
 This implements Phase 3 (documentation portion) from `plan.md`.
 
 ## Acceptance Criteria
-- [ ] Configuration documentation added to project docs
-- [ ] Environment variables documented with defaults
-- [ ] Hardware-specific recommendations provided
-- [ ] Performance expectations documented (with caveats)
-- [ ] Troubleshooting section included
-- [ ] README.md updated with quick reference
+- [x] Configuration documentation added to project docs
+- [x] Environment variables documented with defaults
+- [x] Hardware-specific recommendations provided
+- [x] Performance expectations documented (with caveats)
+- [x] Troubleshooting section included
+- [x] README.md updated with quick reference
 
 ## Technical Requirements
 

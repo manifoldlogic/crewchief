@@ -256,11 +256,16 @@ crewchief-maproom generate-embeddings
 Fine-tune embedding generation performance in `.env`:
 
 ```bash
-EMBEDDING_BATCH_SIZE=50                    # Chunks per batch
-EMBEDDING_PARALLEL_ENABLED=true            # Enable parallel processing
-EMBEDDING_PARALLEL_SUB_BATCH_SIZE=25      # Sub-batch size
-EMBEDDING_PARALLEL_MAX_CONCURRENCY=4      # Concurrent requests
+EMBEDDING_BATCH_SIZE=50                           # Chunks per batch
+MAPROOM_EMBEDDING_PARALLEL_ENABLED=true           # Enable parallel processing
+MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE=50      # Texts per HTTP request (default: 50)
+MAPROOM_EMBEDDING_PARALLEL_MAX_CONCURRENCY=8      # Concurrent requests (default: 8)
 ```
+
+**For detailed optimization guidance**, see [Embedding Optimization Guide](docs/configuration/embedding-optimization.md) for:
+- Hardware-specific recommendations (M1/M2/M3, NVIDIA GPUs)
+- Expected performance improvements (10-20x on Apple Silicon)
+- Troubleshooting tips for slow performance, OOM, or timeouts
 
 ## Requirements
 
