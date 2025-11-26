@@ -336,6 +336,30 @@ CREATE VIRTUAL TABLE vec_code_768 USING vec0(
 DROP TABLE IF EXISTS vec_code_768;
                 "#,
             },
+            Migration {
+                version: 8,
+                name: "add_index_state",
+                up: r#"
+-- Create index state table for tracking indexing progress
+-- Matches PostgreSQL worktree_index_state table columns
+CREATE TABLE IF NOT EXISTS index_state (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worktree_id INTEGER NOT NULL UNIQUE REFERENCES worktrees(id) ON DELETE CASCADE,
+    tree_sha TEXT NOT NULL,
+    chunks_processed INTEGER NOT NULL DEFAULT 0,
+    embeddings_generated INTEGER NOT NULL DEFAULT 0,
+    last_indexed TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Create index for worktree_id lookups
+CREATE INDEX IF NOT EXISTS idx_index_state_worktree ON index_state(worktree_id);
+                "#,
+                down: r#"
+-- Rollback: drop the index_state table and index
+DROP INDEX IF EXISTS idx_index_state_worktree;
+DROP TABLE IF EXISTS index_state;
+                "#,
+            },
         ]
     }
 }
@@ -376,19 +400,19 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version (7)
-        assert_eq!(runner.current_version().unwrap(), 7);
+        // Should now be at latest version (8)
+        assert_eq!(runner.current_version().unwrap(), 8);
         assert!(!runner.needs_migration().unwrap());
 
         // Verify core tables exist (excluding virtual tables and dropped tables)
         let table_count: i32 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations', 'chunk_worktrees', 'code_embeddings')",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations', 'chunk_worktrees', 'code_embeddings', 'index_state')",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(table_count, 9, "Expected 9 core tables to be created");
+        assert_eq!(table_count, 10, "Expected 10 core tables to be created");
 
         // Verify vec_chunks table does NOT exist (dropped by migration 6)
         let vec_chunks_exists: bool = conn
@@ -435,7 +459,7 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 7);
+        assert_eq!(version_after_second, 8);
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
@@ -445,7 +469,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(migration_count, 7, "Expected 7 migrations to be recorded");
+        assert_eq!(migration_count, 8, "Expected 8 migrations to be recorded");
     }
 
     #[test]

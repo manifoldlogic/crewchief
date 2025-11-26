@@ -244,6 +244,19 @@ pub trait VectorStore: Send + Sync {
     /// Get chunk with surrounding context (N chunks before/after by line number)
     async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<ChunkContext>>;
 
+    // --- Index State ---
+    /// Get the last indexed git tree SHA for a worktree
+    /// Returns "init" for never-indexed worktrees
+    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String>;
+
+    /// Update index state after successful indexing
+    async fn update_index_state(
+        &self,
+        worktree_id: i64,
+        tree_sha: &str,
+        stats: &UpdateStats,
+    ) -> anyhow::Result<()>;
+
     // --- Migrations ---
     async fn migrate(&self) -> anyhow::Result<()>;
 

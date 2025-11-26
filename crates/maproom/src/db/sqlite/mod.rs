@@ -1141,6 +1141,46 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
+        self.run(move |conn| {
+            let result = conn.query_row(
+                "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            );
+
+            match result {
+                Ok(sha) => Ok(sha),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok("init".to_string()),
+                Err(e) => Err(e.into()),
+            }
+        }).await
+    }
+
+    async fn update_index_state(
+        &self,
+        worktree_id: i64,
+        tree_sha: &str,
+        stats: &crate::db::UpdateStats,
+    ) -> anyhow::Result<()> {
+        let tree_sha = tree_sha.to_string();
+        let chunks_processed = stats.chunks_processed;
+        let embeddings_generated = stats.embeddings_generated;
+        self.run(move |conn| {
+            conn.execute(
+                "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'))
+                 ON CONFLICT(worktree_id) DO UPDATE SET
+                     tree_sha = excluded.tree_sha,
+                     chunks_processed = excluded.chunks_processed,
+                     embeddings_generated = excluded.embeddings_generated,
+                     last_indexed = datetime('now')",
+                params![worktree_id, tree_sha, chunks_processed, embeddings_generated],
+            )?;
+            Ok(())
+        }).await
+    }
+
     async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);

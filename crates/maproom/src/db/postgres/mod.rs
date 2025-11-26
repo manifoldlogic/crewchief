@@ -233,6 +233,21 @@ impl VectorStore for PostgresStore {
         super::queries::get_chunk_context(&client, chunk_id, surrounding).await
     }
 
+    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::index_state::get_last_indexed_tree(&client, worktree_id).await
+    }
+
+    async fn update_index_state(
+        &self,
+        worktree_id: i64,
+        tree_sha: &str,
+        stats: &crate::db::UpdateStats,
+    ) -> anyhow::Result<()> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::index_state::update_index_state(&client, worktree_id, tree_sha, stats).await
+    }
+
     async fn migrate(&self) -> anyhow::Result<()> {
         let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::migrate(&client).await
