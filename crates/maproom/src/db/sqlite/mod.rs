@@ -1181,6 +1181,212 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT w.id, w.repo_id, w.name, w.abs_path FROM worktrees w ORDER BY w.id"
+            )?;
+
+            let worktrees: Vec<_> = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })?.collect::<Result<Vec<_>, _>>()?;
+
+            let mut stale = Vec::new();
+            for (id, repo_id, name, abs_path) in worktrees {
+                let path = std::path::Path::new(&abs_path);
+                let exists = path.exists() && path.is_dir();
+
+                // Count chunks for this worktree via files
+                let chunk_count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM chunks c
+                     JOIN files f ON c.file_id = f.id
+                     WHERE f.worktree_id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                ).unwrap_or(0);
+
+                if !exists {
+                    stale.push(crate::db::StaleWorktree {
+                        id,
+                        repo_id,
+                        name,
+                        abs_path,
+                        exists: false,
+                        chunk_count,
+                    });
+                }
+            }
+            Ok(stale)
+        }).await
+    }
+
+    async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
+        self.run(move |conn| {
+            // Get count of chunks that will be deleted
+            let chunks_deleted: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE f.worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            // Get count of files that will be deleted
+            let files_deleted: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            // Delete code_embeddings for chunks in this worktree
+            let embeddings_deleted: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM code_embeddings ce
+                 WHERE ce.blob_sha IN (
+                     SELECT c.blob_sha FROM chunks c
+                     JOIN files f ON c.file_id = f.id
+                     WHERE f.worktree_id = ?1
+                 )",
+                params![worktree_id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            conn.execute(
+                "DELETE FROM code_embeddings WHERE blob_sha IN (
+                     SELECT c.blob_sha FROM chunks c
+                     JOIN files f ON c.file_id = f.id
+                     WHERE f.worktree_id = ?1
+                 )",
+                params![worktree_id],
+            )?;
+
+            // Delete chunk_worktrees junction entries
+            conn.execute(
+                "DELETE FROM chunk_worktrees WHERE worktree_id = ?1",
+                params![worktree_id],
+            )?;
+
+            // Delete chunk_edges for chunks in this worktree
+            conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+                     SELECT c.id FROM chunks c
+                     JOIN files f ON c.file_id = f.id
+                     WHERE f.worktree_id = ?1
+                 ) OR dst_chunk_id IN (
+                     SELECT c.id FROM chunks c
+                     JOIN files f ON c.file_id = f.id
+                     WHERE f.worktree_id = ?1
+                 )",
+                params![worktree_id],
+            )?;
+
+            // Delete chunks
+            conn.execute(
+                "DELETE FROM chunks WHERE file_id IN (
+                     SELECT id FROM files WHERE worktree_id = ?1
+                 )",
+                params![worktree_id],
+            )?;
+
+            // Delete files
+            conn.execute(
+                "DELETE FROM files WHERE worktree_id = ?1",
+                params![worktree_id],
+            )?;
+
+            // Delete index_state
+            conn.execute(
+                "DELETE FROM index_state WHERE worktree_id = ?1",
+                params![worktree_id],
+            )?;
+
+            Ok(crate::db::WorktreeCleanupResult {
+                chunks_deleted: chunks_deleted as u64,
+                files_deleted: files_deleted as u64,
+                embeddings_deleted: embeddings_deleted as u64,
+            })
+        }).await
+    }
+
+    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
+        self.run(move |conn| {
+            // Get count of chunks to delete
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
+                params![file_id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            // Delete embeddings for chunks in this file
+            conn.execute(
+                "DELETE FROM code_embeddings WHERE blob_sha IN (
+                     SELECT blob_sha FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunk_worktrees entries
+            conn.execute(
+                "DELETE FROM chunk_worktrees WHERE chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunk edges
+            conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 ) OR dst_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunks
+            conn.execute(
+                "DELETE FROM chunks WHERE file_id = ?1",
+                params![file_id],
+            )?;
+
+            Ok(count as u64)
+        }).await
+    }
+
+    async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        let blob_sha = blob_sha.to_string();
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE c.blob_sha = ?1
+                 ORDER BY c.start_line"
+            )?;
+
+            let rows = stmt.query_map(params![blob_sha], |row| {
+                Ok(crate::db::ChunkSummary {
+                    id: row.get(0)?,
+                    symbol_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    file_path: row.get(5)?,
+                })
+            })?;
+
+            let mut chunks = Vec::new();
+            for chunk_result in rows {
+                chunks.push(chunk_result?);
+            }
+            Ok(chunks)
+        }).await
+    }
+
     async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);

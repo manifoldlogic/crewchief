@@ -248,6 +248,27 @@ impl VectorStore for PostgresStore {
         super::index_state::update_index_state(&client, worktree_id, tree_sha, stats).await
     }
 
+    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        let detector = super::cleanup::StaleWorktreeDetector::new(&client);
+        detector.detect_stale_worktrees().await
+    }
+
+    async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::delete_worktree_data(&client, worktree_id).await
+    }
+
+    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::delete_chunks_by_file(&client, file_id).await
+    }
+
+    async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_chunks_by_blob_sha(&client, blob_sha).await
+    }
+
     async fn migrate(&self) -> anyhow::Result<()> {
         let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::migrate(&client).await

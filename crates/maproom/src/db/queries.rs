@@ -1610,3 +1610,144 @@ pub async fn search_chunks_hybrid(
         .collect();
     Ok(hits)
 }
+
+// --- Cleanup & Maintenance Functions ---
+
+/// Delete all data for a worktree (chunks, embeddings, files)
+/// Returns counts of deleted items
+pub async fn delete_worktree_data(
+    client: &Client,
+    worktree_id: i64,
+) -> anyhow::Result<super::WorktreeCleanupResult> {
+    // Get count of chunks that will be deleted (via files)
+    let chunk_count_row = client.query_one(
+        "SELECT COUNT(*) FROM maproom.chunks c
+         JOIN maproom.files f ON c.file_id = f.id
+         WHERE f.worktree_id = $1",
+        &[&worktree_id],
+    ).await?;
+    let chunks_deleted: i64 = chunk_count_row.get(0);
+
+    // Get count of files that will be deleted
+    let file_count_row = client.query_one(
+        "SELECT COUNT(*) FROM maproom.files WHERE worktree_id = $1",
+        &[&worktree_id],
+    ).await?;
+    let files_deleted: i64 = file_count_row.get(0);
+
+    // Delete code_embeddings via chunks -> files chain
+    let embeddings_row = client.query_one(
+        "WITH deleted_embeddings AS (
+            DELETE FROM maproom.code_embeddings ce
+            WHERE ce.blob_sha IN (
+                SELECT c.blob_sha FROM maproom.chunks c
+                JOIN maproom.files f ON c.file_id = f.id
+                WHERE f.worktree_id = $1
+            )
+            RETURNING 1
+        )
+        SELECT COUNT(*) FROM deleted_embeddings",
+        &[&worktree_id],
+    ).await?;
+    let embeddings_deleted: i64 = embeddings_row.get(0);
+
+    // Delete chunk_edges for chunks in this worktree
+    client.execute(
+        "DELETE FROM maproom.chunk_edges ce
+         WHERE ce.src_chunk_id IN (
+             SELECT c.id FROM maproom.chunks c
+             JOIN maproom.files f ON c.file_id = f.id
+             WHERE f.worktree_id = $1
+         ) OR ce.dst_chunk_id IN (
+             SELECT c.id FROM maproom.chunks c
+             JOIN maproom.files f ON c.file_id = f.id
+             WHERE f.worktree_id = $1
+         )",
+        &[&worktree_id],
+    ).await?;
+
+    // Delete chunks for this worktree (via files)
+    client.execute(
+        "DELETE FROM maproom.chunks c
+         USING maproom.files f
+         WHERE c.file_id = f.id AND f.worktree_id = $1",
+        &[&worktree_id],
+    ).await?;
+
+    // Delete files for this worktree
+    client.execute(
+        "DELETE FROM maproom.files WHERE worktree_id = $1",
+        &[&worktree_id],
+    ).await?;
+
+    // Delete index_state for this worktree
+    client.execute(
+        "DELETE FROM maproom.worktree_index_state WHERE worktree_id = $1",
+        &[&worktree_id],
+    ).await?;
+
+    Ok(super::WorktreeCleanupResult {
+        chunks_deleted: chunks_deleted as u64,
+        files_deleted: files_deleted as u64,
+        embeddings_deleted: embeddings_deleted as u64,
+    })
+}
+
+/// Delete all chunks for a specific file (for incremental re-indexing)
+pub async fn delete_chunks_by_file(
+    client: &Client,
+    file_id: i64,
+) -> anyhow::Result<u64> {
+    // Delete embeddings for chunks belonging to this file
+    client.execute(
+        "DELETE FROM maproom.code_embeddings ce
+         WHERE ce.blob_sha IN (
+             SELECT c.blob_sha FROM maproom.chunks c WHERE c.file_id = $1
+         )",
+        &[&file_id],
+    ).await?;
+
+    // Delete chunk edges involving chunks from this file
+    client.execute(
+        "DELETE FROM maproom.chunk_edges
+         WHERE src_chunk_id IN (SELECT id FROM maproom.chunks WHERE file_id = $1)
+            OR dst_chunk_id IN (SELECT id FROM maproom.chunks WHERE file_id = $1)",
+        &[&file_id],
+    ).await?;
+
+    // Delete chunks
+    let result = client.execute(
+        "DELETE FROM maproom.chunks WHERE file_id = $1",
+        &[&file_id],
+    ).await?;
+
+    Ok(result)
+}
+
+/// Get chunks by blob SHA (for content-addressed deduplication)
+pub async fn get_chunks_by_blob_sha(
+    client: &Client,
+    blob_sha: &str,
+) -> anyhow::Result<Vec<super::ChunkSummary>> {
+    let rows = client.query(
+        "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+         FROM maproom.chunks c
+         JOIN maproom.files f ON c.file_id = f.id
+         WHERE c.blob_sha = $1
+         ORDER BY c.start_line",
+        &[&blob_sha],
+    ).await?;
+
+    let chunks = rows.into_iter().map(|row| {
+        super::ChunkSummary {
+            id: row.get(0),
+            symbol_name: row.get(1),
+            kind: row.get(2),
+            start_line: row.get(3),
+            end_line: row.get(4),
+            file_path: row.get(5),
+        }
+    }).collect();
+
+    Ok(chunks)
+}

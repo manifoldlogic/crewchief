@@ -138,6 +138,14 @@ pub struct WorktreeInfo {
     pub abs_path: String,
 }
 
+/// Result from deleting a single worktree's data
+#[derive(Debug, Clone, Default)]
+pub struct WorktreeCleanupResult {
+    pub chunks_deleted: u64,
+    pub files_deleted: u64,
+    pub embeddings_deleted: u64,
+}
+
 /// Common interface for Vector/FTS storage backends.
 #[async_trait]
 pub trait VectorStore: Send + Sync {
@@ -256,6 +264,19 @@ pub trait VectorStore: Send + Sync {
         tree_sha: &str,
         stats: &UpdateStats,
     ) -> anyhow::Result<()>;
+
+    // --- Cleanup & Maintenance ---
+    /// Detect worktrees that no longer exist on disk
+    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<StaleWorktree>>;
+
+    /// Delete all data for a worktree (chunks, files, embeddings)
+    async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<WorktreeCleanupResult>;
+
+    /// Delete all chunks for a specific file (for incremental re-indexing)
+    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64>;
+
+    /// Get chunks by blob SHA (for content-addressed deduplication)
+    async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<ChunkSummary>>;
 
     // --- Migrations ---
     async fn migrate(&self) -> anyhow::Result<()>;
