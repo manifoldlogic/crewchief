@@ -5,24 +5,22 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
-use crewchief_maproom::db::{create_pool, PgPool};
+use crewchief_maproom::db::{factory::get_store, SearchHit, VectorStore};
 use crewchief_maproom::embedding::EmbeddingService;
-use crewchief_maproom::search::fts::{normalize_for_exact_match, FTSExecutor};
-use crewchief_maproom::search::types::SearchMode;
-use crewchief_maproom::search::vector::VectorExecutor;
 
 use self::types::{JsonRpcRequest, JsonRpcResponse, SearchParams};
 
 struct DaemonState {
-    pool: PgPool,
+    store: Arc<dyn VectorStore>,
     embedding_service: EmbeddingService,
 }
 
 pub async fn run() -> Result<()> {
     info!("Daemon mode starting...");
 
-    // Initialize DB pool
-    let pool = create_pool().await?;
+    // Initialize VectorStore using factory pattern
+    let store = get_store().await.context("Failed to initialize database store")?;
+    info!("Database backend: {:?}", store.backend_type());
 
     // Initialize Embedding Service
     let embedding_service = EmbeddingService::from_env()
@@ -30,7 +28,7 @@ pub async fn run() -> Result<()> {
         .context("Failed to initialize embedding service")?;
 
     let state = Arc::new(DaemonState {
-        pool,
+        store,
         embedding_service,
     });
 
@@ -109,31 +107,6 @@ async fn execute_search(
     state: Arc<DaemonState>,
     params: SearchParams,
 ) -> Result<serde_json::Value> {
-    let client = state.pool.get().await?;
-
-    // Resolve repo_id
-    let repo_row = client
-        .query_one(
-            "SELECT id FROM maproom.repos WHERE name = $1",
-            &[&params.repo],
-        )
-        .await
-        .context(format!("Repository '{}' not found", params.repo))?;
-    let repo_id: i64 = repo_row.get(0);
-
-    // Resolve worktree_id
-    let worktree_id: Option<i64> = if let Some(w) = &params.worktree {
-        let row = client
-            .query_opt(
-                "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
-                &[&repo_id, w],
-            )
-            .await?;
-        row.map(|r| r.get(0))
-    } else {
-        None
-    };
-
     // Determine search mode (default to "hybrid" for backward compatibility)
     let mode = params.mode.as_deref().unwrap_or("hybrid");
 
@@ -145,22 +118,19 @@ async fn execute_search(
         );
     }
 
-    let k = params.limit.unwrap_or(10);
+    let k = params.limit.unwrap_or(10) as i64;
 
-    // Route to appropriate executor based on mode
-    let ranked_results = match mode {
+    // Use VectorStore trait methods for all search operations
+    // The trait methods handle repo/worktree resolution internally
+    let hits: Vec<SearchHit> = match mode {
         "fts" => {
             // FTS mode: Full-text search only (no embeddings required)
-            let normalized_query = normalize_for_exact_match(&params.query);
-            let fts_query = params.query.split_whitespace().collect::<Vec<_>>().join(" & ");
-
-            FTSExecutor::execute(
-                &client,
-                &fts_query,
-                &normalized_query,
-                repo_id,
-                worktree_id,
+            state.store.search_chunks_fts(
+                &params.repo,
+                params.worktree.as_deref(),
+                &params.query,
                 k,
+                false, // debug
             )
             .await
             .context("FTS search execution failed")?
@@ -173,20 +143,19 @@ async fn execute_search(
                 .await
                 .context("Failed to generate query embedding")?;
 
-            VectorExecutor::execute(
-                &client,
+            state.store.search_chunks_vector(
+                &params.repo,
+                params.worktree.as_deref(),
                 &query_embedding,
-                SearchMode::Code,
-                repo_id,
-                worktree_id,
                 k,
+                false, // debug
             )
             .await
             .context("Vector search execution failed")?
         }
         "hybrid" => {
-            // Hybrid mode: Try vector search first, fall back to FTS if it fails
-            // This gracefully handles the case where embeddings are not available
+            // Hybrid mode: Try to get embedding for hybrid search
+            // Falls back gracefully if embedding service unavailable
             let query_embedding_result = state
                 .embedding_service
                 .embed_text(&params.query)
@@ -194,51 +163,29 @@ async fn execute_search(
 
             match query_embedding_result {
                 Ok(query_embedding) => {
-                    // Embeddings available, try vector search
-                    let vector_result = VectorExecutor::execute(
-                        &client,
+                    // Embeddings available, use hybrid search
+                    state.store.search_chunks_hybrid(
+                        &params.repo,
+                        params.worktree.as_deref(),
+                        &params.query,
                         &query_embedding,
-                        SearchMode::Code,
-                        repo_id,
-                        worktree_id,
                         k,
+                        false, // debug
                     )
-                    .await;
-
-                    match vector_result {
-                        Ok(results) => results,
-                        Err(_) => {
-                            // Vector search failed, fall back to FTS
-                            let normalized_query = normalize_for_exact_match(&params.query);
-                            let fts_query = params.query.split_whitespace().collect::<Vec<_>>().join(" & ");
-                            FTSExecutor::execute(
-                                &client,
-                                &fts_query,
-                                &normalized_query,
-                                repo_id,
-                                worktree_id,
-                                k,
-                            )
-                            .await
-                            .unwrap_or_else(|_| {
-                                crewchief_maproom::search::executor_types::RankedResults::empty(
-                                    crewchief_maproom::search::executor_types::SearchSource::FTS
-                                )
-                            })
-                        }
-                    }
+                    .await
+                    .unwrap_or_else(|_| {
+                        // Hybrid failed, will fall back to FTS below
+                        Vec::new()
+                    })
                 }
                 Err(_) => {
                     // No embeddings available, use FTS directly
-                    let normalized_query = normalize_for_exact_match(&params.query);
-                    let fts_query = params.query.split_whitespace().collect::<Vec<_>>().join(" & ");
-                    FTSExecutor::execute(
-                        &client,
-                        &fts_query,
-                        &normalized_query,
-                        repo_id,
-                        worktree_id,
+                    state.store.search_chunks_fts(
+                        &params.repo,
+                        params.worktree.as_deref(),
+                        &params.query,
                         k,
+                        false, // debug
                     )
                     .await
                     .context("FTS search execution failed")?
@@ -248,48 +195,32 @@ async fn execute_search(
         _ => unreachable!("Mode validation should prevent this"),
     };
 
-    // Fetch details
-    let mut hits = Vec::new();
-    for result in ranked_results.results {
-        if let Some(thresh) = params.threshold {
-            if result.score < thresh {
-                continue;
+    // Format response - SearchHit already contains all needed fields
+    let formatted_hits: Vec<serde_json::Value> = hits
+        .iter()
+        .filter(|hit| {
+            // Apply threshold filter if specified
+            if let Some(thresh) = params.threshold {
+                hit.score >= thresh as f64
+            } else {
+                true
             }
-        }
-
-        let chunk_row = client
-            .query_opt(
-                r#"
-                SELECT
-                    c.start_line,
-                    c.end_line,
-                    c.symbol_name,
-                    c.kind::text,
-                    f.relpath
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                WHERE c.id = $1
-                "#,
-                &[&result.chunk_id],
-            )
-            .await?;
-
-        if let Some(row) = chunk_row {
-            hits.push(serde_json::json!({
-                "chunk_id": result.chunk_id,
-                "score": result.score,
-                "start_line": row.get::<_, i32>(0),
-                "end_line": row.get::<_, i32>(1),
-                "symbol_name": row.get::<_, Option<String>>(2),
-                "kind": row.get::<_, String>(3),
-                "file_path": row.get::<_, String>(4),
-            }));
-        }
-    }
+        })
+        .map(|hit| {
+            serde_json::json!({
+                "score": hit.score,
+                "start_line": hit.start_line,
+                "end_line": hit.end_line,
+                "symbol_name": hit.symbol_name,
+                "kind": hit.kind,
+                "file_path": hit.file_relpath,
+            })
+        })
+        .collect();
 
     Ok(serde_json::json!({
-        "hits": hits,
-        "total": hits.len(),
+        "hits": formatted_hits,
+        "total": formatted_hits.len(),
         "query": params.query,
         "mode": mode,
         "k": k,
