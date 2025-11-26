@@ -960,6 +960,121 @@ impl SqliteStore {
 
         Ok(results)
     }
+
+    /// Get metadata for multiple chunks (batch query for semantic ranking)
+    ///
+    /// Returns a map of chunk_id -> ChunkMetadata with kind, symbol_name, and recency_score.
+    pub async fn get_chunks_metadata(
+        &self,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<std::collections::HashMap<i64, hybrid::ChunkMetadata>> {
+        if chunk_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+
+        self.run(move |conn| {
+            let placeholders: Vec<String> = (1..=chunk_ids.len())
+                .map(|i| format!("?{}", i))
+                .collect();
+            let sql = format!(
+                "SELECT id, kind, symbol_name, recency_score FROM chunks WHERE id IN ({})",
+                placeholders.join(", ")
+            );
+
+            let mut stmt = conn.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::ToSql> = chunk_ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::ToSql)
+                .collect();
+
+            let rows = stmt.query_map(params.as_slice(), |row| {
+                let id: i64 = row.get(0)?;
+                let kind: String = row.get(1)?;
+                let symbol_name: Option<String> = row.get(2)?;
+                let recency_score: f64 = row.get(3)?;
+                Ok((id, hybrid::ChunkMetadata {
+                    kind,
+                    symbol_name,
+                    recency_score,
+                }))
+            })?;
+
+            let mut map = std::collections::HashMap::new();
+            for result in rows {
+                let (id, metadata) = result?;
+                map.insert(id, metadata);
+            }
+            Ok(map)
+        }).await
+    }
+
+    /// Hybrid search with semantic ranking applied
+    ///
+    /// Combines FTS5 and vector search using RRF, then applies semantic ranking
+    /// based on chunk kind, symbol name matching, and recency.
+    ///
+    /// # Arguments
+    /// * `repo` - Repository name to filter by
+    /// * `worktree` - Optional worktree name to filter by
+    /// * `query` - User's search query (for FTS and exact match detection)
+    /// * `query_embedding` - Query embedding vector (for semantic search)
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Weights for combining FTS and vector contributions
+    /// * `ranking` - Semantic ranking configuration
+    pub async fn search_hybrid_ranked(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        weights: hybrid::HybridWeights,
+        ranking: hybrid::SemanticRanking,
+    ) -> anyhow::Result<Vec<hybrid::RankedSearchHit>> {
+        // Over-fetch by 2x before ranking to ensure good results after re-ordering
+        let fetch_limit = limit * 2;
+
+        // Get base hybrid results
+        let hits = self
+            .search_hybrid(repo, worktree, query, query_embedding, fetch_limit, weights)
+            .await?;
+
+        if hits.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Fetch chunk metadata for all results
+        let chunk_ids: Vec<i64> = hits.iter().map(|h| h.chunk_id).collect();
+        let metadata = self.get_chunks_metadata(&chunk_ids).await?;
+
+        // Build ranked hits with metadata
+        let mut ranked: Vec<hybrid::RankedSearchHit> = hits
+            .into_iter()
+            .filter_map(|h| {
+                let meta = metadata.get(&h.chunk_id)?;
+                Some(hybrid::RankedSearchHit {
+                    chunk_id: h.chunk_id,
+                    score: h.score,
+                    fts_rank: h.fts_rank,
+                    vector_rank: h.vector_rank,
+                    kind: meta.kind.clone(),
+                    symbol_name: meta.symbol_name.clone(),
+                    recency_score: meta.recency_score,
+                    source: h.source,
+                })
+            })
+            .collect();
+
+        // Apply semantic ranking
+        hybrid::apply_semantic_ranking(&mut ranked, query, &ranking);
+
+        // Take top N after re-ranking
+        ranked.truncate(limit);
+
+        Ok(ranked)
+    }
 }
 
 #[cfg(test)]
@@ -1937,5 +2052,303 @@ mod tests {
         // Should find FTS results even without vector results
         assert!(!results.is_empty(), "Should find FTS results when no embeddings");
         assert!(results.iter().all(|r| r.source == "fts"), "All results should be FTS-only");
+    }
+
+    #[tokio::test]
+    async fn test_get_chunks_metadata() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks with different metadata
+        let chunk1 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("my_function".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "fn my_function() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 0.9,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        let chunk1_id = store.insert_chunk(&chunk1).await.unwrap();
+
+        let chunk2 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("my_variable".to_string()),
+            kind: "variable".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 11,
+            end_line: 15,
+            preview: "let my_variable = 42;".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 0.5,
+            churn_score: 0.3,
+            metadata: None,
+        };
+        let chunk2_id = store.insert_chunk(&chunk2).await.unwrap();
+
+        // Get metadata for both chunks
+        let metadata = store.get_chunks_metadata(&[chunk1_id, chunk2_id]).await.unwrap();
+
+        assert_eq!(metadata.len(), 2, "Should get metadata for both chunks");
+
+        let meta1 = metadata.get(&chunk1_id).expect("Should have chunk1 metadata");
+        assert_eq!(meta1.kind, "function");
+        assert_eq!(meta1.symbol_name, Some("my_function".to_string()));
+        assert!((meta1.recency_score - 0.9).abs() < 1e-6);
+
+        let meta2 = metadata.get(&chunk2_id).expect("Should have chunk2 metadata");
+        assert_eq!(meta2.kind, "variable");
+        assert_eq!(meta2.symbol_name, Some("my_variable".to_string()));
+        assert!((meta2.recency_score - 0.5).abs() < 1e-6);
+
+        // Test empty input
+        let empty_metadata = store.get_chunks_metadata(&[]).await.unwrap();
+        assert!(empty_metadata.is_empty(), "Empty input should return empty map");
+
+        // Test non-existent chunk ID
+        let missing_metadata = store.get_chunks_metadata(&[99999]).await.unwrap();
+        assert!(missing_metadata.is_empty(), "Non-existent ID should return empty map");
+    }
+
+    #[tokio::test]
+    async fn test_search_hybrid_ranked_integration() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks with different kinds and symbol names
+        // Chunk 1: function with matching symbol name
+        let chunk1 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("validate_user".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Validate user credentials".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn validate_user() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0, // Most recent
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk1).await.unwrap();
+
+        // Chunk 2: variable (lower rank multiplier)
+        let chunk2 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("validation_flag".to_string()),
+            kind: "variable".to_string(),
+            signature: None,
+            docstring: Some("User validation status flag".to_string()),
+            start_line: 11,
+            end_line: 15,
+            preview: "let validation_flag = true;".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 0.0, // Oldest
+            churn_score: 0.3,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk2).await.unwrap();
+
+        // Chunk 3: function but no symbol match
+        let chunk3 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob3".to_string(),
+            symbol_name: Some("process_data".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("User data processor".to_string()),
+            start_line: 16,
+            end_line: 25,
+            preview: "fn process_data() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 0.5,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk3).await.unwrap();
+
+        // Create embeddings
+        let query_embedding: Vec<f32> = vec![0.5f32; 1536];
+        let embedding1: Vec<f32> = vec![0.5f32; 1536];
+        let embedding2: Vec<f32> = vec![0.5f32; 1536];
+        let embedding3: Vec<f32> = vec![0.5f32; 1536];
+
+        store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
+        store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
+        store.upsert_embedding("blob3", &embedding3, "model-v1").await.unwrap();
+
+        // Perform ranked hybrid search for "validate"
+        let weights = hybrid::HybridWeights::default();
+        let ranking = hybrid::SemanticRanking::default();
+        let results = store.search_hybrid_ranked(
+            "test-repo",
+            None,
+            "validate",
+            &query_embedding,
+            10,
+            weights,
+            ranking,
+        ).await.unwrap();
+
+        // Should find results
+        assert!(!results.is_empty(), "Should find results");
+
+        // Results should include chunk metadata
+        for result in &results {
+            assert!(!result.kind.is_empty(), "Kind should be populated");
+        }
+
+        // validate_user should rank highest:
+        // - function multiplier (1.2)
+        // - exact match boost (1.5) since "validate" matches "validate_user"
+        // - recency boost (1.0 * 0.1 + 1.0 = 1.1)
+        // This combination should beat other chunks
+        if results.len() >= 2 {
+            let top_result = &results[0];
+            assert_eq!(
+                top_result.symbol_name,
+                Some("validate_user".to_string()),
+                "validate_user should rank first due to function multiplier + exact match + recency"
+            );
+        }
+
+        // Results should be sorted by score descending
+        for i in 1..results.len() {
+            assert!(
+                results[i - 1].score >= results[i].score,
+                "Results should be sorted by score descending"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_hybrid_ranked_identity_ranking() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create a simple chunk
+        let chunk = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("test_fn".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Test function".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn test_fn() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk).await.unwrap();
+
+        // Create embedding
+        let query_embedding: Vec<f32> = vec![0.5f32; 1536];
+        let embedding: Vec<f32> = vec![0.5f32; 1536];
+        store.upsert_embedding("blob1", &embedding, "model-v1").await.unwrap();
+
+        // Compare results with identity ranking vs default ranking
+        let weights = hybrid::HybridWeights::default();
+
+        let results_identity = store.search_hybrid_ranked(
+            "test-repo",
+            None,
+            "test",
+            &query_embedding,
+            10,
+            weights.clone(),
+            hybrid::SemanticRanking::identity(),
+        ).await.unwrap();
+
+        let results_default = store.search_hybrid_ranked(
+            "test-repo",
+            None,
+            "test",
+            &query_embedding,
+            10,
+            weights,
+            hybrid::SemanticRanking::default(),
+        ).await.unwrap();
+
+        // Both should return results
+        assert!(!results_identity.is_empty(), "Identity ranking should find results");
+        assert!(!results_default.is_empty(), "Default ranking should find results");
+
+        // Default ranking should boost the score (function=1.2, exact match=1.5, recency=1.1)
+        // Identity ranking should keep original score
+        assert!(
+            results_default[0].score > results_identity[0].score,
+            "Default ranking should boost score compared to identity"
+        );
     }
 }

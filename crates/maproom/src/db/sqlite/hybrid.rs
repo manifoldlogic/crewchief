@@ -6,11 +6,17 @@
 //!
 //! Results are combined using RRF (Reciprocal Rank Fusion), a proven algorithm
 //! for merging ranked lists without requiring score normalization.
+//!
+//! Semantic ranking applies domain-specific adjustments:
+//! - Kind multipliers (functions/classes rank higher than variables)
+//! - Exact match boost when symbol name matches query
+//! - Recency factor for recently modified chunks
 
 use std::collections::{HashMap, HashSet};
 
 use super::fts::FtsResult;
 use super::vector::VectorResult;
+use crate::search::fts::normalize_for_exact_match;
 
 /// Standard RRF constant (k=60 is widely used in IR research)
 const RRF_K: f64 = 60.0;
@@ -68,6 +74,155 @@ pub struct HybridResult {
     pub vector_rank: Option<usize>,
     /// Source indicator: "fts", "vector", or "both"
     pub source: String,
+}
+
+// ============================================================================
+// Semantic Ranking
+// ============================================================================
+
+/// Semantic ranking configuration with domain-specific multipliers
+///
+/// Applies adjustments based on:
+/// - Kind (function, class, variable, etc.)
+/// - Exact match boost when symbol name matches query
+/// - Recency weight for recently modified chunks
+#[derive(Debug, Clone)]
+pub struct SemanticRanking {
+    /// Multipliers for different chunk kinds
+    pub kind_multipliers: HashMap<String, f64>,
+    /// Boost applied when symbol name matches query
+    pub exact_match_boost: f64,
+    /// Weight for recency score contribution (0-1)
+    pub recency_weight: f64,
+}
+
+impl Default for SemanticRanking {
+    fn default() -> Self {
+        let mut kind_multipliers = HashMap::new();
+        kind_multipliers.insert("function".to_string(), 1.2);
+        kind_multipliers.insert("method".to_string(), 1.2);
+        kind_multipliers.insert("class".to_string(), 1.1);
+        kind_multipliers.insert("struct".to_string(), 1.1);
+        kind_multipliers.insert("interface".to_string(), 1.1);
+        kind_multipliers.insert("trait".to_string(), 1.1);
+        kind_multipliers.insert("enum".to_string(), 1.0);
+        kind_multipliers.insert("module".to_string(), 1.0);
+        kind_multipliers.insert("constant".to_string(), 0.9);
+        kind_multipliers.insert("variable".to_string(), 0.8);
+        kind_multipliers.insert("import".to_string(), 0.7);
+
+        Self {
+            kind_multipliers,
+            exact_match_boost: 1.5,
+            recency_weight: 0.1, // Small boost for recent changes
+        }
+    }
+}
+
+impl SemanticRanking {
+    /// Create semantic ranking with custom multipliers
+    pub fn new(
+        kind_multipliers: HashMap<String, f64>,
+        exact_match_boost: f64,
+        recency_weight: f64,
+    ) -> Self {
+        Self {
+            kind_multipliers,
+            exact_match_boost,
+            recency_weight,
+        }
+    }
+
+    /// Create semantic ranking that doesn't apply any adjustments
+    pub fn identity() -> Self {
+        Self {
+            kind_multipliers: HashMap::new(),
+            exact_match_boost: 1.0,
+            recency_weight: 0.0,
+        }
+    }
+}
+
+/// Chunk metadata needed for semantic ranking
+#[derive(Debug, Clone)]
+pub struct ChunkMetadata {
+    /// Chunk kind (function, class, variable, etc.)
+    pub kind: String,
+    /// Symbol name if available
+    pub symbol_name: Option<String>,
+    /// Recency score 0-1 (1 = most recent)
+    pub recency_score: f64,
+}
+
+/// Extended search hit with chunk metadata for ranking
+#[derive(Debug, Clone)]
+pub struct RankedSearchHit {
+    /// Chunk ID in the chunks table
+    pub chunk_id: i64,
+    /// Combined score after semantic ranking adjustments
+    pub score: f64,
+    /// Position in FTS results (None if not found by FTS)
+    pub fts_rank: Option<usize>,
+    /// Position in vector results (None if not found by vector search)
+    pub vector_rank: Option<usize>,
+    /// Chunk kind (function, class, variable, etc.)
+    pub kind: String,
+    /// Symbol name if available
+    pub symbol_name: Option<String>,
+    /// Recency score 0-1 (1 = most recent)
+    pub recency_score: f64,
+    /// Source indicator: "fts", "vector", or "both"
+    pub source: String,
+}
+
+/// Apply semantic ranking multipliers to search results
+///
+/// Modifies scores in-place based on:
+/// 1. Kind multipliers (functions/classes score higher)
+/// 2. Exact match boost if symbol name contains query
+/// 3. Recency factor (small boost for recently modified)
+///
+/// Re-sorts results by adjusted score after applying multipliers.
+pub fn apply_semantic_ranking(
+    results: &mut [RankedSearchHit],
+    query: &str,
+    ranking: &SemanticRanking,
+) {
+    let normalized_query = normalize_for_exact_match(query);
+
+    for hit in results.iter_mut() {
+        let mut multiplier = 1.0;
+
+        // Apply kind multiplier (default 1.0 for unknown kinds)
+        if let Some(&kind_mult) = ranking.kind_multipliers.get(&hit.kind) {
+            multiplier *= kind_mult;
+        }
+
+        // Apply exact match boost if symbol name contains normalized query
+        if let Some(ref symbol) = hit.symbol_name {
+            let normalized_symbol = normalize_for_exact_match(symbol);
+            if normalized_symbol
+                .to_lowercase()
+                .contains(&normalized_query.to_lowercase())
+            {
+                multiplier *= ranking.exact_match_boost;
+            }
+        }
+
+        // Apply recency factor: 1.0 + (recency_score * weight)
+        // recency_score is 0-1 where 1 = most recent
+        let recency_boost = 1.0 + (hit.recency_score * ranking.recency_weight);
+        multiplier *= recency_boost;
+
+        hit.score *= multiplier;
+    }
+
+    // Re-sort after applying multipliers
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 }
 
 /// Calculate RRF score for a single result
@@ -382,5 +537,244 @@ mod tests {
         let vec_only = rrf_score(None, Some(0), &weights);
 
         assert!(vec_only > fts_only, "Vector-heavy weights should favor vector results");
+    }
+
+    // ========================================================================
+    // Semantic Ranking Tests
+    // ========================================================================
+
+    #[test]
+    fn test_semantic_ranking_defaults() {
+        let ranking = SemanticRanking::default();
+
+        // Check default multipliers
+        assert_eq!(ranking.kind_multipliers.get("function"), Some(&1.2));
+        assert_eq!(ranking.kind_multipliers.get("method"), Some(&1.2));
+        assert_eq!(ranking.kind_multipliers.get("class"), Some(&1.1));
+        assert_eq!(ranking.kind_multipliers.get("variable"), Some(&0.8));
+        assert_eq!(ranking.kind_multipliers.get("import"), Some(&0.7));
+
+        // Check default boost values
+        assert!((ranking.exact_match_boost - 1.5).abs() < 1e-6);
+        assert!((ranking.recency_weight - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_semantic_ranking_identity() {
+        let ranking = SemanticRanking::identity();
+
+        // Identity ranking should have no multipliers
+        assert!(ranking.kind_multipliers.is_empty());
+        assert!((ranking.exact_match_boost - 1.0).abs() < 1e-6);
+        assert!((ranking.recency_weight - 0.0).abs() < 1e-6);
+    }
+
+    fn create_test_hit(
+        chunk_id: i64,
+        score: f64,
+        kind: &str,
+        symbol_name: Option<&str>,
+        recency_score: f64,
+    ) -> RankedSearchHit {
+        RankedSearchHit {
+            chunk_id,
+            score,
+            fts_rank: Some(0),
+            vector_rank: Some(0),
+            kind: kind.to_string(),
+            symbol_name: symbol_name.map(|s| s.to_string()),
+            recency_score,
+            source: "both".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_kind_multipliers() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "function", None, 0.0),
+            create_test_hit(2, 1.0, "variable", None, 0.0),
+            create_test_hit(3, 1.0, "import", None, 0.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "query", &ranking);
+
+        // Function should have highest score (1.0 * 1.2 = 1.2)
+        // Variable should be middle (1.0 * 0.8 = 0.8)
+        // Import should be lowest (1.0 * 0.7 = 0.7)
+        assert!((results[0].score - 1.2).abs() < 1e-6, "Function score: {}", results[0].score);
+        assert!((results[1].score - 0.8).abs() < 1e-6, "Variable score: {}", results[1].score);
+        assert!((results[2].score - 0.7).abs() < 1e-6, "Import score: {}", results[2].score);
+
+        // Should be sorted by score descending
+        assert_eq!(results[0].kind, "function");
+        assert_eq!(results[1].kind, "variable");
+        assert_eq!(results[2].kind, "import");
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_exact_match_boost() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "function", Some("validateUser"), 0.0),
+            create_test_hit(2, 1.0, "function", Some("processData"), 0.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "validate", &ranking);
+
+        // First hit should get exact match boost (1.0 * 1.2 * 1.5 = 1.8)
+        // Second hit should only get kind multiplier (1.0 * 1.2 = 1.2)
+        assert!((results[0].score - 1.8).abs() < 1e-6, "Match score: {}", results[0].score);
+        assert!((results[1].score - 1.2).abs() < 1e-6, "No match score: {}", results[1].score);
+
+        // Verify sorting
+        assert_eq!(results[0].symbol_name, Some("validateUser".to_string()));
+        assert_eq!(results[1].symbol_name, Some("processData".to_string()));
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_exact_match_camel_case() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "function", Some("getUserName"), 0.0),
+            create_test_hit(2, 1.0, "function", Some("processData"), 0.0),
+        ];
+
+        // Query "user_name" should match after normalization
+        // getUserName -> get_user_name which contains "user_name"
+        apply_semantic_ranking(&mut results, "user_name", &ranking);
+
+        // getUserName normalized is "get_user_name" which contains "user_name"
+        // So it should get the boost
+        assert!(results[0].score > results[1].score, "Camel case match should boost score");
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_exact_match_partial_name() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "function", Some("validateUserCredentials"), 0.0),
+            create_test_hit(2, 1.0, "function", Some("processData"), 0.0),
+        ];
+
+        // Query "user" should match "validateUserCredentials" after normalization
+        // validateUserCredentials -> validate_user_credentials
+        apply_semantic_ranking(&mut results, "user", &ranking);
+
+        // Should match since "validate_user_credentials" contains "user"
+        assert!(results[0].score > results[1].score, "Partial name match should boost score");
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_recency_factor() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "enum", None, 1.0),  // Most recent
+            create_test_hit(2, 1.0, "enum", None, 0.0),  // Not recent
+        ];
+
+        apply_semantic_ranking(&mut results, "query", &ranking);
+
+        // First hit: 1.0 * 1.0 * (1.0 + 1.0 * 0.1) = 1.0 * 1.1 = 1.1
+        // Second hit: 1.0 * 1.0 * (1.0 + 0.0 * 0.1) = 1.0 * 1.0 = 1.0
+        assert!((results[0].score - 1.1).abs() < 1e-6, "Recent score: {}", results[0].score);
+        assert!((results[1].score - 1.0).abs() < 1e-6, "Old score: {}", results[1].score);
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_combined_factors() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "function", Some("validateInput"), 1.0),
+            create_test_hit(2, 1.0, "variable", None, 0.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "validate", &ranking);
+
+        // First hit: function (1.2) * exact match (1.5) * recency (1.1) = 1.98
+        // Second hit: variable (0.8) * no match (1.0) * no recency (1.0) = 0.8
+        assert!((results[0].score - 1.98).abs() < 1e-6, "Combined score: {}", results[0].score);
+        assert!((results[1].score - 0.8).abs() < 1e-6, "Base score: {}", results[1].score);
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_reorders_results() {
+        let ranking = SemanticRanking::default();
+
+        // Start with variable ranked higher than function
+        let mut results = vec![
+            create_test_hit(1, 2.0, "variable", None, 0.0),  // Higher base score
+            create_test_hit(2, 1.0, "function", Some("targetFunction"), 0.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "target", &ranking);
+
+        // After ranking:
+        // Variable: 2.0 * 0.8 = 1.6
+        // Function with match: 1.0 * 1.2 * 1.5 = 1.8
+        // Function should now be ranked first
+        assert_eq!(results[0].kind, "function");
+        assert_eq!(results[1].kind, "variable");
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_unknown_kind() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "unknown_kind", None, 0.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "query", &ranking);
+
+        // Unknown kind should use default multiplier of 1.0
+        assert!((results[0].score - 1.0).abs() < 1e-6, "Unknown kind score: {}", results[0].score);
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_empty_results() {
+        let ranking = SemanticRanking::default();
+        let mut results: Vec<RankedSearchHit> = vec![];
+
+        // Should not panic on empty results
+        apply_semantic_ranking(&mut results, "query", &ranking);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_apply_semantic_ranking_no_symbol_name() {
+        let ranking = SemanticRanking::default();
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "function", None, 0.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "validate", &ranking);
+
+        // Should only apply kind multiplier, no exact match boost
+        assert!((results[0].score - 1.2).abs() < 1e-6, "No symbol score: {}", results[0].score);
+    }
+
+    #[test]
+    fn test_semantic_ranking_custom() {
+        let mut kind_multipliers = HashMap::new();
+        kind_multipliers.insert("custom".to_string(), 2.0);
+
+        let ranking = SemanticRanking::new(kind_multipliers, 3.0, 0.5);
+
+        let mut results = vec![
+            create_test_hit(1, 1.0, "custom", Some("matchThis"), 1.0),
+        ];
+
+        apply_semantic_ranking(&mut results, "match", &ranking);
+
+        // custom (2.0) * exact match (3.0) * recency (1.0 + 1.0 * 0.5 = 1.5) = 9.0
+        assert!((results[0].score - 9.0).abs() < 1e-6, "Custom ranking score: {}", results[0].score);
     }
 }

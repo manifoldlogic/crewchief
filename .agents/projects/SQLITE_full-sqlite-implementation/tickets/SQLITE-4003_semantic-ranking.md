@@ -1,9 +1,9 @@
 # Ticket: SQLITE-4003: Semantic Ranking
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,13 +20,13 @@ Raw search scores don't account for code semantics. Functions and classes are ty
 Implements: Plan Phase 4 - Hybrid Search
 
 ## Acceptance Criteria
-- [ ] `SemanticRanking` struct with configurable multipliers
-- [ ] Kind multipliers applied (function=1.2, class=1.1, variable=0.8, etc.)
-- [ ] Exact match boost applied when symbol name matches query
-- [ ] Uses existing `normalize_for_exact_match()` from `src/search/fts.rs`
-- [ ] Recency score factored in (if available)
-- [ ] Integrated into hybrid search pipeline
-- [ ] Tests verify multipliers apply correctly
+- [x] `SemanticRanking` struct with configurable multipliers
+- [x] Kind multipliers applied (function=1.2, class=1.1, variable=0.8, etc.)
+- [x] Exact match boost applied when symbol name matches query
+- [x] Uses existing `normalize_for_exact_match()` from `src/search/fts.rs`
+- [x] Recency score factored in (if available)
+- [x] Integrated into hybrid search pipeline
+- [x] Tests verify multipliers apply correctly
 
 ## Technical Requirements
 Add to `crates/maproom/src/db/sqlite/hybrid.rs`:
@@ -172,3 +172,85 @@ pub async fn search_hybrid_ranked(
 
 ## Files/Packages Affected
 - `crates/maproom/src/db/sqlite/hybrid.rs` (add semantic ranking)
+
+---
+
+## Implementation Notes (rust-indexer-engineer)
+
+### Summary
+Implemented semantic ranking that applies domain-specific score adjustments to hybrid search results. Added configurable kind multipliers, exact match boost, and recency weighting.
+
+### Files Modified
+
+**Modified: `crates/maproom/src/db/sqlite/hybrid.rs` (~200 lines added)**
+- `SemanticRanking` struct with configurable multipliers and weights
+- `ChunkMetadata` struct for batch metadata retrieval
+- `RankedSearchHit` struct with full metadata for ranked results
+- `apply_semantic_ranking()` function applies multipliers and re-sorts
+- 13 unit tests for semantic ranking functionality
+
+**Modified: `crates/maproom/src/db/sqlite/mod.rs` (~115 lines added)**
+- `get_chunks_metadata()` batch query for chunk kind/symbol/recency
+- `search_hybrid_ranked()` combines hybrid search with semantic ranking
+- 3 integration tests for metadata retrieval and ranked search
+
+### Key Implementation Details
+
+**SemanticRanking Configuration:**
+- Default multipliers: function/method=1.2, class/struct/interface/trait=1.1, enum/module=1.0, constant=0.9, variable=0.8, import=0.7
+- Exact match boost: 1.5 (when normalized symbol contains normalized query)
+- Recency weight: 0.1 (small boost for recently modified chunks)
+- `SemanticRanking::identity()` provides no-op ranking for testing
+
+**Exact Match Detection:**
+- Uses `normalize_for_exact_match()` from `crate::search::fts`
+- Normalizes camelCase, kebab-case, acronyms to snake_case lowercase
+- Case-insensitive substring match after normalization
+- Example: query "user" matches symbol "validateUserCredentials"
+
+**Score Calculation:**
+```
+final_score = base_score * kind_multiplier * exact_match_boost * recency_boost
+recency_boost = 1.0 + (recency_score * recency_weight)
+```
+
+**Pipeline Integration:**
+1. `search_hybrid()` returns base RRF results (over-fetched by 2x)
+2. `get_chunks_metadata()` batch fetches kind/symbol/recency for all chunk_ids
+3. `apply_semantic_ranking()` applies multipliers and re-sorts
+4. Final results truncated to requested limit
+
+### Test Results
+```
+running 78 tests
+test db::sqlite::hybrid::tests::test_semantic_ranking_defaults ... ok
+test db::sqlite::hybrid::tests::test_semantic_ranking_identity ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_kind_multipliers ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_exact_match_boost ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_exact_match_camel_case ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_exact_match_partial_name ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_recency_factor ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_combined_factors ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_reorders_results ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_unknown_kind ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_empty_results ... ok
+test db::sqlite::hybrid::tests::test_apply_semantic_ranking_no_symbol_name ... ok
+test db::sqlite::hybrid::tests::test_semantic_ranking_custom ... ok
+test db::sqlite::tests::test_get_chunks_metadata ... ok
+test db::sqlite::tests::test_search_hybrid_ranked_integration ... ok
+test db::sqlite::tests::test_search_hybrid_ranked_identity_ranking ... ok
+...
+test result: ok. 78 passed; 0 failed; 0 ignored
+```
+
+### Acceptance Criteria Verification
+
+| Criterion | Evidence |
+|-----------|----------|
+| SemanticRanking struct | Lines 89-144 in hybrid.rs |
+| Kind multipliers applied | test_apply_semantic_ranking_kind_multipliers |
+| Exact match boost applied | test_apply_semantic_ranking_exact_match_boost |
+| Uses normalize_for_exact_match | Line 191 in hybrid.rs |
+| Recency score factored in | test_apply_semantic_ranking_recency_factor |
+| Integrated into hybrid search | search_hybrid_ranked() in mod.rs |
+| Tests verify multipliers | 13 unit tests + 3 integration tests |
