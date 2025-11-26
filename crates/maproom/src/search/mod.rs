@@ -159,6 +159,7 @@ pub mod signals;
 pub mod vector;
 
 // Search pipeline modules (Phase 2)
+pub mod dedup;
 pub mod fusion;
 pub mod pipeline;
 pub mod results;
@@ -183,6 +184,7 @@ pub use signals::{SignalError, SignalExecutor, SignalWeights};
 pub use vector::{VectorError, VectorExecutor};
 
 // Re-export pipeline types (Phase 2 + Phase 3)
+pub use dedup::{deduplicate, ChunkIdentity, DeduplicationConfig, SelectionStrategy};
 pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, RRFFusion, ScoreFusion};
 pub use pipeline::{PipelineError, SearchPipeline};
 pub use results::{
