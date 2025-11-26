@@ -766,6 +766,130 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn search_chunks_hybrid(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        embedding: &[f32],
+        k: i64,
+        debug: bool,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        // Check vec extension availability before entering blocking closure
+        let has_vec = self.has_vec_extension();
+
+        let repo = repo.to_string();
+        let worktree = worktree.map(|s| s.to_string());
+        let query = query.to_string();
+        let embedding = embedding.to_vec();
+        let limit = k as usize;
+
+        self.run(move |conn| {
+            // Resolve repo/worktree ids
+            let repo_id: i64 = conn.query_row(
+                "SELECT id FROM repos WHERE name = ?1",
+                params![repo],
+                |row| row.get(0),
+            )?;
+
+            let worktree_id: Option<i64> = if let Some(ref w) = worktree {
+                conn.query_row(
+                    "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                    params![repo_id, w],
+                    |row| row.get(0),
+                ).optional()?
+            } else {
+                None
+            };
+
+            // Run FTS and vector search in sequence (no async in blocking closure)
+            let fts_results = fts::search_fts(
+                conn,
+                &repo,
+                worktree.as_deref(),
+                &query,
+                limit * 3,
+            )?;
+
+            // Vector search with graceful fallback
+            let vec_results = if has_vec {
+                vector::search_vector(
+                    conn,
+                    &repo,
+                    worktree.as_deref(),
+                    &embedding,
+                    limit * 3,
+                )?
+            } else {
+                vec![]
+            };
+
+            // Combine using RRF
+            let weights = hybrid::HybridWeights::default();
+            let hybrid_results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
+
+            // Convert HybridResult to SearchHit by fetching chunk metadata
+            let mut hits = Vec::new();
+            for hybrid_result in hybrid_results {
+                // Fetch chunk details with file relpath
+                let hit_result = if let Some(wid) = worktree_id {
+                    conn.query_row(
+                        r#"
+                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath
+                        FROM chunks c
+                        JOIN files f ON f.id = c.file_id
+                        JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                        WHERE c.id = ?1 AND cw.worktree_id = ?2
+                        "#,
+                        params![hybrid_result.chunk_id, wid],
+                        |row| {
+                            Ok(SearchHit {
+                                start_line: row.get(0)?,
+                                end_line: row.get(1)?,
+                                symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                file_relpath: row.get(4)?,
+                                score: hybrid_result.score,
+                                base_score: if debug { Some(hybrid_result.score) } else { None },
+                                kind_mult: None, // RRF score already incorporates semantic ranking
+                                exact_mult: None,
+                            })
+                        }
+                    ).optional()?
+                } else {
+                    conn.query_row(
+                        r#"
+                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath
+                        FROM chunks c
+                        JOIN files f ON f.id = c.file_id
+                        WHERE c.id = ?1
+                        "#,
+                        params![hybrid_result.chunk_id],
+                        |row| {
+                            Ok(SearchHit {
+                                start_line: row.get(0)?,
+                                end_line: row.get(1)?,
+                                symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                file_relpath: row.get(4)?,
+                                score: hybrid_result.score,
+                                base_score: if debug { Some(hybrid_result.score) } else { None },
+                                kind_mult: None, // RRF score already incorporates semantic ranking
+                                exact_mult: None,
+                            })
+                        }
+                    ).optional()?
+                };
+
+                if let Some(hit) = hit_result {
+                    hits.push(hit);
+                }
+            }
+
+            Ok(hits)
+        }).await
+    }
+
     async fn find_chunk_by_symbol(
         &self,
         repo_id: i64,

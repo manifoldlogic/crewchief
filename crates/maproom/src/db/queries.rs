@@ -1230,3 +1230,191 @@ pub async fn search_chunks_fts(
         .collect();
     Ok(hits)
 }
+
+/// Hybrid search combining FTS and vector similarity using RRF fusion
+///
+/// Implements Reciprocal Rank Fusion to combine keyword matching (FTS) with
+/// semantic similarity (vector search). This provides the best of both approaches:
+/// - FTS for exact keyword matches and term relevance
+/// - Vector search for semantic similarity and conceptual matching
+///
+/// RRF formula: score = Σ(1.0 / (60 + rank)) across both result sets
+/// Items appearing in both lists naturally rank higher due to combined contributions.
+///
+/// # Parameters
+/// - `client`: Database client
+/// - `repo`: Repository name
+/// - `worktree`: Optional worktree filter
+/// - `query`: Search query string (for FTS)
+/// - `embedding`: Query embedding vector (for vector search)
+/// - `k`: Maximum number of results
+/// - `debug`: If true, include base_score, kind_mult in results
+///
+/// # Returns
+/// Vector of SearchHit results ordered by RRF score DESC
+pub async fn search_chunks_hybrid(
+    client: &Client,
+    repo: &str,
+    worktree: Option<&str>,
+    query: &str,
+    embedding: &[f32],
+    k: i64,
+    debug: bool,
+) -> anyhow::Result<Vec<SearchHit>> {
+    use crate::db::select_columns_for_dimension;
+
+    // Resolve repo/worktree ids
+    let repo_row = client
+        .query_one("SELECT id FROM maproom.repos WHERE name = $1", &[&repo])
+        .await?;
+    let repo_id: i64 = repo_row.get(0);
+    let worktree_id: Option<i64> = if let Some(w) = worktree {
+        let row = client
+            .query_opt(
+                "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
+                &[&repo_id, &w],
+            )
+            .await?;
+        row.map(|r| r.get(0))
+    } else {
+        None
+    };
+
+    // Select columns based on embedding dimension
+    let dimension = embedding.len();
+    let columns = select_columns_for_dimension(dimension)?;
+
+    // Convert embedding to pgvector::Vector
+    let query_vec = pgvector::Vector::from(embedding.to_vec());
+
+    // Build FTS query string (simple tokenization with prefix matching)
+    let fts_query = query
+        .split_whitespace()
+        .map(|t| format!("{}:*", t.replace("'", "")))
+        .collect::<Vec<_>>()
+        .join(" & ");
+
+    // Normalize query for exact match detection (SEMRANK-2004b)
+    let normalized_query = normalize_for_exact_match(query);
+
+    // Hybrid search SQL using RRF (Reciprocal Rank Fusion)
+    // Standard RRF formula: score = 1/(k + rank) where k=60 is constant
+    // Combines FTS and vector results with FULL OUTER JOIN for coverage
+    let sql = format!(
+        r#"
+        WITH fts_results AS (
+          SELECT
+            c.id,
+            c.start_line,
+            c.end_line,
+            c.symbol_name,
+            c.kind::text,
+            f.relpath,
+            ROW_NUMBER() OVER (ORDER BY ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) DESC) - 1 as fts_rank,
+            -- SEMRANK-2004a/b: Exact match multiplier
+            CASE
+              WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
+              ELSE 1.0
+            END as exact_mult,
+            -- SEMRANK-2003: Kind-based multiplier
+            CASE
+              WHEN c.kind IN ('func', 'async_func') THEN 2.5
+              WHEN c.kind IN ('class', 'component') THEN 2.0
+              WHEN c.kind = 'hook' THEN 1.8
+              WHEN c.kind IN ('module', 'type', 'struct', 'trait', 'enum') THEN 1.5
+              WHEN c.kind IN ('var', 'variable', 'constant', 'method', 'async_method') THEN 1.0
+              WHEN c.kind = 'heading_1' THEN 0.6
+              WHEN c.kind = 'heading_2' THEN 0.5
+              WHEN c.kind = 'heading_3' THEN 0.4
+              WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN 0.3
+              WHEN c.kind = 'other' THEN 1.0
+              WHEN c.kind IS NULL THEN 1.0
+              ELSE 1.0
+            END as kind_mult
+          FROM maproom.chunks c
+          JOIN maproom.files f ON f.id = c.file_id
+          WHERE c.ts_doc @@ to_tsquery('simple', $1)
+            AND f.repo_id = $3
+            AND ($4::bigint IS NULL OR f.worktree_id = $4)
+          ORDER BY ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) DESC
+          LIMIT $5 * 2
+        ),
+        vec_results AS (
+          SELECT
+            c.id,
+            c.start_line,
+            c.end_line,
+            c.symbol_name,
+            c.kind::text,
+            f.relpath,
+            ROW_NUMBER() OVER (ORDER BY c.{} <=> $6) - 1 as vec_rank,
+            -- SEMRANK-2003: Kind-based multiplier (same as FTS)
+            CASE
+              WHEN c.kind IN ('func', 'async_func') THEN 2.5
+              WHEN c.kind IN ('class', 'component') THEN 2.0
+              WHEN c.kind = 'hook' THEN 1.8
+              WHEN c.kind IN ('module', 'type', 'struct', 'trait', 'enum') THEN 1.5
+              WHEN c.kind IN ('var', 'variable', 'constant', 'method', 'async_method') THEN 1.0
+              WHEN c.kind = 'heading_1' THEN 0.6
+              WHEN c.kind = 'heading_2' THEN 0.5
+              WHEN c.kind = 'heading_3' THEN 0.4
+              WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN 0.3
+              WHEN c.kind = 'other' THEN 1.0
+              WHEN c.kind IS NULL THEN 1.0
+              ELSE 1.0
+            END as kind_mult
+          FROM maproom.chunks c
+          JOIN maproom.files f ON f.id = c.file_id
+          WHERE c.{} IS NOT NULL
+            AND f.repo_id = $3
+            AND ($4::bigint IS NULL OR f.worktree_id = $4)
+          ORDER BY c.{} <=> $6
+          LIMIT $5 * 2
+        )
+        SELECT
+          COALESCE(f.start_line, v.start_line) as start_line,
+          COALESCE(f.end_line, v.end_line) as end_line,
+          COALESCE(f.symbol_name, v.symbol_name) as symbol_name,
+          COALESCE(f.kind, v.kind) as kind,
+          COALESCE(f.relpath, v.relpath) as relpath,
+          COALESCE(f.kind_mult, v.kind_mult, 1.0)::float8 as kind_mult,
+          COALESCE(f.exact_mult, 1.0)::float8 as exact_mult,
+          (
+            COALESCE(1.0 / (60.0 + f.fts_rank::float8), 0.0) +
+            COALESCE(1.0 / (60.0 + v.vec_rank::float8), 0.0)
+          ) * COALESCE(f.kind_mult, v.kind_mult, 1.0) * COALESCE(f.exact_mult, 1.0) as rrf_score
+        FROM fts_results f
+        FULL OUTER JOIN vec_results v ON f.id = v.id
+        ORDER BY rrf_score DESC
+        LIMIT $5
+    "#,
+        columns.code_embedding, columns.code_embedding, columns.code_embedding
+    );
+
+    let rows = client
+        .query(
+            &sql,
+            &[&fts_query, &normalized_query, &repo_id, &worktree_id, &k, &query_vec],
+        )
+        .await?;
+
+    // Extract results with optional debug fields
+    let hits = rows
+        .into_iter()
+        .map(|r| {
+            let rrf_score: f64 = r.get(7);
+            SearchHit {
+                start_line: r.get(0),
+                end_line: r.get(1),
+                symbol_name: r.get(2),
+                kind: r.get(3),
+                file_relpath: r.get(4),
+                score: rrf_score,
+                base_score: if debug { Some(rrf_score) } else { None },
+                kind_mult: if debug { Some(r.get(5)) } else { None },
+                exact_mult: if debug { Some(r.get(6)) } else { None },
+            }
+        })
+        .collect();
+    Ok(hits)
+}

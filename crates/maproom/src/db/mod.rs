@@ -150,6 +150,17 @@ pub trait VectorStore: Send + Sync {
         debug: bool,
     ) -> anyhow::Result<Vec<SearchHit>>;
 
+    /// Hybrid search combining FTS and vector similarity using RRF fusion
+    async fn search_chunks_hybrid(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,          // Text query for FTS
+        embedding: &[f32],    // Query embedding for vector search
+        k: i64,
+        debug: bool,
+    ) -> anyhow::Result<Vec<SearchHit>>;
+
     // --- Lookup ---
     async fn find_chunk_by_symbol(
         &self,
