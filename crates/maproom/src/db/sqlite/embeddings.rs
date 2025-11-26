@@ -65,40 +65,16 @@ pub fn upsert_embedding(
     )
     .context("Failed to retrieve embedding id")?;
 
-    // Also insert/update in vec_code virtual table for similarity search
-    // First check if exists in vec_code
-    let exists_in_vec_code: bool = conn
-        .query_row(
-            "SELECT 1 FROM vec_code WHERE rowid = ?1",
-            params![rowid],
-            |_| Ok(true),
-        )
-        .unwrap_or(false);
-
-    if exists_in_vec_code {
-        // Update existing vector
-        conn.execute(
-            "UPDATE vec_code SET embedding = ?1 WHERE rowid = ?2",
-            params![blob, rowid],
-        )
-        .context("Failed to update vec_code")?;
-    } else {
-        // Insert new vector with explicit rowid
-        conn.execute(
-            "INSERT INTO vec_code(rowid, embedding) VALUES (?1, ?2)",
-            params![rowid, blob],
-        )
-        .context("Failed to insert into vec_code")?;
-    }
-
     Ok(rowid)
 }
 
 /// Batch upsert with deduplication
+///
+/// Returns a vector of (embedding_id, embedding) pairs for subsequent syncing to vec_code
 pub fn upsert_embeddings_batch(
     conn: &mut Connection,
     embeddings: &[EmbeddingRecord],
-) -> Result<()> {
+) -> Result<Vec<(i64, Vec<f32>)>> {
     // Validate all embeddings are 1536 dimensions
     for (idx, record) in embeddings.iter().enumerate() {
         if record.embedding.len() != 1536 {
@@ -115,6 +91,8 @@ pub fn upsert_embeddings_batch(
         .transaction()
         .context("Failed to begin transaction for batch embedding upsert")?;
 
+    let mut result = Vec::new();
+
     {
         // Prepare statements for reuse
         let mut upsert_stmt = tx.prepare(
@@ -130,18 +108,6 @@ pub fn upsert_embeddings_batch(
             "SELECT id FROM code_embeddings WHERE blob_sha = ?1"
         )?;
 
-        let mut check_vec_stmt = tx.prepare(
-            "SELECT 1 FROM vec_code WHERE rowid = ?1"
-        )?;
-
-        let mut update_vec_stmt = tx.prepare(
-            "UPDATE vec_code SET embedding = ?1 WHERE rowid = ?2"
-        )?;
-
-        let mut insert_vec_stmt = tx.prepare(
-            "INSERT INTO vec_code(rowid, embedding) VALUES (?1, ?2)"
-        )?;
-
         for record in embeddings {
             let blob = vec_to_blob(&record.embedding);
 
@@ -153,26 +119,17 @@ pub fn upsert_embeddings_batch(
                 record.model_version,
             ])?;
 
-            // Get the rowid
-            let rowid: i64 = get_id_stmt.query_row(params![record.blob_sha], |row| row.get(0))?;
+            // Get the rowid for syncing
+            let embedding_id: i64 = get_id_stmt.query_row(params![record.blob_sha], |row| row.get(0))?;
 
-            // Check if exists in vec_code
-            let exists_in_vec_code = check_vec_stmt
-                .exists(params![rowid])
-                .unwrap_or(false);
-
-            if exists_in_vec_code {
-                update_vec_stmt.execute(params![blob, rowid])?;
-            } else {
-                insert_vec_stmt.execute(params![rowid, blob])?;
-            }
+            result.push((embedding_id, record.embedding.clone()));
         }
     }
 
     tx.commit()
         .context("Failed to commit batch embedding upsert transaction")?;
 
-    Ok(())
+    Ok(result)
 }
 
 /// Check if embedding exists for blob_sha
@@ -204,9 +161,110 @@ pub fn get_embedding(conn: &Connection, blob_sha: &str) -> Result<Option<Vec<f32
     Ok(result.map(|blob| blob_to_vec(&blob)))
 }
 
+/// Sync single embedding to vector index (vec_code table)
+///
+/// This function syncs an embedding from code_embeddings to the vec_code virtual table
+/// for vector similarity search. The rowid in vec_code matches the id in code_embeddings
+/// to enable joining search results back to chunks.
+pub fn sync_embedding_to_vec(
+    conn: &Connection,
+    embedding_id: i64,
+    embedding: &[f32],
+) -> Result<()> {
+    // Delete existing if any (for updates)
+    // This is needed because vec_code doesn't support UPDATE
+    conn.execute("DELETE FROM vec_code WHERE rowid = ?1", params![embedding_id])
+        .context("Failed to delete from vec_code")?;
+
+    // Convert embedding to blob
+    let blob = vec_to_blob(embedding);
+
+    // Insert with explicit rowid to match code_embeddings.id
+    conn.execute(
+        "INSERT INTO vec_code(rowid, embedding) VALUES (?1, ?2)",
+        params![embedding_id, blob],
+    )
+    .context("Failed to insert into vec_code")?;
+
+    Ok(())
+}
+
+/// Sync all embeddings not yet in vec_code
+///
+/// This function finds all embeddings in code_embeddings that don't have a corresponding
+/// entry in vec_code and syncs them. Returns the number of embeddings synced.
+pub fn sync_all_embeddings_to_vec(conn: &Connection) -> Result<usize> {
+    // Find embeddings not yet in vec_code
+    let mut stmt = conn
+        .prepare(
+            "SELECT e.id, e.embedding FROM code_embeddings e
+             WHERE NOT EXISTS (SELECT 1 FROM vec_code v WHERE v.rowid = e.id)",
+        )
+        .context("Failed to prepare query for unsynced embeddings")?;
+
+    let mut count = 0;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })
+        .context("Failed to query unsynced embeddings")?;
+
+    for row in rows {
+        let (id, blob) = row.context("Failed to read embedding row")?;
+        conn.execute(
+            "INSERT INTO vec_code(rowid, embedding) VALUES (?1, ?2)",
+            params![id, blob],
+        )
+        .context("Failed to insert into vec_code during batch sync")?;
+        count += 1;
+    }
+
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn setup_test_connection() -> Connection {
+        // Register extension globally
+        unsafe {
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                crate::db::sqlite::sqlite3_vec_init as *const ()
+            )));
+        }
+
+        let conn = Connection::open_in_memory().expect("Failed to open in-memory database");
+
+        // Enable foreign keys
+        conn.execute_batch(
+            r#"
+            PRAGMA foreign_keys = ON;
+            "#,
+        ).expect("Failed to enable foreign keys");
+
+        // Create schema
+        conn.execute_batch(
+            r#"
+            CREATE TABLE code_embeddings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blob_sha TEXT NOT NULL UNIQUE,
+                embedding BLOB,
+                embedding_dim INTEGER NOT NULL DEFAULT 1536,
+                model_version TEXT NOT NULL DEFAULT 'text-embedding-3-small',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX idx_embeddings_blob ON code_embeddings(blob_sha);
+
+            CREATE VIRTUAL TABLE vec_code USING vec0(
+                embedding float[1536]
+            );
+            "#,
+        ).expect("Failed to create schema");
+
+        conn
+    }
 
     #[test]
     fn test_vec_to_blob_and_back() {
@@ -243,5 +301,194 @@ mod tests {
         let param = vec_to_sqlite_param(&vec);
         let blob = vec_to_blob(&vec);
         assert_eq!(param, blob);
+    }
+
+    #[test]
+    fn test_vector_table_sync() {
+        let conn = setup_test_connection();
+
+        // Create a 1536-dimensional embedding
+        let embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+
+        // Insert embedding into code_embeddings
+        let embedding_id = upsert_embedding(&conn, "test_blob_sha", &embedding, "model-v1")
+            .expect("Failed to upsert embedding");
+
+        assert!(embedding_id > 0);
+
+        // Sync to vec_code
+        sync_embedding_to_vec(&conn, embedding_id, &embedding)
+            .expect("Failed to sync to vec_code");
+
+        // Verify the embedding exists in vec_code with matching rowid
+        let vec_code_rowid: i64 = conn
+            .query_row(
+                "SELECT rowid FROM vec_code WHERE rowid = ?1",
+                params![embedding_id],
+                |row| row.get(0),
+            )
+            .expect("Failed to query vec_code rowid");
+
+        assert_eq!(vec_code_rowid, embedding_id, "Rowid in vec_code should match embedding_id");
+
+        // Verify the embedding data is correct
+        let vec_code_blob: Vec<u8> = conn
+            .query_row(
+                "SELECT embedding FROM vec_code WHERE rowid = ?1",
+                params![embedding_id],
+                |row| row.get(0),
+            )
+            .expect("Failed to query vec_code embedding");
+
+        let retrieved_embedding = blob_to_vec(&vec_code_blob);
+        assert_eq!(retrieved_embedding.len(), 1536);
+        for (a, b) in embedding.iter().zip(retrieved_embedding.iter()) {
+            assert!((a - b).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_vector_table_sync_update() {
+        let conn = setup_test_connection();
+
+        // Create two different embeddings
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+
+        // Insert first embedding
+        let embedding_id = upsert_embedding(&conn, "test_blob", &embedding1, "model-v1")
+            .expect("Failed to upsert embedding");
+
+        // Sync first embedding
+        sync_embedding_to_vec(&conn, embedding_id, &embedding1)
+            .expect("Failed to sync first embedding");
+
+        // Update with second embedding (same blob_sha)
+        let updated_id = upsert_embedding(&conn, "test_blob", &embedding2, "model-v2")
+            .expect("Failed to update embedding");
+
+        assert_eq!(embedding_id, updated_id, "ID should remain the same on update");
+
+        // Sync updated embedding (should replace old one)
+        sync_embedding_to_vec(&conn, updated_id, &embedding2)
+            .expect("Failed to sync updated embedding");
+
+        // Verify only one entry exists in vec_code
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM vec_code WHERE rowid = ?1",
+                params![embedding_id],
+                |row| row.get(0),
+            )
+            .expect("Failed to count vec_code entries");
+
+        assert_eq!(count, 1, "Should only have one entry in vec_code");
+
+        // Verify the updated embedding is stored
+        let vec_code_blob: Vec<u8> = conn
+            .query_row(
+                "SELECT embedding FROM vec_code WHERE rowid = ?1",
+                params![embedding_id],
+                |row| row.get(0),
+            )
+            .expect("Failed to query vec_code embedding");
+
+        let retrieved = blob_to_vec(&vec_code_blob);
+        // Verify it's embedding2, not embedding1
+        assert!((retrieved[0] - embedding2[0]).abs() < 1e-6);
+        assert!((retrieved[100] - embedding2[100]).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_sync_all_embeddings_to_vec() {
+        let conn = setup_test_connection();
+
+        // Create multiple embeddings
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+        let embedding3: Vec<f32> = (0..1536).map(|i| (i as f32 + 2.0) / 1536.0).collect();
+
+        // Insert embeddings into code_embeddings only (not vec_code)
+        upsert_embedding(&conn, "blob1", &embedding1, "model-v1")
+            .expect("Failed to upsert embedding1");
+        upsert_embedding(&conn, "blob2", &embedding2, "model-v1")
+            .expect("Failed to upsert embedding2");
+        upsert_embedding(&conn, "blob3", &embedding3, "model-v1")
+            .expect("Failed to upsert embedding3");
+
+        // Verify vec_code is empty
+        let count_before: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))
+            .expect("Failed to count vec_code");
+        assert_eq!(count_before, 0);
+
+        // Sync all embeddings
+        let synced_count = sync_all_embeddings_to_vec(&conn)
+            .expect("Failed to sync all embeddings");
+
+        assert_eq!(synced_count, 3, "Should have synced 3 embeddings");
+
+        // Verify vec_code now has all embeddings
+        let count_after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))
+            .expect("Failed to count vec_code");
+        assert_eq!(count_after, 3);
+
+        // Verify rowid mapping is correct
+        let id1: i64 = conn
+            .query_row(
+                "SELECT id FROM code_embeddings WHERE blob_sha = 'blob1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Failed to get id1");
+
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM vec_code WHERE rowid = ?1",
+                params![id1],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+
+        assert!(exists, "vec_code should have entry with rowid matching code_embeddings.id");
+
+        // Run sync again - should sync 0 (idempotent)
+        let synced_again = sync_all_embeddings_to_vec(&conn)
+            .expect("Failed to sync again");
+        assert_eq!(synced_again, 0, "Second sync should find nothing to sync");
+    }
+
+    #[test]
+    fn test_vector_table_sync_graceful_degradation() {
+        // Create connection without vec extension
+        let conn = Connection::open_in_memory().expect("Failed to open in-memory database");
+
+        conn.execute_batch(
+            r#"
+            CREATE TABLE code_embeddings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blob_sha TEXT NOT NULL UNIQUE,
+                embedding BLOB,
+                embedding_dim INTEGER NOT NULL DEFAULT 1536,
+                model_version TEXT NOT NULL DEFAULT 'text-embedding-3-small',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            "#,
+        ).expect("Failed to create schema");
+
+        let embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+
+        // Insert embedding should work
+        let embedding_id = upsert_embedding(&conn, "test", &embedding, "model-v1")
+            .expect("Upsert should work even without vec extension");
+
+        // Sync should fail because vec_code doesn't exist
+        let result = sync_embedding_to_vec(&conn, embedding_id, &embedding);
+        assert!(result.is_err(), "Sync should fail when vec_code table doesn't exist");
+
+        // sync_all should also fail
+        let result = sync_all_embeddings_to_vec(&conn);
+        assert!(result.is_err(), "Sync all should fail when vec_code table doesn't exist");
     }
 }

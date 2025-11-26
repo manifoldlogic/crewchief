@@ -101,19 +101,6 @@ impl SqliteStore {
     pub fn has_vec_extension(&self) -> bool {
         self.vec_available.load(Ordering::Relaxed)
     }
-
-    /// Internal: verify extension on first use
-    fn check_vec_extension(&self, conn: &Connection) -> bool {
-        if !self.vec_checked.load(Ordering::Relaxed) {
-            let available = verify_vec_extension(conn);
-            self.vec_available.store(available, Ordering::Relaxed);
-            self.vec_checked.store(true, Ordering::Relaxed);
-            if !available {
-                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
-            }
-        }
-        self.vec_available.load(Ordering::Relaxed)
-    }
 }
 
 /// Verify that sqlite-vec extension is loaded correctly
@@ -732,7 +719,21 @@ impl VectorStore for SqliteStore {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);
             runner.migrate()
-        }).await
+        }).await?;
+
+        // Check extension availability after migration
+        self.run(|conn| {
+            let available = verify_vec_extension(conn);
+            Ok(available)
+        }).await.map(|available| {
+            self.vec_available.store(available, Ordering::Relaxed);
+            self.vec_checked.store(true, Ordering::Relaxed);
+            if !available {
+                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
+            }
+        })?;
+
+        Ok(())
     }
 
     async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
@@ -793,12 +794,17 @@ impl SqliteStore {
         model_version: &str,
     ) -> anyhow::Result<i64> {
         let blob_sha = blob_sha.to_string();
-        let embedding = embedding.to_vec();
+        let embedding_vec = embedding.to_vec();
         let model_version = model_version.to_string();
 
-        self.run(move |conn| {
-            embeddings::upsert_embedding(conn, &blob_sha, &embedding, &model_version)
-        }).await
+        let embedding_id = self.run(move |conn| {
+            embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
+        }).await?;
+
+        // Sync to vec_code table
+        self.sync_embedding_to_vec(embedding_id, embedding).await?;
+
+        Ok(embedding_id)
     }
 
     /// Batch upsert embeddings with deduplication (SQLite-specific, not in VectorStore trait)
@@ -808,9 +814,18 @@ impl SqliteStore {
     ) -> anyhow::Result<()> {
         let embeddings_vec = embeddings_vec.to_vec();
 
-        self.run(move |conn| {
+        let id_embedding_pairs = self.run(move |conn| {
             embeddings::upsert_embeddings_batch(conn, &embeddings_vec)
-        }).await
+        }).await?;
+
+        // Sync all embeddings to vec_code
+        if self.has_vec_extension() {
+            for (embedding_id, embedding) in id_embedding_pairs {
+                self.sync_embedding_to_vec(embedding_id, &embedding).await?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Check if embedding exists for blob_sha (SQLite-specific, not in VectorStore trait)
@@ -828,6 +843,35 @@ impl SqliteStore {
 
         self.run(move |conn| {
             embeddings::get_embedding(conn, &blob_sha)
+        }).await
+    }
+
+    /// Sync embedding to vec_code table (skips if extension not available)
+    ///
+    /// This method syncs a single embedding from code_embeddings to the vec_code virtual table.
+    /// The rowid in vec_code matches the embedding_id to enable joining search results.
+    pub async fn sync_embedding_to_vec(&self, embedding_id: i64, embedding: &[f32]) -> anyhow::Result<()> {
+        if !self.has_vec_extension() {
+            return Ok(());  // Skip silently if extension not available
+        }
+
+        let embedding = embedding.to_vec();
+        self.run(move |conn| {
+            embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding)
+        }).await
+    }
+
+    /// Sync all embeddings to vec_code table
+    ///
+    /// This method finds all embeddings in code_embeddings that don't have a corresponding
+    /// entry in vec_code and syncs them. Returns the number of embeddings synced.
+    pub async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
+        if !self.has_vec_extension() {
+            return Ok(0);  // Skip if extension not available
+        }
+
+        self.run(move |conn| {
+            embeddings::sync_all_embeddings_to_vec(conn)
         }).await
     }
 }
@@ -1056,5 +1100,111 @@ mod tests {
             assert_eq!(worktrees.len(), 1);
             assert_eq!(worktrees[0], worktree_id);
         }
+    }
+
+    #[tokio::test]
+    async fn test_vector_table_sync_integration() {
+        let store = setup_test_store().await;
+
+        // Create embeddings
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+
+        // Upsert embeddings (should auto-sync to vec_code)
+        let id1 = store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
+        let id2 = store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
+
+        assert_ne!(id1, id2);
+
+        // Verify embeddings are in vec_code
+        let count_synced = store.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM vec_code WHERE rowid IN (?1, ?2)",
+                params![id1, id2],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        }).await.unwrap();
+
+        assert_eq!(count_synced, 2, "Both embeddings should be synced to vec_code");
+
+        // Test update
+        let embedding1_updated: Vec<f32> = (0..1536).map(|i| (i as f32 + 10.0) / 1536.0).collect();
+        let id1_updated = store.upsert_embedding("blob1", &embedding1_updated, "model-v2").await.unwrap();
+
+        assert_eq!(id1, id1_updated, "ID should remain the same on update");
+
+        // Verify still only 2 entries in vec_code
+        let count_after_update = store.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM vec_code",
+                [],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        }).await.unwrap();
+
+        assert_eq!(count_after_update, 2, "Update should not create duplicate vec_code entries");
+    }
+
+    #[tokio::test]
+    async fn test_sync_all_embeddings_integration() {
+        let store = setup_test_store().await;
+
+        // Create embeddings directly without auto-sync
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+
+        // Insert directly into code_embeddings without syncing
+        let id1 = store.run(move |conn| {
+            embeddings::upsert_embedding(conn, "batch1", &embedding1, "model-v1")
+        }).await.unwrap();
+
+        let id2 = store.run(move |conn| {
+            embeddings::upsert_embedding(conn, "batch2", &embedding2, "model-v1")
+        }).await.unwrap();
+
+        // Verify vec_code is empty
+        let count_before = store.run(|conn| {
+            let count: i64 = conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
+            Ok(count)
+        }).await.unwrap();
+
+        assert_eq!(count_before, 0, "vec_code should be empty before sync");
+
+        // Sync all embeddings
+        let synced_count = store.sync_all_embeddings_to_vec().await.unwrap();
+        assert_eq!(synced_count, 2, "Should have synced 2 embeddings");
+
+        // Verify vec_code now has both
+        let count_after = store.run(|conn| {
+            let count: i64 = conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
+            Ok(count)
+        }).await.unwrap();
+
+        assert_eq!(count_after, 2, "vec_code should have 2 embeddings after sync");
+
+        // Verify rowid mapping
+        let rowids_match = store.run(move |conn| {
+            let match1: bool = conn.query_row(
+                "SELECT 1 FROM vec_code WHERE rowid = ?1",
+                params![id1],
+                |_| Ok(true),
+            ).unwrap_or(false);
+
+            let match2: bool = conn.query_row(
+                "SELECT 1 FROM vec_code WHERE rowid = ?1",
+                params![id2],
+                |_| Ok(true),
+            ).unwrap_or(false);
+
+            Ok(match1 && match2)
+        }).await.unwrap();
+
+        assert!(rowids_match, "Rowids in vec_code should match code_embeddings IDs");
+
+        // Sync again - should be idempotent
+        let synced_again = store.sync_all_embeddings_to_vec().await.unwrap();
+        assert_eq!(synced_again, 0, "Second sync should find nothing new");
     }
 }
