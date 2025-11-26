@@ -17,6 +17,7 @@ import * as vscode from 'vscode'
 import type { ProcessOrchestrator } from '../process/orchestrator'
 import type { WatchEvent } from '../process/events'
 import { formatRelativeTime } from '../utils/time'
+import type { DatabaseConfig } from '../services/database-checker'
 
 /**
  * Status bar icon and text for each state
@@ -84,6 +85,7 @@ export class StatusBarManager implements vscode.Disposable {
   private pendingUpdate = false
   private readonly watchEventHandler: (processName: string, event: WatchEvent) => void
   private isDisposed = false
+  private databaseConfig: DatabaseConfig | undefined
 
   /**
    * Create a new status bar manager
@@ -151,6 +153,18 @@ export class StatusBarManager implements vscode.Disposable {
     } else if (state !== 'error') {
       this.lastError = undefined
     }
+    this.scheduleUpdate()
+  }
+
+  /**
+   * Set database configuration for tooltip display
+   *
+   * Shows database mode (SQLite/PostgreSQL) and path in the status bar tooltip.
+   *
+   * @param config - Database configuration from resolveDatabaseConfig()
+   */
+  setDatabaseConfig(config: DatabaseConfig): void {
+    this.databaseConfig = config
     this.scheduleUpdate()
   }
 
@@ -349,6 +363,15 @@ export class StatusBarManager implements vscode.Disposable {
    */
   private buildTooltip(): string {
     const lines: string[] = ['Maproom Semantic Search']
+
+    // Database mode and path
+    if (this.databaseConfig) {
+      const dbType = this.databaseConfig.type === 'sqlite' ? 'SQLite' : 'PostgreSQL'
+      lines.push(`Database: ${dbType}`)
+      if (this.databaseConfig.path) {
+        lines.push(`Path: ${this.databaseConfig.path}`)
+      }
+    }
 
     // Current state
     lines.push(`Status: ${this.currentState}`)

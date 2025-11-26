@@ -85,6 +85,7 @@ let statusBar: StatusBarManager | undefined
  * @param context - Extension context
  */
 export function activate(context: vscode.ExtensionContext): void {
+  const activationStart = performance.now()
   console.log('Maproom extension activating...')
 
   // Step 1: Create output channel (fast, synchronous)
@@ -169,9 +170,17 @@ export function activate(context: vscode.ExtensionContext): void {
   // Step 6: Check and prompt for MCP setup if needed (fast, asynchronous)
   void checkAndPromptForSetup(context)
 
-  // Step 7: Return immediately (FAST ACTIVATION - under 500ms)
-  console.log('Maproom extension activated (background initialization starting...)')
-  outputChannel.appendLine('Extension activated, starting services in background...')
+  // Step 7: Set database config on status bar for tooltip display
+  const dbConfig = resolveDatabaseConfig()
+  statusBar.setDatabaseConfig(dbConfig)
+
+  // Step 8: Log activation time and return (FAST ACTIVATION - under 500ms)
+  const activationTime = performance.now() - activationStart
+  outputChannel.appendLine(`Maproom: Activated in ${activationTime.toFixed(0)}ms (${dbConfig.type} mode)`)
+  if (activationTime > 500) {
+    outputChannel.appendLine(`Warning: Activation exceeded 500ms target`)
+  }
+  console.log(`Maproom extension activated in ${activationTime.toFixed(0)}ms (background initialization starting...)`)
 }
 
 /**
