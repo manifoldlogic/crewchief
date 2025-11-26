@@ -37,8 +37,8 @@ Implement all methods in both `PostgresStore` and `SqliteStore`.
 - Contract and parity tests
 
 **Out of Scope** (separate projects):
-- CLI migration to trait (MAPROOMCLI)
-- Daemon migration to trait (MAPROOMCLI)
+- CLI migration to trait (MAPCLI)
+- Daemon migration to trait (MAPCLI)
 - MCP server updates (MCPDB)
 - VSCode extension updates (VSCODEDB)
 - CI/CD and documentation (SQLITEINFRA)
@@ -81,11 +81,11 @@ Implement all methods in both `PostgresStore` and `SqliteStore`.
 6. All new trait methods implemented in both `PostgresStore` and `SqliteStore`
 7. Contract tests verify both backends implement trait correctly
 
-**Note:** CLI/daemon/indexer migration to use `Arc<dyn VectorStore>` is handled by MAPROOMCLI project after VECSTORE completes.
+**Note:** CLI/daemon/indexer migration to use `Arc<dyn VectorStore>` is handled by MAPCLI project after VECSTORE completes.
 
 ## Dependencies
 
-- **Blocks**: MAPROOMCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
+- **Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
 - **Blocked By**: None (foundation project)
 
 **EMBPERF Relationship**: The EMBPERF project (Ollama parallel optimization) produces 768-dim embeddings. VECSTORE-1000 must complete before EMBPERF can be fully utilized with SQLite backends.

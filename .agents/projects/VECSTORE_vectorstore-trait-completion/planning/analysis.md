@@ -245,7 +245,7 @@ The PostgreSQL backend (`db/postgres/mod.rs`) wraps `db/queries.rs` functions. M
 5. **Phase 5**: Add cleanup methods to trait
 6. **Phase 6**: Contract and parity tests
 
-**Note:** CLI/daemon/indexer migration is handled by MAPROOMCLI project after VECSTORE completes.
+**Note:** CLI/daemon/indexer migration is handled by MAPCLI project after VECSTORE completes.
 
 ### Success Criteria
 
@@ -257,12 +257,12 @@ The PostgreSQL backend (`db/postgres/mod.rs`) wraps `db/queries.rs` functions. M
 
 ### Out of Scope
 
-- **CLI migration to trait** (MAPROOMCLI project) - CLI commands using `Arc<dyn VectorStore>`
-- **Daemon migration to trait** (MAPROOMCLI project) - Daemon using `Arc<dyn VectorStore>`
-- **Indexer migration to trait** (MAPROOMCLI project) - Indexer using trait instead of pool
-- CLI command flags for backend selection (MAPROOMCLI project)
+- **CLI migration to trait** (MAPCLI project) - CLI commands using `Arc<dyn VectorStore>`
+- **Daemon migration to trait** (MAPCLI project) - Daemon using `Arc<dyn VectorStore>`
+- **Indexer migration to trait** (MAPCLI project) - Indexer using trait instead of pool
+- CLI command flags for backend selection (MAPCLI project)
 - TypeScript changes (MCPDB project)
 - VSCode extension changes (VSCODEDB project)
 - CI/CD changes (SQLITEINFRA project)
 
-**Note:** VECSTORE completes when the trait is expanded and both stores implement it. Consumer migration (CLI/daemon/indexer using the trait) is a separate project (MAPROOMCLI).
+**Note:** VECSTORE completes when the trait is expanded and both stores implement it. Consumer migration (CLI/daemon/indexer using the trait) is a separate project (MAPCLI).

@@ -16,9 +16,9 @@ The original integration impact analysis proposed a single **SQLITE-INTEGRATION*
 | Project | Priority | Estimate | Dependencies |
 |---------|----------|----------|--------------|
 | VECSTORE | Critical | 5-7 days | None (foundation) |
-| MAPROOMCLI | High | 4-5 days | VECSTORE |
-| MCPDB | Medium | 2-3 days | MAPROOMCLI |
-| VSCODEDB | Medium | 3-4 days | MAPROOMCLI |
+| MAPCLI | High | 4-5 days | VECSTORE |
+| MCPDB | Medium | 2-3 days | MAPCLI |
+| VSCODEDB | Medium | 3-4 days | MAPCLI |
 | SQLITEINFRA | Low | 2-3 days | All above |
 
 **Total**: 16-22 days (similar effort, better agent effectiveness)
@@ -109,8 +109,8 @@ testable_completion:
 - Verify `db/factory.rs:get_store()` returns functional store
 
 **Out of Scope:**
-- CLI command updates (MAPROOMCLI)
-- Daemon restructuring (MAPROOMCLI)
+- CLI command updates (MAPCLI)
+- Daemon restructuring (MAPCLI)
 - TypeScript changes (other projects)
 
 #### Tickets (Estimated: 5-7 days)
@@ -132,7 +132,7 @@ testable_completion:
 
 ---
 
-### Project 2: MAPROOMCLI - Maproom CLI Abstraction
+### Project 2: MAPCLI - Maproom CLI Abstraction
 
 **Pattern**: Service Module
 **Priority**: HIGH (Enables CLI and daemon for SQLite)
@@ -180,11 +180,11 @@ testable_completion:
 
 | Ticket | Description |
 |--------|-------------|
-| MAPROOMCLI-1001 | Update main.rs to use get_store() factory |
-| MAPROOMCLI-1002 | Refactor daemon to use VectorStore trait |
-| MAPROOMCLI-1003 | Add SQLite backend detection/configuration |
-| MAPROOMCLI-1004 | Update all CLI commands for trait-based access |
-| MAPROOMCLI-1005 | E2E integration tests with SQLite backend |
+| MAPCLI-1001 | Update main.rs to use get_store() factory |
+| MAPCLI-1002 | Refactor daemon to use VectorStore trait |
+| MAPCLI-1003 | Add SQLite backend detection/configuration |
+| MAPCLI-1004 | Update all CLI commands for trait-based access |
+| MAPCLI-1005 | E2E integration tests with SQLite backend |
 
 #### Success Criteria
 - [ ] `crewchief-maproom scan --sqlite /path/to/repo` works
@@ -206,9 +206,9 @@ Update the TypeScript MCP server (`packages/maproom-mcp/`) to support SQLite dat
 
 ```yaml
 interface_stability:
-  ✅ All external APIs documented       # Daemon JSON-RPC (from MAPROOMCLI)
+  ✅ All external APIs documented       # Daemon JSON-RPC (from MAPCLI)
   ✅ Data formats finalized             # Database URL formats
-  ✅ Integration points stable          # MAPROOMCLI daemon works
+  ✅ Integration points stable          # MAPCLI daemon works
   ✅ No expected interface changes      # URL parsing is additive
 
 context_coherence:
@@ -233,7 +233,7 @@ testable_completion:
 - Update environment variable handling
 
 **Out of Scope:**
-- Daemon implementation (MAPROOMCLI)
+- Daemon implementation (MAPCLI)
 - VectorStore trait (VECSTORE)
 - VSCode extension (VSCODEDB)
 
@@ -268,7 +268,7 @@ Update the VSCode extension to support SQLite as the default database, removing 
 interface_stability:
   ✅ All external APIs documented       # VSCode Extension API stable
   ✅ Data formats finalized             # SQLite file path config
-  ✅ Integration points stable          # Daemon (MAPROOMCLI) works
+  ✅ Integration points stable          # Daemon (MAPCLI) works
   ✅ No expected interface changes      # Additive config changes
 
 context_coherence:
@@ -293,7 +293,7 @@ testable_completion:
 - Update activation to check for SQLite file OR PostgreSQL
 
 **Out of Scope:**
-- Daemon changes (MAPROOMCLI)
+- Daemon changes (MAPCLI)
 - MCP server changes (MCPDB)
 - CI/CD changes (SQLITEINFRA)
 
@@ -381,7 +381,7 @@ testable_completion:
 VECSTORE (Foundation)
     │
     ▼
-MAPROOMCLI (CLI/Daemon)
+MAPCLI (CLI/Daemon)
     │
     ├───────┬───────┐
     ▼       ▼       ▼
@@ -395,7 +395,7 @@ MAPROOMCLI (CLI/Daemon)
 
 **Execution Order**:
 1. VECSTORE (must complete first - defines interfaces)
-2. MAPROOMCLI (enables all downstream work)
+2. MAPCLI (enables all downstream work)
 3. MCPDB and VSCODEDB (can run in parallel)
 4. SQLITEINFRA (cleanup after all code complete)
 
@@ -418,7 +418,7 @@ MAPROOMCLI (CLI/Daemon)
 The original SQLITE-INTEGRATION proposal should be replaced with 5 well-bounded projects:
 
 1. **VECSTORE** - Foundation, must run first
-2. **MAPROOMCLI** - Core CLI/daemon work
+2. **MAPCLI** - Core CLI/daemon work
 3. **MCPDB** - MCP TypeScript updates
 4. **VSCODEDB** - VSCode extension updates
 5. **SQLITEINFRA** - Infrastructure cleanup
@@ -428,5 +428,5 @@ Each project passes the Project Boundary Framework evaluation and can be execute
 **Recommended Next Steps**:
 1. Create VECSTORE project using `/create-project`
 2. Complete VECSTORE before starting any other project
-3. Run MCPDB and VSCODEDB in parallel after MAPROOMCLI
+3. Run MCPDB and VSCODEDB in parallel after MAPCLI
 4. Finish with SQLITEINFRA documentation pass

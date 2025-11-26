@@ -153,7 +153,7 @@ Recommended execution sequence:
 
 ## Project Dependencies
 
-**Blocks**: MAPROOMCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
+**Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
 
 **Blocked By**: None (foundation project)
 

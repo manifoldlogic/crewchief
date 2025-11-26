@@ -536,7 +536,7 @@ crates/maproom/src/db/
 
 ### Phase 2: Consumer Migration (CLI/Daemon/Indexer)
 
-**After trait is complete**, separate project (MAPROOMCLI) will:
+**After trait is complete**, separate project (MAPCLI) will:
 1. Update main.rs to use `get_store()` instead of `db::connect()`
 2. Update daemon to accept `Arc<dyn VectorStore>`
 3. Update indexer to use trait methods instead of pool.get()

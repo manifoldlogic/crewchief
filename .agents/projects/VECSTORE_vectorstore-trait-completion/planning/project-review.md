@@ -15,7 +15,7 @@ VECSTORE is a well-defined, appropriately scoped project that addresses a genuin
 - Well-structured phases with logical dependencies
 
 **Primary Concerns:**
-1. **Scope Ambiguity in Analysis**: Success criteria #3 claims "CLI, daemon, and indexer use `Arc<dyn VectorStore>`" but this is explicitly out of scope in the same document (MAPROOMCLI project). This needs clarification.
+1. **Scope Ambiguity in Analysis**: Success criteria #3 claims "CLI, daemon, and indexer use `Arc<dyn VectorStore>`" but this is explicitly out of scope in the same document (MAPCLI project). This needs clarification.
 2. **Missing PostgreSQL Query Functions**: Some proposed trait methods don't have existing PostgreSQL implementations in `queries.rs` (e.g., `search_chunks_vector`, `get_chunk_by_id`). The plan assumes wrapping exists when it doesn't.
 3. **Context Module Coupling**: The `context/` module contains 10+ functions that query PostgreSQL directly. These need to be wired through the trait, but they have complex dependencies.
 
@@ -28,14 +28,14 @@ VECSTORE is a well-defined, appropriately scoped project that addresses a genuin
 **Severity:** Critical
 **Category:** Requirements
 
-**Description:** The analysis.md states success criteria #3 as "CLI, daemon, and indexer use `Arc<dyn VectorStore>`" but also lists CLI migration, daemon migration, and indexer migration as "Out of Scope" items belonging to MAPROOMCLI project.
+**Description:** The analysis.md states success criteria #3 as "CLI, daemon, and indexer use `Arc<dyn VectorStore>`" but also lists CLI migration, daemon migration, and indexer migration as "Out of Scope" items belonging to MAPCLI project.
 
-**Impact:** Agents will be confused about what constitutes project completion. The project could either be declared complete prematurely or work could drift into MAPROOMCLI scope.
+**Impact:** Agents will be confused about what constitutes project completion. The project could either be declared complete prematurely or work could drift into MAPCLI scope.
 
 **Required Action:**
 1. Remove success criteria #3 from analysis.md
 2. Clarify that VECSTORE completes when the trait is expanded and both stores implement it
-3. Consumer migration (CLI/daemon/indexer) is MAPROOMCLI
+3. Consumer migration (CLI/daemon/indexer) is MAPCLI
 
 **Documents Affected:** analysis.md (lines 210-214), plan.md (lines 179-186)
 
@@ -265,7 +265,7 @@ VECSTORE is a well-defined, appropriately scoped project that addresses a genuin
 
 2. **Clarify success criteria**
    - Remove "CLI/daemon/indexer use trait" from VECSTORE success criteria
-   - Add to MAPROOMCLI prerequisites instead
+   - Add to MAPCLI prerequisites instead
 
 3. **Define ChunkFull and ChunkSummary types**
    - Add type definitions to architecture.md

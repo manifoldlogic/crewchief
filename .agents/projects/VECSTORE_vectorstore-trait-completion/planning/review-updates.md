@@ -8,10 +8,10 @@
 
 ### Issue 1: Conflicting Success Criteria
 
-**Original Problem:** Analysis.md states success criteria #3 as "CLI, daemon, and indexer use `Arc<dyn VectorStore>`" but also lists CLI migration, daemon migration, and indexer migration as "Out of Scope" items belonging to MAPROOMCLI project.
+**Original Problem:** Analysis.md states success criteria #3 as "CLI, daemon, and indexer use `Arc<dyn VectorStore>`" but also lists CLI migration, daemon migration, and indexer migration as "Out of Scope" items belonging to MAPCLI project.
 
 **Changes Made:**
-- analysis.md: Removed success criteria #3 (lines 210-213) - CLI/daemon/indexer migration is MAPROOMCLI scope
+- analysis.md: Removed success criteria #3 (lines 210-213) - CLI/daemon/indexer migration is MAPCLI scope
 - analysis.md: Clarified VECSTORE completes when trait is expanded and both stores implement it
 - plan.md: Updated success criteria section to match
 - README.md: Updated success criteria list
@@ -89,7 +89,7 @@
 
 ### Clarified Boundaries
 
-- Phase 5 removed from VECSTORE (CLI/daemon migration) → Confirmed belongs to MAPROOMCLI
+- Phase 5 removed from VECSTORE (CLI/daemon migration) → Confirmed belongs to MAPCLI
 - Success criteria #3 removed → Consumer migration is separate project
 
 ## Alignment Improvements
@@ -97,7 +97,7 @@
 ### MVP Discipline
 
 - Confirmed VECSTORE focuses solely on trait expansion and implementation
-- Consumer migration explicitly deferred to MAPROOMCLI
+- Consumer migration explicitly deferred to MAPCLI
 - Phase 5 and 6 references to "migration" clarified as "integration testing" only
 
 ### Pragmatism
@@ -126,7 +126,7 @@
 - Lines modified: ~60
 - Key changes:
   - Updated success criteria section with correct 7-item list
-  - Added note clarifying CLI/daemon migration is MAPROOMCLI scope
+  - Added note clarifying CLI/daemon migration is MAPCLI scope
   - VECSTORE-1001: Added sub-tasks list, noted PostgreSQL function must be written
   - VECSTORE-1002: Added sub-tasks list, noted PostgreSQL function must be written
   - VECSTORE-1003: Added detailed sub-tasks, note on context complexity

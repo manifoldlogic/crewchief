@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-Complete the `VectorStore` trait abstraction by adding all missing database operations. This is the **foundation project** that must complete before MAPROOMCLI, MCPDB, VSCODEDB, SQLITEINFRA, or **EMBPERF** can begin.
+Complete the `VectorStore` trait abstraction by adding all missing database operations. This is the **foundation project** that must complete before MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, or **EMBPERF** can begin.
 
 **Priority**: Ollama (768-dim) support is CRITICAL - it enables the zero-config experience (SQLite + Ollama).
 
@@ -298,11 +298,11 @@ Complete the `VectorStore` trait abstraction by adding all missing database oper
 7. ✅ All new trait methods implemented in both `PostgresStore` and `SqliteStore`
 8. ✅ Contract tests verify both backends implement trait correctly
 
-**Note:** CLI/daemon/indexer migration to use `Arc<dyn VectorStore>` is handled by MAPROOMCLI project after VECSTORE completes.
+**Note:** CLI/daemon/indexer migration to use `Arc<dyn VectorStore>` is handled by MAPCLI project after VECSTORE completes.
 
 ## Dependencies
 
-**Blocks**: MAPROOMCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
+**Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
 
 **Blocked By**: None (foundation project)
 
@@ -315,4 +315,4 @@ Complete the `VectorStore` trait abstraction by adding all missing database oper
 | Interface changes during development | Each phase is additive; existing methods unchanged |
 | PostgreSQL unavailable for testing | SQLite tests can run independently |
 | Complex query differences between backends | Parity tests catch divergence early |
-| Scope creep | Out of scope items documented; CLI/daemon migration is MAPROOMCLI |
+| Scope creep | Out of scope items documented; CLI/daemon migration is MAPCLI |
