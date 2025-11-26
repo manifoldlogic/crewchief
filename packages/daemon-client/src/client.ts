@@ -23,6 +23,8 @@ export interface SearchParams {
   limit?: number
   threshold?: number
   debug?: boolean
+  /** Deduplicate results across worktrees (default: true) */
+  deduplicate?: boolean
 }
 
 /**
@@ -68,7 +70,12 @@ export class DaemonClient {
    * Send search request to daemon
    */
   async search(params: SearchParams): Promise<SearchResult> {
-    return await this.sendRequest<SearchResult>('search', params)
+    // Ensure deduplicate has a default value (true)
+    const searchParams = {
+      ...params,
+      deduplicate: params.deduplicate ?? true,
+    }
+    return await this.sendRequest<SearchResult>('search', searchParams)
   }
 
   /**

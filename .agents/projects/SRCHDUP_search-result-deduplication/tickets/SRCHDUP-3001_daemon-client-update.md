@@ -1,8 +1,8 @@
 # Ticket: SRCHDUP-3001: Update daemon-client SearchParams interface
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - core tests pass (rpc, errors, lifecycle); performance tests require daemon binary
 - [ ] **Verified** - by the verify-ticket agent
 
 ## Agents
