@@ -216,6 +216,11 @@ DEBUG: Set debug=true to see score breakdowns`,
           type: 'boolean',
           default: false,
           description: 'Enable debug mode to see score breakdowns (FTS, vector, graph signals, fusion method)'
+        },
+        deduplicate: {
+          type: 'boolean',
+          default: true,
+          description: 'Deduplicate results across worktrees. When true, results with the same file path, symbol name, and line number are grouped, returning only the highest-scoring instance. Set false to see all results including duplicates. (default: true)'
         }
       },
       required: ['repo', 'query']
