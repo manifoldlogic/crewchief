@@ -1418,4 +1418,100 @@ mod tests {
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("dimension mismatch"), "Error should mention dimension mismatch");
     }
+
+    #[tokio::test]
+    async fn test_vector_search_extension_not_available() {
+        let store = setup_test_store().await;
+
+        // Create test repo
+        store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+
+        // Manually disable vec extension availability (simulating missing extension)
+        store.vec_available.store(false, Ordering::Relaxed);
+        store.vec_checked.store(true, Ordering::Relaxed);
+
+        // Query should return empty results, not error
+        let query_embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+
+        assert!(results.is_empty(), "Should return empty results when extension not available");
+
+        // has_vec_extension should return false
+        assert!(!store.has_vec_extension(), "has_vec_extension should return false");
+    }
+
+    #[tokio::test]
+    async fn test_vector_search_similarity_ordering() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create 3 chunks with embeddings at different distances from query
+        // Query will be [0.5, 0.5, 0.5, ...]
+        // embed1 = [0.5, 0.5, 0.5, ...] -> distance = 0 (identical)
+        // embed2 = [0.6, 0.6, 0.6, ...] -> distance = small
+        // embed3 = [0.9, 0.9, 0.9, ...] -> distance = larger
+
+        for (i, val) in [(1, 0.5f32), (2, 0.6f32), (3, 0.9f32)] {
+            let chunk = ChunkRecord {
+                file_id,
+                worktree_id,
+                blob_sha: format!("blob{}", i),
+                symbol_name: Some(format!("fn{}", i)),
+                kind: "function".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: i as i32,
+                end_line: i as i32 + 10,
+                preview: format!("fn fn{}() {{}}", i),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            };
+            store.insert_chunk(&chunk).await.unwrap();
+
+            let embedding: Vec<f32> = vec![val; 1536];
+            store.upsert_embedding(&format!("blob{}", i), &embedding, "model-v1").await.unwrap();
+        }
+
+        // Query with [0.5, 0.5, 0.5, ...]
+        let query_embedding: Vec<f32> = vec![0.5f32; 1536];
+        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+
+        assert_eq!(results.len(), 3, "Should find all 3 chunks");
+
+        // Verify ordering: first result should be most similar (embed1, then embed2, then embed3)
+        // Check that distances are in ascending order
+        for i in 1..results.len() {
+            assert!(
+                results[i - 1].distance <= results[i].distance,
+                "Results should be sorted by distance (ascending): {} <= {}",
+                results[i - 1].distance,
+                results[i].distance
+            );
+        }
+
+        // First result should have similarity close to 1.0 (identical vector)
+        assert!(results[0].similarity > 0.9, "First result should have high similarity, got {}", results[0].similarity);
+
+        // Last result should have lower similarity
+        assert!(results[2].similarity < results[0].similarity, "Last result should have lower similarity");
+    }
 }
