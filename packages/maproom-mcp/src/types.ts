@@ -154,6 +154,9 @@ export interface SearchParams {
 
   /** Include score breakdown and debug information in results */
   debug?: boolean
+
+  /** Deduplicate results across worktrees (default: true) */
+  deduplicate?: boolean
 }
 
 /**

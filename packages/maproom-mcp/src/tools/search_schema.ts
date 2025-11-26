@@ -52,6 +52,10 @@ export const SearchParamsSchema = z.object({
     .boolean()
     .default(false)
     .describe('Include score breakdown and debug information in results'),
+  deduplicate: z
+    .boolean()
+    .default(true)
+    .describe('Deduplicate results across worktrees (default: true)'),
 })
 
 export type SearchParams = z.infer<typeof SearchParamsSchema>

@@ -200,9 +200,9 @@ export async function handleSearchTool(
 ): Promise<SearchBundle> {
   // Validate parameters with Zod schema
   const validatedParams = validateSearchParams(params)
-  const { query, repo, worktree, limit, mode, debug } = validatedParams
+  const { query, repo, worktree, limit, mode, debug, deduplicate } = validatedParams
 
-  log.debug({ query, repo, worktree, limit, mode, debug }, 'handleSearchTool called')
+  log.debug({ query, repo, worktree, limit, mode, debug, deduplicate }, 'handleSearchTool called')
 
   // SEMRANK-2006: Permission check for debug mode
   // If auth system exists in the future, check user.hasPermission('debug_mode')
@@ -254,6 +254,7 @@ export async function handleSearchTool(
       // Note: mode parameter not yet supported by daemon (Phase 2 enhancement)
       // Daemon uses hybrid search by default
       debug,
+      deduplicate,
     })
   } catch (error) {
     // Convert daemon errors to MCP-friendly errors

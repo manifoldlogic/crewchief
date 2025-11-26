@@ -23,6 +23,8 @@ export interface SearchParams {
   limit?: number
   threshold?: number
   debug?: boolean
+  /** Deduplicate results across worktrees (default: true) */
+  deduplicate?: boolean
 }
 
 /**
