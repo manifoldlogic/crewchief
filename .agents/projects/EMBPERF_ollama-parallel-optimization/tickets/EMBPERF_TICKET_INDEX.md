@@ -10,7 +10,7 @@ Optimize Ollama embedding throughput from ~50-100 texts/sec to 500-1500 texts/se
 
 | Ticket | Title | Agent | Status |
 |--------|-------|-------|--------|
-| [EMBPERF-0001](./EMBPERF-0001_baseline-api-validation.md) | Baseline & API Validation | technical-researcher | Not Started |
+| [EMBPERF-0001](./EMBPERF-0001_baseline-api-validation.md) | Baseline & API Validation | technical-researcher | **Completed** |
 
 ### Phase 1: Batch API Support
 
