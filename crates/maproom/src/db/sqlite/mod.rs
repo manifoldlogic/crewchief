@@ -950,6 +950,133 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+        self.run(move |conn| {
+            let result = conn.query_row(
+                "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id = ?1",
+                params![chunk_id],
+                |row| {
+                    Ok(crate::db::ChunkFull {
+                        id: row.get(0)?,
+                        file_id: row.get(1)?,
+                        blob_sha: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        signature: row.get(5)?,
+                        docstring: row.get(6)?,
+                        start_line: row.get(7)?,
+                        end_line: row.get(8)?,
+                        preview: row.get(9)?,
+                        file_path: row.get(10)?,
+                    })
+                }
+            ).optional()?;
+            Ok(result)
+        }).await
+    }
+
+    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.file_id = ?1
+                 ORDER BY c.start_line ASC"
+            )?;
+
+            let rows = stmt.query_map(params![file_id], |row| {
+                Ok(crate::db::ChunkSummary {
+                    id: row.get(0)?,
+                    symbol_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    file_path: row.get(5)?,
+                })
+            })?;
+
+            let mut chunks = Vec::new();
+            for chunk_result in rows {
+                chunks.push(chunk_result?);
+            }
+            Ok(chunks)
+        }).await
+    }
+
+    async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+        self.run(move |conn| {
+            // First, get the target chunk
+            let chunk = conn.query_row(
+                "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id = ?1",
+                params![chunk_id],
+                |row| {
+                    Ok(crate::db::ChunkFull {
+                        id: row.get(0)?,
+                        file_id: row.get(1)?,
+                        blob_sha: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        signature: row.get(5)?,
+                        docstring: row.get(6)?,
+                        start_line: row.get(7)?,
+                        end_line: row.get(8)?,
+                        preview: row.get(9)?,
+                        file_path: row.get(10)?,
+                    })
+                }
+            ).optional()?;
+
+            let chunk = match chunk {
+                Some(c) => c,
+                None => return Ok(None),
+            };
+
+            // Get surrounding chunks from the same file, ordered by line proximity
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.file_id = ?1 AND c.id != ?2
+                 ORDER BY ABS(c.start_line - ?3)
+                 LIMIT ?4"
+            )?;
+
+            let rows = stmt.query_map(
+                params![chunk.file_id, chunk_id, chunk.start_line, (surrounding as i64 * 2)],
+                |row| {
+                    Ok(crate::db::ChunkSummary {
+                        id: row.get(0)?,
+                        symbol_name: row.get(1)?,
+                        kind: row.get(2)?,
+                        start_line: row.get(3)?,
+                        end_line: row.get(4)?,
+                        file_path: row.get(5)?,
+                    })
+                }
+            )?;
+
+            let mut surrounding_chunks = Vec::new();
+            for chunk_result in rows {
+                surrounding_chunks.push(chunk_result?);
+            }
+
+            Ok(Some(crate::db::ChunkContext {
+                file_path: chunk.file_path.clone(),
+                chunk,
+                surrounding_chunks,
+            }))
+        }).await
+    }
+
     async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);

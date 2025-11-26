@@ -1231,6 +1231,115 @@ pub async fn search_chunks_fts(
     Ok(hits)
 }
 
+/// Get a single chunk by ID with full content
+pub async fn get_chunk_by_id(
+    client: &Client,
+    chunk_id: i64,
+) -> anyhow::Result<Option<super::ChunkFull>> {
+    let row = client
+        .query_opt(
+            "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind::text, c.signature,
+                    c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+             FROM maproom.chunks c
+             JOIN maproom.files f ON f.id = c.file_id
+             WHERE c.id = $1",
+            &[&chunk_id],
+        )
+        .await?;
+
+    Ok(row.map(|r| super::ChunkFull {
+        id: r.get(0),
+        file_id: r.get(1),
+        blob_sha: r.get(2),
+        symbol_name: r.get(3),
+        kind: r.get(4),
+        signature: r.get(5),
+        docstring: r.get(6),
+        start_line: r.get(7),
+        end_line: r.get(8),
+        preview: r.get(9),
+        file_path: r.get(10),
+    }))
+}
+
+/// Get all chunks for a file ordered by line number
+pub async fn get_file_chunks(
+    client: &Client,
+    file_id: i64,
+) -> anyhow::Result<Vec<super::ChunkSummary>> {
+    let rows = client
+        .query(
+            "SELECT c.id, c.symbol_name, c.kind::text, c.start_line, c.end_line, f.relpath
+             FROM maproom.chunks c
+             JOIN maproom.files f ON f.id = c.file_id
+             WHERE c.file_id = $1
+             ORDER BY c.start_line ASC",
+            &[&file_id],
+        )
+        .await?;
+
+    let chunks = rows
+        .into_iter()
+        .map(|r| super::ChunkSummary {
+            id: r.get(0),
+            symbol_name: r.get(1),
+            kind: r.get(2),
+            start_line: r.get(3),
+            end_line: r.get(4),
+            file_path: r.get(5),
+        })
+        .collect();
+
+    Ok(chunks)
+}
+
+/// Get chunk with surrounding context (N chunks before/after by line proximity)
+pub async fn get_chunk_context(
+    client: &Client,
+    chunk_id: i64,
+    surrounding: usize,
+) -> anyhow::Result<Option<super::ChunkContext>> {
+    // First, get the target chunk
+    let chunk = get_chunk_by_id(client, chunk_id).await?;
+
+    let chunk = match chunk {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+
+    // Get surrounding chunks from the same file, ordered by line proximity
+    // Use ABS(start_line - target_start) to find closest chunks
+    let rows = client
+        .query(
+            "SELECT c.id, c.symbol_name, c.kind::text, c.start_line, c.end_line, f.relpath
+             FROM maproom.chunks c
+             JOIN maproom.files f ON f.id = c.file_id
+             WHERE c.file_id = $1 AND c.id != $2
+             ORDER BY ABS(c.start_line - $3)
+             LIMIT $4",
+            &[&chunk.file_id, &chunk_id, &chunk.start_line, &(surrounding as i64 * 2)],
+        )
+        .await?;
+
+    let surrounding_chunks = rows
+        .into_iter()
+        .map(|r| super::ChunkSummary {
+            id: r.get(0),
+            symbol_name: r.get(1),
+            kind: r.get(2),
+            start_line: r.get(3),
+            end_line: r.get(4),
+            file_path: r.get(5),
+        })
+        .collect();
+
+    Ok(Some(super::ChunkContext {
+        file_path: chunk.file_path.clone(),
+        chunk,
+        surrounding_chunks,
+    }))
+}
+
 /// Hybrid search combining FTS and vector similarity using RRF fusion
 ///
 /// Implements Reciprocal Rank Fusion to combine keyword matching (FTS) with

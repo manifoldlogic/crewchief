@@ -86,6 +86,41 @@ pub struct SearchHit {
     pub exact_mult: Option<f64>,
 }
 
+/// Full chunk data for display/context - read-only view of a chunk
+#[derive(Debug, Clone, Serialize)]
+pub struct ChunkFull {
+    pub id: i64,
+    pub file_id: i64,
+    pub blob_sha: String,
+    pub symbol_name: Option<String>,
+    pub kind: String,
+    pub signature: Option<String>,
+    pub docstring: Option<String>,
+    pub start_line: i32,
+    pub end_line: i32,
+    pub preview: String,
+    pub file_path: String,    // Denormalized from file table
+}
+
+/// Lightweight chunk reference for lists/navigation
+#[derive(Debug, Clone, Serialize)]
+pub struct ChunkSummary {
+    pub id: i64,
+    pub symbol_name: Option<String>,
+    pub kind: String,
+    pub start_line: i32,
+    pub end_line: i32,
+    pub file_path: String,
+}
+
+/// Context around a chunk - surrounding and related chunks
+#[derive(Debug, Clone, Serialize)]
+pub struct ChunkContext {
+    pub chunk: ChunkFull,
+    pub file_path: String,
+    pub surrounding_chunks: Vec<ChunkSummary>,  // Chunks before/after by line number
+}
+
 /// Common interface for Vector/FTS storage backends.
 #[async_trait]
 pub trait VectorStore: Send + Sync {
@@ -170,9 +205,19 @@ pub trait VectorStore: Send + Sync {
         relpath: Option<&str>,
     ) -> anyhow::Result<Option<i64>>;
 
+    // --- Context Assembly ---
+    /// Get a single chunk by ID with full content
+    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;
+
+    /// Get all chunks for a file
+    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<ChunkSummary>>;
+
+    /// Get chunk with surrounding context (N chunks before/after by line number)
+    async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<ChunkContext>>;
+
     // --- Migrations ---
     async fn migrate(&self) -> anyhow::Result<()>;
-    
+
     // --- Stats/Maintenance ---
     async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>>;
 }

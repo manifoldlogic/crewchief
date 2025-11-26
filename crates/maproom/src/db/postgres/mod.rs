@@ -198,6 +198,21 @@ impl VectorStore for PostgresStore {
         .await
     }
 
+    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_chunk_by_id(&client, chunk_id).await
+    }
+
+    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_file_chunks(&client, file_id).await
+    }
+
+    async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_chunk_context(&client, chunk_id, surrounding).await
+    }
+
     async fn migrate(&self) -> anyhow::Result<()> {
         let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::migrate(&client).await
