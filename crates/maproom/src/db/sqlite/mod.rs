@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, params, OptionalExtension};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::spawn_blocking;
 
 use crate::db::{ChunkRecord, FileRecord, SearchHit, VectorStore};
@@ -27,6 +28,9 @@ pub struct SqliteStore {
     // We use a connection manager with r2d2 for pooling
     // Since rusqlite is sync, we wrap operations in spawn_blocking
     pool: r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>,
+    // Extension verification (cached after first check)
+    vec_available: Arc<AtomicBool>,
+    vec_checked: Arc<AtomicBool>,
 }
 
 impl SqliteStore {
@@ -72,7 +76,11 @@ impl SqliteStore {
             }
         }
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            vec_available: Arc::new(AtomicBool::new(false)),
+            vec_checked: Arc::new(AtomicBool::new(false)),
+        })
     }
 
     // Helper to run a blocking closure with a connection
@@ -88,6 +96,30 @@ impl SqliteStore {
         })
         .await?
     }
+
+    /// Check if sqlite-vec extension is available
+    pub fn has_vec_extension(&self) -> bool {
+        self.vec_available.load(Ordering::Relaxed)
+    }
+
+    /// Internal: verify extension on first use
+    fn check_vec_extension(&self, conn: &Connection) -> bool {
+        if !self.vec_checked.load(Ordering::Relaxed) {
+            let available = verify_vec_extension(conn);
+            self.vec_available.store(available, Ordering::Relaxed);
+            self.vec_checked.store(true, Ordering::Relaxed);
+            if !available {
+                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
+            }
+        }
+        self.vec_available.load(Ordering::Relaxed)
+    }
+}
+
+/// Verify that sqlite-vec extension is loaded correctly
+fn verify_vec_extension(conn: &Connection) -> bool {
+    conn.query_row("SELECT vec_version()", [], |row| row.get::<_, String>(0))
+        .is_ok()
 }
 
 #[async_trait]
@@ -350,7 +382,28 @@ impl VectorStore for SqliteStore {
     ) -> anyhow::Result<()> {
         let code = code_embedding.map(|s| s.to_vec());
         let text = text_embedding.map(|s| s.to_vec());
+
+        // Clone Arc pointers for the closure
+        let vec_available = self.vec_available.clone();
+        let vec_checked = self.vec_checked.clone();
+
         self.run(move |conn| {
+            // Check extension availability (cached after first check)
+            if !vec_checked.load(Ordering::Relaxed) {
+                let available = verify_vec_extension(conn);
+                vec_available.store(available, Ordering::Relaxed);
+                vec_checked.store(true, Ordering::Relaxed);
+                if !available {
+                    tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
+                }
+            }
+
+            // Skip vec_chunks operations if extension not available
+            if !vec_available.load(Ordering::Relaxed) {
+                tracing::debug!("Skipping vec_chunks upsert - extension not available");
+                return Ok(());
+            }
+
             // Upsert into vec_chunks
             // Helper to convert Vec<f32> to Vec<u8>
             let to_blob = |v: &Vec<f32>| -> Vec<u8> {
@@ -398,9 +451,30 @@ impl VectorStore for SqliteStore {
         dimension: usize,
     ) -> anyhow::Result<()> {
         let embeddings = embeddings.to_vec();
+
+        // Clone Arc pointers for the closure
+        let vec_available = self.vec_available.clone();
+        let vec_checked = self.vec_checked.clone();
+
         self.run(move |conn| {
+            // Check extension availability (cached after first check)
+            if !vec_checked.load(Ordering::Relaxed) {
+                let available = verify_vec_extension(conn);
+                vec_available.store(available, Ordering::Relaxed);
+                vec_checked.store(true, Ordering::Relaxed);
+                if !available {
+                    tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
+                }
+            }
+
+            // Skip vec_chunks operations if extension not available
+            if !vec_available.load(Ordering::Relaxed) {
+                tracing::debug!("Skipping batch vec_chunks upsert - extension not available");
+                return Ok(());
+            }
+
             let tx = conn.transaction()?;
-            
+
             {
                 let mut update_code = tx.prepare("UPDATE vec_chunks SET code_embedding = ?1 WHERE chunk_id = ?2")?;
                 let mut update_text = tx.prepare("UPDATE vec_chunks SET text_embedding = ?1 WHERE chunk_id = ?2")?;
