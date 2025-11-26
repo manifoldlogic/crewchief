@@ -55,7 +55,12 @@ export const SearchParamsSchema = z.object({
   deduplicate: z
     .boolean()
     .default(true)
-    .describe('Deduplicate results across worktrees (default: true)'),
+    .describe(
+      'Deduplicate results across worktrees. When true, results with the same ' +
+        'file path, symbol name, and line number are grouped, returning only the ' +
+        'highest-scoring instance. Set false to see all results including duplicates. ' +
+        '(default: true)'
+    ),
 })
 
 export type SearchParams = z.infer<typeof SearchParamsSchema>
