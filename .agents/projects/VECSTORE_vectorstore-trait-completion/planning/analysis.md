@@ -263,6 +263,6 @@ The PostgreSQL backend (`db/postgres/mod.rs`) wraps `db/queries.rs` functions. M
 - CLI command flags for backend selection (MAPCLI project)
 - TypeScript changes (MCPDB project)
 - VSCode extension changes (VSCODEDB project)
-- CI/CD changes (SQLITEINFRA project)
+- CI/CD changes (SQLINFRA project)
 
 **Note:** VECSTORE completes when the trait is expanded and both stores implement it. Consumer migration (CLI/daemon/indexer using the trait) is a separate project (MAPCLI).

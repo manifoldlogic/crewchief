@@ -148,7 +148,7 @@ SQLite databases are stored unencrypted. For local development use case, this is
 
 PostgreSQL connections use environment-configured settings. TLS configuration is a deployment concern, not a code concern.
 
-**Recommendation**: Document TLS configuration in deployment docs (SQLITEINFRA project).
+**Recommendation**: Document TLS configuration in deployment docs (SQLINFRA project).
 
 ### Gap 3: Input Size Limits
 

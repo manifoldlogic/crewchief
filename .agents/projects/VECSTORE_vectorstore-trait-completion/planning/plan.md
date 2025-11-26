@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-Complete the `VectorStore` trait abstraction by adding all missing database operations. This is the **foundation project** that must complete before MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, or **EMBPERF** can begin.
+Complete the `VectorStore` trait abstraction by adding all missing database operations. This is the **foundation project** that must complete before MAPCLI, MCPDB, VSCODEDB, SQLINFRA, or **EMBPERF** can begin.
 
 **Priority**: Ollama (768-dim) support is CRITICAL - it enables the zero-config experience (SQLite + Ollama).
 
@@ -302,7 +302,7 @@ Complete the `VectorStore` trait abstraction by adding all missing database oper
 
 ## Dependencies
 
-**Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
+**Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLINFRA, **EMBPERF**
 
 **Blocked By**: None (foundation project)
 

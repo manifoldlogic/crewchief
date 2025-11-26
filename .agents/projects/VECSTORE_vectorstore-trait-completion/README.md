@@ -41,7 +41,7 @@ Implement all methods in both `PostgresStore` and `SqliteStore`.
 - Daemon migration to trait (MAPCLI)
 - MCP server updates (MCPDB)
 - VSCode extension updates (VSCODEDB)
-- CI/CD and documentation (SQLITEINFRA)
+- CI/CD and documentation (SQLINFRA)
 
 ## Relevant Agents
 
@@ -85,7 +85,7 @@ Implement all methods in both `PostgresStore` and `SqliteStore`.
 
 ## Dependencies
 
-- **Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLITEINFRA, **EMBPERF**
+- **Blocks**: MAPCLI, MCPDB, VSCODEDB, SQLINFRA, **EMBPERF**
 - **Blocked By**: None (foundation project)
 
 **EMBPERF Relationship**: The EMBPERF project (Ollama parallel optimization) produces 768-dim embeddings. VECSTORE-1000 must complete before EMBPERF can be fully utilized with SQLite backends.

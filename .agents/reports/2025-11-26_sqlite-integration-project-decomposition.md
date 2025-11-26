@@ -19,7 +19,7 @@ The original integration impact analysis proposed a single **SQLITE-INTEGRATION*
 | MAPCLI | High | 4-5 days | VECSTORE |
 | MCPDB | Medium | 2-3 days | MAPCLI |
 | VSCODEDB | Medium | 3-4 days | MAPCLI |
-| SQLITEINFRA | Low | 2-3 days | All above |
+| SQLINFRA | Low | 2-3 days | All above |
 
 **Total**: 16-22 days (similar effort, better agent effectiveness)
 
@@ -295,7 +295,7 @@ testable_completion:
 **Out of Scope:**
 - Daemon changes (MAPCLI)
 - MCP server changes (MCPDB)
-- CI/CD changes (SQLITEINFRA)
+- CI/CD changes (SQLINFRA)
 
 #### Tickets (Estimated: 3-4 days)
 
@@ -315,7 +315,7 @@ testable_completion:
 
 ---
 
-### Project 5: SQLITEINFRA - Infrastructure Simplification
+### Project 5: SQLINFRA - Infrastructure Simplification
 
 **Pattern**: Capability Layer
 **Priority**: LOW (Quality of life improvements)
@@ -362,10 +362,10 @@ testable_completion:
 
 | Ticket | Description |
 |--------|-------------|
-| SQLITEINFRA-1001 | Add SQLite CI test job |
-| SQLITEINFRA-1002 | Make PostgreSQL CI optional |
-| SQLITEINFRA-1003 | Update Docker documentation |
-| SQLITEINFRA-1004 | Update all project documentation |
+| SQLINFRA-1001 | Add SQLite CI test job |
+| SQLINFRA-1002 | Make PostgreSQL CI optional |
+| SQLINFRA-1003 | Update Docker documentation |
+| SQLINFRA-1004 | Update all project documentation |
 
 #### Success Criteria
 - [ ] CI passes SQLite tests without PostgreSQL service
@@ -390,14 +390,14 @@ MAPCLI (CLI/Daemon)
     └───────┴───────┘
             │
             ▼
-      SQLITEINFRA
+      SQLINFRA
 ```
 
 **Execution Order**:
 1. VECSTORE (must complete first - defines interfaces)
 2. MAPCLI (enables all downstream work)
 3. MCPDB and VSCODEDB (can run in parallel)
-4. SQLITEINFRA (cleanup after all code complete)
+4. SQLINFRA (cleanup after all code complete)
 
 ---
 
@@ -421,7 +421,7 @@ The original SQLITE-INTEGRATION proposal should be replaced with 5 well-bounded 
 2. **MAPCLI** - Core CLI/daemon work
 3. **MCPDB** - MCP TypeScript updates
 4. **VSCODEDB** - VSCode extension updates
-5. **SQLITEINFRA** - Infrastructure cleanup
+5. **SQLINFRA** - Infrastructure cleanup
 
 Each project passes the Project Boundary Framework evaluation and can be executed by agents with high confidence. The total effort is similar (16-22 days vs 18-24 days), but with significantly better agent effectiveness and reduced risk of confusion or inconsistency.
 
@@ -429,4 +429,4 @@ Each project passes the Project Boundary Framework evaluation and can be execute
 1. Create VECSTORE project using `/create-project`
 2. Complete VECSTORE before starting any other project
 3. Run MCPDB and VSCODEDB in parallel after MAPCLI
-4. Finish with SQLITEINFRA documentation pass
+4. Finish with SQLINFRA documentation pass

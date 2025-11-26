@@ -99,4 +99,4 @@ See [tickets/](tickets/) directory for individual work items (to be created via 
 ## Related Projects
 
 - **VSCODEDB** - VSCode extension SQLite support (downstream)
-- **SQLITEINFRA** - Infrastructure documentation updates (downstream)
+- **SQLINFRA** - Infrastructure documentation updates (downstream)
