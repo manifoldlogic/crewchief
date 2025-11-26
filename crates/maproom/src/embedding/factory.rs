@@ -188,13 +188,20 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
             let model = env::var("MAPROOM_EMBEDDING_MODEL")
                 .unwrap_or_else(|_| "nomic-embed-text".to_string());
 
+            // Load parallel configuration from environment
+            let config = EmbeddingConfig::from_env()?;
+            let parallel_config = config.parallel;
+
             tracing::info!(
-                "Using provider: ollama (model: {}, endpoint: {})",
+                "Using provider: ollama (model: {}, endpoint: {}, parallel: enabled={}, sub_batch={}, concurrency={})",
                 model,
-                endpoint
+                endpoint,
+                parallel_config.enabled,
+                parallel_config.sub_batch_size,
+                parallel_config.max_concurrency
             );
 
-            let provider = OllamaProvider::new(endpoint, model)?;
+            let provider = OllamaProvider::new_with_config(endpoint, model, parallel_config)?;
             Ok(Box::new(provider))
         }
         "openai" => {

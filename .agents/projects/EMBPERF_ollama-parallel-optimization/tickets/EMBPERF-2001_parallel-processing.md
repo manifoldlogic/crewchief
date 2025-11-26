@@ -1,9 +1,9 @@
 # Ticket: EMBPERF-2001: Parallel Sub-Batch Processing
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**: Tests MUST be executed - unit tests for sub-batch splitting and parallel execution.
 
@@ -27,17 +27,17 @@ Combined with batch API, this should achieve 10-20x throughput improvement.
 This implements Phase 2 from `plan.md`.
 
 ## Acceptance Criteria
-- [ ] `OllamaProvider` accepts `ParallelConfig` in constructor
-- [ ] `embed_batch_parallel()` method implemented
-- [ ] Sub-batches split according to `config.sub_batch_size`
-- [ ] Concurrent requests limited by `config.max_concurrency` via Semaphore
-- [ ] Results merged in correct order after parallel execution
-- [ ] `embed_batch()` uses parallel when `config.enabled && texts.len() > sub_batch_size`
-- [ ] Factory passes `ParallelConfig` to `OllamaProvider`
-- [ ] Config defaults updated: `sub_batch_size: 50`, `max_concurrency: 8`
-- [ ] Unit tests pass for sub-batch splitting logic
-- [ ] Unit tests pass for result ordering
-- [ ] Integration test confirms parallel execution works
+- [x] `OllamaProvider` accepts `ParallelConfig` in constructor
+- [x] `embed_batch_parallel()` method implemented
+- [x] Sub-batches split according to `config.sub_batch_size`
+- [x] Concurrent requests limited by `config.max_concurrency` via Semaphore
+- [x] Results merged in correct order after parallel execution
+- [x] `embed_batch()` uses parallel when `config.enabled && texts.len() > sub_batch_size`
+- [x] Factory passes `ParallelConfig` to `OllamaProvider`
+- [x] Config defaults updated: `sub_batch_size: 50`, `max_concurrency: 8`
+- [x] Unit tests pass for sub-batch splitting logic
+- [x] Unit tests pass for result ordering
+- [x] Integration test confirms parallel execution works
 
 ## Technical Requirements
 

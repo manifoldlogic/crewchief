@@ -376,8 +376,8 @@ impl Default for ParallelConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            sub_batch_size: 25, // Sweet spot for Ollama based on testing
-            max_concurrency: 4, // Conservative default for CPU-only systems
+            sub_batch_size: 50, // Updated for EMBPERF-2001: better throughput
+            max_concurrency: 8, // Updated for EMBPERF-2001: higher concurrency
         }
     }
 }

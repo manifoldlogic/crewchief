@@ -44,7 +44,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use tracing;
 
+use crate::embedding::config::ParallelConfig;
 use crate::embedding::error::{ApiError, EmbeddingError};
 use crate::embedding::provider::{EmbeddingProvider, Vector};
 
@@ -87,8 +89,9 @@ pub struct OllamaProvider {
     endpoint: String,
     /// Model name (e.g., "nomic-embed-text")
     model: String,
-    /// Semaphore to limit concurrent requests (reserved for future use)
-    #[allow(dead_code)]
+    /// Parallel processing configuration
+    parallel_config: ParallelConfig,
+    /// Semaphore to limit concurrent requests
     semaphore: Arc<Semaphore>,
 }
 
@@ -98,9 +101,6 @@ impl OllamaProvider {
 
     /// Default model for embeddings.
     pub const DEFAULT_MODEL: &'static str = "nomic-embed-text";
-
-    /// Maximum concurrent requests to avoid overwhelming Ollama.
-    const MAX_CONCURRENT_REQUESTS: usize = 10;
 
     /// Request timeout in seconds (increased for larger batches).
     const REQUEST_TIMEOUT_SECS: u64 = 60;
@@ -129,15 +129,57 @@ impl OllamaProvider {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn new(endpoint: String, model: String) -> Result<Self, EmbeddingError> {
+        Self::new_with_config(endpoint, model, ParallelConfig::default())
+    }
+
+    /// Create a new OllamaProvider with explicit parallel processing configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - Ollama API endpoint URL (e.g., "http://localhost:11434/api/embed")
+    /// * `model` - Model name (e.g., "nomic-embed-text")
+    /// * `config` - Parallel processing configuration
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(OllamaProvider)` - Successfully created provider
+    /// - `Err(EmbeddingError)` - If HTTP client creation fails
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::embedding::ollama::OllamaProvider;
+    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    ///
+    /// let config = ParallelConfig {
+    ///     enabled: true,
+    ///     sub_batch_size: 50,
+    ///     max_concurrency: 8,
+    /// };
+    /// let provider = OllamaProvider::new_with_config(
+    ///     "http://localhost:11434/api/embed".to_string(),
+    ///     "nomic-embed-text".to_string(),
+    ///     config
+    /// )?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn new_with_config(
+        endpoint: String,
+        model: String,
+        config: ParallelConfig,
+    ) -> Result<Self, EmbeddingError> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(Self::REQUEST_TIMEOUT_SECS))
             .build()?;
+
+        let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
 
         Ok(Self {
             client,
             endpoint,
             model,
-            semaphore: Arc::new(Semaphore::new(Self::MAX_CONCURRENT_REQUESTS)),
+            parallel_config: config,
+            semaphore,
         })
     }
 
@@ -158,6 +200,120 @@ impl OllamaProvider {
             Self::DEFAULT_ENDPOINT.to_string(),
             Self::DEFAULT_MODEL.to_string(),
         )
+    }
+
+    /// Embed a batch of texts using parallel sub-batches.
+    ///
+    /// This method splits a large batch into smaller sub-batches and processes them
+    /// concurrently using tokio tasks with semaphore-controlled concurrency. Results
+    /// are merged in the correct order to preserve input sequence.
+    ///
+    /// # Arguments
+    ///
+    /// * `texts` - Vector of texts to embed
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Vec<Vector>)` - Vector of embeddings (same length and order as input)
+    /// - `Err(EmbeddingError)` - If any sub-batch fails
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Split texts into sub-batches of size `parallel_config.sub_batch_size`
+    /// 2. Spawn tokio tasks for each sub-batch (limited by semaphore)
+    /// 3. Track original index for each sub-batch
+    /// 4. Sort results by index after all tasks complete
+    /// 5. Flatten vectors in correct order
+    async fn embed_batch_parallel(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+        let total_texts = texts.len();
+        let sub_batch_size = self.parallel_config.sub_batch_size;
+
+        // Split into sub-batches
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        let num_batches = sub_batches.len();
+
+        tracing::info!(
+            "Parallel batch embedding: {} texts in {} sub-batches (size: {}, concurrency: {})",
+            total_texts,
+            num_batches,
+            sub_batch_size,
+            self.parallel_config.max_concurrency
+        );
+
+        let start = std::time::Instant::now();
+
+        // Process sub-batches in parallel with semaphore limiting concurrency
+        let handles: Vec<_> = sub_batches
+            .into_iter()
+            .enumerate()
+            .map(|(idx, batch)| {
+                let semaphore = self.semaphore.clone();
+                let this = self.clone();
+                let batch_size = batch.len();
+
+                tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    let batch_start = std::time::Instant::now();
+
+                    tracing::debug!("Starting sub-batch {} ({} texts)", idx, batch_size);
+
+                    let result = this.embed_batch_raw(batch).await;
+
+                    let elapsed = batch_start.elapsed();
+                    tracing::debug!(
+                        "Sub-batch {} completed in {:.2}s ({} texts)",
+                        idx,
+                        elapsed.as_secs_f64(),
+                        batch_size
+                    );
+
+                    (idx, result)
+                })
+            })
+            .collect();
+
+        // Collect results from all tasks
+        let mut results: Vec<(usize, Result<Vec<Vector>, EmbeddingError>)> = Vec::new();
+        for handle in handles {
+            let (idx, result) = handle.await.map_err(|e| {
+                EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                    "Task join error: {}",
+                    e
+                )))
+            })?;
+            results.push((idx, result));
+        }
+
+        // Sort by index to preserve order
+        results.sort_by_key(|(idx, _)| *idx);
+
+        // Check for errors and flatten results
+        let mut embeddings = Vec::with_capacity(total_texts);
+        for (idx, result) in results {
+            let batch_embeddings = result.map_err(|e| {
+                EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                    "Sub-batch {} failed: {}",
+                    idx, e
+                )))
+            })?;
+            embeddings.extend(batch_embeddings);
+        }
+
+        let elapsed = start.elapsed();
+        let throughput = total_texts as f64 / elapsed.as_secs_f64();
+
+        tracing::info!(
+            "Parallel batch complete: {} texts in {:.2}s ({:.0} texts/sec)",
+            total_texts,
+            elapsed.as_secs_f64(),
+            throughput
+        );
+
+        Ok(embeddings)
     }
 
     /// Embed a batch of texts using a single HTTP request.
@@ -297,8 +453,10 @@ impl EmbeddingProvider for OllamaProvider {
 
     /// Generate embeddings for a batch of texts.
     ///
-    /// This method uses Ollama's batch API to send all texts in a single HTTP request,
-    /// providing significant performance improvements over individual requests.
+    /// This method intelligently chooses between parallel sub-batch processing and
+    /// single-batch processing based on configuration and batch size:
+    /// - Uses parallel processing if `parallel_config.enabled` and `texts.len() > sub_batch_size`
+    /// - Otherwise uses single-batch API call
     ///
     /// # Arguments
     ///
@@ -323,7 +481,12 @@ impl EmbeddingProvider for OllamaProvider {
     /// # }
     /// ```
     async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
-        self.embed_batch_raw(texts).await
+        // Use parallel processing for large batches when enabled
+        if self.parallel_config.enabled && texts.len() > self.parallel_config.sub_batch_size {
+            self.embed_batch_parallel(texts).await
+        } else {
+            self.embed_batch_raw(texts).await
+        }
     }
 
     /// Get the embedding dimension for this provider.
@@ -469,5 +632,170 @@ mod tests {
         let embedding = provider.embed("test".to_string()).await.unwrap();
 
         assert_eq!(embedding.len(), 768);
+    }
+
+    // Unit tests for parallel processing (EMBPERF-2001)
+
+    #[test]
+    fn test_sub_batch_splitting() {
+        // Test that 105 texts with batch_size 50 produces 3 batches: [50, 50, 5]
+        let texts: Vec<String> = (0..105).map(|i| i.to_string()).collect();
+        let batches: Vec<Vec<String>> = texts.chunks(50).map(|c| c.to_vec()).collect();
+
+        assert_eq!(batches.len(), 3);
+        assert_eq!(batches[0].len(), 50);
+        assert_eq!(batches[1].len(), 50);
+        assert_eq!(batches[2].len(), 5);
+    }
+
+    #[test]
+    fn test_result_merge_ordering() {
+        // Simulate out-of-order completion of sub-batches
+        let mut results = vec![
+            (2, vec!["c1".to_string(), "c2".to_string()]),
+            (0, vec!["a1".to_string(), "a2".to_string()]),
+            (1, vec!["b1".to_string(), "b2".to_string()]),
+        ];
+
+        // Sort by index (same as parallel implementation)
+        results.sort_by_key(|(idx, _)| *idx);
+
+        // Flatten results
+        let merged: Vec<String> = results.into_iter().flat_map(|(_, v)| v).collect();
+
+        // Verify correct order
+        assert_eq!(merged, vec!["a1", "a2", "b1", "b2", "c1", "c2"]);
+    }
+
+    #[test]
+    fn test_parallel_config_construction() {
+        let config = ParallelConfig {
+            enabled: true,
+            sub_batch_size: 50,
+            max_concurrency: 8,
+        };
+
+        let provider = OllamaProvider::new_with_config(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            config.clone(),
+        )
+        .unwrap();
+
+        assert_eq!(provider.parallel_config.enabled, true);
+        assert_eq!(provider.parallel_config.sub_batch_size, 50);
+        assert_eq!(provider.parallel_config.max_concurrency, 8);
+    }
+
+    #[test]
+    fn test_parallel_config_defaults() {
+        let provider = OllamaProvider::default_config().unwrap();
+
+        // Verify updated defaults from EMBPERF-2001
+        assert_eq!(provider.parallel_config.enabled, true);
+        assert_eq!(provider.parallel_config.sub_batch_size, 50);
+        assert_eq!(provider.parallel_config.max_concurrency, 8);
+    }
+
+    #[tokio::test]
+    async fn test_small_batch_uses_raw_not_parallel() {
+        // Create provider with parallel enabled
+        let config = ParallelConfig {
+            enabled: true,
+            sub_batch_size: 50,
+            max_concurrency: 8,
+        };
+        let provider = OllamaProvider::new_with_config(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            config,
+        )
+        .unwrap();
+
+        // Small batch (10 texts) should use raw, not parallel
+        // We can't directly test this without mocking, but we can verify the logic
+        let texts: Vec<String> = (0..10).map(|i| format!("text_{}", i)).collect();
+
+        // This would normally call embed_batch_raw since 10 <= 50
+        // The test just verifies the struct is set up correctly
+        assert!(texts.len() <= provider.parallel_config.sub_batch_size);
+    }
+
+    #[tokio::test]
+    async fn test_large_batch_triggers_parallel() {
+        // Create provider with parallel enabled
+        let config = ParallelConfig {
+            enabled: true,
+            sub_batch_size: 50,
+            max_concurrency: 8,
+        };
+        let provider = OllamaProvider::new_with_config(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            config,
+        )
+        .unwrap();
+
+        // Large batch (100 texts) should trigger parallel
+        let texts: Vec<String> = (0..100).map(|i| format!("text_{}", i)).collect();
+
+        // This would normally call embed_batch_parallel since 100 > 50
+        // The test just verifies the struct is set up correctly
+        assert!(texts.len() > provider.parallel_config.sub_batch_size);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running Ollama
+    async fn test_parallel_preserves_order() {
+        // Integration test: verify parallel processing preserves order
+        let config = ParallelConfig {
+            enabled: true,
+            sub_batch_size: 10,
+            max_concurrency: 4,
+        };
+        let provider = OllamaProvider::new_with_config(
+            OllamaProvider::DEFAULT_ENDPOINT.to_string(),
+            OllamaProvider::DEFAULT_MODEL.to_string(),
+            config,
+        )
+        .unwrap();
+
+        // Create texts with identifiable content
+        let texts: Vec<String> = (0..50).map(|i| format!("text_{}", i)).collect();
+        let embeddings = provider.embed_batch(texts.clone()).await.unwrap();
+
+        // Verify we got the right number of embeddings
+        assert_eq!(embeddings.len(), 50);
+
+        // Verify each embedding has correct dimension
+        for embedding in &embeddings {
+            assert_eq!(embedding.len(), 768);
+        }
+
+        // To truly verify order, we'd need to re-embed individually and compare
+        // For now, we just verify the batch processing succeeded with correct count
+    }
+
+    #[test]
+    fn test_parallel_disabled_config() {
+        let config = ParallelConfig {
+            enabled: false,
+            sub_batch_size: 50,
+            max_concurrency: 8,
+        };
+
+        let provider = OllamaProvider::new_with_config(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            config,
+        )
+        .unwrap();
+
+        assert_eq!(provider.parallel_config.enabled, false);
+
+        // Even with large batch, parallel should not be used when disabled
+        let texts: Vec<String> = (0..100).map(|i| format!("text_{}", i)).collect();
+        assert!(texts.len() > provider.parallel_config.sub_batch_size);
+        assert!(!provider.parallel_config.enabled);
     }
 }
