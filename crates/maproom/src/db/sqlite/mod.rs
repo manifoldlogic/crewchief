@@ -1,5 +1,6 @@
 pub mod schema;
 pub mod migrations;
+pub mod embeddings;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -385,6 +386,8 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    // NOTE: This method is deprecated. Use SqliteStore::upsert_embedding() instead for content-based deduplication.
+    // Cannot use #[deprecated] attribute on trait method implementations.
     async fn upsert_embeddings(
         &self,
         chunk_id: i64,
@@ -781,6 +784,52 @@ impl SqliteStore {
             Ok(ids)
         }).await
     }
+
+    /// Store or update embedding by content hash (SQLite-specific, not in VectorStore trait)
+    pub async fn upsert_embedding(
+        &self,
+        blob_sha: &str,
+        embedding: &[f32],
+        model_version: &str,
+    ) -> anyhow::Result<i64> {
+        let blob_sha = blob_sha.to_string();
+        let embedding = embedding.to_vec();
+        let model_version = model_version.to_string();
+
+        self.run(move |conn| {
+            embeddings::upsert_embedding(conn, &blob_sha, &embedding, &model_version)
+        }).await
+    }
+
+    /// Batch upsert embeddings with deduplication (SQLite-specific, not in VectorStore trait)
+    pub async fn upsert_embeddings_batch_new(
+        &self,
+        embeddings_vec: &[embeddings::EmbeddingRecord],
+    ) -> anyhow::Result<()> {
+        let embeddings_vec = embeddings_vec.to_vec();
+
+        self.run(move |conn| {
+            embeddings::upsert_embeddings_batch(conn, &embeddings_vec)
+        }).await
+    }
+
+    /// Check if embedding exists for blob_sha (SQLite-specific, not in VectorStore trait)
+    pub async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
+        let blob_sha = blob_sha.to_string();
+
+        self.run(move |conn| {
+            embeddings::has_embedding(conn, &blob_sha)
+        }).await
+    }
+
+    /// Get embedding by blob_sha (SQLite-specific, not in VectorStore trait)
+    pub async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
+        let blob_sha = blob_sha.to_string();
+
+        self.run(move |conn| {
+            embeddings::get_embedding(conn, &blob_sha)
+        }).await
+    }
 }
 
 #[cfg(test)]
@@ -858,6 +907,87 @@ mod tests {
         store.add_chunk_to_worktree(chunk_id, worktree2_id).await.unwrap();
         let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
         assert_eq!(worktrees.len(), 2); // Still only 2, not 3
+    }
+
+    #[tokio::test]
+    async fn test_embedding_deduplication() {
+        let store = setup_test_store().await;
+
+        // Create a 1536-dimensional embedding
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+
+        // Insert first embedding for blob_sha "hash1"
+        let id1 = store
+            .upsert_embedding("hash1", &embedding1, "model-v1")
+            .await
+            .unwrap();
+
+        // Verify embedding exists
+        assert!(store.has_embedding("hash1").await.unwrap());
+
+        // Retrieve and verify
+        let retrieved1 = store.get_embedding("hash1").await.unwrap();
+        assert!(retrieved1.is_some());
+        let retrieved1 = retrieved1.unwrap();
+        assert_eq!(retrieved1.len(), 1536);
+        // Check a few values
+        assert!((retrieved1[0] - embedding1[0]).abs() < 1e-6);
+        assert!((retrieved1[100] - embedding1[100]).abs() < 1e-6);
+
+        // Update the same blob_sha with a different embedding
+        let id2 = store
+            .upsert_embedding("hash1", &embedding2, "model-v2")
+            .await
+            .unwrap();
+
+        // Should return the same id (upsert)
+        assert_eq!(id1, id2);
+
+        // Retrieve updated embedding
+        let retrieved2 = store.get_embedding("hash1").await.unwrap().unwrap();
+        assert_eq!(retrieved2.len(), 1536);
+        // Verify it's the new embedding
+        assert!((retrieved2[0] - embedding2[0]).abs() < 1e-6);
+        assert!((retrieved2[100] - embedding2[100]).abs() < 1e-6);
+
+        // Insert a different blob_sha
+        let id3 = store
+            .upsert_embedding("hash2", &embedding1, "model-v1")
+            .await
+            .unwrap();
+
+        // Should be a different id
+        assert_ne!(id1, id3);
+
+        // Both should exist
+        assert!(store.has_embedding("hash1").await.unwrap());
+        assert!(store.has_embedding("hash2").await.unwrap());
+        assert!(!store.has_embedding("hash3").await.unwrap());
+
+        // Test batch upsert
+        let batch = vec![
+            embeddings::EmbeddingRecord {
+                blob_sha: "batch1".to_string(),
+                embedding: embedding1.clone(),
+                model_version: "model-v1".to_string(),
+            },
+            embeddings::EmbeddingRecord {
+                blob_sha: "batch2".to_string(),
+                embedding: embedding2.clone(),
+                model_version: "model-v1".to_string(),
+            },
+        ];
+
+        store.upsert_embeddings_batch_new(&batch).await.unwrap();
+
+        // Verify batch inserts
+        assert!(store.has_embedding("batch1").await.unwrap());
+        assert!(store.has_embedding("batch2").await.unwrap());
+
+        let batch1_emb = store.get_embedding("batch1").await.unwrap().unwrap();
+        assert_eq!(batch1_emb.len(), 1536);
+        assert!((batch1_emb[0] - embedding1[0]).abs() < 1e-6);
     }
 
     #[tokio::test]
