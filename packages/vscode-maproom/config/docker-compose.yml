@@ -1,3 +1,32 @@
+# =============================================================================
+# PostgreSQL for VSCode Maproom Extension - Development & Team Sharing
+# =============================================================================
+#
+# This Docker Compose provides PostgreSQL with pgvector for the VSCode extension.
+#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │  DO YOU NEED THIS?                                                       │
+# │                                                                          │
+# │  The VSCode extension supports SQLite-first activation:                  │
+# │    • Opens instantly without waiting for Docker                          │
+# │    • Uses ~/.maproom/maproom.db automatically                            │
+# │    • No configuration required                                           │
+# │                                                                          │
+# │  Use PostgreSQL (this file) when you need:                               │
+# │    • Multiple team members sharing a code index                          │
+# │    • Running the test suite with postgres-test container                 │
+# │    • Development of PostgreSQL-specific features                         │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Quick start (PostgreSQL):
+#   docker compose up -d
+#   # Extension will auto-detect maproom-postgres container
+#
+# For SQLite (recommended for most users):
+#   # Just open VSCode - extension works without Docker
+#
+# See docs/architecture/DATABASE_ARCHITECTURE.md for backend comparison.
+#
 name: crewchief-dev-env
 
 services:

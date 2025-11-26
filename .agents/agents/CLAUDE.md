@@ -1,0 +1,1 @@
+These files contain definitions for specialized AI agents. 

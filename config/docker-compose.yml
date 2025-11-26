@@ -1,11 +1,32 @@
-# Maproom Infrastructure Services
+# =============================================================================
+# PostgreSQL for Maproom - Team Sharing Setup
+# =============================================================================
 #
-# This docker-compose provides the database infrastructure for Maproom.
-# The MCP server runs on the host via `npx @crewchief/maproom-mcp`.
+# This Docker Compose provides PostgreSQL with pgvector for shared team indices.
 #
-# Quick start:
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │  DO YOU NEED THIS?                                                       │
+# │                                                                          │
+# │  For individual use, SQLite works without Docker:                        │
+# │    crewchief maproom scan                                                │
+# │    crewchief maproom search "query"                                      │
+# │    (Database auto-created at ~/.maproom/maproom.db)                      │
+# │                                                                          │
+# │  Use PostgreSQL (this file) when you need:                               │
+# │    • Multiple team members sharing a code index                          │
+# │    • Concurrent indexing across multiple processes                       │
+# │    • Production deployment with high query volume                        │
+# │    • Database replication or backup strategies                           │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Quick start (PostgreSQL):
 #   docker compose up -d
-#   npx @crewchief/maproom-mcp
+#   export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5433/maproom"
+#   crewchief maproom db migrate
+#   crewchief maproom scan
+#
+# See README.md "Quick Start" for SQLite setup (recommended for most users).
+# See docs/architecture/DATABASE_ARCHITECTURE.md for backend comparison.
 #
 # For VSCode extension users, use the extension's docker-compose instead:
 #   packages/vscode-maproom/config/docker-compose.yml
