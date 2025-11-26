@@ -47,13 +47,13 @@ export interface OrchestratorConfig {
   extensionRoot: string
   /** Workspace root directory for branch-watch */
   workspaceRoot: string
-  /** PostgreSQL connection configuration */
-  postgres: PostgresConfig
+  /** PostgreSQL connection configuration (optional - only needed for postgres mode without databaseUrlOverride) */
+  postgres?: PostgresConfig
   /** Secrets manager for API credentials (optional) */
   secretsManager?: SecretsManager
   /** Embedding provider (optional) */
   provider?: EmbeddingProvider
-  /** Override database URL (e.g. for sqlite) */
+  /** Override database URL (e.g. for sqlite or explicit postgres URL). Takes precedence over postgres config. */
   databaseUrlOverride?: string
 }
 
@@ -335,18 +335,29 @@ export class ProcessOrchestrator extends EventEmitter {
     // Note: Old binaries use DATABASE_URL, new binaries use MAPROOM_DATABASE_URL
     // We set both for compatibility
     // If override is provided (e.g. sqlite://...), use it. Otherwise construct postgres URL.
-    const databaseUrl = databaseUrlOverride || `postgresql://${postgres.user}:${postgres.password}@${postgres.host}:${postgres.port}/${postgres.database}`
+    let databaseUrl: string
+    if (databaseUrlOverride) {
+      databaseUrl = databaseUrlOverride
+    } else if (postgres) {
+      databaseUrl = `postgresql://${postgres.user}:${postgres.password}@${postgres.host}:${postgres.port}/${postgres.database}`
+    } else {
+      throw new Error('Either databaseUrlOverride or postgres config must be provided')
+    }
 
-    // Start with PostgreSQL config
+    // Start with base environment and database URL
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       DATABASE_URL: databaseUrl, // For old binaries
       MAPROOM_DATABASE_URL: databaseUrl, // For new binaries
-      PGHOST: postgres.host,
-      PGPORT: postgres.port.toString(),
-      PGUSER: postgres.user,
-      PGPASSWORD: postgres.password,
-      PGDATABASE: postgres.database,
+    }
+
+    // Add PostgreSQL-specific environment variables only when using postgres config
+    if (postgres) {
+      env.PGHOST = postgres.host
+      env.PGPORT = postgres.port.toString()
+      env.PGUSER = postgres.user
+      env.PGPASSWORD = postgres.password
+      env.PGDATABASE = postgres.database
     }
 
     // Add embedding provider credentials if available

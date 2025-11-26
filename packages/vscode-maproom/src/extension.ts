@@ -44,6 +44,13 @@ import {
   getPostgresConfigFromSettings,
   getPostgresUrl,
 } from './services/postgres-checker'
+import {
+  resolveDatabaseConfig,
+  checkDatabaseAvailable,
+  getDatabaseUnavailableMessage,
+  getDatabaseUrl,
+  type DatabaseConfig,
+} from './services/database-checker'
 import { DockerManager } from './docker/manager'
 
 /**
@@ -171,7 +178,8 @@ export function activate(context: vscode.ExtensionContext): void {
  * First-time setup flow
  *
  * Runs the setup wizard to select embedding provider, then starts Docker services
- * and triggers initial workspace scan. If user cancels setup, initialization is skipped.
+ * (for PostgreSQL mode) or checks SQLite availability, and triggers initial workspace scan.
+ * If user cancels setup, initialization is skipped.
  *
  * @param context - Extension context
  * @param workspaceRoot - Workspace root path
@@ -200,17 +208,34 @@ async function runFirstTimeSetup(
       `Maproom configured to use ${provider.toUpperCase()} for embeddings`
     )
 
-    // Start Docker services before checking PostgreSQL
-    await ensureDockerRunning(context, provider)
+    // Resolve database configuration
+    const dbConfig = resolveDatabaseConfig()
+    outputChannel?.appendLine(`Database mode: ${dbConfig.type}`)
 
-    // Check if PostgreSQL is available
-    await ensurePostgresAvailable()
+    // Branch based on database type
+    if (dbConfig.type === 'postgresql') {
+      // PostgreSQL mode: Start Docker services before checking availability
+      await ensureDockerRunning(context, provider)
+      await ensurePostgresAvailable()
 
-    // Run initial scan after setup completes
-    await runInitialWorkspaceScan(context, workspaceRoot)
+      // Run initial scan after setup completes
+      await runInitialWorkspaceScan(context, workspaceRoot)
 
-    // After scan completes, start watch processes
-    await startWatchProcesses(context, workspaceRoot)
+      // After scan completes, start watch processes
+      await startWatchProcesses(context, workspaceRoot)
+    } else {
+      // SQLite mode: Check database availability (no Docker needed)
+      const sqliteAvailable = await ensureSqliteAvailable(dbConfig)
+
+      if (sqliteAvailable) {
+        // Database exists - start watch processes
+        await startWatchProcesses(context, workspaceRoot)
+      } else {
+        // Database not found - show guidance and enter degraded mode
+        outputChannel?.appendLine('SQLite database not found - run crewchief-maproom scan to create index')
+        statusBar?.setState('idle')
+      }
+    }
   } catch (error: any) {
     const errorMessage = `Setup failed: ${error.message}`
     outputChannel?.appendLine(`ERROR: ${errorMessage}`)
@@ -307,6 +332,10 @@ async function initializeServices(
       throw new Error('No embedding provider configured. Run "Maproom: Setup" to configure.')
     }
 
+    // Resolve database configuration
+    const dbConfig = resolveDatabaseConfig()
+    outputChannel?.appendLine(`Database mode: ${dbConfig.type}`)
+
     // Show progress notification
     await vscode.window.withProgress(
       {
@@ -315,33 +344,39 @@ async function initializeServices(
         cancellable: false,
       },
       async (progress) => {
-        // Step 1: Start Docker services
-        progress.report({ message: 'Starting Docker services...' })
-        await ensureDockerRunning(context, provider)
+        // Branch based on database type
+        if (dbConfig.type === 'postgresql') {
+          // PostgreSQL mode: Start Docker services and check availability
+          progress.report({ message: 'Starting Docker services...' })
+          await ensureDockerRunning(context, provider)
 
-        // Step 2: Check PostgreSQL availability
-        progress.report({ message: 'Checking PostgreSQL...' })
-        await ensurePostgresAvailable()
+          progress.report({ message: 'Checking PostgreSQL...' })
+          await ensurePostgresAvailable()
+        } else {
+          // SQLite mode: Check database file exists (no Docker needed)
+          progress.report({ message: 'Checking SQLite database...' })
+          const sqliteAvailable = await ensureSqliteAvailable(dbConfig)
+
+          if (!sqliteAvailable) {
+            // Database not found - update status and continue with degraded mode
+            statusBar?.setState('idle')
+            outputChannel?.appendLine('SQLite database not found - extension running in degraded mode')
+            return // Exit progress handler but don't throw
+          }
+        }
 
         // Step 3: Create process orchestrator
         progress.report({ message: 'Starting watch processes...' })
         outputChannel?.appendLine('Creating process orchestrator...')
 
-        const postgresConfig = {
-          host: 'maproom-postgres', // Docker network hostname
-          port: 5432,
-          user: 'maproom',
-          password: 'maproom',
-          database: 'maproom',
-        }
-
-        // Create secrets manager (provider already retrieved above)
+        // Create secrets manager
         const secretsManager = new SecretsManager(context.secrets)
 
+        // Use databaseUrlOverride for both SQLite and PostgreSQL modes
         orchestrator = new ProcessOrchestrator(outputChannel!, {
           extensionRoot: context.extensionPath,
           workspaceRoot,
-          postgres: postgresConfig,
+          databaseUrlOverride: getDatabaseUrl(dbConfig),
           secretsManager,
           provider,
         })
@@ -406,6 +441,49 @@ async function ensurePostgresAvailable(): Promise<void> {
 }
 
 /**
+ * Ensure SQLite database is available
+ *
+ * Checks if the SQLite database file exists at the configured path.
+ * Shows error notification with guidance if not available, but allows
+ * extension to activate (graceful degradation).
+ *
+ * @param config - Database configuration from resolveDatabaseConfig()
+ * @returns true if database is available, false otherwise
+ */
+async function ensureSqliteAvailable(config: DatabaseConfig): Promise<boolean> {
+  outputChannel?.appendLine(`Checking SQLite database at ${config.path}...`)
+
+  const available = await checkDatabaseAvailable(config)
+
+  if (!available) {
+    const message = getDatabaseUnavailableMessage(config)
+    outputChannel?.appendLine(`WARNING: ${message}`)
+
+    const action = await vscode.window.showWarningMessage(
+      'Maproom: Database Not Found',
+      { detail: message, modal: false },
+      'Open Settings',
+      'Show Logs'
+    )
+
+    if (action === 'Open Settings') {
+      await vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        'maproom.database'
+      )
+    } else if (action === 'Show Logs') {
+      outputChannel?.show()
+    }
+
+    // Return false but don't throw - allow graceful degradation
+    return false
+  }
+
+  outputChannel?.appendLine(`SQLite database found at ${config.path}`)
+  return true
+}
+
+/**
  * Run initial workspace scan
  *
  * Triggers a one-time scan of the workspace to build the initial semantic index.
@@ -435,9 +513,9 @@ async function runInitialWorkspaceScan(
     Object.assign(env, credentialEnv)
   }
 
-  // Get database URL from settings
-  const config = getPostgresConfigFromSettings()
-  const databaseUrl = getPostgresUrl(config)
+  // Get database URL from database-checker (supports both SQLite and PostgreSQL)
+  const dbConfig = resolveDatabaseConfig()
+  const databaseUrl = getDatabaseUrl(dbConfig)
 
   // Run scan with progress notification
   const filesIndexed = await runInitialScan({
@@ -466,13 +544,8 @@ async function startWatchProcesses(
 ): Promise<void> {
   outputChannel?.appendLine('Creating process orchestrator...')
 
-  const postgresConfig = {
-    host: 'maproom-postgres', // Docker network hostname
-    port: 5432,
-    user: 'maproom',
-    password: 'maproom',
-    database: 'maproom',
-  }
+  // Resolve database configuration and use databaseUrlOverride
+  const dbConfig = resolveDatabaseConfig()
 
   // Get configured provider and create secrets manager
   const provider = getConfiguredProvider(context)
@@ -481,7 +554,7 @@ async function startWatchProcesses(
   orchestrator = new ProcessOrchestrator(outputChannel!, {
     extensionRoot: context.extensionPath,
     workspaceRoot,
-    postgres: postgresConfig,
+    databaseUrlOverride: getDatabaseUrl(dbConfig),
     secretsManager,
     provider,
   })
