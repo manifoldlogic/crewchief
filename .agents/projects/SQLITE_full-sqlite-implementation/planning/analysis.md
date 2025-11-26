@@ -215,6 +215,8 @@ Rationale:
 - Eliminates entire class of bugs
 - Better query performance with indexes
 
+> **Note**: No data migration needed. There are no existing SQLite databases with data. Fresh indexing populates all tables including the junction table.
+
 ## Graph Traversal Strategy
 
 The `chunk_edges` table stores relationships:

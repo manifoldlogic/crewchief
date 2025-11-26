@@ -156,15 +156,13 @@ mod tests {
 ```rust
 #[cfg(test)]
 mod tests {
-    // Migration system
+    // Migration system (fresh database only - no data migration needed)
     #[tokio::test]
     async fn test_migration_version_tracking();
     #[tokio::test]
     async fn test_migration_idempotent();
     #[tokio::test]
-    async fn test_migration_upgrade_path();
-    #[tokio::test]
-    async fn test_migration_from_sqlfix_schema();
+    async fn test_fresh_database_creation();
 }
 ```
 
@@ -383,9 +381,8 @@ These paths MUST have test coverage:
 
 | Path | Risk if Broken | Tests |
 |------|----------------|-------|
-| Migration system | Data loss on upgrade | `test_migration_*` |
+| Migration system | Schema not created | `test_migration_*`, `test_fresh_database_*` |
 | Extension loading | Vector search broken | `test_sqlite_vec_*` |
-| Schema migration | Data loss | `test_migrate_*` |
 | Chunk insertion | Index corruption | `test_insert_chunk*` |
 | FTS indexing | Search broken | `test_fts_*` |
 | Vector indexing | Semantic search broken | `test_vector_*` |

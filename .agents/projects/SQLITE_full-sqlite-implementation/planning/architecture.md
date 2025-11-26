@@ -146,8 +146,10 @@ struct Migration {
 | 2 | `add_chunk_worktrees` | Add junction table |
 | 3 | `add_code_embeddings` | Add deduplicated embeddings table |
 | 4 | `add_vec_code` | Add vector index table |
-| 5 | `migrate_worktree_ids` | Migrate JSON to junction table |
-| 6 | `drop_worktree_ids` | Remove deprecated JSON column |
+| 5 | `drop_worktree_ids` | Remove deprecated JSON column |
+| 6 | `drop_vec_chunks` | Remove deprecated vec_chunks table |
+
+> **Note**: No data migration is required. There are no existing SQLite databases with data to migrate. Fresh indexing populates all tables from scratch.
 
 ### Migration Safety
 
@@ -200,7 +202,7 @@ CREATE TABLE files (
   UNIQUE(commit_id, relpath, content_hash)
 );
 
--- Code chunks (EXISTING - worktree_ids to be migrated)
+-- Code chunks (EXISTING - worktree_ids column will be dropped)
 CREATE TABLE chunks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -216,7 +218,7 @@ CREATE TABLE chunks (
   recency_score REAL NOT NULL,
   churn_score REAL NOT NULL,
   metadata JSON,
-  worktree_ids JSON NOT NULL,  -- DEPRECATED: will be migrated to junction table
+  worktree_ids JSON NOT NULL,  -- DEPRECATED: will be dropped (Migration 5)
   UNIQUE(file_id, start_line, end_line)
 );
 
@@ -233,7 +235,7 @@ CREATE TABLE chunk_edges (
 ### New Tables (Added by Migrations)
 
 ```sql
--- Chunk-worktree junction (replaces worktree_ids JSON)
+-- Chunk-worktree junction (proper relational design)
 -- Migration 2: add_chunk_worktrees
 CREATE TABLE chunk_worktrees (
   chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
@@ -258,6 +260,53 @@ CREATE VIRTUAL TABLE vec_code USING vec0(
   embedding float[1536]
 );
 ```
+
+### Deprecated Table: vec_chunks
+
+The existing `vec_chunks` table (created by SQLFIX) is **DEPRECATED** and replaced by the new `code_embeddings` + `vec_code` architecture.
+
+```sql
+-- DEPRECATED: Will be dropped by Migration 7
+-- This was the original SQLFIX design (chunk_id keyed, no deduplication)
+CREATE VIRTUAL TABLE vec_chunks USING vec0(
+    chunk_id INTEGER PRIMARY KEY,
+    code_embedding float[1536],
+    text_embedding float[1536]
+);
+```
+
+**Why Replace vec_chunks:**
+
+| Aspect | vec_chunks (Old) | code_embeddings + vec_code (New) |
+|--------|------------------|----------------------------------|
+| Key | chunk_id | blob_sha (content hash) |
+| Deduplication | None - same content = N embeddings | Yes - same content = 1 embedding |
+| Storage | 70-90% waste on shared content | Minimal waste |
+| Text embedding | Stored separately | Combined into single embedding |
+
+**Migration Path (Migration 6: drop_vec_chunks):**
+
+```sql
+-- Migration 6: drop_vec_chunks
+-- No data migration needed - fresh indexing populates code_embeddings
+DROP TABLE IF EXISTS vec_chunks;
+```
+
+**Code Migration:**
+
+The existing `VectorStore::upsert_embeddings(chunk_id, ...)` method in `mod.rs` uses `vec_chunks`. This method will be deprecated in favor of new SQLite-specific methods:
+
+```rust
+// DEPRECATED (mod.rs:343) - uses vec_chunks
+async fn upsert_embeddings(&self, chunk_id: i64, ...) -> Result<()>
+
+// NEW (embeddings.rs) - uses code_embeddings + vec_code
+impl SqliteStore {
+    pub async fn upsert_embedding(&self, blob_sha: &str, embedding: &[f32], model: &str) -> Result<i64>
+}
+```
+
+**Note:** The new `upsert_embedding()` method is SQLite-specific and NOT part of the `VectorStore` trait. This is intentional per the "SQLite-native" design principle - we optimize for SQLite, not abstraction compatibility.
 
 ### FTS5 Table (Existing)
 

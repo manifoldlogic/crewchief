@@ -79,8 +79,9 @@ Implement a complete SQLite-based storage and search backend for Maproom. This i
 ### Ticket: Vector Table Population
 - Sync `code_embeddings` table with `vec_code` virtual table
 - Implement rowid mapping between tables (code_embeddings.id -> vec_code.rowid)
-- Add migration path for existing embeddings (if any)
 - 1536-dim only for MVP
+
+> **Note**: No data migration needed. Fresh indexing populates all tables from scratch.
 
 **Agent**: rust-indexer-engineer
 
@@ -233,7 +234,7 @@ Note:
 | Phase | Criterion |
 |-------|-----------|
 | 0 | Migration system works, extension verification passes |
-| 1 | Schema migration runs without error, junction table populated |
+| 1 | Schema migration runs without error, junction table created |
 | 2 | Embeddings stored with deduplication verified |
 | 3 | Vector search returns similar chunks |
 | 4 | Hybrid search combines FTS+vector, ranking applied |
@@ -266,8 +267,10 @@ cargo test --features sqlite test_file_based_integration
 |------|------------|
 | sqlite-vec not bundled correctly | Test extension loading in CI |
 | Performance issues at scale | Add basic perf tests, profile if slow |
-| Schema migration breaks existing DBs | Version migrations, test upgrade path |
+| Schema migration fails on fresh DB | Version migrations, test fresh database creation |
 | FTS5 query syntax edge cases | Comprehensive query sanitization |
+
+> **Note**: No existing SQLite databases require data migration. All data populated via fresh indexing.
 
 ## Known Limitations (MVP)
 

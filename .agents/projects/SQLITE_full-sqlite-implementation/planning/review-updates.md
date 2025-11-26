@@ -228,3 +228,107 @@
 | plan.md | Phase renumbering (0-6), time estimates, known limitations, expanded criteria |
 | quality-strategy.md | File-based integration test, critical path coverage |
 | review-updates.md | This section documenting round 2 updates |
+
+---
+
+## Ticket Review Updates (Round 3)
+
+**Date:** 2025-11-26
+
+### Issues Identified in Ticket Review
+
+The `/review-tickets SQLITE` command identified two critical issues with the tickets that needed resolution.
+
+### Critical Issue 1: VectorStore Trait Interface Mismatch
+
+**Original Problem:** New SQLite-specific methods (`upsert_embedding()`, `search_vector()`) were proposed but weren't part of the `VectorStore` trait. The existing `upsert_embeddings(chunk_id, ...)` method uses `vec_chunks` table.
+
+**Resolution:**
+1. Confirmed this is **intentional** per architecture.md "SQLite-native" design principle
+2. Updated architecture.md with explicit "Deprecated Table: vec_chunks" section documenting:
+   - Comparison table (old vs new embedding approach)
+   - Code migration path (old method → new method)
+   - Explicit note that new methods are SqliteStore-specific, not VectorStore trait
+3. Updated SQLITE-2001 ticket with:
+   - Table comparing `VectorStore::upsert_embeddings()` vs `SqliteStore::upsert_embedding()`
+   - Acceptance criteria to mark old method deprecated
+   - Acceptance criteria to update callers
+
+### Critical Issue 2: vec_chunks Table Conflict
+
+**Original Problem:** Existing `schema.rs` creates `vec_chunks` table (chunk_id keyed), but tickets propose `code_embeddings` + `vec_code` tables (blob_sha keyed). No migration path documented.
+
+**Resolution:**
+1. Updated architecture.md with:
+   - "Deprecated Table: vec_chunks" section with full SQL definition
+   - Comparison table showing why new design is better (deduplication)
+   - Migration 7 SQL (DROP TABLE IF EXISTS vec_chunks)
+   - Updated migration sequence table
+2. Updated SQLITE-1001 ticket with:
+   - Migration 7 in acceptance criteria
+   - Migration 7 SQL in technical requirements
+   - Implementation notes about vec_chunks data NOT being migrated
+   - Risk assessment for existing code breakage and data loss
+
+### Documents Modified
+
+| Document | Changes |
+|----------|---------|
+| architecture.md | Added "Deprecated Table: vec_chunks" section (~50 lines), updated migration table |
+| SQLITE-1001 | Added Migration 7, updated summary/background/criteria/notes/risks/files |
+| SQLITE-2001 | Added SqliteStore-specific method documentation, deprecation criteria |
+| SQLITE_TICKET_INDEX.md | Updated SQLITE-1001 description to mention vec_chunks |
+| tickets-review-report.md | Updated to show critical issues resolved, status changed to APPROVED |
+
+### Verification
+
+All 14 tickets now pass review:
+- ~~SQLITE-1001 NEEDS UPDATE~~ → PASS (Updated)
+- ~~SQLITE-2001 NEEDS UPDATE~~ → PASS (Updated)
+- All other tickets: PASS (unchanged)
+
+---
+
+## No Data Migration Required (Round 4)
+
+**Date:** 2025-11-26
+
+### Clarification
+
+Per user confirmation: **There are no existing SQLite databases with data to migrate.** All data will be generated from scratch via fresh indexing.
+
+### Changes Made
+
+1. **Removed Migration 5 (migrate_worktree_ids)** - No JSON-to-junction table data migration needed
+2. **Renumbered migrations** - Now 6 migrations total (1-6)
+3. **Simplified risk assessments** - Removed data loss concerns
+4. **Removed migration test requirements** - No `test_migration_upgrade_path` or `test_migrate_existing_sqlfix_database`
+
+### Documents Updated
+
+| Document | Changes |
+|----------|---------|
+| architecture.md | Removed Migration 5, renumbered to 6 migrations, added "no data migration" note |
+| plan.md | Removed migration references, updated risk table |
+| analysis.md | Added note that no data migration needed |
+| quality-strategy.md | Removed migration upgrade tests, simplified test list |
+| SQLITE-1001 | Removed Migration 5, simplified to fresh DB only |
+| SQLITE_TICKET_INDEX.md | Updated SQLITE-1001 description |
+| tickets-review-report.md | Removed REC-1, updated migration numbers |
+
+### Migration Sequence (Final)
+
+| Version | Name | Description |
+|---------|------|-------------|
+| 1 | `init_schema` | Wrap existing schema creation |
+| 2 | `add_chunk_worktrees` | Add junction table |
+| 3 | `add_code_embeddings` | Add deduplicated embeddings table |
+| 4 | `add_vec_code` | Add vector index table |
+| 5 | `drop_worktree_ids` | Remove deprecated JSON column |
+| 6 | `drop_vec_chunks` | Remove deprecated vec_chunks table |
+
+### Impact
+
+- **Simplified implementation** - No complex JSON parsing or data transformation
+- **Reduced risk** - No data loss scenarios to handle
+- **Faster execution** - Skip migration steps during implementation
