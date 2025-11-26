@@ -4,6 +4,7 @@ pub mod embeddings;
 pub mod vector;
 pub mod fts;
 pub mod hybrid;
+pub mod graph;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -1074,6 +1075,99 @@ impl SqliteStore {
         ranked.truncate(limit);
 
         Ok(ranked)
+    }
+
+    // ========================================================================
+    // Graph Traversal Methods
+    // ========================================================================
+
+    /// Find all chunks that call the target chunk (directly or transitively)
+    ///
+    /// # Arguments
+    /// * `target_chunk_id` - The chunk to find callers for
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    pub async fn find_callers(
+        &self,
+        target_chunk_id: i64,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_callers(conn, target_chunk_id, max_depth))
+            .await
+    }
+
+    /// Find all chunks called by the source chunk (directly or transitively)
+    ///
+    /// # Arguments
+    /// * `source_chunk_id` - The chunk to find callees for
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    pub async fn find_callees(
+        &self,
+        source_chunk_id: i64,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_callees(conn, source_chunk_id, max_depth))
+            .await
+    }
+
+    /// Find import relationships for a chunk
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find imports for
+    /// * `direction` - Incoming (who imports this) or Outgoing (what this imports)
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    pub async fn find_imports(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_imports(conn, chunk_id, direction, max_depth))
+            .await
+    }
+
+    /// Find extension/inheritance relationships for a chunk
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find extensions for
+    /// * `direction` - Incoming (what extends this) or Outgoing (what this extends)
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    pub async fn find_extensions(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_extensions(conn, chunk_id, direction, max_depth))
+            .await
+    }
+
+    /// Get all direct edges from or to a chunk (without recursion)
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find edges for
+    /// * `direction` - Incoming (edges pointing to chunk) or Outgoing (edges from chunk)
+    ///
+    /// # Returns
+    /// Vector of GraphResult with depth=1 for all direct relationships
+    pub async fn get_direct_edges(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
+            .await
     }
 }
 
@@ -2350,5 +2444,358 @@ mod tests {
             results_default[0].score > results_identity[0].score,
             "Default ranking should boost score compared to identity"
         );
+    }
+
+    // ========================================================================
+    // Graph Traversal Integration Tests
+    // ========================================================================
+
+    /// Helper to create a simple chunk for graph testing
+    async fn create_test_chunk(store: &SqliteStore, file_id: i64, worktree_id: i64, name: &str, line_start: i32) -> i64 {
+        let chunk = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: format!("blob_{}", name),
+            symbol_name: Some(name.to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: line_start,
+            end_line: line_start + 10,
+            preview: format!("fn {}() {{}}", name),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_graph_find_callers_direct() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks A -> B (A calls B)
+        let a = create_test_chunk(&store, file_id, worktree_id, "func_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "func_b", 20).await;
+
+        // A calls B
+        store.insert_chunk_edge(a, b, "calls").await.unwrap();
+
+        // Find callers of B
+        let callers = store.find_callers(b, Some(1)).await.unwrap();
+
+        assert_eq!(callers.len(), 1, "Should find 1 direct caller");
+        assert_eq!(callers[0].chunk_id, a);
+        assert_eq!(callers[0].depth, 1);
+    }
+
+    #[tokio::test]
+    async fn test_graph_find_callees_direct() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks A -> B (A calls B)
+        let a = create_test_chunk(&store, file_id, worktree_id, "func_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "func_b", 20).await;
+
+        // A calls B
+        store.insert_chunk_edge(a, b, "calls").await.unwrap();
+
+        // Find callees of A
+        let callees = store.find_callees(a, Some(1)).await.unwrap();
+
+        assert_eq!(callees.len(), 1, "Should find 1 direct callee");
+        assert_eq!(callees[0].chunk_id, b);
+        assert_eq!(callees[0].depth, 1);
+    }
+
+    #[tokio::test]
+    async fn test_graph_transitive_callers() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create linear chain: A -> B -> C
+        let a = create_test_chunk(&store, file_id, worktree_id, "func_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "func_b", 20).await;
+        let c = create_test_chunk(&store, file_id, worktree_id, "func_c", 40).await;
+
+        store.insert_chunk_edge(a, b, "calls").await.unwrap();
+        store.insert_chunk_edge(b, c, "calls").await.unwrap();
+
+        // Find all callers of C (should be B at depth 1, A at depth 2)
+        let callers = store.find_callers(c, Some(3)).await.unwrap();
+
+        assert_eq!(callers.len(), 2, "Should find 2 callers (transitive)");
+        assert!(callers.iter().any(|r| r.chunk_id == b && r.depth == 1), "B should be at depth 1");
+        assert!(callers.iter().any(|r| r.chunk_id == a && r.depth == 2), "A should be at depth 2");
+    }
+
+    #[tokio::test]
+    async fn test_graph_cycle_handling() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create cycle: A -> B -> C -> A
+        let a = create_test_chunk(&store, file_id, worktree_id, "func_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "func_b", 20).await;
+        let c = create_test_chunk(&store, file_id, worktree_id, "func_c", 40).await;
+
+        store.insert_chunk_edge(a, b, "calls").await.unwrap();
+        store.insert_chunk_edge(b, c, "calls").await.unwrap();
+        store.insert_chunk_edge(c, a, "calls").await.unwrap(); // Cycle!
+
+        // Should not hang and should not have duplicates
+        let callers = store.find_callers(a, Some(10)).await.unwrap();
+
+        // Each chunk should appear at most once
+        let unique_chunks: std::collections::HashSet<i64> = callers.iter().map(|r| r.chunk_id).collect();
+        assert_eq!(unique_chunks.len(), callers.len(), "Should have no duplicate chunks");
+    }
+
+    #[tokio::test]
+    async fn test_graph_depth_limiting() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chain: A -> B -> C
+        let a = create_test_chunk(&store, file_id, worktree_id, "func_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "func_b", 20).await;
+        let c = create_test_chunk(&store, file_id, worktree_id, "func_c", 40).await;
+
+        store.insert_chunk_edge(a, b, "calls").await.unwrap();
+        store.insert_chunk_edge(b, c, "calls").await.unwrap();
+
+        // With depth 1, should only find B (direct caller of C)
+        let callers = store.find_callers(c, Some(1)).await.unwrap();
+
+        assert_eq!(callers.len(), 1, "Should find only 1 caller at depth 1");
+        assert_eq!(callers[0].chunk_id, b);
+        assert!(!callers.iter().any(|r| r.chunk_id == a), "A should not be found at depth 1");
+    }
+
+    #[tokio::test]
+    async fn test_graph_empty_results() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create isolated chunk with no edges
+        let chunk = create_test_chunk(&store, file_id, worktree_id, "isolated", 1).await;
+
+        let callers = store.find_callers(chunk, None).await.unwrap();
+        let callees = store.find_callees(chunk, None).await.unwrap();
+
+        assert!(callers.is_empty(), "Isolated chunk should have no callers");
+        assert!(callees.is_empty(), "Isolated chunk should have no callees");
+    }
+
+    #[tokio::test]
+    async fn test_graph_imports() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks: A imports B
+        let a = create_test_chunk(&store, file_id, worktree_id, "module_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "module_b", 20).await;
+
+        store.insert_chunk_edge(a, b, "imports").await.unwrap();
+
+        // Find what A imports (outgoing)
+        let imports_out = store.find_imports(a, graph::ImportDirection::Outgoing, Some(1)).await.unwrap();
+        assert_eq!(imports_out.len(), 1, "A should import 1 module");
+        assert_eq!(imports_out[0].chunk_id, b);
+
+        // Find what imports B (incoming)
+        let imports_in = store.find_imports(b, graph::ImportDirection::Incoming, Some(1)).await.unwrap();
+        assert_eq!(imports_in.len(), 1, "B should be imported by 1 module");
+        assert_eq!(imports_in[0].chunk_id, a);
+    }
+
+    #[tokio::test]
+    async fn test_graph_direct_edges() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks with multiple edge types: A calls B, A imports C
+        let a = create_test_chunk(&store, file_id, worktree_id, "func_a", 1).await;
+        let b = create_test_chunk(&store, file_id, worktree_id, "func_b", 20).await;
+        let c = create_test_chunk(&store, file_id, worktree_id, "module_c", 40).await;
+
+        store.insert_chunk_edge(a, b, "calls").await.unwrap();
+        store.insert_chunk_edge(a, c, "imports").await.unwrap();
+
+        // Get all outgoing edges from A
+        let edges = store.get_direct_edges(a, graph::ImportDirection::Outgoing).await.unwrap();
+
+        assert_eq!(edges.len(), 2, "A should have 2 outgoing edges");
+        assert!(edges.iter().any(|e| e.chunk_id == b && e.edge_type == "calls"));
+        assert!(edges.iter().any(|e| e.chunk_id == c && e.edge_type == "imports"));
+    }
+
+    #[tokio::test]
+    async fn test_graph_large_chain() {
+        let store = setup_test_store().await;
+
+        // Setup
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chain of 20 nodes
+        let mut chunks = Vec::new();
+        for i in 0..20 {
+            let chunk = create_test_chunk(&store, file_id, worktree_id, &format!("func_{}", i), (i * 15) as i32).await;
+            chunks.push(chunk);
+        }
+        for i in 0..19 {
+            store.insert_chunk_edge(chunks[i], chunks[i + 1], "calls").await.unwrap();
+        }
+
+        let start = std::time::Instant::now();
+        let callers = store.find_callers(chunks[19], Some(10)).await.unwrap();
+        let elapsed = start.elapsed();
+
+        // Should complete quickly
+        assert!(elapsed.as_millis() < 1000, "Graph traversal took {:?}", elapsed);
+
+        // Should find up to 10 callers (limited by depth)
+        assert_eq!(callers.len(), 10, "Should find 10 callers (limited by depth)");
+
+        // Verify results are ordered by depth
+        for i in 1..callers.len() {
+            assert!(callers[i - 1].depth <= callers[i].depth, "Results should be ordered by depth");
+        }
     }
 }
