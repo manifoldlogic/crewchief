@@ -1,8 +1,136 @@
-# Database Architecture: maproom-postgres
+# Database Architecture
 
 ## Overview
 
-CrewChief uses a **single PostgreSQL instance** (`maproom-postgres`) for all Maproom semantic search operations. This database serves both development workflows and the production MCP service, with intelligent connection fallback for different environments.
+CrewChief supports **two database backends** for Maproom semantic search:
+
+- **SQLite** (Default) - Zero configuration, perfect for individual developers
+- **PostgreSQL** - For team sharing and high-concurrency production deployments
+
+Both backends provide the same core functionality: semantic code search with vector embeddings. The choice depends on your use case and infrastructure requirements.
+
+## Database Backend Options
+
+### Quick Comparison
+
+| Feature | SQLite (Default) | PostgreSQL |
+|---------|------------------|------------|
+| **Setup Required** | None | Docker or managed service |
+| **Configuration** | Zero-config | Environment variables |
+| **Best For** | Individual use, CI/CD | Teams, production |
+| **Concurrent Access** | Single-writer | Multiple concurrent |
+| **Vector Search** | sqlite-vec | pgvector |
+| **File Location** | `~/.maproom/maproom.db` | Network service |
+| **Embedding Dimensions** | 768 or 1536 | 768 or 1536 |
+
+### When to Use SQLite (Recommended Default)
+
+**Choose SQLite when:**
+- You're an individual developer working on your own projects
+- You want to get started immediately without Docker
+- You're running in CI/CD pipelines
+- You need a portable, self-contained database
+- You're using the VSCode extension for personal use
+
+**SQLite limitations:**
+- Single-writer (no concurrent indexing from multiple processes)
+- No parallel query execution
+- Database locked during writes
+
+### When to Use PostgreSQL
+
+**Choose PostgreSQL when:**
+- Multiple team members share a code index
+- You need concurrent indexing across multiple worktrees
+- You're deploying for production with high query volume
+- You need advanced features (recursive CTEs, parallel queries)
+- You require database replication or backup strategies
+
+---
+
+## SQLite Backend (Default)
+
+SQLite is the **recommended default** for most users. It works immediately after install with zero configuration.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     SQLite Architecture                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   User's Machine                                                │
+│   ├── ~/.maproom/                                               │
+│   │   └── maproom.db          ← Single-file database           │
+│   │       ├── repos            (repository metadata)           │
+│   │       ├── worktrees        (git worktrees)                 │
+│   │       ├── chunks           (code chunks with embeddings)   │
+│   │       └── chunk_edges      (relationships)                 │
+│   │                                                             │
+│   └── crewchief maproom scan  ← CLI creates DB automatically   │
+│       crewchief maproom search                                  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Getting Started
+
+```bash
+# No setup required! Just run:
+crewchief maproom scan
+
+# Database created automatically at ~/.maproom/maproom.db
+# Search immediately:
+crewchief maproom search "authentication flow"
+```
+
+### SQLite Configuration
+
+By default, SQLite is used when no `MAPROOM_DATABASE_URL` is set. You can also set it explicitly:
+
+```bash
+# Explicit SQLite URL (optional)
+export MAPROOM_DATABASE_URL="sqlite://~/.maproom/maproom.db"
+
+# Custom location
+export MAPROOM_DATABASE_URL="sqlite:///path/to/custom/maproom.db"
+```
+
+### SQLite Schema
+
+The SQLite schema mirrors PostgreSQL with these tables:
+
+| Table | Purpose |
+|-------|---------|
+| `repos` | Repository metadata (name, path, remote URL) |
+| `worktrees` | Git worktrees within repositories |
+| `chunks` | Code chunks with content, embeddings, and metadata |
+| `chunk_edges` | Relationships between chunks (imports, calls) |
+| `symbols` | Extracted symbols (functions, classes, etc.) |
+
+### Vector Search with sqlite-vec
+
+SQLite uses the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension for vector similarity search:
+
+- Supports 768-dimensional (Ollama) and 1536-dimensional (OpenAI) embeddings
+- Uses approximate nearest neighbor search
+- Embedded in the Rust binary (no external dependencies)
+
+### SQLite Limitations
+
+1. **Single-Writer**: Only one process can write at a time. If you run `maproom scan` in two terminals simultaneously, one will wait.
+
+2. **No Parallel Queries**: Complex queries run sequentially. PostgreSQL can parallelize across CPU cores.
+
+3. **Database Locking**: During writes, reads may be briefly blocked.
+
+4. **No Network Access**: SQLite is a local file. For team sharing, use PostgreSQL.
+
+---
+
+## PostgreSQL Backend (Team/Production)
+
+PostgreSQL is recommended for team environments and production deployments where concurrent access is required.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -276,7 +404,84 @@ See `crates/maproom/migrations/` for all migration SQL files.
 psql $MAPROOM_DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migrations ORDER BY version DESC LIMIT 10;"
 ```
 
-## Troubleshooting
+## SQLite Troubleshooting
+
+### Database Locked
+
+**Symptom**: `database is locked` or `SQLITE_BUSY`
+
+**Cause**: Another process is writing to the database.
+
+**Solutions**:
+1. Wait for the other process to finish:
+   ```bash
+   # Check for running maproom processes
+   ps aux | grep crewchief-maproom
+   ```
+
+2. If a process is stuck, kill it:
+   ```bash
+   # Find and kill stuck process
+   pkill -f crewchief-maproom
+   ```
+
+3. Ensure only one indexing process runs at a time.
+
+### Corrupt Database
+
+**Symptom**: `database disk image is malformed` or unexpected errors
+
+**Solutions**:
+1. Check database integrity:
+   ```bash
+   sqlite3 ~/.maproom/maproom.db "PRAGMA integrity_check;"
+   ```
+
+2. If corrupt, delete and re-index:
+   ```bash
+   rm ~/.maproom/maproom.db
+   crewchief maproom scan
+   ```
+
+### Re-indexing
+
+**When to re-index:**
+- After upgrading CrewChief to a new major version
+- If search results seem stale or incorrect
+- After deleting and recreating the database
+
+**How to re-index:**
+```bash
+# Remove existing database
+rm -rf ~/.maproom/
+
+# Scan fresh
+crewchief maproom scan
+```
+
+### Disk Space
+
+**Symptom**: `disk I/O error` or database operations fail
+
+**Solutions**:
+1. Check available disk space:
+   ```bash
+   df -h ~/.maproom/
+   ```
+
+2. Check database size:
+   ```bash
+   ls -lh ~/.maproom/maproom.db
+   ```
+
+3. If space is low, consider:
+   - Removing unused indexed repositories
+   - Moving the database to a larger disk
+   - Using PostgreSQL for large codebases
+
+---
+
+## PostgreSQL Troubleshooting
 
 ### Connection Refused
 
@@ -449,6 +654,18 @@ docker exec maproom-postgres psql -U maproom -d maproom \
 
 ## Summary
 
+### SQLite (Default)
+
+| Aspect | Details |
+|--------|---------|
+| **File Location** | `~/.maproom/maproom.db` |
+| **Setup** | None required |
+| **Vector Extension** | sqlite-vec (embedded) |
+| **Best For** | Individual use, CI/CD |
+| **Connection** | Automatic when no MAPROOM_DATABASE_URL set |
+
+### PostgreSQL (Team/Production)
+
 | Aspect | Details |
 |--------|---------|
 | **Hostname** | `maproom-postgres` |
@@ -457,10 +674,9 @@ docker exec maproom-postgres psql -U maproom -d maproom \
 | **User** | `maproom:maproom` |
 | **Database** | `maproom` |
 | **Image** | `pgvector/pgvector:pg16` |
-| **Data** | Persistent via Docker volumes |
-| **Use Cases** | Development, MCP service, testing, production |
-| **Connection** | Auto-detected (fallback to MAPROOM_DATABASE_URL) |
+| **Best For** | Teams, production, concurrent access |
+| **Connection** | `MAPROOM_DATABASE_URL` or auto-detected |
 
 ---
 
-**Need Help?** See the troubleshooting section above or check the [Maproom MCP README](../../packages/maproom-mcp/README.md).
+**Need Help?** See the troubleshooting sections above or check the [README Quick Start](../../README.md#quick-start-sqlite---recommended).
