@@ -1,0 +1,30 @@
+=== MAPCLI SQLite E2E Tests ===
+
+Setting up test database...
+Building CLI with SQLite support...
+
+=== Running CLI Tests ===
+
+Test: Status command (JSON)... PASS
+Test: Status command (text)... PASS
+Test: Search command - find main... PASS
+Test: Search command - find function... PASS
+Test: Search result structure... PASS
+Test: Search nonexistent repo... PASS
+Test: Scan shows Phase 2 message... PASS
+Test: Upsert shows Phase 2 message... PASS
+Test: Cleanup-stale command... PASS
+Test: DB migrate for SQLite... PASS
+
+=== Daemon Tests (stdio) ===
+
+Test: Daemon ping via stdio... PASS
+Test: Daemon FTS search... PASS
+
+=== Test Summary ===
+Passed: 12
+Failed: 0
+
+ALL TESTS PASSED
+
+Cleaning up...

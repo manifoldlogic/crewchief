@@ -280,9 +280,9 @@ impl VectorStore for SqliteStore {
 
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
         self.run(move |conn| {
-            // SQLite: count chunks where worktree_id matches
+            // SQLite: count chunks via chunk_worktrees junction table
             let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM chunks WHERE worktree_id = ?1",
+                "SELECT COUNT(DISTINCT chunk_id) FROM chunk_worktrees WHERE worktree_id = ?1",
                 params![worktree_id],
                 |row| row.get(0),
             )?;

@@ -550,12 +550,12 @@ async fn main() -> anyhow::Result<()> {
                 // Start timer for elapsed time tracking
                 let start_time = std::time::Instant::now();
 
-                // Phase 1: Detection
-                println!("🔍 Detecting stale worktrees...");
-                let mut client = db::connect().await?;
-                let detector = db::cleanup::StaleWorktreeDetector::new(&client);
+                // Get store using VectorStore trait
+                let store = db::factory::get_store().await?;
 
-                let stale = match detector.detect_stale_worktrees().await {
+                // Phase 1: Detection using VectorStore trait
+                println!("🔍 Detecting stale worktrees...");
+                let stale = match store.detect_stale_worktrees().await {
                     Ok(worktrees) => worktrees,
                     Err(e) => {
                         eprintln!("❌ Error detecting stale worktrees: {}", e);
@@ -595,33 +595,33 @@ async fn main() -> anyhow::Result<()> {
                 // Phase 3: Deletion (if confirmed)
                 if confirm {
                     println!("🗑️  Deleting {} stale worktree(s)...", stale.len());
-                    let mut cleaner = db::cleanup::WorktreeCleaner::new(&mut client, false);
+                    let mut deleted_count = 0;
+                    let mut chunks_cleaned = 0i64;
+                    let mut failures = Vec::new();
 
-                    match cleaner.cleanup_stale_worktrees(stale).await {
-                        Ok(report) => {
-                            let elapsed = start_time.elapsed();
-                            println!("✅ Cleanup complete!");
-                            println!(
-                                "   Deleted: {}/{}",
-                                report.deleted_count, report.total_stale
-                            );
-                            println!(
-                                "   Chunks cleaned: {}",
-                                format_number(report.chunks_cleaned)
-                            );
-                            println!("   Time taken: {:.2}s", elapsed.as_secs_f64());
-                            if report.has_failures() {
-                                println!("   ⚠️  Failures: {}", report.failed_count);
-                                if verbose {
-                                    for (id, err) in &report.failed_deletions {
-                                        println!("      Worktree {}: {}", id, err);
-                                    }
-                                }
+                    for wt in &stale {
+                        match store.delete_worktree_data(wt.id).await {
+                            Ok(result) => {
+                                deleted_count += 1;
+                                chunks_cleaned += result.chunks_deleted as i64;
+                            }
+                            Err(e) => {
+                                failures.push((wt.id, e.to_string()));
                             }
                         }
-                        Err(e) => {
-                            eprintln!("❌ Error during cleanup: {}", e);
-                            std::process::exit(1);
+                    }
+
+                    let elapsed = start_time.elapsed();
+                    println!("✅ Cleanup complete!");
+                    println!("   Deleted: {}/{}", deleted_count, stale.len());
+                    println!("   Chunks cleaned: {}", format_number(chunks_cleaned));
+                    println!("   Time taken: {:.2}s", elapsed.as_secs_f64());
+                    if !failures.is_empty() {
+                        println!("   ⚠️  Failures: {}", failures.len());
+                        if verbose {
+                            for (id, err) in &failures {
+                                println!("      Worktree {}: {}", id, err);
+                            }
                         }
                     }
                 } else {
@@ -1068,8 +1068,8 @@ async fn main() -> anyhow::Result<()> {
             k,
             debug,
         } => {
-            let client = db::connect().await?;
-            let hits = db::search_chunks_fts(&client, &repo, worktree.as_deref(), &query, k, debug)
+            let store = db::factory::get_store().await?;
+            let hits = store.search_chunks_fts(&repo, worktree.as_deref(), &query, k, debug)
                 .await?;
             println!(
                 "{}",
@@ -1085,30 +1085,9 @@ async fn main() -> anyhow::Result<()> {
             threshold,
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
-            use crewchief_maproom::search::{SearchMode, VectorExecutor};
 
-            // Connect to database
-            let client = db::connect().await?;
-
-            // Resolve repo_id
-            let repo_row = client
-                .query_one("SELECT id FROM maproom.repos WHERE name = $1", &[&repo])
-                .await
-                .context(format!("Repository '{}' not found", repo))?;
-            let repo_id: i64 = repo_row.get(0);
-
-            // Resolve worktree_id if specified
-            let worktree_id: Option<i64> = if let Some(w) = &worktree {
-                let row = client
-                    .query_opt(
-                        "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
-                        &[&repo_id, w],
-                    )
-                    .await?;
-                row.map(|r| r.get(0))
-            } else {
-                None
-            };
+            // Use VectorStore trait for backend-agnostic search
+            let store = db::factory::get_store().await?;
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
@@ -1127,78 +1106,48 @@ async fn main() -> anyhow::Result<()> {
                 threshold
             );
 
-            // Execute vector search
-            let ranked_results = VectorExecutor::execute(
-                &client,
+            // Execute vector search using VectorStore trait
+            let search_hits = match store.search_chunks_vector(
+                &repo,
+                worktree.as_deref(),
                 &query_embedding,
-                SearchMode::Code, // Use Code mode for now (can be parameterized later)
-                repo_id,
-                worktree_id,
-                k,
-            )
-            .await
-            .context("Vector search execution failed")?;
+                k as i64,
+                false,
+            ).await {
+                Ok(hits) => hits,
+                Err(e) => {
+                    // Check for SQLite-specific errors (no vector support)
+                    let err_str = e.to_string();
+                    if err_str.contains("sqlite-vec") || err_str.contains("vector") || err_str.contains("not available") {
+                        eprintln!("Vector search unavailable: {}", e);
+                        eprintln!("Tip: Use 'search' command for full-text search instead");
+                        std::process::exit(1);
+                    }
+                    return Err(e);
+                }
+            };
 
-            // Get chunk details for each result
+            // Build hits with threshold filtering
             let mut hits = Vec::new();
-            for result in ranked_results.results {
+            for hit in search_hits {
                 // Apply threshold filter if specified
                 if let Some(thresh) = threshold {
-                    if result.score < thresh {
+                    if hit.score < thresh as f64 {
                         continue;
                     }
                 }
 
-                // Query chunk details
-                let chunk_row = client
-                    .query_opt(
-                        r#"
-                        SELECT 
-                            c.start_line,
-                            c.end_line,
-                            c.symbol_name,
-                            c.kind::text,
-                            f.relpath
-                        FROM maproom.chunks c
-                        JOIN maproom.files f ON f.id = c.file_id
-                        WHERE c.id = $1
-                        "#,
-                        &[&result.chunk_id],
-                    )
-                    .await?;
-
-                if let Some(row) = chunk_row {
-                    hits.push(serde_json::json!({
-                        "chunk_id": result.chunk_id,
-                        "score": result.score,
-                        "start_line": row.get::<_, i32>(0),
-                        "end_line": row.get::<_, i32>(1),
-                        "symbol_name": row.get::<_, Option<String>>(2),
-                        "kind": row.get::<_, String>(3),
-                        "file_path": row.get::<_, String>(4),
-                    }));
-                }
+                hits.push(serde_json::json!({
+                    "score": hit.score,
+                    "start_line": hit.start_line,
+                    "end_line": hit.end_line,
+                    "symbol_name": hit.symbol_name,
+                    "kind": hit.kind,
+                    "file_path": hit.file_relpath,
+                }));
             }
 
-            // Output JSON schema for MCP client consumption:
-            // {
-            //   "hits": [
-            //     {
-            //       "chunk_id": i64,
-            //       "score": f32 (0.0-1.0 similarity),
-            //       "start_line": i32,
-            //       "end_line": i32,
-            //       "symbol_name": string | null,
-            //       "kind": string (symbol_kind enum),
-            //       "file_path": string (relative path)
-            //     }
-            //   ],
-            //   "total": usize,
-            //   "query": string,
-            //   "mode": "vector",
-            //   "k": usize,
-            //   "threshold": f32 | null
-            // }
+            // Output JSON schema for MCP client consumption
             let output = serde_json::json!({
                 "hits": hits,
                 "total": hits.len(),
