@@ -414,7 +414,7 @@ An Embeddings Engineer successfully completes a ticket when:
 - Sentence Transformers: https://www.sbert.net/
 
 ### Project Context
-- Specification: `.agents/knowledge/maproom/specification.md`
+- Architecture: `docs/architecture/MAPROOM_ARCHITECTURE.md`
 - Database schema: `crates/maproom/migrations/`
 - Work tickets: `.agents/work-tickets/`
 

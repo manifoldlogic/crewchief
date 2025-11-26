@@ -420,7 +420,7 @@ A Search Quality Engineer successfully completes a ticket when:
 - MRR: https://en.wikipedia.org/wiki/Mean_reciprocal_rank
 
 ### Project Context
-- Specification: `.agents/knowledge/maproom/specification.md`
+- Architecture: `docs/architecture/MAPROOM_ARCHITECTURE.md`
 - Search implementation: `packages/maproom-mcp/src/index.ts`
 - Work tickets: `.agents/work-tickets/`
 

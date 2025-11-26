@@ -662,7 +662,7 @@ A Monitoring & Observability Engineer successfully completes a ticket when:
 
 ### Project Context
 - Metrics requirements: `.agents/archive/projects/PERF_OPT_performance-optimization/planning/`
-- System architecture: `.agents/knowledge/maproom/specification.md`
+- Architecture: `docs/architecture/MAPROOM_ARCHITECTURE.md`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

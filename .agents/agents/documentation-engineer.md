@@ -366,7 +366,7 @@ A Documentation Engineer successfully completes a ticket when:
 
 ### Project Context
 - Documentation: `docs/`, `README.md` files
-- Specification: `.agents/knowledge/maproom/specification.md`
+- Architecture: `docs/architecture/MAPROOM_ARCHITECTURE.md`
 - Work tickets: `.agents/work-tickets/`
 
 ### Key Principles

@@ -6,12 +6,13 @@ This directory contains AI agent-focused documentation, project planning, work t
 
 ```
 .agents/
-├── projects/          # Active projects (in progress)
-├── archive/           # Completed projects and historical records
-├── agents/            # Agent definitions and capabilities
-├── reference/         # Process documentation and conventions
-├── knowledge/         # Research and technical knowledge base
-└── scratchpad/  # Scratchpad for exploration
+├── projects/          # Active projects (planning + tickets)
+├── archive/           # Completed projects
+├── agents/            # Agent definitions
+├── reference/         # Templates and conventions (read-only)
+├── reports/           # Point-in-time analysis outputs (dated)
+├── research/          # Exploratory technical research
+└── scratchpad/        # Temporary working space
 ```
 
 ## Quick Navigation
@@ -20,23 +21,21 @@ This directory contains AI agent-focused documentation, project planning, work t
 - **[Projects](./projects/README.md)** - Current projects and their tickets
 - **[Agents](./agents/README.md)** - Available agents and their capabilities
 
-### 📚 Knowledge Base
-- **[Knowledge](./knowledge/)** - Product vision, technical specs, research
-  - [Maproom](./knowledge/maproom/) - Maproom semantic search documentation
-  - [CLI](./knowledge/cli/) - CLI specifications
-  - [Research](./knowledge/research/) - Technical research documents
-
 ### 📖 Process & Reference
 - **[Reference](./reference/)** - Development process and conventions
   - [Spec-Driven Development](./reference/spec-driven-development.md)
   - [Work Ticket Template](./reference/work-ticket-template.md)
   - [Git Commit Scopes](./reference/git-commit-scopes.txt)
 
-### 📦 Archive
-- **[Archive](./archive/README.md)** - Completed projects and sessions
+### 🔬 Research & Reports
+- **[Research](./research/)** - Exploratory technical research (pre-project)
+- **[Reports](./reports/)** - Point-in-time analysis outputs (dated)
 
-### 🔬 Work in Progress
-- **[Work in Progress](./scratchpad/)** - Experimental notes and ideas
+### 📦 Archive
+- **[Archive](./archive/README.md)** - Completed projects
+
+### 🗒️ Temporary
+- **[Scratchpad](./scratchpad/)** - Temporary notes and experiments
 
 ## For AI Agents
 

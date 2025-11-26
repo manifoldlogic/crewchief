@@ -6,12 +6,13 @@ Working with agent workspace at `/.agents`.
 
 ```
 .agents/
-├── projects/          # Active projects
-├── archive/           # Completed work
+├── projects/          # Active projects (planning + tickets)
+├── archive/           # Completed projects
 ├── agents/            # Agent definitions
-├── reference/         # Process docs and templates
-├── knowledge/         # Research and specs
-└── scratchpad/  # Scratchpad
+├── reference/         # Templates and conventions (read-only)
+├── reports/           # Point-in-time analysis outputs (dated)
+├── research/          # Exploratory technical research
+└── scratchpad/        # Temporary working space
 ```
 
 ## Project Structure
@@ -56,10 +57,9 @@ projects/{SLUG}_{name}/
   - `work-ticket-template.md`
   - `project-naming-guidelines.md`
   - `git-commit-scopes.txt`
-- **knowledge/** - Domain-specific research
-  - `maproom/` - Maproom docs
-  - `cli/` - CLI specs
-  - `research/` - Technical research
+- **research/** - Exploratory technical research (pre-project)
+- **reports/** - Dated analysis outputs
+- **scratchpad/** - Temporary notes and experiments
 
 ## Archive
 
