@@ -321,6 +321,21 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
 );
                 "#,
             },
+            Migration {
+                version: 7,
+                name: "add_vec_code_768",
+                up: r#"
+-- Create vector index table for 768-dimensional embeddings
+-- Supports Ollama nomic-embed-text (768-dim) alongside existing 1536-dim
+CREATE VIRTUAL TABLE vec_code_768 USING vec0(
+    embedding float[768]
+);
+                "#,
+                down: r#"
+-- Rollback: drop the 768-dim virtual table
+DROP TABLE IF EXISTS vec_code_768;
+                "#,
+            },
         ]
     }
 }
@@ -361,8 +376,8 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version (6)
-        assert_eq!(runner.current_version().unwrap(), 6);
+        // Should now be at latest version (7)
+        assert_eq!(runner.current_version().unwrap(), 7);
         assert!(!runner.needs_migration().unwrap());
 
         // Verify core tables exist (excluding virtual tables and dropped tables)
@@ -420,7 +435,7 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 6);
+        assert_eq!(version_after_second, 7);
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
@@ -430,7 +445,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(migration_count, 6, "Expected 6 migrations to be recorded");
+        assert_eq!(migration_count, 7, "Expected 7 migrations to be recorded");
     }
 
     #[test]

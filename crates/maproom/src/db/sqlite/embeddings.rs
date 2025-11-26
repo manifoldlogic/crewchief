@@ -28,6 +28,22 @@ pub struct EmbeddingRecord {
     pub model_version: String,
 }
 
+/// Supported embedding dimensions
+const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1536];
+
+/// Get the appropriate vec table name for a given dimension
+fn get_vec_table_name(dimension: usize) -> Result<&'static str> {
+    match dimension {
+        768 => Ok("vec_code_768"),
+        1536 => Ok("vec_code"),
+        _ => bail!(
+            "Unsupported embedding dimension: {}. Supported dimensions: {:?}",
+            dimension,
+            SUPPORTED_DIMENSIONS
+        ),
+    }
+}
+
 /// Store or update embedding by content hash
 pub fn upsert_embedding(
     conn: &Connection,
@@ -35,11 +51,13 @@ pub fn upsert_embedding(
     embedding: &[f32],
     model_version: &str,
 ) -> Result<i64> {
-    // Validate embedding dimension is 1536
-    if embedding.len() != 1536 {
+    // Validate embedding dimension
+    let dimension = embedding.len();
+    if !SUPPORTED_DIMENSIONS.contains(&dimension) {
         bail!(
-            "Unsupported embedding dimension: {}. Only 1536-dimensional embeddings are currently supported.",
-            embedding.len()
+            "Unsupported embedding dimension: {}. Supported dimensions: {:?}",
+            dimension,
+            SUPPORTED_DIMENSIONS
         );
     }
 
@@ -75,13 +93,15 @@ pub fn upsert_embeddings_batch(
     conn: &mut Connection,
     embeddings: &[EmbeddingRecord],
 ) -> Result<Vec<(i64, Vec<f32>)>> {
-    // Validate all embeddings are 1536 dimensions
+    // Validate all embeddings have supported dimensions
     for (idx, record) in embeddings.iter().enumerate() {
-        if record.embedding.len() != 1536 {
+        let dimension = record.embedding.len();
+        if !SUPPORTED_DIMENSIONS.contains(&dimension) {
             bail!(
-                "Embedding at index {} has unsupported dimension: {}. Only 1536-dimensional embeddings are currently supported.",
+                "Embedding at index {} has unsupported dimension: {}. Supported dimensions: {:?}",
                 idx,
-                record.embedding.len()
+                dimension,
+                SUPPORTED_DIMENSIONS
             );
         }
     }
@@ -161,9 +181,9 @@ pub fn get_embedding(conn: &Connection, blob_sha: &str) -> Result<Option<Vec<f32
     Ok(result.map(|blob| blob_to_vec(&blob)))
 }
 
-/// Sync single embedding to vector index (vec_code table)
+/// Sync single embedding to vector index (vec_code or vec_code_768 table)
 ///
-/// This function syncs an embedding from code_embeddings to the vec_code virtual table
+/// This function syncs an embedding from code_embeddings to the appropriate vec_code virtual table
 /// for vector similarity search. The rowid in vec_code matches the id in code_embeddings
 /// to enable joining search results back to chunks.
 pub fn sync_embedding_to_vec(
@@ -171,51 +191,81 @@ pub fn sync_embedding_to_vec(
     embedding_id: i64,
     embedding: &[f32],
 ) -> Result<()> {
+    // Determine which vec table to use based on dimension
+    let dimension = embedding.len();
+    let vec_table = get_vec_table_name(dimension)?;
+
     // Delete existing if any (for updates)
     // This is needed because vec_code doesn't support UPDATE
-    conn.execute("DELETE FROM vec_code WHERE rowid = ?1", params![embedding_id])
-        .context("Failed to delete from vec_code")?;
+    let delete_sql = format!("DELETE FROM {} WHERE rowid = ?1", vec_table);
+    conn.execute(&delete_sql, params![embedding_id])
+        .with_context(|| format!("Failed to delete from {}", vec_table))?;
 
     // Convert embedding to blob
     let blob = vec_to_blob(embedding);
 
     // Insert with explicit rowid to match code_embeddings.id
-    conn.execute(
-        "INSERT INTO vec_code(rowid, embedding) VALUES (?1, ?2)",
-        params![embedding_id, blob],
-    )
-    .context("Failed to insert into vec_code")?;
+    let insert_sql = format!("INSERT INTO {}(rowid, embedding) VALUES (?1, ?2)", vec_table);
+    conn.execute(&insert_sql, params![embedding_id, blob])
+        .with_context(|| format!("Failed to insert into {}", vec_table))?;
 
     Ok(())
 }
 
-/// Sync all embeddings not yet in vec_code
+/// Sync all embeddings not yet in vec_code or vec_code_768
 ///
 /// This function finds all embeddings in code_embeddings that don't have a corresponding
-/// entry in vec_code and syncs them. Returns the number of embeddings synced.
+/// entry in their respective vec tables and syncs them. Returns the number of embeddings synced.
 pub fn sync_all_embeddings_to_vec(conn: &Connection) -> Result<usize> {
-    // Find embeddings not yet in vec_code
-    let mut stmt = conn
+    let mut count = 0;
+
+    // Sync 1536-dim embeddings to vec_code
+    let mut stmt_1536 = conn
         .prepare(
             "SELECT e.id, e.embedding FROM code_embeddings e
-             WHERE NOT EXISTS (SELECT 1 FROM vec_code v WHERE v.rowid = e.id)",
+             WHERE e.embedding_dim = 1536
+               AND NOT EXISTS (SELECT 1 FROM vec_code v WHERE v.rowid = e.id)",
         )
-        .context("Failed to prepare query for unsynced embeddings")?;
+        .context("Failed to prepare query for unsynced 1536-dim embeddings")?;
 
-    let mut count = 0;
-    let rows = stmt
+    let rows_1536 = stmt_1536
         .query_map([], |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
         })
-        .context("Failed to query unsynced embeddings")?;
+        .context("Failed to query unsynced 1536-dim embeddings")?;
 
-    for row in rows {
-        let (id, blob) = row.context("Failed to read embedding row")?;
+    for row in rows_1536 {
+        let (id, blob) = row.context("Failed to read 1536-dim embedding row")?;
         conn.execute(
             "INSERT INTO vec_code(rowid, embedding) VALUES (?1, ?2)",
             params![id, blob],
         )
         .context("Failed to insert into vec_code during batch sync")?;
+        count += 1;
+    }
+
+    // Sync 768-dim embeddings to vec_code_768
+    let mut stmt_768 = conn
+        .prepare(
+            "SELECT e.id, e.embedding FROM code_embeddings e
+             WHERE e.embedding_dim = 768
+               AND NOT EXISTS (SELECT 1 FROM vec_code_768 v WHERE v.rowid = e.id)",
+        )
+        .context("Failed to prepare query for unsynced 768-dim embeddings")?;
+
+    let rows_768 = stmt_768
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })
+        .context("Failed to query unsynced 768-dim embeddings")?;
+
+    for row in rows_768 {
+        let (id, blob) = row.context("Failed to read 768-dim embedding row")?;
+        conn.execute(
+            "INSERT INTO vec_code_768(rowid, embedding) VALUES (?1, ?2)",
+            params![id, blob],
+        )
+        .context("Failed to insert into vec_code_768 during batch sync")?;
         count += 1;
     }
 
@@ -259,6 +309,10 @@ mod tests {
 
             CREATE VIRTUAL TABLE vec_code USING vec0(
                 embedding float[1536]
+            );
+
+            CREATE VIRTUAL TABLE vec_code_768 USING vec0(
+                embedding float[768]
             );
             "#,
         ).expect("Failed to create schema");
@@ -490,5 +544,186 @@ mod tests {
         // sync_all should also fail
         let result = sync_all_embeddings_to_vec(&conn);
         assert!(result.is_err(), "Sync all should fail when vec_code table doesn't exist");
+    }
+
+    #[test]
+    fn test_768_dim_embedding_storage() {
+        let conn = setup_test_connection();
+
+        // Create a 768-dimensional embedding
+        let embedding: Vec<f32> = (0..768).map(|i| i as f32 / 768.0).collect();
+
+        // Insert embedding
+        let embedding_id = upsert_embedding(&conn, "test_768", &embedding, "nomic-embed-text")
+            .expect("Failed to upsert 768-dim embedding");
+
+        assert!(embedding_id > 0);
+
+        // Verify embedding was stored with correct dimension
+        let stored_dim: i32 = conn
+            .query_row(
+                "SELECT embedding_dim FROM code_embeddings WHERE blob_sha = 'test_768'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Failed to query embedding_dim");
+
+        assert_eq!(stored_dim, 768, "Stored dimension should be 768");
+
+        // Retrieve and verify embedding
+        let retrieved = get_embedding(&conn, "test_768")
+            .expect("Failed to get embedding")
+            .expect("Embedding should exist");
+
+        assert_eq!(retrieved.len(), 768);
+        for (a, b) in embedding.iter().zip(retrieved.iter()) {
+            assert!((a - b).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_768_dim_vector_table_sync() {
+        let conn = setup_test_connection();
+
+        // Create a 768-dimensional embedding
+        let embedding: Vec<f32> = (0..768).map(|i| i as f32 / 768.0).collect();
+
+        // Insert embedding
+        let embedding_id = upsert_embedding(&conn, "test_768_sync", &embedding, "nomic-embed-text")
+            .expect("Failed to upsert 768-dim embedding");
+
+        // Sync to vec_code_768
+        sync_embedding_to_vec(&conn, embedding_id, &embedding)
+            .expect("Failed to sync 768-dim embedding to vec_code_768");
+
+        // Verify the embedding exists in vec_code_768 with matching rowid
+        let vec_code_rowid: i64 = conn
+            .query_row(
+                "SELECT rowid FROM vec_code_768 WHERE rowid = ?1",
+                params![embedding_id],
+                |row| row.get(0),
+            )
+            .expect("Failed to query vec_code_768 rowid");
+
+        assert_eq!(vec_code_rowid, embedding_id, "Rowid in vec_code_768 should match embedding_id");
+
+        // Verify the embedding data is correct
+        let vec_code_blob: Vec<u8> = conn
+            .query_row(
+                "SELECT embedding FROM vec_code_768 WHERE rowid = ?1",
+                params![embedding_id],
+                |row| row.get(0),
+            )
+            .expect("Failed to query vec_code_768 embedding");
+
+        let retrieved_embedding = blob_to_vec(&vec_code_blob);
+        assert_eq!(retrieved_embedding.len(), 768);
+        for (a, b) in embedding.iter().zip(retrieved_embedding.iter()) {
+            assert!((a - b).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_mixed_dimensions_storage() {
+        let conn = setup_test_connection();
+
+        // Create 768-dim and 1536-dim embeddings
+        let embedding_768: Vec<f32> = (0..768).map(|i| i as f32 / 768.0).collect();
+        let embedding_1536: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+
+        // Insert both
+        let id_768 = upsert_embedding(&conn, "blob_768", &embedding_768, "nomic-embed-text")
+            .expect("Failed to upsert 768-dim");
+        let id_1536 = upsert_embedding(&conn, "blob_1536", &embedding_1536, "text-embedding-3-small")
+            .expect("Failed to upsert 1536-dim");
+
+        // Verify both exist with correct dimensions
+        let dim_768: i32 = conn
+            .query_row(
+                "SELECT embedding_dim FROM code_embeddings WHERE id = ?1",
+                params![id_768],
+                |row| row.get(0),
+            )
+            .expect("Failed to query dim_768");
+
+        let dim_1536: i32 = conn
+            .query_row(
+                "SELECT embedding_dim FROM code_embeddings WHERE id = ?1",
+                params![id_1536],
+                |row| row.get(0),
+            )
+            .expect("Failed to query dim_1536");
+
+        assert_eq!(dim_768, 768);
+        assert_eq!(dim_1536, 1536);
+    }
+
+    #[test]
+    fn test_sync_all_mixed_dimensions() {
+        let conn = setup_test_connection();
+
+        // Create embeddings of both dimensions
+        let embedding_768_a: Vec<f32> = (0..768).map(|i| i as f32 / 768.0).collect();
+        let embedding_768_b: Vec<f32> = (0..768).map(|i| (i as f32 + 1.0) / 768.0).collect();
+        let embedding_1536_a: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding_1536_b: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+
+        // Insert all embeddings
+        upsert_embedding(&conn, "blob_768_a", &embedding_768_a, "nomic-embed-text")
+            .expect("Failed to upsert 768-dim a");
+        upsert_embedding(&conn, "blob_768_b", &embedding_768_b, "nomic-embed-text")
+            .expect("Failed to upsert 768-dim b");
+        upsert_embedding(&conn, "blob_1536_a", &embedding_1536_a, "text-embedding-3-small")
+            .expect("Failed to upsert 1536-dim a");
+        upsert_embedding(&conn, "blob_1536_b", &embedding_1536_b, "text-embedding-3-small")
+            .expect("Failed to upsert 1536-dim b");
+
+        // Verify vec tables are empty
+        let count_768_before: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vec_code_768", [], |row| row.get(0))
+            .expect("Failed to count vec_code_768");
+        let count_1536_before: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))
+            .expect("Failed to count vec_code");
+
+        assert_eq!(count_768_before, 0);
+        assert_eq!(count_1536_before, 0);
+
+        // Sync all embeddings
+        let synced_count = sync_all_embeddings_to_vec(&conn)
+            .expect("Failed to sync all embeddings");
+
+        assert_eq!(synced_count, 4, "Should have synced 4 embeddings (2 of each dimension)");
+
+        // Verify correct counts in each table
+        let count_768_after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vec_code_768", [], |row| row.get(0))
+            .expect("Failed to count vec_code_768");
+        let count_1536_after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))
+            .expect("Failed to count vec_code");
+
+        assert_eq!(count_768_after, 2, "vec_code_768 should have 2 embeddings");
+        assert_eq!(count_1536_after, 2, "vec_code should have 2 embeddings");
+
+        // Run sync again - should sync 0 (idempotent)
+        let synced_again = sync_all_embeddings_to_vec(&conn)
+            .expect("Failed to sync again");
+        assert_eq!(synced_again, 0, "Second sync should find nothing to sync");
+    }
+
+    #[test]
+    fn test_unsupported_dimension() {
+        let conn = setup_test_connection();
+
+        // Try to insert 512-dim embedding (unsupported)
+        let embedding_512: Vec<f32> = (0..512).map(|i| i as f32 / 512.0).collect();
+
+        let result = upsert_embedding(&conn, "test_512", &embedding_512, "bad-model");
+        assert!(result.is_err(), "Should reject unsupported dimension");
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("512"), "Error should mention the dimension");
+        assert!(err_msg.contains("768") && err_msg.contains("1536"), "Error should list supported dimensions");
     }
 }

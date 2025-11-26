@@ -1695,7 +1695,7 @@ mod tests {
 
         assert!(result.is_err(), "Should return error for wrong embedding dimension");
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("dimension mismatch"), "Error should mention dimension mismatch");
+        assert!(error_msg.contains("Unsupported embedding dimension"), "Error should mention unsupported dimension");
     }
 
     #[tokio::test]

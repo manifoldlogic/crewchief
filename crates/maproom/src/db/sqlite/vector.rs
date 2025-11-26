@@ -1,6 +1,22 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use rusqlite::{Connection, params};
 use super::embeddings::vec_to_blob;
+
+/// Supported embedding dimensions
+const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1536];
+
+/// Get the appropriate vec table name for a given dimension
+fn get_vec_table_name(dimension: usize) -> Result<&'static str> {
+    match dimension {
+        768 => Ok("vec_code_768"),
+        1536 => Ok("vec_code"),
+        _ => bail!(
+            "Unsupported embedding dimension: {}. Supported dimensions: {:?}",
+            dimension,
+            SUPPORTED_DIMENSIONS
+        ),
+    }
+}
 
 /// Result from vector similarity search
 #[derive(Debug, Clone)]
@@ -20,7 +36,7 @@ pub fn distance_to_similarity(distance: f64) -> f64 {
 /// Search for similar chunks by embedding
 ///
 /// Uses sqlite-vec's MATCH operator to find nearest neighbors by L2 distance.
-/// Results are joined from vec_code → code_embeddings → chunks via blob_sha.
+/// Results are joined from vec_code/vec_code_768 → code_embeddings → chunks via blob_sha.
 /// Optional worktree filtering via chunk_worktrees junction table.
 ///
 /// Returns empty Vec (not error) when:
@@ -34,23 +50,27 @@ pub fn search_vector(
     query_embedding: &[f32],
     limit: usize,
 ) -> Result<Vec<VectorResult>> {
-    // Validate embedding dimension
-    if query_embedding.len() != 1536 {
-        anyhow::bail!(
-            "Embedding dimension mismatch: expected 1536, got {}",
-            query_embedding.len()
+    // Validate embedding dimension and get the appropriate table
+    let dimension = query_embedding.len();
+    if !SUPPORTED_DIMENSIONS.contains(&dimension) {
+        bail!(
+            "Unsupported embedding dimension: {}. Supported dimensions: {:?}",
+            dimension,
+            SUPPORTED_DIMENSIONS
         );
     }
 
+    let vec_table = get_vec_table_name(dimension)?;
     let query_blob = vec_to_blob(query_embedding);
 
-    // SQL with JOIN path: vec_code.rowid → code_embeddings.id → chunks.blob_sha
+    // SQL with JOIN path: vec_code/vec_code_768.rowid → code_embeddings.id → chunks.blob_sha
     // The MATCH operator expects: WHERE embedding MATCH ?1 AND k = ?N
     // The query_blob contains both the query vector and the limit parameter
     let sql = if worktree.is_some() {
-        r#"
+        format!(
+            r#"
             SELECT c.id, v.distance
-            FROM vec_code v
+            FROM {} v
             JOIN code_embeddings e ON e.id = v.rowid
             JOIN chunks c ON c.blob_sha = e.blob_sha
             JOIN files f ON f.id = c.file_id
@@ -62,11 +82,14 @@ pub fn search_vector(
               AND r.name = ?2
               AND w.name = ?3
             ORDER BY v.distance ASC
-        "#
+        "#,
+            vec_table
+        )
     } else {
-        r#"
+        format!(
+            r#"
             SELECT DISTINCT c.id, v.distance
-            FROM vec_code v
+            FROM {} v
             JOIN code_embeddings e ON e.id = v.rowid
             JOIN chunks c ON c.blob_sha = e.blob_sha
             JOIN files f ON f.id = c.file_id
@@ -75,10 +98,12 @@ pub fn search_vector(
               AND k = ?3
               AND r.name = ?2
             ORDER BY v.distance ASC
-        "#
+        "#,
+            vec_table
+        )
     };
 
-    let mut stmt = conn.prepare(sql)?;
+    let mut stmt = conn.prepare(&sql)?;
 
     let mut vec_results = Vec::new();
 
