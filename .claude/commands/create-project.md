@@ -19,6 +19,7 @@ Create comprehensive project structure in `.agents/projects/` following analysis
 2. **Generate identifiers:**
    - PROJECT_NAME: Descriptive, clear name
    - SLUG: Max 8 characters, unique, representative
+   - Refer to .agents/reference/project-naming-guidelines.md for naming conventions.
 
 3. **Create structure:** `.agents/projects/{SLUG}_{project-name}/`
    - `planning/` subdirectory for all planning documents
