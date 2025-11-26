@@ -1,6 +1,9 @@
 use anyhow::Result;
 use rusqlite::Connection;
 
+/// DEPRECATED: This function is no longer used. Schema creation is now handled
+/// by the migration system in migrations.rs. This function is kept for reference only.
+#[allow(dead_code)]
 pub fn init_schema(conn: &Connection) -> Result<()> {
     // Create Repositories table
     conn.execute(

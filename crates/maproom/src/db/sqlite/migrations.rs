@@ -230,6 +230,97 @@ DROP TABLE IF EXISTS worktrees;
 DROP TABLE IF EXISTS repos;
                 "#,
             },
+            Migration {
+                version: 2,
+                name: "add_chunk_worktrees",
+                up: r#"
+-- Create junction table for chunk-worktree many-to-many relationship
+CREATE TABLE chunk_worktrees (
+    chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+    worktree_id INTEGER NOT NULL REFERENCES worktrees(id) ON DELETE CASCADE,
+    PRIMARY KEY (chunk_id, worktree_id)
+);
+
+-- Create index for queries filtering by worktree
+CREATE INDEX idx_chunk_worktrees_worktree ON chunk_worktrees(worktree_id);
+                "#,
+                down: r#"
+-- Rollback: drop the junction table and its index
+DROP INDEX IF EXISTS idx_chunk_worktrees_worktree;
+DROP TABLE IF EXISTS chunk_worktrees;
+                "#,
+            },
+            Migration {
+                version: 3,
+                name: "add_code_embeddings",
+                up: r#"
+-- Create deduplicated embedding storage table
+CREATE TABLE code_embeddings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    blob_sha TEXT NOT NULL UNIQUE,
+    embedding BLOB,
+    embedding_dim INTEGER NOT NULL DEFAULT 1536,
+    model_version TEXT NOT NULL DEFAULT 'text-embedding-3-small',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Create index for blob_sha lookups
+CREATE INDEX idx_embeddings_blob ON code_embeddings(blob_sha);
+                "#,
+                down: r#"
+-- Rollback: drop the code_embeddings table and its index
+DROP INDEX IF EXISTS idx_embeddings_blob;
+DROP TABLE IF EXISTS code_embeddings;
+                "#,
+            },
+            Migration {
+                version: 4,
+                name: "add_vec_code",
+                up: r#"
+-- Create vector index table using sqlite-vec
+-- Note: requires sqlite-vec extension to be loaded
+-- If extension is not available, migration will fail with "no such module: vec0"
+CREATE VIRTUAL TABLE vec_code USING vec0(
+    embedding float[1536]
+);
+                "#,
+                down: r#"
+-- Rollback: drop the virtual table
+DROP TABLE IF EXISTS vec_code;
+                "#,
+            },
+            Migration {
+                version: 5,
+                name: "drop_worktree_ids",
+                up: r#"
+-- Drop the deprecated worktree_ids JSON column
+-- Requires SQLite 3.35.0+ for ALTER TABLE DROP COLUMN
+ALTER TABLE chunks DROP COLUMN worktree_ids;
+                "#,
+                down: r#"
+-- Rollback: add the worktree_ids column back
+-- Note: data will be lost, this is a best-effort rollback
+ALTER TABLE chunks ADD COLUMN worktree_ids JSON NOT NULL DEFAULT '[]';
+                "#,
+            },
+            Migration {
+                version: 6,
+                name: "drop_vec_chunks",
+                up: r#"
+-- Drop the deprecated vec_chunks virtual table
+-- Uses IF EXISTS for safety on fresh databases
+DROP TABLE IF EXISTS vec_chunks;
+                "#,
+                down: r#"
+-- Rollback: recreate vec_chunks table
+-- Note: data will be lost, this is a best-effort rollback
+CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
+    chunk_id INTEGER PRIMARY KEY,
+    code_embedding float[1536],
+    text_embedding float[1536]
+);
+                "#,
+            },
         ]
     }
 }
@@ -270,19 +361,49 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version
-        assert_eq!(runner.current_version().unwrap(), 1);
+        // Should now be at latest version (6)
+        assert_eq!(runner.current_version().unwrap(), 6);
         assert!(!runner.needs_migration().unwrap());
 
-        // Verify core tables exist (vec_chunks and fts_chunks are virtual tables that may fail in tests without extensions)
+        // Verify core tables exist (excluding virtual tables and dropped tables)
         let table_count: i32 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations')",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations', 'chunk_worktrees', 'code_embeddings')",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(table_count, 7, "Expected 7 core tables to be created");
+        assert_eq!(table_count, 9, "Expected 9 core tables to be created");
+
+        // Verify vec_chunks table does NOT exist (dropped by migration 6)
+        let vec_chunks_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vec_chunks'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(!vec_chunks_exists, "vec_chunks table should be dropped");
+
+        // Verify chunk_worktrees junction table exists
+        let junction_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='chunk_worktrees'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(junction_exists, "chunk_worktrees junction table should exist");
+
+        // Verify code_embeddings table exists
+        let embeddings_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='code_embeddings'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(embeddings_exists, "code_embeddings table should exist");
     }
 
     #[test]
@@ -299,17 +420,17 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 1);
+        assert_eq!(version_after_second, 6);
 
-        // Check migration was only recorded once
+        // Check each migration was only recorded once
         let migration_count: i32 = conn
             .query_row(
-                "SELECT COUNT(*) FROM schema_migrations WHERE version = 1",
+                "SELECT COUNT(*) FROM schema_migrations",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(migration_count, 1);
+        assert_eq!(migration_count, 6, "Expected 6 migrations to be recorded");
     }
 
     #[test]
@@ -385,5 +506,79 @@ mod tests {
             )
             .unwrap_or(false);
         assert!(!recorded);
+    }
+
+    #[test]
+    fn test_new_migrations_schema() {
+        let mut conn = setup_test_db();
+        let mut runner = MigrationRunner::new(&mut conn);
+
+        // Apply all migrations
+        runner.migrate().unwrap();
+
+        // Verify chunk_worktrees junction table has correct schema
+        let junction_schema: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='chunk_worktrees'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(junction_schema.contains("chunk_id"), "chunk_worktrees should have chunk_id column");
+        assert!(junction_schema.contains("worktree_id"), "chunk_worktrees should have worktree_id column");
+        assert!(junction_schema.contains("PRIMARY KEY"), "chunk_worktrees should have composite primary key");
+
+        // Verify index exists on chunk_worktrees
+        let index_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_chunk_worktrees_worktree'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(index_exists, "Index idx_chunk_worktrees_worktree should exist");
+
+        // Verify code_embeddings table has correct schema
+        let embeddings_schema: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='code_embeddings'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(embeddings_schema.contains("blob_sha"), "code_embeddings should have blob_sha column");
+        assert!(embeddings_schema.contains("UNIQUE"), "code_embeddings should have UNIQUE constraint on blob_sha");
+        assert!(embeddings_schema.contains("embedding BLOB"), "code_embeddings should have embedding BLOB column");
+        assert!(embeddings_schema.contains("embedding_dim"), "code_embeddings should have embedding_dim column");
+
+        // Verify index exists on code_embeddings
+        let blob_index_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_embeddings_blob'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(blob_index_exists, "Index idx_embeddings_blob should exist");
+
+        // Verify vec_code virtual table exists
+        let vec_code_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vec_code'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(vec_code_exists, "vec_code virtual table should exist");
+
+        // Verify worktree_ids column does NOT exist in chunks table (dropped by migration 5)
+        let chunks_schema: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='chunks'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!chunks_schema.contains("worktree_ids"), "worktree_ids column should be dropped from chunks table");
     }
 }
