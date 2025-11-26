@@ -1,9 +1,11 @@
 # SRCHDUP: Search Result Deduplication
 
-**Status:** 📋 Planning Complete - Ready for Ticket Creation
+**Status:** 🎫 Tickets Created - Ready for Execution
 **Priority:** 🟡 High - Significantly improves search quality
-**Duration:** 3-5 days (8-12 tickets)
+**Duration:** 3-5 days (13 tickets)
 **Complexity:** Low - Focused feature addition
+
+> **Note:** Planning documents revised after project review to address integration gaps.
 
 ---
 
@@ -87,6 +89,16 @@ Search Pipeline (existing)
   FinalSearchResults
 ```
 
+### Integration Stack
+
+The feature spans multiple layers:
+
+```
+MCP TypeScript → daemon-client → JSON-RPC → Rust daemon → SearchPipeline → dedup.rs
+```
+
+All layers accept a `deduplicate` parameter (default: true).
+
 ### Identity Key
 
 ```rust
@@ -96,6 +108,9 @@ struct ChunkIdentity {
     start_line: i32,      // Starting line
 }
 ```
+
+**Note:** Line number sensitivity means chunks with the same code at different line numbers
+(e.g., due to added imports) won't be deduplicated. This is a conservative design choice.
 
 ### Selection Strategy
 
@@ -136,6 +151,8 @@ Among duplicates, select the chunk with the **highest score**. This preserves th
 | [quality-strategy.md](planning/quality-strategy.md) | Testing approach, benchmarks |
 | [security-review.md](planning/security-review.md) | Security assessment (low risk) |
 | [plan.md](planning/plan.md) | Phased execution plan, ticket outline |
+| [project-review.md](planning/project-review.md) | Project review findings |
+| [review-updates.md](planning/review-updates.md) | Review update tracking |
 
 ---
 

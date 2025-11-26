@@ -72,6 +72,27 @@ impl ChunkIdentity {
 }
 ```
 
+#### Identity Key Limitations
+
+**Known Limitation: Line Number Sensitivity**
+
+The identity key includes `start_line`, which means:
+- If a function moves by even 1 line across worktrees (e.g., due to added imports), it will NOT be considered a duplicate
+- This is a conservative choice that avoids false positives (incorrectly deduping different code)
+- Trade-off: May result in some near-duplicates not being grouped
+
+**When Line Drift Occurs:**
+- Adding/removing imports at file top
+- Adding/removing functions above the target
+- Code reformatting that shifts line numbers
+
+**Future Enhancement:** Add fuzzy line matching option that considers (relpath, symbol_name) alone for module-level chunks (kind = "module") or allows ±N line tolerance.
+
+**Why Not Use blob_sha?**
+- `blob_sha` (content hash) would give exact content matching
+- However, `blob_sha` is not currently in `ChunkSearchResult`
+- Future enhancement: Add `blob_sha` to results for content-based identity
+
 ### 2. Deduplication Module
 
 New module: `crates/maproom/src/search/dedup.rs`
@@ -105,13 +126,15 @@ impl Default for DeduplicationConfig {
 }
 
 /// Strategy for selecting the representative chunk from duplicates.
+///
+/// Note: Only HighestScore is implemented in MVP. PreferMain requires
+/// worktree_name to be added to ChunkSearchResult (future enhancement).
 #[derive(Debug, Clone, Copy, Default)]
 pub enum SelectionStrategy {
-    /// Select the chunk with the highest score
+    /// Select the chunk with the highest score (MVP implementation)
     #[default]
     HighestScore,
-    /// Prefer "main" worktree, then highest score
-    PreferMain,
+    // Future: PreferMain - requires worktree_name in ChunkSearchResult
 }
 
 /// Deduplicate search results, keeping only the best representative per identity.
@@ -160,12 +183,7 @@ fn select_representative(
             group.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
             group.remove(0)
         }
-        SelectionStrategy::PreferMain => {
-            // Future: Add worktree_name to ChunkSearchResult for this
-            // For now, fall back to highest score
-            group.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-            group.remove(0)
-        }
+        // Future strategies can be added here when worktree_name is available
     }
 }
 ```
@@ -231,7 +249,106 @@ pub async fn search(
 }
 ```
 
-### 5. MCP Tool Update
+### 5. CLI Flag Support
+
+The Rust CLI `search` command needs a `--deduplicate`/`--no-deduplicate` flag:
+
+```rust
+// In crates/maproom/src/main.rs (or cli.rs)
+
+#[derive(Parser, Debug)]
+pub struct SearchArgs {
+    /// Search query
+    query: String,
+
+    /// Repository name
+    #[arg(long)]
+    repo: String,
+
+    /// Worktree name (optional)
+    #[arg(long)]
+    worktree: Option<String>,
+
+    /// Maximum results
+    #[arg(long, default_value = "10")]
+    limit: usize,
+
+    /// Enable/disable deduplication (default: true)
+    #[arg(long, default_value = "true")]
+    deduplicate: bool,
+}
+```
+
+The CLI handler passes this to SearchOptions:
+
+```rust
+let options = SearchOptions::new(repo_id, worktree_id, args.limit)
+    .with_deduplicate(args.deduplicate);
+```
+
+### 6. Daemon-Client Integration
+
+The daemon-client package provides the JSON-RPC bridge between MCP TypeScript and the Rust daemon. It must be updated to pass the `deduplicate` parameter.
+
+**Update SearchParams interface:**
+
+```typescript
+// In packages/daemon-client/src/client.ts
+
+export interface SearchParams {
+  query: string;
+  repo: string;
+  worktree?: string;
+  limit?: number;
+  threshold?: number;
+  debug?: boolean;
+  deduplicate?: boolean;  // NEW: default true
+}
+```
+
+**Update search method:**
+
+```typescript
+async search(params: SearchParams): Promise<SearchResult[]> {
+  return this.call('search', {
+    query: params.query,
+    repo: params.repo,
+    worktree: params.worktree,
+    limit: params.limit ?? 10,
+    threshold: params.threshold,
+    debug: params.debug,
+    deduplicate: params.deduplicate ?? true,  // Default enabled
+  });
+}
+```
+
+### 7. Rust Daemon JSON-RPC Handler
+
+The Rust daemon's JSON-RPC handler must accept the `deduplicate` parameter:
+
+```rust
+// In crates/maproom/src/daemon/handlers.rs (or similar)
+
+#[derive(Deserialize)]
+pub struct SearchRequest {
+    pub query: String,
+    pub repo: String,
+    pub worktree: Option<String>,
+    pub limit: Option<usize>,
+    pub threshold: Option<f32>,
+    pub debug: Option<bool>,
+    pub deduplicate: Option<bool>,  // NEW
+}
+
+impl SearchRequest {
+    pub fn to_search_options(&self, repo_id: i64, worktree_id: Option<i64>) -> SearchOptions {
+        SearchOptions::new(repo_id, worktree_id, self.limit.unwrap_or(10))
+            .with_deduplicate(self.deduplicate.unwrap_or(true))
+    }
+}
+```
+
+### 8. MCP Tool Update
 
 The MCP `search` tool exposes deduplication via parameters:
 
@@ -246,6 +363,18 @@ interface SearchParams {
   mode?: 'fts' | 'vector' | 'hybrid';
   deduplicate?: boolean;  // NEW: default true
 }
+```
+
+The MCP tool passes this through to the daemon-client:
+
+```typescript
+const results = await client.search({
+  query: params.query,
+  repo: params.repo,
+  worktree: params.worktree,
+  limit: params.limit,
+  deduplicate: params.deduplicate,
+});
 ```
 
 ## Data Flow
@@ -355,6 +484,125 @@ crates/maproom/src/search/
 ├── results.rs          # Modify: SearchOptions.deduplicate
 ├── pipeline.rs         # Modify: Call dedup in search()
 └── ...existing files...
+```
+
+## Integration Layers
+
+The deduplication feature spans multiple layers. Here's the complete integration path:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Integration Stack                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  MCP TypeScript (packages/maproom-mcp/src/tools/search.ts)              │
+│       │  deduplicate?: boolean                                          │
+│       ▼                                                                  │
+│  Daemon Client (packages/daemon-client/src/client.ts)                   │
+│       │  SearchParams.deduplicate                                       │
+│       ▼                                                                  │
+│  JSON-RPC Protocol                                                       │
+│       │  {"deduplicate": true}                                          │
+│       ▼                                                                  │
+│  Rust Daemon Handler (crates/maproom/src/daemon/)                       │
+│       │  SearchRequest.deduplicate                                      │
+│       ▼                                                                  │
+│  Search Pipeline (crates/maproom/src/search/pipeline.rs)                │
+│       │  SearchOptions.deduplicate                                      │
+│       ▼                                                                  │
+│  Dedup Module (crates/maproom/src/search/dedup.rs)                      │
+│       │  DeduplicationConfig                                            │
+│       ▼                                                                  │
+│  FinalSearchResults (deduplicated)                                       │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## SQLite Backend Consideration
+
+The codebase has a SQLite backend (`crates/maproom/src/db/sqlite/`) with its own search implementation (`hybrid.rs`). This project focuses on the PostgreSQL pipeline, but SQLite users should be considered.
+
+### Current State Analysis
+
+**PostgreSQL Pipeline:**
+- Search goes through `SearchPipeline` in `pipeline.rs`
+- Fusion happens in `fusion.rs`
+- Clear deduplication insertion point exists
+
+**SQLite Backend:**
+- Uses `SqliteSearchEngine` with different query structure
+- May or may not share `FinalSearchResults` type
+- Requires investigation during implementation
+
+### Approach
+
+1. **Phase 1-2:** Implement deduplication for PostgreSQL pipeline
+2. **During Phase 2:** Investigate if SQLite uses the same result type
+3. **If SQLite shares result type:** Deduplication applies automatically
+4. **If SQLite is separate:** Document limitation, consider future ticket
+
+### Mitigation
+
+If SQLite search is separate and doesn't benefit from this work:
+- Document in README that deduplication is PostgreSQL-only initially
+- Create follow-up ticket for SQLite deduplication if needed
+- SQLite users can still disable deduplication flag (no-op)
+
+## Cache Key Consideration
+
+If search results are cached, the cache key should include the `deduplicate` flag to prevent incorrect cache hits.
+
+```rust
+// Cache key should include deduplicate setting
+struct SearchCacheKey {
+    query: String,
+    repo_id: i64,
+    worktree_id: Option<i64>,
+    limit: usize,
+    deduplicate: bool,  // Include in cache key
+}
+```
+
+**Implementation Note:** Verify if `cache.rs` exists and update cache key accordingly during Phase 2.
+
+## Limit Interaction
+
+**Behavior:** Deduplication happens BEFORE the limit is applied.
+
+### Reasoning
+
+If user requests `limit=10`:
+1. Query returns up to N raw results (N > limit for coverage)
+2. Deduplication groups and selects representatives
+3. Limit is applied to deduplicated results
+4. User gets up to 10 unique results
+
+### Edge Case
+
+If there are fewer than 10 unique results after deduplication, user gets fewer than requested. This is correct behavior - we don't pad with duplicates.
+
+### Implementation
+
+```rust
+pub async fn search(&self, query: &str, options: &SearchOptions) -> Result<FinalSearchResults> {
+    // Request extra results to ensure limit can be satisfied post-dedup
+    let fetch_limit = options.limit * 3;  // Fetch 3x to handle high duplication
+
+    let raw_results = self.execute_search(query, fetch_limit).await?;
+    let fused = self.fusion.fuse(raw_results);
+
+    // Deduplicate first
+    let deduped = if options.deduplicate {
+        dedup::deduplicate(fused, &DeduplicationConfig::default())
+    } else {
+        fused
+    };
+
+    // Apply limit after deduplication
+    let limited = deduped.into_iter().take(options.limit).collect();
+
+    Ok(FinalSearchResults::new(query.to_string(), limited, metadata))
+}
 ```
 
 ## API Contract

@@ -243,6 +243,131 @@ All existing search tests must continue passing:
 - Test repository indexed with daemon
 - Known duplicate files across worktrees
 
+## Test Fixture Creation
+
+### Unit Test Fixtures
+
+Create helper functions for building test data:
+
+```rust
+// In tests/fixtures/search_fixtures.rs or within dedup.rs tests
+
+fn make_chunk_result(
+    chunk_id: i64,
+    relpath: &str,
+    symbol_name: Option<&str>,
+    start_line: i32,
+    score: f64,
+) -> ChunkSearchResult {
+    ChunkSearchResult {
+        chunk_id,
+        file_id: 1,
+        relpath: relpath.to_string(),
+        symbol_name: symbol_name.map(|s| s.to_string()),
+        kind: "function".to_string(),
+        start_line,
+        end_line: start_line + 10,
+        preview: "...".to_string(),
+        score,
+    }
+}
+
+fn make_duplicates(count: usize, relpath: &str, symbol: &str, line: i32) -> Vec<ChunkSearchResult> {
+    (0..count)
+        .map(|i| make_chunk_result(
+            i as i64,
+            relpath,
+            Some(symbol),
+            line,
+            0.9 - (i as f64 * 0.05),  // Decreasing scores
+        ))
+        .collect()
+}
+```
+
+### Integration Test Fixtures
+
+For integration tests, insert duplicate chunks into the test database:
+
+```rust
+async fn setup_duplicate_chunks(db: &Pool) -> Result<()> {
+    // Create two worktrees for the same repo
+    let repo_id = insert_repo(db, "test-repo").await?;
+    let wt_main = insert_worktree(db, repo_id, "main").await?;
+    let wt_feature = insert_worktree(db, repo_id, "feature-x").await?;
+
+    // Insert the same file in both worktrees
+    let file_main = insert_file(db, wt_main, "src/auth.rs").await?;
+    let file_feature = insert_file(db, wt_feature, "src/auth.rs").await?;
+
+    // Insert identical chunks
+    let chunk_content = "fn validate(token: &str) -> bool { ... }";
+    insert_chunk(db, file_main, "validate", 10, 25, chunk_content).await?;
+    insert_chunk(db, file_feature, "validate", 10, 25, chunk_content).await?;
+
+    Ok(())
+}
+```
+
+### MCP E2E Test Fixtures
+
+For MCP tests, use a dedicated test repository with known duplicates:
+
+```typescript
+// In packages/maproom-mcp/tests/fixtures/setup-duplicates.ts
+
+async function setupDuplicateIndex() {
+  // Create test repo with two worktrees
+  const testRepo = await createTestRepo('dedup-test');
+
+  // Create main worktree with auth.ts
+  await createWorktree(testRepo, 'main', {
+    'src/auth.ts': `
+      export function validateToken(token: string): boolean {
+        return token.startsWith('valid-');
+      }
+    `,
+  });
+
+  // Create feature worktree with same file
+  await createWorktree(testRepo, 'feature-auth', {
+    'src/auth.ts': `
+      export function validateToken(token: string): boolean {
+        return token.startsWith('valid-');
+      }
+    `,
+  });
+
+  // Index both worktrees
+  await indexWorktree(testRepo, 'main');
+  await indexWorktree(testRepo, 'feature-auth');
+
+  return testRepo;
+}
+```
+
+### Fixture Verification
+
+Each test should verify fixtures are set up correctly:
+
+```rust
+#[tokio::test]
+async fn test_fixture_creates_duplicates() {
+    let db = setup_test_db().await;
+    setup_duplicate_chunks(&db).await.unwrap();
+
+    // Verify duplicates exist
+    let results = search_raw("validate", &db).await.unwrap();
+    assert!(results.len() >= 2, "Expected at least 2 duplicate chunks");
+
+    // Verify they have same identity key
+    let identities: HashSet<_> = results.iter()
+        .map(|r| ChunkIdentity::from_result(r))
+        .collect();
+    assert_eq!(identities.len(), 1, "All results should have same identity");
+}
+```
+
 ## Performance Benchmarks
 
 ### Deduplication Benchmark

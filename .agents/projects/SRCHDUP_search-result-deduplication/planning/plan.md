@@ -4,12 +4,15 @@
 
 **Project:** SRCHDUP - Search Result Deduplication
 **Goal:** Eliminate duplicate search results across worktrees
-**Duration:** 3-5 days (8-12 tickets)
+**Duration:** 3-5 days (10 tickets)
 **Complexity:** Low - focused feature addition
+
+> **Note:** This plan was revised after project review to address integration gaps
+> (daemon-client, CLI flags) identified in project-review.md.
 
 ## Phase Structure
 
-### Phase 1: Core Implementation (1-2 days)
+### Phase 1: Core Implementation (1 day)
 
 **Objective:** Implement deduplication module with unit tests
 
@@ -23,9 +26,11 @@
 **Tickets:**
 | ID | Description | Agent |
 |----|-------------|-------|
-| SRCHDUP-1001 | Create dedup.rs module with ChunkIdentity | rust-indexer-engineer |
-| SRCHDUP-1002 | Implement deduplicate() function | rust-indexer-engineer |
-| SRCHDUP-1003 | Unit tests for dedup module | rust-indexer-engineer |
+| SRCHDUP-1001 | Create dedup.rs module with ChunkIdentity and deduplicate() | rust-indexer-engineer |
+| SRCHDUP-1002 | Unit tests for dedup module | rust-indexer-engineer |
+
+> **Note:** Consolidated from 3 tickets to 2. Module creation and function implementation
+> are tightly coupled and should be done together.
 
 **Success Criteria:**
 - [ ] `cargo test --lib search::dedup` passes all tests
@@ -36,11 +41,12 @@
 
 ### Phase 2: Pipeline Integration (1 day)
 
-**Objective:** Integrate deduplication into search pipeline
+**Objective:** Integrate deduplication into search pipeline and CLI
 
 **Deliverables:**
 - Modified `SearchOptions` with `deduplicate` field
-- Pipeline calls dedup after fusion
+- Pipeline calls dedup after fusion (before limit)
+- CLI `--deduplicate` flag support
 - Search results automatically deduplicated (default on)
 - Integration tests verify E2E behavior
 
@@ -49,35 +55,46 @@
 |----|-------------|-------|
 | SRCHDUP-2001 | Extend SearchOptions with deduplicate flag | rust-indexer-engineer |
 | SRCHDUP-2002 | Integrate dedup into SearchPipeline | rust-indexer-engineer |
-| SRCHDUP-2003 | Integration tests for pipeline dedup | integration-tester |
+| SRCHDUP-2003 | Add --deduplicate CLI flag to search command | rust-indexer-engineer |
+| SRCHDUP-2004 | Integration tests for pipeline dedup | integration-tester |
+
+> **Note:** Added CLI flag ticket (SRCHDUP-2003) per review recommendation.
 
 **Success Criteria:**
 - [ ] Default search results are deduplicated
 - [ ] `SearchOptions::without_dedup()` disables deduplication
+- [ ] `crewchief-maproom search --no-deduplicate` works
 - [ ] All existing search tests continue passing
 
 ---
 
 ### Phase 3: MCP Exposure (1 day)
 
-**Objective:** Expose deduplication control via MCP API
+**Objective:** Expose deduplication control via MCP API through the full integration stack
 
 **Deliverables:**
-- MCP search tool accepts `deduplicate` parameter
-- TypeScript schema updated
+- Daemon-client `SearchParams` interface updated with `deduplicate`
+- Rust daemon JSON-RPC handler accepts `deduplicate` param
+- MCP search tool schema updated
 - E2E tests verify MCP behavior
 
 **Tickets:**
 | ID | Description | Agent |
 |----|-------------|-------|
-| SRCHDUP-3001 | Add deduplicate parameter to MCP search schema | vscode-extension-specialist |
-| SRCHDUP-3002 | Pass deduplicate param to Rust daemon | vscode-extension-specialist |
-| SRCHDUP-3003 | MCP E2E tests for deduplication | integration-tester |
+| SRCHDUP-3001 | Update daemon-client SearchParams interface | vscode-extension-specialist |
+| SRCHDUP-3002 | Update Rust daemon JSON-RPC handler for deduplicate | rust-indexer-engineer |
+| SRCHDUP-3003 | Add deduplicate parameter to MCP search schema | vscode-extension-specialist |
+| SRCHDUP-3004 | MCP E2E tests for deduplication | integration-tester |
+
+> **Note:** Split into 4 tickets to cover the full integration stack:
+> daemon-client → JSON-RPC → MCP schema → E2E tests.
+> This addresses the integration gap identified in review.
 
 **Success Criteria:**
 - [ ] `search({query: "...", deduplicate: false})` returns all results
 - [ ] Default behavior deduplicates
 - [ ] MCP tests pass
+- [ ] Full integration path works: MCP → daemon-client → JSON-RPC → Rust
 
 ---
 
@@ -108,18 +125,20 @@
 
 | Range | Phase | Description |
 |-------|-------|-------------|
-| 1001-1003 | Phase 1 | Core implementation |
-| 2001-2003 | Phase 2 | Pipeline integration |
-| 3001-3003 | Phase 3 | MCP exposure |
-| 4001-4003 | Phase 4 | Documentation & cleanup |
+| 1001-1002 | Phase 1 | Core implementation (2 tickets) |
+| 2001-2004 | Phase 2 | Pipeline integration + CLI (4 tickets) |
+| 3001-3004 | Phase 3 | MCP exposure + daemon-client (4 tickets) |
+| 4001-4003 | Phase 4 | Documentation & cleanup (3 tickets) |
+
+**Total: 13 tickets**
 
 ## Agent Assignments
 
 | Agent | Role | Tickets |
 |-------|------|---------|
-| rust-indexer-engineer | Core Rust implementation | 1001, 1002, 1003, 2001, 2002, 4001 |
-| integration-tester | Integration and E2E tests | 2003, 3003 |
-| vscode-extension-specialist | TypeScript MCP changes | 3001, 3002 |
+| rust-indexer-engineer | Core Rust implementation | 1001, 1002, 2001, 2002, 2003, 3002, 4001 |
+| integration-tester | Integration and E2E tests | 2004, 3004 |
+| vscode-extension-specialist | TypeScript changes | 3001, 3003 |
 | technical-researcher | Documentation | 4002 |
 | verify-ticket | Verification | 4003 |
 | commit-ticket | Commits | After each ticket |
@@ -134,7 +153,7 @@ Phase 2 (Pipeline) ────→ Phase 3 (MCP)
 Phase 4 (Docs & Cleanup) ←────┘
 ```
 
-**Critical Path:** 1001 → 1002 → 2002 → (3001, 3002 parallel)
+**Critical Path:** 1001 → 1002 → 2001 → 2002 → 2003 → 3001 → 3002 → 3003
 
 ## Risk Management
 
@@ -157,7 +176,7 @@ Phase 4 (Docs & Cleanup) ←────┘
 ## Definition of Done
 
 **Project Complete When:**
-- [ ] All 12 tickets completed and verified
+- [ ] All 13 tickets completed and verified
 - [ ] All tests pass (unit, integration, E2E)
 - [ ] Benchmarks meet performance targets
 - [ ] Documentation updated
