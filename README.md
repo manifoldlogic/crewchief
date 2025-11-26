@@ -10,7 +10,7 @@ A multi-tool CLI for git worktree management, semantic code search, and AI agent
 ## What's Working
 
 ✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees
-✅ **Semantic Code Search** - Index and search code, docs, and configs using PostgreSQL
+✅ **Semantic Code Search** - Index and search code, docs, and configs (SQLite default, PostgreSQL optional)
 ✅ **Automatic Branch Detection** ✨ - Auto-index branches on switch (no manual scan needed)
 ✅ **Grep-Impossible Task Framework** - Scientific validation framework for semantic search value
 ✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)
@@ -93,27 +93,29 @@ crewchief --version  # Should show 1.0.0 or higher
 
 See [MIGRATION.md](MIGRATION.md) for full migration guide.
 
-## Quick Start
+## Quick Start (SQLite - Recommended)
+
+**Zero configuration required!** Works immediately without Docker or PostgreSQL.
 
 ```bash
-# Set up database (required for maproom features)
-export PG_DATABASE_URL="postgres://user:password@localhost:5432/maproom"
-crewchief maproom:db
-
-# Index your code (auto-detects git context)
-# Embeddings are generated automatically during scan!
-crewchief maproom:scan
+# Index your code (creates ~/.maproom/maproom.db automatically)
+crewchief maproom scan
 # ✅ Scan completed successfully!
 #    Files processed: 150
 #    Total chunks: 1234
-# 🔄 Generating embeddings for new chunks...
-#    Found 1234 chunks needing embeddings
-# 📊 Embedding Generation Summary:
-#    Processed 1234 chunks in 15.3s (80.6 chunks/s)
 
-# Search semantically (works immediately after scan!)
-crewchief maproom:search "authentication flow"
+# Search semantically
+crewchief maproom search "authentication flow"
 
+# Check status
+crewchief maproom status
+```
+
+That's it! Your code is indexed and searchable in under a minute.
+
+### Worktree Management
+
+```bash
 # Manage worktrees
 crewchief worktree create feature-branch
 crewchief worktree list
@@ -124,8 +126,12 @@ crewchief worktree copy-ignored feature-branch
 
 # Merge worktree changes back to source branch
 crewchief worktree merge feature-branch
+```
 
-# Spawn AI agents in iTerm2 (REQUIRES iTerm2)
+### AI Agent Orchestration (requires iTerm2)
+
+```bash
+# Spawn AI agents in iTerm2
 crewchief spawn claude "implement-auth"      # Creates worktree 'implement-auth__claude' and launches Claude
 crewchief spawn gemini "code-review"         # Creates worktree 'code-review__gemini' and launches Gemini
 crewchief spawn claude,gemini "fix-bug"      # Spawn BOTH agents at once with smart splitting
@@ -135,6 +141,27 @@ crewchief agent message fix-bug__claude --file prompt.md  # Send file contents a
 crewchief agent message fix-bug --all "Update approach"  # Send to ALL agents working on fix-bug
 crewchief agent message "*" --all "Status update"  # Broadcast to ALL running agents
 ```
+
+## Advanced: PostgreSQL Setup (Team Sharing)
+
+For shared team indices or production deployments with concurrent access:
+
+```bash
+# Start PostgreSQL with Docker
+cd config && docker compose up -d
+
+# Set database URL
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5433/maproom"
+
+# Run migrations
+crewchief maproom db migrate
+
+# Index and search (same commands, uses PostgreSQL)
+crewchief maproom scan
+crewchief maproom search "authentication flow"
+```
+
+See [DATABASE_ARCHITECTURE.md](docs/architecture/DATABASE_ARCHITECTURE.md) for detailed backend comparison and when to use each option.
 
 ## Grep-Impossible Task Framework
 
@@ -238,10 +265,10 @@ EMBEDDING_PARALLEL_MAX_CONCURRENCY=4      # Concurrent requests
 ## Requirements
 
 - Node.js >= 18
-- PostgreSQL (for Maproom)
 - Git
-- iTerm2 (required for agent features, on macOS)
-- **Ollama** (optional, for local embeddings) - [Install Ollama](https://ollama.ai/download)
+- **Optional**: Docker (for PostgreSQL team sharing)
+- **Optional**: iTerm2 (for agent features, macOS only)
+- **Optional**: [Ollama](https://ollama.ai/download) (for local embeddings)
 
 ## Contributing
 
