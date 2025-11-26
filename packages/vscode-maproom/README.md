@@ -4,18 +4,43 @@
 
 Maproom brings AI-powered semantic search to Visual Studio Code. Index your workspace once, then search by concept instead of keywords. Find code by what it does, not just what it's called.
 
+## Quick Start (SQLite - Recommended)
+
+Get started in minutes with zero configuration:
+
+1. **Install the extension** from marketplace
+2. **Create an index** using the CLI:
+   ```bash
+   crewchief-maproom scan /path/to/your/repo
+   ```
+3. **Search!** Use "Maproom: Search" command (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+
+That's it! The extension auto-detects `~/.maproom/maproom.db` - no Docker required.
+
 ## Features
 
 - **Semantic Search** - Find code by meaning using AI embeddings, not just text matching
+- **Zero-Config SQLite** - Works immediately with existing `~/.maproom/maproom.db` (no Docker needed!)
 - **Real-Time Indexing** - File watching keeps your index fresh as you code
-- **Docker Integration** - Managed PostgreSQL, Ollama, and MCP services with zero manual setup
+- **Optional PostgreSQL** - Team sharing with Docker-managed PostgreSQL and pgvector
 - **Provider Choice** - Use Ollama (local, free), OpenAI, or Google Gemini for embeddings
 - **Crash Recovery** - Automatic restart with exponential backoff if processes crash
 - **Secure Credentials** - API keys stored safely in VSCode SecretStorage
-- **Status Tracking** - Real-time status bar showing indexed files and last update
-- **Progress Notifications** - Clear feedback during initial scanning and indexing
+- **Status Tracking** - Real-time status bar showing indexed files and database mode
 
 ## System Requirements
+
+### SQLite Mode (Default)
+
+| Requirement | Minimum | Recommended |
+|------------|---------|-------------|
+| VSCode | 1.85.0+ | Latest stable |
+| RAM | 2GB | 4GB |
+| Free Disk Space | 500MB | 2GB |
+
+**No Docker required!** Just install the extension and create an index.
+
+### PostgreSQL Mode (Advanced)
 
 | Requirement | Minimum | Recommended |
 |------------|---------|-------------|
@@ -24,17 +49,15 @@ Maproom brings AI-powered semantic search to Visual Studio Code. Index your work
 | RAM | 4GB | 8GB |
 | Free Disk Space | 2GB | 5GB |
 
-**Critical**: Docker Desktop must be installed and running before activating the extension. The extension automatically starts PostgreSQL and MCP server containers on activation.
-
 ## Platform Support
 
 | Platform | Architecture | Status | Notes |
 |----------|--------------|--------|-------|
-| Linux | x64 | ✅ Supported | Full support |
-| Linux | arm64 | ✅ Supported | Full support |
-| macOS | arm64 (M1+) | ✅ Supported | Full support |
-| macOS | x64 (Intel) | ✅ Supported | Full support |
-| Windows | x64 | ⚠️ Experimental | File watching may be slower |
+| Linux | x64 | Supported | Full support |
+| Linux | arm64 | Supported | Full support |
+| macOS | arm64 (M1+) | Supported | Full support |
+| macOS | x64 (Intel) | Supported | Full support |
+| Windows | x64 | Experimental | File watching may be slower |
 
 **Windows users**: Experimental support. Please report any issues you encounter.
 
@@ -51,51 +74,59 @@ Maproom brings AI-powered semantic search to Visual Studio Code. Index your work
 
 **Or via command line**:
 ```bash
-code --install-extension vscode-maproom-0.1.0.vsix
+code --install-extension vscode-maproom-0.3.3.vsix
 ```
 
 ### From Source (Development)
 
 ```bash
-git clone https://github.com/crewchief/vscode-maproom
-cd vscode-maproom
+git clone https://github.com/danielbushman/crewchief.git
+cd crewchief/packages/vscode-maproom
 pnpm install
 pnpm compile
 code --extensionDevelopmentPath=$(pwd)
 ```
 
-## Getting Started
+## Settings Reference
 
-### First Launch
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `maproom.database.provider` | Database backend: `sqlite` or `postgres` | `sqlite` |
+| `maproom.database.sqlitePath` | Custom SQLite path (empty = `~/.maproom/maproom.db`) | `""` |
+| `maproom.database.host` | PostgreSQL host (postgres mode only) | `localhost` |
+| `maproom.database.port` | PostgreSQL port (postgres mode only) | `5432` |
+| `maproom.database.user` | PostgreSQL username (postgres mode only) | `maproom` |
+| `maproom.database.password` | PostgreSQL password (postgres mode only) | `maproom` |
+| `maproom.database.name` | PostgreSQL database name (postgres mode only) | `maproom` |
 
-1. **Open a workspace** in VSCode
-   - The extension activates automatically on startup
-   - Docker services start in the background
+## Commands
 
-2. **Complete setup wizard** (appears automatically)
-   - Choose your embedding provider:
-     - **Ollama** (Recommended) - Free, local, private
-     - **OpenAI** - Requires API key, fast and accurate
-     - **Google Gemini** - Requires API key
+Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and run:
 
-   ![Setup Wizard](docs/images/setup-wizard.png)
-   *Screenshot pending - shows provider selection QuickPick*
+| Command | Description | When to Use |
+|---------|-------------|-------------|
+| `Maproom: Setup` | Re-run setup wizard | Change embedding provider or update API key |
+| `Maproom: Show Output` | Open Maproom output channel | View detailed logs, debug issues |
+| `Maproom: Restart Watchers` | Restart file watching processes | If file watching stops or seems stuck |
+| `Maproom: Show Status` | Show current Maproom status | Check database mode and connection |
 
-3. **Wait for initial scan** (progress shown in notification)
-   - Large workspaces (>10k files) may take 5-10 minutes
-   - Progress updates every few seconds
-   - Status bar shows file count as indexing progresses
+## Status Bar
 
-   ![Progress Notification](docs/images/progress-notification.png)
-   *Screenshot pending - shows indexing progress*
+The Maproom status bar item shows current state:
 
-4. **Start searching!**
-   - Status bar shows "Watching: X files" when ready
-   - Search functionality available (integration coming soon)
+- **Starting...** - Services initializing
+- **Indexing: 1,234 files** - Scan in progress
+- **Watching: 5,678 files** - Active and ready
+- **Error** - Click to view details in output channel
 
-### Provider Details
+The tooltip shows additional information:
+- Current database mode (SQLite or PostgreSQL)
+- Database path (for SQLite mode)
+- Last indexed timestamp
 
-#### Ollama (Recommended)
+## Embedding Providers
+
+### Ollama (Recommended for Privacy)
 
 **Pros**: Free, private, runs locally, no API keys
 **Cons**: Requires 4GB RAM, slower on first run (model download)
@@ -107,7 +138,7 @@ code --extensionDevelopmentPath=$(pwd)
 
 The setup wizard auto-detects if Ollama is running on port 11434.
 
-#### OpenAI
+### OpenAI
 
 **Pros**: Fast, accurate, reliable
 **Cons**: Requires API key, costs money per request
@@ -117,7 +148,7 @@ The setup wizard auto-detects if Ollama is running on port 11434.
 2. Enter key when prompted (stored securely)
 3. Uses `text-embedding-ada-002` model
 
-#### Google Gemini
+### Google Gemini
 
 **Pros**: Fast, competitive pricing
 **Cons**: Requires API key and Google Cloud setup
@@ -127,169 +158,194 @@ The setup wizard auto-detects if Ollama is running on port 11434.
 2. Get API key: https://cloud.google.com/vertex-ai/docs/authentication
 3. Enter key when prompted (stored securely)
 
-## Usage
+## Advanced: PostgreSQL Setup (Team Sharing)
 
-### Status Bar
+For team environments where you want a shared code index, use PostgreSQL mode:
 
-The Maproom status bar item shows current state:
+### 1. Change Database Provider
 
-- **Starting...** - Docker services initializing
-- **Indexing: 1,234 files** - Initial scan in progress
-- **Watching: 5,678 files** (Updated: 2m ago) - Active and ready
-- **Error** - Click to view details in output channel
+Open VS Code settings and set:
+```json
+{
+  "maproom.database.provider": "postgres"
+}
+```
 
-![Status Bar](docs/images/status-bar.png)
-*Screenshot pending - shows status bar in different states*
+### 2. Start Docker Containers
 
-**Timestamp behavior**:
-- Shows "just now" for updates within 1 minute
-- Shows "Xm ago" for recent updates
-- Shows "Xh ago" for older updates
-- Shows "Xd ago" for very old updates
+```bash
+cd ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/config
+docker compose up -d
+```
 
-### Commands
+### 3. Configure Connection (if needed)
 
-Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and run:
+Default settings work out-of-the-box with the bundled Docker Compose file. For custom PostgreSQL instances:
 
-| Command | Description | When to Use |
-|---------|-------------|-------------|
-| `Maproom: Setup` | Re-run setup wizard | Change embedding provider or update API key |
-| `Maproom: Show Output` | Open Maproom output channel | View detailed logs, debug issues |
-| `Maproom: Restart Watchers` | Restart file watching processes | If file watching stops or seems stuck |
+```json
+{
+  "maproom.database.provider": "postgres",
+  "maproom.database.host": "your-postgres-host",
+  "maproom.database.port": 5432,
+  "maproom.database.user": "maproom",
+  "maproom.database.password": "your-password",
+  "maproom.database.name": "maproom"
+}
+```
 
-### Settings
+### 4. Reload VSCode
 
-Currently configured via setup wizard. Future versions may add workspace settings.
+Run "Developer: Reload Window" command to apply changes.
 
-**Internal state** (workspace state, not user-configurable):
-- `maproom.provider` - Selected embedding provider
-- API credentials stored in VSCode SecretStorage
+## Migrating Between Backends
+
+### PostgreSQL to SQLite
+
+If you've been using PostgreSQL and want to switch to SQLite:
+
+1. **Create SQLite index**:
+   ```bash
+   crewchief-maproom scan /path/to/your/repo
+   ```
+
+2. **Update settings**:
+   Open VS Code settings and change:
+   ```json
+   {
+     "maproom.database.provider": "sqlite"
+   }
+   ```
+
+3. **Reload window**:
+   Run "Developer: Reload Window" command
+
+4. **Stop Docker (optional)**:
+   If you no longer need PostgreSQL:
+   ```bash
+   docker compose down
+   ```
+
+### SQLite to PostgreSQL
+
+To migrate from SQLite to PostgreSQL for team sharing:
+
+1. **Start PostgreSQL**:
+   ```bash
+   cd ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/config
+   docker compose up -d
+   ```
+
+2. **Update settings**:
+   ```json
+   {
+     "maproom.database.provider": "postgres"
+   }
+   ```
+
+3. **Re-index your codebase**:
+   The extension will prompt to re-scan your workspace.
 
 ## Troubleshooting
 
-For detailed troubleshooting, see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+### SQLite Issues
 
-### Quick Solutions
+#### "SQLite database not found"
 
-#### "Maproom requires Docker Desktop to be running" error
+**Error**: `SQLite database not found at: /Users/you/.maproom/maproom.db`
 
-**Cause**: Docker Desktop is not installed or not running when the extension activates.
+**Cause**: No index has been created yet.
+
+**Solution**: Create an index using the CLI:
+```bash
+crewchief-maproom scan /path/to/your/repo
+```
+
+#### Custom SQLite Path Not Working
+
+**Cause**: Path may contain unsupported characters or doesn't exist.
+
+**Solutions**:
+1. Ensure the path exists and is readable
+2. Use absolute paths (not relative)
+3. Tilde (`~`) is supported for home directory
+4. Check the Output channel for detailed error messages
+
+### PostgreSQL Issues
+
+#### "Cannot connect to PostgreSQL"
+
+**Error**: `Cannot connect to PostgreSQL at localhost:5432`
+
+**Cause**: PostgreSQL container not running or misconfigured.
+
+**Solutions**:
+1. Ensure Docker Desktop is running
+2. Start containers: `docker compose up -d`
+3. Verify containers are healthy: `docker ps`
+4. Check settings match your PostgreSQL configuration
+
+#### "Maproom requires Docker Desktop to be running"
+
+**Cause**: Docker Desktop is not installed or not running (PostgreSQL mode only).
 
 **Solutions**:
 1. Install Docker Desktop from https://www.docker.com/products/docker-desktop
 2. Start Docker Desktop and wait for it to fully initialize
-3. Verify Docker is running: `docker ps` in terminal should show no errors
-4. Reload VSCode window (Command Palette → "Developer: Reload Window")
-5. If the error persists, click "Show Logs" in the error dialog to view detailed diagnostics
+3. Verify Docker is running: `docker ps`
+4. Reload VSCode window
+5. **Or switch to SQLite mode** - change `maproom.database.provider` to `sqlite`
 
-#### Port conflicts (5432, 3000)
+#### Port Conflicts (5432, 3000)
 
-**Cause**: Another service is already using ports that Maproom's Docker containers need.
+**Cause**: Another service is using required ports.
 
 **Solutions**:
 1. Check what's using the ports:
-   - Linux/macOS: `lsof -i :5432` and `lsof -i :3000`
-   - Windows: `netstat -ano | findstr :5432` and `netstat -ano | findstr :3000`
-2. Stop the conflicting service (e.g., local PostgreSQL installation)
-3. Or modify the port mappings in `~/.vscode/extensions/crewchief.vscode-maproom-*/config/docker-compose.yml`
-4. Restart VSCode to apply changes
+   - Linux/macOS: `lsof -i :5432`
+   - Windows: `netstat -ano | findstr :5432`
+2. Stop the conflicting service
+3. Or modify port mappings in the Docker Compose file
 
-#### Containers not stopping on deactivation
+### General Issues
 
-**Cause**: Docker containers persist across VSCode sessions by design (for faster restarts).
+#### Binary Permission Denied (Linux/macOS)
 
-**Solutions**:
-1. To manually stop containers: `docker compose down` in extension directory
-2. Or stop specific containers: `docker stop maproom-postgres maproom-mcp`
-3. To force cleanup: `docker compose down -v` (Warning: deletes indexed data)
-4. This is normal behavior - containers are reused across sessions for performance
-
-#### Docker services failed to start
-
-**Error**: "Docker services failed to start" or "Health check timeout"
-
-**Solutions**:
-1. Ensure Docker Desktop is running
-2. Check Docker has 4GB+ memory allocated (Settings → Resources)
-3. Verify Docker works: `docker ps` in terminal
-4. Try manually: `docker compose -f config/docker-compose.yml up`
-5. Restart VSCode
-
-#### Binary permission denied (Linux/macOS)
-
-**Error**: "EACCES: permission denied" or "spawn EACCES"
+**Error**: `EACCES: permission denied`
 
 **Solution**:
 ```bash
-# Find extension directory
-ls ~/.vscode/extensions/crewchief.vscode-maproom-*
-
-# Make binary executable
-chmod +x ~/.vscode/extensions/crewchief.vscode-maproom-*/bin/*/crewchief-maproom
+chmod +x ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/bin/*/crewchief-maproom
 ```
 
-#### Ollama not detected
-
-**Error**: Setup wizard doesn't show Ollama as "Recommended"
+#### Ollama Not Detected
 
 **Solutions**:
 1. Verify Ollama is running: `ollama list`
 2. Check Ollama API: `curl http://localhost:11434`
-3. If Ollama is on different port, select it anyway (port configurable in future)
-4. Or choose OpenAI/Google instead
+3. Or choose OpenAI/Google instead
 
-#### Invalid API credentials
-
-**Error**: "Authentication failed" or "Invalid API key"
-
-**Solutions**:
-1. Re-run setup: `Maproom: Setup` command
-2. Verify API key is correct (check for whitespace)
-3. For OpenAI: https://platform.openai.com/api-keys
-4. For Google: https://cloud.google.com/vertex-ai/docs/authentication
-
-#### Process keeps crashing
-
-**Error**: "Maproom watcher crashed after 5 restart attempts"
+#### Process Keeps Crashing
 
 **Solutions**:
 1. Check output channel: `Maproom: Show Output`
-2. Look for error details in logs
-3. Try restarting: `Maproom: Restart Watchers`
-4. Check system resources (RAM, disk space)
-5. Report issue with log excerpt (see TROUBLESHOOTING.md)
+2. Try restarting: `Maproom: Restart Watchers`
+3. Check system resources (RAM, disk space)
 
-#### Slow performance
-
-**Issue**: Indexing is very slow or never completes
+#### Slow Performance
 
 **Solutions**:
-1. Check Docker Desktop resource allocation (needs 4GB+ RAM)
-2. Large repos (>10k files) can take 5-10 minutes initially
-3. Subsequent updates are incremental (much faster)
-4. Monitor progress in status bar
-5. Check output channel for detailed progress
-
-#### File watching not working
-
-**Issue**: Changes not detected, index becomes stale
-
-**Solutions**:
-1. Run `Maproom: Restart Watchers` command
-2. Check output channel for watcher errors
-3. Windows users: May experience delays (experimental support)
-4. Verify file is within workspace root
-5. Check file isn't in `.gitignore` or binary file
+1. Large repos (>10k files) can take 5-10 minutes initially
+2. Subsequent updates are incremental (much faster)
+3. For PostgreSQL: ensure Docker has 4GB+ RAM allocated
 
 ## Known Limitations
 
 - **Windows Support**: Experimental. File watching may be slower or miss some events.
 - **Large Repositories**: Initial scan of >10,000 files can take 5-10 minutes.
 - **Memory Usage**: Embedding requires 2-4GB RAM for large codebases.
-- **Binary Files**: Only text files are indexed (images, PDFs, compiled binaries ignored).
-- **Network Required**: OpenAI and Google providers require active internet connection.
+- **Binary Files**: Only text files are indexed.
+- **Network Required**: OpenAI and Google providers require active internet.
 - **Ollama Model**: Must download ~500MB model on first use (one-time).
-- **Search UI**: Semantic search integration coming soon (extension indexes but search UI not yet implemented).
 
 ## Architecture
 
@@ -297,28 +353,21 @@ Maproom uses a multi-process architecture:
 
 ```
 VSCode Extension (Node.js)
-  ├── Docker Manager → Docker Compose services
-  │   ├── PostgreSQL (pgvector) - Vector database
-  │   ├── Ollama - Local embedding generation
-  │   └── Maproom MCP - Indexing & search backend
-  └── Process Orchestrator → File watchers
-      ├── Initial scanner - One-time full scan
-      └── File watcher - Real-time change detection
+  ├── Database Checker → SQLite file or PostgreSQL connection
+  ├── Process Orchestrator → File watchers
+  │   ├── Initial scanner - One-time full scan
+  │   └── File watcher - Real-time change detection
+  └── (PostgreSQL mode only)
+      └── Docker Manager → Docker Compose services
+          ├── PostgreSQL (pgvector) - Vector database
+          └── Ollama - Local embedding generation
 ```
 
 **Key components**:
+- **Database Checker**: Unified SQLite/PostgreSQL configuration
 - **Setup Wizard**: Provider selection and credential management
-- **Status Bar**: Real-time status and file count
+- **Status Bar**: Real-time status, file count, and database mode
 - **Crash Recovery**: Exponential backoff restart (5 attempts)
-- **NDJSON Parser**: Processes file scan events with metadata
-- **Secrets Manager**: Secure credential storage via VSCode API
-
-**Technology stack**:
-- TypeScript (ESM modules)
-- Vitest for testing (71% coverage)
-- Docker Compose for service orchestration
-- PostgreSQL with pgvector extension
-- Ollama for local embeddings
 
 ## Development
 
@@ -326,7 +375,7 @@ VSCode Extension (Node.js)
 
 - Node.js 20+
 - pnpm 8+
-- Docker Desktop
+- Docker Desktop (only for PostgreSQL testing)
 - VSCode 1.85+
 
 ### Setup
@@ -348,28 +397,6 @@ pnpm test:coverage
 pnpm test:watch
 ```
 
-### Testing
-
-```bash
-# All tests
-pnpm test
-
-# Specific test file
-pnpm test src/docker/manager.test.ts
-
-# Integration tests
-pnpm test src/test/integration.test.ts
-
-# Coverage report
-pnpm test:coverage
-```
-
-**Current coverage**: 71% overall (270 tests passing)
-- `src/config`: 96%
-- `src/ui`: 94%
-- `src/process`: 81%
-- `src/utils`: 100%
-
 ### Package Extension
 
 ```bash
@@ -377,9 +404,9 @@ pnpm test:coverage
 npm install -g @vscode/vsce
 
 # Package extension
-vsce package
+pnpm vsce:package
 
-# Output: vscode-maproom-0.1.0.vsix
+# Output: vscode-maproom-0.3.3.vsix
 ```
 
 ## Contributing
@@ -405,19 +432,19 @@ MIT License - see LICENSE file for details
 
 ## Support
 
-- **Bug Reports**: https://github.com/crewchief/vscode-maproom/issues
-- **Feature Requests**: https://github.com/crewchief/vscode-maproom/issues
-- **Documentation**: https://github.com/crewchief/vscode-maproom/blob/main/docs/
-- **Troubleshooting**: See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+- **Bug Reports**: https://github.com/danielbushman/crewchief/issues
+- **Feature Requests**: https://github.com/danielbushman/crewchief/issues
+- **Documentation**: https://github.com/danielbushman/crewchief/tree/main/packages/vscode-maproom
 
 ## Acknowledgements
 
 Built with:
 - [VSCode Extension API](https://code.visualstudio.com/api)
-- [PostgreSQL](https://www.postgresql.org/) with [pgvector](https://github.com/pgvector/pgvector)
+- [SQLite](https://www.sqlite.org/) for zero-config storage
+- [PostgreSQL](https://www.postgresql.org/) with [pgvector](https://github.com/pgvector/pgvector) for team sharing
 - [Ollama](https://ollama.ai/) for local embeddings
-- [Maproom](https://github.com/crewchief/maproom) semantic search engine
+- [Maproom](https://github.com/danielbushman/crewchief) semantic search engine
 
 ---
 
-**Status**: Beta (v0.1.0) - Actively developed, feedback welcome!
+**Status**: Beta (v0.3.3) - Actively developed, feedback welcome!
