@@ -1,6 +1,13 @@
-use anyhow::{Context, Result};
+//! Status module for querying indexed repositories and worktrees.
+//!
+//! This module uses the VectorStore trait abstraction to work with both
+//! PostgreSQL and SQLite backends.
+
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::sync::Arc;
+
+use crate::db::VectorStore;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatusResponse {
@@ -20,101 +27,62 @@ pub struct WorktreeStatus {
     pub last_updated: Option<String>,
 }
 
-/// Query database for worktree status information
+/// Query database for worktree status information using VectorStore trait.
+///
+/// This function works with both PostgreSQL and SQLite backends.
 pub async fn get_status(
+    store: Arc<dyn VectorStore>,
     repo_filter: Option<String>,
     worktree_filter: Option<String>,
 ) -> Result<StatusResponse> {
-    let database_url =
-        env::var("MAPROOM_DATABASE_URL").context("MAPROOM_DATABASE_URL must be set")?;
+    // Get all repositories using trait method
+    let repos = store.list_repos().await?;
 
-    let (client, connection) = tokio_postgres::connect(&database_url, tokio_postgres::NoTls)
-        .await
-        .context("Failed to connect to database")?;
+    let mut repo_statuses = Vec::new();
 
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("database connection error: {}", e);
+    for repo in repos {
+        // Apply repo filter if specified
+        if let Some(ref filter) = repo_filter {
+            if repo.name != *filter {
+                continue;
+            }
         }
-    });
 
-    // Build query based on filters
-    let query = if let Some(ref _repo) = repo_filter {
-        if let Some(ref _worktree) = worktree_filter {
-            // Filter by both repo and worktree
-            "SELECT r.name as repo_name, w.name as worktree_name, w.indexed_at,
-                    COUNT(DISTINCT c.id) FILTER (WHERE c.worktree_ids @> jsonb_build_array(w.id)) as chunk_count
-             FROM repos r
-             JOIN worktrees w ON w.repo_id = r.id
-             LEFT JOIN chunks c ON c.worktree_ids @> jsonb_build_array(w.id)
-             WHERE r.name = $1 AND w.name = $2
-             GROUP BY r.name, w.name, w.indexed_at
-             ORDER BY r.name, w.name"
-        } else {
-            // Filter by repo only
-            "SELECT r.name as repo_name, w.name as worktree_name, w.indexed_at,
-                    COUNT(DISTINCT c.id) FILTER (WHERE c.worktree_ids @> jsonb_build_array(w.id)) as chunk_count
-             FROM repos r
-             JOIN worktrees w ON w.repo_id = r.id
-             LEFT JOIN chunks c ON c.worktree_ids @> jsonb_build_array(w.id)
-             WHERE r.name = $1
-             GROUP BY r.name, w.name, w.indexed_at
-             ORDER BY r.name, w.name"
+        // Get worktrees for this repo
+        let worktrees = store.list_worktrees(repo.id).await?;
+
+        let mut worktree_statuses = Vec::new();
+
+        for worktree in worktrees {
+            // Apply worktree filter if specified
+            if let Some(ref filter) = worktree_filter {
+                if worktree.name != *filter {
+                    continue;
+                }
+            }
+
+            // Get chunk count for this worktree
+            let chunk_count = store.get_worktree_chunk_count(worktree.id).await?;
+
+            worktree_statuses.push(WorktreeStatus {
+                name: worktree.name,
+                chunk_count,
+                // Note: last_updated is not currently tracked in worktree metadata
+                // This would require adding indexed_at to WorktreeInfo
+                last_updated: None,
+            });
         }
-    } else {
-        // No filters - get all
-        "SELECT r.name as repo_name, w.name as worktree_name, w.indexed_at,
-                COUNT(DISTINCT c.id) FILTER (WHERE c.worktree_ids @> jsonb_build_array(w.id)) as chunk_count
-         FROM repos r
-         JOIN worktrees w ON w.repo_id = r.id
-         LEFT JOIN chunks c ON c.worktree_ids @> jsonb_build_array(w.id)
-         GROUP BY r.name, w.name, w.indexed_at
-         ORDER BY r.name, w.name"
-    };
 
-    // Execute query with appropriate parameters
-    let rows = if let Some(ref repo) = repo_filter {
-        if let Some(ref worktree) = worktree_filter {
-            client.query(query, &[repo, worktree]).await?
-        } else {
-            client.query(query, &[repo]).await?
-        }
-    } else {
-        client.query(query, &[]).await?
-    };
-
-    // Group results by repo
-    let mut repos_map: std::collections::HashMap<String, Vec<WorktreeStatus>> =
-        std::collections::HashMap::new();
-
-    for row in rows {
-        let repo_name: String = row.get("repo_name");
-        let worktree_name: String = row.get("worktree_name");
-        let chunk_count: i64 = row.get("chunk_count");
-        let indexed_at: Option<chrono::DateTime<chrono::Utc>> = row.get("indexed_at");
-
-        let worktree_status = WorktreeStatus {
-            name: worktree_name,
-            chunk_count,
-            last_updated: indexed_at.map(|dt| dt.to_rfc3339()),
-        };
-
-        repos_map
-            .entry(repo_name)
-            .or_insert_with(Vec::new)
-            .push(worktree_status);
+        repo_statuses.push(RepoStatus {
+            name: repo.name,
+            worktrees: worktree_statuses,
+        });
     }
 
-    // Convert to response format
-    let mut repos: Vec<RepoStatus> = repos_map
-        .into_iter()
-        .map(|(name, worktrees)| RepoStatus { name, worktrees })
-        .collect();
-
     // Sort repos by name for consistent output
-    repos.sort_by(|a, b| a.name.cmp(&b.name));
+    repo_statuses.sort_by(|a, b| a.name.cmp(&b.name));
 
-    Ok(StatusResponse { repos })
+    Ok(StatusResponse { repos: repo_statuses })
 }
 
 /// Format status as human-readable text
@@ -169,5 +137,5 @@ fn format_number(n: i64) -> String {
 
 /// Format status as JSON
 pub fn format_json(status: &StatusResponse) -> Result<String> {
-    serde_json::to_string_pretty(status).context("Failed to serialize status to JSON")
+    serde_json::to_string_pretty(status).map_err(|e| anyhow::anyhow!("Failed to serialize status to JSON: {}", e))
 }

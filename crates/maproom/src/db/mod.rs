@@ -186,6 +186,9 @@ pub trait VectorStore: Send + Sync {
     /// List all worktrees for a repository
     async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<WorktreeInfo>>;
 
+    /// Get chunk count for a worktree
+    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64>;
+
     // --- Indexing ---
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64>;
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64>;

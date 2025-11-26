@@ -66,6 +66,19 @@ impl VectorStore for PostgresStore {
         super::queries::list_worktrees(&client, repo_id).await
     }
 
+    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        // PostgreSQL: count chunks where worktree_ids JSONB array contains worktree_id
+        let row = client
+            .query_one(
+                "SELECT COUNT(DISTINCT id) FROM maproom.chunks WHERE worktree_ids @> jsonb_build_array($1::bigint)",
+                &[&worktree_id],
+            )
+            .await
+            .context("Failed to count chunks for worktree")?;
+        Ok(row.get(0))
+    }
+
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::upsert_file(

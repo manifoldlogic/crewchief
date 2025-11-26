@@ -1223,7 +1223,10 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::bail!("--worktree requires --repo to be specified");
             }
 
-            match status::get_status(repo, worktree).await {
+            // Use VectorStore trait for backend-agnostic status
+            let (store, _backend_type) = get_store_with_type().await?;
+
+            match status::get_status(store, repo, worktree).await {
                 Ok(status_data) => {
                     if json {
                         let output = status::format_json(&status_data)?;

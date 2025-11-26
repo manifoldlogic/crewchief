@@ -278,6 +278,18 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            // SQLite: count chunks where worktree_id matches
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunks WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        }).await
+    }
+
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
         self.run(move |conn| {
