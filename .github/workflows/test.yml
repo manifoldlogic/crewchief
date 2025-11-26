@@ -269,3 +269,75 @@ jobs:
 
       - name: Run SQLite E2E tests
         run: ./tests/e2e/test_sqlite_flow.sh
+
+  # =============================================================================
+  # MCP Server SQLite Tests (TypeScript layer)
+  # =============================================================================
+  # Tests the TypeScript MCP server with SQLite backend via daemon.
+  # NOTE: This is DIFFERENT from test-sqlite-e2e which tests the Rust CLI.
+  #
+  # test-sqlite-e2e:  Rust CLI + SQLite (cargo test)
+  # test-mcp-sqlite:  TypeScript MCP + SQLite daemon (pnpm test:sqlite)
+  # =============================================================================
+  test-mcp-sqlite:
+    name: MCP SQLite Tests (TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust (for fixture generation if needed)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          key: mcp-sqlite
+
+      - name: Ensure SQLite fixture exists
+        run: |
+          if [ ! -f crates/maproom/tests/fixtures/pre-indexed-maproom.db ]; then
+            echo "SQLite fixture not found, generating..."
+            cargo test --features sqlite --test create_sqlite_fixture -- --ignored
+          else
+            echo "SQLite fixture found"
+          fi
+
+      - name: Build MCP package
+        working-directory: packages/maproom-mcp
+        run: pnpm build
+
+      - name: Run MCP SQLite tests
+        working-directory: packages/maproom-mcp
+        run: pnpm test:sqlite
+        env:
+          MAPROOM_DATABASE_URL: sqlite://${{ github.workspace }}/crates/maproom/tests/fixtures/pre-indexed-maproom.db
