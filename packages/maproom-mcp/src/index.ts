@@ -6,6 +6,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { LRUCache } from 'lru-cache'
 import { getCurrentBranch } from './utils/git.js'
+import { resolveDatabaseConfig } from './utils/resolve-database.js'
 
 // IMPORTANT: Never write logs to stdout; MCP JSON-RPC must be the only stdout output.
 // Route pino logs to stderr to avoid corrupting the protocol stream.
@@ -352,6 +353,27 @@ async function getAvailableRepos(client: Client): Promise<string[]> {
 
 async function handleStatus(params: any): Promise<any> {
   const { repo } = params
+
+  // Check database type - return degraded response for SQLite
+  const dbConfig = resolveDatabaseConfig()
+  if (dbConfig.type === 'sqlite') {
+    log.info({ sqlitePath: dbConfig.path }, 'SQLite mode: returning degraded status response')
+    return {
+      repos: [],
+      totalRepos: 0,
+      totalFiles: 0,
+      totalChunks: 0,
+      hint: 'SQLite mode: detailed statistics not available. Use search tool for indexed content.',
+      backendType: 'sqlite',
+      sqlitePath: dbConfig.path,
+      searchTips: [
+        'Use simple terms: "auth" instead of "authentication_handler"',
+        'Search concepts: "message bus" or "event handling"',
+        'Filter by type: use filter:"code" or filter:"docs"',
+      ],
+    }
+  }
+
   const client = await getPg()
   try {
     let repoFilter = ''

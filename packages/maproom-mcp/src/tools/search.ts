@@ -49,6 +49,7 @@ import { validateSearchParams } from './search_schema.js'
 import { ValidationError } from '../utils/validation.js'
 import { ProcessError } from '../utils/process.js'
 import { getDaemonClient } from '../daemon.js'
+import { resolveDatabaseConfig } from '../utils/resolve-database.js'
 import {
   DaemonError,
   DaemonStartError,
@@ -318,8 +319,21 @@ export async function handleSearchTool(
 
   log.debug({ hitCount: rustOutput.hits.length }, 'Received search results from daemon')
 
-  // Fetch chunk IDs from database
-  const chunkIdMap = await fetchChunkIds(client, repo, rustOutput.hits)
+  // Fetch chunk IDs from database (skip for SQLite - no PostgreSQL available)
+  const dbConfig = resolveDatabaseConfig()
+  let chunkIdMap: Map<string, number>
+
+  if (dbConfig.type === 'sqlite') {
+    // SQLite: daemon doesn't return chunk IDs and we can't query PostgreSQL
+    log.warn(
+      { hits: rustOutput.hits.length },
+      'SQLite mode: chunk IDs unavailable, using 0'
+    )
+    chunkIdMap = new Map() // Empty map = all chunk_id will be 0
+  } else {
+    // PostgreSQL: use existing fetchChunkIds
+    chunkIdMap = await fetchChunkIds(client, repo, rustOutput.hits)
+  }
 
   // Transform Rust hits to SearchResult format (SEMRANK-2006: include score_breakdown if debug=true)
   const hits: SearchResult[] = rustOutput.hits.map((hit) => {
