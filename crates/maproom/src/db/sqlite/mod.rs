@@ -1,6 +1,7 @@
 pub mod schema;
 pub mod migrations;
 pub mod embeddings;
+pub mod vector;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -874,6 +875,29 @@ impl SqliteStore {
             embeddings::sync_all_embeddings_to_vec(conn)
         }).await
     }
+
+    /// Search for similar chunks by embedding (SQLite-specific)
+    ///
+    /// Returns empty Vec (not error) when extension is not available.
+    pub async fn search_vector(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query_embedding: &[f32],
+        limit: usize,
+    ) -> anyhow::Result<Vec<vector::VectorResult>> {
+        if !self.has_vec_extension() {
+            return Ok(vec![]);
+        }
+
+        let repo = repo.to_string();
+        let worktree = worktree.map(|s| s.to_string());
+        let query_embedding = query_embedding.to_vec();
+
+        self.run(move |conn| {
+            vector::search_vector(conn, &repo, worktree.as_deref(), &query_embedding, limit)
+        }).await
+    }
 }
 
 #[cfg(test)]
@@ -1206,5 +1230,192 @@ mod tests {
         // Sync again - should be idempotent
         let synced_again = store.sync_all_embeddings_to_vec().await.unwrap();
         assert_eq!(synced_again, 0, "Second sync should find nothing new");
+    }
+
+    #[tokio::test]
+    async fn test_vector_search_integration() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree1_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let worktree2_id = store.get_or_create_worktree(repo_id, "feature", "/test/path/feature").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create files
+        let file1 = FileRecord {
+            repo_id,
+            worktree_id: worktree1_id,
+            commit_id,
+            relpath: "test1.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file1_id = store.upsert_file(&file1).await.unwrap();
+
+        let file2 = FileRecord {
+            repo_id,
+            worktree_id: worktree2_id,
+            commit_id,
+            relpath: "test2.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash2".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file2_id = store.upsert_file(&file2).await.unwrap();
+
+        // Create chunks with different blob_sha values
+        let chunk1 = ChunkRecord {
+            file_id: file1_id,
+            worktree_id: worktree1_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("fn1".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "fn fn1() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        let chunk1_id = store.insert_chunk(&chunk1).await.unwrap();
+
+        let chunk2 = ChunkRecord {
+            file_id: file2_id,
+            worktree_id: worktree2_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("fn2".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "fn fn2() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        let chunk2_id = store.insert_chunk(&chunk2).await.unwrap();
+
+        // Create embeddings (similar vectors)
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 0.1) / 1536.0).collect(); // Slightly different
+
+        // Insert embeddings for both chunks
+        store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
+        store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
+
+        // Query with a vector similar to embedding1
+        let query_embedding: Vec<f32> = (0..1536).map(|i| (i as f32 + 0.05) / 1536.0).collect();
+
+        // Search across all worktrees
+        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+
+        assert!(!results.is_empty(), "Should find at least one result");
+        assert!(results.len() <= 2, "Should find at most 2 results");
+
+        // Verify results are sorted by similarity (best first = lowest distance)
+        for i in 1..results.len() {
+            assert!(
+                results[i - 1].distance <= results[i].distance,
+                "Results should be sorted by distance (ascending)"
+            );
+        }
+
+        // Verify similarity scores are in range (0, 1]
+        for result in &results {
+            assert!(result.similarity > 0.0 && result.similarity <= 1.0,
+                "Similarity should be in range (0, 1], got {}", result.similarity);
+        }
+
+        // Search with worktree filter (only worktree1)
+        let results_wt1 = store.search_vector("test-repo", Some("main"), &query_embedding, 10).await.unwrap();
+
+        assert_eq!(results_wt1.len(), 1, "Should find exactly 1 result in main worktree");
+        assert_eq!(results_wt1[0].chunk_id, chunk1_id, "Should find chunk1 in main worktree");
+
+        // Search with different worktree filter (only worktree2)
+        let results_wt2 = store.search_vector("test-repo", Some("feature"), &query_embedding, 10).await.unwrap();
+
+        assert_eq!(results_wt2.len(), 1, "Should find exactly 1 result in feature worktree");
+        assert_eq!(results_wt2[0].chunk_id, chunk2_id, "Should find chunk2 in feature worktree");
+
+        // Search with non-existent repo (should return empty)
+        let results_no_repo = store.search_vector("non-existent", None, &query_embedding, 10).await.unwrap();
+        assert!(results_no_repo.is_empty(), "Should return empty for non-existent repo");
+
+        // Search with non-existent worktree (should return empty)
+        let results_no_wt = store.search_vector("test-repo", Some("non-existent"), &query_embedding, 10).await.unwrap();
+        assert!(results_no_wt.is_empty(), "Should return empty for non-existent worktree");
+    }
+
+    #[tokio::test]
+    async fn test_vector_search_no_embeddings() {
+        let store = setup_test_store().await;
+
+        // Create test data but no embeddings
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        let chunk = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob_no_embedding".to_string(),
+            symbol_name: Some("fn1".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "fn fn1() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk).await.unwrap();
+
+        // Search without any embeddings indexed
+        let query_embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+
+        assert!(results.is_empty(), "Should return empty when no embeddings indexed");
+    }
+
+    #[tokio::test]
+    async fn test_vector_search_dimension_validation() {
+        let store = setup_test_store().await;
+
+        // Create test repo
+        store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+
+        // Query with wrong dimension
+        let query_embedding: Vec<f32> = vec![1.0, 2.0, 3.0]; // Only 3 dimensions instead of 1536
+
+        let result = store.search_vector("test-repo", None, &query_embedding, 10).await;
+
+        assert!(result.is_err(), "Should return error for wrong embedding dimension");
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("dimension mismatch"), "Error should mention dimension mismatch");
     }
 }
