@@ -188,3 +188,7 @@ required-features = ["sqlite"]
 name = "ollama_parallel_bench"
 harness = false
 
+[[bench]]
+name = "dedup_bench"
+harness = false
+
