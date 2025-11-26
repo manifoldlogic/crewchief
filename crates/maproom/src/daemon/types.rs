@@ -17,6 +17,13 @@ pub struct SearchParams {
     pub limit: Option<usize>,
     pub threshold: Option<f32>,
     pub mode: Option<String>, // "fts", "vector", or "hybrid"
+    /// Deduplicate results across worktrees (default: true)
+    #[serde(default = "default_deduplicate")]
+    pub deduplicate: Option<bool>,
+}
+
+fn default_deduplicate() -> Option<bool> {
+    Some(true)
 }
 
 #[derive(Debug, Serialize)]

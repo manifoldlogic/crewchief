@@ -1,6 +1,7 @@
 pub mod types;
 
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
@@ -9,6 +10,43 @@ use crewchief_maproom::db::{factory::get_store, SearchHit, VectorStore};
 use crewchief_maproom::embedding::EmbeddingService;
 
 use self::types::{JsonRpcRequest, JsonRpcResponse, SearchParams};
+
+/// Deduplicate search hits by identity (file_relpath, symbol_name, start_line).
+fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit> {
+    if hits.is_empty() {
+        return hits;
+    }
+
+    let mut groups: HashMap<(String, Option<String>, i32), Vec<SearchHit>> = HashMap::new();
+    for hit in hits {
+        let key = (
+            hit.file_relpath.clone(),
+            hit.symbol_name.clone(),
+            hit.start_line,
+        );
+        groups.entry(key).or_default().push(hit);
+    }
+
+    let mut deduped: Vec<SearchHit> = groups
+        .into_values()
+        .map(|mut group| {
+            group.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            group.remove(0)
+        })
+        .collect();
+
+    deduped.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    deduped.into_iter().take(limit).collect()
+}
 
 struct DaemonState {
     store: Arc<dyn VectorStore>,
@@ -119,17 +157,21 @@ async fn execute_search(
     }
 
     let k = params.limit.unwrap_or(10) as i64;
+    let deduplicate = params.deduplicate.unwrap_or(true);
+
+    // Fetch extra results when deduplication is enabled
+    let fetch_k = if deduplicate { k * 3 } else { k };
 
     // Use VectorStore trait methods for all search operations
     // The trait methods handle repo/worktree resolution internally
-    let hits: Vec<SearchHit> = match mode {
+    let raw_hits: Vec<SearchHit> = match mode {
         "fts" => {
             // FTS mode: Full-text search only (no embeddings required)
             state.store.search_chunks_fts(
                 &params.repo,
                 params.worktree.as_deref(),
                 &params.query,
-                k,
+                fetch_k,
                 false, // debug
             )
             .await
@@ -147,7 +189,7 @@ async fn execute_search(
                 &params.repo,
                 params.worktree.as_deref(),
                 &query_embedding,
-                k,
+                fetch_k,
                 false, // debug
             )
             .await
@@ -169,7 +211,7 @@ async fn execute_search(
                         params.worktree.as_deref(),
                         &params.query,
                         &query_embedding,
-                        k,
+                        fetch_k,
                         false, // debug
                     )
                     .await
@@ -184,7 +226,7 @@ async fn execute_search(
                         &params.repo,
                         params.worktree.as_deref(),
                         &params.query,
-                        k,
+                        fetch_k,
                         false, // debug
                     )
                     .await
@@ -193,6 +235,13 @@ async fn execute_search(
             }
         }
         _ => unreachable!("Mode validation should prevent this"),
+    };
+
+    // Apply deduplication if enabled
+    let hits = if deduplicate {
+        deduplicate_search_hits(raw_hits, k as usize)
+    } else {
+        raw_hits
     };
 
     // Format response - SearchHit already contains all needed fields
@@ -225,5 +274,6 @@ async fn execute_search(
         "mode": mode,
         "k": k,
         "threshold": params.threshold,
+        "deduplicate": deduplicate,
     }))
 }
