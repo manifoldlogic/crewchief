@@ -17,8 +17,10 @@
  * - Configuration inherits from existing MCP server environment
  */
 
+import { existsSync } from 'node:fs'
 import { DaemonClient } from './daemon-client/index.js'
 import { findMaproomBinary } from './utils/process.js'
+import { resolveDatabaseConfig } from './utils/resolve-database.js'
 
 /**
  * Singleton daemon client instance
@@ -51,11 +53,20 @@ export function getDaemonClient(): DaemonClient {
       )
     }
 
-    // Validate required environment variables
-    if (!process.env.MAPROOM_DATABASE_URL) {
-      throw new Error(
-        'MAPROOM_DATABASE_URL environment variable is required for daemon operation'
-      )
+    // Resolve database configuration (handles SQLite and PostgreSQL)
+    const dbConfig = resolveDatabaseConfig()
+
+    // Validate SQLite file exists before spawning daemon
+    if (dbConfig.type === 'sqlite' && dbConfig.path) {
+      if (!existsSync(dbConfig.path)) {
+        throw new Error(
+          `SQLite database not found: ${dbConfig.path}\n\n` +
+            `To create an index:\n` +
+            `  crewchief-maproom scan --path /your/repo\n\n` +
+            `Or specify a different database:\n` +
+            `  export MAPROOM_DATABASE_URL=sqlite:///path/to/your.db`
+        )
+      }
     }
 
     // Create daemon client with configuration
@@ -63,8 +74,8 @@ export function getDaemonClient(): DaemonClient {
     daemonClient = new DaemonClient({
       binaryPath,
       env: {
-        // Required: Database connection
-        MAPROOM_DATABASE_URL: process.env.MAPROOM_DATABASE_URL,
+        // Required: Database connection (use resolved URL)
+        MAPROOM_DATABASE_URL: dbConfig.url,
 
         // Optional: Embedding provider credentials
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
