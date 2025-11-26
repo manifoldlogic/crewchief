@@ -2,7 +2,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use std::collections::HashSet;
 
-use crate::db::{ChunkRecord, FileRecord, PgPool, SearchHit, VectorStore};
+use crate::db::{BackendType, ChunkRecord, FileRecord, PgPool, SearchHit, VectorStore};
 
 pub struct PostgresStore {
     pool: PgPool,
@@ -17,6 +17,10 @@ impl PostgresStore {
 
 #[async_trait]
 impl VectorStore for PostgresStore {
+    fn backend_type(&self) -> BackendType {
+        BackendType::PostgreSQL
+    }
+
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::get_or_create_repo(&client, name, root_path).await

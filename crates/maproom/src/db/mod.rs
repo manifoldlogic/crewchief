@@ -2,6 +2,13 @@
 //!
 //! This module provides database connectivity, connection pooling, and query utilities.
 
+/// Backend type for runtime detection
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendType {
+    PostgreSQL,
+    SQLite,
+}
+
 pub mod cleanup;
 pub mod columns;
 pub mod connection;
@@ -149,6 +156,9 @@ pub struct WorktreeCleanupResult {
 /// Common interface for Vector/FTS storage backends.
 #[async_trait]
 pub trait VectorStore: Send + Sync {
+    /// Returns the backend type for runtime feature detection
+    fn backend_type(&self) -> BackendType;
+
     // --- Repository & Worktree ---
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64>;
     async fn get_or_create_worktree(

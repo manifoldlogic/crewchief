@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::spawn_blocking;
 
-use crate::db::{ChunkRecord, FileRecord, SearchHit, VectorStore};
+use crate::db::{BackendType, ChunkRecord, FileRecord, SearchHit, VectorStore};
 use migrations::MigrationRunner;
 
 // Declare the C extension init function from sqlite-vec
@@ -115,6 +115,10 @@ fn verify_vec_extension(conn: &Connection) -> bool {
 
 #[async_trait]
 impl VectorStore for SqliteStore {
+    fn backend_type(&self) -> BackendType {
+        BackendType::SQLite
+    }
+
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let name = name.to_string();
         let root_path = root_path.to_string();
