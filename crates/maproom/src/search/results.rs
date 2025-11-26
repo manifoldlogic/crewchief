@@ -290,6 +290,20 @@ pub struct SearchOptions {
 
     /// Whether to skip signal search
     pub skip_signals: bool,
+
+    /// Whether to deduplicate results across worktrees.
+    ///
+    /// When enabled (default), results with the same identity
+    /// (relpath, symbol_name, start_line) are grouped, and only
+    /// the highest-scoring instance is returned.
+    ///
+    /// Default: `true`
+    #[serde(default = "default_deduplicate")]
+    pub deduplicate: bool,
+}
+
+fn default_deduplicate() -> bool {
+    true
 }
 
 impl SearchOptions {
@@ -303,6 +317,7 @@ impl SearchOptions {
             skip_vector: false,
             skip_graph: false,
             skip_signals: false,
+            deduplicate: true,
         }
     }
 
@@ -327,6 +342,18 @@ impl SearchOptions {
     /// Builder method to skip signal search.
     pub fn with_skip_signals(mut self, skip: bool) -> Self {
         self.skip_signals = skip;
+        self
+    }
+
+    /// Builder method to disable deduplication.
+    pub fn without_dedup(mut self) -> Self {
+        self.deduplicate = false;
+        self
+    }
+
+    /// Builder method to set deduplication explicitly.
+    pub fn with_deduplicate(mut self, deduplicate: bool) -> Self {
+        self.deduplicate = deduplicate;
         self
     }
 
@@ -451,5 +478,28 @@ mod tests {
         assert_eq!(weights.graph, 0.1);
         assert_eq!(weights.recency, 0.1);
         assert_eq!(weights.churn, 0.05);
+    }
+
+    #[test]
+    fn test_search_options_deduplicate_default() {
+        let options = SearchOptions::new(1, None, 10);
+        assert!(options.deduplicate, "Deduplication should be enabled by default");
+    }
+
+    #[test]
+    fn test_search_options_without_dedup() {
+        let options = SearchOptions::new(1, None, 10).without_dedup();
+        assert!(!options.deduplicate, "without_dedup should disable deduplication");
+    }
+
+    #[test]
+    fn test_search_options_with_deduplicate() {
+        let options = SearchOptions::new(1, None, 10)
+            .without_dedup()
+            .with_deduplicate(true);
+        assert!(options.deduplicate, "with_deduplicate(true) should enable deduplication");
+
+        let options = SearchOptions::new(1, None, 10).with_deduplicate(false);
+        assert!(!options.deduplicate, "with_deduplicate(false) should disable deduplication");
     }
 }
