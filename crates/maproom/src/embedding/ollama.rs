@@ -53,8 +53,8 @@ use crate::embedding::provider::{EmbeddingProvider, Vector};
 struct OllamaRequest {
     /// Model name (e.g., "nomic-embed-text")
     model: String,
-    /// Text to embed
-    input: String,
+    /// Texts to embed (batch API format)
+    input: Vec<String>,
 }
 
 /// Response payload from Ollama embedding API.
@@ -67,20 +67,18 @@ struct OllamaResponse {
 /// Ollama embedding provider for local embeddings.
 ///
 /// This provider integrates with Ollama running locally to generate embeddings
-/// using the nomic-embed-text model (768 dimensions). It uses concurrent requests
-/// with semaphore limiting to avoid overwhelming the local Ollama instance.
+/// using the nomic-embed-text model (768 dimensions). It uses Ollama's batch API
+/// to send multiple texts in a single HTTP request for improved performance.
 ///
 /// # Configuration
 ///
 /// - **Endpoint**: Default `http://localhost:11434/api/embed`
 /// - **Model**: Default `nomic-embed-text`
-/// - **Timeout**: 30 seconds per request
-/// - **Concurrency**: Max 10 simultaneous requests
+/// - **Timeout**: 60 seconds per request
 ///
 /// # Thread Safety
 ///
 /// This provider is `Clone` and can be safely shared across async tasks.
-/// The internal semaphore ensures concurrency limits are respected.
 #[derive(Clone)]
 pub struct OllamaProvider {
     /// HTTP client for making requests
@@ -89,7 +87,8 @@ pub struct OllamaProvider {
     endpoint: String,
     /// Model name (e.g., "nomic-embed-text")
     model: String,
-    /// Semaphore to limit concurrent requests
+    /// Semaphore to limit concurrent requests (reserved for future use)
+    #[allow(dead_code)]
     semaphore: Arc<Semaphore>,
 }
 
@@ -103,8 +102,8 @@ impl OllamaProvider {
     /// Maximum concurrent requests to avoid overwhelming Ollama.
     const MAX_CONCURRENT_REQUESTS: usize = 10;
 
-    /// Request timeout in seconds.
-    const REQUEST_TIMEOUT_SECS: u64 = 30;
+    /// Request timeout in seconds (increased for larger batches).
+    const REQUEST_TIMEOUT_SECS: u64 = 60;
 
     /// Create a new OllamaProvider with specified endpoint and model.
     ///
@@ -161,55 +160,44 @@ impl OllamaProvider {
         )
     }
 
-    /// Make a single embedding request with retry logic.
+    /// Embed a batch of texts using a single HTTP request.
     ///
-    /// This method implements retry logic for transient failures such as
-    /// temporary Ollama overload or network issues.
-    async fn embed_with_retry(&self, text: String) -> Result<Vector, EmbeddingError> {
-        const MAX_RETRIES: u32 = 3;
-        const RETRY_DELAY_MS: u64 = 1000;
-
-        let mut last_error = None;
-
-        for attempt in 0..MAX_RETRIES {
-            match self.embed_single(&text).await {
-                Ok(vector) => return Ok(vector),
-                Err(e) => {
-                    // Check if error is retryable
-                    let should_retry = match &e {
-                        EmbeddingError::Network(_) => true,
-                        EmbeddingError::Api(api_err) => api_err.is_retryable(),
-                        _ => false,
-                    };
-
-                    if !should_retry || attempt == MAX_RETRIES - 1 {
-                        return Err(e);
-                    }
-
-                    last_error = Some(e);
-                    tokio::time::sleep(std::time::Duration::from_millis(
-                        RETRY_DELAY_MS * (attempt as u64 + 1),
-                    ))
-                    .await;
-                }
-            }
+    /// This method uses Ollama's batch API to send multiple texts in one request,
+    /// significantly reducing HTTP overhead compared to individual requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `texts` - Vector of texts to embed
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Vec<Vector>)` - Vector of embeddings (same length as input)
+    /// - `Err(EmbeddingError)` - If the API call fails
+    ///
+    /// # Error Handling
+    ///
+    /// This method does NOT fall back to single-text requests on failure.
+    /// Failures return an error with context including batch size for debugging.
+    async fn embed_batch_raw(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
         }
 
-        Err(last_error
-            .unwrap_or_else(|| EmbeddingError::Other("All retry attempts failed".to_string())))
-    }
+        let batch_size = texts.len();
 
-    /// Make a single embedding request without retry.
-    async fn embed_single(&self, text: &str) -> Result<Vector, EmbeddingError> {
         let response = self
             .client
             .post(&self.endpoint)
             .json(&OllamaRequest {
                 model: self.model.clone(),
-                input: text.to_string(),
+                input: texts,
             })
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to send batch of {} texts: {}", batch_size, e);
+                EmbeddingError::Network(e)
+            })?;
 
         let status = response.status();
         if !status.is_success() {
@@ -224,35 +212,51 @@ impl OllamaProvider {
                 },
                 500..=599 => ApiError::ServerError {
                     status: status.as_u16(),
-                    message: error_msg,
+                    message: format!("Batch of {} texts failed: {}", batch_size, error_msg),
                 },
                 401 => ApiError::Authentication(error_msg),
-                400 => ApiError::BadRequest(error_msg),
-                _ => ApiError::InvalidResponse(format!("HTTP {}: {}", status, error_msg)),
+                400 => ApiError::BadRequest(format!(
+                    "Batch of {} texts rejected: {}",
+                    batch_size, error_msg
+                )),
+                _ => ApiError::InvalidResponse(format!(
+                    "HTTP {} for batch of {} texts: {}",
+                    status, batch_size, error_msg
+                )),
             }));
         }
 
-        let body: OllamaResponse = response.json().await?;
+        let body: OllamaResponse = response.json().await.map_err(|e| {
+            EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                "Failed to parse batch response for {} texts: {}",
+                batch_size, e
+            )))
+        })?;
 
-        if body.embeddings.is_empty() {
-            return Err(EmbeddingError::Api(ApiError::InvalidResponse(
-                "Empty embeddings array in response".to_string(),
-            )));
-        }
-
-        let embedding = &body.embeddings[0];
-        let expected_dim = self.dimension();
-
-        // Validate dimension matches expected value (contract guarantee)
-        if embedding.len() != expected_dim {
+        // Validate response has expected number of embeddings
+        if body.embeddings.len() != batch_size {
             return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                "Dimension mismatch: expected {} dimensions but got {}",
-                expected_dim,
-                embedding.len()
+                "Batch size mismatch: sent {} texts but got {} embeddings",
+                batch_size,
+                body.embeddings.len()
             ))));
         }
 
-        Ok(embedding.clone())
+        let expected_dim = self.dimension();
+
+        // Validate all embeddings have correct dimension
+        for (i, embedding) in body.embeddings.iter().enumerate() {
+            if embedding.len() != expected_dim {
+                return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                    "Dimension mismatch in batch at index {}: expected {} dimensions but got {}",
+                    i,
+                    expected_dim,
+                    embedding.len()
+                ))));
+            }
+        }
+
+        Ok(body.embeddings)
     }
 }
 
@@ -261,7 +265,8 @@ impl EmbeddingProvider for OllamaProvider {
     /// Generate embedding vector for a single text.
     ///
     /// This method calls the Ollama API to generate a 768-dimensional embedding
-    /// vector for the input text. It includes retry logic for transient failures.
+    /// vector for the input text. Internally, it wraps the text in a batch of one
+    /// to use Ollama's batch API endpoint.
     ///
     /// # Arguments
     ///
@@ -270,7 +275,7 @@ impl EmbeddingProvider for OllamaProvider {
     /// # Returns
     ///
     /// - `Ok(Vector)` - 768-dimensional embedding vector
-    /// - `Err(EmbeddingError)` - If the API call fails after retries
+    /// - `Err(EmbeddingError)` - If the API call fails
     ///
     /// # Examples
     ///
@@ -285,14 +290,15 @@ impl EmbeddingProvider for OllamaProvider {
     /// # }
     /// ```
     async fn embed(&self, text: String) -> Result<Vector, EmbeddingError> {
-        self.embed_with_retry(text).await
+        let embeddings = self.embed_batch_raw(vec![text]).await?;
+        // Safe to unwrap because we validated response length in embed_batch_raw
+        Ok(embeddings.into_iter().next().unwrap())
     }
 
     /// Generate embeddings for a batch of texts.
     ///
-    /// Since Ollama doesn't support native batching, this method uses concurrent
-    /// requests with semaphore limiting to process multiple texts efficiently
-    /// while avoiding overwhelming the local Ollama instance.
+    /// This method uses Ollama's batch API to send all texts in a single HTTP request,
+    /// providing significant performance improvements over individual requests.
     ///
     /// # Arguments
     ///
@@ -301,12 +307,7 @@ impl EmbeddingProvider for OllamaProvider {
     /// # Returns
     ///
     /// - `Ok(Vec<Vector>)` - Vector of 768-dimensional embeddings (same length as input)
-    /// - `Err(EmbeddingError)` - If any embedding fails
-    ///
-    /// # Concurrency
-    ///
-    /// This method limits concurrent requests to 10 to avoid overwhelming Ollama.
-    /// The semaphore ensures this limit is respected even when processing large batches.
+    /// - `Err(EmbeddingError)` - If the batch request fails
     ///
     /// # Examples
     ///
@@ -322,38 +323,7 @@ impl EmbeddingProvider for OllamaProvider {
     /// # }
     /// ```
     async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Spawn concurrent tasks with semaphore limiting
-        let mut tasks = Vec::with_capacity(texts.len());
-
-        for text in texts {
-            let provider = self.clone();
-            let semaphore = self.semaphore.clone();
-
-            tasks.push(tokio::spawn(async move {
-                // Acquire permit before making request
-                let _permit = semaphore.acquire().await.map_err(|e| {
-                    EmbeddingError::Other(format!("Failed to acquire semaphore: {}", e))
-                })?;
-
-                // Make request (permit automatically released when dropped)
-                provider.embed(text).await
-            }));
-        }
-
-        // Collect results
-        let mut results = Vec::with_capacity(tasks.len());
-        for task in tasks {
-            let result = task
-                .await
-                .map_err(|e| EmbeddingError::Other(format!("Task join error: {}", e)))??;
-            results.push(result);
-        }
-
-        Ok(results)
+        self.embed_batch_raw(texts).await
     }
 
     /// Get the embedding dimension for this provider.
@@ -414,25 +384,52 @@ mod tests {
     }
 
     #[test]
-    fn test_ollama_request_serialization() {
+    fn test_ollama_request_serialization_single() {
         let request = OllamaRequest {
             model: "nomic-embed-text".to_string(),
-            input: "test text".to_string(),
+            input: vec!["test text".to_string()],
         };
 
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("nomic-embed-text"));
         assert!(json.contains("test text"));
+        assert!(json.contains("\"input\":["));
     }
 
     #[test]
-    fn test_ollama_response_deserialization() {
+    fn test_ollama_request_serialization_batch() {
+        let request = OllamaRequest {
+            model: "nomic-embed-text".to_string(),
+            input: vec!["text1".to_string(), "text2".to_string()],
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"model\":\"nomic-embed-text\""));
+        assert!(json.contains("\"input\":[\"text1\",\"text2\"]"));
+    }
+
+    #[test]
+    fn test_ollama_response_deserialization_single() {
         let json = r#"{"embeddings":[[0.1,0.2,0.3]]}"#;
         let response: OllamaResponse = serde_json::from_str(json).unwrap();
 
         assert_eq!(response.embeddings.len(), 1);
         assert_eq!(response.embeddings[0].len(), 3);
         assert_eq!(response.embeddings[0][0], 0.1);
+    }
+
+    #[test]
+    fn test_ollama_response_deserialization_batch() {
+        let json = r#"{"embeddings":[[0.1,0.2],[0.3,0.4]]}"#;
+        let response: OllamaResponse = serde_json::from_str(json).unwrap();
+
+        assert_eq!(response.embeddings.len(), 2);
+        assert_eq!(response.embeddings[0].len(), 2);
+        assert_eq!(response.embeddings[1].len(), 2);
+        assert_eq!(response.embeddings[0][0], 0.1);
+        assert_eq!(response.embeddings[0][1], 0.2);
+        assert_eq!(response.embeddings[1][0], 0.3);
+        assert_eq!(response.embeddings[1][1], 0.4);
     }
 
     #[tokio::test]
@@ -442,5 +439,35 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_embed_batch_raw_empty_returns_empty() {
+        let provider = OllamaProvider::default_config().unwrap();
+        let result = provider.embed_batch_raw(vec![]).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running Ollama
+    async fn test_ollama_batch_api_integration() {
+        let provider = OllamaProvider::default_config().unwrap();
+        let texts = vec!["hello".to_string(), "world".to_string()];
+        let embeddings = provider.embed_batch(texts).await.unwrap();
+
+        assert_eq!(embeddings.len(), 2);
+        assert_eq!(embeddings[0].len(), 768);
+        assert_eq!(embeddings[1].len(), 768);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running Ollama
+    async fn test_ollama_single_embed_uses_batch_api() {
+        let provider = OllamaProvider::default_config().unwrap();
+        let embedding = provider.embed("test".to_string()).await.unwrap();
+
+        assert_eq!(embedding.len(), 768);
     }
 }
