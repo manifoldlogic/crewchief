@@ -3,10 +3,9 @@ pub mod migrations;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use rusqlite::{Connection, params, OptionalExtension};
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::spawn_blocking;
 
@@ -240,17 +239,18 @@ impl VectorStore for SqliteStore {
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
         self.run(move |conn| {
+            let tx = conn.transaction()?;
+
             // For JSON fields, we need to serialize to string if rusqlite doesn't support JSON directly
             let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
-            let worktree_ids_json = serde_json::json!([chunk.worktree_id]).to_string();
 
-            // SQLite UPSERT
-            conn.execute(
+            // SQLite UPSERT - no longer includes worktree_ids column
+            tx.execute(
                 "INSERT INTO chunks (
                    file_id, blob_sha, symbol_name, kind, signature, docstring,
                    start_line, end_line, preview, ts_doc_text, recency_score,
-                   churn_score, metadata, worktree_ids
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                   churn_score, metadata
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                  ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
                    blob_sha = excluded.blob_sha,
                    symbol_name = excluded.symbol_name,
@@ -260,7 +260,8 @@ impl VectorStore for SqliteStore {
                    preview = excluded.preview,
                    ts_doc_text = excluded.ts_doc_text,
                    metadata = excluded.metadata,
-                   worktree_ids = json_insert(chunks.worktree_ids, '$[#]', ?15) -- Append worktree_id if not exists logic needed
+                   recency_score = excluded.recency_score,
+                   churn_score = excluded.churn_score
                  ",
                 params![
                     chunk.file_id,
@@ -276,27 +277,30 @@ impl VectorStore for SqliteStore {
                     chunk.recency_score,
                     chunk.churn_score,
                     metadata_json,
-                    worktree_ids_json,
-                    chunk.worktree_id // For update logic
                 ],
             )?;
-            
-            // Correct update logic for worktree_ids: 
-            // If ID not in array, append it.
-            // But first get the ID
-            let id: i64 = conn.query_row(
+
+            // Get the chunk ID
+            let chunk_id: i64 = tx.query_row(
                 "SELECT id FROM chunks WHERE file_id = ?1 AND start_line = ?2 AND end_line = ?3",
                 params![chunk.file_id, chunk.start_line, chunk.end_line],
                 |row| row.get(0),
             )?;
-            
-            // Update FTS index manually
-            conn.execute(
-                "INSERT OR REPLACE INTO fts_chunks(rowid, content, docstring, symbol_name) VALUES (?1, ?2, ?3, ?4)",
-                params![id, chunk.preview, chunk.docstring, chunk.symbol_name],
+
+            // Insert into junction table (INSERT OR IGNORE handles duplicates)
+            tx.execute(
+                "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
+                params![chunk_id, chunk.worktree_id],
             )?;
 
-            Ok(id)
+            // Update FTS index manually
+            tx.execute(
+                "INSERT OR REPLACE INTO fts_chunks(rowid, content, docstring, symbol_name) VALUES (?1, ?2, ?3, ?4)",
+                params![chunk_id, chunk.preview, chunk.docstring, chunk.symbol_name],
+            )?;
+
+            tx.commit()?;
+            Ok(chunk_id)
         }).await
     }
 
@@ -305,11 +309,11 @@ impl VectorStore for SqliteStore {
         self.run(move |conn| {
             let tx = conn.transaction()?;
             let mut ids = Vec::new();
-            
+
             {
                 let mut stmt = tx.prepare(
                     "INSERT INTO chunks (
-                       file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, recency_score, churn_score, metadata, worktree_ids
+                       file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc_text, recency_score, churn_score, metadata
                      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                      ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
                        blob_sha = excluded.blob_sha,
@@ -318,9 +322,15 @@ impl VectorStore for SqliteStore {
                        signature = excluded.signature,
                        docstring = excluded.docstring,
                        preview = excluded.preview,
-                       metadata = excluded.metadata
-                       -- worktree_ids update logic simplified for batch
+                       ts_doc_text = excluded.ts_doc_text,
+                       metadata = excluded.metadata,
+                       recency_score = excluded.recency_score,
+                       churn_score = excluded.churn_score
                      RETURNING id"
+                )?;
+
+                let mut junction_stmt = tx.prepare(
+                    "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)"
                 )?;
 
                 let mut fts_stmt = tx.prepare(
@@ -329,9 +339,8 @@ impl VectorStore for SqliteStore {
 
                 for chunk in chunks {
                     let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
-                    let worktree_ids_json = serde_json::json!([chunk.worktree_id]).to_string();
 
-                    let id: i64 = stmt.query_row(params![
+                    let chunk_id: i64 = stmt.query_row(params![
                         chunk.file_id,
                         chunk.blob_sha,
                         chunk.symbol_name,
@@ -341,17 +350,20 @@ impl VectorStore for SqliteStore {
                         chunk.start_line,
                         chunk.end_line,
                         chunk.preview,
+                        chunk.ts_doc_text,
                         chunk.recency_score,
                         chunk.churn_score,
                         metadata_json,
-                        worktree_ids_json
                     ], |row| row.get(0))?;
-                    
-                    fts_stmt.execute(params![id, chunk.preview, chunk.docstring, chunk.symbol_name])?;
-                    ids.push(id);
+
+                    // Insert into junction table
+                    junction_stmt.execute(params![chunk_id, chunk.worktree_id])?;
+
+                    fts_stmt.execute(params![chunk_id, chunk.preview, chunk.docstring, chunk.symbol_name])?;
+                    ids.push(chunk_id);
                 }
             }
-            
+
             tx.commit()?;
             Ok(ids)
         }).await
@@ -378,7 +390,7 @@ impl VectorStore for SqliteStore {
         chunk_id: i64,
         code_embedding: Option<&[f32]>,
         text_embedding: Option<&[f32]>,
-        dimension: usize,
+        _dimension: usize,
     ) -> anyhow::Result<()> {
         let code = code_embedding.map(|s| s.to_vec());
         let text = text_embedding.map(|s| s.to_vec());
@@ -448,7 +460,7 @@ impl VectorStore for SqliteStore {
     async fn batch_upsert_embeddings(
         &self,
         embeddings: &[(i64, Option<Vec<f32>>, Option<Vec<f32>>)],
-        dimension: usize,
+        _dimension: usize,
     ) -> anyhow::Result<()> {
         let embeddings = embeddings.to_vec();
 
@@ -520,7 +532,7 @@ impl VectorStore for SqliteStore {
         worktree: Option<&str>,
         query: &str,
         k: i64,
-        debug: bool,
+        _debug: bool,
     ) -> anyhow::Result<Vec<SearchHit>> {
         let repo = repo.to_string();
         let worktree = worktree.map(|s| s.to_string());
@@ -571,7 +583,27 @@ impl VectorStore for SqliteStore {
             // SQLite FTS5 rank is built-in function 'bm25' or 'rank'
             // We join with chunks and files
             
-            let sql = r#"
+            let sql = if worktree_id.is_some() {
+                r#"
+                SELECT
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    fts_chunks.rank as score
+                FROM fts_chunks
+                JOIN chunks c ON c.id = fts_chunks.rowid
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                WHERE fts_chunks MATCH ?1
+                  AND f.repo_id = ?2
+                  AND cw.worktree_id = ?3
+                ORDER BY score
+                LIMIT ?4
+                "#
+            } else {
+                r#"
                 SELECT
                     c.start_line,
                     c.end_line,
@@ -584,46 +616,50 @@ impl VectorStore for SqliteStore {
                 JOIN files f ON f.id = c.file_id
                 WHERE fts_chunks MATCH ?1
                   AND f.repo_id = ?2
-                  AND (?3 IS NULL OR f.worktree_id = ?3)
                 ORDER BY score
-                LIMIT ?4
-            "#;
+                LIMIT ?3
+                "#
+            };
 
             let mut stmt = conn.prepare(sql)?;
-            let rows = stmt.query_map(params![fts_query, repo_id, worktree_id, k], |row| {
-                let score: f64 = row.get(5)?;
-                Ok(SearchHit {
-                    start_line: row.get(0)?,
-                    end_line: row.get(1)?,
-                    symbol_name: row.get(2)?,
-                    kind: row.get(3)?,
-                    file_relpath: row.get(4)?,
-                    score: -score, // FTS5 rank is lower=better, we want higher=better for consistency? 
-                                   // Wait, usually rank is relevance. BM25 is negative in SQLite? 
-                                   // Actually, 'rank' column value depends on function. 
-                                   // Default 'rank' is negative of BM25 score? No.
-                                   // Let's just use it raw for now or assume lower is better and negate it for sorting DESC.
-                                   // Postgres ts_rank is higher=better.
-                                   // SQLite FTS5 rank is usually lower=better (it's a distance-like metric often).
-                                   // Let's verify FTS5 documentation. "The default rank function... returns a value that is less than or equal to zero."
-                                   // So more negative is better? Or closer to zero?
-                                   // Actually, it returns "a value <= 0.0". Smaller (more negative) is better?
-                                   // "The default rank function returns a copy of its first argument." (Wait, no).
-                                   // Standard `bm25()` returns negative values where more negative is better match.
-                                   // So to sort by relevance descending (best first), we order by rank (which is negative).
-                                   // Wait, `ORDER BY rank` sorts ascending (-10, -5, -1). -10 is better?
-                                   // "The more relevant the match, the smaller the value returned."
-                                   // So ASC order gives best results first.
-                                   // We want to return a positive score. So let's negate it.
-                    base_score: None,
-                    kind_mult: None,
-                    exact_mult: None,
-                })
-            })?;
 
             let mut hits = Vec::new();
-            for row in rows {
-                hits.push(row?);
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(params![fts_query, repo_id, wid, k], |row| {
+                    let score: f64 = row.get(5)?;
+                    Ok(SearchHit {
+                        start_line: row.get(0)?,
+                        end_line: row.get(1)?,
+                        symbol_name: row.get(2)?,
+                        kind: row.get(3)?,
+                        file_relpath: row.get(4)?,
+                        score: -score, // FTS5 rank is negative, negate for positive score
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(params![fts_query, repo_id, k], |row| {
+                    let score: f64 = row.get(5)?;
+                    Ok(SearchHit {
+                        start_line: row.get(0)?,
+                        end_line: row.get(1)?,
+                        symbol_name: row.get(2)?,
+                        kind: row.get(3)?,
+                        file_relpath: row.get(4)?,
+                        score: -score, // FTS5 rank is negative, negate for positive score
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
             }
             Ok(hits)
         }).await
@@ -717,5 +753,178 @@ impl VectorStore for SqliteStore {
             }
             Ok(versions)
         }).await
+    }
+}
+
+// Additional SQLite-specific methods not in VectorStore trait
+impl SqliteStore {
+    /// Add chunk to additional worktree
+    pub async fn add_chunk_to_worktree(&self, chunk_id: i64, worktree_id: i64) -> anyhow::Result<()> {
+        self.run(move |conn| {
+            conn.execute(
+                "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
+                params![chunk_id, worktree_id],
+            )?;
+            Ok(())
+        }).await
+    }
+
+    /// Get all worktrees containing this chunk
+    pub async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
+            let rows = stmt.query_map(params![chunk_id], |row| row.get(0))?;
+            let mut ids = Vec::new();
+            for id in rows {
+                ids.push(id?);
+            }
+            Ok(ids)
+        }).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::VectorStore;
+
+    async fn setup_test_store() -> SqliteStore {
+        let store = SqliteStore::connect(":memory:").await.expect("Failed to create test store");
+        store.migrate().await.expect("Failed to run migrations");
+        store
+    }
+
+    #[tokio::test]
+    async fn test_junction_table_operations() {
+        let store = setup_test_store().await;
+
+        // Create a test repo
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+
+        // Create two worktrees
+        let worktree1_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let worktree2_id = store.get_or_create_worktree(repo_id, "feature", "/test/path/feature").await.unwrap();
+
+        // Create a commit
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create a file for worktree1
+        let file = FileRecord {
+            repo_id,
+            worktree_id: worktree1_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash123".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create a chunk associated with worktree1
+        let chunk = ChunkRecord {
+            file_id,
+            worktree_id: worktree1_id,
+            blob_sha: "blob123".to_string(),
+            symbol_name: Some("test_function".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "fn test_function() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        let chunk_id = store.insert_chunk(&chunk).await.unwrap();
+
+        // Verify chunk is associated with worktree1
+        let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0], worktree1_id);
+
+        // Add chunk to worktree2
+        store.add_chunk_to_worktree(chunk_id, worktree2_id).await.unwrap();
+
+        // Verify chunk is now associated with both worktrees
+        let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
+        assert_eq!(worktrees.len(), 2);
+        assert!(worktrees.contains(&worktree1_id));
+        assert!(worktrees.contains(&worktree2_id));
+
+        // Try adding same worktree again (should be idempotent)
+        store.add_chunk_to_worktree(chunk_id, worktree2_id).await.unwrap();
+        let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
+        assert_eq!(worktrees.len(), 2); // Still only 2, not 3
+    }
+
+    #[tokio::test]
+    async fn test_batch_insert_with_junction() {
+        let store = setup_test_store().await;
+
+        // Create test data
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash123".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create multiple chunks
+        let chunks = vec![
+            ChunkRecord {
+                file_id,
+                worktree_id,
+                blob_sha: "blob1".to_string(),
+                symbol_name: Some("fn1".to_string()),
+                kind: "function".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: 5,
+                preview: "fn fn1() {}".to_string(),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            },
+            ChunkRecord {
+                file_id,
+                worktree_id,
+                blob_sha: "blob2".to_string(),
+                symbol_name: Some("fn2".to_string()),
+                kind: "function".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 6,
+                end_line: 10,
+                preview: "fn fn2() {}".to_string(),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            },
+        ];
+
+        let chunk_ids = store.insert_chunks_batch(&chunks).await.unwrap();
+        assert_eq!(chunk_ids.len(), 2);
+
+        // Verify both chunks are in junction table
+        for chunk_id in chunk_ids {
+            let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
+            assert_eq!(worktrees.len(), 1);
+            assert_eq!(worktrees[0], worktree_id);
+        }
     }
 }
