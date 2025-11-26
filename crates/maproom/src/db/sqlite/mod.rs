@@ -3,6 +3,7 @@ pub mod migrations;
 pub mod embeddings;
 pub mod vector;
 pub mod fts;
+pub mod hybrid;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -919,15 +920,63 @@ impl SqliteStore {
             fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit)
         }).await
     }
+
+    /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
+    ///
+    /// Combines keyword matching (FTS5) with semantic similarity (vectors) to provide
+    /// comprehensive search results. Falls back to FTS-only when vector search is
+    /// unavailable or returns no results.
+    ///
+    /// # Arguments
+    /// * `repo` - Repository name to filter by
+    /// * `worktree` - Optional worktree name to filter by
+    /// * `query` - User's search query (for FTS)
+    /// * `query_embedding` - Query embedding vector (for semantic search)
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Weights for combining FTS and vector contributions
+    pub async fn search_hybrid(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        weights: hybrid::HybridWeights,
+    ) -> anyhow::Result<Vec<hybrid::HybridResult>> {
+        // Over-fetch from each source for better fusion coverage
+        let fetch_limit = limit * 3;
+
+        // Run FTS and vector search in parallel
+        let (fts_results, vec_results) = tokio::join!(
+            self.search_fts(repo, worktree, query, fetch_limit),
+            self.search_vector(repo, worktree, query_embedding, fetch_limit),
+        );
+
+        let fts_results = fts_results?;
+        let vec_results = vec_results?;
+
+        // Combine results using RRF
+        let results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
+
+        Ok(results)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::VectorStore;
+    use std::sync::atomic::AtomicUsize;
+
+    // Counter for unique test database names
+    static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     async fn setup_test_store() -> SqliteStore {
-        let store = SqliteStore::connect(":memory:").await.expect("Failed to create test store");
+        // Use file:memdb?mode=memory&cache=shared for shared in-memory database
+        // Each test gets a unique name to avoid interference
+        let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let db_name = format!("file:memdb_test_{}?mode=memory&cache=shared", counter);
+        let store = SqliteStore::connect(&db_name).await.expect("Failed to create test store");
         store.migrate().await.expect("Failed to run migrations");
         store
     }
@@ -1709,5 +1758,184 @@ mod tests {
         // Search only in feature worktree
         let results_feature = store.search_fts("test-repo", Some("feature"), "handler", 10).await.unwrap();
         assert_eq!(results_feature.len(), 1, "Should find 1 handler in feature worktree");
+    }
+
+    #[tokio::test]
+    async fn test_hybrid_search_integration() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks with both FTS content and embeddings
+        // Chunk 1: Good for both FTS ("authentication") and vector (similar to query)
+        let chunk1 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("process_authentication".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Handle user authentication".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn process_authentication() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk1).await.unwrap();
+
+        // Chunk 2: Good for FTS only ("authentication" in content)
+        let chunk2 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("validate_auth".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Validate authentication token".to_string()),
+            start_line: 11,
+            end_line: 20,
+            preview: "fn validate_auth() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk2).await.unwrap();
+
+        // Chunk 3: Good for vector only (semantically similar embedding)
+        let chunk3 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob3".to_string(),
+            symbol_name: Some("login_handler".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Handle login requests".to_string()),
+            start_line: 21,
+            end_line: 30,
+            preview: "fn login_handler() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk3).await.unwrap();
+
+        // Create embeddings (chunk1 and chunk3 similar to query, chunk2 different)
+        let query_embedding: Vec<f32> = vec![0.5f32; 1536];
+        let embedding1: Vec<f32> = vec![0.5f32; 1536]; // Similar to query
+        let embedding2: Vec<f32> = vec![0.9f32; 1536]; // Different from query
+        let embedding3: Vec<f32> = vec![0.51f32; 1536]; // Similar to query
+
+        store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
+        store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
+        store.upsert_embedding("blob3", &embedding3, "model-v1").await.unwrap();
+
+        // Perform hybrid search for "authentication"
+        let weights = hybrid::HybridWeights::default();
+        let results = store.search_hybrid(
+            "test-repo",
+            None,
+            "authentication",
+            &query_embedding,
+            10,
+            weights,
+        ).await.unwrap();
+
+        // Should find results from both sources
+        assert!(!results.is_empty(), "Hybrid search should return results");
+
+        // Chunk 1 should be ranked highly (appears in both FTS and vector)
+        let chunk1_result = results.iter().find(|r| r.source == "both");
+        assert!(chunk1_result.is_some(), "Should have at least one result from both sources");
+
+        // Results should be sorted by score (descending)
+        for i in 1..results.len() {
+            assert!(
+                results[i - 1].score >= results[i].score,
+                "Results should be sorted by score descending"
+            );
+        }
+
+        // All scores should be positive
+        for result in &results {
+            assert!(result.score > 0.0, "All scores should be positive");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_hybrid_search_fallback_to_fts() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file and chunk with FTS content but NO embedding
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        let chunk = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob_no_embedding".to_string(),
+            symbol_name: Some("test_function".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Test function for search".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn test_function() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk).await.unwrap();
+
+        // Perform hybrid search - should fall back to FTS since no embeddings
+        let query_embedding: Vec<f32> = vec![0.5f32; 1536];
+        let weights = hybrid::HybridWeights::default();
+        let results = store.search_hybrid(
+            "test-repo",
+            None,
+            "test",
+            &query_embedding,
+            10,
+            weights,
+        ).await.unwrap();
+
+        // Should find FTS results even without vector results
+        assert!(!results.is_empty(), "Should find FTS results when no embeddings");
+        assert!(results.iter().all(|r| r.source == "fts"), "All results should be FTS-only");
     }
 }
