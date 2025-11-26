@@ -5,6 +5,11 @@
  * Does NOT start Docker containers - assumes maproom-mcp is already running.
  *
  * This lightweight approach avoids container conflicts and keeps the extension simple.
+ *
+ * @deprecated This module is being superseded by database-checker.ts which provides
+ * a unified interface for both SQLite and PostgreSQL backends. Functions from this
+ * module are still used internally by database-checker.ts for PostgreSQL support,
+ * but new code should use database-checker.ts directly.
  */
 
 import { createConnection, type Socket } from 'node:net'
