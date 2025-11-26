@@ -155,6 +155,18 @@ impl VectorStore for PostgresStore {
         super::queries::search_chunks_fts(&client, repo, worktree, query, k, debug).await
     }
 
+    async fn search_chunks_vector(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        embedding: &[f32],
+        k: i64,
+        debug: bool,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::search_chunks_vector(&client, repo, worktree, embedding, k, debug).await
+    }
+
     async fn find_chunk_by_symbol(
         &self,
         repo_id: i64,

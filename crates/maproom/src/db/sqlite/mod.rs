@@ -659,6 +659,113 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn search_chunks_vector(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        embedding: &[f32],
+        k: i64,
+        debug: bool,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        // Graceful degradation if sqlite-vec not available
+        if !self.has_vec_extension() {
+            return Ok(vec![]);
+        }
+
+        let repo = repo.to_string();
+        let worktree = worktree.map(|s| s.to_string());
+        let embedding = embedding.to_vec();
+        let limit = k as usize;
+
+        self.run(move |conn| {
+            // Resolve repo/worktree ids
+            let repo_id: i64 = conn.query_row(
+                "SELECT id FROM repos WHERE name = ?1",
+                params![repo],
+                |row| row.get(0),
+            )?;
+
+            let worktree_id: Option<i64> = if let Some(ref w) = worktree {
+                conn.query_row(
+                    "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                    params![repo_id, w],
+                    |row| row.get(0),
+                ).optional()?
+            } else {
+                None
+            };
+
+            // Get vector search results (chunk_id, distance, similarity)
+            let vec_results = vector::search_vector(
+                conn,
+                &repo,
+                worktree.as_deref(),
+                &embedding,
+                limit,
+            )?;
+
+            // Convert VectorResult to SearchHit by fetching chunk metadata
+            let mut hits = Vec::new();
+            for vec_result in vec_results {
+                // Fetch chunk details with file relpath
+                let hit_result = if let Some(wid) = worktree_id {
+                    conn.query_row(
+                        r#"
+                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath
+                        FROM chunks c
+                        JOIN files f ON f.id = c.file_id
+                        JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                        WHERE c.id = ?1 AND cw.worktree_id = ?2
+                        "#,
+                        params![vec_result.chunk_id, wid],
+                        |row| {
+                            Ok(SearchHit {
+                                start_line: row.get(0)?,
+                                end_line: row.get(1)?,
+                                symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                file_relpath: row.get(4)?,
+                                score: vec_result.similarity,
+                                base_score: if debug { Some(vec_result.similarity) } else { None },
+                                kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
+                                exact_mult: None,
+                            })
+                        }
+                    ).optional()?
+                } else {
+                    conn.query_row(
+                        r#"
+                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath
+                        FROM chunks c
+                        JOIN files f ON f.id = c.file_id
+                        WHERE c.id = ?1
+                        "#,
+                        params![vec_result.chunk_id],
+                        |row| {
+                            Ok(SearchHit {
+                                start_line: row.get(0)?,
+                                end_line: row.get(1)?,
+                                symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                file_relpath: row.get(4)?,
+                                score: vec_result.similarity,
+                                base_score: if debug { Some(vec_result.similarity) } else { None },
+                                kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
+                                exact_mult: None,
+                            })
+                        }
+                    ).optional()?
+                };
+
+                if let Some(hit) = hit_result {
+                    hits.push(hit);
+                }
+            }
+
+            Ok(hits)
+        }).await
+    }
+
     async fn find_chunk_by_symbol(
         &self,
         repo_id: i64,

@@ -970,6 +970,134 @@ pub async fn batch_upsert_embeddings(
     Ok(())
 }
 
+/// Search chunks using vector similarity with SEMRANK enhancements
+///
+/// Implements pgvector cosine distance search with semantic ranking:
+/// - Kind-based multipliers (SEMRANK-2003): Functions/classes rank higher than tests/docs
+/// - Distance to similarity conversion: 1.0 - (distance / 2.0) for normalized vectors
+/// - Combined final score (SEMRANK-2005): similarity × kind_mult
+///
+/// # Parameters
+/// - `client`: Database client
+/// - `repo`: Repository name
+/// - `worktree`: Optional worktree filter
+/// - `embedding`: Query embedding vector (768 or 1536 dimensions)
+/// - `k`: Maximum number of results
+/// - `debug`: If true, include base_score (similarity) and kind_mult in results
+///
+/// # Returns
+/// Vector of SearchHit results ordered by final_score DESC
+pub async fn search_chunks_vector(
+    client: &Client,
+    repo: &str,
+    worktree: Option<&str>,
+    embedding: &[f32],
+    k: i64,
+    debug: bool,
+) -> anyhow::Result<Vec<SearchHit>> {
+    use crate::db::select_columns_for_dimension;
+
+    // Resolve repo/worktree ids
+    let repo_row = client
+        .query_one("SELECT id FROM maproom.repos WHERE name = $1", &[&repo])
+        .await?;
+    let repo_id: i64 = repo_row.get(0);
+    let worktree_id: Option<i64> = if let Some(w) = worktree {
+        let row = client
+            .query_opt(
+                "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
+                &[&repo_id, &w],
+            )
+            .await?;
+        row.map(|r| r.get(0))
+    } else {
+        None
+    };
+
+    // Select columns based on embedding dimension
+    let dimension = embedding.len();
+    let columns = select_columns_for_dimension(dimension)?;
+
+    // Convert embedding to pgvector::Vector
+    let query_vec = pgvector::Vector::from(embedding.to_vec());
+
+    // SEMRANK-enhanced SQL query with kind multiplier and cosine distance
+    // pgvector's <=> operator computes cosine distance (0 = identical, 2 = opposite)
+    // Similarity = 1.0 - (distance / 2.0) for normalized range [0, 1]
+    let sql = format!(
+        r#"
+        WITH vector_results AS (
+          SELECT
+            c.id,
+            c.start_line,
+            c.end_line,
+            c.symbol_name,
+            c.kind::text,
+            f.relpath,
+            (1.0 - (c.{} <=> $1) / 2.0) as similarity,
+            -- SEMRANK-2003: Kind-based multiplier
+            CASE
+              WHEN c.kind IN ('func', 'async_func') THEN 2.5
+              WHEN c.kind IN ('class', 'component') THEN 2.0
+              WHEN c.kind = 'hook' THEN 1.8
+              WHEN c.kind IN ('module', 'type', 'struct', 'trait', 'enum') THEN 1.5
+              WHEN c.kind IN ('var', 'variable', 'constant', 'method', 'async_method') THEN 1.0
+              WHEN c.kind = 'heading_1' THEN 0.6
+              WHEN c.kind = 'heading_2' THEN 0.5
+              WHEN c.kind = 'heading_3' THEN 0.4
+              WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN 0.3
+              WHEN c.kind = 'other' THEN 1.0
+              WHEN c.kind IS NULL THEN 1.0
+              ELSE 1.0
+            END as kind_mult
+          FROM maproom.chunks c
+          JOIN maproom.files f ON f.id = c.file_id
+          WHERE c.{} IS NOT NULL
+            AND f.repo_id = $2
+            AND ($3::bigint IS NULL OR f.worktree_id = $3)
+          ORDER BY c.{} <=> $1
+          LIMIT $4
+        )
+        SELECT
+          start_line,
+          end_line,
+          symbol_name,
+          kind,
+          relpath,
+          similarity::float8,
+          kind_mult::float8,
+          (similarity * kind_mult)::float8 as final_score
+        FROM vector_results
+        ORDER BY final_score DESC
+    "#,
+        columns.code_embedding, columns.code_embedding, columns.code_embedding
+    );
+
+    let rows = client
+        .query(&sql, &[&query_vec, &repo_id, &worktree_id, &k])
+        .await?;
+
+    // Extract results with optional debug fields
+    let hits = rows
+        .into_iter()
+        .map(|r| {
+            let final_score: f64 = r.get(7);
+            SearchHit {
+                start_line: r.get(0),
+                end_line: r.get(1),
+                symbol_name: r.get(2),
+                kind: r.get(3),
+                file_relpath: r.get(4),
+                score: final_score,
+                base_score: if debug { Some(r.get(5)) } else { None },
+                kind_mult: if debug { Some(r.get(6)) } else { None },
+                exact_mult: None, // Not applicable for vector search
+            }
+        })
+        .collect();
+    Ok(hits)
+}
+
 /// Search chunks using full-text search with SEMRANK enhancements
 ///
 /// Implements SEMRANK semantic ranking with:

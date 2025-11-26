@@ -140,6 +140,16 @@ pub trait VectorStore: Send + Sync {
         debug: bool,
     ) -> anyhow::Result<Vec<SearchHit>>;
 
+    /// Vector similarity search using embedding
+    async fn search_chunks_vector(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        embedding: &[f32],
+        k: i64,
+        debug: bool,
+    ) -> anyhow::Result<Vec<SearchHit>>;
+
     // --- Lookup ---
     async fn find_chunk_by_symbol(
         &self,
