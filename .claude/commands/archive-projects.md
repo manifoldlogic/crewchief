@@ -15,33 +15,60 @@ Review all active projects and archive those that are complete, ensuring knowled
 ## Phase 1: Inventory Active Projects
 
 1. List all projects in `.agents/projects/`
-2. For each project, assess completion status:
-   - Read `README.md` for project status
-   - Check ticket index for completion checkboxes
-   - Review individual tickets for verified status
+2. For each project, gather ticket files from `tickets/` directory
 
-## Phase 2: Evaluate Each Project
+## Phase 2: Verify Completion (Source of Truth)
 
-For each project, determine completion state:
+**CRITICAL: The source of truth for project completion is the "Verified" checkbox in each individual ticket file, NOT the ticket index.**
+
+Ticket indexes and README status markers can become outdated when agents mark things complete prematurely. The `verify-ticket` agent is a quality gate that actually checks for completeness before checking the "Verified" box.
+
+For each project:
+
+1. **Read each ticket file** (not just the index)
+2. **Check for the Verified checkbox pattern:**
+   ```markdown
+   - [x] **Verified** - by the verify-ticket agent
+   ```
+3. **Count verified vs unverified tickets:**
+   - Verified: `- [x] **Verified**`
+   - Unverified: `- [ ] **Verified**` (or missing)
 
 **Complete (ready to archive):**
-- ✓ All tickets have "Task completed" and "Verified" checkboxes checked
-- ✓ No pending or in-progress tickets remain
-- ✓ Project README reflects completed status
+- ✓ ALL tickets have `- [x] **Verified**` checkbox checked
+- ✓ No tickets with unchecked Verified checkbox
 
 **Partially Complete (do not archive):**
-- Some tickets complete, others pending
-- Active work still in progress
-- Dependencies on other incomplete projects
+- One or more tickets have unchecked Verified checkbox
+- Even if ticket index shows "Complete" status
 
 **Abandoned/Superseded (may archive with note):**
-- Project explicitly marked abandoned
+- Project explicitly marked abandoned in README
 - Work superseded by different project
 - No activity and no planned continuation
+- Note: Add "ABANDONED" or "SUPERSEDED" prefix to archived folder name
 
-## Phase 3: Knowledge Synthesis
+## Phase 3: Update Project Documents
 
-Before archiving a complete project, check for extractable knowledge:
+Before archiving, ensure project documents reflect actual completion status:
+
+**Update Ticket Index (`tickets/{SLUG}_TICKET_INDEX.md`):**
+1. Update each ticket's status to match verified state:
+   - `✅ Complete` - only if `- [x] **Verified**` in ticket file
+   - `🟡 Pending` - if not yet started or in progress
+2. Update any "Status" field at the top to reflect true completion
+3. Remove any outdated time estimates or week references
+
+**Update Project README (`README.md`):**
+1. Set status to "Complete" only if all tickets verified
+2. Add completion date
+3. Summarize what was delivered
+
+**Why this matters:** These documents become the historical record in the archive. They should accurately reflect what was accomplished, not optimistic mid-project status markers.
+
+## Phase 4: Knowledge Synthesis
+
+Before archiving, check for extractable knowledge:
 
 **Candidates for `/docs/`:**
 - Architecture decisions with lasting value
@@ -61,7 +88,7 @@ Before archiving a complete project, check for extractable knowledge:
 - Equivalent documentation already exists in `/docs/`
 - Information is outdated or superseded
 
-## Phase 4: Update References
+## Phase 5: Update References
 
 Before moving project folder, find and update references:
 
@@ -75,7 +102,7 @@ Before moving project folder, find and update references:
 - Update status indicators (e.g., "In Progress" → "Completed")
 - Remove from active project lists
 
-## Phase 5: Archive
+## Phase 6: Archive
 
 For each complete project:
 
@@ -91,39 +118,88 @@ mv .agents/projects/{PROJECT}/ .agents/archive/projects/
 ## Decision Criteria
 
 **Archive if ALL true:**
-- All tickets verified complete
+- ALL tickets have `- [x] **Verified**` checkbox checked (source of truth)
 - No active development planned
 - Knowledge synthesized (or determined unnecessary)
 
 **Do NOT archive if ANY true:**
-- Tickets still pending or in-progress
+- Any ticket has unchecked Verified checkbox (even if index shows "Complete")
 - Active development continuing
 - Blocking other active projects
 
 ## Output
 
-Provide summary:
-- Projects reviewed (count)
-- Projects archived (list with slugs)
-- Knowledge synthesized to `/docs/` (if any)
-- Projects remaining active (list with reasons)
-- References updated (count)
+Provide summary for each project showing verification status:
+
+```
+## Archive Review
+
+### Project: {PROJECT_SLUG}
+
+**Ticket Verification Audit:**
+| Ticket | Verified | Notes |
+|--------|----------|-------|
+| {SLUG}-1001 | ✅ | |
+| {SLUG}-1002 | ✅ | |
+| {SLUG}-2001 | ❌ | Missing Verified checkbox |
+
+**Status**: {VERIFIED_COUNT}/{TOTAL_COUNT} verified
+**Decision**: {Archive / Do Not Archive / Abandoned}
+**Reason**: {explanation}
+```
 
 ## Example Output
 
 ```
-## Archive Summary
+## Archive Review
 
-### Reviewed: 5 projects
+### Project: EMBPERF_ollama-parallel-optimization
 
-### Archived (2):
-- EMBPERF_ollama-parallel-optimization → Performance docs added to /docs/configuration/
-- OPNFIX_open-tool-path-fix → No synthesis needed
+**Ticket Verification Audit:**
+| Ticket | Verified | Notes |
+|--------|----------|-------|
+| EMBPERF-0001 | ✅ | |
+| EMBPERF-1001 | ✅ | |
+| EMBPERF-2001 | ✅ | |
+| EMBPERF-3001 | ✅ | |
+| EMBPERF-3002 | ✅ | |
 
-### Remaining Active (3):
-- SRCHDUP_search-result-deduplication - Tickets pending
-- IDXCLEAN_index-stale-worktree-cleanup - 8/17 tickets complete
-- SQLINFRA_infrastructure-simplification - In progress
+**Status**: 5/5 verified
+**Decision**: Archive
+**Reason**: All tickets verified by verify-ticket agent
+**Knowledge**: Performance docs → /docs/configuration/
 
-### References Updated: 3 files
+---
+
+### Project: IDXCLEAN_index-stale-worktree-cleanup
+
+**Ticket Verification Audit:**
+| Ticket | Verified | Notes |
+|--------|----------|-------|
+| IDXCLEAN-1001 | ✅ | |
+| IDXCLEAN-1002 | ❌ | Task completed but not verified |
+| IDXCLEAN-1003 | ❌ | Pending |
+... (truncated)
+
+**Status**: 1/17 verified
+**Decision**: Do Not Archive
+**Reason**: 16 tickets not yet verified
+
+---
+
+## Summary
+
+- **Reviewed**: 5 projects
+- **Archived**: 1 (EMBPERF)
+- **Remaining Active**: 4
+- **References Updated**: 3 files
 ```
+
+## Future: Automation Hooks
+
+This command will eventually be supported by:
+- **Skill**: `/archive-projects` skill with interactive verification
+- **Scripts**: Automated ticket scanning to extract Verified checkbox status
+- **Reports**: Machine-readable JSON output for CI/CD integration
+
+For now, manually inspect each ticket file to verify the `- [x] **Verified**` checkbox status.
