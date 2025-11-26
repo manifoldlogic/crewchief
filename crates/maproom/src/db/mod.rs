@@ -121,6 +121,23 @@ pub struct ChunkContext {
     pub surrounding_chunks: Vec<ChunkSummary>,  // Chunks before/after by line number
 }
 
+/// Repository metadata
+#[derive(Debug, Clone, Serialize)]
+pub struct RepoInfo {
+    pub id: i64,
+    pub name: String,
+    pub root_path: String,
+}
+
+/// Worktree metadata
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeInfo {
+    pub id: i64,
+    pub repo_id: i64,
+    pub name: String,
+    pub abs_path: String,
+}
+
 /// Common interface for Vector/FTS storage backends.
 #[async_trait]
 pub trait VectorStore: Send + Sync {
@@ -138,6 +155,18 @@ pub trait VectorStore: Send + Sync {
         sha: &str,
         committed_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> anyhow::Result<i64>;
+
+    /// Get repository by name
+    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<RepoInfo>>;
+
+    /// Get worktree by name within a repository
+    async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<WorktreeInfo>>;
+
+    /// List all repositories
+    async fn list_repos(&self) -> anyhow::Result<Vec<RepoInfo>>;
+
+    /// List all worktrees for a repository
+    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<WorktreeInfo>>;
 
     // --- Indexing ---
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64>;

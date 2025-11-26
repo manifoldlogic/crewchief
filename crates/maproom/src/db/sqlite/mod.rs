@@ -197,6 +197,70 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
+    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
+        let name = name.to_string();
+        self.run(move |conn| {
+            let result = conn.query_row(
+                "SELECT id, name, root_path FROM repos WHERE name = ?1",
+                params![name],
+                |row| Ok(crate::db::RepoInfo {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    root_path: row.get(2)?,
+                }),
+            ).optional()?;
+            Ok(result)
+        }).await
+    }
+
+    async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<crate::db::WorktreeInfo>> {
+        let name = name.to_string();
+        self.run(move |conn| {
+            let result = conn.query_row(
+                "SELECT id, repo_id, name, abs_path FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                params![repo_id, name],
+                |row| Ok(crate::db::WorktreeInfo {
+                    id: row.get(0)?,
+                    repo_id: row.get(1)?,
+                    name: row.get(2)?,
+                    abs_path: row.get(3)?,
+                }),
+            ).optional()?;
+            Ok(result)
+        }).await
+    }
+
+    async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare("SELECT id, name, root_path FROM repos ORDER BY name")?;
+            let repos = stmt.query_map([], |row| {
+                Ok(crate::db::RepoInfo {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    root_path: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+            Ok(repos)
+        }).await
+    }
+
+    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees WHERE repo_id = ?1 ORDER BY name")?;
+            let worktrees = stmt.query_map(params![repo_id], |row| {
+                Ok(crate::db::WorktreeInfo {
+                    id: row.get(0)?,
+                    repo_id: row.get(1)?,
+                    name: row.get(2)?,
+                    abs_path: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+            Ok(worktrees)
+        }).await
+    }
+
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
         self.run(move |conn| {

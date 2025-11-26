@@ -42,6 +42,26 @@ impl VectorStore for PostgresStore {
         super::queries::get_or_create_commit(&client, repo_id, sha, committed_at).await
     }
 
+    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_repo_by_name(&client, name).await
+    }
+
+    async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<crate::db::WorktreeInfo>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::get_worktree_by_name(&client, repo_id, name).await
+    }
+
+    async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::list_repos(&client).await
+    }
+
+    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
+        let client = self.pool.get().await.context("Failed to get connection from pool")?;
+        super::queries::list_worktrees(&client, repo_id).await
+    }
+
     async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let client = self.pool.get().await.context("Failed to get connection from pool")?;
         super::queries::upsert_file(

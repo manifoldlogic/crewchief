@@ -479,6 +479,89 @@ pub async fn get_or_create_commit(
     Ok(row.get(0))
 }
 
+/// Get repository by name
+pub async fn get_repo_by_name(
+    client: &Client,
+    name: &str,
+) -> anyhow::Result<Option<super::RepoInfo>> {
+    let row = client
+        .query_opt(
+            "SELECT id, name, root_path FROM maproom.repos WHERE name = $1",
+            &[&name],
+        )
+        .await?;
+
+    Ok(row.map(|r| super::RepoInfo {
+        id: r.get(0),
+        name: r.get(1),
+        root_path: r.get(2),
+    }))
+}
+
+/// Get worktree by name within a repository
+pub async fn get_worktree_by_name(
+    client: &Client,
+    repo_id: i64,
+    name: &str,
+) -> anyhow::Result<Option<super::WorktreeInfo>> {
+    let row = client
+        .query_opt(
+            "SELECT id, repo_id, name, abs_path FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
+            &[&repo_id, &name],
+        )
+        .await?;
+
+    Ok(row.map(|r| super::WorktreeInfo {
+        id: r.get(0),
+        repo_id: r.get(1),
+        name: r.get(2),
+        abs_path: r.get(3),
+    }))
+}
+
+/// List all repositories
+pub async fn list_repos(client: &Client) -> anyhow::Result<Vec<super::RepoInfo>> {
+    let rows = client
+        .query("SELECT id, name, root_path FROM maproom.repos ORDER BY name", &[])
+        .await?;
+
+    let repos = rows
+        .into_iter()
+        .map(|r| super::RepoInfo {
+            id: r.get(0),
+            name: r.get(1),
+            root_path: r.get(2),
+        })
+        .collect();
+
+    Ok(repos)
+}
+
+/// List all worktrees for a repository
+pub async fn list_worktrees(
+    client: &Client,
+    repo_id: i64,
+) -> anyhow::Result<Vec<super::WorktreeInfo>> {
+    let rows = client
+        .query(
+            "SELECT id, repo_id, name, abs_path FROM maproom.worktrees WHERE repo_id = $1 ORDER BY name",
+            &[&repo_id],
+        )
+        .await?;
+
+    let worktrees = rows
+        .into_iter()
+        .map(|r| super::WorktreeInfo {
+            id: r.get(0),
+            repo_id: r.get(1),
+            name: r.get(2),
+            abs_path: r.get(3),
+        })
+        .collect();
+
+    Ok(worktrees)
+}
+
 pub async fn upsert_file(
     client: &Client,
     repo_id: i64,
