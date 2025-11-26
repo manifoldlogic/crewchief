@@ -2,6 +2,7 @@ pub mod schema;
 pub mod migrations;
 pub mod embeddings;
 pub mod vector;
+pub mod fts;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -898,6 +899,26 @@ impl SqliteStore {
             vector::search_vector(conn, &repo, worktree.as_deref(), &query_embedding, limit)
         }).await
     }
+
+    /// Search for chunks using FTS5 full-text search (SQLite-specific)
+    ///
+    /// Returns FtsResult with chunk_id, rank, normalized_rank (0-1), and position.
+    /// The normalized_rank is suitable for RRF fusion with vector search results.
+    pub async fn search_fts(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        limit: usize,
+    ) -> anyhow::Result<Vec<fts::FtsResult>> {
+        let repo = repo.to_string();
+        let worktree = worktree.map(|s| s.to_string());
+        let query = query.to_string();
+
+        self.run(move |conn| {
+            fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit)
+        }).await
+    }
 }
 
 #[cfg(test)]
@@ -1513,5 +1534,180 @@ mod tests {
 
         // Last result should have lower similarity
         assert!(results[2].similarity < results[0].similarity, "Last result should have lower similarity");
+    }
+
+    #[tokio::test]
+    async fn test_fts_search_integration() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks with searchable content
+        let chunk1 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("process_authentication".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Handle user authentication and login".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn process_authentication(user: &User) -> AuthResult {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk1).await.unwrap();
+
+        let chunk2 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("validate_token".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Validate JWT token for authentication".to_string()),
+            start_line: 11,
+            end_line: 20,
+            preview: "fn validate_token(token: &str) -> bool {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk2).await.unwrap();
+
+        // Search for "authentication"
+        let results = store.search_fts("test-repo", None, "authentication", 10).await.unwrap();
+
+        assert!(!results.is_empty(), "Should find results for 'authentication'");
+        assert!(results.len() >= 1, "Should find at least 1 chunk with 'authentication'");
+
+        // Verify results have normalized rank in valid range
+        for result in &results {
+            assert!(result.normalized_rank > 0.0 && result.normalized_rank <= 1.0,
+                "Normalized rank should be in (0, 1], got {}", result.normalized_rank);
+        }
+
+        // Verify position is 0-indexed
+        for (i, result) in results.iter().enumerate() {
+            assert_eq!(result.position, i, "Position should be 0-indexed, expected {}, got {}", i, result.position);
+        }
+
+        // Search for "token" - should find validate_token
+        let results_token = store.search_fts("test-repo", None, "token", 10).await.unwrap();
+        assert!(!results_token.is_empty(), "Should find results for 'token'");
+
+        // Search with empty query should return empty
+        let results_empty = store.search_fts("test-repo", None, "", 10).await.unwrap();
+        assert!(results_empty.is_empty(), "Empty query should return empty results");
+
+        // Search for non-existent term should return empty
+        let results_none = store.search_fts("test-repo", None, "xyznonexistent", 10).await.unwrap();
+        assert!(results_none.is_empty(), "Non-existent term should return empty results");
+    }
+
+    #[tokio::test]
+    async fn test_fts_search_worktree_filter() {
+        let store = setup_test_store().await;
+
+        // Create test repo with two worktrees
+        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let worktree1_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
+        let worktree2_id = store.get_or_create_worktree(repo_id, "feature", "/test/path/feature").await.unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+
+        // Create files in each worktree
+        let file1 = FileRecord {
+            repo_id,
+            worktree_id: worktree1_id,
+            commit_id,
+            relpath: "test1.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file1_id = store.upsert_file(&file1).await.unwrap();
+
+        let file2 = FileRecord {
+            repo_id,
+            worktree_id: worktree2_id,
+            commit_id,
+            relpath: "test2.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash2".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file2_id = store.upsert_file(&file2).await.unwrap();
+
+        // Create chunk in worktree1
+        let chunk1 = ChunkRecord {
+            file_id: file1_id,
+            worktree_id: worktree1_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("main_handler".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Main worktree handler function".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn main_handler() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk1).await.unwrap();
+
+        // Create chunk in worktree2
+        let chunk2 = ChunkRecord {
+            file_id: file2_id,
+            worktree_id: worktree2_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("feature_handler".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: Some("Feature worktree handler function".to_string()),
+            start_line: 1,
+            end_line: 10,
+            preview: "fn feature_handler() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        store.insert_chunk(&chunk2).await.unwrap();
+
+        // Search across all worktrees for "handler"
+        let results_all = store.search_fts("test-repo", None, "handler", 10).await.unwrap();
+        assert_eq!(results_all.len(), 2, "Should find 2 handlers across all worktrees");
+
+        // Search only in main worktree
+        let results_main = store.search_fts("test-repo", Some("main"), "handler", 10).await.unwrap();
+        assert_eq!(results_main.len(), 1, "Should find 1 handler in main worktree");
+
+        // Search only in feature worktree
+        let results_feature = store.search_fts("test-repo", Some("feature"), "handler", 10).await.unwrap();
+        assert_eq!(results_feature.len(), 1, "Should find 1 handler in feature worktree");
     }
 }
