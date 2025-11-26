@@ -16,20 +16,20 @@ Optimize Ollama embedding throughput from ~50-100 texts/sec to 500-1500 texts/se
 
 | Ticket | Title | Agent | Status |
 |--------|-------|-------|--------|
-| [EMBPERF-1001](./EMBPERF-1001_batch-api-support.md) | Batch API Support | rust-indexer-engineer | Not Started |
+| [EMBPERF-1001](./EMBPERF-1001_batch-api-support.md) | Batch API Support | rust-indexer-engineer | **Completed** |
 
 ### Phase 2: Parallel Processing
 
 | Ticket | Title | Agent | Status |
 |--------|-------|-------|--------|
-| [EMBPERF-2001](./EMBPERF-2001_parallel-processing.md) | Parallel Sub-Batch Processing | rust-indexer-engineer | Not Started |
+| [EMBPERF-2001](./EMBPERF-2001_parallel-processing.md) | Parallel Sub-Batch Processing | rust-indexer-engineer | **Completed** |
 
 ### Phase 3: Benchmarking & Documentation
 
 | Ticket | Title | Agent | Status |
 |--------|-------|-------|--------|
-| [EMBPERF-3001](./EMBPERF-3001_benchmarks-tests.md) | Benchmarks & Integration Tests | integration-tester | Not Started |
-| [EMBPERF-3002](./EMBPERF-3002_documentation.md) | Documentation | technical-researcher | Not Started |
+| [EMBPERF-3001](./EMBPERF-3001_benchmarks-tests.md) | Benchmarks & Integration Tests | integration-tester | **Completed** |
+| [EMBPERF-3002](./EMBPERF-3002_documentation.md) | Documentation | technical-researcher | **Completed** |
 
 ## Implementation Order
 
