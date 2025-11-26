@@ -141,7 +141,7 @@ You are working on the CrewChief project, specifically the Maproom semantic sear
 - Scoring algorithms: `crates/maproom/src/search/`
 - Context assembly: `packages/maproom-mcp/src/context/`
 - Token counting: `packages/maproom-mcp/src/tokens/`
-- Work tickets: `.agents/work-tickets/`
+- Work tickets: `.agents/projects/{SLUG}_*/tickets/`
 
 Adhere to all coding standards and patterns defined in the project's CLAUDE.md file.
 

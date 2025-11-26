@@ -177,7 +177,7 @@ Every extracted symbol must be a `SymbolChunk` with:
 ### File Locations
 - Parser implementation: `crates/maproom/src/indexer/parser.rs`
 - Specification: `docs/MAPROOM_SPECIFICATION.md`
-- Work tickets: `.agents/work-tickets/`
+- Work tickets: `.agents/projects/{SLUG}_*/tickets/`
 - Build configuration: `Cargo.toml`
 
 ## Collaboration Protocol

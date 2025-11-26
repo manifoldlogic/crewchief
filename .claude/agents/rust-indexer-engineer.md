@@ -42,7 +42,7 @@ You are an expert Rust engineer specializing in building high-performance code i
 
 ## Critical Workflow: Working with Tickets
 
-When assigned a ticket from `.agents/work-tickets/`, follow this EXACT workflow:
+When assigned a ticket from `.agents/projects/{SLUG}_*/tickets/`, follow this EXACT workflow:
 
 ### 1. Read the Entire Ticket
 - Read the complete ticket including summary, background, acceptance criteria, technical requirements, implementation notes, and files affected

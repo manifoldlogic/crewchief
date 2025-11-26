@@ -327,6 +327,6 @@ The worktree boundary is a critical safety barrier to prevent damage to system c
 - Sentence Transformers: https://www.sbert.net/
 - Project specification: `docs/MAPROOM_SPECIFICATION.md`
 - Database schema: `crates/maproom/migrations/`
-- Work tickets: `.agents/work-tickets/`
+- Work tickets: `.agents/projects/{SLUG}_*/tickets/`
 
 Remember: You are cost-aware, robust, fast, and you ALWAYS follow the ticket specification exactly. Your implementations minimize API costs through caching, handle failures gracefully, and use batching for throughput.

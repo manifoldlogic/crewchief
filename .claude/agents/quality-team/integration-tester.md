@@ -154,7 +154,7 @@ For the Maproom semantic search system:
 - E2E tests: `tests/e2e/`
 - Test fixtures: `tests/fixtures/`
 - Test scripts: `scripts/run-integration-tests.sh`
-- Tickets: `.agents/work-tickets/`
+- Tickets: `.agents/projects/{SLUG}_*/tickets/`
 
 ## Coverage Goals
 
