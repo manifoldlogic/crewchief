@@ -1,14 +1,14 @@
 ---
-argument-hint: [PROJECT_SLUG]
 description: Create tickets for a project based on the project plan and supporting documents
+argument-hint: [PROJECT_SLUG]
 ---
 
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: .agents/projects/$ARGUMENTS-*/
-Plan: .agents/projects/$ARGUMENTS-*/planning/{$ARGUMENTS}_PLAN.md
-Output: .agents/projects/$ARGUMENTS-*/tickets/$ARGUMENTS-*
+Project folder: `.agents/projects/$ARGUMENTS_*/`
+Plan: `.agents/projects/$ARGUMENTS_*/planning/plan.md`
+Output: `.agents/projects/$ARGUMENTS_*/tickets/`
 
 # Task
 
@@ -16,7 +16,7 @@ Use the ticket-creator agent to systematically create all tickets for project "$
 
 ## Preparation
 
-1. Review .claude/agents/ticket-creator.md and .agents/reference/work-ticket-template.md
+1. Review `.agents/reference/work-ticket-template.md` for ticket format
 2. Read all project documents in project folder
 3. Identify phases, components, and dependencies from plan
 
@@ -70,7 +70,7 @@ Before delegating each ticket to ticket-creator, verify:
 
 ## Output Organization
 
-Create ticket index: `.agents/projects/$ARGUMENTS-*/tickets/$ARGUMENTS_TICKET_INDEX.md`
+Create ticket index: `.agents/projects/$ARGUMENTS_*/tickets/$ARGUMENTS_TICKET_INDEX.md`
 - List all tickets organized by phase
 - Include ticket IDs, titles, and status
 - Reference plan sections for traceability

@@ -1,15 +1,15 @@
 ---
-argument-hint: [PROJECT_SLUG]
 description: Critical review of project readiness, execution risks, and alignment with development principles. Run BEFORE ticket creation to catch issues early, or after for complete assessment.
+argument-hint: [PROJECT_SLUG]
 ---
 
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS-*/`
-Planning documents: `.agents/projects/$ARGUMENTS-*/planning/`
-Tickets (if created): `.agents/projects/$ARGUMENTS-*/tickets/`
-Output: `.agents/projects/$ARGUMENTS-*/planning/project-review.md`
+Project folder: `.agents/projects/$ARGUMENTS_*/`
+Planning documents: `.agents/projects/$ARGUMENTS_*/planning/`
+Tickets (if created): `.agents/projects/$ARGUMENTS_*/tickets/`
+Output: `.agents/projects/$ARGUMENTS_*/planning/project-review.md`
 
 # Task
 
@@ -469,7 +469,6 @@ Read all planning documents critically, noting:
 ✅ RIGHT: Use public API with proper authentication
 ```
 
-### Phase 3: Cross-Reference Validation
 ### Phase 3: Cross-Reference Validation
 Compare documents against each other AND existing codebase:
 - Does plan match architecture?

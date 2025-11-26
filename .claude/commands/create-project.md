@@ -1,6 +1,6 @@
 ---
-argument-hint: [project description]
 description: Create initial project documents based on analysis, design, and planning framework
+argument-hint: [project description]
 ---
 
 # Context
@@ -92,4 +92,29 @@ Work systematically through document creation:
 5. Create comprehensive plan synthesizing all inputs
 6. Summarize in README
 
-Think sequentially and complete thoroughly.
+## Output
+
+Provide summary when complete:
+
+```
+📁 PROJECT CREATED: {SLUG}_{project-name}
+
+📂 Structure:
+.agents/projects/{SLUG}_{project-name}/
+├── README.md
+├── planning/
+│   ├── analysis.md
+│   ├── architecture.md
+│   ├── plan.md
+│   ├── quality-strategy.md
+│   └── security-review.md
+└── tickets/
+
+📋 Summary:
+- Problem: {one-line problem statement}
+- Solution: {one-line approach}
+- Phases: {count} phases planned
+- Agents: {list of primary agents}
+
+🎯 Next step: Run `/review-project {SLUG}` before creating tickets
+```

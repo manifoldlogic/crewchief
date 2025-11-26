@@ -1,6 +1,6 @@
 ---
-argument-hint: [TICKET_ID]
 description: Complete, verify, and commit a ticket following the full implementation workflow
+argument-hint: [TICKET_ID]
 ---
 
 # Context

@@ -5,8 +5,6 @@ argument-hint: [problem or question to analyze]
 
 # Deep Analysis and Problem Solving Mode
 
-Deep analysis and problem solving mode
-
 ## Instructions
 
 1. **Initialize Ultra Think Mode**
@@ -88,34 +86,34 @@ Deep analysis and problem solving mode
 
 9. **Provide Structured Recommendations**
    Present findings in a clear structure:
-   ``
+   ```
    ## Problem Analysis
    - Core challenge
    - Key constraints
    - Critical success factors
-   
+
    ## Solution Options
    ### Option 1: [Name]
    - Description
    - Pros/Cons
    - Implementation approach
    - Risk assessment
-   
+
    ### Option 2: [Name]
    [Similar structure]
-   
+
    ## Recommendation
    - Recommended approach
    - Rationale
    - Implementation roadmap
    - Success metrics
    - Risk mitigation plan
-   
+
    ## Alternative Perspectives
    - Contrarian view
    - Future considerations
    - Areas for further research
-   `
+   ```
 
 10. **Meta-Analysis**
     - Reflect on the thinking process itself
@@ -126,19 +124,19 @@ Deep analysis and problem solving mode
 
 ## Usage Examples
 
-`bash
+```bash
 # Architectural decision
-/ultra-think Should we migrate to microservices or improve our monolith?
+/ultrathink Should we migrate to microservices or improve our monolith?
 
 # Complex problem solving
-/ultra-think How do we scale our system to handle 10x traffic while reducing costs?
+/ultrathink How do we scale our system to handle 10x traffic while reducing costs?
 
 # Strategic planning
-/ultra-think What technology stack should we choose for our next-gen platform?
+/ultrathink What technology stack should we choose for our next-gen platform?
 
 # Design challenge
-/ultra-think How can we improve our API to be more developer-friendly while maintaining backward compatibility?
-``
+/ultrathink How can we improve our API to be more developer-friendly while maintaining backward compatibility?
+```
 
 ## Key Principles
 

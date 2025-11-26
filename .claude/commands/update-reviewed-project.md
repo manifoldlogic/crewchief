@@ -1,15 +1,15 @@
 ---
-argument-hint: [PROJECT_SLUG]
 description: Systematically update project planning documents based on project-review findings to address critical issues, gaps, and recommendations
+argument-hint: [PROJECT_SLUG]
 ---
 
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS-*/`
-Review document: `.agents/projects/$ARGUMENTS-*/planning/project-review.md`
-Planning documents: `.agents/projects/$ARGUMENTS-*/planning/`
-Output: Updates to planning documents + `.agents/projects/$ARGUMENTS-*/planning/review-updates.md`
+Project folder: `.agents/projects/$ARGUMENTS_*/`
+Review document: `.agents/projects/$ARGUMENTS_*/planning/project-review.md`
+Planning documents: `.agents/projects/$ARGUMENTS_*/planning/`
+Output: Updates to planning documents + `.agents/projects/$ARGUMENTS_*/planning/review-updates.md`
 
 # Task
 
@@ -104,25 +104,6 @@ For each boundary violation from the review:
    - Explain why this integration method was chosen
    - Note benefits of proper separation
    - Identify what problems this prevents
-
-### Phase 3: Risk Mitigation Implementation
-
-For each high-risk area:
-
-1. **Apply mitigation strategies:**
-   - Implement suggested mitigations from review
-   - Add risk management sections where missing
-   - Define fallback approaches for dependencies
-
-2. **Strengthen weak areas:**
-   - Add specificity to vague requirements
-   - Define concrete acceptance criteria
-   - Clarify technical specifications
-
-3. **Add contingency planning:**
-   - Document rollback procedures
-   - Define failure handling
-   - Specify monitoring points
 
 ### Phase 3: Risk Mitigation Implementation
 

@@ -1,14 +1,14 @@
 ---
-argument-hint: [PROJECT_SLUG]
 description: Complete all tickets for a project systematically from start to finish
+argument-hint: [PROJECT_SLUG]
 ---
 
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS-*/`
-Plan: `.agents/projects/$ARGUMENTS-*/planning/plan.md`
-Tickets: `.agents/projects/$ARGUMENTS-*/tickets/`
+Project folder: `.agents/projects/$ARGUMENTS_*/`
+Plan: `.agents/projects/$ARGUMENTS_*/planning/plan.md`
+Tickets: `.agents/projects/$ARGUMENTS_*/tickets/`
 
 # Task
 
@@ -34,7 +34,7 @@ Execute all tickets for project "$ARGUMENTS" systematically using autonomous wor
 
 **Execution rhythm:**
 ```
-1. Execute: /complete-ticket <ticket-id>
+1. Execute: /single-ticket <ticket-id>
 2. Move to next ticket
 3. Repeat until all tickets complete
 ```
