@@ -1,11 +1,13 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crewchief_maproom::db::{BackendType, VectorStore};
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{db, indexer};
 
@@ -505,6 +507,16 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     Ok((repo_name, branch_name, commit_hash))
 }
 
+/// Get a VectorStore instance along with its backend type.
+///
+/// This helper provides convenient access to both the store and backend detection
+/// for commands that need to handle backend-specific behavior.
+async fn get_store_with_type() -> anyhow::Result<(Arc<dyn VectorStore>, BackendType)> {
+    let store = db::factory::get_store().await?;
+    let backend_type = store.backend_type();
+    Ok((store, backend_type))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -519,9 +531,20 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
-                let client = db::connect().await?;
-                db::migrate(&client).await?;
-                tracing::info!("migrations applied");
+                let (store, backend_type) = get_store_with_type().await?;
+                match backend_type {
+                    BackendType::PostgreSQL => {
+                        let client = db::connect().await?;
+                        db::migrate(&client).await?;
+                        tracing::info!("migrations applied");
+                        println!("✅ PostgreSQL migrations applied successfully");
+                    }
+                    BackendType::SQLite => {
+                        // SQLite auto-migrates on connection, but we still run migrate for consistency
+                        store.migrate().await?;
+                        println!("✅ SQLite database is up to date (auto-migrates on connection)");
+                    }
+                }
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking
@@ -631,6 +654,21 @@ async fn main() -> anyhow::Result<()> {
             provider,
             verbose,
         } => {
+            // Check backend type - scan requires PostgreSQL (Phase 2 for SQLite)
+            let (_, backend_type) = get_store_with_type().await?;
+            if backend_type == BackendType::SQLite {
+                anyhow::bail!(
+                    "The 'scan' command requires PostgreSQL backend.\n\
+                     SQLite support for indexing is coming in Phase 2.\n\
+                     Set MAPROOM_DATABASE_URL to a PostgreSQL connection string to use this command."
+                );
+            }
+
+            // Warn about --parallel for SQLite (future-proofing)
+            if parallel && backend_type == BackendType::SQLite {
+                eprintln!("Warning: --parallel flag ignored for SQLite backend (single-writer limitation)");
+            }
+
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
 
@@ -941,6 +979,16 @@ async fn main() -> anyhow::Result<()> {
             embedding_batch_size,
             provider,
         } => {
+            // Check backend type - upsert requires PostgreSQL (Phase 2 for SQLite)
+            let (_, backend_type) = get_store_with_type().await?;
+            if backend_type == BackendType::SQLite {
+                anyhow::bail!(
+                    "The 'upsert' command requires PostgreSQL backend.\n\
+                     SQLite support for indexing is coming in Phase 2.\n\
+                     Set MAPROOM_DATABASE_URL to a PostgreSQL connection string to use this command."
+                );
+            }
+
             let client = db::connect().await?;
             indexer::upsert_files(&client, &repo, &worktree, &root, &commit, &paths)
                 .await
@@ -971,6 +1019,16 @@ async fn main() -> anyhow::Result<()> {
             path,
             throttle,
         } => {
+            // Check backend type - watch requires PostgreSQL (Phase 2 for SQLite)
+            let (_, backend_type) = get_store_with_type().await?;
+            if backend_type == BackendType::SQLite {
+                anyhow::bail!(
+                    "The 'watch' command requires PostgreSQL backend.\n\
+                     SQLite support for file watching is coming in Phase 2.\n\
+                     Set MAPROOM_DATABASE_URL to a PostgreSQL connection string to use this command."
+                );
+            }
+
             // Default path to current directory if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
 
