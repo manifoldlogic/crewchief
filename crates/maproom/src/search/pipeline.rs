@@ -25,6 +25,7 @@
 //! - Assembly: ~5-10ms
 
 use crate::metrics::get_metrics;
+use crate::search::dedup::{self, DeduplicationConfig};
 use crate::search::executor_types::SearchSource;
 use crate::search::executors::SearchExecutors;
 use crate::search::fusion::{BasicWeightedFusion, FusedResult, ScoreFusion};
@@ -192,6 +193,14 @@ impl SearchPipeline {
         let graph_count = search_results.graph.len();
         let signals_count = search_results.signals.len();
 
+        // Fetch more results when deduplication is enabled to ensure
+        // we can satisfy the limit after removing duplicates
+        let fusion_limit = if options.deduplicate {
+            options.limit * 3
+        } else {
+            options.limit
+        };
+
         let fused_results = self.fusion.fuse(
             vec![
                 search_results.fts,
@@ -200,7 +209,7 @@ impl SearchPipeline {
                 search_results.signals,
             ],
             &fusion_weights,
-            options.limit,
+            fusion_limit,
         );
         let fusion_time = fusion_start.elapsed().as_secs_f64() * 1000.0;
 
@@ -221,6 +230,10 @@ impl SearchPipeline {
                 .map(|r| (r.chunk_id, r.score))
                 .collect::<Vec<_>>()
         );
+
+        // Note: Deduplication is applied in assemble_results after fetching
+        // chunk details (which provide relpath, symbol_name, start_line needed
+        // for the identity key).
 
         // Stage 4: Assemble final results with chunk details
         let assembly_start = Instant::now();
@@ -327,10 +340,10 @@ impl SearchPipeline {
         result_counts.insert(SearchSource::Signals, signals_count);
 
         // Merge fused scores with chunk details
-        let mut final_results = Vec::new();
+        let mut assembled_results = Vec::new();
         for fused in fused_results {
             if let Some(details) = chunk_details.get(&fused.chunk_id) {
-                final_results.push(ChunkSearchResult::new(
+                assembled_results.push(ChunkSearchResult::new(
                     fused.chunk_id,
                     details.file_id,
                     details.relpath.clone(),
@@ -349,6 +362,23 @@ impl SearchPipeline {
                 );
             }
         }
+
+        // Apply deduplication if enabled
+        let final_results = if options.deduplicate {
+            let config = DeduplicationConfig::default();
+            let pre_dedup_count = assembled_results.len();
+            let deduped = dedup::deduplicate(assembled_results, &config);
+            debug!(
+                "Deduplication: {} -> {} results (removed {} duplicates)",
+                pre_dedup_count,
+                deduped.len(),
+                pre_dedup_count - deduped.len()
+            );
+            // Apply the original limit after deduplication
+            deduped.into_iter().take(options.limit).collect()
+        } else {
+            assembled_results
+        };
 
         let metadata = self.build_metadata(
             processed,
