@@ -1,5 +1,7 @@
 # VSCODEDB - VSCode Extension Database Modernization
 
+**Status**: ✅ Complete (Archived 2025-11-26)
+
 ## Project Summary
 
 This project adds SQLite support to the Maproom VSCode extension as the default, zero-config database backend. Users will be able to use semantic code search immediately after installation without requiring Docker or PostgreSQL.

@@ -1,5 +1,7 @@
 # VECSTORE: VectorStore Trait Completion
 
+**Status**: ✅ Complete (Archived 2025-11-26)
+
 ## Project Summary
 
 Complete the `VectorStore` trait abstraction so both PostgreSQL and SQLite backends can be used interchangeably. This is the **foundation project** that enables all downstream SQLite integration work.

@@ -1,5 +1,7 @@
 # MAPCLI - Maproom CLI Abstraction
 
+**Status**: ✅ Complete (Archived 2025-11-26)
+
 ## Project Summary
 
 Update the `crewchief-maproom` CLI binary and daemon to use the `VectorStore` trait abstraction, enabling SQLite backend support for zero-configuration semantic search.
