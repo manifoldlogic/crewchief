@@ -7,7 +7,70 @@ Working with GitHub workflows at `/.github`.
 ```
 workflows/
 ├── release-maproom-mcp.yml  # npm publish for @crewchief/maproom-mcp
-└── test.yml                 # CI tests
+└── test.yml                 # CI tests (SQLite-first)
+```
+
+## CI Testing Philosophy: SQLite-First
+
+**Default Backend:** SQLite - zero configuration, no external services required
+**Integration Backend:** PostgreSQL - for team sharing and production validation
+
+### Test Job Organization
+
+| Job | Backend | Dependencies | Purpose |
+|-----|---------|--------------|---------|
+| `test-sqlite-e2e` | SQLite | None | CLI end-to-end tests |
+| `test-mcp-sqlite` | SQLite | None | TypeScript MCP server tests |
+| `test-rust-sqlite` | SQLite | None | Rust library tests (in-memory) |
+| `test-postgres` | PostgreSQL | Service container | TypeScript integration tests |
+| `test-rust-postgres` | PostgreSQL | None | Rust compilation validation |
+
+### When to Add Tests
+
+**Add SQLite tests (default):**
+- Testing new CLI commands
+- Testing MCP server features
+- Unit testing Rust functions
+- Most development and feature work
+
+**Add PostgreSQL tests:**
+- Testing concurrent access patterns
+- Validating PostgreSQL-specific features (recursive CTEs, parallel queries)
+- Team sharing / multi-user scenarios
+- Production deployment validation
+
+### Adding New Test Jobs
+
+For SQLite tests (recommended):
+```yaml
+my-new-test:
+  name: My Feature Test (SQLite)
+  runs-on: ubuntu-latest
+  steps:
+    # ... test steps
+    - name: Job Summary
+      if: always()
+      run: |
+        echo "## 🗄️ My Feature Test" >> $GITHUB_STEP_SUMMARY
+        echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+```
+
+For PostgreSQL tests (when needed):
+```yaml
+my-postgres-test:
+  name: My Feature Test (PostgreSQL Integration)
+  runs-on: ubuntu-latest
+  services:
+    postgres-test:
+      image: pgvector/pgvector:pg16
+      # ... service config
+  steps:
+    # ... test steps
+    - name: Job Summary
+      if: always()
+      run: |
+        echo "## 🐘 My Feature Test" >> $GITHUB_STEP_SUMMARY
+        echo "**Backend:** PostgreSQL (integration)" >> $GITHUB_STEP_SUMMARY
 ```
 
 ## Workflows

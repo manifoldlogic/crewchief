@@ -113,6 +113,16 @@ jobs:
       - name: Run SQLite E2E tests
         run: ./tests/e2e/test_sqlite_flow.sh
 
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🗄️ SQLite E2E Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** None - runs standalone" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests CLI commands with SQLite backend (no Docker required)." >> $GITHUB_STEP_SUMMARY
+
   # =============================================================================
   # MCP Server SQLite Tests (TypeScript layer)
   # =============================================================================
@@ -185,6 +195,16 @@ jobs:
         env:
           MAPROOM_DATABASE_URL: sqlite://${{ github.workspace }}/crates/maproom/tests/fixtures/pre-indexed-maproom.db
 
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🗄️ MCP SQLite Tests (TypeScript)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** None - uses pre-indexed fixture" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests TypeScript MCP server with SQLite daemon." >> $GITHUB_STEP_SUMMARY
+
   # Rust SQLite feature tests
   # SQLite tests run in-memory (no external service needed)
   test-rust-sqlite:
@@ -213,6 +233,16 @@ jobs:
       - name: Run tests
         run: cargo test --features sqlite
         working-directory: crates/maproom
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🗄️ Rust SQLite Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** None - uses in-memory database" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests Rust \`maproom\` crate with SQLite feature." >> $GITHUB_STEP_SUMMARY
 
   # =============================================================================
   # POSTGRESQL TESTS (Integration) - Requires service container
@@ -340,6 +370,16 @@ jobs:
                   (SELECT COUNT(*) FROM maproom.symbols) as symbols;" \
             || echo "Note: No test data found (expected for some test suites)"
 
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🐘 PostgreSQL Integration Tests (TypeScript)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** PostgreSQL (integration)" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** PostgreSQL service container with pgvector" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests TypeScript MCP server with PostgreSQL for team/production scenarios." >> $GITHUB_STEP_SUMMARY
+
   # Rust PostgreSQL feature tests
   test-rust-postgres:
     name: Rust PostgreSQL Tests
@@ -369,3 +409,13 @@ jobs:
         working-directory: crates/maproom
         # Note: postgres tests requiring DB connection will be skipped
         # This validates compilation and non-DB-dependent tests
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🐘 Rust PostgreSQL Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** PostgreSQL (integration)" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** None - validates compilation only" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests Rust \`maproom\` crate with PostgreSQL feature (DB tests skipped)." >> $GITHUB_STEP_SUMMARY
