@@ -184,3 +184,7 @@ name = "sqlite_benchmark"
 harness = false
 required-features = ["sqlite"]
 
+[[bench]]
+name = "ollama_parallel_bench"
+harness = false
+
