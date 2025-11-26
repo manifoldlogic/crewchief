@@ -14,11 +14,11 @@
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       }
     },
-    "context7": {
+    "Ref": {
       "type": "http",
-      "url": "https://mcp.context7.com/mcp",
+      "url": "https://api.ref.tools/mcp",
       "headers": {
-        "CONTEXT7_API_KEY": "ctx7sk-481a49a8-35bc-40a2-8441-8f5c2e40b55f"
+        "x-ref-api-key": "ref-a69f62a09e5489964eeb"
       }
     }
   }

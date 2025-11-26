@@ -92,6 +92,11 @@ Long-term codebase documentation. Read by both agents and humans.
 - API references
 - Technical specifications
 
+### Public documentation
+For public documentation for programming languages, frameworks, libraries, tools, etc., outside the codebase, prefer the 'Ref' tools to find information.
+- `ref_read_url` when you have a URL, to see if the information is available, rather than reading the page yourself, where possible.
+- `ref_search_documentation` for general documentation search.
+
 **Rule**: Agents document active work in `.agents/`, finalized knowledge goes in `docs/`.
 
 ## Architecture
@@ -132,6 +137,12 @@ Single PostgreSQL instance: `maproom-postgres:5432/maproom`
 - Tokio async runtime
 - anyhow/thiserror for errors
 - Binaries in `packages/cli/bin/<platform>/`
+
+### New libraries and tools
+- When choosing a new library or tool, check if an alternative is already in the codebase, and whether it meets the project's needs, or if there is a reason to use the new library or tool.
+- Prefer latest stable versions compatible with the project's dependencies.
+- Be pragmatic rather than theoretical or ideological in choosing libraries and tools.
+- For major decisions about libraries and tools, call out top choices, and the reasoning behind them, during the planning phase. If the user does not provide a decision, move forward with your top choice based on your own analysis and pragmatism. 
 
 ## Safety Rules
 
@@ -178,6 +189,7 @@ Each ticket progresses through these agents:
 ```
 Planning Phase:
   /create-project → analysis, architecture, quality-strategy, plan
+  /review-project → validate project quality
   /create-project-tickets → individual ticket files
   /review-tickets → validate ticket quality
 
