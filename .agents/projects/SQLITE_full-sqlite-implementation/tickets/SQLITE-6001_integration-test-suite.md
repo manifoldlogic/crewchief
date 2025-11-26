@@ -1,9 +1,9 @@
 # Ticket: SQLITE-6001: Integration Test Suite
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,13 +20,13 @@ Individual components are tested, but we need end-to-end tests that verify the c
 Implements: Plan Phase 6 - Integration Testing
 
 ## Acceptance Criteria
-- [ ] Test full index→embed→search cycle end-to-end
-- [ ] Test multi-worktree scenarios (same file in multiple worktrees)
-- [ ] Test embedding deduplication across files (same content, one embedding)
-- [ ] Test graph traversal with real code relationships
-- [ ] File-based integration test (not just :memory:)
-- [ ] Performance sanity checks pass (not benchmarks, just "doesn't hang")
-- [ ] All tests pass: `cargo test --features sqlite --test sqlite_integration`
+- [x] Test full index→embed→search cycle end-to-end
+- [x] Test multi-worktree scenarios (same file in multiple worktrees)
+- [x] Test embedding deduplication across files (same content, one embedding)
+- [x] Test graph traversal with real code relationships
+- [x] File-based integration test (not just :memory:)
+- [x] Performance sanity checks pass (not benchmarks, just "doesn't hang")
+- [x] All tests pass: `cargo test --features sqlite --test sqlite_integration`
 
 ## Technical Requirements
 Create `crates/maproom/tests/sqlite_integration.rs`:
@@ -194,3 +194,80 @@ fn generate_test_embedding(text: &str) -> Vec<f32> {
 ## Files/Packages Affected
 - `crates/maproom/tests/sqlite_integration.rs` (NEW)
 - `crates/maproom/Cargo.toml` (may need test dependencies)
+
+---
+
+## Implementation Notes (rust-indexer-engineer)
+
+### Summary
+Created comprehensive integration tests that validate the complete SQLite pipeline from indexing through search.
+
+### Files Created
+
+**`crates/maproom/tests/sqlite_integration.rs` (~800 lines)**
+
+### Test Coverage (14 tests)
+
+**Full Index → Search Cycle:**
+- `test_full_index_search_cycle` - Complete repo→worktree→file→chunk→embedding→FTS→hybrid search
+
+**Multi-Worktree Scenarios:**
+- `test_multi_worktree_search` - Same file in multiple worktrees, search filtering
+- `test_worktree_isolation` - Chunks only visible in their worktree
+
+**Embedding Deduplication:**
+- `test_embedding_dedup_same_content` - Same blob_sha, one embedding, both chunks found
+- `test_embedding_check_missing` - Check for nonexistent embedding
+
+**Graph Traversal:**
+- `test_graph_traversal_real_relationships` - handle_request→validate_input→sanitize_data chain
+
+**File-Based Integration:**
+- `test_file_based_persistence` - Data survives connection close/reopen
+- `test_wal_mode_enabled` - Verifies WAL mode configuration
+
+**Performance Sanity:**
+- `test_batch_insert_performance` - 100 chunks in <10s
+- `test_search_performance` - 10 searches in <5s
+
+**Hybrid Search:**
+- `test_hybrid_search_with_ranking` - Function ranks higher than variable (kind multiplier)
+
+**Edge Cases:**
+- `test_nonexistent_repo_search` - Graceful handling
+- `test_nonexistent_worktree_search` - Graceful handling
+- `test_empty_database_search` - Graceful handling
+
+### Test Results
+```
+cargo test --features sqlite --test sqlite_integration
+
+running 14 tests
+test integration_tests::test_full_index_search_cycle ... ok
+test integration_tests::test_multi_worktree_search ... ok
+test integration_tests::test_worktree_isolation ... ok
+test integration_tests::test_embedding_dedup_same_content ... ok
+test integration_tests::test_embedding_check_missing ... ok
+test integration_tests::test_graph_traversal_real_relationships ... ok
+test integration_tests::test_file_based_persistence ... ok
+test integration_tests::test_wal_mode_enabled ... ok
+test integration_tests::test_batch_insert_performance ... ok
+test integration_tests::test_search_performance ... ok
+test integration_tests::test_hybrid_search_with_ranking ... ok
+test integration_tests::test_nonexistent_repo_search ... ok
+test integration_tests::test_nonexistent_worktree_search ... ok
+test integration_tests::test_empty_database_search ... ok
+test result: ok. 14 passed; 0 failed; 0 ignored
+```
+
+### Acceptance Criteria Verification
+
+| Criterion | Test |
+|-----------|------|
+| Full index→embed→search cycle | test_full_index_search_cycle |
+| Multi-worktree scenarios | test_multi_worktree_search, test_worktree_isolation |
+| Embedding deduplication | test_embedding_dedup_same_content |
+| Graph traversal | test_graph_traversal_real_relationships |
+| File-based integration | test_file_based_persistence |
+| Performance sanity checks | test_batch_insert_performance, test_search_performance |
+| All tests pass | 14/14 passed |

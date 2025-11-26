@@ -150,3 +150,75 @@ maproom watch
 ```
 
 **Note:** The `--worktree` flag is deprecated but still supported with a warning. Branch auto-detection is now automatic.
+
+## SQLite Backend
+
+The SQLite backend provides zero-config semantic search without PostgreSQL. Enable with `--features sqlite`.
+
+### Features
+- FTS5 full-text search with rank normalization
+- sqlite-vec vector similarity search (1536-dim)
+- Hybrid search (Reciprocal Rank Fusion)
+- Semantic ranking (kind multipliers, exact match boost)
+- Embedding deduplication by blob_sha
+- Graph traversal (caller/callee, imports, extends)
+- Graceful degradation if sqlite-vec extension missing
+- WAL mode for concurrent reads
+
+### Development
+
+```bash
+# Build with SQLite
+cargo build --features sqlite
+
+# Test SQLite backend
+cargo test --features sqlite --lib db::sqlite
+cargo test --features sqlite --test sqlite_integration
+
+# All SQLite tests (98 unit + 14 integration)
+cargo test --features sqlite db::sqlite
+cargo test --features sqlite --test sqlite_integration --test sqlite_store
+```
+
+### SQLite Module Structure
+
+```
+src/db/sqlite/
+├── mod.rs          # SqliteStore implementation
+├── schema.rs       # Schema DDL (repos, worktrees, files, chunks, edges)
+├── migrations.rs   # Migration system (versioned, idempotent)
+├── embeddings.rs   # Embedding storage and sync to vec_code
+├── vector.rs       # Vector search via sqlite-vec
+├── fts.rs          # FTS5 search with rank normalization
+├── hybrid.rs       # Hybrid search (RRF) + semantic ranking
+└── graph.rs        # Graph traversal (recursive CTEs)
+```
+
+### Search Pipeline
+
+1. **FTS5 Search**: Keyword matching with BM25 ranking
+2. **Vector Search**: Cosine similarity via sqlite-vec (if available)
+3. **Hybrid Fusion**: RRF combines FTS + vector ranks
+4. **Semantic Ranking**: Kind multipliers (function=1.2, variable=0.8), exact match boost
+
+### Graph Traversal
+
+```rust
+// Find all chunks that call a function (transitive)
+store.find_callers(chunk_id, Some(3)).await?;  // max depth 3
+
+// Find all chunks called by a function
+store.find_callees(chunk_id, Some(3)).await?;
+
+// Find import relationships
+store.find_imports(chunk_id, ImportDirection::Incoming, None).await?;
+```
+
+Uses recursive CTEs with cycle detection. Default depth=3, hard max=10.
+
+### Known Limitations
+- 1536-dim embeddings only (OpenAI/Vertex compatible)
+- 768-dim (Ollama nomic-embed-text) requires config change (deferred)
+- Single-user only (no multi-process concurrent writes)
+- No database encryption
+- sqlite-vec extension must be compiled in (statically linked)
