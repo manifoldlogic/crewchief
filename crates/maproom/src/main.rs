@@ -26,6 +26,40 @@ fn validate_provider(s: &str) -> Result<String, String> {
     }
 }
 
+/// Deduplicate search hits by identity (file_relpath, symbol_name, start_line).
+///
+/// When the same code exists in multiple worktrees, this removes duplicates
+/// keeping only the highest-scoring instance.
+fn deduplicate_search_hits(hits: Vec<db::SearchHit>, limit: usize) -> Vec<db::SearchHit> {
+    use std::collections::HashMap;
+
+    if hits.is_empty() {
+        return hits;
+    }
+
+    // Group by identity key
+    let mut groups: HashMap<(String, Option<String>, i32), Vec<db::SearchHit>> = HashMap::new();
+    for hit in hits {
+        let key = (hit.file_relpath.clone(), hit.symbol_name.clone(), hit.start_line);
+        groups.entry(key).or_default().push(hit);
+    }
+
+    // Select highest-scoring from each group
+    let mut deduped: Vec<db::SearchHit> = groups
+        .into_values()
+        .map(|mut group| {
+            group.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            group.remove(0)
+        })
+        .collect();
+
+    // Re-sort by score descending
+    deduped.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Apply limit
+    deduped.into_iter().take(limit).collect()
+}
+
 /// Format number with thousands separator.
 ///
 /// Converts a number like 487329 to "487,329" for better readability.
@@ -174,6 +208,10 @@ enum Commands {
         /// Include score breakdown (base_fts, kind_multiplier, exact_match_multiplier, final)
         #[arg(long, default_value_t = false)]
         debug: bool,
+        /// Deduplicate results across worktrees (default: true)
+        /// Use --no-deduplicate to see all results including duplicates
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        deduplicate: bool,
     },
 
     /// Vector similarity search using embeddings
@@ -1067,10 +1105,21 @@ async fn main() -> anyhow::Result<()> {
             query,
             k,
             debug,
+            deduplicate,
         } => {
             let store = db::factory::get_store().await?;
-            let hits = store.search_chunks_fts(&repo, worktree.as_deref(), &query, k, debug)
+            // Fetch extra results if deduplication is enabled
+            let fetch_k = if deduplicate { k * 3 } else { k };
+            let hits = store.search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug)
                 .await?;
+
+            // Apply deduplication if enabled
+            let hits = if deduplicate {
+                deduplicate_search_hits(hits, k as usize)
+            } else {
+                hits
+            };
+
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
