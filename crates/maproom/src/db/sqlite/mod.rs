@@ -1,4 +1,5 @@
 pub mod schema;
+pub mod migrations;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -9,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use tokio::task::spawn_blocking;
 
 use crate::db::{ChunkRecord, FileRecord, SearchHit, VectorStore};
-use schema::init_schema;
+use migrations::MigrationRunner;
 
 // Declare the C extension init function from sqlite-vec
 // This is provided by the static link
@@ -616,7 +617,8 @@ impl VectorStore for SqliteStore {
 
     async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
-            init_schema(conn)
+            let mut runner = MigrationRunner::new(conn);
+            runner.migrate()
         }).await
     }
 

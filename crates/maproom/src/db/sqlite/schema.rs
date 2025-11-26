@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Connection, params};
+use rusqlite::Connection;
 
 pub fn init_schema(conn: &Connection) -> Result<()> {
     // Create Repositories table
