@@ -1,9 +1,15 @@
 # Ticket: IDXCLEAN-4001: Extend Status Task with Periodic Cleanup Checks
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [ ] **Task completed** - **BLOCKED** - watch command not functional
+- [ ] **Tests pass** - N/A
 - [ ] **Verified** - by the verify-ticket agent
+
+### BLOCKER (2025-11-27)
+
+Same blocker as IDXCLEAN-4001: The `watch_worktree()` function and status_task loop were **removed** in IDXABS-2001 (SQLite-only migration). The watch command currently returns an error.
+
+**Resolution:** DEFERRED until watch command is reimplemented (IDXABS-2006). Phase 4 is [Optional Enhancement].
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output

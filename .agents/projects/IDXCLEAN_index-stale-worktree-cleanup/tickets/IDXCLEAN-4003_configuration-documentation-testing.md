@@ -1,9 +1,15 @@
 # Ticket: IDXCLEAN-4003: Document Configuration and Test Watch Cleanup Integration
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
+- [ ] **Task completed** - **BLOCKED** - watch command not functional
+- [ ] **Tests pass** - N/A
 - [ ] **Verified** - by the verify-ticket agent
+
+### BLOCKER (2025-11-27)
+
+Same blocker as IDXCLEAN-4001 and 4002: The watch command is not functional (removed in IDXABS-2001). Cannot document or test watch cleanup integration until watch is reimplemented.
+
+**Resolution:** DEFERRED until watch command is reimplemented (IDXABS-2006). Phase 4 is [Optional Enhancement].
 
 ## Agents
 - rust-indexer-engineer
