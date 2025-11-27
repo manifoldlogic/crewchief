@@ -1,5 +1,8 @@
 /**
  * Tests for SDK agent spawner
+ *
+ * NOTE: These tests require Claude Code to be installed and configured
+ * with valid API credentials. They are skipped in CI environments.
  */
 
 import { mkdtemp, rm, readFile } from 'fs/promises'
@@ -10,7 +13,10 @@ import { updateSDKConfig, resetSDKConfig } from '../../src/sdk/config.js'
 import { spawnAgent } from '../../src/sdk/spawner.js'
 import type { ToolUseEvent, AgentResult } from '../../src/sdk/types.js'
 
-describe('SDK Agent Spawner', () => {
+// Skip tests in CI - they require Claude Code with valid API credentials
+const isCI = process.env.CI === 'true'
+
+describe.skipIf(isCI)('SDK Agent Spawner', () => {
   let testWorktree: string
 
   beforeEach(async () => {

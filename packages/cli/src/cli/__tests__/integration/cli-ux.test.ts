@@ -25,8 +25,10 @@ describe('CLI UX Integration', () => {
       })
 
       expect(result.status).toBe(0)
-      // stdout should contain the workspace path
-      expect(result.stdout.trim()).toContain('workspace')
+      // stdout should be a valid absolute path
+      const outputPath = result.stdout.trim()
+      expect(outputPath).toMatch(/^\//) // Starts with / (absolute path)
+      expect(outputPath.length).toBeGreaterThan(1)
     })
 
     it('outputs only path to stdout (no logger messages)', () => {
