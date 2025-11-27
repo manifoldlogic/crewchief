@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-3001: Implement startup reconciliation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,13 +21,13 @@ Reference: planning/plan.md - Phase 3, Ticket 3001
 Reference: planning/architecture.md - TypeScript-Based Startup Reconciliation
 
 ## Acceptance Criteria
-- [ ] `reconcileChanges(context)` function created in `src/process/reconcile.ts`
-- [ ] Reads last indexed commit from VSCode workspace state
-- [ ] Uses `git diff --name-only` to find changed files
-- [ ] Spawns `crewchief-maproom upsert` with correct arguments
-- [ ] Updates last indexed commit in workspace state after success
-- [ ] Gracefully handles first run (no last commit stored)
-- [ ] Gracefully handles no changed files
+- [x] `reconcileChanges(context)` function created in `src/process/reconcile.ts`
+- [x] Reads last indexed commit from VSCode workspace state
+- [x] Uses `git diff --name-only` to find changed files
+- [x] Spawns `crewchief-maproom upsert` with correct arguments
+- [x] Updates last indexed commit in workspace state after success
+- [x] Gracefully handles first run (no last commit stored)
+- [x] Gracefully handles no changed files
 
 ## Technical Requirements
 - Store last commit in: `context.workspaceState.get<string>('maproom.lastIndexedCommit')`

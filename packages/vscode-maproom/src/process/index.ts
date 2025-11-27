@@ -27,3 +27,10 @@ export {
   type CompleteEvent,
   type StatusEvent,
 } from './events'
+
+export {
+  reconcileChanges,
+  updateLastIndexedCommit,
+  type ReconcileConfig,
+  type ReconcileResult,
+} from './reconcile'
