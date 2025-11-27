@@ -1,9 +1,9 @@
 # Ticket: CLIUX-3001: Integration tests and final verification
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - integration-tester
@@ -27,12 +27,12 @@ This ticket implements Phase 3 of the CLI UX Refinements plan. After the individ
 
 ## Acceptance Criteria
 
-- [ ] Integration test file created at `packages/cli/src/cli/__tests__/integration/cli-ux.test.ts`
-- [ ] All integration tests pass
-- [ ] Manual testing checklist completed (documented in this ticket)
-- [ ] All `--help` outputs verified accurate
-- [ ] `cd $(crewchief worktree use ...)` works in bash
-- [ ] All unit tests from previous tickets still pass
+- [x] Integration test file created at `packages/cli/src/cli/__tests__/integration/cli-ux.test.ts`
+- [x] All integration tests pass
+- [x] Manual testing checklist completed (documented in this ticket)
+- [x] All `--help` outputs verified accurate
+- [x] `cd $(crewchief worktree use ...)` works in bash
+- [x] All unit tests from previous tickets still pass
 
 ## Technical Requirements
 

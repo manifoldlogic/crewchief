@@ -49,9 +49,9 @@ Examples:
           await wt.initRepository(basePath)
           const skipCopyIgnored = opts.copyIgnored === false
           const createdPath = await wt.createWorktree(name, baseBranch, basePath, skipCopyIgnored)
-          logger.success(`Created worktree at ${createdPath} [${baseBranch}]`)
 
           if (opts.shell) {
+            logger.success(`Created worktree at ${createdPath} [${baseBranch}]`)
             // Opt-in: spawn interactive subshell
             const shell = process.env.SHELL || '/bin/bash'
             const currentBranch = await wt.getCurrentBranch()

@@ -53,7 +53,8 @@ export async function createVariantWorktree(
   const cliPath = resolve(__dirname, '../../dist/cli/index.js')
 
   // Execute CLI command to create worktree
-  const createCommand = `node "${cliPath}" worktree create "${branchName}" --branch "${currentBranch}" --no-cd --no-copy-ignored`
+  // Note: worktree create now prints path to stdout by default (as the last line)
+  const createCommand = `node "${cliPath}" worktree create "${branchName}" --branch "${currentBranch}" --no-copy-ignored`
 
   let worktreePath: string
   try {
@@ -63,12 +64,13 @@ export async function createVariantWorktree(
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 
-    // Parse worktree path from output: "[ok] Created worktree at /path/to/worktree [branch]"
-    const match = output.match(/Created worktree at (.+?) \[/)
-    if (!match) {
-      throw new Error(`Failed to parse worktree path from CLI output: ${output}`)
+    // The CLI prints the path as the last line of stdout
+    // Other info messages may appear before it
+    const lines = output.trim().split('\n')
+    worktreePath = lines[lines.length - 1].trim()
+    if (!worktreePath || !worktreePath.startsWith('/')) {
+      throw new Error(`No valid path returned from CLI output: ${output}`)
     }
-    worktreePath = match[1].trim()
   } catch (error) {
     throw new Error(`Failed to create worktree via CLI: ${error}`)
   }
