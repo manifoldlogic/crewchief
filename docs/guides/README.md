@@ -38,9 +38,10 @@ New to Maproom? Start with the provider setup guides:
 
 For developers and advanced users:
 
-- **[Configuration Guide](../../crates/maproom/docs/configuration_guide.md)** - Full configuration reference
-- **[Performance Tuning](../../crates/maproom/docs/PERFORMANCE_TUNING.md)** - Optimize search performance
-- **[Database Architecture](../architecture/DATABASE_ARCHITECTURE.md)** - PostgreSQL setup and schemas
+- **[Performance Tuning](./performance-tuning.md)** - Optimize search and indexing performance
+- **[Database Architecture](../architecture/DATABASE_ARCHITECTURE.md)** - SQLite and PostgreSQL setup
+- **[Architecture Overview](../architecture/overview.md)** - System design and data flow
+- **[Troubleshooting](../troubleshooting/README.md)** - Common errors and debugging
 
 ---
 
