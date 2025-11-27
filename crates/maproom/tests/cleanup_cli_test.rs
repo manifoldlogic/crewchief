@@ -3,7 +3,7 @@
 //! Tests the three-phase workflow: detection → report → deletion
 //! Uses in-memory SQLite database for testing.
 //!
-//! IDXCLEAN-2003: CLI Integration Tests
+//! IDXCLEAN-3003: CLI Integration Tests
 
 use anyhow::Result;
 use crewchief_maproom::db::cleanup::{StaleWorktreeDetector, WorktreeCleaner};
