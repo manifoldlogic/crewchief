@@ -1,15 +1,15 @@
 # CrewChief Maproom
 
-Semantic code search powered by embeddings and PostgreSQL.
+Semantic code search powered by embeddings and SQLite.
 
 ## Features
 
-- **🔍 Semantic Code Search** - Find code by concept, not just keywords
-- **🎯 Multi-Provider Embeddings** - Choose Ollama (free), OpenAI, or Google Vertex AI
-- **⚡ Zero-Config Setup** - Auto-detects Ollama, works out of the box
-- **🗃️ PostgreSQL Storage** - Reliable vector storage with pgvector
-- **🔄 Incremental Indexing** - Fast updates for changed files
-- **🌐 MCP Integration** - Works with Claude, Cursor, and other AI tools
+- **Semantic Code Search** - Find code by concept, not just keywords
+- **Multi-Provider Embeddings** - Choose Ollama (free), OpenAI, or Google Vertex AI
+- **Zero-Config Setup** - SQLite database auto-created, no external services required
+- **SQLite Storage** - Portable, zero-config database with FTS5 and sqlite-vec
+- **Incremental Indexing** - Fast updates for changed files
+- **MCP Integration** - Works with Claude, Cursor, and other AI tools
 
 ## Quick Start (Zero Config)
 
@@ -178,19 +178,14 @@ See [Migration Guide](docs/guides/provider-migration.md) for details.
 
 ### Database Setup
 
-1. Install Postgres with `vector`, `pg_trgm`, and `unaccent` extensions.
-2. Create a DB and apply migrations:
+Maproom uses SQLite by default. The database is automatically created at `~/.maproom/maproom.db`.
 
-```
-createdb maproom
-psql maproom -f migrations/0001_init.sql
-psql maproom -f scripts/analyze.sql
-```
+```bash
+# Initialize database (auto-creates if needed)
+cargo run -p crewchief-maproom -- db migrate
 
-Or via CLI:
-
-```
-export MAPROOM_DATABASE_URL=postgres://USER:PASSWORD@localhost:5432/maproom
+# Or specify a custom location
+export MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
 cargo run -p crewchief-maproom -- db migrate
 ```
 
@@ -252,113 +247,52 @@ cargo run -p crewchief-maproom -- search \
 
 ## Environment Variables
 
-### Required
-- `MAPROOM_DATABASE_URL` - PostgreSQL connection string
+### Database (Optional)
+- `MAPROOM_DATABASE_URL` - SQLite database location (default: `~/.maproom/maproom.db`)
+  - Example: `MAPROOM_DATABASE_URL="sqlite:///tmp/maproom.db"`
 
 ### Provider-Specific (pick one)
 
 **Ollama (default):**
 - No environment variables required! Just install and run Ollama.
+- `OLLAMA_URL` - Optional, defaults to `http://localhost:11434`
 
 **OpenAI:**
-- `MAPROOM_OPENAI_API_KEY` - Maproom-specific OpenAI API key (preferred)
-- OR `OPENAI_API_KEY` - Standard OpenAI API key (fallback)
+- `OPENAI_API_KEY` - OpenAI API key
 - `MAPROOM_EMBEDDING_PROVIDER=openai` (optional if API key present)
 
 **Google Vertex AI:**
-- `MAPROOM_GOOGLE_PROJECT_ID` - Maproom-specific GCP project ID (preferred)
-- OR `GOOGLE_PROJECT_ID` - Standard GCP project ID (fallback)
-- `MAPROOM_GOOGLE_APPLICATION_CREDENTIALS` - Maproom-specific service account key path (preferred)
-- OR `GOOGLE_APPLICATION_CREDENTIALS` - Standard service account key path (fallback)
+- `GOOGLE_PROJECT_ID` - GCP project ID
+- `GOOGLE_APPLICATION_CREDENTIALS` - Service account key path
 - `MAPROOM_EMBEDDING_PROVIDER=google` (optional if project ID present)
 
 ### Optional Configuration
 - `MAPROOM_EMBEDDING_PROVIDER` - Explicit provider selection: `ollama`, `openai`, or `google`
 - `MAPROOM_EMBEDDING_MODEL` - Model name override
-- `MAPROOM_EMBEDDING_DIMENSION` - Embedding dimension override
 - `MAPROOM_EMBEDDING_BATCH_SIZE` - API batch size (default: 100)
 - `MAPROOM_EMBEDDING_CACHE_SIZE` - LRU cache size (default: 10000)
 - `MAPROOM_EMBEDDING_CACHE_TTL` - Cache TTL in seconds (default: 3600)
-- `MAPROOM_EMBEDDING_API_ENDPOINT` - Custom API endpoint (for custom embedding services)
-- `MAPROOM_EMBEDDING_RETRY_MAX_ATTEMPTS` - Retry attempts (default: 3)
-
-**Note:** Maproom-specific variables (e.g., `MAPROOM_OPENAI_API_KEY`) are checked first, then standard variables (e.g., `OPENAI_API_KEY`). This allows you to use different API keys for Maproom than for other tools.
 
 ### Configuration File
 
-Create a `.env` at the repo root or in `crates/maproom/` by copying `.env.example`:
-
-```bash
-cp crates/maproom/.env.example .env
-# or
-cp crates/maproom/.env.example crates/maproom/.env
-```
-
-**Example configurations:**
+Create a `.env` at the repo root or in `crates/maproom/`:
 
 ```bash
 # Ollama (default - no configuration needed!)
-MAPROOM_DATABASE_URL=postgres://maproom:maproom@localhost:5433/maproom
+# Database auto-created at ~/.maproom/maproom.db
 
 # OpenAI
-MAPROOM_DATABASE_URL=postgres://maproom:maproom@localhost:5433/maproom
 OPENAI_API_KEY=sk-proj-...
 MAPROOM_EMBEDDING_PROVIDER=openai
 
 # Google Vertex AI
-MAPROOM_DATABASE_URL=postgres://maproom:maproom@localhost:5433/maproom
 GOOGLE_PROJECT_ID=your-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
 MAPROOM_EMBEDDING_PROVIDER=google
+
+# Custom database location (optional)
+MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
 ```
-
-### Database Configuration
-
-The `MAPROOM_DATABASE_URL` environment variable must point to a running PostgreSQL instance with the required extensions installed.
-
-**Format:**
-```
-MAPROOM_DATABASE_URL=postgresql://username:password@hostname:port/database
-```
-
-**Local Development (PostgreSQL on host machine):**
-```bash
-export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5433/maproom"
-```
-
-**Docker/Devcontainer (PostgreSQL in separate container):**
-
-When running in Docker or a devcontainer, PostgreSQL typically runs in a separate container with hostname `maproom-postgres`:
-```bash
-export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
-```
-
-**Common Configuration Issues:**
-
-1. **Connection Refused Error**: If you see "Connection refused (os error 111)", the database is unreachable. Common causes:
-   - Wrong hostname: Use `postgres` instead of `localhost` in Docker/devcontainer environments
-   - PostgreSQL not running: Verify with `docker ps` or `pg_isready`
-   - Wrong port: Ensure PostgreSQL is listening on the specified port
-
-2. **Authentication Failed**: Check username and password are correct
-
-3. **Database Does Not Exist**: Create the database first:
-   ```bash
-   createdb crewchief
-   # or in Docker:
-   docker exec -it postgres psql -U postgres -c "CREATE DATABASE crewchief;"
-   ```
-
-4. **Missing Schema**: After connecting, run migrations:
-   ```bash
-   cargo run -p crewchief-maproom -- db migrate
-   ```
-
-**Validation:**
-
-The `watch` command validates the database connection on startup and provides helpful error messages if misconfigured. You'll see:
-- ✅ Success: "Database connection validated successfully"
-- ❌ Failure: Clear error with the MAPROOM_DATABASE_URL being used (password sanitized) and troubleshooting steps
 
 ## Testing
 
@@ -432,12 +366,10 @@ For detailed setup instructions, see [docs/development/integration-testing.md](d
 ### Test Requirements
 
 Integration tests require:
-- PostgreSQL running locally (default: `localhost:5433`)
-- Database credentials configured in `MAPROOM_DATABASE_URL` environment variable
 - Sufficient disk space for temporary test repositories
 
 The tests will automatically:
-- Create temporary test databases with unique names
+- Create temporary in-memory SQLite databases
 - Clean up test data after execution
 - Use temporary directories for file system operations
 
@@ -461,7 +393,7 @@ The tests will automatically:
 ### Continuous Integration
 
 Tests are designed to run in CI environments:
-- All tests use unique database names to avoid conflicts
+- All tests use in-memory SQLite databases to avoid conflicts
 - Temporary directories are automatically cleaned up
 - Tests have appropriate timeouts for deadlock detection
 - Database schema is created automatically per test

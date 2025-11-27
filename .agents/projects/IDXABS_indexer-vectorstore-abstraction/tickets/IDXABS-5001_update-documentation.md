@@ -1,9 +1,9 @@
 # Ticket: IDXABS-5001: Update Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation only)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - Documentation ticket - no tests required
@@ -24,12 +24,12 @@ With the migration complete, documentation needs to accurately reflect that SQLi
 **Reference**: Phase 5, Ticket 5001 of `planning/plan.md` - "Update CLAUDE.md"
 
 ## Acceptance Criteria
-- [ ] `crates/maproom/CLAUDE.md` updated (no PostgreSQL references)
-- [ ] Environment variable documentation accurate for SQLite-only
-- [ ] Example commands work as documented
-- [ ] Default database path documented (`~/.maproom/maproom.db`)
-- [ ] No references to `--features sqlite` flag
-- [ ] No references to `--parallel` flag
+- [x] `crates/maproom/CLAUDE.md` updated (no PostgreSQL references)
+- [x] Environment variable documentation accurate for SQLite-only
+- [x] Example commands work as documented
+- [x] Default database path documented (`~/.maproom/maproom.db`)
+- [x] No references to `--features sqlite` flag
+- [x] No references to `--parallel` flag
 
 ## Technical Requirements
 - Remove all PostgreSQL references from documentation

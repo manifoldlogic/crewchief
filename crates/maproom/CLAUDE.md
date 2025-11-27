@@ -9,7 +9,7 @@ src/
 ├── main.rs          # CLI entry point
 ├── lib.rs           # Library exports
 ├── cli/             # CLI commands
-├── db/              # Database operations
+├── db/              # Database operations (SQLite)
 ├── embedding/       # Multi-provider embeddings (Ollama, OpenAI, Google)
 ├── indexer/         # File scanning and indexing
 ├── search/          # Search (FTS, vector, hybrid)
@@ -17,6 +17,18 @@ src/
 ├── incremental/     # Incremental updates
 ├── cache/           # LRU caching
 └── metrics/         # Prometheus metrics
+```
+
+## Database
+
+Maproom uses SQLite for storage. By default, the database is created at:
+```
+~/.maproom/maproom.db
+```
+
+Override with `MAPROOM_DATABASE_URL`:
+```bash
+MAPROOM_DATABASE_URL="sqlite:///tmp/maproom.db"
 ```
 
 ## Development
@@ -29,26 +41,47 @@ cargo build --release --bin crewchief-maproom
 ./scripts/build-and-package.sh
 
 # Run commands
-cargo run --bin crewchief-maproom -- db
-cargo run --bin crewchief-maproom -- scan /path/to/repo
-cargo run --bin crewchief-maproom -- search "query"
-cargo run --bin crewchief-maproom -- context <chunk-id>
+cargo run --bin crewchief-maproom -- db migrate
+cargo run --bin crewchief-maproom -- scan --path /path/to/repo --repo myrepo --worktree main
+cargo run --bin crewchief-maproom -- status --repo myrepo
+cargo run --bin crewchief-maproom -- search --query "function name" --repo myrepo
+cargo run --bin crewchief-maproom -- upsert --paths /path/to/file.rs --repo myrepo --worktree main --root /path/to/repo --commit HEAD
 
-# Watch command (unified file and branch watching)
-cargo run --bin crewchief-maproom -- watch
-# Auto-detects current branch, watches for file changes and branch switches
-# Emits NDJSON events to stdout (including branch_switched events)
+# Generate embeddings (requires embedding provider)
+cargo run --bin crewchief-maproom -- generate-embeddings --repo myrepo
 
 # Test
-cargo test
-cargo test -- --nocapture
+cargo test -p crewchief-maproom
+cargo test -p crewchief-maproom -- --nocapture
 
-# Benchmark
-cargo bench
+# E2E validation
+./scripts/test_sqlite_e2e.sh
 
 # Code quality
-cargo clippy
+cargo clippy -p crewchief-maproom
 cargo fmt
+```
+
+## Quick Start
+
+```bash
+# 1. Initialize database
+cargo run --bin crewchief-maproom -- db migrate
+
+# 2. Index a repository
+cargo run --bin crewchief-maproom -- scan --path /path/to/repo --repo myrepo --worktree main
+
+# 3. Check status
+cargo run --bin crewchief-maproom -- status --repo myrepo
+
+# 4. Search (FTS - no embeddings required)
+cargo run --bin crewchief-maproom -- search --query "authentication" --repo myrepo --mode fts
+
+# 5. Generate embeddings (optional, for semantic search)
+cargo run --bin crewchief-maproom -- generate-embeddings --repo myrepo
+
+# 6. Hybrid search (FTS + vector)
+cargo run --bin crewchief-maproom -- search --query "authentication" --repo myrepo --mode hybrid
 ```
 
 ## Key Dependencies
@@ -56,131 +89,60 @@ cargo fmt
 - **tokio** - Async runtime
 - **anyhow/thiserror** - Error handling
 - **tracing** - Logging
-- **tokio-postgres + pgvector** - Database
+- **rusqlite + sqlite-vec** - Database with vector extension
 - **tree-sitter** - Parsing (TypeScript, Rust, Python, Go, JavaScript, Markdown)
 - **reqwest + async-trait** - Embedding providers
-- **rayon** - Parallelism
 - **tiktoken-rs** - Token counting
 
 ## Search Modes
 
-1. **FTS** - PostgreSQL tsvector keyword matching
-2. **Vector** - pgvector cosine similarity
+1. **FTS** - SQLite FTS5 keyword matching with BM25 ranking
+2. **Vector** - sqlite-vec cosine similarity (requires embeddings)
 3. **Hybrid** - Reciprocal Rank Fusion (FTS + vector)
 
 Scoring: text relevance, vector similarity, recency, symbol importance, chunk type.
 
 ## Database Schema
 
-See `migrations/`:
-- `repos`, `worktrees`, `files`, `chunks`, `chunk_relationships`
-- Vector indexes (ivfflat/hnsw)
-- GIN indexes for FTS
-
-## Migrations
-
-Migrations 0000-0017: Original maproom schema
-Migrations 0018-0020: BLOBSHA/BRANCHX integration (added SCHMAFIX project)
-
-**Migration 0018** (add_blob_sha): Adds blob_sha TEXT column to chunks for content-addressed storage
-**Migration 0019** (create_code_embeddings): Creates deduplicated embeddings table with HNSW index
-**Migration 0020** (add_worktree_tracking): Adds worktree_ids JSONB column and worktree_index_state table
-
-**Adding New Migrations**:
-1. Create SQL file in `crates/maproom/migrations/NNNN_description.sql`
-2. Update `src/db/queries.rs` migrations array with `include_str!`
-3. Use `IF NOT EXISTS` for idempotency
-4. Set `concurrent = false` for transaction safety (default)
-5. Write integration tests in `tests/migration_integration.rs`
-
-See `migrations/CLAUDE.md` for detailed migration guidelines.
+SQLite schema in `src/db/sqlite/schema.rs`:
+- `repos`, `worktrees`, `files`, `chunks`, `chunk_edges`
+- `code_embeddings` - Deduplicated embeddings by blob_sha
+- `chunks_fts` - FTS5 virtual table for full-text search
+- `vec_code` - sqlite-vec virtual table for vector search
 
 ## Binary Output
 
 Built to `../../packages/cli/bin/<platform>/crewchief-maproom`:
 - Platforms: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64
-- OpenSSL vendored for portability
 
 ## Environment Variables
 
 ```bash
-MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5432/maproom
-MAPROOM_EMBEDDING_PROVIDER=ollama  # ollama, openai, or google
+# Database location (default: ~/.maproom/maproom.db)
+MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
+
+# Embedding provider: ollama, openai, or google
+MAPROOM_EMBEDDING_PROVIDER=ollama
 MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+
+# Logging
 RUST_LOG=info              # info, debug, trace
 RUST_BACKTRACE=1
-OPENAI_API_KEY=sk-...      # If using OpenAI provider
-GOOGLE_PROJECT_ID=...      # If using Google provider
-GOOGLE_APPLICATION_CREDENTIALS=... # If using Google provider
+
+# OpenAI provider
+OPENAI_API_KEY=sk-...
+
+# Google provider
+GOOGLE_PROJECT_ID=...
+GOOGLE_APPLICATION_CREDENTIALS=...
+
+# Ollama (default - no configuration needed if running locally)
+OLLAMA_URL=http://localhost:11434  # optional, auto-detected
 ```
 
 Config: `~/.config/crewchief/maproom.json`
 
-## Watch Command (Unified)
-
-The `watch` command provides unified file and branch watching:
-
-```bash
-maproom watch
-```
-
-**Features:**
-- Auto-detects the current branch
-- Watches for file changes (incremental indexing)
-- Detects branch switches and automatically re-indexes
-- Emits NDJSON events to stdout for integration with tools
-
-**NDJSON Events:**
-- `branch_switched`: Emitted when a branch switch is detected
-  - Includes: old/new branch names, old/new worktree IDs, timestamp
-  - Used by VSCode extension to update UI and refresh context
-
-**Migration from separate commands:**
-
-Before (required two separate commands):
-```bash
-maproom watch --repo myproject --worktree main
-# Plus separately running branch-watch in another terminal
-```
-
-After (single unified command):
-```bash
-maproom watch
-# Handles both file watching and branch detection automatically
-```
-
-**Note:** The `--worktree` flag is deprecated but still supported with a warning. Branch auto-detection is now automatic.
-
-## SQLite Backend
-
-The SQLite backend provides zero-config semantic search without PostgreSQL. Enable with `--features sqlite`.
-
-### Features
-- FTS5 full-text search with rank normalization
-- sqlite-vec vector similarity search (1536-dim)
-- Hybrid search (Reciprocal Rank Fusion)
-- Semantic ranking (kind multipliers, exact match boost)
-- Embedding deduplication by blob_sha
-- Graph traversal (caller/callee, imports, extends)
-- Graceful degradation if sqlite-vec extension missing
-- WAL mode for concurrent reads
-
-### Development
-
-```bash
-# Build with SQLite
-cargo build --features sqlite
-
-# Test SQLite backend
-cargo test --features sqlite --lib db::sqlite
-cargo test --features sqlite --test sqlite_integration
-
-# All SQLite tests (98 unit + 14 integration)
-cargo test --features sqlite db::sqlite
-cargo test --features sqlite --test sqlite_integration --test sqlite_store
-```
-
-### SQLite Module Structure
+## SQLite Module Structure
 
 ```
 src/db/sqlite/
@@ -194,14 +156,18 @@ src/db/sqlite/
 └── graph.rs        # Graph traversal (recursive CTEs)
 ```
 
-### Search Pipeline
+## Features
 
-1. **FTS5 Search**: Keyword matching with BM25 ranking
-2. **Vector Search**: Cosine similarity via sqlite-vec (if available)
-3. **Hybrid Fusion**: RRF combines FTS + vector ranks
-4. **Semantic Ranking**: Kind multipliers (function=1.2, variable=0.8), exact match boost
+- FTS5 full-text search with rank normalization
+- sqlite-vec vector similarity search (1536-dim)
+- Hybrid search (Reciprocal Rank Fusion)
+- Semantic ranking (kind multipliers, exact match boost)
+- Embedding deduplication by blob_sha
+- Graph traversal (caller/callee, imports, extends)
+- Graceful degradation if sqlite-vec extension missing
+- WAL mode for concurrent reads
 
-### Graph Traversal
+## Graph Traversal
 
 ```rust
 // Find all chunks that call a function (transitive)
@@ -216,7 +182,8 @@ store.find_imports(chunk_id, ImportDirection::Incoming, None).await?;
 
 Uses recursive CTEs with cycle detection. Default depth=3, hard max=10.
 
-### Known Limitations
+## Known Limitations
+
 - 1536-dim embeddings only (OpenAI/Vertex compatible)
 - 768-dim (Ollama nomic-embed-text) requires config change (deferred)
 - Single-user only (no multi-process concurrent writes)

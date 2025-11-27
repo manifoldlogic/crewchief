@@ -6,7 +6,7 @@ Guidance for Claude Code when working with this repository.
 
 CrewChief is a CLI tool combining:
 - **Git worktree management** - Create, list, and manage git worktrees
-- **Semantic code search (Maproom)** - Index and search code using PostgreSQL and tree-sitter
+- **Semantic code search (Maproom)** - Index and search code using SQLite and tree-sitter
 
 ## Quick Start
 
@@ -119,11 +119,11 @@ CrewChief/
 
 ### Database
 
-Single PostgreSQL instance: `maproom-postgres:5432/maproom`
-- Connection: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
-- VSCode extension: `packages/vscode-maproom/config/docker-compose.yml`
-- Standalone: `config/docker-compose.yml`
-- Details: `docs/architecture/DATABASE_ARCHITECTURE.md`
+Maproom uses SQLite for storage:
+- Default location: `~/.maproom/maproom.db`
+- Override with: `MAPROOM_DATABASE_URL="sqlite:///path/to/db"`
+- Zero-config setup: database auto-created on first use
+- Details: `crates/maproom/CLAUDE.md`
 
 ## Development Practices
 
