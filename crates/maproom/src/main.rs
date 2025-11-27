@@ -978,8 +978,15 @@ async fn main() -> anyhow::Result<()> {
                 "Starting watch"
             );
 
-            let store = db::connect().await?;
-            indexer::watch_worktree(&store, &repo, &worktree, &path, &throttle).await?;
+            // TODO: watch_worktree was removed in IDXABS-2001 (SQLite-only migration)
+            // It will be reimplemented in a future ticket using SqliteStore
+            let _store = db::connect().await?;
+            anyhow::bail!(
+                "Watch command is temporarily unavailable.\n\
+                The watch_worktree function was removed during SQLite-only migration.\n\
+                Use 'scan' for initial indexing and 'upsert' for incremental updates.\n\
+                Watch functionality will be reimplemented in a future update."
+            );
         }
 
         Commands::Search {

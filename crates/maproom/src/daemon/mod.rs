@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
-use crewchief_maproom::db::{factory::get_store, SearchHit, VectorStore};
+use crewchief_maproom::db::{connect, SearchHit, SqliteStore};
 use crewchief_maproom::embedding::EmbeddingService;
 
 use self::types::{JsonRpcRequest, JsonRpcResponse, SearchParams};
@@ -49,16 +49,16 @@ fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit>
 }
 
 struct DaemonState {
-    store: Arc<dyn VectorStore>,
+    store: Arc<SqliteStore>,
     embedding_service: EmbeddingService,
 }
 
 pub async fn run() -> Result<()> {
     info!("Daemon mode starting...");
 
-    // Initialize VectorStore using factory pattern
-    let store = get_store().await.context("Failed to initialize database store")?;
-    info!("Database backend: {:?}", store.backend_type());
+    // Initialize SqliteStore
+    let store = Arc::new(connect().await.context("Failed to initialize database store")?);
+    info!("Database backend: SQLite");
 
     // Initialize Embedding Service
     let embedding_service = EmbeddingService::from_env()
