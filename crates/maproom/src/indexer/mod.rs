@@ -4,14 +4,11 @@ use std::{
 };
 
 use anyhow::Context;
-use humantime::parse_duration;
 use ignore::WalkBuilder;
-use tokio_postgres::Client;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
-use crate::incremental::path_utils::normalize_to_relpath;
+use crate::db::{ChunkRecord, FileRecord, SqliteStore};
 
-pub mod parallel;
 pub mod parser;
 
 /// Debouncer to prevent rapid successive event handling
@@ -110,6 +107,7 @@ impl DebouncedHandler {
 /// - `old_worktree_id`: Database worktree ID before the switch (BIGINT/i64)
 /// - `new_worktree_id`: Database worktree ID after the switch (BIGINT/i64)
 /// - `worktree_created`: Whether a new worktree record was created in the database
+#[allow(dead_code)] // Used in tests; will be used when watch_worktree is reimplemented
 #[derive(serde::Serialize)]
 struct BranchSwitchEvent {
     #[serde(rename = "type")]
@@ -125,7 +123,7 @@ struct BranchSwitchEvent {
 
 /// Process Python imports from chunk metadata and create import edges in chunk_edges table
 async fn process_python_imports(
-    client: &Client,
+    store: &SqliteStore,
     repo_id: i64,
     worktree_id: i64,
     _file_id: i64,
@@ -140,14 +138,9 @@ async fn process_python_imports(
         if let Some(metadata) = &imports.metadata {
             if let Some(imports_array) = metadata.get("imports").and_then(|v| v.as_array()) {
                 // Get the chunk_id for the imports chunk itself
-                let imports_chunk_id = crate::db::find_chunk_by_symbol(
-                    client,
-                    repo_id,
-                    Some(worktree_id),
-                    "__imports__",
-                    None,
-                )
-                .await?;
+                let imports_chunk_id = store
+                    .find_chunk_by_symbol(repo_id, Some(worktree_id), "__imports__", None)
+                    .await?;
 
                 if let Some(src_chunk_id) = imports_chunk_id {
                     // Process each import
@@ -161,23 +154,14 @@ async fn process_python_imports(
 
                         // For each imported name, try to find the target chunk
                         for name in names {
-                            if let Ok(Some(dst_chunk_id)) = crate::db::find_chunk_by_symbol(
-                                client,
-                                repo_id,
-                                Some(worktree_id),
-                                name,
-                                None,
-                            )
-                            .await
+                            if let Ok(Some(dst_chunk_id)) = store
+                                .find_chunk_by_symbol(repo_id, Some(worktree_id), name, None)
+                                .await
                             {
                                 // Create the import edge
-                                if let Err(e) = crate::db::insert_chunk_edge(
-                                    client,
-                                    src_chunk_id,
-                                    dst_chunk_id,
-                                    "imports",
-                                )
-                                .await
+                                if let Err(e) = store
+                                    .insert_chunk_edge(src_chunk_id, dst_chunk_id, "imports")
+                                    .await
                                 {
                                     warn!("Failed to create import edge for {}: {}", name, e);
                                 }
@@ -248,216 +232,8 @@ fn file_modified_time(path: &Path) -> Option<chrono::DateTime<chrono::Utc>> {
     chrono::DateTime::<chrono::Utc>::from_timestamp(dur.as_secs() as i64, dur.subsec_nanos())
 }
 
-/// Scan worktree with parallel batch processing for improved performance.
-///
-/// This version uses the parallel indexing pipeline from PERF_OPT-3001:
-/// - Parallel file parsing with rayon work-stealing
-/// - Batch database inserts (50-100 chunks per batch)
-/// - Concurrent database workers (4-8 workers)
-///
-/// Expected performance: 5-10x faster than sequential scan_worktree.
-pub async fn scan_worktree_parallel(
-    pool: &crate::db::PgPool,
-    repo: &str,
-    worktree: &str,
-    root: &Path,
-    commit: &str,
-    languages: Option<Vec<String>>,
-    exclude: Option<Vec<String>>,
-    parallel_config: parallel::ParallelConfig,
-    progress: Option<&crate::progress::ProgressTracker>,
-) -> anyhow::Result<()> {
-    use crate::indexer::parallel::{FileTask, ParallelIndexer};
-
-    let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
-
-    // Get database client for setup
-    let client = pool.get().await?;
-
-    let repo_id =
-        crate::db::get_or_create_repo(&client, repo, root_abs.to_string_lossy().as_ref()).await?;
-    let worktree_id = crate::db::get_or_create_worktree(
-        &client,
-        repo_id,
-        worktree,
-        root_abs.to_string_lossy().as_ref(),
-    )
-    .await?;
-    let commit_id = crate::db::get_or_create_commit(&client, repo_id, commit, None).await?;
-
-    println!(
-        "🔍 Scanning worktree (parallel): {} @ {}",
-        worktree,
-        &commit[..8.min(commit.len())]
-    );
-    println!("   Repository: {}", repo);
-    println!("   Path: {}", root_abs.display());
-    println!(
-        "   Workers: {}, Batch size: {}",
-        parallel_config.parallel_workers, parallel_config.batch_size
-    );
-
-    // Collect files to process
-    let mut walk = WalkBuilder::new(&root_abs);
-    walk.hidden(false)
-        .ignore(true)
-        .git_ignore(true)
-        .git_exclude(true);
-    if let Some(globs) = &exclude {
-        let mut ob = ignore::overrides::OverrideBuilder::new(&root_abs);
-        for g in globs {
-            ob.add(&format!("!{}", g))?;
-        }
-        walk.overrides(ob.build()?);
-    }
-
-    let allow_langs: Option<Vec<String>> =
-        languages.map(|v| v.into_iter().map(|s| s.to_lowercase()).collect());
-
-    let mut file_tasks = Vec::new();
-    let mut files_skipped = 0;
-    let mut total_bytes = 0usize;
-    let mut language_counts: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
-
-    for dent in walk.build() {
-        let dent = match dent {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
-        if !dent.file_type().map(|t| t.is_file()).unwrap_or(false) {
-            continue;
-        }
-
-        let path = dent.path();
-        let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
-        let language = detect_language_from_path(path);
-
-        if language.is_none() {
-            files_skipped += 1;
-            continue;
-        }
-
-        if let Some(ref allow) = allow_langs {
-            if !allow.iter().any(|l| l == language.unwrap()) {
-                files_skipped += 1;
-                continue;
-            }
-        }
-
-        let content = match std::fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => {
-                files_skipped += 1;
-                continue;
-            }
-        };
-
-        // Skip files larger than max_file_size
-        if content.len() > parallel_config.max_file_size {
-            files_skipped += 1;
-            continue;
-        }
-
-        let content_hash = blake3::hash(content.as_bytes()).to_hex().to_string();
-        let size_bytes = content.len().min(i32::MAX as usize) as i32;
-        let last_modified = file_modified_time(path);
-
-        total_bytes += content.len();
-        *language_counts
-            .entry(language.unwrap().to_string())
-            .or_insert(0) += 1;
-
-        // Create file record
-        let file_id = crate::db::upsert_file(
-            &client,
-            repo_id,
-            worktree_id,
-            commit_id,
-            relpath.to_string_lossy().as_ref(),
-            language,
-            &content_hash,
-            size_bytes,
-            last_modified,
-        )
-        .await?;
-
-        file_tasks.push(FileTask {
-            path: path.to_path_buf(),
-            relpath: relpath.to_path_buf(),
-            language: language.unwrap().to_string(),
-            content,
-            file_id,
-            worktree_id,
-        });
-    }
-
-    // Drop client before parallel processing
-    drop(client);
-
-    // Set progress totals after file collection
-    if let Some(p) = progress {
-        p.set_totals(file_tasks.len(), None);
-    }
-
-    // Process files in parallel
-    let indexer = ParallelIndexer::new(pool.clone(), parallel_config);
-    let stats = indexer.process_files(file_tasks).await?;
-
-    // Print summary
-    println!("\n✅ Parallel scan completed successfully!");
-    println!("   Files processed: {}", stats.files_processed);
-    if files_skipped > 0 {
-        println!("   Files skipped: {}", files_skipped);
-    }
-    println!("   Total chunks: {}", stats.chunks_inserted);
-    println!(
-        "   Batches: {} (avg {:.1} chunks/batch)",
-        stats.batches_processed,
-        stats.avg_chunks_per_batch()
-    );
-    println!("   Total size: {:.2} MB", total_bytes as f64 / 1_048_576.0);
-
-    if stats.errors > 0 {
-        println!("   Errors: {}", stats.errors);
-    }
-
-    if !language_counts.is_empty() {
-        println!("\n   Languages indexed:");
-        let mut langs: Vec<_> = language_counts.iter().collect();
-        langs.sort_by(|a, b| b.1.cmp(a.1));
-        for (lang, count) in langs {
-            println!(
-                "     {} {}: {}",
-                match lang.as_str() {
-                    "ts" | "tsx" => "📘",
-                    "js" | "jsx" => "📙",
-                    "rs" => "🦀",
-                    "py" => "🐍",
-                    "go" => "🔷",
-                    "md" => "📝",
-                    "json" => "📋",
-                    "yaml" | "yml" => "📄",
-                    "toml" => "⚙️",
-                    _ => "📄",
-                },
-                lang,
-                count
-            );
-        }
-    }
-
-    // Finish progress tracking
-    if let Some(p) = progress {
-        p.finish();
-    }
-
-    info!(?repo, ?worktree, ?commit, "parallel scan complete");
-    Ok(())
-}
-
 pub async fn scan_worktree(
-    client: &Client,
+    store: &SqliteStore,
     repo: &str,
     worktree: &str,
     root: &Path,
@@ -469,16 +245,13 @@ pub async fn scan_worktree(
 ) -> anyhow::Result<()> {
     let start_time = std::time::Instant::now();
     let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
-    let repo_id =
-        crate::db::get_or_create_repo(client, repo, root_abs.to_string_lossy().as_ref()).await?;
-    let worktree_id = crate::db::get_or_create_worktree(
-        client,
-        repo_id,
-        worktree,
-        root_abs.to_string_lossy().as_ref(),
-    )
-    .await?;
-    let commit_id = crate::db::get_or_create_commit(client, repo_id, commit, None).await?;
+    let repo_id = store
+        .get_or_create_repo(repo, root_abs.to_string_lossy().as_ref())
+        .await?;
+    let worktree_id = store
+        .get_or_create_worktree(repo_id, worktree, root_abs.to_string_lossy().as_ref())
+        .await?;
+    let commit_id = store.get_or_create_commit(repo_id, commit, None).await?;
 
     // Stats tracking
     let mut files_processed = 0;
@@ -562,18 +335,17 @@ pub async fn scan_worktree(
         total_bytes += content.len();
         *language_counts.entry(language.to_string()).or_insert(0) += 1;
 
-        let file_id = crate::db::upsert_file(
-            client,
+        let file_record = FileRecord {
             repo_id,
             worktree_id,
             commit_id,
-            relpath.to_string_lossy().as_ref(),
-            Some(language),
-            &content_hash,
+            relpath: relpath.to_string_lossy().to_string(),
+            language: Some(language.to_string()),
+            content_hash,
             size_bytes,
             last_modified,
-        )
-        .await?;
+        };
+        let file_id = store.upsert_file(&file_record).await?;
 
         let chunks = parser::extract_chunks(&content, language);
         if chunks.is_empty() {
@@ -588,24 +360,23 @@ pub async fn scan_worktree(
                 None,
                 &preview,
             );
-            crate::db::insert_chunk(
-                client,
+            let chunk_record = ChunkRecord {
                 file_id,
-                &blob_sha,
-                None,
-                "module",
-                None,
-                None,
-                1,
-                content.lines().count() as i32,
-                &preview,
-                &ts_doc,
-                1.0,
-                0.0,
-                None,
+                blob_sha,
+                symbol_name: None,
+                kind: "module".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: content.lines().count() as i32,
+                preview,
+                ts_doc_text: ts_doc,
+                recency_score: 1.0,
+                churn_score: 0.0,
+                metadata: None,
                 worktree_id,
-            )
-            .await?;
+            };
+            store.insert_chunk(&chunk_record).await?;
         } else {
             total_chunks += chunks.len();
             for ch in &chunks {
@@ -624,30 +395,29 @@ pub async fn scan_worktree(
                     ch.docstring.as_deref(),
                     &preview,
                 );
-                crate::db::insert_chunk(
-                    client,
+                let chunk_record = ChunkRecord {
                     file_id,
-                    &blob_sha,
-                    ch.symbol_name.as_deref(),
-                    &ch.kind,
-                    ch.signature.as_deref(),
-                    ch.docstring.as_deref(),
-                    ch.start_line,
-                    ch.end_line,
-                    &preview,
-                    &ts_doc,
-                    1.0,
-                    0.0,
-                    ch.metadata.as_ref(),
+                    blob_sha,
+                    symbol_name: ch.symbol_name.clone(),
+                    kind: ch.kind.clone(),
+                    signature: ch.signature.clone(),
+                    docstring: ch.docstring.clone(),
+                    start_line: ch.start_line,
+                    end_line: ch.end_line,
+                    preview,
+                    ts_doc_text: ts_doc,
+                    recency_score: 1.0,
+                    churn_score: 0.0,
+                    metadata: ch.metadata.clone(),
                     worktree_id,
-                )
-                .await?;
+                };
+                store.insert_chunk(&chunk_record).await?;
             }
 
             // Process Python imports and create edges
             if language == "py" {
                 if let Err(e) =
-                    process_python_imports(client, repo_id, worktree_id, file_id, &chunks).await
+                    process_python_imports(store, repo_id, worktree_id, file_id, &chunks).await
                 {
                     warn!(
                         "Failed to process Python imports for {}: {}",
@@ -715,7 +485,7 @@ pub async fn scan_worktree(
 }
 
 pub async fn upsert_files(
-    client: &Client,
+    store: &SqliteStore,
     repo: &str,
     worktree: &str,
     root: &Path,
@@ -723,16 +493,13 @@ pub async fn upsert_files(
     paths: &[PathBuf],
 ) -> anyhow::Result<()> {
     let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
-    let repo_id =
-        crate::db::get_or_create_repo(client, repo, root_abs.to_string_lossy().as_ref()).await?;
-    let worktree_id = crate::db::get_or_create_worktree(
-        client,
-        repo_id,
-        worktree,
-        root_abs.to_string_lossy().as_ref(),
-    )
-    .await?;
-    let commit_id = crate::db::get_or_create_commit(client, repo_id, commit, None).await?;
+    let repo_id = store
+        .get_or_create_repo(repo, root_abs.to_string_lossy().as_ref())
+        .await?;
+    let worktree_id = store
+        .get_or_create_worktree(repo_id, worktree, root_abs.to_string_lossy().as_ref())
+        .await?;
+    let commit_id = store.get_or_create_commit(repo_id, commit, None).await?;
 
     for path in paths {
         let abs = if path.is_absolute() {
@@ -758,18 +525,17 @@ pub async fn upsert_files(
         let content_hash = blake3::hash(content.as_bytes()).to_hex().to_string();
         let size_bytes = content.len().min(i32::MAX as usize) as i32;
         let last_modified = file_modified_time(&abs);
-        let file_id = crate::db::upsert_file(
-            client,
+        let file_record = FileRecord {
             repo_id,
             worktree_id,
             commit_id,
-            relpath.to_string_lossy().as_ref(),
-            language,
-            &content_hash,
+            relpath: relpath.to_string_lossy().to_string(),
+            language: language.map(|l| l.to_string()),
+            content_hash,
             size_bytes,
             last_modified,
-        )
-        .await?;
+        };
+        let file_id = store.upsert_file(&file_record).await?;
         let chunks = parser::extract_chunks(&content, language.unwrap());
         if chunks.is_empty() {
             let preview = first_n_lines(&content, 40);
@@ -781,24 +547,23 @@ pub async fn upsert_files(
                 None,
                 &preview,
             );
-            crate::db::insert_chunk(
-                client,
+            let chunk_record = ChunkRecord {
                 file_id,
-                &blob_sha,
-                None,
-                "module",
-                None,
-                None,
-                1,
-                content.lines().count() as i32,
-                &preview,
-                &ts_doc,
-                1.0,
-                0.0,
-                None,
+                blob_sha,
+                symbol_name: None,
+                kind: "module".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: content.lines().count() as i32,
+                preview,
+                ts_doc_text: ts_doc,
+                recency_score: 1.0,
+                churn_score: 0.0,
+                metadata: None,
                 worktree_id,
-            )
-            .await?;
+            };
+            store.insert_chunk(&chunk_record).await?;
         } else {
             for ch in &chunks {
                 let chunk_content = content
@@ -816,30 +581,29 @@ pub async fn upsert_files(
                     ch.docstring.as_deref(),
                     &preview,
                 );
-                crate::db::insert_chunk(
-                    client,
+                let chunk_record = ChunkRecord {
                     file_id,
-                    &blob_sha,
-                    ch.symbol_name.as_deref(),
-                    &ch.kind,
-                    ch.signature.as_deref(),
-                    ch.docstring.as_deref(),
-                    ch.start_line,
-                    ch.end_line,
-                    &preview,
-                    &ts_doc,
-                    1.0,
-                    0.0,
-                    ch.metadata.as_ref(),
+                    blob_sha,
+                    symbol_name: ch.symbol_name.clone(),
+                    kind: ch.kind.clone(),
+                    signature: ch.signature.clone(),
+                    docstring: ch.docstring.clone(),
+                    start_line: ch.start_line,
+                    end_line: ch.end_line,
+                    preview,
+                    ts_doc_text: ts_doc,
+                    recency_score: 1.0,
+                    churn_score: 0.0,
+                    metadata: ch.metadata.clone(),
                     worktree_id,
-                )
-                .await?;
+                };
+                store.insert_chunk(&chunk_record).await?;
             }
 
             // Process Python imports and create edges
             if language.unwrap() == "py" {
                 if let Err(e) =
-                    process_python_imports(client, repo_id, worktree_id, file_id, &chunks).await
+                    process_python_imports(store, repo_id, worktree_id, file_id, &chunks).await
                 {
                     warn!(
                         "Failed to process Python imports for {}: {}",
@@ -900,6 +664,7 @@ pub async fn upsert_files(
 ///     Ok(())
 /// }
 /// ```
+#[allow(dead_code)] // Used in tests; will be used when watch_worktree is reimplemented
 fn setup_head_watcher(
     git_head: &Path,
     tx: tokio::sync::mpsc::Sender<notify::Event>,
@@ -934,611 +699,10 @@ fn setup_head_watcher(
     Ok(watcher)
 }
 
-/// Handles branch switch detection and updates database/state accordingly
-///
-/// This function is the core handler for branch switch events, implementing the workflow:
-/// 1. Detect branch name from .git/HEAD using `get_current_branch()`
-/// 2. Early return if branch hasn't changed (prevents unnecessary work)
-/// 3. Get or create database records for repo and worktree
-/// 4. Update shared state variables (current_branch and current_worktree_id)
-/// 5. Trigger incremental re-indexing for the new branch
-/// 6. Emit NDJSON event to stdout for external consumers
-///
-/// # Arguments
-///
-/// * `repo_path` - Absolute path to the repository root
-/// * `current_branch` - Shared state tracking the current branch name
-/// * `current_worktree_id` - Shared state tracking the current worktree database ID
-/// * `pool` - Database connection pool for queries
-/// * `repo` - Repository name (e.g., "crewchief")
-///
-/// # Thread Safety
-///
-/// Uses Arc<RwLock<T>> for safe concurrent access to shared state:
-/// - Acquires read lock to check if branch changed
-/// - Acquires write locks to update state after database operations
-/// - Drops read lock before acquiring write lock to prevent deadlock
-///
-/// # Returns
-///
-/// Returns `Ok(())` if the branch switch was handled successfully or if no switch occurred.
-/// Returns `Err` if database operations or re-indexing fail.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use std::sync::{Arc, RwLock};
-/// use std::path::Path;
-/// use crewchief_maproom::db::pool::create_pool;
-///
-/// #[tokio::main]
-/// async fn main() -> anyhow::Result<()> {
-///     let pool = create_pool().await?;
-///     let current_branch = Arc::new(RwLock::new("main".to_string()));
-///     let current_worktree_id = Arc::new(RwLock::new(1i64));
-///     let repo_path = Path::new("/workspace/repo");
-///
-///     handle_branch_switch(
-///         repo_path,
-///         &current_branch,
-///         &current_worktree_id,
-///         &pool,
-///         "crewchief"
-///     ).await?;
-///
-///     Ok(())
-/// }
-/// ```
-async fn handle_branch_switch(
-    repo_path: &Path,
-    current_branch: &std::sync::Arc<std::sync::RwLock<String>>,
-    current_worktree_id: &std::sync::Arc<std::sync::RwLock<i64>>,
-    pool: &crate::db::PgPool,
-    repo: &str,
-) -> anyhow::Result<()> {
-    // Get new branch name from .git/HEAD
-    let new_branch = crate::git::get_current_branch(repo_path)?;
-
-    // Check if branch actually changed and capture old state BEFORE updating
-    // (early return to prevent unnecessary work)
-    let (old_branch, old_worktree_id) = {
-        let current = current_branch.read().unwrap();
-        if *current == new_branch {
-            return Ok(()); // No change, skip processing
-        }
-        let old_wt_id = *current_worktree_id.read().unwrap();
-        (current.clone(), old_wt_id)
-    };
-
-    info!("Branch switch detected: {} -> {}", old_branch, new_branch);
-
-    // Get database client from pool
-    let client = pool.get().await?;
-
-    // Get or create database records for repo and worktree
-    let repo_id =
-        crate::db::get_or_create_repo(&client, repo, repo_path.to_string_lossy().as_ref()).await?;
-
-    // Check if worktree exists before creating
-    let worktree_existed = client
-        .query_opt(
-            "SELECT id FROM maproom.worktrees WHERE repo_id = $1 AND name = $2",
-            &[&repo_id, &new_branch],
-        )
-        .await?
-        .is_some();
-
-    let new_worktree_id = crate::db::get_or_create_worktree(
-        &client,
-        repo_id,
-        &new_branch,
-        repo_path.to_string_lossy().as_ref(),
-    )
-    .await?;
-
-    let worktree_created = !worktree_existed;
-
-    // Update shared state with write locks
-    {
-        let mut branch = current_branch.write().unwrap();
-        *branch = new_branch.clone();
-    }
-    {
-        let mut id = current_worktree_id.write().unwrap();
-        *id = new_worktree_id;
-    }
-
-    // Trigger incremental re-indexing for the new branch
-    crate::incremental::incremental_update(&client, new_worktree_id, repo_path).await?;
-
-    // Emit NDJSON event to stdout for external consumers (UNIWATCH-2002)
-    let event = BranchSwitchEvent {
-        event_type: "branch_switched",
-        timestamp: chrono::Utc::now().to_rfc3339(),
-        repo: repo.to_string(),
-        old_branch,
-        new_branch,
-        old_worktree_id,
-        new_worktree_id,
-        worktree_created,
-    };
-
-    // Serialize to single-line JSON and emit to stdout
-    match serde_json::to_string(&event) {
-        Ok(json) => println!("{}", json),
-        Err(e) => warn!("Failed to serialize BranchSwitchEvent: {}", e),
-    }
-
-    info!("Switched to worktree_id={}", new_worktree_id);
-    Ok(())
-}
-
-pub async fn watch_worktree(
-    _client: &Client,
-    repo: &str,
-    worktree: &str,
-    root: &Path,
-    throttle: &str,
-) -> anyhow::Result<()> {
-    use crate::incremental::{
-        ChangeDetector, FileEvent, IncrementalProcessor, Trigger, UpdateQueue, UpdateTask,
-        WatcherConfig, WorktreeWatcher,
-    };
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-
-    let root_abs = root.canonicalize().with_context(|| "invalid root path")?;
-
-    // Parse throttle duration and convert to milliseconds for WatcherConfig
-    let throttle_dur = parse_duration(throttle)?;
-    let debounce_ms = throttle_dur.as_millis().min(u64::MAX as u128) as u64;
-
-    println!("🔌 Validating database connection...");
-
-    // Create connection pool and validate connection BEFORE starting watcher
-    // This ensures we fail fast if MAPROOM_DATABASE_URL is misconfigured
-    let pool = crate::db::pool::create_pool().await.with_context(|| {
-        "Failed to connect to database. Please check your MAPROOM_DATABASE_URL configuration."
-    })?;
-
-    // Test the connection by getting a client from the pool
-    let test_client = pool
-        .get()
-        .await
-        .with_context(|| "Database connection pool created but unable to acquire connection")?;
-
-    // Verify database has required schema by checking for maproom schema
-    match test_client
-        .query_opt(
-            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'maproom'",
-            &[],
-        )
-        .await
-    {
-        Ok(Some(_)) => {
-            println!("✅ Database connection validated successfully");
-        }
-        Ok(None) => {
-            anyhow::bail!(
-                "Database connected but 'maproom' schema not found.\n\
-                 Run migrations first: cargo run -p crewchief-maproom -- db migrate"
-            );
-        }
-        Err(e) => {
-            anyhow::bail!(
-                "Failed to verify database schema: {}\n\
-                 Check that MAPROOM_DATABASE_URL is correct and database is accessible.",
-                e
-            );
-        }
-    }
-
-    // Drop test client to return it to pool
-    drop(test_client);
-
-    // Initialize dynamic worktree tracking state (UNIWATCH-1002)
-    let current_branch = std::sync::Arc::new(std::sync::RwLock::new(worktree.to_string()));
-    let current_worktree_id = std::sync::Arc::new(std::sync::RwLock::new({
-        let client = pool.get().await?;
-        let repo_id =
-            crate::db::get_or_create_repo(&client, repo, root_abs.to_string_lossy().as_ref())
-                .await?;
-        let worktree_id = crate::db::get_or_create_worktree(
-            &client,
-            repo_id,
-            worktree,
-            root_abs.to_string_lossy().as_ref(),
-        )
-        .await?;
-        worktree_id
-    }));
-
-    // Initialize components
-    let config = WatcherConfig {
-        debounce_ms,
-        channel_capacity: 1000,
-    };
-
-    let worktree_id = format!("{}:{}", repo, worktree);
-    let (mut watcher, mut event_rx) =
-        WorktreeWatcher::new(worktree_id.clone(), root_abs.clone(), config)?;
-
-    // Start watching
-    watcher.start()?;
-    info!(
-        repo = %repo,
-        worktree = %worktree,
-        path = %root_abs.display(),
-        "Started incremental watch"
-    );
-
-    // Add .git/HEAD watcher for branch switch detection (UNIWATCH-3001)
-    let git_head = root_abs.join(".git/HEAD");
-    let (head_tx, mut head_rx) = tokio::sync::mpsc::channel(10);
-
-    let _head_watcher = match setup_head_watcher(&git_head, head_tx) {
-        Ok(watcher) => {
-            info!(
-                path = %git_head.display(),
-                "Started .git/HEAD watcher for branch detection"
-            );
-            Some(watcher)
-        }
-        Err(e) => {
-            warn!(
-                path = %git_head.display(),
-                error = %e,
-                "Failed to watch .git/HEAD. Branch detection disabled."
-            );
-            None
-        }
-    };
-
-    // Create change detector and processor
-    let detector = Arc::new(Mutex::new(ChangeDetector::with_capacity(
-        pool.clone(),
-        1000,
-    )));
-    let processor = IncrementalProcessor::new(pool.clone(), root_abs.clone());
-    let queue = Arc::new(Mutex::new(UpdateQueue::with_capacity(100)));
-
-    // Spawn event processor task
-    let queue_clone = queue.clone();
-    let detector_clone = detector.clone();
-    let pool_clone = pool.clone();
-    let root_clone = root_abs.clone();
-    let repo_clone = repo.to_string();
-    let _worktree_clone = worktree.to_string(); // Kept for potential future use
-    let current_branch_clone = current_branch.clone();
-    let current_worktree_id_clone = current_worktree_id.clone();
-
-    let processor_task = tokio::spawn(async move {
-        let debouncer = DebouncedHandler::new(std::time::Duration::from_secs(2));
-
-        loop {
-            tokio::select! {
-                Some(indexing_event) = event_rx.recv() => {
-                    // UNIWATCH-3003: Read dynamic worktree_id at point of use
-                    // This ensures file events are indexed to the correct worktree after branch switches
-                    let worktree_id = *current_worktree_id_clone.read().unwrap();
-
-                    // CRITICAL FIX (WATCHFIX-1002): Normalize path ONCE at event entry
-                    // The database stores relative paths (e.g., "packages/cli/src/main.ts")
-                    // but events arrive with absolute paths (e.g., "/workspace/packages/cli/src/main.ts").
-                    // We must normalize to relpath for database lookups, then use absolute path for filesystem ops.
-                    let relpath = match normalize_to_relpath(&indexing_event.path, &root_clone) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            warn!(
-                                path = %indexing_event.path.display(),
-                                error = %e,
-                                "Path normalization failed - path outside repository, skipping event"
-                            );
-                            continue; // Skip this event
-                        }
-                    };
-
-                    // Convert relpath to string for database queries
-                    let relpath_str = match relpath.to_str() {
-                        Some(s) => s,
-                        None => {
-                            warn!(
-                                path = %relpath.display(),
-                                "Path contains invalid UTF-8, skipping event"
-                            );
-                            continue;
-                        }
-                    };
-
-                    // Convert IndexingEvent to FileEvent
-                    let file_event = match indexing_event.event_type {
-                        crate::incremental::EventType::Modified => {
-                            FileEvent::Modified(indexing_event.path.clone())
-                        }
-                        crate::incremental::EventType::Deleted => {
-                            FileEvent::Deleted(indexing_event.path.clone())
-                        }
-                        crate::incremental::EventType::Renamed => {
-                            if let Some(old_path) = indexing_event.old_path {
-                                FileEvent::Renamed(old_path, indexing_event.path.clone())
-                            } else {
-                                FileEvent::Modified(indexing_event.path.clone())
-                            }
-                        }
-                    };
-
-                    // Detect change type
-                    let change_type = match file_event {
-                        FileEvent::Modified(ref path) => {
-                            // CRITICAL FIX (WATCHFIX-1002): Use normalized relpath for database lookup
-                            // Previously this used absolute path, causing lookups to fail and files
-                            // to be misclassified as NEW when they were actually MODIFIED.
-                            // UNIWATCH-3003: Use dynamic worktree_id instead of static name lookup
-                            match get_file_id_by_worktree_id(
-                                &pool_clone,
-                                worktree_id,
-                                relpath_str,
-                            )
-                            .await
-                            {
-                                Ok(Some(file_id)) => {
-                                    // File exists in database - ALWAYS call ChangeDetector
-                                    // This is the key fix: we must use ChangeDetector to determine
-                                    // if content actually changed (Modified vs None).
-                                    detector_clone
-                                        .lock()
-                                        .await
-                                        .detect_change(file_id, path)
-                                        .await
-                                        .ok()
-                                }
-                                Ok(None) => {
-                                    // File not in database - truly a new file
-                                    // Compute hash directly since there's no existing record to compare against
-                                    if path.exists() {
-                                        if let Ok(hash) = crate::incremental::FileHasher::hash_file(path) {
-                                            Some(crate::incremental::ChangeType::New(hash))
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        path = %path.display(),
-                                        relpath = %relpath.display(),
-                                        error = %e,
-                                        "Database lookup failed, skipping event"
-                                    );
-                                    None
-                                }
-                            }
-                        }
-                        FileEvent::Deleted(ref path) => {
-                            // Use normalized relpath for database lookup
-                            // UNIWATCH-3003: Use dynamic worktree_id instead of static name lookup
-                            match get_file_id_by_worktree_id(
-                                &pool_clone,
-                                worktree_id,
-                                relpath_str,
-                            )
-                            .await
-                            {
-                                Ok(Some(file_id)) => detector_clone
-                                    .lock()
-                                    .await
-                                    .detect_deletion(file_id, path)
-                                    .await
-                                    .ok()
-                                    .flatten(),
-                                Ok(None) => None,
-                                Err(e) => {
-                                    warn!(
-                                        path = %path.display(),
-                                        relpath = %relpath.display(),
-                                        error = %e,
-                                        "Database lookup failed for deletion, skipping event"
-                                    );
-                                    None
-                                }
-                            }
-                        }
-                        FileEvent::Renamed(ref _old_path, ref new_path) => {
-                            // Treat rename as delete + new
-                            if let Ok(hash) = crate::incremental::FileHasher::hash_file(new_path) {
-                                Some(crate::incremental::ChangeType::New(hash))
-                            } else {
-                                None
-                            }
-                        }
-                    };
-
-                    if let Some(change) = change_type {
-                        if !matches!(change, crate::incremental::ChangeType::None) {
-                            let task = UpdateTask::new(indexing_event.path.clone(), change, Trigger::Auto);
-                            queue_clone.lock().await.enqueue(task);
-                        }
-                    }
-                }
-                Some(_head_event) = head_rx.recv() => {
-                    // Branch switch handling with debouncing
-                    if !debouncer.should_handle() {
-                        debug!("Debouncing rapid branch switch");
-                        continue;
-                    }
-
-                    if let Err(e) = handle_branch_switch(
-                        &root_clone,
-                        &current_branch_clone,
-                        &current_worktree_id_clone,
-                        &pool_clone,
-                        &repo_clone,
-                    ).await {
-                        error!("Branch switch handling failed: {}", e);
-                    }
-                }
-                else => break, // Both channels closed
-            }
-        }
-
-        info!("Event processing loop exited");
-    });
-
-    // Spawn task processor
-    let queue_clone = queue.clone();
-    let processor_clone = Arc::new(processor);
-    let processing_task = tokio::spawn(async move {
-        loop {
-            let task = {
-                let mut q = queue_clone.lock().await;
-                q.dequeue()
-            };
-
-            if let Some(task) = task {
-                let path = task.path.clone();
-                match processor_clone.process(task).await {
-                    Ok(_) => {
-                        queue_clone.lock().await.mark_completed(&path);
-                    }
-                    Err(e) => {
-                        warn!(path = %path.display(), error = %e, "Failed to process file");
-                        // Re-enqueue with retry
-                        let task_again = { queue_clone.lock().await.dequeue() };
-                        if let Some(t) = task_again {
-                            queue_clone.lock().await.mark_failed(t, &e.to_string());
-                        }
-                    }
-                }
-            } else {
-                // No tasks available, sleep briefly
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            }
-        }
-    });
-
-    // Status reporting task
-    let queue_clone = queue.clone();
-    let root_clone_status = root_abs.clone();
-    let status_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
-        let mut events_processed = 0usize;
-
-        loop {
-            interval.tick().await;
-            let stats = queue_clone.lock().await.stats();
-            events_processed += stats.processing;
-
-            // Count files in watched directory (estimate)
-            let files_watched = WalkBuilder::new(&root_clone_status)
-                .hidden(false)
-                .ignore(true)
-                .git_ignore(true)
-                .git_exclude(true)
-                .build()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-                .count();
-
-            info!(
-                files_watched = files_watched,
-                watcher_state = "running",
-                queue_size = stats.pending,
-                processing = stats.processing,
-                dead_letter = stats.dead_letter,
-                total_processed = events_processed,
-                "Watch status"
-            );
-        }
-    });
-
-    // Wait for SIGINT (Ctrl+C) or SIGTERM signal
-    use tokio::signal::unix::{signal, SignalKind};
-    let mut sigterm =
-        signal(SignalKind::terminate()).context("Failed to install SIGTERM handler")?;
-
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            info!("Received SIGINT");
-        },
-        _ = sigterm.recv() => {
-            info!("Received SIGTERM");
-        },
-    }
-
-    info!("Received shutdown signal, stopping watch...");
-
-    // Stop the watcher
-    watcher.stop()?;
-
-    // Wait briefly for in-flight events to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-    // Process remaining tasks in queue
-    let remaining = {
-        let q = queue.lock().await;
-        q.queue_size()
-    };
-    if remaining > 0 {
-        info!("Processing {} remaining tasks...", remaining);
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    }
-
-    // Cancel background tasks
-    processor_task.abort();
-    processing_task.abort();
-    status_task.abort();
-
-    info!("Watch stopped gracefully");
-    Ok(())
-}
-
-/// Helper function to get file_id from database by path
-/// Kept for potential use in other parts of codebase (UNIWATCH-3003)
-#[allow(dead_code)]
-async fn get_file_id_by_path(
-    pool: &crate::db::PgPool,
-    repo: &str,
-    worktree: &str,
-    relpath: &str,
-) -> anyhow::Result<Option<i64>> {
-    let client = pool.get().await?;
-
-    let row = client
-        .query_opt(
-            "SELECT f.id FROM maproom.files f
-         JOIN maproom.worktrees w ON f.worktree_id = w.id
-         JOIN maproom.repos r ON w.repo_id = r.id
-         WHERE r.name = $1 AND w.name = $2 AND f.relpath = $3
-         ORDER BY f.id DESC LIMIT 1",
-            &[&repo, &worktree, &relpath],
-        )
-        .await?;
-
-    Ok(row.map(|r| r.get(0)))
-}
-
-/// Get file ID by worktree_id and relpath (UNIWATCH-3003)
-/// More efficient than name-based lookup - uses numeric worktree_id directly
-async fn get_file_id_by_worktree_id(
-    pool: &crate::db::PgPool,
-    worktree_id: i64,
-    relpath: &str,
-) -> anyhow::Result<Option<i64>> {
-    let client = pool.get().await?;
-
-    let row = client
-        .query_opt(
-            "SELECT id FROM maproom.files
-             WHERE worktree_id = $1 AND relpath = $2
-             ORDER BY id DESC LIMIT 1",
-            &[&worktree_id, &relpath],
-        )
-        .await?;
-
-    Ok(row.map(|r| r.get(0)))
-}
+// NOTE: watch_worktree, handle_branch_switch, get_file_id_by_path, and get_file_id_by_worktree_id
+// functions have been removed as part of IDXABS-2001 (SQLite-only migration).
+// They depended on PostgreSQL's PgPool and will be reimplemented in IDXABS-2006
+// (Refactor Incremental Module) with SqliteStore support.
 
 #[derive(Debug, Clone)]
 pub struct SymbolChunk {
