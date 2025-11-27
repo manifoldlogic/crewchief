@@ -1,9 +1,21 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import chalk from 'chalk'
 import { Command } from 'commander'
 import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { RunManager } from '../orchestrator/runManager'
+import { Scheduler } from '../orchestrator/scheduler'
+import { TerminalFactory } from '../terminal/factory'
 import { logger } from '../utils/logger'
+
+interface SpawnOptions {
+  name?: string
+  vertical?: boolean
+  args?: string
+  noLabel?: boolean
+  backend?: string
+  headless?: boolean
+}
 
 export function registerAgentCommands(program: Command): void {
   const agent = new Command('agent').description('Agent communication and management')
@@ -186,6 +198,105 @@ Examples:
       rm.updateRun(run.id, { status: 'closed' })
       logger.success(`Marked agent ${agentId} as closed [run=${run.id}]`)
       logger.info('Please manually close the terminal pane')
+    })
+
+  agent
+    .command('spawn')
+    .description('Spawn AI agent(s) in dedicated terminal pane(s)')
+    .argument('<agents>', 'Agent type(s) - single or comma-separated (e.g., claude or claude,gemini)')
+    .argument('[task]', 'Optional task description to include in agent name(s)')
+    .option('-n, --name <name>', 'Custom name for the agent')
+    .option('-v, --vertical', 'Split pane vertically instead of horizontally')
+    .option('-a, --args <args>', 'Additional arguments to pass to the agent command')
+    .option('--no-label', 'Skip labeling the pane')
+    .option('--backend <backend>', 'Force specific backend (iterm only)')
+    .option('--headless', 'Force headless mode (no terminal UI)')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Spawn a Claude agent:
+    crewchief agent spawn claude "fix login bug"
+
+  Spawn in vertical split:
+    crewchief agent spawn claude -v "add tests"
+
+  Spawn in headless mode:
+    crewchief agent spawn gemini --headless "refactor module"
+
+  Spawn multiple agents:
+    crewchief agent spawn claude,gemini "review code"
+`,
+    )
+    .action(async (agents: string, task: string | undefined, options: SpawnOptions) => {
+      try {
+        // Detect terminal provider
+        const terminal = TerminalFactory.autoDetect()
+        await terminal.initialize()
+
+        // Use the Scheduler architecture
+        const scheduler = new Scheduler(terminal)
+
+        // Parse comma-separated agent types
+        const agentTypes = agents
+          .split(',')
+          .map((a) => a.trim())
+          .filter((a) => a.length > 0)
+
+        if (agentTypes.length === 0) {
+          console.error(chalk.red('No valid agent types specified'))
+          process.exit(1)
+        }
+
+        // Determine effective task name/description
+        const effectiveTask = task || options.name || `agent-${Date.now()}`
+
+        if (agentTypes.length === 1) {
+          // Single agent - existing logic
+          console.log(chalk.cyan(`Spawning agent ${agentTypes[0]} via ${terminal.id}...`))
+
+          const runId = await scheduler.assignSingleAgent(effectiveTask, agentTypes[0])
+
+          console.log(chalk.green(`Agent spawned successfully [Run ID: ${runId}]`))
+        } else {
+          // Multi-agent spawn
+          console.log(chalk.cyan(`Spawning ${agentTypes.length} agents via ${terminal.id}...`))
+
+          const results = await Promise.allSettled(
+            agentTypes.map((type) => scheduler.assignSingleAgent(effectiveTask, type)),
+          )
+
+          // Report results for each agent
+          let successCount = 0
+          results.forEach((result, i) => {
+            if (result.status === 'fulfilled') {
+              console.log(chalk.green(`${agentTypes[i]}: spawned [Run ID: ${result.value}]`))
+              successCount++
+            } else {
+              console.log(chalk.red(`${agentTypes[i]}: ${result.reason?.message || result.reason}`))
+            }
+          })
+
+          console.log(chalk.cyan(`\nSummary: ${successCount}/${agentTypes.length} agents spawned successfully`))
+
+          if (successCount === 0) {
+            process.exit(1)
+          }
+        }
+
+        if (terminal.id === 'headless') {
+          console.log(chalk.blue('Running in headless mode. Press Ctrl+C to stop all agents.'))
+          // Keep the process alive to stream logs and manage child processes
+          await new Promise(() => {})
+        } else {
+          // For iTerm, we can exit, the window is independent
+          process.exit(0)
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(chalk.red('Error spawning agent:'), message)
+        process.exit(1)
+      }
     })
 
   program.addCommand(agent)

@@ -1,9 +1,9 @@
 # Ticket: CLIUX-2001: Migrate spawn to agent subcommand
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose

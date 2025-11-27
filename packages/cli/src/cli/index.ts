@@ -10,7 +10,6 @@ import { registerDoctorCommand } from './doctor'
 import { registerMaproomCommands } from './maproom'
 import { registerOptimizationCommands } from './optimization'
 import { registerSetupCommand, runSetupWizard } from './setup'
-import { registerSpawnCommand } from './spawn'
 import { registerWorktreeCommands } from './worktree'
 import { loadConfig } from '../config/loader'
 import { startOrchestratorEventBridge } from '../orchestrator/events'
@@ -40,7 +39,6 @@ program
 startOrchestratorEventBridge()
 
 registerWorktreeCommands(program)
-registerSpawnCommand(program)
 registerAgentCommands(program)
 registerCompetitionCommands(program)
 registerMaproomCommands(program)
@@ -80,11 +78,11 @@ program.action(async () => {
     const launch = (config as any).launch
 
     // DEPRECATED: Auto-launching agents is no longer supported
-    // Users should use `crewchief spawn <agent>` command instead
+    // Users should use `crewchief agent spawn <agent>` command instead
     const ensureAgentRunning = async (typeId: string) => {
-      logger.warn(`Auto-launching agents is deprecated. Please use: crewchief spawn ${typeId}`)
-      logger.info('Example: crewchief spawn claude "my-task"')
-      logger.info('See: crewchief spawn --help')
+      logger.warn(`Auto-launching agents is deprecated. Please use: crewchief agent spawn ${typeId}`)
+      logger.info('Example: crewchief agent spawn claude "my-task"')
+      logger.info('See: crewchief agent spawn --help')
     }
 
     if (launch?.autoRunDefaultAgents) {
@@ -121,7 +119,7 @@ program.action(async () => {
       }
     }
     // iTerm2 doesn't need explicit attach - already in the terminal
-    logger.info('CrewChief is ready. Use `crewchief spawn` to launch agents.')
+    logger.info('CrewChief is ready. Use `crewchief agent spawn` to launch agents.')
   } catch (err: any) {
     logger.error('Failed to start CrewChief:', err)
     process.exitCode = 1
