@@ -6,7 +6,12 @@ Working with GitHub workflows at `/.github`.
 
 ```
 workflows/
-├── release-maproom-mcp.yml  # npm publish for @crewchief/maproom-mcp
+├── release-all.yml          # Coordinated release (all packages in order)
+├── release-cli.yml          # Individual: @crewchief/cli to npm
+├── release-maproom-mcp.yml  # Individual: @crewchief/maproom-mcp to npm
+├── release-vscode-maproom.yml # Individual: vscode-maproom to marketplaces
+├── reusable-rust-build.yml  # Shared Rust binary builds
+├── reusable-typescript-build.yml # Shared TypeScript builds
 └── test.yml                 # CI tests (SQLite-first)
 ```
 
@@ -75,10 +80,57 @@ my-postgres-test:
 
 ## Workflows
 
+### Coordinated Release System
+
+The project uses a coordinated release system to ensure packages are released in the correct dependency order.
+
+**Required Order:** `@crewchief/cli` → `@crewchief/daemon-client` → `@crewchief/maproom-mcp` → `vscode-maproom`
+
+**Configuration:** `/release-config.json` defines:
+- Release order and dependencies
+- Version requirements (e.g., MCP requires CLI >= 1.5.0)
+- Validation rules (clean working tree, passing tests, etc.)
+
+### `release-all.yml` (Recommended)
+Coordinated release of all packages in correct order.
+- Trigger: Manual workflow dispatch
+- Options: release type (patch/minor/major), dry run, packages to release
+- Builds Rust binaries once (shared), then releases packages sequentially
+- Validates dependencies before each package release
+
+### `release-cli.yml`
+Publishes `@crewchief/cli` to npm.
+- Trigger: Version tags (`@crewchief/cli@v*.*.*`) or manual
+- Builds TypeScript, bundles Rust binaries, publishes package
+
 ### `release-maproom-mcp.yml`
 Publishes `@crewchief/maproom-mcp` to npm.
 - Trigger: Version tags (`@crewchief/maproom-mcp@v*.*.*`)
 - Builds TypeScript, bundles Rust binaries, publishes package
+
+### `release-vscode-maproom.yml`
+Publishes `vscode-maproom` to VS Code Marketplace and Open VSX.
+- Trigger: Manual workflow dispatch (requires version input)
+- Builds TypeScript, bundles Rust binaries, creates VSIX, publishes
+
+### Local Release Commands
+
+```bash
+# Dry run to see what would be released
+pnpm release:dry
+
+# Release all packages (coordinated)
+pnpm release:all          # Auto-detect changes
+pnpm release:all:patch    # Patch bump all
+pnpm release:all:minor    # Minor bump all
+pnpm release:all:major    # Major bump all
+
+# Release specific packages
+pnpm release -p @crewchief/cli @crewchief/daemon-client
+
+# Skip confirmation prompts
+pnpm release --all -y
+```
 
 ## Debug Failed Workflow
 
@@ -157,4 +209,6 @@ git push
 
 Set in repository settings (Settings → Secrets and variables → Actions):
 - `NPM_TOKEN` - npm publish auth
+- `VSCE_PAT` - VS Code Marketplace Personal Access Token
+- `OVSX_PAT` - Open VSX Registry Personal Access Token
 - `GITHUB_TOKEN` - Auto-provided by GitHub

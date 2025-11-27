@@ -1,0 +1,329 @@
+name: Release All Packages (Coordinated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Version bump type'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      packages:
+        description: 'Packages to release (comma-separated, or "all")'
+        type: string
+        default: 'all'
+      dry_run:
+        description: 'Dry run (build and validate only, skip publishing)'
+        type: boolean
+        default: false
+      skip_tests:
+        description: 'Skip running tests (not recommended)'
+        type: boolean
+        default: false
+      vscode_version:
+        description: 'VSCode extension version (required if releasing vscode-maproom)'
+        type: string
+        required: false
+
+# Only allow one coordinated release at a time
+concurrency:
+  group: coordinated-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write  # Needed to trigger other workflows
+
+jobs:
+  # ============================================
+  # Phase 0: Validate and Plan Release
+  # ============================================
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_cli: ${{ steps.plan.outputs.release_cli }}
+      release_maproom_mcp: ${{ steps.plan.outputs.release_maproom_mcp }}
+      release_vscode: ${{ steps.plan.outputs.release_vscode }}
+      cli_version: ${{ steps.versions.outputs.cli_version }}
+      maproom_mcp_version: ${{ steps.versions.outputs.maproom_mcp_version }}
+      vscode_version: ${{ steps.versions.outputs.vscode_version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate release-config.json
+        run: |
+          if [ ! -f "release-config.json" ]; then
+            echo "ERROR: release-config.json not found"
+            exit 1
+          fi
+          echo "Release configuration:"
+          cat release-config.json | jq .releaseOrder
+
+      - name: Plan release
+        id: plan
+        run: |
+          PACKAGES="${{ inputs.packages }}"
+
+          if [ "$PACKAGES" = "all" ]; then
+            echo "release_cli=true" >> $GITHUB_OUTPUT
+            echo "release_maproom_mcp=true" >> $GITHUB_OUTPUT
+            echo "release_vscode=true" >> $GITHUB_OUTPUT
+          else
+            echo "release_cli=false" >> $GITHUB_OUTPUT
+            echo "release_maproom_mcp=false" >> $GITHUB_OUTPUT
+            echo "release_vscode=false" >> $GITHUB_OUTPUT
+
+            IFS=',' read -ra ADDR <<< "$PACKAGES"
+            for pkg in "${ADDR[@]}"; do
+              pkg=$(echo "$pkg" | xargs)
+              case "$pkg" in
+                "@crewchief/cli"|"cli")
+                  echo "release_cli=true" >> $GITHUB_OUTPUT
+                  ;;
+                "@crewchief/maproom-mcp"|"maproom-mcp")
+                  echo "release_maproom_mcp=true" >> $GITHUB_OUTPUT
+                  ;;
+                "vscode-maproom"|"vscode")
+                  echo "release_vscode=true" >> $GITHUB_OUTPUT
+                  ;;
+              esac
+            done
+          fi
+
+      - name: Calculate new versions
+        id: versions
+        run: |
+          BUMP_TYPE="${{ inputs.release_type }}"
+
+          bump_version() {
+            local version="$1"
+            local major minor patch
+            IFS='.' read -r major minor patch <<< "$version"
+
+            case "$BUMP_TYPE" in
+              major) echo "$((major + 1)).0.0" ;;
+              minor) echo "$major.$((minor + 1)).0" ;;
+              patch) echo "$major.$minor.$((patch + 1))" ;;
+            esac
+          }
+
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          MCP_VERSION=$(node -p "require('./packages/maproom-mcp/package.json').version")
+          VSCODE_CURRENT=$(node -p "require('./packages/vscode-maproom/package.json').version")
+
+          NEW_CLI=$(bump_version "$CLI_VERSION")
+          NEW_MCP=$(bump_version "$MCP_VERSION")
+
+          if [ -n "${{ inputs.vscode_version }}" ]; then
+            NEW_VSCODE="${{ inputs.vscode_version }}"
+          else
+            NEW_VSCODE=$(bump_version "$VSCODE_CURRENT")
+          fi
+
+          echo "cli_version=$NEW_CLI" >> $GITHUB_OUTPUT
+          echo "maproom_mcp_version=$NEW_MCP" >> $GITHUB_OUTPUT
+          echo "vscode_version=$NEW_VSCODE" >> $GITHUB_OUTPUT
+
+          echo "=== Version Plan ==="
+          echo "@crewchief/cli: $CLI_VERSION -> $NEW_CLI"
+          echo "@crewchief/maproom-mcp: $MCP_VERSION -> $NEW_MCP"
+          echo "vscode-maproom: $VSCODE_CURRENT -> $NEW_VSCODE"
+
+      - name: Run tests
+        if: ${{ !inputs.skip_tests }}
+        run: pnpm test
+
+      - name: Summary
+        run: |
+          echo "## Release Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Release | New Version |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| @crewchief/cli | ${{ steps.plan.outputs.release_cli }} | ${{ steps.versions.outputs.cli_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| @crewchief/maproom-mcp | ${{ steps.plan.outputs.release_maproom_mcp }} | ${{ steps.versions.outputs.maproom_mcp_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| vscode-maproom | ${{ steps.plan.outputs.release_vscode }} | ${{ steps.versions.outputs.vscode_version }} |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Mode: DRY RUN** - No packages will be published" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================
+  # Phase 1: Bump versions and create tags
+  # This prepares the releases but doesn't publish
+  # ============================================
+  prepare-releases:
+    name: Prepare Releases
+    needs: validate
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.dry_run }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump CLI version and tag
+        if: needs.validate.outputs.release_cli == 'true'
+        run: |
+          cd packages/cli
+          npm version ${{ needs.validate.outputs.cli_version }} --no-git-tag-version
+          cd ../..
+          git add packages/cli/package.json
+          git commit -m "chore(release): @crewchief/cli@${{ needs.validate.outputs.cli_version }}"
+          git tag "@crewchief/cli@v${{ needs.validate.outputs.cli_version }}"
+
+      - name: Bump maproom-mcp version and tag
+        if: needs.validate.outputs.release_maproom_mcp == 'true'
+        run: |
+          cd packages/maproom-mcp
+          npm version ${{ needs.validate.outputs.maproom_mcp_version }} --no-git-tag-version
+          cd ../..
+          git add packages/maproom-mcp/package.json
+          git commit -m "chore(release): @crewchief/maproom-mcp@${{ needs.validate.outputs.maproom_mcp_version }}"
+          git tag "@crewchief/maproom-mcp@v${{ needs.validate.outputs.maproom_mcp_version }}"
+
+      - name: Bump vscode-maproom version (no tag - manual trigger)
+        if: needs.validate.outputs.release_vscode == 'true'
+        run: |
+          cd packages/vscode-maproom
+          npm version ${{ needs.validate.outputs.vscode_version }} --no-git-tag-version
+          cd ../..
+          git add packages/vscode-maproom/package.json
+          git commit -m "chore(release): vscode-maproom@${{ needs.validate.outputs.vscode_version }}"
+
+      - name: Push commits and tags
+        run: |
+          git push origin main --tags
+
+  # ============================================
+  # Phase 2: Wait for tag-triggered workflows
+  # The individual release workflows are triggered by tags
+  # ============================================
+
+  # CLI release is triggered by @crewchief/cli@v* tag
+  wait-cli-release:
+    name: CLI Release (via tag)
+    needs: [validate, prepare-releases]
+    if: ${{ !inputs.dry_run && needs.validate.outputs.release_cli == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for CLI release workflow
+        run: |
+          echo "CLI release triggered by tag: @crewchief/cli@v${{ needs.validate.outputs.cli_version }}"
+          echo "The release-cli.yml workflow will handle the actual publish using OIDC Trusted Publishers"
+          echo ""
+          echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-cli.yml"
+
+  # Maproom-MCP release is triggered by @crewchief/maproom-mcp@v* tag
+  wait-mcp-release:
+    name: MCP Release (via tag)
+    needs: [validate, prepare-releases, wait-cli-release]
+    if: ${{ !inputs.dry_run && needs.validate.outputs.release_maproom_mcp == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for MCP release workflow
+        run: |
+          echo "MCP release triggered by tag: @crewchief/maproom-mcp@v${{ needs.validate.outputs.maproom_mcp_version }}"
+          echo "The release-maproom-mcp.yml workflow will handle the actual publish using OIDC Trusted Publishers"
+          echo ""
+          echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-maproom-mcp.yml"
+
+  # VSCode extension requires manual trigger (no tag-based workflow)
+  trigger-vscode-release:
+    name: VSCode Release (manual trigger)
+    needs: [validate, prepare-releases, wait-cli-release, wait-mcp-release]
+    if: ${{ !inputs.dry_run && needs.validate.outputs.release_vscode == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger VSCode release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Triggering VSCode release workflow for version ${{ needs.validate.outputs.vscode_version }}"
+
+          gh workflow run release-vscode-maproom.yml \
+            --repo ${{ github.repository }} \
+            -f version=${{ needs.validate.outputs.vscode_version }} \
+            -f dry_run=false
+
+          echo ""
+          echo "VSCode release workflow triggered!"
+          echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-vscode-maproom.yml"
+
+  # ============================================
+  # Final Summary
+  # ============================================
+  summary:
+    name: Release Summary
+    needs: [validate, prepare-releases, wait-cli-release, wait-mcp-release, trigger-vscode-release]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Coordinated Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Version | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.validate.outputs.release_cli }}" = "true" ]; then
+            echo "| @crewchief/cli | ${{ needs.validate.outputs.cli_version }} | Tag pushed → release-cli.yml |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.validate.outputs.release_maproom_mcp }}" = "true" ]; then
+            echo "| @crewchief/maproom-mcp | ${{ needs.validate.outputs.maproom_mcp_version }} | Tag pushed → release-maproom-mcp.yml |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.validate.outputs.release_vscode }}" = "true" ]; then
+            echo "| vscode-maproom | ${{ needs.validate.outputs.vscode_version }} | Triggered → release-vscode-maproom.yml |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## How It Works" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This workflow **orchestrates** releases by:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Bumping versions and pushing tags" >> $GITHUB_STEP_SUMMARY
+          echo "2. Tags trigger the individual release workflows (which use OIDC Trusted Publishers)" >> $GITHUB_STEP_SUMMARY
+          echo "3. VSCode release is manually triggered (no tag-based workflow)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Monitor individual workflows:" >> $GITHUB_STEP_SUMMARY
+          echo "- [release-cli.yml](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-cli.yml)" >> $GITHUB_STEP_SUMMARY
+          echo "- [release-maproom-mcp.yml](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-maproom-mcp.yml)" >> $GITHUB_STEP_SUMMARY
+          echo "- [release-vscode-maproom.yml](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-vscode-maproom.yml)" >> $GITHUB_STEP_SUMMARY

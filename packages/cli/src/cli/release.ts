@@ -14,6 +14,9 @@ interface ReleaseOptions {
   yes?: boolean
   push?: boolean
   publish?: boolean
+  packages?: string[]
+  all?: boolean
+  skipTests?: boolean
 }
 
 interface PackageInfo {
@@ -24,6 +27,30 @@ interface PackageInfo {
   lastReleaseTag?: string
   changesSinceLastRelease?: string[]
   private?: boolean
+  publishTo?: string[]
+  dependencies?: string[]
+  requiredCliVersion?: string
+}
+
+interface ReleaseConfig {
+  releaseOrder: string[]
+  packages: Record<
+    string,
+    {
+      path: string
+      publishTo: string[]
+      dependencies: string[]
+      requiredCliVersion?: string
+      schemaVersion: number
+      notes?: string
+    }
+  >
+  validation: {
+    requireCleanWorkingTree: boolean
+    requirePassingTests: boolean
+    requireVersionBump: boolean
+    blockOnUnreleasedDependencies: boolean
+  }
 }
 
 /**
@@ -36,10 +63,21 @@ function getProjectRoot(): string {
 }
 
 /**
+ * Load release configuration
+ */
+function loadReleaseConfig(projectRoot: string): ReleaseConfig {
+  const configPath = path.join(projectRoot, 'release-config.json')
+  if (!fs.existsSync(configPath)) {
+    throw new Error('release-config.json not found. Please create it in the project root.')
+  }
+  return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+}
+
+/**
  * Bump version based on type
  */
 function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'): string {
-  const [major, minor, patch] = version.split('.').map(v => parseInt(v, 10))
+  const [major, minor, patch] = version.split('.').map((v) => parseInt(v, 10))
 
   switch (type) {
     case 'major':
@@ -53,25 +91,52 @@ function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'): string
 }
 
 /**
- * Get all packages in the monorepo
+ * Parse semver version string
  */
-async function getPackages(projectRoot: string): Promise<PackageInfo[]> {
-  const packages: PackageInfo[] = []
-  const packagesDir = path.join(projectRoot, 'packages')
-
-  if (!fs.existsSync(packagesDir)) {
-    return packages
+function parseVersion(version: string): { major: number; minor: number; patch: number } {
+  const match = version.replace(/^[>=<^~]+/, '').match(/^(\d+)\.(\d+)\.(\d+)/)
+  if (!match) {
+    throw new Error(`Invalid version: ${version}`)
   }
+  return {
+    major: parseInt(match[1], 10),
+    minor: parseInt(match[2], 10),
+    patch: parseInt(match[3], 10),
+  }
+}
 
-  const dirs = fs.readdirSync(packagesDir).filter(dir => {
-    const dirPath = path.join(packagesDir, dir)
-    return fs.statSync(dirPath).isDirectory() &&
-           fs.existsSync(path.join(dirPath, 'package.json'))
-  })
+/**
+ * Check if version satisfies requirement (simple >= check)
+ */
+function versionSatisfies(version: string, requirement: string): boolean {
+  const req = parseVersion(requirement)
+  const ver = parseVersion(version)
 
-  for (const dir of dirs) {
-    const packagePath = path.join(packagesDir, dir)
+  if (ver.major > req.major) return true
+  if (ver.major < req.major) return false
+  if (ver.minor > req.minor) return true
+  if (ver.minor < req.minor) return false
+  return ver.patch >= req.patch
+}
+
+/**
+ * Get all packages in the monorepo based on release config
+ */
+async function getPackages(projectRoot: string, config: ReleaseConfig): Promise<PackageInfo[]> {
+  const packages: PackageInfo[] = []
+
+  for (const pkgName of config.releaseOrder) {
+    const pkgConfig = config.packages[pkgName]
+    if (!pkgConfig) continue
+
+    const packagePath = path.join(projectRoot, pkgConfig.path)
     const packageJsonPath = path.join(packagePath, 'package.json')
+
+    if (!fs.existsSync(packageJsonPath)) {
+      console.log(chalk.yellow(`  Warning: ${pkgName} not found at ${pkgConfig.path}`))
+      continue
+    }
+
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
 
     packages.push({
@@ -80,6 +145,9 @@ async function getPackages(projectRoot: string): Promise<PackageInfo[]> {
       version: packageJson.version,
       hasChanges: false,
       private: packageJson.private,
+      publishTo: pkgConfig.publishTo,
+      dependencies: pkgConfig.dependencies,
+      requiredCliVersion: pkgConfig.requiredCliVersion,
     })
   }
 
@@ -93,7 +161,7 @@ async function detectChanges(pkg: PackageInfo, git: SimpleGit): Promise<boolean>
   try {
     // Get all tags for this package
     const tags = await git.tags()
-    const packageTags = tags.all.filter(tag => tag.startsWith(`${pkg.name}@v`))
+    const packageTags = tags.all.filter((tag) => tag.startsWith(`${pkg.name}@v`))
 
     if (packageTags.length === 0) {
       // No previous releases, everything is new
@@ -117,7 +185,7 @@ async function detectChanges(pkg: PackageInfo, git: SimpleGit): Promise<boolean>
 
       // Get list of changed files
       const changedFiles = await git.diff([lastTag, 'HEAD', '--name-only', '--', relativePath])
-      pkg.changesSinceLastRelease = changedFiles.split('\n').filter(f => f.trim())
+      pkg.changesSinceLastRelease = changedFiles.split('\n').filter((f) => f.trim())
 
       return true
     }
@@ -131,14 +199,60 @@ async function detectChanges(pkg: PackageInfo, git: SimpleGit): Promise<boolean>
 }
 
 /**
+ * Check if dependencies have unreleased changes
+ */
+async function checkDependencyReleaseStatus(
+  pkg: PackageInfo,
+  allPackages: PackageInfo[],
+  git: SimpleGit,
+): Promise<{ ok: boolean; blockers: string[] }> {
+  const blockers: string[] = []
+
+  if (!pkg.dependencies || pkg.dependencies.length === 0) {
+    return { ok: true, blockers: [] }
+  }
+
+  for (const depName of pkg.dependencies) {
+    const depPkg = allPackages.find((p) => p.name === depName)
+    if (!depPkg) continue
+
+    // Check if dependency has unreleased changes
+    const hasChanges = await detectChanges(depPkg, git)
+    if (hasChanges && depPkg.hasChanges) {
+      blockers.push(`${depName} has unreleased changes`)
+    }
+  }
+
+  return { ok: blockers.length === 0, blockers }
+}
+
+/**
+ * Check CLI version requirement for MCP package
+ */
+function checkCliVersionRequirement(pkg: PackageInfo, allPackages: PackageInfo[]): { ok: boolean; message?: string } {
+  if (!pkg.requiredCliVersion) {
+    return { ok: true }
+  }
+
+  const cliPkg = allPackages.find((p) => p.name === '@crewchief/cli')
+  if (!cliPkg) {
+    return { ok: false, message: '@crewchief/cli not found in packages' }
+  }
+
+  if (!versionSatisfies(cliPkg.version, pkg.requiredCliVersion)) {
+    return {
+      ok: false,
+      message: `Requires @crewchief/cli ${pkg.requiredCliVersion}, but found ${cliPkg.version}`,
+    }
+  }
+
+  return { ok: true }
+}
+
+/**
  * Execute a command and return promise
  */
-function executeCommand(
-  command: string,
-  args: string[],
-  cwd: string,
-  dryRun: boolean = false,
-): Promise<void> {
+function executeCommand(command: string, args: string[], cwd: string, dryRun: boolean = false): Promise<void> {
   return new Promise((resolve, reject) => {
     if (dryRun) {
       console.log(chalk.gray(`[DRY RUN] Would execute: ${command} ${args.join(' ')}`))
@@ -196,6 +310,9 @@ async function releasePackage(
   console.log(chalk.cyan(`\n📦 Releasing ${pkg.name}...`))
   console.log(chalk.gray(`  Current version: ${pkg.version}`))
   console.log(chalk.gray(`  New version: ${newVersion}`))
+  if (pkg.publishTo) {
+    console.log(chalk.gray(`  Publish to: ${pkg.publishTo.join(', ')}`))
+  }
 
   // Update package.json
   updatePackageVersion(pkg.path, newVersion, dryRun || false)
@@ -221,52 +338,136 @@ async function releasePackage(
     console.log(chalk.green('  ✓ Pushed to remote'))
   }
 
-  // Publish to npm
-  if (publish && !pkg.private && !dryRun) {
+  // Publish to npm (if npm is in publishTo)
+  if (publish && !pkg.private && pkg.publishTo?.includes('npm') && !dryRun) {
     console.log(chalk.yellow('  Publishing to npm...'))
-    await executeCommand('pnpm', ['publish', '--access', 'public'], pkg.path, dryRun || false)
+    await executeCommand('pnpm', ['publish', '--access', 'public', '--no-git-checks'], pkg.path, dryRun || false)
     console.log(chalk.green('  ✓ Published to npm'))
+  }
+
+  // Note about other publish targets
+  if (publish && pkg.publishTo) {
+    const nonNpmTargets = pkg.publishTo.filter((t) => t !== 'npm')
+    if (nonNpmTargets.length > 0) {
+      console.log(
+        chalk.yellow(`  Note: ${nonNpmTargets.join(', ')} publishing requires manual workflow or separate CI`),
+      )
+    }
   }
 }
 
 export function registerReleaseCommand(program: Command): void {
   program
     .command('release')
-    .description('Release packages with changes since last release')
+    .description('Release packages with coordinated versioning and dependency order')
     .option('--dry-run', 'Show what would be released without making changes')
     .option('-t, --type <type>', 'Version bump type: patch, minor, or major', 'patch')
     .option('-y, --yes', 'Skip confirmation prompts')
     .option('--no-push', 'Do not push to remote')
     .option('--no-publish', 'Do not publish to npm')
+    .option('-p, --packages <packages...>', 'Release specific packages (in release order)')
+    .option('--all', 'Release all packages regardless of changes')
+    .option('--skip-tests', 'Skip running tests before release (not recommended)')
     .action(async (options: ReleaseOptions) => {
       try {
         const projectRoot = getProjectRoot()
         const git = simpleGit(projectRoot)
 
-        console.log(chalk.bold.cyan('\n🚀 CrewChief Release System\n'))
+        console.log(chalk.bold.cyan('\n🚀 CrewChief Coordinated Release System\n'))
         console.log(chalk.gray(`Project root: ${projectRoot}`))
+
+        // Load release config
+        let config: ReleaseConfig
+        try {
+          config = loadReleaseConfig(projectRoot)
+          console.log(chalk.green('✓ Loaded release-config.json'))
+          console.log(chalk.gray(`  Release order: ${config.releaseOrder.join(' → ')}`))
+        } catch (error) {
+          logger.error('Failed to load release config:', error)
+          process.exitCode = 1
+          return
+        }
 
         // Check for uncommitted changes
         const status = await git.status()
-        if (!status.isClean() && !options.dryRun) {
+        if (!status.isClean() && !options.dryRun && config.validation.requireCleanWorkingTree) {
           logger.error('Working tree has uncommitted changes. Commit or stash them before releasing.')
           process.exitCode = 1
           return
         }
 
-        // Get all packages
-        const packages = await getPackages(projectRoot)
-        console.log(chalk.cyan(`\n📋 Found ${packages.length} package(s)\n`))
+        // Run tests if required
+        if (config.validation.requirePassingTests && !options.skipTests && !options.dryRun) {
+          console.log(chalk.yellow('\n🧪 Running tests...\n'))
+          try {
+            await executeCommand('pnpm', ['test'], projectRoot, false)
+            console.log(chalk.green('✓ All tests passed\n'))
+          } catch {
+            logger.error('Tests failed. Fix test failures before releasing.')
+            logger.info('Use --skip-tests to bypass (not recommended)')
+            process.exitCode = 1
+            return
+          }
+        } else if (options.skipTests) {
+          console.log(chalk.yellow('⚠️  Skipping tests (--skip-tests flag)\n'))
+        } else if (options.dryRun) {
+          console.log(chalk.gray('[DRY RUN] Would run tests before release\n'))
+        }
+
+        // Get all packages in release order
+        const packages = await getPackages(projectRoot, config)
+        console.log(chalk.cyan(`\n📋 Found ${packages.length} package(s) in release order\n`))
+
+        // Filter to requested packages if specified
+        let packagesToProcess = packages
+        if (options.packages && options.packages.length > 0) {
+          packagesToProcess = packages.filter((p) => options.packages!.includes(p.name))
+
+          // Validate that requested packages maintain release order
+          const actualOrder = packagesToProcess.map((p) => config.releaseOrder.indexOf(p.name))
+
+          for (let i = 0; i < actualOrder.length - 1; i++) {
+            if (actualOrder[i] > actualOrder[i + 1]) {
+              logger.error(
+                `Invalid release order. ${packagesToProcess[i + 1].name} must be released before ${packagesToProcess[i].name}`,
+              )
+              logger.error(`Required order: ${config.releaseOrder.join(' → ')}`)
+              process.exitCode = 1
+              return
+            }
+          }
+        }
 
         // Detect changes for each package
         console.log(chalk.yellow('🔍 Detecting changes...\n'))
         const changedPackages: PackageInfo[] = []
 
-        for (const pkg of packages) {
+        for (const pkg of packagesToProcess) {
           const hasChanges = await detectChanges(pkg, git)
-          if (hasChanges) {
+
+          if (hasChanges || options.all) {
+            // Check dependency release status (skip if --all since deps will be released in this run)
+            if (config.validation.blockOnUnreleasedDependencies && !options.all) {
+              const depStatus = await checkDependencyReleaseStatus(pkg, packages, git)
+              if (!depStatus.ok) {
+                console.log(chalk.red(`  ✗ ${pkg.name} blocked:`))
+                for (const blocker of depStatus.blockers) {
+                  console.log(chalk.red(`      - ${blocker}`))
+                }
+                console.log(chalk.yellow('      Release dependencies first, then retry.'))
+                continue
+              }
+            }
+
+            // Check CLI version requirement
+            const cliCheck = checkCliVersionRequirement(pkg, packages)
+            if (!cliCheck.ok) {
+              console.log(chalk.red(`  ✗ ${pkg.name} blocked: ${cliCheck.message}`))
+              continue
+            }
+
             changedPackages.push(pkg)
-            console.log(chalk.green(`  ✓ ${pkg.name} has changes`))
+            console.log(chalk.green(`  ✓ ${pkg.name} ${options.all ? '(forced)' : 'has changes'}`))
             if (pkg.changesSinceLastRelease && pkg.changesSinceLastRelease.length > 0) {
               console.log(chalk.gray(`    Files changed: ${pkg.changesSinceLastRelease.length}`))
             }
@@ -276,25 +477,55 @@ export function registerReleaseCommand(program: Command): void {
         }
 
         if (changedPackages.length === 0) {
-          console.log(chalk.yellow('\n📭 No packages have changes to release\n'))
+          console.log(chalk.yellow('\n📭 No packages to release\n'))
           return
         }
 
+        // Verify release order
+        console.log(chalk.cyan('\n🔒 Verifying release order...\n'))
+        const releaseIndices = changedPackages.map((p) => ({
+          name: p.name,
+          index: config.releaseOrder.indexOf(p.name),
+        }))
+
+        let orderValid = true
+        for (let i = 0; i < releaseIndices.length - 1; i++) {
+          if (releaseIndices[i].index > releaseIndices[i + 1].index) {
+            console.log(
+              chalk.red(
+                `  ✗ Order violation: ${releaseIndices[i + 1].name} must come before ${releaseIndices[i].name}`,
+              ),
+            )
+            orderValid = false
+          }
+        }
+
+        if (!orderValid) {
+          logger.error('Release order validation failed')
+          process.exitCode = 1
+          return
+        }
+        console.log(chalk.green('  ✓ Release order verified'))
+
         // Calculate new versions
         const releaseType = options.type || 'patch'
-        const releasePlan = changedPackages.map(pkg => ({
+        const releasePlan = changedPackages.map((pkg) => ({
           ...pkg,
           newVersion: bumpVersion(pkg.version, releaseType),
         }))
 
         // Show release plan
         console.log(chalk.cyan('\n📦 Release Plan:\n'))
-        for (const pkg of releasePlan) {
-          console.log(`  ${pkg.name}:`)
-          console.log(`    Current: ${pkg.version}`)
-          console.log(`    New:     ${chalk.green(pkg.newVersion)}`)
+        for (let i = 0; i < releasePlan.length; i++) {
+          const pkg = releasePlan[i]
+          console.log(`  ${i + 1}. ${pkg.name}:`)
+          console.log(`     Current: ${pkg.version}`)
+          console.log(`     New:     ${chalk.green(pkg.newVersion)}`)
+          if (pkg.publishTo) {
+            console.log(`     Targets: ${pkg.publishTo.join(', ')}`)
+          }
           if (pkg.private) {
-            console.log(chalk.gray('    (private - will not publish)'))
+            console.log(chalk.gray('     (private - will not publish)'))
           }
         }
 
@@ -304,12 +535,14 @@ export function registerReleaseCommand(program: Command): void {
 
         // Confirm release
         if (!options.yes && !options.dryRun) {
-          const { proceed } = await inquirer.prompt([{
-            type: 'confirm',
-            name: 'proceed',
-            message: `Release ${changedPackages.length} package(s) with ${releaseType} version bump?`,
-            default: true,
-          }])
+          const { proceed } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'proceed',
+              message: `Release ${changedPackages.length} package(s) with ${releaseType} version bump in order?`,
+              default: true,
+            },
+          ])
 
           if (!proceed) {
             logger.info('Release cancelled')
@@ -317,28 +550,28 @@ export function registerReleaseCommand(program: Command): void {
           }
         }
 
-        // Release each package
+        // Release each package IN ORDER
+        console.log(chalk.cyan('\n🚀 Releasing packages in order...\n'))
         for (const pkg of releasePlan) {
-          await releasePackage(
-            pkg,
-            pkg.newVersion,
-            options,
-            git,
-          )
+          await releasePackage(pkg, pkg.newVersion, options, git)
         }
 
         if (options.dryRun) {
           console.log(chalk.yellow('\n✅ DRY RUN completed - no actual changes made\n'))
         } else {
-          console.log(chalk.bold.green('\n✨ Release completed successfully!\n'))
+          console.log(chalk.bold.green('\n✨ Coordinated release completed successfully!\n'))
 
           // Show summary
-          console.log(chalk.cyan('Released packages:'))
-          for (const pkg of releasePlan) {
-            console.log(chalk.gray(`  • ${pkg.name}@${pkg.newVersion}`))
+          console.log(chalk.cyan('Released packages (in order):'))
+          for (let i = 0; i < releasePlan.length; i++) {
+            const pkg = releasePlan[i]
+            console.log(chalk.gray(`  ${i + 1}. ${pkg.name}@${pkg.newVersion}`))
           }
-        }
 
+          console.log(chalk.cyan('\nNext steps:'))
+          console.log(chalk.gray('  • GitHub Actions will build and publish packages'))
+          console.log(chalk.gray('  • For vscode-maproom: Manually trigger the release workflow'))
+        }
       } catch (error) {
         logger.error('Release failed:', error)
         process.exitCode = 1

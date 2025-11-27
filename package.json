@@ -11,11 +11,14 @@
     "build": "pnpm -r --filter='./packages/*' build",
     "test": "pnpm -r --filter='./packages/*' test",
     "lint": "pnpm -r --filter='./packages/*' lint",
-    "release": "node packages/cli/dist/cli/index.js release",
-    "release:patch": "node packages/cli/dist/cli/index.js release --type patch",
-    "release:minor": "node packages/cli/dist/cli/index.js release --type minor",
-    "release:major": "node packages/cli/dist/cli/index.js release --type major",
-    "release:dry": "node packages/cli/dist/cli/index.js release --dry-run"
+    "release": "echo 'Use: pnpm release:patch|minor|major or pnpm release:dry' && exit 1",
+    "release:patch": "git push origin main && gh workflow run release-all.yml -f release_type=patch -f packages=all",
+    "release:minor": "git push origin main && gh workflow run release-all.yml -f release_type=minor -f packages=all",
+    "release:major": "git push origin main && gh workflow run release-all.yml -f release_type=major -f packages=all",
+    "release:dry": "node packages/cli/dist/cli/index.js release --dry-run --all",
+    "release:cli": "git push origin main && gh workflow run release-all.yml -f release_type=patch -f packages=cli",
+    "release:mcp": "git push origin main && gh workflow run release-all.yml -f release_type=patch -f packages=maproom-mcp",
+    "release:vscode": "git push origin main && gh workflow run release-all.yml -f release_type=patch -f packages=vscode"
   },
   "devDependencies": {
     "vitest": "^1.6.1"

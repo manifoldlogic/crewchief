@@ -9,6 +9,7 @@ import { registerCompetitionCommands } from './competition'
 import { registerDoctorCommand } from './doctor'
 import { registerMaproomCommands } from './maproom'
 import { registerOptimizationCommands } from './optimization'
+import { registerReleaseCommand } from './release'
 import { registerSetupCommand, runSetupWizard } from './setup'
 import { registerWorktreeCommands } from './worktree'
 import { loadConfig } from '../config/loader'
@@ -45,6 +46,7 @@ registerMaproomCommands(program)
 registerOptimizationCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
+registerReleaseCommand(program)
 
 // Default behavior: `crewchief` with no subcommand starts/attaches session.
 program.action(async () => {
