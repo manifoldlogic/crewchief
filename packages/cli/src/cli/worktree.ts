@@ -22,44 +22,61 @@ export function registerWorktreeCommands(program: Command): void {
     .argument('<name>')
     .option('--branch <base>', 'Base branch to create the worktree from')
     .option('--base-path <dir>', 'Base directory for storing worktrees')
-    .option('--no-cd', 'Do not start a subshell in the created worktree')
+    .option('--shell', 'Start interactive subshell after creating')
     .option('--no-copy-ignored', 'Do not copy ignored files (override config)')
-    .description('Create a git worktree from a base branch (general-purpose)')
-    .action(async (name: string, opts: { branch?: string; basePath?: string; cd?: boolean; copyIgnored?: boolean }) => {
-      try {
-        const config = await loadConfig()
-        const baseBranch = opts.branch ?? config.repository.mainBranch
-        const basePath = opts.basePath ?? config.repository.worktreeBasePath
-        const wt = new WorktreeService()
-        await wt.initRepository(basePath)
-        const skipCopyIgnored = opts.copyIgnored === false
-        const createdPath = await wt.createWorktree(name, baseBranch, basePath, skipCopyIgnored)
-        logger.success(`Created worktree at ${createdPath} [${baseBranch}]`)
+    .description('Create a git worktree from a base branch. Prints path by default.')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Create and switch to worktree:
+    cd $(crewchief worktree create feature-x)
 
-        // Default behavior: start a subshell in the created worktree unless --no-cd is passed
-        // Commander sets opts.cd to false when --no-cd is provided; otherwise it's true/undefined
-        const shouldCd = opts.cd !== false
-        if (shouldCd) {
-          const shell = process.env.SHELL || '/bin/bash'
-          const currentBranch = await wt.getCurrentBranch()
-          const currentDir = process.cwd()
+  Create and open in subshell:
+    crewchief worktree create feature-x --shell
 
-          displaySubshellMessage({
-            targetBranch: name,
-            targetDirectory: path.relative(currentDir, createdPath) || path.basename(createdPath),
-            sourceBranch: currentBranch,
-            sourceDirectory: path.basename(currentDir),
-            shell: path.basename(shell),
-          })
+  Create from specific branch:
+    cd $(crewchief worktree create hotfix --branch release-1.0)
+`,
+    )
+    .action(
+      async (name: string, opts: { branch?: string; basePath?: string; shell?: boolean; copyIgnored?: boolean }) => {
+        try {
+          const config = await loadConfig()
+          const baseBranch = opts.branch ?? config.repository.mainBranch
+          const basePath = opts.basePath ?? config.repository.worktreeBasePath
+          const wt = new WorktreeService()
+          await wt.initRepository(basePath)
+          const skipCopyIgnored = opts.copyIgnored === false
+          const createdPath = await wt.createWorktree(name, baseBranch, basePath, skipCopyIgnored)
+          logger.success(`Created worktree at ${createdPath} [${baseBranch}]`)
 
-          const child = spawn(shell, { stdio: 'inherit', cwd: createdPath, env: process.env })
-          child.on('exit', (code) => process.exit(code ?? 0))
+          if (opts.shell) {
+            // Opt-in: spawn interactive subshell
+            const shell = process.env.SHELL || '/bin/bash'
+            const currentBranch = await wt.getCurrentBranch()
+            const currentDir = process.cwd()
+
+            displaySubshellMessage({
+              targetBranch: name,
+              targetDirectory: path.relative(currentDir, createdPath) || path.basename(createdPath),
+              sourceBranch: currentBranch,
+              sourceDirectory: path.basename(currentDir),
+              shell: path.basename(shell),
+            })
+
+            const child = spawn(shell, { stdio: 'inherit', cwd: createdPath, env: process.env })
+            child.on('exit', (code) => process.exit(code ?? 0))
+          } else {
+            // Default: print path for scripting
+            process.stdout.write(createdPath + '\n')
+          }
+        } catch (err) {
+          logger.error('Failed to create worktree:', err)
+          process.exitCode = 1
         }
-      } catch (err) {
-        logger.error('Failed to create worktree:', err)
-        process.exitCode = 1
-      }
-    })
+      },
+    )
 
   worktree
     .command('list')
