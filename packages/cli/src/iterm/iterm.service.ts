@@ -53,7 +53,7 @@ export class ITermService {
     this.ensureITerm()
 
     // Find the bridge script
-    const bridgePath = new URL('../../../../iterm_scripts/iterm_bridge.py', import.meta.url).pathname
+    const bridgePath = new URL('../../../../scripts/iterm_scripts/iterm_bridge.py', import.meta.url).pathname
 
     if (!existsSync(bridgePath)) {
       throw new Error(`Bridge script not found at ${bridgePath}`)

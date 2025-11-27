@@ -13,8 +13,8 @@ export class ITermSimpleService {
   constructor() {
     // Find the iterm_scripts directory
     const possiblePaths = [
-      join(__dirname, '..', '..', '..', '..', 'iterm_scripts'),
-      join(process.cwd(), 'iterm_scripts'),
+      join(__dirname, '..', '..', '..', '..', 'scripts', 'iterm_scripts'),
+      join(process.cwd(), 'scripts', 'iterm_scripts'),
       join(process.cwd(), '.crewchief', 'iterm_scripts'),
     ]
 

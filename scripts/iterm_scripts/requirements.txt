@@ -1,4 +1,2 @@
 # iTerm2 Python API requirements
 iterm2>=2.7
-aiohttp>=3.8.0
-asyncio-mqtt>=0.16.0

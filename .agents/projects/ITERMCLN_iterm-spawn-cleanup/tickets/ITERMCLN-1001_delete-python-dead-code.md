@@ -1,9 +1,9 @@
 # Ticket: ITERMCLN-1001: Delete Dead Python Bridge Code
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (deletion only, no tests required)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (deletion only, no tests required)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-development
@@ -21,10 +21,10 @@ The working approach uses direct script calls via `spawn_agent.py`, `send_to_pan
 Reference: ITERMCLN plan.md Phase 1 - Dead Code Removal
 
 ## Acceptance Criteria
-- [ ] All bridge-related Python files deleted (~10 files totaling ~1,650 lines)
-- [ ] No broken imports in remaining Python scripts (verified via grep)
-- [ ] `requirements.txt` remains valid and contains necessary dependencies
-- [ ] README.md in `scripts/iterm_scripts/` updated to remove all bridge references
+- [x] All bridge-related Python files deleted (~10 files totaling ~1,650 lines)
+- [x] No broken imports in remaining Python scripts (verified via grep)
+- [x] `requirements.txt` remains valid and contains necessary dependencies
+- [x] README.md in `scripts/iterm_scripts/` updated to remove all bridge references
 
 ## Technical Requirements
 Delete these Python files from `scripts/iterm_scripts/`:
