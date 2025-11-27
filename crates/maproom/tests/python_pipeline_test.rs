@@ -186,6 +186,7 @@ struct FileRow {
 
 /// Test that .py files are correctly detected as Python language.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_py_file_language_detection() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -232,6 +233,7 @@ def hello():
 
 /// Test that Python parser is invoked for .py files and extracts symbols correctly.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_python_parser_invocation() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -318,6 +320,7 @@ def multiply(x, y):
 
 /// Test that file scanner includes Python files during scan operations.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_scanner_includes_python_files() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -374,6 +377,7 @@ async fn test_scanner_includes_python_files() -> Result<()> {
 
 /// Test that indexed chunks have language="python" tag.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_chunks_have_python_language_tag() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -425,6 +429,7 @@ class DataProcessor:
 
 /// Test full scan → parse → index flow with complex Python code.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_full_pipeline_with_complex_python() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -560,6 +565,7 @@ async fn test_full_pipeline_with_complex_python() -> Result<()> {
 
 /// Test that language filter works with Python files.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_language_filter_for_python() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -604,6 +610,7 @@ async fn test_language_filter_for_python() -> Result<()> {
 
 /// Test that Python files with imports are indexed correctly.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_python_imports_extraction() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 
@@ -665,6 +672,7 @@ def process_files(files: List[Path]) -> Dict[str, str]:
 
 /// Test that malformed Python files are handled gracefully.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_malformed_python_handling() -> Result<()> {
     let test_repo = TestRepo::new().await?;
 

@@ -86,11 +86,22 @@ describe('PreFlightValidator', () => {
     })
 
     it('should return false when database URL is not configured', async () => {
-      const validatorNoUrl = new PreFlightValidator('')
+      // Save and clear any existing env var
+      const origEnv = process.env.MAPROOM_DATABASE_URL
+      delete process.env.MAPROOM_DATABASE_URL
 
-      const result = await validatorNoUrl.checkDatabaseConnection()
+      try {
+        const validatorNoUrl = new PreFlightValidator('')
 
-      expect(result).toBe(false)
+        const result = await validatorNoUrl.checkDatabaseConnection()
+
+        expect(result).toBe(false)
+      } finally {
+        // Restore env var
+        if (origEnv !== undefined) {
+          process.env.MAPROOM_DATABASE_URL = origEnv
+        }
+      }
     })
 
     it('should handle query failure', async () => {
@@ -111,13 +122,19 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
+              // Implementation expects nested repos[].worktrees[] format
               callback(
                 JSON.stringify({
-                  worktrees: [
+                  repos: [
                     {
-                      name: 'main',
-                      worktree: 'main',
-                      chunk_count: 150,
+                      name: 'crewchief',
+                      worktrees: [
+                        {
+                          name: 'main',
+                          worktree: 'main',
+                          chunk_count: 150,
+                        },
+                      ],
                     },
                   ],
                 }),
@@ -150,9 +167,15 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
+              // Implementation expects nested repos[].worktrees[] format
               callback(
                 JSON.stringify({
-                  worktrees: [],
+                  repos: [
+                    {
+                      name: 'crewchief',
+                      worktrees: [],
+                    },
+                  ],
                 }),
               )
             }
@@ -214,13 +237,19 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
+              // Implementation expects nested repos[].worktrees[] format
               callback(
                 JSON.stringify({
-                  worktrees: [
+                  repos: [
                     {
-                      name: 'test-worktree',
-                      worktree: 'test-worktree',
-                      chunk_count: 50,
+                      name: 'crewchief',
+                      worktrees: [
+                        {
+                          name: 'test-worktree',
+                          worktree: 'test-worktree',
+                          chunk_count: 50,
+                        },
+                      ],
                     },
                   ],
                 }),
@@ -254,13 +283,19 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
+              // Implementation expects nested repos[].worktrees[] format
               callback(
                 JSON.stringify({
-                  worktrees: [
+                  repos: [
                     {
-                      name: 'test-worktree',
-                      worktree: 'test-worktree',
-                      chunk_count: 0,
+                      name: 'crewchief',
+                      worktrees: [
+                        {
+                          name: 'test-worktree',
+                          worktree: 'test-worktree',
+                          chunk_count: 0,
+                        },
+                      ],
                     },
                   ],
                 }),
@@ -293,9 +328,15 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
+              // Implementation expects nested repos[].worktrees[] format
               callback(
                 JSON.stringify({
-                  worktrees: [],
+                  repos: [
+                    {
+                      name: 'crewchief',
+                      worktrees: [],
+                    },
+                  ],
                 }),
               )
             }
@@ -472,13 +513,19 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
+              // Implementation expects nested repos[].worktrees[] format
               callback(
                 JSON.stringify({
-                  worktrees: [
+                  repos: [
                     {
-                      name: 'test-worktree',
-                      worktree: 'test-worktree',
-                      chunk_count: 50,
+                      name: 'crewchief',
+                      worktrees: [
+                        {
+                          name: 'test-worktree',
+                          worktree: 'test-worktree',
+                          chunk_count: 50,
+                        },
+                      ],
                     },
                   ],
                 }),
@@ -530,7 +577,8 @@ describe('PreFlightValidator', () => {
         stdout: {
           on: vi.fn((event, callback) => {
             if (event === 'data') {
-              callback(JSON.stringify({ worktrees: [] }))
+              // Implementation expects nested repos[].worktrees[] format
+              callback(JSON.stringify({ repos: [{ name: 'crewchief', worktrees: [] }] }))
             }
           }),
         },

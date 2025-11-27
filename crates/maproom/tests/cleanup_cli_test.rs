@@ -2,6 +2,9 @@
 //!
 //! Tests the three-phase workflow: detection → report → deletion
 //! Requires test database connection via MAPROOM_TEST_DB_HOST environment variable.
+//!
+//! NOTE: These tests require PostgreSQL and are ignored by default.
+//! Run with: cargo test --test cleanup_cli_test -- --ignored
 
 use anyhow::Result;
 use crewchief_maproom::db;
@@ -21,6 +24,7 @@ fn get_test_db_url() -> String {
 
 /// Test dry-run mode: detection and reporting without deletion
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cleanup_dry_run_no_deletion() -> Result<()> {
     // Setup: Connect to test database
     let db_url = get_test_db_url();
@@ -106,6 +110,7 @@ async fn test_cleanup_dry_run_no_deletion() -> Result<()> {
 
 /// Test confirm mode: actual deletion of stale worktrees
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cleanup_confirm_deletes_worktrees() -> Result<()> {
     // Setup: Connect to test database
     let db_url = get_test_db_url();
@@ -191,6 +196,7 @@ async fn test_cleanup_confirm_deletes_worktrees() -> Result<()> {
 
 /// Test verbose mode: verify additional details are available
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cleanup_verbose_mode() -> Result<()> {
     // Setup: Connect to test database
     let db_url = get_test_db_url();
@@ -280,6 +286,7 @@ async fn test_cleanup_handles_connection_error() {
 
 /// Test exit code 2: no stale worktrees found
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cleanup_no_stale_worktrees() -> Result<()> {
     // Setup: Connect to test database
     let db_url = get_test_db_url();

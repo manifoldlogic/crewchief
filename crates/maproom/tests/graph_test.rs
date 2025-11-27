@@ -140,6 +140,7 @@ async fn create_test_link(client: &Client, test_chunk_id: i64, target_chunk_id: 
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_find_related_chunks_bidirectional() -> Result<()> {
     let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
@@ -195,6 +196,7 @@ async fn test_find_related_chunks_bidirectional() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_find_related_chunks_depth_limiting() -> Result<()> {
     let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
@@ -228,6 +230,7 @@ async fn test_find_related_chunks_depth_limiting() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_find_related_chunks_edge_type_filtering() -> Result<()> {
     let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
@@ -260,6 +263,7 @@ async fn test_find_related_chunks_edge_type_filtering() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_find_related_chunks_directional() -> Result<()> {
     let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
@@ -299,6 +303,7 @@ async fn test_find_related_chunks_directional() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_relevance_decay() -> Result<()> {
     let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()
@@ -331,6 +336,7 @@ async fn test_relevance_decay() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_ordering_by_relevance() -> Result<()> {
     let database_url = std::env::var("MAPROOM_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://postgres:postgres@localhost:5432/maproom_test".to_string()

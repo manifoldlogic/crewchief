@@ -118,6 +118,7 @@ fn another_function() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_assemble_primary_chunk() -> Result<()> {
     if should_skip_db_test() {
         eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
@@ -175,6 +176,7 @@ async fn test_assemble_primary_chunk() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_assemble_exceeds_budget() -> Result<()> {
     if should_skip_db_test() {
         eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
@@ -221,6 +223,7 @@ async fn test_assemble_exceeds_budget() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_assemble_missing_chunk() -> Result<()> {
     if should_skip_db_test() {
         eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
@@ -257,6 +260,7 @@ async fn test_assemble_missing_chunk() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_token_counting_accuracy() -> Result<()> {
     if should_skip_db_test() {
         eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");
@@ -321,6 +325,7 @@ async fn test_token_counting_accuracy() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_file_content_extraction() -> Result<()> {
     if should_skip_db_test() {
         eprintln!("Skipping integration test: MAPROOM_DATABASE_URL not set");

@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Test upserting 768-dimensional embeddings to *_ollama columns.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_upsert_768_dimension_embeddings() -> Result<()> {
     use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
 
@@ -88,6 +89,7 @@ async fn test_upsert_768_dimension_embeddings() -> Result<()> {
 
 /// Test upserting 1536-dimensional embeddings to original columns.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_upsert_1536_dimension_embeddings() -> Result<()> {
     use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
 
@@ -168,6 +170,7 @@ async fn test_upsert_1536_dimension_embeddings() -> Result<()> {
 
 /// Test that dimension mismatch returns an error.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_dimension_mismatch_error() -> Result<()> {
     use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
 
@@ -214,6 +217,7 @@ async fn test_dimension_mismatch_error() -> Result<()> {
 
 /// Test batch upserting 768-dimensional embeddings.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_upsert_768_dimension() -> Result<()> {
     use crewchief_maproom::db::queries::{batch_upsert_embeddings, connect, migrate};
 
@@ -276,6 +280,7 @@ async fn test_batch_upsert_768_dimension() -> Result<()> {
 
 /// Test batch upserting 1536-dimensional embeddings.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_upsert_1536_dimension() -> Result<()> {
     use crewchief_maproom::db::queries::{batch_upsert_embeddings, connect, migrate};
 
@@ -338,6 +343,7 @@ async fn test_batch_upsert_1536_dimension() -> Result<()> {
 
 /// Test that batch upsert handles dimension mismatch correctly.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_dimension_mismatch_error() -> Result<()> {
     use crewchief_maproom::db::queries::{batch_upsert_embeddings, connect, migrate};
 
@@ -384,6 +390,7 @@ async fn test_batch_dimension_mismatch_error() -> Result<()> {
 
 /// Test that batch upsert maintains transaction safety.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_transaction_rollback() -> Result<()> {
     use crewchief_maproom::db::queries::{batch_upsert_embeddings, connect, migrate};
 
@@ -470,6 +477,7 @@ async fn test_batch_transaction_rollback() -> Result<()> {
 
 /// Test upserting with unsupported dimension.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_unsupported_dimension_error() -> Result<()> {
     use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
 
@@ -519,6 +527,7 @@ async fn test_unsupported_dimension_error() -> Result<()> {
 /// This test verifies the bug fix for MCP-009 where text embeddings were incorrectly
 /// being written to doc_embedding columns instead of text_embedding columns.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_text_embedding_column_correct_768() -> Result<()> {
     use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
 
@@ -636,6 +645,7 @@ async fn test_text_embedding_column_correct_768() -> Result<()> {
 
 /// Test that text embeddings are written to text_embedding column for 1536 dimensions.
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_text_embedding_column_correct_1536() -> Result<()> {
     use crewchief_maproom::db::queries::{connect, migrate, upsert_embeddings};
 

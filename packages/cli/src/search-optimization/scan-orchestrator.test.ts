@@ -6,7 +6,17 @@ import { scanAllWorktrees, scanWorktree, waitForScanCompletion, type ScanConfig 
 // Mock child_process spawn at module level before imports
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
+  spawnSync: vi.fn().mockReturnValue({ status: 0, stdout: Buffer.from('/usr/local/bin/crewchief') }),
 }))
+
+// Mock fs to make findCrewchiefCli always find the binary
+vi.mock('fs', async () => {
+  const actual = await vi.importActual('fs')
+  return {
+    ...actual,
+    existsSync: vi.fn().mockReturnValue(true),
+  }
+})
 
 const mockSpawn = spawn as ReturnType<typeof vi.fn>
 
@@ -110,9 +120,21 @@ describe('ScanOrchestrator', () => {
 
       await scanWorktree(testConfig)
 
+      // Now uses crewchief CLI with 'maproom scan' subcommand
       expect(mockSpawn).toHaveBeenCalledWith(
-        'crewchief-maproom',
-        ['scan', '--repo', 'crewchief', '--worktree', 'test-variant', '--commit', 'abc123', '--root', '/tmp/test'],
+        expect.stringContaining('crewchief'),
+        [
+          'maproom',
+          'scan',
+          '--repo',
+          'crewchief',
+          '--worktree',
+          'test-variant',
+          '--commit',
+          'abc123',
+          '--path',
+          '/tmp/test',
+        ],
         expect.objectContaining({
           shell: false,
           stdio: 'pipe',
@@ -334,9 +356,9 @@ describe('ScanOrchestrator', () => {
 
       await scanWorktree(maliciousConfig)
 
-      // Verify shell: false was used
+      // Verify shell: false was used (now uses crewchief CLI)
       expect(mockSpawn).toHaveBeenCalledWith(
-        'crewchief-maproom',
+        expect.stringContaining('crewchief'),
         expect.any(Array),
         expect.objectContaining({ shell: false }),
       )
@@ -364,13 +386,14 @@ describe('ScanOrchestrator', () => {
 
       await scanWorktree(config)
 
-      // First argument should be command
+      // First argument should be command (crewchief CLI path)
       const [command, args] = mockSpawn.mock.calls[0]
-      expect(command).toBe('crewchief-maproom')
+      expect(command).toContain('crewchief')
 
-      // Second argument should be array of args
+      // Second argument should be array of args (now uses 'maproom scan' subcommand)
       expect(Array.isArray(args)).toBe(true)
       expect(args).toEqual([
+        'maproom',
         'scan',
         '--repo',
         'crewchief',
@@ -378,7 +401,7 @@ describe('ScanOrchestrator', () => {
         'variant-a',
         '--commit',
         'HEAD',
-        '--root',
+        '--path',
         '/tmp/test',
       ])
     })

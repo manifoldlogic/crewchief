@@ -104,13 +104,23 @@ describe('Maproom validation integration', () => {
   })
 
   it('maproom scan with valid env forwards to binary (or shows binary not found)', () => {
-    const { stderr, exitCode } = runCli('maproom scan', TEST_ENV)
-    // Either forwards successfully (exit 0) or binary not found (exit 1)
-    // Both are valid - we're testing validation passed, not binary execution
+    const { stderr, stdout, exitCode } = runCli('maproom scan', TEST_ENV)
+    // Either:
+    // - exit 0: forwards successfully
+    // - exit 1: binary not found, connection refused, or other runtime error
+    // We're testing validation passed (env vars accepted), not binary execution
     expect([0, 1]).toContain(exitCode)
-    // If exit 1, should be binary not found, not validation error
+
+    // If exit 1, should be a runtime error (binary not found OR database not available)
+    // NOT a validation error (which would mention MAPROOM_DATABASE_URL missing)
     if (exitCode === 1) {
-      expect(stderr).toContain('crewchief-maproom')
+      const output = stderr + stdout
+      // Should NOT be a validation error
+      expect(output).not.toContain('MAPROOM_DATABASE_URL is required')
+      // Should be either binary not found or database connection error
+      const isBinaryError = output.includes('crewchief-maproom') || output.includes('not found')
+      const isConnectionError = output.includes('Connection refused') || output.includes('error connecting')
+      expect(isBinaryError || isConnectionError).toBe(true)
     }
   })
 

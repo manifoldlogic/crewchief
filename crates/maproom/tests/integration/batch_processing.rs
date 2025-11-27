@@ -331,6 +331,7 @@ impl BatchMetrics {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_1000_files() {
     let repo = BatchTestRepo::new()
         .await
@@ -393,6 +394,7 @@ async fn test_batch_1000_files() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[ignore] // Run with `cargo test --ignored` for extended tests
 async fn test_batch_5000_files() {
     let repo = BatchTestRepo::new()
@@ -440,6 +442,7 @@ async fn test_batch_5000_files() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_modifications() {
     let repo = BatchTestRepo::new()
         .await
@@ -515,6 +518,7 @@ async fn test_batch_modifications() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_deletions() {
     let repo = BatchTestRepo::new()
         .await
@@ -581,6 +585,7 @@ async fn test_batch_deletions() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_accuracy() {
     let repo = BatchTestRepo::new()
         .await
@@ -663,6 +668,7 @@ async fn test_batch_accuracy() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_memory_usage() {
     // Note: This test verifies the system can handle large batches without OOM
     // Actual memory measurement would require platform-specific APIs

@@ -374,6 +374,7 @@ async fn count_embeddings(client: &Client, column_name: &str) -> Result<i64> {
 // =============================================================================
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_migration_0015_forward_and_rollback() {
     println!("\n========================================");
@@ -633,6 +634,7 @@ async fn test_migration_0015_forward_and_rollback() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_migration_0015_idempotency() {
     println!("\n========================================");

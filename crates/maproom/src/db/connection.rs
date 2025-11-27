@@ -178,6 +178,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[cfg(not(feature = "sqlite"))]
     fn test_fallback_when_no_env_vars() {
         env::remove_var("MAPROOM_DATABASE_URL");
         env::remove_var("MAPROOM_DB_HOST");

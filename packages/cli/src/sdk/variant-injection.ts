@@ -82,10 +82,10 @@ export async function createVariantWorktree(
     let content = readFileSync(toolFilePath, 'utf-8')
 
     // Replace description in the toolSchemas array
-    // The pattern matches: description: '...multi-line string...'
-    // Note: The description uses single quotes with escaped quotes inside
-    // Pattern explanation: matches either \' (escaped quote) or any char except '
-    const descriptionPattern = /(name:\s*'search'\s*,\s*description:\s*)'(?:[^'\\]|\\.)*'/s
+    // The pattern matches: description: `...template literal...`
+    // Note: The description uses backticks (template literals)
+    // Pattern explanation: matches content between backticks, handling nested backticks via \`
+    const descriptionPattern = /(name:\s*'search'\s*,\s*description:\s*)`(?:[^`\\]|\\.)*`/s
 
     if (!descriptionPattern.test(content)) {
       throw new Error(
@@ -94,15 +94,13 @@ export async function createVariantWorktree(
       )
     }
 
-    // Escape special characters in the variant description for JavaScript string literal
+    // Escape special characters in the variant description for JavaScript template literal
     const escapedDescription = variant.description
       .replace(/\\/g, '\\\\') // Escape backslashes first
-      .replace(/'/g, "\\'") // Escape single quotes
-      .replace(/\n/g, '\\n') // Escape newlines
-      .replace(/\r/g, '\\r') // Escape carriage returns
-      .replace(/\t/g, '\\t') // Escape tabs
+      .replace(/`/g, '\\`') // Escape backticks
+      .replace(/\$/g, '\\$') // Escape dollar signs (template expressions)
 
-    content = content.replace(descriptionPattern, `$1'${escapedDescription}'`)
+    content = content.replace(descriptionPattern, `$1\`${escapedDescription}\``)
 
     // Write back modified content
     writeFileSync(toolFilePath, content, 'utf-8')

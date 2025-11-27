@@ -1161,6 +1161,7 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
+    #[cfg(not(feature = "sqlite"))]
     async fn test_copy_existing_embeddings_success() {
         let client = create_test_client()
             .await
@@ -1243,6 +1244,7 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
+    #[cfg(not(feature = "sqlite"))]
     async fn test_copy_skips_without_cache() {
         let client = create_test_client()
             .await
@@ -1290,6 +1292,7 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
+    #[cfg(not(feature = "sqlite"))]
     async fn test_copy_idempotent() {
         let client = create_test_client()
             .await

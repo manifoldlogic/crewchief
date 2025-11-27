@@ -144,6 +144,7 @@ impl DynamicWorktreeFixture {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_file_events_use_current_worktree() -> Result<()> {
     // Setup test fixture with two worktrees
     let fixture = DynamicWorktreeFixture::new().await?;
@@ -235,6 +236,7 @@ async fn test_file_events_use_current_worktree() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_read_lock_dropped_quickly() -> Result<()> {
     // This test verifies the read lock is dropped immediately (not held across await points)
     let fixture = DynamicWorktreeFixture::new().await?;

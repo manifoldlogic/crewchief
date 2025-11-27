@@ -247,6 +247,7 @@ async fn verify_index_exists(client: &Client, index_name: &str) -> Result<()> {
 
 /// Test 1: Fresh database migrations (0000-0017)
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_fresh_database_migrations() -> Result<()> {
     let (test_db_name, conn_string) = setup_test_database("fresh").await?;
@@ -279,6 +280,7 @@ async fn test_fresh_database_migrations() -> Result<()> {
 
 /// Test 2: Migration idempotency
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_migration_idempotency() -> Result<()> {
     let (test_db_name, conn_string) = setup_test_database("idempotency").await?;
@@ -340,6 +342,7 @@ async fn test_migration_idempotency() -> Result<()> {
 
 /// Test 3: Schema validation
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_schema_validation() -> Result<()> {
     let (test_db_name, conn_string) = setup_test_database("schema").await?;

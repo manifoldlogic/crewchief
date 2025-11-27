@@ -99,6 +99,7 @@ async fn cleanup_test_file(pool: &PgPool, file_id: i64) -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_get_hash_from_db_null() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -114,6 +115,7 @@ async fn test_get_hash_from_db_null() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_store_and_retrieve_hash() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -136,6 +138,7 @@ async fn test_store_and_retrieve_hash() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_store_hash_overwrites() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -161,6 +164,7 @@ async fn test_store_hash_overwrites() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_detect_new_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -190,6 +194,7 @@ async fn test_detect_new_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_detect_modified_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -226,6 +231,7 @@ async fn test_detect_modified_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_detect_unchanged_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -255,6 +261,7 @@ async fn test_detect_unchanged_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cache_hit_scenario() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -285,6 +292,7 @@ async fn test_cache_hit_scenario() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cache_detects_modification() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -334,6 +342,7 @@ async fn test_cache_detects_modification() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_db_hit_after_cache_miss() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -366,6 +375,7 @@ async fn test_db_hit_after_cache_miss() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_clear_cache() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -387,6 +397,7 @@ async fn test_clear_cache() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_multiple_files_with_cache() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -438,6 +449,7 @@ async fn test_multiple_files_with_cache() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_hash_storage_32_bytes() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -466,6 +478,7 @@ async fn test_hash_storage_32_bytes() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_get_hash_nonexistent_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -482,6 +495,7 @@ async fn test_get_hash_nonexistent_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_detect_deleted_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -514,6 +528,7 @@ async fn test_detect_deleted_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_delete_never_tracked_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -542,6 +557,7 @@ async fn test_delete_never_tracked_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_detect_file_move() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -577,6 +593,7 @@ async fn test_detect_file_move() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_detect_move_no_previous_file() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -596,6 +613,7 @@ async fn test_detect_move_no_previous_file() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_change_detection() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -661,6 +679,7 @@ async fn test_batch_change_detection() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_change_detection_with_modifications() -> Result<()> {
     let pool = setup_pool().await?;
 
@@ -723,6 +742,7 @@ async fn test_batch_change_detection_with_modifications() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_batch_change_detection_empty() -> Result<()> {
     let pool = setup_pool().await?;
     let mut detector = ChangeDetector::new(pool);

@@ -303,6 +303,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "requires PostgreSQL database"]
     async fn test_db_creation() {
         let test_db = TestDb::new().await.expect("Failed to create test database");
         assert!(test_db.db_name.starts_with("maproom_test_"));

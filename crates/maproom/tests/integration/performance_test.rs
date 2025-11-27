@@ -54,6 +54,7 @@ fn test_performance_single_file_parsing() {
 }
 
 #[test]
+#[ignore = "performance thresholds are for release builds, not debug"]
 fn test_performance_large_file_parsing() {
     // Test parsing a large generated markdown file (10k lines)
     println!("\n========================================");

@@ -43,6 +43,12 @@ vi.mock('node:child_process', async (importOriginal) => {
   }
 })
 
+// Mock git utilities
+vi.mock('../utils/git', () => ({
+  getRepoName: vi.fn().mockResolvedValue('test-owner/test-repo'),
+  getBranchName: vi.fn().mockResolvedValue('main'),
+}))
+
 // Mock OutputChannel for testing
 class MockOutputChannel {
   private lines: string[] = []
@@ -222,7 +228,17 @@ describe('ProcessOrchestrator', () => {
       await orchestrator.startWatching()
 
       const calls = vi.mocked(spawn).mock.calls
-      expect(calls[0][1]).toEqual(['watch', '--throttle', '3s'])
+      expect(calls[0][1]).toEqual([
+        'watch',
+        '--repo',
+        'test-owner/test-repo',
+        '--worktree',
+        'main',
+        '--path',
+        '/test/workspace',
+        '--throttle',
+        '3s',
+      ])
       expect(calls[1][1]).toEqual(['branch-watch', '--repo', '/test/workspace'])
     })
 

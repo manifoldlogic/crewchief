@@ -2,6 +2,7 @@ use crewchief_maproom::db::connection::get_database_url;
 use crewchief_maproom::db::pool::create_pool;
 
 #[tokio::test]
+#[cfg_attr(feature = "sqlite", ignore = "SQLite feature uses different fallback URL")]
 async fn test_pool_creation_with_fallback_url() {
     // Remove MAPROOM_DATABASE_URL to test fallback logic
     std::env::remove_var("MAPROOM_DATABASE_URL");

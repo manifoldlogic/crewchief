@@ -204,6 +204,7 @@ async fn insert_test_data(
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_detects_stale_worktree() -> Result<()> {
     // Setup test database
@@ -242,6 +243,7 @@ async fn test_detects_stale_worktree() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_preserves_valid_worktree() -> Result<()> {
     // Setup test database
@@ -278,6 +280,7 @@ async fn test_preserves_valid_worktree() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_mixed_worktrees() -> Result<()> {
     // Setup test database
@@ -323,6 +326,7 @@ async fn test_mixed_worktrees() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_empty_database() -> Result<()> {
     // Setup test database
@@ -350,6 +354,7 @@ async fn test_empty_database() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_worktree_with_no_chunks() -> Result<()> {
     // Setup test database
@@ -391,6 +396,7 @@ async fn test_worktree_with_no_chunks() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_parallel_performance() -> Result<()> {
     // Setup test database

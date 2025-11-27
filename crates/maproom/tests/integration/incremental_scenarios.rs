@@ -282,6 +282,7 @@ impl TestRepo {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_file_creation() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
     let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
@@ -329,6 +330,7 @@ async fn test_file_creation() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_file_modification() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
     let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
@@ -403,6 +405,7 @@ async fn test_file_modification() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_file_deletion() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
     let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
@@ -468,6 +471,7 @@ async fn test_file_deletion() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_file_rename() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
     let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
@@ -546,6 +550,7 @@ async fn test_file_rename() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mixed_operations() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
     let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
@@ -661,6 +666,7 @@ async fn test_mixed_operations() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_index_consistency_after_operations() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
     let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());

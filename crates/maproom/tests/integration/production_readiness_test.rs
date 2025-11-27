@@ -24,6 +24,7 @@ use crewchief_maproom::search::{
 };
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_load_concurrent_users() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -115,6 +116,7 @@ struct UserStats {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_sustained_load() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -180,6 +182,7 @@ async fn test_production_sustained_load() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_graceful_degradation_no_vector() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -219,6 +222,7 @@ async fn test_production_graceful_degradation_no_vector() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_graceful_degradation_no_fts() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -258,6 +262,7 @@ async fn test_production_graceful_degradation_no_fts() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_config_rollback() {
     // Setup: Create initial configuration
     let test_config = TestConfig::new().expect("Failed to create test config");
@@ -381,6 +386,7 @@ feature_flags:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_recovery_from_empty_results() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -418,6 +424,7 @@ async fn test_production_recovery_from_empty_results() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_performance_benchmarks() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -472,6 +479,7 @@ async fn test_production_performance_benchmarks() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_metrics_under_load() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -535,6 +543,7 @@ async fn test_production_metrics_under_load() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_production_connection_pool_exhaustion() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");

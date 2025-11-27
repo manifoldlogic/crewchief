@@ -291,6 +291,7 @@ impl FailureTestRepo {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_invalid_file_path_handling() {
     let repo = FailureTestRepo::new()
         .await
@@ -321,6 +322,7 @@ async fn test_invalid_file_path_handling() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_partial_batch_failure() {
     let repo = FailureTestRepo::new()
         .await
@@ -377,6 +379,7 @@ async fn test_partial_batch_failure() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_transaction_rollback_on_error() {
     let repo = FailureTestRepo::new()
         .await
@@ -437,6 +440,7 @@ async fn test_transaction_rollback_on_error() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_corrupted_file_content() {
     let repo = FailureTestRepo::new()
         .await
@@ -469,6 +473,7 @@ async fn test_corrupted_file_content() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_filesystem_permission_error() {
     let repo = FailureTestRepo::new()
         .await
@@ -522,6 +527,7 @@ async fn test_filesystem_permission_error() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_interrupted_batch_consistency() {
     let repo = FailureTestRepo::new()
         .await
@@ -586,6 +592,7 @@ async fn test_interrupted_batch_consistency() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_cascade_delete_integrity() {
     let repo = FailureTestRepo::new()
         .await
@@ -649,6 +656,7 @@ async fn test_cascade_delete_integrity() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_recovery_from_pool_exhaustion() {
     let repo = FailureTestRepo::new()
         .await

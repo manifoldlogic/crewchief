@@ -231,7 +231,8 @@ jobs:
         working-directory: crates/maproom
 
       - name: Run tests
-        run: cargo test --features sqlite
+        # Use --test-threads=1 due to env var race conditions in config tests
+        run: cargo test --features sqlite -- --test-threads=1
         working-directory: crates/maproom
 
       - name: Job Summary
@@ -405,7 +406,8 @@ jobs:
         working-directory: crates/maproom
 
       - name: Run tests
-        run: cargo test --features postgres
+        # Use --test-threads=1 due to env var race conditions in config tests
+        run: cargo test --features postgres -- --test-threads=1
         working-directory: crates/maproom
         # Note: postgres tests requiring DB connection will be skipped
         # This validates compilation and non-DB-dependent tests
@@ -419,3 +421,75 @@ jobs:
           echo "**Dependencies:** None - validates compilation only" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Tests Rust \`maproom\` crate with PostgreSQL feature (DB tests skipped)." >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
+  # TYPESCRIPT PACKAGE TESTS - Unit tests for CLI, VSCode, and Daemon packages
+  # =============================================================================
+
+  # TypeScript Package Unit Tests
+  # Tests cli, vscode-maproom, and daemon-client packages
+  test-typescript:
+    name: TypeScript Package Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Test CLI package
+        working-directory: packages/cli
+        run: pnpm test
+        env:
+          CI: true
+
+      - name: Test VSCode extension package
+        working-directory: packages/vscode-maproom
+        run: pnpm test
+        env:
+          CI: true
+
+      - name: Test Daemon Client package
+        working-directory: packages/daemon-client
+        run: pnpm test
+        env:
+          CI: true
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 📦 TypeScript Package Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Packages Tested:**" >> $GITHUB_STEP_SUMMARY
+          echo "- cli: Worktree management and agent orchestration" >> $GITHUB_STEP_SUMMARY
+          echo "- vscode-maproom: VSCode extension" >> $GITHUB_STEP_SUMMARY
+          echo "- daemon-client: Daemon RPC client" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Unit tests for TypeScript packages (no database required)." >> $GITHUB_STEP_SUMMARY

@@ -243,6 +243,7 @@ impl ConcurrentTestRepo {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_concurrent_file_creation() {
     let repo = ConcurrentTestRepo::new()
         .await
@@ -305,6 +306,7 @@ async fn test_concurrent_file_creation() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_concurrent_modifications() {
     let repo = ConcurrentTestRepo::new()
         .await
@@ -382,6 +384,7 @@ async fn test_concurrent_modifications() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_concurrent_mixed_operations() {
     let repo = ConcurrentTestRepo::new()
         .await
@@ -504,6 +507,7 @@ async fn test_concurrent_mixed_operations() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_transaction_isolation() {
     let repo = ConcurrentTestRepo::new()
         .await
@@ -591,6 +595,7 @@ async fn test_transaction_isolation() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_no_deadlocks_under_load() {
     let repo = ConcurrentTestRepo::new()
         .await

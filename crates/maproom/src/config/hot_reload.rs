@@ -283,7 +283,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_manual_reload() {
-        let _guard = CONFIG_MUTEX.lock().unwrap();
+        let _guard = CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
         // Clean up environment variables that could override file config
         std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_FTS");
@@ -350,7 +350,7 @@ feature_flags:
     #[tokio::test]
     #[serial]
     async fn test_invalid_config_rejected() {
-        let _guard = CONFIG_MUTEX.lock().unwrap();
+        let _guard = CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
         // Clean up environment variables that could override file config
         std::env::remove_var("MAPROOM_SEARCH_FUSION_WEIGHTS_FTS");

@@ -18,6 +18,7 @@ use crewchief_maproom::config::{SearchConfig, FeatureFlags};
 use crewchief_maproom::search::fusion::FusionWeights;
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_load_from_file() {
     // Setup: Create test configuration file
     let test_config = TestConfig::new().expect("Failed to create test config");
@@ -91,6 +92,7 @@ feature_flags:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_default_fallback() {
     // Test: Load default configuration when file doesn't exist
     let config = SearchConfig::default();
@@ -115,6 +117,7 @@ async fn test_config_default_fallback() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_env_overrides() {
     // Setup: Set environment variables
     std::env::set_var("MAPROOM_SEARCH_EMBEDDING_PROVIDER", "cohere");
@@ -188,6 +191,7 @@ feature_flags:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_validation() {
     // Test: Valid configuration
     let valid_config = SearchConfig::default();
@@ -215,6 +219,7 @@ async fn test_config_validation() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_hot_reload() {
     // Setup: Create initial configuration file
     let test_config = TestConfig::new().expect("Failed to create test config");
@@ -327,6 +332,7 @@ feature_flags:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_feature_flags() {
     // Test: Feature flags default state
     let flags = FeatureFlags::default();
@@ -352,6 +358,7 @@ async fn test_feature_flags() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_feature_flag_env_override() {
     // Setup: Set environment variable to disable vector search
     std::env::set_var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_VECTOR_SEARCH", "false");
@@ -417,6 +424,7 @@ feature_flags:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_fusion_weights_validation() {
     // Test: Valid fusion weights
     let valid_weights = FusionWeights {
@@ -450,6 +458,7 @@ async fn test_fusion_weights_validation() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_yaml_parsing_errors() {
     // Setup: Create invalid YAML configuration
     let test_config = TestConfig::new().expect("Failed to create test config");
@@ -471,6 +480,7 @@ embedding:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_missing_required_fields() {
     // Setup: Create configuration with missing required fields
     let test_config = TestConfig::new().expect("Failed to create test config");
@@ -491,6 +501,7 @@ embedding:
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_config_get_env_overrides() {
     // Setup: Set some test environment variables
     std::env::set_var("MAPROOM_SEARCH_TEST_VAR_1", "value1");

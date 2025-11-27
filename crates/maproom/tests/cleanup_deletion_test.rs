@@ -283,6 +283,7 @@ async fn get_chunk_worktree_ids(client: &tokio_postgres::Client, chunk_id: i64) 
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_multi_worktree_chunk_safety() -> Result<()> {
     // Scenario 4 from quality-strategy.md: Multi-worktree chunks must be preserved
@@ -373,6 +374,7 @@ async fn test_multi_worktree_chunk_safety() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_garbage_collection_accuracy() -> Result<()> {
     // Scenario 5 from quality-strategy.md: Single-worktree chunks should be deleted
@@ -445,6 +447,7 @@ async fn test_garbage_collection_accuracy() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_dry_run_mode() -> Result<()> {
     // Verify dry-run mode makes no changes
@@ -508,6 +511,7 @@ async fn test_dry_run_mode() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_partial_failure_handling() -> Result<()> {
     // Test that partial failures are collected and don't abort the entire process
@@ -585,6 +589,7 @@ async fn test_partial_failure_handling() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_complex_multi_worktree_scenario() -> Result<()> {
     // Complex scenario: Multiple worktrees with overlapping chunks
@@ -671,6 +676,7 @@ async fn test_complex_multi_worktree_scenario() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_deletes_only_stale_worktrees() -> Result<()> {
     // Test that only stale worktrees are deleted, not valid ones
@@ -791,6 +797,7 @@ async fn test_deletes_only_stale_worktrees() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_transaction_rollback_on_error() -> Result<()> {
     // Test that transaction rolls back on error (no partial deletions)
@@ -888,6 +895,7 @@ async fn test_transaction_rollback_on_error() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_audit_logging() -> Result<()> {
     // Test that audit logging captures all deletions with proper context
@@ -974,6 +982,7 @@ async fn test_audit_logging() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 #[serial]
 async fn test_concurrent_operations() -> Result<()> {
     // Test that concurrent cleanup operations are handled safely

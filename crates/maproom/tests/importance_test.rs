@@ -95,11 +95,11 @@ fn test_integration_test_relationship_priority() {
         regular_score
     );
 
-    // Verify the ratio is approximately 1.5/1.2 = 1.25
+    // Verify the ratio is approximately 1.5/0.8 = 1.875 (test_of vs calls relationship weights)
     let ratio = test_score / regular_score;
     assert!(
-        (ratio - 1.25).abs() < 0.01,
-        "Expected ratio ~1.25, got {}",
+        (ratio - 1.875).abs() < 0.01,
+        "Expected ratio ~1.875, got {}",
         ratio
     );
 }

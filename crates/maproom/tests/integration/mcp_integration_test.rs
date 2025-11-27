@@ -21,6 +21,7 @@ use crewchief_maproom::search::{
 };
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_search_hybrid_mode() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -58,6 +59,7 @@ async fn test_mcp_search_hybrid_mode() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_search_fts_mode() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -105,6 +107,7 @@ async fn test_mcp_search_fts_mode() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_search_vector_mode() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -152,6 +155,7 @@ async fn test_mcp_search_vector_mode() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_search_with_filters() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -193,6 +197,7 @@ async fn test_mcp_search_with_filters() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_search_debug_mode() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -247,6 +252,7 @@ async fn test_mcp_search_debug_mode() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_backward_compatibility() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -289,6 +295,7 @@ async fn test_mcp_backward_compatibility() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_error_handling() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -328,6 +335,7 @@ async fn test_mcp_error_handling() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_concurrent_requests() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -387,6 +395,7 @@ async fn test_mcp_concurrent_requests() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_performance_target() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");
@@ -437,6 +446,7 @@ async fn test_mcp_performance_target() {
 }
 
 #[tokio::test]
+#[ignore = "requires PostgreSQL database"]
 async fn test_mcp_empty_query_handling() {
     // Setup
     let test_db = TestDb::new().await.expect("Failed to create test database");

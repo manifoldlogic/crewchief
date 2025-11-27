@@ -59,6 +59,12 @@ vi.mock('node:child_process', async (importOriginal) => {
   }
 })
 
+// Mock git utilities
+vi.mock('../utils/git', () => ({
+  getRepoName: vi.fn().mockResolvedValue('test-owner/test-repo'),
+  getBranchName: vi.fn().mockResolvedValue('main'),
+}))
+
 /**
  * Mock StatusBarItem
  */
