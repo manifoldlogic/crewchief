@@ -5,7 +5,7 @@
  * with minimal mocking. They test end-to-end workflows across:
  * - Event flow: Parser → Orchestrator → StatusBar
  * - Process lifecycle: Start → Watch → Error → Recovery
- * - Extension activation: Docker → Processes → UI
+ * - Extension activation: Ollama → Reconcile → Processes → UI
  *
  * Note: These are integration-style tests using Vitest, not @vscode/test-electron.
  * Real VSCode API calls are still mocked, but module interactions are real.
