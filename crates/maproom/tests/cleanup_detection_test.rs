@@ -1,7 +1,6 @@
 //! IDXCLEAN-1001: Stale Worktree Detection Integration Tests
 //!
-//! Integration tests for stale worktree detection using a real PostgreSQL database.
-//! Uses the existing PostgreSQL database at maproom-postgres:5432.
+//! Integration tests for stale worktree detection using SQLite in-memory database.
 //!
 //! Tests verify:
 //! - Detection of worktrees with non-existent paths
@@ -9,217 +8,98 @@
 //! - Parallel validation performance
 //! - Error handling for edge cases
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crewchief_maproom::db::cleanup::StaleWorktreeDetector;
-use serial_test::serial;
+use crewchief_maproom::db::sqlite::SqliteStore;
+use crewchief_maproom::db::{ChunkRecord, FileRecord};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
-use tokio_postgres::{Client, NoTls};
 
-const POSTGRES_USER: &str = "maproom";
-const POSTGRES_PASSWORD: &str = "maproom";
+// Counter for unique test database names
+static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-/// Get postgres connection parameters from environment or defaults
-fn get_postgres_params() -> (String, u16) {
-    let host =
-        std::env::var("MAPROOM_TEST_DB_HOST").unwrap_or_else(|_| "maproom-postgres".to_string());
-    let port = std::env::var("MAPROOM_TEST_DB_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(5432);
-    (host, port)
-}
-
-/// Generate a unique test database name using timestamp
-fn generate_test_db_name(test_name: &str) -> String {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    format!("maproom_test_cleanup_{}_{}", test_name, timestamp)
-}
-
-/// Setup a test database and return the database name and connection string
-async fn setup_test_database(test_name: &str) -> Result<(String, String)> {
-    let test_db_name = generate_test_db_name(test_name);
-    let (host, port) = get_postgres_params();
-
-    // Connect to the default 'postgres' database to create our test database
-    let postgres_conn_string = format!(
-        "postgresql://{}:{}@{}:{}/postgres",
-        POSTGRES_USER, POSTGRES_PASSWORD, host, port
-    );
-
-    let (client, connection) = tokio_postgres::connect(&postgres_conn_string, NoTls)
-        .await
-        .context("Failed to connect to postgres database")?;
-
-    // Spawn connection driver
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("postgres connection error: {}", e);
-        }
-    });
-
-    // Create test database
-    client
-        .execute(&format!("CREATE DATABASE {}", test_db_name), &[])
-        .await
-        .with_context(|| format!("Failed to create test database {}", test_db_name))?;
-
-    // Build connection string for the test database
-    let test_conn_string = format!(
-        "postgresql://{}:{}@{}:{}/{}",
-        POSTGRES_USER, POSTGRES_PASSWORD, host, port, test_db_name
-    );
-
-    Ok((test_db_name, test_conn_string))
-}
-
-/// Connect to the test database
-async fn connect_to_test_database(conn_string: &str) -> Result<Client> {
-    let (client, connection) = tokio_postgres::connect(conn_string, NoTls)
-        .await
-        .context("Failed to connect to test database")?;
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("postgres connection error: {}", e);
-        }
-    });
-
-    Ok(client)
-}
-
-/// Drop the test database after test completion
-async fn cleanup_test_database(test_db_name: &str) -> Result<()> {
-    let (host, port) = get_postgres_params();
-    let postgres_conn_string = format!(
-        "postgresql://{}:{}@{}:{}/postgres",
-        POSTGRES_USER, POSTGRES_PASSWORD, host, port
-    );
-
-    let (client, connection) = tokio_postgres::connect(&postgres_conn_string, NoTls)
-        .await
-        .context("Failed to connect to postgres database for cleanup")?;
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("postgres connection error during cleanup: {}", e);
-        }
-    });
-
-    // Terminate active connections to the test database
-    client
-        .execute(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-            &[&test_db_name],
-        )
-        .await
-        .context("Failed to terminate active connections")?;
-
-    // Drop the test database
-    client
-        .execute(&format!("DROP DATABASE IF EXISTS {}", test_db_name), &[])
-        .await
-        .with_context(|| format!("Failed to drop test database {}", test_db_name))?;
-
-    Ok(())
-}
-
-/// Run migrations on the test database
-async fn run_migrations(client: &Client) -> Result<()> {
-    crewchief_maproom::db::queries::migrate(client)
-        .await
-        .context("Failed to run migrations")?;
-    Ok(())
+/// Create a shared in-memory SQLite store with migrations applied
+/// Uses file:memdb?mode=memory&cache=shared for proper pooled connection support
+async fn setup_test_store() -> SqliteStore {
+    let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let db_name = format!("file:memdb_cleanup_detect_{}?mode=memory&cache=shared", counter);
+    let store = SqliteStore::connect(&db_name).await.unwrap();
+    store.migrate().await.unwrap();
+    store
 }
 
 /// Insert test data: repo, worktree, and chunks
+/// Returns (repo_id, worktree_id)
 async fn insert_test_data(
-    client: &Client,
+    store: &SqliteStore,
     worktree_name: &str,
     abs_path: &str,
     chunk_count: i32,
 ) -> Result<(i64, i64)> {
-    // Insert or get repo (idempotent)
-    let repo_id: i64 = client
-        .query_one(
-            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2)
-             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-             RETURNING id",
-            &[&"test-repo", &"/tmp/test-repo"],
-        )
-        .await?
-        .get(0);
+    // Create repo (shared across all worktrees in a test)
+    let repo_id = store
+        .get_or_create_repo("test-repo", "/tmp/test-repo")
+        .await?;
 
-    // Insert worktree
-    let worktree_id: i64 = client
-        .query_one(
-            "INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3) RETURNING id",
-            &[&repo_id, &worktree_name, &abs_path],
-        )
-        .await?
-        .get(0);
+    // Create worktree
+    let worktree_id = store
+        .get_or_create_worktree(repo_id, worktree_name, abs_path)
+        .await?;
 
-    // Insert commit with unique SHA based on worktree name
-    let commit_sha = format!("commit-{}", worktree_name.replace("-", ""));
-    let commit_id: i64 = client
-        .query_one(
-            "INSERT INTO maproom.commits (repo_id, sha, committed_at) VALUES ($1, $2, NOW()) RETURNING id",
-            &[&repo_id, &commit_sha],
-        )
-        .await?
-        .get(0);
+    // Create commit (unique per worktree)
+    let commit_sha = format!("commit-{}", worktree_name.replace('-', ""));
+    let commit_id = store
+        .get_or_create_commit(repo_id, &commit_sha, None)
+        .await?;
 
-    // Insert file
-    let file_id: i64 = client
-        .query_one(
-            "INSERT INTO maproom.files (repo_id, worktree_id, commit_id, relpath, language, content_hash, size_bytes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-            &[&repo_id, &worktree_id, &commit_id, &"test.rs", &"rust", &"hash123", &1000],
-        )
-        .await?
-        .get(0);
+    // Create file (unique per worktree using worktree_name)
+    let file = FileRecord {
+        repo_id,
+        worktree_id,
+        commit_id,
+        relpath: format!("src/{}/test.rs", worktree_name),
+        language: Some("rust".to_string()),
+        content_hash: format!("hash_{}", worktree_name),
+        size_bytes: 1000,
+        last_modified: None,
+    };
+    let file_id = store.upsert_file(&file).await?;
 
-    // Insert chunks with worktree_ids and blob_sha
+    // Create chunks with worktree association via junction table
     for i in 0..chunk_count {
-        client
-            .execute(
-                "INSERT INTO maproom.chunks (file_id, symbol_name, kind, start_line, end_line, preview, blob_sha, worktree_ids)
-                 VALUES ($1, $2, 'func', $3, $4, $5, $6, $7)",
-                &[
-                    &file_id,
-                    &format!("test_func_{}", i),
-                    &(i * 10),
-                    &((i + 1) * 10),
-                    &format!("fn test_func_{}() {{}}", i),
-                    &format!("test_blob_sha_{}", i), // Add blob_sha
-                    &serde_json::json!([worktree_id.to_string()]),
-                ],
-            )
-            .await?;
+        let chunk = ChunkRecord {
+            file_id,
+            blob_sha: format!("blob_sha_{}_{}", worktree_name, i),
+            symbol_name: Some(format!("test_func_{}_{}", worktree_name, i)),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: i * 10,
+            end_line: (i + 1) * 10,
+            preview: format!("fn test_func_{}() {{}}", i),
+            ts_doc_text: format!("test function {} {}", worktree_name, i),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+            worktree_id,
+        };
+        store.insert_chunk(&chunk).await?;
     }
 
     Ok((repo_id, worktree_id))
 }
 
 #[tokio::test]
-#[ignore = "requires PostgreSQL database"]
-#[serial]
 async fn test_detects_stale_worktree() -> Result<()> {
     // Setup test database
-    let (test_db_name, conn_string) = setup_test_database("detects_stale").await?;
-    let client = connect_to_test_database(&conn_string).await?;
-
-    // Run migrations
-    run_migrations(&client).await?;
+    let store = setup_test_store().await;
 
     // Insert test data with non-existent path
     let non_existent_path = "/tmp/non_existent_worktree_12345";
-    insert_test_data(&client, "test-branch", non_existent_path, 5).await?;
+    insert_test_data(&store, "test-branch", non_existent_path, 5).await?;
 
     // Run detection
-    let detector = StaleWorktreeDetector::new(&client);
+    let detector = StaleWorktreeDetector::new(&store);
     let stale_worktrees = detector.detect_stale_worktrees().await?;
 
     // Verify: should find 1 stale worktree
@@ -236,32 +116,23 @@ async fn test_detects_stale_worktree() -> Result<()> {
     assert!(!stale.exists, "Worktree should be marked as not existing");
     assert_eq!(stale.chunk_count, 5, "Expected 5 chunks");
 
-    // Cleanup
-    cleanup_test_database(&test_db_name).await?;
-
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires PostgreSQL database"]
-#[serial]
 async fn test_preserves_valid_worktree() -> Result<()> {
     // Setup test database
-    let (test_db_name, conn_string) = setup_test_database("preserves_valid").await?;
-    let client = connect_to_test_database(&conn_string).await?;
-
-    // Run migrations
-    run_migrations(&client).await?;
+    let store = setup_test_store().await;
 
     // Create a temporary directory that exists
     let temp_dir = TempDir::new()?;
     let existing_path = temp_dir.path().to_str().unwrap();
 
     // Insert test data with existing path
-    insert_test_data(&client, "test-branch", existing_path, 3).await?;
+    insert_test_data(&store, "test-branch", existing_path, 3).await?;
 
     // Run detection
-    let detector = StaleWorktreeDetector::new(&client);
+    let detector = StaleWorktreeDetector::new(&store);
     let stale_worktrees = detector.detect_stale_worktrees().await?;
 
     // Verify: should find 0 stale worktrees (the path exists)
@@ -272,35 +143,31 @@ async fn test_preserves_valid_worktree() -> Result<()> {
         stale_worktrees.len()
     );
 
-    // Cleanup
-    drop(temp_dir);
-    cleanup_test_database(&test_db_name).await?;
-
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires PostgreSQL database"]
-#[serial]
 async fn test_mixed_worktrees() -> Result<()> {
     // Setup test database
-    let (test_db_name, conn_string) = setup_test_database("mixed").await?;
-    let client = connect_to_test_database(&conn_string).await?;
+    let store = setup_test_store().await;
 
-    // Run migrations
-    run_migrations(&client).await?;
+    // Use UUID-like unique prefixes for worktree names to avoid conflicts
+    let uuid = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
 
     // Create one valid worktree
     let temp_dir = TempDir::new()?;
     let valid_path = temp_dir.path().to_str().unwrap();
-    insert_test_data(&client, "valid-branch", valid_path, 10).await?;
+    insert_test_data(&store, &format!("valid-{}", uuid), valid_path, 10).await?;
 
     // Create two stale worktrees with unique names
-    insert_test_data(&client, "stale-branch-1", "/tmp/stale_worktree_1_xyz", 5).await?;
-    insert_test_data(&client, "stale-branch-2", "/tmp/stale_worktree_2_xyz", 8).await?;
+    insert_test_data(&store, &format!("stale1-{}", uuid), "/tmp/stale_worktree_1_xyz", 5).await?;
+    insert_test_data(&store, &format!("stale2-{}", uuid), "/tmp/stale_worktree_2_xyz", 8).await?;
 
     // Run detection
-    let detector = StaleWorktreeDetector::new(&client);
+    let detector = StaleWorktreeDetector::new(&store);
     let stale_worktrees = detector.detect_stale_worktrees().await?;
 
     // Verify: should find 2 stale worktrees
@@ -318,26 +185,16 @@ async fn test_mixed_worktrees() -> Result<()> {
         "Expected 13 total chunks in stale worktrees"
     );
 
-    // Cleanup
-    drop(temp_dir);
-    cleanup_test_database(&test_db_name).await?;
-
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires PostgreSQL database"]
-#[serial]
 async fn test_empty_database() -> Result<()> {
     // Setup test database
-    let (test_db_name, conn_string) = setup_test_database("empty").await?;
-    let client = connect_to_test_database(&conn_string).await?;
-
-    // Run migrations
-    run_migrations(&client).await?;
+    let store = setup_test_store().await;
 
     // Run detection on empty database
-    let detector = StaleWorktreeDetector::new(&client);
+    let detector = StaleWorktreeDetector::new(&store);
     let stale_worktrees = detector.detect_stale_worktrees().await?;
 
     // Verify: should find 0 stale worktrees
@@ -347,41 +204,26 @@ async fn test_empty_database() -> Result<()> {
         "Expected 0 stale worktrees in empty database"
     );
 
-    // Cleanup
-    cleanup_test_database(&test_db_name).await?;
-
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires PostgreSQL database"]
-#[serial]
 async fn test_worktree_with_no_chunks() -> Result<()> {
     // Setup test database
-    let (test_db_name, conn_string) = setup_test_database("no_chunks").await?;
-    let client = connect_to_test_database(&conn_string).await?;
+    let store = setup_test_store().await;
 
-    // Run migrations
-    run_migrations(&client).await?;
+    // Create repo
+    let repo_id = store
+        .get_or_create_repo("test-repo", "/tmp/test-repo")
+        .await?;
 
-    // Insert worktree with no chunks
-    let repo_id: i64 = client
-        .query_one(
-            "INSERT INTO maproom.repos (name, root_path) VALUES ($1, $2) RETURNING id",
-            &[&"test-repo", &"/tmp/test-repo"],
-        )
-        .await?
-        .get(0);
-
-    client
-        .execute(
-            "INSERT INTO maproom.worktrees (repo_id, name, abs_path) VALUES ($1, $2, $3)",
-            &[&repo_id, &"empty-branch", &"/tmp/non_existent_empty"],
-        )
+    // Create worktree with no chunks
+    store
+        .get_or_create_worktree(repo_id, "empty-branch", "/tmp/non_existent_empty")
         .await?;
 
     // Run detection
-    let detector = StaleWorktreeDetector::new(&client);
+    let detector = StaleWorktreeDetector::new(&store);
     let stale_worktrees = detector.detect_stale_worktrees().await?;
 
     // Verify: should find 1 stale worktree with 0 chunks
@@ -389,27 +231,18 @@ async fn test_worktree_with_no_chunks() -> Result<()> {
     assert_eq!(stale_worktrees[0].chunk_count, 0);
     assert_eq!(stale_worktrees[0].name, "empty-branch");
 
-    // Cleanup
-    cleanup_test_database(&test_db_name).await?;
-
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires PostgreSQL database"]
-#[serial]
 async fn test_parallel_performance() -> Result<()> {
     // Setup test database
-    let (test_db_name, conn_string) = setup_test_database("performance").await?;
-    let client = connect_to_test_database(&conn_string).await?;
-
-    // Run migrations
-    run_migrations(&client).await?;
+    let store = setup_test_store().await;
 
     // Insert 50 worktrees (a reasonable test size) with unique names
     for i in 0..50 {
         insert_test_data(
-            &client,
+            &store,
             &format!("test-branch-{}", i),
             &format!("/tmp/test_worktree_{}", i),
             2,
@@ -419,7 +252,7 @@ async fn test_parallel_performance() -> Result<()> {
 
     // Run detection and measure time
     let start = std::time::Instant::now();
-    let detector = StaleWorktreeDetector::new(&client);
+    let detector = StaleWorktreeDetector::new(&store);
     let stale_worktrees = detector.detect_stale_worktrees().await?;
     let duration = start.elapsed();
 
@@ -435,9 +268,6 @@ async fn test_parallel_performance() -> Result<()> {
     );
 
     println!("Performance test: detected 50 worktrees in {:?}", duration);
-
-    // Cleanup
-    cleanup_test_database(&test_db_name).await?;
 
     Ok(())
 }
