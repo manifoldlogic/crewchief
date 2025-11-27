@@ -244,18 +244,29 @@ jobs:
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_cli == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger CLI release workflow
+      - name: Trigger and wait for CLI release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Triggering CLI release workflow"
+          echo "Triggering CLI release workflow..."
           gh workflow run release-cli.yml \
             --repo ${{ github.repository }} \
             -f dry_run=false
 
-          echo ""
-          echo "CLI release workflow triggered!"
-          echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-cli.yml"
+          # Wait for workflow to start
+          sleep 10
+
+          # Get the most recent run of release-cli.yml
+          RUN_ID=$(gh run list --workflow=release-cli.yml --limit=1 --json databaseId -q '.[0].databaseId')
+          echo "Waiting for run $RUN_ID to complete..."
+
+          # Wait for it to complete (timeout after 20 minutes)
+          gh run watch $RUN_ID --exit-status --interval 30 || {
+            echo "::error::CLI release workflow failed!"
+            exit 1
+          }
+
+          echo "✅ CLI release completed successfully!"
 
   # Maproom-MCP release (depends on CLI for ordering)
   trigger-mcp-release:
@@ -264,18 +275,29 @@ jobs:
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_maproom_mcp == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger MCP release workflow
+      - name: Trigger and wait for MCP release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Triggering MCP release workflow"
+          echo "Triggering MCP release workflow..."
           gh workflow run release-maproom-mcp.yml \
             --repo ${{ github.repository }} \
             -f dry_run=false
 
-          echo ""
-          echo "MCP release workflow triggered!"
-          echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-maproom-mcp.yml"
+          # Wait for workflow to start
+          sleep 10
+
+          # Get the most recent run of release-maproom-mcp.yml
+          RUN_ID=$(gh run list --workflow=release-maproom-mcp.yml --limit=1 --json databaseId -q '.[0].databaseId')
+          echo "Waiting for run $RUN_ID to complete..."
+
+          # Wait for it to complete (timeout after 20 minutes)
+          gh run watch $RUN_ID --exit-status --interval 30 || {
+            echo "::error::MCP release workflow failed!"
+            exit 1
+          }
+
+          echo "✅ MCP release completed successfully!"
 
   # VSCode extension release (depends on MCP for ordering)
   trigger-vscode-release:
@@ -284,20 +306,31 @@ jobs:
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_vscode == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger VSCode release workflow
+      - name: Trigger and wait for VSCode release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Triggering VSCode release workflow for version ${{ needs.validate.outputs.vscode_version }}"
+          echo "Triggering VSCode release workflow for version ${{ needs.validate.outputs.vscode_version }}..."
 
           gh workflow run release-vscode-maproom.yml \
             --repo ${{ github.repository }} \
             -f version=${{ needs.validate.outputs.vscode_version }} \
             -f dry_run=false
 
-          echo ""
-          echo "VSCode release workflow triggered!"
-          echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-vscode-maproom.yml"
+          # Wait for workflow to start
+          sleep 10
+
+          # Get the most recent run of release-vscode-maproom.yml
+          RUN_ID=$(gh run list --workflow=release-vscode-maproom.yml --limit=1 --json databaseId -q '.[0].databaseId')
+          echo "Waiting for run $RUN_ID to complete..."
+
+          # Wait for it to complete (timeout after 20 minutes)
+          gh run watch $RUN_ID --exit-status --interval 30 || {
+            echo "::error::VSCode release workflow failed!"
+            exit 1
+          }
+
+          echo "✅ VSCode release completed successfully!"
 
   # ============================================
   # Final Summary
