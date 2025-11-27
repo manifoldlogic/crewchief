@@ -86,9 +86,9 @@ impl SearchPipeline {
         }
     }
 
-    /// Get reference to the database client (for testing and utilities).
-    pub fn client(&self) -> &tokio_postgres::Client {
-        self.executors.client()
+    /// Get reference to the database store (for testing and utilities).
+    pub fn store(&self) -> &crate::db::SqliteStore {
+        self.executors.store()
     }
 
     /// Execute the complete search pipeline.
@@ -406,44 +406,13 @@ impl SearchPipeline {
         &self,
         chunk_ids: &[i64],
     ) -> Result<HashMap<i64, ChunkDetails>, PipelineError> {
-        let query = r#"
-            SELECT
-                c.id,
-                c.file_id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                c.preview
-            FROM maproom.chunks c
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE c.id = ANY($1)
-        "#;
+        // TODO(IDXABS-2003): This needs to be implemented using SqliteStore.
+        // SqliteStore doesn't have a bulk chunk details fetch method yet.
+        // This should query the chunks and files tables to get the needed fields.
+        // See ticket IDXABS-4001 for search functionality updates.
 
-        let client = self.executors.client();
-        let rows = client.query(query, &[&chunk_ids]).await?;
-
-        let mut details = HashMap::new();
-        for row in rows {
-            let chunk_id: i64 = row.get(0);
-            details.insert(
-                chunk_id,
-                ChunkDetails {
-                    file_id: row.get(1),
-                    relpath: row.get(2),
-                    symbol_name: row.get(3),
-                    kind: row.get(4),
-                    start_line: row.get(5),
-                    end_line: row.get(6),
-                    preview: row.get(7),
-                },
-            );
-        }
-
-        debug!("Fetched details for {} chunks", details.len());
-
-        Ok(details)
+        debug!("fetch_chunk_details called for {} chunk IDs (not yet implemented)", chunk_ids.len());
+        Ok(HashMap::new())
     }
 
     /// Build search metadata from pipeline execution details.
@@ -512,7 +481,7 @@ pub enum PipelineError {
 
     /// Database query failed
     #[error("Database error: {0}")]
-    Database(#[from] tokio_postgres::Error),
+    Database(String),
 
     /// Result assembly failed
     #[error("Result assembly failed: {0}")]

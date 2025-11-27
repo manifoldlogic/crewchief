@@ -33,9 +33,9 @@
 //!
 //! All edge cases validated in tests/integration/semrank-edge-cases.test.ts
 
+use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use regex::Regex;
-use tokio_postgres::Client;
 use tracing::{debug, instrument, warn};
 
 /// Normalize query for exact match detection
@@ -134,9 +134,9 @@ impl FTSExecutor {
     /// ORDER BY final_score DESC
     /// LIMIT $5;
     /// ```
-    #[instrument(skip(client), fields(query_len = fts_query.len()))]
+    #[instrument(skip(store), fields(query_len = fts_query.len()))]
     pub async fn execute(
-        client: &Client,
+        store: &SqliteStore,
         fts_query: &str,
         normalized_query: &str,
         repo_id: i64,
@@ -156,113 +156,14 @@ impl FTSExecutor {
             fts_query, limit, fetch_limit
         );
 
-        // Prepare the SQL query
-        let sql = r#"
-            WITH fts_results AS (
-              SELECT
-                c.id,
-                ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
-                -- SEMRANK-2004: Exact match multiplier (3.0× boost for exact symbol_name match)
-                CASE
-                  WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
-                  ELSE 1.0
-                END as exact_mult,
-                -- Source: 0001_init.sql:45 + migrations (maproom.symbol_kind enum)
-                CASE
-                  WHEN c.kind IN ('func', 'async_func') THEN 2.5
-                  WHEN c.kind IN ('class', 'component') THEN 2.0
-                  WHEN c.kind = 'hook' THEN 1.8
-                  WHEN c.kind IN ('module', 'type', 'struct', 'trait', 'enum') THEN 1.5
-                  WHEN c.kind IN ('var', 'variable', 'constant', 'method', 'async_method') THEN 1.0
-                  WHEN c.kind = 'heading_1' THEN 0.6
-                  WHEN c.kind = 'heading_2' THEN 0.5
-                  WHEN c.kind = 'heading_3' THEN 0.4
-                  WHEN c.kind IN ('heading_4', 'heading_5', 'heading_6') THEN 0.3
-                  WHEN c.kind = 'other' THEN 1.0
-                  WHEN c.kind IS NULL THEN 1.0
-                  ELSE 1.0
-                END as kind_mult
-              FROM maproom.chunks c
-              JOIN maproom.files f ON f.id = c.file_id
-              WHERE c.ts_doc @@ to_tsquery('simple', $1)
-                AND f.repo_id = $3
-                AND ($4::bigint IS NULL OR f.worktree_id = $4)
-            )
-            SELECT
-              id,
-              base_score,
-              kind_mult,
-              exact_mult,
-              (base_score * kind_mult * exact_mult) as final_score,
-              ROW_NUMBER() OVER (ORDER BY base_score * kind_mult * exact_mult DESC) as rank
-            FROM fts_results
-            ORDER BY final_score DESC
-            LIMIT $5
-        "#;
+        // TODO(IDXABS-2003): This is a placeholder implementation.
+        // The full FTS ranking logic with kind multipliers and exact match boosting
+        // needs to be implemented in SqliteStore's search_chunks_fts method.
+        // For now, we return empty results to allow compilation.
+        // See ticket IDXABS-4001 for search functionality updates.
 
-        let stmt = client.prepare(sql).await.map_err(|e| {
-            warn!("Failed to prepare FTS query: {}", e);
-            FTSError::Database(format!("Failed to prepare query: {}", e))
-        })?;
-
-        let rows = client
-            .query(
-                &stmt,
-                &[
-                    &fts_query,
-                    &normalized_query,
-                    &repo_id,
-                    &worktree_id,
-                    &fetch_limit,
-                ],
-            )
-            .await
-            .map_err(|e| {
-                warn!("Failed to execute FTS query: {}", e);
-                FTSError::Database(format!("Query execution failed: {}", e))
-            })?;
-
-        debug!("FTS query returned {} rows", rows.len());
-
-        if rows.is_empty() {
-            return Ok(RankedResults::empty(SearchSource::FTS));
-        }
-
-        // Extract results and normalize scores
-        // Columns: id (0), base_score (1), kind_mult (2), exact_mult (3), final_score (4), rank (5)
-        let results: Vec<(i64, f64, i64)> = rows
-            .iter()
-            .map(|row| {
-                let chunk_id: i64 = row.get(0);
-                let final_score: f64 = row.get(4);
-                let rank: i64 = row.get(5);
-                (chunk_id, final_score, rank)
-            })
-            .collect();
-
-        // Find max score for normalization
-        let max_score = results.iter().map(|(_, s, _)| *s).fold(0.0f64, f64::max);
-
-        // Normalize scores to 0.0-1.0 range
-        let ranked_results: Vec<RankedResult> = results
-            .iter()
-            .map(|(chunk_id, score, rank)| {
-                let normalized_score = if max_score > 0.0 {
-                    (score / max_score) as f32
-                } else {
-                    0.0f32
-                };
-                RankedResult::new(*chunk_id, normalized_score, *rank as usize)
-            })
-            .collect();
-
-        debug!(
-            "FTS executor returning {} results (max_score: {:.4})",
-            ranked_results.len(),
-            max_score
-        );
-
-        Ok(RankedResults::new(ranked_results, SearchSource::FTS))
+        warn!("FTS search is not fully implemented for SqliteStore backend");
+        Ok(RankedResults::empty(SearchSource::FTS))
     }
 }
 

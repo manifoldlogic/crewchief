@@ -4,6 +4,7 @@
 //! parallel execution of FTS, vector, graph, and signal searches using
 //! tokio::join! for optimal performance.
 
+use crate::db::SqliteStore;
 use crate::profile_scope;
 use crate::search::executor_types::RankedResults;
 use crate::search::fts::{FTSError, FTSExecutor};
@@ -12,7 +13,6 @@ use crate::search::signals::{SignalError, SignalExecutor};
 use crate::search::types::ProcessedQuery;
 use crate::search::vector::{VectorError, VectorExecutor};
 use std::time::Instant;
-use tokio_postgres::Client;
 use tracing::{debug, info, instrument, warn};
 
 /// Parallel search execution coordinator.
@@ -25,14 +25,14 @@ use tracing::{debug, info, instrument, warn};
 ///
 /// All searches run concurrently using tokio::join! to minimize latency.
 pub struct SearchExecutors {
-    /// Database client for query execution
-    client: Client,
+    /// Database store for query execution
+    store: SqliteStore,
 }
 
 impl SearchExecutors {
     /// Create a new SearchExecutors coordinator.
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(store: SqliteStore) -> Self {
+        Self { store }
     }
 
     /// Execute all search strategies in parallel.
@@ -82,7 +82,7 @@ impl SearchExecutors {
         let (fts_result, vector_result, graph_result, signal_result) = tokio::join!(
             // Full-text search with normalized query for exact matching
             FTSExecutor::execute(
-                &self.client,
+                &self.store,
                 &fts_query,
                 &normalized_query,
                 repo_id,
@@ -91,7 +91,7 @@ impl SearchExecutors {
             ),
             // Vector similarity search
             VectorExecutor::execute(
-                &self.client,
+                &self.store,
                 &query_embedding,
                 search_mode,
                 repo_id,
@@ -99,9 +99,9 @@ impl SearchExecutors {
                 limit
             ),
             // Graph importance
-            GraphExecutor::execute(&self.client, repo_id, worktree_id, limit),
+            GraphExecutor::execute(&self.store, repo_id, worktree_id, limit),
             // Temporal signals
-            SignalExecutor::execute(&self.client, repo_id, worktree_id),
+            SignalExecutor::execute(&self.store, repo_id, worktree_id),
         );
 
         let elapsed = start.elapsed();
@@ -192,7 +192,7 @@ impl SearchExecutors {
         let (fts_result, vector_result) = tokio::join!(
             // Full-text search with normalized query for exact matching
             FTSExecutor::execute(
-                &self.client,
+                &self.store,
                 &fts_query,
                 &normalized_query,
                 repo_id,
@@ -200,7 +200,7 @@ impl SearchExecutors {
                 limit
             ),
             VectorExecutor::execute(
-                &self.client,
+                &self.store,
                 &query_embedding,
                 search_mode,
                 repo_id,
@@ -224,9 +224,9 @@ impl SearchExecutors {
         Ok((fts_results, vector_results))
     }
 
-    /// Get reference to database client for custom queries.
-    pub fn client(&self) -> &Client {
-        &self.client
+    /// Get reference to database store for custom queries.
+    pub fn store(&self) -> &SqliteStore {
+        &self.store
     }
 }
 

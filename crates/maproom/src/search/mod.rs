@@ -57,22 +57,18 @@
 //! ```no_run
 //! use crewchief_maproom::search::{QueryProcessor, SearchExecutors};
 //! use crewchief_maproom::embedding::EmbeddingService;
+//! use crewchief_maproom::db;
 //! use std::sync::Arc;
-//! use tokio_postgres::NoTls;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Connect to database
-//!     let (client, connection) = tokio_postgres::connect(
-//!         "host=localhost user=postgres dbname=maproom",
-//!         NoTls,
-//!     ).await?;
-//!     tokio::spawn(async move { connection.await });
+//!     let store = db::connect().await?;
 //!
 //!     // Initialize components
 //!     let embedder = Arc::new(EmbeddingService::from_env()?);
 //!     let processor = QueryProcessor::new(embedder);
-//!     let executors = SearchExecutors::new(client);
+//!     let executors = SearchExecutors::new(store);
 //!
 //!     // Process query
 //!     let processed = processor.process("authenticate user").await?;

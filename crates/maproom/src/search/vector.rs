@@ -41,10 +41,10 @@
 //! - Smaller index footprint due to deduplication
 //! - Query performance equal or better than direct embedding access
 
+use crate::db::SqliteStore;
 use crate::embedding::cache::Vector;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use crate::search::types::SearchMode;
-use tokio_postgres::Client;
 use tracing::{debug, instrument, warn};
 
 /// Vector similarity search executor.
@@ -87,9 +87,9 @@ impl VectorExecutor {
     /// ORDER BY similarity DESC
     /// LIMIT $4;
     /// ```
-    #[instrument(skip(client, query_embedding), fields(embedding_dim = query_embedding.len()))]
+    #[instrument(skip(store, query_embedding), fields(embedding_dim = query_embedding.len()))]
     pub async fn execute(
-        client: &Client,
+        store: &SqliteStore,
         query_embedding: &Vector,
         mode: SearchMode,
         repo_id: i64,
@@ -109,232 +109,16 @@ impl VectorExecutor {
             mode, limit, fetch_limit
         );
 
-        let (_sql, results) = match mode {
-            SearchMode::Code => {
-                Self::execute_code_mode(client, query_embedding, repo_id, worktree_id, fetch_limit)
-                    .await?
-            }
-            SearchMode::Text => {
-                Self::execute_text_mode(client, query_embedding, repo_id, worktree_id, fetch_limit)
-                    .await?
-            }
-            SearchMode::Auto => {
-                Self::execute_hybrid_mode(
-                    client,
-                    query_embedding,
-                    repo_id,
-                    worktree_id,
-                    fetch_limit,
-                )
-                .await?
-            }
-        };
+        // TODO(IDXABS-2003): This is a placeholder implementation.
+        // Vector search using sqlite-vec needs to be integrated with the search pipeline.
+        // The SqliteStore has search_chunks_vector() but returns SearchHit, not RankedResult.
+        // This needs adapter logic to convert between types.
+        // See ticket IDXABS-4001 for search functionality updates.
 
-        debug!(
-            "Vector search ({:?} mode) returned {} results",
-            mode,
-            results.len()
-        );
-
-        Ok(RankedResults::new(results, SearchSource::Vector))
+        warn!("Vector search is not fully implemented for SqliteStore backend");
+        Ok(RankedResults::empty(SearchSource::Vector))
     }
 
-    /// Execute code-focused vector search.
-    ///
-    /// Joins chunks with code_embeddings table to access deduplicated embeddings.
-    /// This allows searching across chunks with different embedding providers.
-    async fn execute_code_mode(
-        client: &Client,
-        query_embedding: &Vector,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        limit: i64,
-    ) -> Result<(&'static str, Vec<RankedResult>), VectorError> {
-        let dimension = query_embedding.len();
-
-        // Build SQL with dimension from query embedding length
-        // JOIN with code_embeddings table for content-addressed embedding storage
-        let sql = format!(
-            r#"
-            SELECT
-              c.id,
-              CASE
-                WHEN e.embedding IS NOT NULL THEN
-                  1 - (e.embedding <=> $1::vector({}))
-                ELSE 0
-              END as similarity,
-              CASE
-                WHEN e.embedding IS NOT NULL THEN '1536'
-                ELSE NULL
-              END as embedding_dimension
-            FROM maproom.chunks c
-            JOIN maproom.code_embeddings e ON c.blob_sha = e.blob_sha
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE e.embedding IS NOT NULL
-              AND f.repo_id = $2
-              AND ($3::bigint IS NULL OR f.worktree_id = $3)
-            ORDER BY similarity DESC
-            LIMIT $4
-            "#,
-            dimension
-        );
-
-        let stmt = client.prepare(&sql).await.map_err(|e| {
-            warn!("Failed to prepare code vector query: {}", e);
-            VectorError::Database(format!("Failed to prepare query: {}", e))
-        })?;
-
-        let rows = client
-            .query(&stmt, &[&query_embedding, &repo_id, &worktree_id, &limit])
-            .await
-            .map_err(|e| {
-                warn!("Failed to execute code vector query: {}", e);
-                VectorError::Database(format!("Query execution failed: {}", e))
-            })?;
-
-        let results = Self::process_rows_with_dimension(rows)?;
-        Ok(("code", results))
-    }
-
-    /// Execute text-focused vector search.
-    ///
-    /// Joins chunks with code_embeddings table to access deduplicated embeddings.
-    /// This allows searching across chunks with different embedding providers.
-    async fn execute_text_mode(
-        client: &Client,
-        query_embedding: &Vector,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        limit: i64,
-    ) -> Result<(&'static str, Vec<RankedResult>), VectorError> {
-        let dimension = query_embedding.len();
-
-        // Build SQL with dimension from query embedding length
-        // JOIN with code_embeddings table for content-addressed embedding storage
-        let sql = format!(
-            r#"
-            SELECT
-              c.id,
-              CASE
-                WHEN e.embedding IS NOT NULL THEN
-                  1 - (e.embedding <=> $1::vector({}))
-                ELSE 0
-              END as similarity,
-              CASE
-                WHEN e.embedding IS NOT NULL THEN '1536'
-                ELSE NULL
-              END as embedding_dimension
-            FROM maproom.chunks c
-            JOIN maproom.code_embeddings e ON c.blob_sha = e.blob_sha
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE e.embedding IS NOT NULL
-              AND f.repo_id = $2
-              AND ($3::bigint IS NULL OR f.worktree_id = $3)
-            ORDER BY similarity DESC
-            LIMIT $4
-            "#,
-            dimension
-        );
-
-        let stmt = client.prepare(&sql).await.map_err(|e| {
-            warn!("Failed to prepare text vector query: {}", e);
-            VectorError::Database(format!("Failed to prepare query: {}", e))
-        })?;
-
-        let rows = client
-            .query(&stmt, &[&query_embedding, &repo_id, &worktree_id, &limit])
-            .await
-            .map_err(|e| {
-                warn!("Failed to execute text vector query: {}", e);
-                VectorError::Database(format!("Query execution failed: {}", e))
-            })?;
-
-        let results = Self::process_rows_with_dimension(rows)?;
-        Ok(("text", results))
-    }
-
-    /// Execute hybrid vector search (60% code, 40% text).
-    ///
-    /// Joins chunks with code_embeddings table to access deduplicated embeddings.
-    /// For hybrid mode, we use the same embedding for both code and text similarity
-    /// since code_embeddings stores a single embedding per unique content blob.
-    async fn execute_hybrid_mode(
-        client: &Client,
-        query_embedding: &Vector,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        limit: i64,
-    ) -> Result<(&'static str, Vec<RankedResult>), VectorError> {
-        let dimension = query_embedding.len();
-
-        // Build SQL with dimension from query embedding length
-        // JOIN with code_embeddings table for content-addressed embedding storage
-        // Use same embedding for both code and text components in hybrid scoring
-        let sql = format!(
-            r#"
-            SELECT
-              c.id,
-              CASE
-                WHEN e.embedding IS NOT NULL THEN
-                  1 - (e.embedding <=> $1::vector({}))
-                ELSE 0
-              END as similarity,
-              CASE
-                WHEN e.embedding IS NOT NULL THEN '1536'
-                ELSE NULL
-              END as embedding_dimension
-            FROM maproom.chunks c
-            JOIN maproom.code_embeddings e ON c.blob_sha = e.blob_sha
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE e.embedding IS NOT NULL
-              AND f.repo_id = $2
-              AND ($3::bigint IS NULL OR f.worktree_id = $3)
-            ORDER BY similarity DESC
-            LIMIT $4
-            "#,
-            dimension
-        );
-
-        let stmt = client.prepare(&sql).await.map_err(|e| {
-            warn!("Failed to prepare hybrid vector query: {}", e);
-            VectorError::Database(format!("Failed to prepare query: {}", e))
-        })?;
-
-        let rows = client
-            .query(&stmt, &[&query_embedding, &repo_id, &worktree_id, &limit])
-            .await
-            .map_err(|e| {
-                warn!("Failed to execute hybrid vector query: {}", e);
-                VectorError::Database(format!("Query execution failed: {}", e))
-            })?;
-
-        let results = Self::process_rows_with_dimension(rows)?;
-        Ok(("hybrid", results))
-    }
-
-    /// Process query rows into RankedResults with embedding dimension information.
-    fn process_rows_with_dimension(
-        rows: Vec<tokio_postgres::Row>,
-    ) -> Result<Vec<RankedResult>, VectorError> {
-        if rows.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let results: Vec<RankedResult> = rows
-            .iter()
-            .enumerate()
-            .map(|(idx, row)| {
-                let chunk_id: i64 = row.get(0);
-                let similarity: f32 = row.get(1);
-                let embedding_dimension: Option<String> = row.get(2);
-                // Clamp to 0.0-1.0 range (should already be in range, but ensure it)
-                let score = similarity.clamp(0.0, 1.0);
-                RankedResult::new_with_dimension(chunk_id, score, idx + 1, embedding_dimension)
-            })
-            .collect();
-
-        Ok(results)
-    }
 }
 
 /// Errors that can occur during vector search execution.
