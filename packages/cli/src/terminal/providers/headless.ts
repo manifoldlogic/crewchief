@@ -29,7 +29,7 @@ export class HeadlessProvider implements TerminalProvider {
 
     for (const [paneId, agent] of this.agents.entries()) {
       if (agent.child && agent.child.pid) {
-        logger.debug(`Killing process tree for pane ${paneId} (PID: ${agent.child.pid})`)
+        logger.info(`Killing process tree for pane ${paneId} (PID: ${agent.child.pid})`)
         const promise = new Promise<void>((resolve) => {
           treeKill(agent.child.pid!, 'SIGTERM', (err) => {
             if (err) {
