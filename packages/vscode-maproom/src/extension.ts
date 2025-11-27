@@ -2,26 +2,26 @@
  * VSCode extension entry point for Maproom Semantic Search
  *
  * Integrates core components with fast activation pattern:
- * - DockerManager: Manages PostgreSQL container lifecycle
- * - ProcessOrchestrator: Manages watch processes (file monitoring, branch monitoring)
+ * - ProcessOrchestrator: Manages unified watch process (file monitoring, branch detection)
  * - StatusBarManager: Displays real-time indexing status in status bar
+ * - OllamaClient: Manages embedding model availability (ollama provider only)
  *
  * Extension lifecycle:
  * 1. activate() - Called when extension loads (onStartupFinished)
  *    - Create output channel and status bar immediately (<500ms)
  *    - Register commands synchronously
  *    - Return quickly (FAST ACTIVATION)
- *    - Background: Start Docker services asynchronously
- *    - Background: Start watch processes after Docker healthy
+ *    - Background: Check/pull Ollama model (ollama provider only)
+ *    - Background: Run startup reconciliation
+ *    - Background: Start unified watch process
  *    - Background: Update status bar to "Watching" state
  * 2. deactivate() - Called when extension unloads
- *    - Stop watch processes
- *    - Optionally stop PostgreSQL container
+ *    - Stop watch process
  *    - Cleanup resources
  *
  * Performance:
  * - activate() completes in <500ms (doesn't block VSCode startup)
- * - Docker and process initialization happens in background with progress UI
+ * - All heavy initialization happens in background with progress UI
  * - Status bar shows "Starting..." immediately, updates to "Watching" when ready
  */
 
@@ -30,6 +30,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { ProcessOrchestrator } from './process/orchestrator'
 import { StatusBarManager } from './ui/statusBar'
+import { reconcileChanges } from './process/reconcile'
 import {
   runSetupWizard,
   getConfiguredProvider,
@@ -37,22 +38,19 @@ import {
   showNoSqliteGuidance,
 } from './ui/setupWizard'
 import { SecretsManager } from './config/secrets'
-import { runInitialScan } from './process/scan'
-import {
-  checkPostgresAvailable,
-  getPostgresUnavailableMessage,
-  DEFAULT_POSTGRES_CONFIG,
-  getPostgresConfigFromSettings,
-  getPostgresUrl,
-} from './services/postgres-checker'
 import {
   resolveDatabaseConfig,
   checkDatabaseAvailable,
-  getDatabaseUnavailableMessage,
   getDatabaseUrl,
-  type DatabaseConfig,
 } from './services/database-checker'
-import { DockerManager } from './docker/manager'
+import {
+  ensureOllamaModel,
+  showOllamaNotRunningError,
+  showModelPullError,
+  OllamaNotRunningError,
+  ModelPullError,
+  DEFAULT_EMBEDDING_MODEL,
+} from './ollama'
 
 /**
  * Output channel for extension logging
@@ -79,9 +77,10 @@ let statusBar: StatusBarManager | undefined
  * 1. Create output channel and status bar (synchronous, fast)
  * 2. Register commands (synchronous, fast)
  * 3. Return immediately (FAST!)
- * 4. Background: Start Docker services with progress UI
- * 5. Background: Start watch processes after Docker ready
- * 6. Background: Connect status bar to orchestrator
+ * 4. Background: Check/ensure Ollama model (ollama provider only)
+ * 5. Background: Run startup reconciliation
+ * 6. Background: Start watch process
+ * 7. Background: Connect status bar to orchestrator
  *
  * @param context - Extension context
  */
@@ -187,8 +186,8 @@ export function activate(context: vscode.ExtensionContext): void {
 /**
  * First-time setup flow
  *
- * Runs the setup wizard to select embedding provider, then starts Docker services
- * (for PostgreSQL mode) or checks SQLite availability, and triggers initial workspace scan.
+ * Runs the setup wizard to select embedding provider, then proceeds with
+ * normal initialization (Ollama model check, reconciliation, watch).
  * If user cancels setup, initialization is skipped.
  *
  * @param context - Extension context
@@ -218,34 +217,8 @@ async function runFirstTimeSetup(
       `Maproom configured to use ${provider.toUpperCase()} for embeddings`
     )
 
-    // Resolve database configuration
-    const dbConfig = resolveDatabaseConfig()
-    outputChannel?.appendLine(`Database mode: ${dbConfig.type}`)
-
-    // Branch based on database type
-    if (dbConfig.type === 'postgresql') {
-      // PostgreSQL mode: Start Docker services before checking availability
-      await ensureDockerRunning(context, provider)
-      await ensurePostgresAvailable()
-
-      // Run initial scan after setup completes
-      await runInitialWorkspaceScan(context, workspaceRoot)
-
-      // After scan completes, start watch processes
-      await startWatchProcesses(context, workspaceRoot)
-    } else {
-      // SQLite mode: Check database availability (no Docker needed)
-      const sqliteAvailable = await ensureSqliteAvailable(dbConfig)
-
-      if (sqliteAvailable) {
-        // Database exists - start watch processes
-        await startWatchProcesses(context, workspaceRoot)
-      } else {
-        // Database not found - show guidance and enter degraded mode
-        outputChannel?.appendLine('SQLite database not found - run crewchief-maproom scan to create index')
-        statusBar?.setState('idle')
-      }
-    }
+    // Proceed with normal initialization
+    await initializeServices(context, workspaceRoot)
   } catch (error: any) {
     const errorMessage = `Setup failed: ${error.message}`
     outputChannel?.appendLine(`ERROR: ${errorMessage}`)
@@ -259,73 +232,15 @@ async function runFirstTimeSetup(
   }
 }
 
-/**
- * Ensure Docker services are running
- *
- * Multi-workspace behavior:
- * - Multiple VSCode workspaces share the same Docker containers
- * - DockerManager.ensureServicesRunning() is idempotent (safe to call multiple times)
- * - Containers remain running until last workspace closes
- * - Each workspace registers its own cleanup handler
- *
- * @param context - Extension context
- * @param provider - Embedding provider selected by user ('ollama', 'openai', 'google')
- * @throws Error if Docker services cannot be started
- */
-async function ensureDockerRunning(
-  context: vscode.ExtensionContext,
-  provider: string
-): Promise<void> {
-  const dockerManager = new DockerManager(outputChannel!)
-
-  try {
-    // Build environment variables for docker compose
-    const envVars: Record<string, string> = {
-      MAPROOM_EMBEDDING_PROVIDER: provider,
-    }
-
-    // Get API key from secrets if needed (not for ollama)
-    if (provider !== 'ollama') {
-      const secretsManager = new SecretsManager(context.secrets)
-      const apiKey = await secretsManager.getApiKey(provider as any)
-
-      if (apiKey) {
-        // Map to environment variable names expected by docker-compose.yml
-        if (provider === 'openai') {
-          envVars.OPENAI_API_KEY = apiKey
-        } else if (provider === 'google') {
-          envVars.GOOGLE_APPLICATION_CREDENTIALS = apiKey
-        }
-      }
-    }
-
-    outputChannel?.appendLine(`Starting Docker services for provider: ${provider}`)
-    outputChannel?.appendLine(`Environment: MAPROOM_EMBEDDING_PROVIDER=${provider}`)
-
-    await dockerManager.ensureServicesRunning()
-    context.subscriptions.push({
-      dispose: () => void dockerManager.stop()
-    })
-  } catch (error: any) {
-    // Error message templates:
-    // - "Maproom requires Docker Desktop to be running." (Docker not running)
-    // - "Failed to start Docker services: [specific error]" (other errors)
-    const action = await vscode.window.showErrorMessage(
-      'Maproom requires Docker Desktop to be running.',
-      'Open Docker Desktop',
-      'Show Logs',
-      'Retry'
-    )
-
-    if (action === 'Show Logs') outputChannel?.show()
-    throw new Error(`Failed to start Docker services: ${error.message}`)
-  }
-}
 
 /**
  * Background service initialization
  *
- * Runs after activate() returns. Shows progress notification to user.
+ * Runs after activate() returns. New simplified flow:
+ * 1. Check/ensure Ollama model (ollama provider only)
+ * 2. Run startup reconciliation
+ * 3. Start unified watch process
+ *
  * Handles errors gracefully without crashing the extension.
  *
  * @param context - Extension context
@@ -342,75 +257,109 @@ async function initializeServices(
       throw new Error('No embedding provider configured. Run "Maproom: Setup" to configure.')
     }
 
-    // Resolve database configuration
+    // Resolve database configuration (SQLite only now)
     const dbConfig = resolveDatabaseConfig()
     outputChannel?.appendLine(`Database mode: ${dbConfig.type}`)
 
-    // Show progress notification
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Maproom',
-        cancellable: false,
-      },
-      async (progress) => {
-        // Branch based on database type
-        if (dbConfig.type === 'postgresql') {
-          // PostgreSQL mode: Start Docker services and check availability
-          progress.report({ message: 'Starting Docker services...' })
-          await ensureDockerRunning(context, provider)
-
-          progress.report({ message: 'Checking PostgreSQL...' })
-          await ensurePostgresAvailable()
-        } else {
-          // SQLite mode: Check database file exists (no Docker needed)
-          progress.report({ message: 'Checking SQLite database...' })
-          const sqliteAvailable = await ensureSqliteAvailable(dbConfig)
-
-          if (!sqliteAvailable) {
-            // Database not found - update status and continue with degraded mode
-            statusBar?.setState('idle')
-            outputChannel?.appendLine('SQLite database not found - extension running in degraded mode')
-            return // Exit progress handler but don't throw
-          }
-        }
-
-        // Step 3: Create process orchestrator
-        progress.report({ message: 'Starting watch processes...' })
-        outputChannel?.appendLine('Creating process orchestrator...')
-
-        // Create secrets manager
-        const secretsManager = new SecretsManager(context.secrets)
-
-        // Use databaseUrlOverride for both SQLite and PostgreSQL modes
-        orchestrator = new ProcessOrchestrator(outputChannel!, {
-          extensionRoot: context.extensionPath,
-          workspaceRoot,
-          databaseUrlOverride: getDatabaseUrl(dbConfig),
-          secretsManager,
-          provider,
+    // Step 1: Ensure Ollama model (ONLY for ollama provider)
+    if (provider === 'ollama') {
+      outputChannel?.appendLine('Checking Ollama embedding model...')
+      try {
+        await ensureOllamaModel(DEFAULT_EMBEDDING_MODEL, {
+          onProgress: (msg) => outputChannel?.appendLine(`Ollama: ${msg}`),
         })
-
-        // Step 4: Start watch processes
-        outputChannel?.appendLine('Starting watch processes...')
-        await orchestrator.startWatching()
-        outputChannel?.appendLine('Watch processes started successfully')
-
-        // Step 5: Connect status bar to orchestrator
-        progress.report({ message: 'Initializing status bar...' })
-        outputChannel?.appendLine('Connecting status bar to orchestrator...')
-
-        statusBar?.connectOrchestrator(orchestrator)
-        statusBar?.setState('watching')
-
-        outputChannel?.appendLine('Status bar connected (Watching)')
-
-        // Success!
-        progress.report({ message: 'Ready!' })
-        outputChannel?.appendLine('Maproom services initialized successfully')
-        console.log('Maproom background initialization complete')
+        outputChannel?.appendLine('Ollama model ready')
+      } catch (error) {
+        if (error instanceof OllamaNotRunningError) {
+          await showOllamaNotRunningError(() => {
+            // Retry callback
+            void initializeServices(context, workspaceRoot)
+          })
+          statusBar?.setState('error', 'Ollama not running')
+          return
+        } else if (error instanceof ModelPullError) {
+          await showModelPullError(DEFAULT_EMBEDDING_MODEL, () => {
+            // Retry callback
+            void initializeServices(context, workspaceRoot)
+          })
+          statusBar?.setState('error', 'Model pull failed')
+          return
+        }
+        throw error
       }
-    )
+    } else {
+      outputChannel?.appendLine(`Using ${provider} provider - skipping Ollama model check`)
+    }
+
+    // Step 2: Check SQLite database availability
+    outputChannel?.appendLine(`Checking database at ${dbConfig.path || dbConfig.url}...`)
+    const dbAvailable = await checkDatabaseAvailable(dbConfig)
+
+    if (!dbAvailable) {
+      // Database not found - show guidance and enter degraded mode
+      outputChannel?.appendLine('SQLite database not found - run crewchief-maproom scan to create index')
+      await showNoSqliteGuidance()
+      statusBar?.setState('idle')
+      return
+    }
+    outputChannel?.appendLine('Database found')
+
+    // Step 3: Run startup reconciliation
+    statusBar?.setState('reconciling')
+    outputChannel?.appendLine('Running startup reconciliation...')
+
+    const reconcileResult = await reconcileChanges(context, {
+      extensionRoot: context.extensionPath,
+      databaseUrl: getDatabaseUrl(dbConfig),
+      onProgress: (msg) => {
+        outputChannel?.appendLine(`Reconcile: ${msg}`)
+        statusBar?.setState('reconciling', msg)
+      },
+    })
+
+    if (reconcileResult.performed) {
+      outputChannel?.appendLine(
+        `Reconciliation complete: ${reconcileResult.filesReconciled} files indexed`
+      )
+    } else if (reconcileResult.error) {
+      outputChannel?.appendLine(`Reconciliation skipped: ${reconcileResult.error}`)
+    } else {
+      outputChannel?.appendLine('Reconciliation skipped: no changes since last run')
+    }
+
+    // Step 4: Create and start process orchestrator
+    outputChannel?.appendLine('Creating process orchestrator...')
+
+    // Create secrets manager for API key resolution
+    const secretsManager = new SecretsManager(context.secrets)
+
+    orchestrator = new ProcessOrchestrator(outputChannel!, {
+      extensionRoot: context.extensionPath,
+      workspaceRoot,
+      databaseUrlOverride: getDatabaseUrl(dbConfig),
+      secretsManager,
+      provider,
+    })
+
+    // Start unified watch process
+    outputChannel?.appendLine('Starting watch process...')
+    await orchestrator.startWatching()
+    outputChannel?.appendLine('Watch process started successfully')
+
+    // Step 5: Connect status bar to orchestrator
+    outputChannel?.appendLine('Connecting status bar to orchestrator...')
+    statusBar?.connectOrchestrator(orchestrator)
+    statusBar?.setState('watching')
+    outputChannel?.appendLine('Status bar connected (Watching)')
+
+    // Register orchestrator for cleanup
+    context.subscriptions.push({
+      dispose: () => void orchestrator?.stopWatching(),
+    })
+
+    // Success!
+    outputChannel?.appendLine('Maproom services initialized successfully')
+    console.log('Maproom background initialization complete')
   } catch (error: any) {
     const errorMessage = `Failed to initialize Maproom services: ${error.message}`
     outputChannel?.appendLine(`ERROR: ${errorMessage}`)
@@ -419,7 +368,7 @@ async function initializeServices(
     // Update status bar to error state
     statusBar?.setState('error', error.message)
 
-    // Show error notification
+    // Show error notification with appropriate action
     vscode.window.showErrorMessage(errorMessage)
 
     // Cleanup partial initialization
@@ -427,146 +376,6 @@ async function initializeServices(
   }
 }
 
-/**
- * Ensure PostgreSQL is available
- *
- * Checks if PostgreSQL is listening at the configured host/port.
- * Throws error with helpful message if not available.
- *
- * @throws Error if PostgreSQL is not available
- */
-async function ensurePostgresAvailable(): Promise<void> {
-  const config = getPostgresConfigFromSettings()
-  outputChannel?.appendLine(`Checking PostgreSQL availability at ${config.host}:${config.port}...`)
-
-  const available = await checkPostgresAvailable(config)
-
-  if (!available) {
-    const message = getPostgresUnavailableMessage()
-    outputChannel?.appendLine(`ERROR: ${message}`)
-    throw new Error(message)
-  }
-
-  outputChannel?.appendLine('PostgreSQL is available and ready')
-}
-
-/**
- * Ensure SQLite database is available
- *
- * Checks if the SQLite database file exists at the configured path.
- * Shows error notification with guidance if not available, but allows
- * extension to activate (graceful degradation).
- *
- * @param config - Database configuration from resolveDatabaseConfig()
- * @returns true if database is available, false otherwise
- */
-async function ensureSqliteAvailable(config: DatabaseConfig): Promise<boolean> {
-  outputChannel?.appendLine(`Checking SQLite database at ${config.path}...`)
-
-  const available = await checkDatabaseAvailable(config)
-
-  if (!available) {
-    const message = getDatabaseUnavailableMessage(config)
-    outputChannel?.appendLine(`WARNING: ${message}`)
-
-    // Use enhanced SQLite guidance with file picker, copy command, and terminal options
-    await showNoSqliteGuidance()
-
-    // Return false but don't throw - allow graceful degradation
-    return false
-  }
-
-  outputChannel?.appendLine(`SQLite database found at ${config.path}`)
-  return true
-}
-
-/**
- * Run initial workspace scan
- *
- * Triggers a one-time scan of the workspace to build the initial semantic index.
- * Shows progress notification with file counts and percentage.
- *
- * @param context - Extension context
- * @param workspaceRoot - Workspace root path
- */
-async function runInitialWorkspaceScan(
-  context: vscode.ExtensionContext,
-  workspaceRoot: string
-): Promise<void> {
-  if (!statusBar) {
-    throw new Error('Status bar not initialized')
-  }
-
-  outputChannel?.appendLine('Running initial workspace scan...')
-
-  // Get configured provider for environment variables
-  const provider = getConfiguredProvider(context)
-  const secretsManager = new SecretsManager(context.secrets)
-
-  // Build environment variables with credentials
-  const env: NodeJS.ProcessEnv = { ...process.env }
-  if (provider) {
-    const credentialEnv = await secretsManager.getEnvironmentVars(provider)
-    Object.assign(env, credentialEnv)
-  }
-
-  // Get database URL from database-checker (supports both SQLite and PostgreSQL)
-  const dbConfig = resolveDatabaseConfig()
-  const databaseUrl = getDatabaseUrl(dbConfig)
-
-  // Run scan with progress notification
-  const filesIndexed = await runInitialScan({
-    extensionRoot: context.extensionPath,
-    workspaceRoot,
-    databaseUrl,
-    outputChannel: outputChannel!,
-    statusBarManager: statusBar,
-    env,
-  })
-
-  outputChannel?.appendLine(`Initial scan complete: ${filesIndexed} files indexed`)
-}
-
-/**
- * Start watch processes
- *
- * Starts file and branch watch processes after initial scan completes.
- *
- * @param context - Extension context
- * @param workspaceRoot - Workspace root path
- */
-async function startWatchProcesses(
-  context: vscode.ExtensionContext,
-  workspaceRoot: string
-): Promise<void> {
-  outputChannel?.appendLine('Creating process orchestrator...')
-
-  // Resolve database configuration and use databaseUrlOverride
-  const dbConfig = resolveDatabaseConfig()
-
-  // Get configured provider and create secrets manager
-  const provider = getConfiguredProvider(context)
-  const secretsManager = new SecretsManager(context.secrets)
-
-  orchestrator = new ProcessOrchestrator(outputChannel!, {
-    extensionRoot: context.extensionPath,
-    workspaceRoot,
-    databaseUrlOverride: getDatabaseUrl(dbConfig),
-    secretsManager,
-    provider,
-  })
-
-  // Start watch processes
-  outputChannel?.appendLine('Starting watch processes...')
-  await orchestrator.startWatching()
-  outputChannel?.appendLine('Watch processes started successfully')
-
-  // Connect status bar to orchestrator
-  outputChannel?.appendLine('Connecting status bar to orchestrator...')
-  statusBar?.connectOrchestrator(orchestrator)
-  statusBar?.setState('watching')
-  outputChannel?.appendLine('Status bar connected (Watching)')
-}
 
 /**
  * Check and prompt for MCP setup if needed
@@ -631,11 +440,11 @@ export async function deactivate(): Promise<void> {
  */
 async function cleanup(): Promise<void> {
   try {
-    // Stop watch processes if they were started
+    // Stop watch process if it was started
     if (orchestrator) {
-      outputChannel?.appendLine('Stopping watch processes...')
+      outputChannel?.appendLine('Stopping watch process...')
       await orchestrator.stopWatching()
-      outputChannel?.appendLine('Watch processes stopped')
+      outputChannel?.appendLine('Watch process stopped')
       orchestrator = undefined
     }
 
@@ -643,11 +452,6 @@ async function cleanup(): Promise<void> {
     if (statusBar) {
       statusBar.setState('idle')
     }
-
-    // Note: We don't stop PostgreSQL container on deactivation
-    // because it may be shared across VSCode sessions.
-    // Users can manually stop it with: docker compose down
-    // or we could add a command: "Maproom: Stop Services"
 
     // Status bar and output channel are disposed via context.subscriptions
   } catch (error: any) {

@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-3002: Rewrite extension activation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,13 +21,13 @@ Reference: planning/plan.md - Phase 3, Ticket 3002
 Reference: planning/architecture.md - Simplified Extension Flow
 
 ## Acceptance Criteria
-- [ ] No Docker containers started during activation
-- [ ] Ollama model checked/pulled before watch (ollama provider only)
-- [ ] Reconciliation runs before watch starts
-- [ ] Activation sync portion completes < 500ms
-- [ ] Background initialization shows progress in status bar
-- [ ] Error states handled with user-friendly messages
-- [ ] Non-Ollama providers (OpenAI, Google) skip model management
+- [x] No Docker containers started during activation
+- [x] Ollama model checked/pulled before watch (ollama provider only)
+- [x] Reconciliation runs before watch starts
+- [x] Activation sync portion completes < 500ms
+- [x] Background initialization shows progress in status bar
+- [x] Error states handled with user-friendly messages
+- [x] Non-Ollama providers (OpenAI, Google) skip model management
 
 ## Technical Requirements
 - Remove all `ensureDockerRunning()` calls

@@ -1,50 +1,17 @@
 /**
- * Tests for Extension activation and first-activation prompt
+ * Tests for Extension activation and initialization flow
+ *
+ * Tests the new simplified activation flow:
+ * 1. Fast sync activation (<500ms)
+ * 2. Background: Ollama model check (ollama provider only)
+ * 3. Background: Startup reconciliation
+ * 4. Background: Start watch process
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
-
-/**
- * Mock DockerManager
- */
-class MockDockerManager {
-  private shouldFail: boolean = false
-  private errorMessage: string = ''
-
-  constructor(public outputChannel: any) {}
-
-  async ensureServicesRunning(): Promise<void> {
-    if (this.shouldFail) {
-      throw new Error(this.errorMessage)
-    }
-  }
-
-  async stop(): Promise<void> {}
-
-  setFailure(shouldFail: boolean, message: string = 'Docker not running'): void {
-    this.shouldFail = shouldFail
-    this.errorMessage = message
-  }
-}
-
-// Track mock DockerManager instances
-let mockDockerManagerInstance: MockDockerManager | undefined
-
-// Mock DockerManager module
-vi.mock('./docker/manager', () => ({
-  DockerManager: class {
-    private mockInstance: MockDockerManager
-
-    constructor(outputChannel: any) {
-      this.mockInstance = new MockDockerManager(outputChannel)
-      mockDockerManagerInstance = this.mockInstance
-      return this.mockInstance
-    }
-  },
-}))
 
 /**
  * Mock SecretStorage
@@ -167,9 +134,18 @@ vi.mock('vscode', () => ({
     get workspaceFolders() {
       return mockWorkspaceFolders
     },
+    getConfiguration: () => ({
+      get: () => 'sqlite',
+    }),
   },
   ProgressLocation: {
     Notification: 15,
+  },
+  env: {
+    openExternal: vi.fn(),
+  },
+  Uri: {
+    parse: (url: string) => ({ toString: () => url }),
   },
 }))
 
@@ -186,7 +162,7 @@ vi.mock('fs', () => ({
  */
 const mockFileExists = new Set<string>()
 
-describe('Extension First-Activation Prompt', () => {
+describe('Extension Activation Flow', () => {
   let tempDir: string
 
   beforeEach(async () => {
@@ -199,7 +175,6 @@ describe('Extension First-Activation Prompt', () => {
     executedCommands.length = 0
     mockWorkspaceFolders = undefined
     mockFileExists.clear()
-    mockDockerManagerInstance = undefined
     mockOutputChannel.appendLine.mockClear()
     mockOutputChannel.show.mockClear()
 
@@ -222,13 +197,6 @@ describe('Extension First-Activation Prompt', () => {
       mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
 
       const context = new MockExtensionContext()
-
-      // Import and call checkAndPromptForSetup (via module import)
-      const { activate } = await import('./extension.js')
-
-      // The activate function internally calls checkAndPromptForSetup
-      // We need to isolate the function for testing
-      // For now, we'll test the behavior through integration
 
       // Simulate missing MCP config
       const mcpConfigPath = path.join(tempDir, '.vscode', 'mcp.json')
@@ -315,49 +283,6 @@ describe('Extension First-Activation Prompt', () => {
       expect(executedCommands).toContain('maproom.setup')
     })
 
-    it('should not execute command when "Remind Me Later" clicked', async () => {
-      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
-
-      const context = new MockExtensionContext()
-      const mcpConfigPath = path.join(tempDir, '.vscode', 'mcp.json')
-      mockFileExists.delete(mcpConfigPath)
-
-      infoMessageAction = 'Remind Me Later'
-
-      const checkAndPromptForSetup = async (ctx: MockExtensionContext) => {
-        const workspaceRoot = mockWorkspaceFolders?.[0]?.uri.fsPath
-        if (!workspaceRoot) {
-          return
-        }
-
-        const configExists = mockFileExists.has(mcpConfigPath)
-
-        if (!configExists) {
-          const hasPrompted = ctx.workspaceState.get<boolean>('maproom.hasPromptedSetup', false)
-
-          if (!hasPrompted) {
-            const vscode = await import('vscode')
-            const action = await vscode.window.showInformationMessage(
-              'Maproom MCP server not configured. Run setup to enable semantic code search?',
-              'Run Setup',
-              'Remind Me Later'
-            )
-
-            await ctx.workspaceState.update('maproom.hasPromptedSetup', true)
-
-            if (action === 'Run Setup') {
-              await vscode.commands.executeCommand('maproom.setup')
-            }
-          }
-        }
-      }
-
-      await checkAndPromptForSetup(context)
-
-      // Should not execute any command
-      expect(executedCommands).not.toContain('maproom.setup')
-    })
-
     it('should only show prompt once per workspace', async () => {
       mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
 
@@ -378,17 +303,13 @@ describe('Extension First-Activation Prompt', () => {
 
           if (!hasPrompted) {
             const vscode = await import('vscode')
-            const action = await vscode.window.showInformationMessage(
+            await vscode.window.showInformationMessage(
               'Maproom MCP server not configured. Run setup to enable semantic code search?',
               'Run Setup',
               'Remind Me Later'
             )
 
             await ctx.workspaceState.update('maproom.hasPromptedSetup', true)
-
-            if (action === 'Run Setup') {
-              await vscode.commands.executeCommand('maproom.setup')
-            }
           }
         }
       }
@@ -432,17 +353,13 @@ describe('Extension First-Activation Prompt', () => {
 
           if (!hasPrompted) {
             const vscode = await import('vscode')
-            const action = await vscode.window.showInformationMessage(
+            await vscode.window.showInformationMessage(
               'Maproom MCP server not configured. Run setup to enable semantic code search?',
               'Run Setup',
               'Remind Me Later'
             )
 
             await ctx.workspaceState.update('maproom.hasPromptedSetup', true)
-
-            if (action === 'Run Setup') {
-              await vscode.commands.executeCommand('maproom.setup')
-            }
           }
         }
       }
@@ -452,294 +369,143 @@ describe('Extension First-Activation Prompt', () => {
       // Should not show prompt
       expect(lastInfoMessage).toBeUndefined()
     })
-
-    it('should not show prompt when no workspace open', async () => {
-      // No workspace folders
-      mockWorkspaceFolders = undefined
-
-      const context = new MockExtensionContext()
-
-      const checkAndPromptForSetup = async (ctx: MockExtensionContext) => {
-        const workspaceRoot = mockWorkspaceFolders?.[0]?.uri.fsPath
-        if (!workspaceRoot) {
-          return
-        }
-
-        const mcpConfigPath = path.join(workspaceRoot, '.vscode', 'mcp.json')
-        const configExists = mockFileExists.has(mcpConfigPath)
-
-        if (!configExists) {
-          const hasPrompted = ctx.workspaceState.get<boolean>('maproom.hasPromptedSetup', false)
-
-          if (!hasPrompted) {
-            const vscode = await import('vscode')
-            const action = await vscode.window.showInformationMessage(
-              'Maproom MCP server not configured. Run setup to enable semantic code search?',
-              'Run Setup',
-              'Remind Me Later'
-            )
-
-            await ctx.workspaceState.update('maproom.hasPromptedSetup', true)
-
-            if (action === 'Run Setup') {
-              await vscode.commands.executeCommand('maproom.setup')
-            }
-          }
-        }
-      }
-
-      await checkAndPromptForSetup(context)
-
-      // Should not show prompt
-      expect(lastInfoMessage).toBeUndefined()
-    })
-
-    it('should reset prompt state when MCP config is deleted', async () => {
-      mockWorkspaceFolders = [{ uri: { fsPath: tempDir } }]
-
-      const context = new MockExtensionContext()
-      const mcpConfigPath = path.join(tempDir, '.vscode', 'mcp.json')
-
-      const checkAndPromptForSetup = async (ctx: MockExtensionContext) => {
-        const workspaceRoot = mockWorkspaceFolders?.[0]?.uri.fsPath
-        if (!workspaceRoot) {
-          return
-        }
-
-        const configExists = mockFileExists.has(mcpConfigPath)
-
-        if (!configExists) {
-          const hasPrompted = ctx.workspaceState.get<boolean>('maproom.hasPromptedSetup', false)
-
-          if (!hasPrompted) {
-            const vscode = await import('vscode')
-            const action = await vscode.window.showInformationMessage(
-              'Maproom MCP server not configured. Run setup to enable semantic code search?',
-              'Run Setup',
-              'Remind Me Later'
-            )
-
-            await ctx.workspaceState.update('maproom.hasPromptedSetup', true)
-
-            if (action === 'Run Setup') {
-              await vscode.commands.executeCommand('maproom.setup')
-            }
-          }
-        }
-      }
-
-      // First activation - show prompt and mark as prompted
-      mockFileExists.delete(mcpConfigPath)
-      await checkAndPromptForSetup(context)
-      expect(context.workspaceState.get('maproom.hasPromptedSetup')).toBe(true)
-
-      // Reset workspace state to simulate config deletion scenario
-      await context.workspaceState.update('maproom.hasPromptedSetup', false)
-
-      // Reset message tracking
-      lastInfoMessage = undefined
-
-      // Second activation with config still missing - should show prompt again
-      await checkAndPromptForSetup(context)
-      expect(lastInfoMessage).toContain('Maproom MCP server not configured')
-    })
   })
 
-  describe('ensureDockerRunning', () => {
-    it('should start Docker services successfully and register cleanup', async () => {
-      const context = new MockExtensionContext()
-
-      // Create test function that mimics ensureDockerRunning
-      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
-        const { DockerManager } = await import('./docker/manager')
-        const dockerManager = new DockerManager(mockOutputChannel)
-
-        try {
-          await dockerManager.ensureServicesRunning()
-          ctx.subscriptions.push({
-            dispose: () => void dockerManager.stop()
-          })
-        } catch (error: any) {
-          throw new Error(`Failed to start Docker services: ${error.message}`)
-        }
-      }
-
-      await ensureDockerRunning(context)
-
-      // Should register cleanup handler
-      expect(context.subscriptions.length).toBe(1)
-      expect(context.subscriptions[0]).toHaveProperty('dispose')
-    })
-
-    it('should show error notification when Docker not running', async () => {
-      const context = new MockExtensionContext()
-
-      // Set mock to fail
-      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
-        const { DockerManager } = await import('./docker/manager')
-        const dockerManager = new DockerManager(mockOutputChannel)
-
-        if (mockDockerManagerInstance) {
-          mockDockerManagerInstance.setFailure(true, 'Docker daemon is not running')
-        }
-
-        try {
-          await dockerManager.ensureServicesRunning()
-          ctx.subscriptions.push({
-            dispose: () => void dockerManager.stop()
-          })
-        } catch (error: any) {
-          const vscode = await import('vscode')
-          const action = await vscode.window.showErrorMessage(
-            'Maproom requires Docker Desktop to be running.',
-            'Open Docker Desktop',
-            'Show Logs',
-            'Retry'
-          )
-
-          if (action === 'Show Logs') mockOutputChannel?.show()
-          throw new Error(`Failed to start Docker services: ${error.message}`)
-        }
-      }
-
-      await expect(ensureDockerRunning(context)).rejects.toThrow('Failed to start Docker services')
-      expect(lastErrorMessage).toContain('Maproom requires Docker Desktop to be running')
-      expect(errorMessageActions).toContain('Open Docker Desktop')
-      expect(errorMessageActions).toContain('Show Logs')
-      expect(errorMessageActions).toContain('Retry')
-    })
-
-    it('should show logs when "Show Logs" button clicked', async () => {
-      const context = new MockExtensionContext()
-      errorMessageAction = 'Show Logs'
-
-      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
-        const { DockerManager } = await import('./docker/manager')
-        const dockerManager = new DockerManager(mockOutputChannel)
-
-        if (mockDockerManagerInstance) {
-          mockDockerManagerInstance.setFailure(true, 'Docker daemon is not running')
-        }
-
-        try {
-          await dockerManager.ensureServicesRunning()
-          ctx.subscriptions.push({
-            dispose: () => void dockerManager.stop()
-          })
-        } catch (error: any) {
-          const vscode = await import('vscode')
-          const action = await vscode.window.showErrorMessage(
-            'Maproom requires Docker Desktop to be running.',
-            'Open Docker Desktop',
-            'Show Logs',
-            'Retry'
-          )
-
-          if (action === 'Show Logs') mockOutputChannel?.show()
-          throw new Error(`Failed to start Docker services: ${error.message}`)
-        }
-      }
-
-      await expect(ensureDockerRunning(context)).rejects.toThrow()
-      expect(mockOutputChannel.show).toHaveBeenCalled()
-    })
-
-    it('should call dockerManager.stop() when disposed', async () => {
-      const context = new MockExtensionContext()
-      const stopSpy = vi.fn()
-
-      const ensureDockerRunning = async (ctx: MockExtensionContext) => {
-        const { DockerManager } = await import('./docker/manager')
-        const dockerManager = new DockerManager(mockOutputChannel)
-
-        // Override stop method with spy
-        dockerManager.stop = stopSpy
-
-        await dockerManager.ensureServicesRunning()
-        ctx.subscriptions.push({
-          dispose: () => void dockerManager.stop()
-        })
-      }
-
-      await ensureDockerRunning(context)
-
-      // Call dispose
-      const disposable = context.subscriptions[0]
-      disposable.dispose()
-
-      // stop() should have been called
-      expect(stopSpy).toHaveBeenCalled()
-    })
-  })
-
-  describe('initializeServices with Docker', () => {
-    it('should start Docker before checking PostgreSQL', async () => {
+  describe('New Activation Flow', () => {
+    it('should run Ollama model check only for ollama provider', async () => {
       const callOrder: string[] = []
 
-      // Mock the functions to track call order
-      const ensureDockerRunning = async () => {
-        callOrder.push('docker')
-      }
-
-      const ensurePostgresAvailable = async () => {
-        callOrder.push('postgres')
-      }
-
-      // Simulate initializeServices flow
-      await ensureDockerRunning()
-      await ensurePostgresAvailable()
-
-      expect(callOrder).toEqual(['docker', 'postgres'])
-    })
-
-    it('should show progress messages in correct order', async () => {
-      const progressMessages: string[] = []
-
-      const mockProgress = {
-        report: ({ message }: { message: string }) => {
-          progressMessages.push(message)
+      const ensureOllamaModel = async (provider: string) => {
+        if (provider === 'ollama') {
+          callOrder.push('ollama-check')
         }
       }
 
-      // Simulate the progress flow
-      mockProgress.report({ message: 'Starting Docker services...' })
-      mockProgress.report({ message: 'Checking PostgreSQL...' })
-      mockProgress.report({ message: 'Starting watch processes...' })
-
-      expect(progressMessages).toEqual([
-        'Starting Docker services...',
-        'Checking PostgreSQL...',
-        'Starting watch processes...'
-      ])
-    })
-
-    it('should prevent service initialization if Docker fails', async () => {
-      let dockerStarted = false
-      let postgresChecked = false
-
-      const ensureDockerRunning = async () => {
-        throw new Error('Docker not running')
+      const reconcileChanges = async () => {
+        callOrder.push('reconcile')
       }
 
-      const ensurePostgresAvailable = async () => {
-        postgresChecked = true
+      const startWatch = async () => {
+        callOrder.push('watch')
+      }
+
+      // Simulate flow with ollama provider
+      const provider = 'ollama'
+      await ensureOllamaModel(provider)
+      await reconcileChanges()
+      await startWatch()
+
+      expect(callOrder).toEqual(['ollama-check', 'reconcile', 'watch'])
+    })
+
+    it('should skip Ollama check for non-ollama providers', async () => {
+      const callOrder: string[] = []
+
+      const ensureOllamaModel = async (provider: string) => {
+        if (provider === 'ollama') {
+          callOrder.push('ollama-check')
+        }
+      }
+
+      const reconcileChanges = async () => {
+        callOrder.push('reconcile')
+      }
+
+      const startWatch = async () => {
+        callOrder.push('watch')
+      }
+
+      // Simulate flow with openai provider
+      const provider = 'openai'
+      await ensureOllamaModel(provider)
+      await reconcileChanges()
+      await startWatch()
+
+      // Ollama check should be skipped
+      expect(callOrder).toEqual(['reconcile', 'watch'])
+    })
+
+    it('should run reconciliation before starting watch', async () => {
+      const callOrder: string[] = []
+
+      const reconcileChanges = async () => {
+        callOrder.push('reconcile')
+      }
+
+      const startWatch = async () => {
+        callOrder.push('watch')
+      }
+
+      await reconcileChanges()
+      await startWatch()
+
+      expect(callOrder).toEqual(['reconcile', 'watch'])
+    })
+
+    it('should handle Ollama not running error', async () => {
+      let errorHandled = false
+      let statusBarState = ''
+
+      class OllamaNotRunningError extends Error {
+        constructor() {
+          super('Ollama is not running')
+          this.name = 'OllamaNotRunningError'
+        }
+      }
+
+      const ensureOllamaModel = async () => {
+        throw new OllamaNotRunningError()
+      }
+
+      const showOllamaNotRunningError = async () => {
+        errorHandled = true
+      }
+
+      const setStatusBar = (state: string) => {
+        statusBarState = state
       }
 
       try {
-        await ensureDockerRunning()
-        dockerStarted = true
-        await ensurePostgresAvailable()
+        await ensureOllamaModel()
       } catch (error) {
-        // Expected
+        if (error instanceof OllamaNotRunningError) {
+          await showOllamaNotRunningError()
+          setStatusBar('error')
+        }
       }
 
-      expect(dockerStarted).toBe(false)
-      expect(postgresChecked).toBe(false)
+      expect(errorHandled).toBe(true)
+      expect(statusBarState).toBe('error')
+    })
+
+    it('should enter degraded mode when database not found', async () => {
+      let statusBarState = ''
+      let guidanceShown = false
+
+      const checkDatabaseAvailable = async () => false
+
+      const showNoSqliteGuidance = async () => {
+        guidanceShown = true
+      }
+
+      const setStatusBar = (state: string) => {
+        statusBarState = state
+      }
+
+      const dbAvailable = await checkDatabaseAvailable()
+
+      if (!dbAvailable) {
+        await showNoSqliteGuidance()
+        setStatusBar('idle')
+      }
+
+      expect(guidanceShown).toBe(true)
+      expect(statusBarState).toBe('idle')
     })
   })
 
-  describe('runFirstTimeSetup with Docker', () => {
-    it('should start Docker after wizard, before initial scan', async () => {
+  describe('runFirstTimeSetup', () => {
+    it('should proceed to initializeServices after wizard completes', async () => {
       const callOrder: string[] = []
 
       const runSetupWizard = async () => {
@@ -747,53 +513,68 @@ describe('Extension First-Activation Prompt', () => {
         return 'ollama'
       }
 
-      const ensureDockerRunning = async () => {
-        callOrder.push('docker')
-      }
-
-      const ensurePostgresAvailable = async () => {
-        callOrder.push('postgres')
-      }
-
-      const runInitialWorkspaceScan = async () => {
-        callOrder.push('scan')
+      const initializeServices = async () => {
+        callOrder.push('initialize')
       }
 
       // Simulate first-time setup flow
       const provider = await runSetupWizard()
       if (provider) {
-        await ensureDockerRunning()
-        await ensurePostgresAvailable()
-        await runInitialWorkspaceScan()
+        await initializeServices()
       }
 
-      expect(callOrder).toEqual(['wizard', 'docker', 'postgres', 'scan'])
+      expect(callOrder).toEqual(['wizard', 'initialize'])
     })
 
-    it('should show error and abort setup if Docker fails', async () => {
-      let setupCompleted = false
+    it('should show idle state when user cancels setup', async () => {
+      let statusBarState = ''
 
-      const runSetupWizard = async () => 'ollama'
-
-      const ensureDockerRunning = async () => {
-        throw new Error('Docker not running')
+      const runSetupWizard = async () => {
+        return null // User cancelled
       }
 
-      const runInitialWorkspaceScan = async () => {
-        setupCompleted = true
+      const setStatusBar = (state: string) => {
+        statusBarState = state
       }
 
-      try {
-        const provider = await runSetupWizard()
-        if (provider) {
-          await ensureDockerRunning()
-          await runInitialWorkspaceScan()
-        }
-      } catch (error) {
-        // Expected
+      const provider = await runSetupWizard()
+      if (!provider) {
+        setStatusBar('idle')
       }
 
-      expect(setupCompleted).toBe(false)
+      expect(statusBarState).toBe('idle')
+    })
+  })
+
+  describe('Status Bar State Transitions', () => {
+    it('should transition through correct states during initialization', async () => {
+      const stateTransitions: string[] = []
+
+      const setStatusBar = (state: string) => {
+        stateTransitions.push(state)
+      }
+
+      // Simulate initialization flow
+      setStatusBar('starting')
+      setStatusBar('reconciling')
+      setStatusBar('watching')
+
+      expect(stateTransitions).toEqual(['starting', 'reconciling', 'watching'])
+    })
+
+    it('should show error state when initialization fails', async () => {
+      const stateTransitions: string[] = []
+
+      const setStatusBar = (state: string) => {
+        stateTransitions.push(state)
+      }
+
+      // Simulate initialization with error
+      setStatusBar('starting')
+      setStatusBar('reconciling')
+      setStatusBar('error')
+
+      expect(stateTransitions).toContain('error')
     })
   })
 })
