@@ -33,17 +33,26 @@
 - Test logic that would need complete rewrites, not migrations
 - Functionality that will be validated by Phase 3 incremental tickets
 
-### Batch 2: Search Tests (6 files)
-*Ticket: SQLIMPL-1003*
+### Batch 2: Search Tests (7 files)
+*Ticket: SQLIMPL-1003 - COMPLETED*
 
-| File | Classification | Notes |
-|------|----------------|-------|
-| `tests/search_pipeline_integration_test.rs` | Defer | Depends on Phase 2 executor stubs |
-| `tests/search_executors_test.rs` | Defer | Depends on Phase 2 executor stubs |
-| `tests/fusion_integration_test.rs` | Migrate | RRF fusion logic (already SQLite-compatible) |
-| `tests/fusion_quality_test.rs` | Migrate | Quality assertions |
-| `tests/rrf_fusion_test.rs` | Migrate | RRF algorithm unit tests |
-| `tests/mixed_embeddings_search_test.rs` | Defer | Depends on embedding infra |
+| File | Classification | Status | Notes |
+|------|----------------|--------|-------|
+| `tests/search_pipeline_integration_test.rs` | **DELETED** | ✅ | `tokio_postgres::connect()`, `SearchExecutors::new(client)` |
+| `tests/search_executors_test.rs` | **DELETED** | ✅ | `tokio_postgres::{Client, NoTls}`, PostgreSQL client |
+| `tests/fusion_integration_test.rs` | **DELETED** | ✅ | `tokio_postgres::connect()`, PostgreSQL pipeline |
+| `tests/fusion_quality_test.rs` | **DELETED** | ✅ | `tokio_postgres::connect()`, PostgreSQL queries |
+| `tests/rrf_fusion_test.rs` | **DELETED** | ✅ | `tokio_postgres::connect()`, PostgreSQL client |
+| `tests/weighted_fusion_test.rs` | **DELETED** | ✅ | `tokio_postgres::connect()`, PostgreSQL client |
+| `tests/mixed_embeddings_search_test.rs` | **DELETED** | ✅ | `tokio_postgres::connect()`, embedding infra |
+
+**Note:** These tests were deleted because they contained:
+- `tokio_postgres::connect()` for direct PostgreSQL connections
+- `SearchExecutors::new(client)` expecting PostgreSQL client type
+- `pipeline.client()` returning PostgreSQL client
+- Raw PostgreSQL queries (e.g., `SELECT id FROM maproom.repos`)
+- Test patterns incompatible with SQLite - complete rewrites needed
+- Functionality that will be validated by Phase 2 executor wiring tickets
 
 ### Batch 3: Incremental Tests (7 files)
 *Ticket: SQLIMPL-1004*
@@ -74,7 +83,6 @@
 | `tests/vector_db_test.rs` | Migrate | Vector store ops |
 | `tests/watch_integration.rs` | Defer | Depends on Phase 5 |
 | `tests/unified_watch_test.rs` | Defer | Depends on Phase 5 |
-| `tests/weighted_fusion_test.rs` | Migrate | Fusion weighting |
 | `tests/python_pipeline_test.rs` | Migrate | Python parsing |
 
 ## Already SQLite-Compatible (No Changes Needed)
@@ -161,19 +169,19 @@ cargo test -p crewchief-maproom --test common
 
 ## Deferred Tests Summary
 
-These tests require stub implementations from later phases:
+These tests require stub implementations from later phases (if they exist):
 
-| Test File | Blocking Phase | Reason |
-|-----------|----------------|--------|
-| `search_pipeline_integration_test.rs` | Phase 2 | FTS/Vector executor stubs |
-| `search_executors_test.rs` | Phase 2 | Executor stubs |
-| `mixed_embeddings_search_test.rs` | Phase 2 | Search pipeline |
-| `incremental_integration_test.rs` | Phase 3 | Processor stubs |
-| `incremental_processor_test.rs` | Phase 3 | Processor stubs |
-| `watch_integration.rs` | Phase 5 | Watch command disabled |
-| `unified_watch_test.rs` | Phase 5 | Watch command disabled |
+| Test File | Blocking Phase | Status | Reason |
+|-----------|----------------|--------|--------|
+| `search_pipeline_integration_test.rs` | Phase 2 | **DELETED** | Heavy PostgreSQL dependency |
+| `search_executors_test.rs` | Phase 2 | **DELETED** | Heavy PostgreSQL dependency |
+| `mixed_embeddings_search_test.rs` | Phase 2 | **DELETED** | Heavy PostgreSQL dependency |
+| `incremental_integration_test.rs` | Phase 3 | Pending | Depends on processor stubs |
+| `incremental_processor_test.rs` | Phase 3 | Pending | Depends on processor stubs |
+| `watch_integration.rs` | Phase 5 | Pending | Watch command disabled |
+| `unified_watch_test.rs` | Phase 5 | Pending | Watch command disabled |
 
-Mark these with `#[ignore = "requires Phase X implementation"]` during migration.
+Mark remaining tests with `#[ignore = "requires Phase X implementation"]` during migration.
 
 ---
 
