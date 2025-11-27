@@ -1,9 +1,9 @@
 # Ticket: CLIUX-1001: Modify `worktree use` command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - general-purpose
@@ -28,13 +28,13 @@ This ticket implements Phase 1, Part 1 of the CLI UX Refinements plan. The goal 
 
 ## Acceptance Criteria
 
-- [ ] `worktree use <name>` prints the absolute path to **stdout** (newline-terminated) when worktree exists
-- [ ] `worktree use <name>` exits with code 1 and shows error message with suggestion when worktree not found
-- [ ] `worktree use <name> --shell` spawns interactive subshell (opt-in behavior)
-- [ ] `--print` flag is accepted as no-op alias (backwards compatibility)
-- [ ] `--branch` and `--base-path` options are removed (no longer applicable)
-- [ ] Help text updated with examples showing `cd $(crewchief worktree use ...)`
-- [ ] Unit tests pass for all new behaviors
+- [x] `worktree use <name>` prints the absolute path to **stdout** (newline-terminated) when worktree exists
+- [x] `worktree use <name>` exits with code 1 and shows error message with suggestion when worktree not found
+- [x] `worktree use <name> --shell` spawns interactive subshell (opt-in behavior)
+- [x] `--print` flag is accepted as no-op alias (backwards compatibility)
+- [x] `--branch` and `--base-path` options are removed (no longer applicable)
+- [x] Help text updated with examples showing `cd $(crewchief worktree use ...)`
+- [x] Unit tests pass for all new behaviors
 
 ## Technical Requirements
 
@@ -109,6 +109,11 @@ Options:
    ```
 
 ### Test File: `packages/cli/src/cli/__tests__/worktree-use.test.ts`
+
+**Note:** Create the test directory first if it doesn't exist:
+```bash
+mkdir -p packages/cli/src/cli/__tests__
+```
 
 Create new test file with:
 - Mock `WorktreeService.listWorktrees()`

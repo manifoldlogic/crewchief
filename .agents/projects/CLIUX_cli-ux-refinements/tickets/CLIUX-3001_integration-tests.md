@@ -185,15 +185,19 @@ Execute these tests manually and document results:
 
 ## Implementation Notes
 
-1. **Create test directory**: `packages/cli/src/cli/__tests__/integration/`
-2. **Run all unit tests first**: `pnpm test` to ensure previous tickets' tests pass
-3. **Run integration tests**: Tests require git to be available
-4. **Document manual test results**: Update this ticket with pass/fail for each item
+1. **Create test directory**:
+   ```bash
+   mkdir -p packages/cli/src/cli/__tests__/integration
+   ```
+2. **Build CLI before testing**: `pnpm build` is **required** before running integration tests that execute the `crewchief` command
+3. **Run all unit tests first**: `pnpm test` to ensure previous tickets' tests pass
+4. **Run integration tests**: Tests require git to be available
+5. **Document manual test results**: Update this ticket with pass/fail for each item
 
 ### Running Tests
 
 ```bash
-# Build first
+# Build first (REQUIRED for integration tests)
 pnpm build
 
 # Run all tests

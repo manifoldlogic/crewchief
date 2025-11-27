@@ -172,63 +172,63 @@ export function registerWorktreeCommands(program: Command): void {
   worktree
     .command('use')
     .argument('<name>')
-    .option('-p, --print', 'Print the absolute path instead of starting a subshell')
-    .option('--branch <base>', 'Base branch to create from if worktree does not exist')
-    .option('--base-path <dir>', 'Base directory for storing worktrees')
-    .option('--no-copy-ignored', 'Do not copy ignored files (override config) when creating')
-    .description(
-      'Use a worktree: switches to it if it exists, creates it first if not. Starts a subshell by default. Use --print to output the absolute path for command substitution.',
+    .option('--shell', 'Start interactive subshell in worktree')
+    .option('-p, --print', 'Print absolute path (default behavior, kept for compatibility)')
+    .description('Switch to an existing worktree. Prints path by default.')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Switch to worktree (prints path):
+    cd $(crewchief worktree use feature-x)
+
+  Open worktree in subshell:
+    crewchief worktree use feature-x --shell
+
+  Use in scripts:
+    path=$(crewchief worktree use my-branch)
+    code "$path"
+`,
     )
-    .action(
-      async (name: string, opts: { print?: boolean; branch?: string; basePath?: string; copyIgnored?: boolean }) => {
-        try {
-          const config = await loadConfig()
-          const wt = new WorktreeService()
-          const list = await wt.listWorktrees()
+    .action(async (name: string, opts: { shell?: boolean; print?: boolean }) => {
+      try {
+        const wt = new WorktreeService()
+        const list = await wt.listWorktrees()
 
-          // Try to find existing worktree
-          const matches = list.filter((item) => {
-            const sel = name.trim()
-            const byBranch = item.branch && item.branch === sel
-            const byBaseName = path.basename(item.path) === sel
-            let byPath = false
-            try {
-              const resolvedSel = path.resolve(sel)
-              byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
-            } catch {}
-            return Boolean(byBranch || byBaseName || byPath)
-          })
+        // Try to find existing worktree
+        const matches = list.filter((item) => {
+          const sel = name.trim()
+          const byBranch = item.branch && item.branch === sel
+          const byBaseName = path.basename(item.path) === sel
+          let byPath = false
+          try {
+            const resolvedSel = path.resolve(sel)
+            byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
+          } catch {}
+          return Boolean(byBranch || byBaseName || byPath)
+        })
 
-          let targetPath: string
-          let targetBranch: string | undefined
+        if (matches.length === 0) {
+          // Worktree doesn't exist - error with helpful message
+          logger.error(`Worktree '${name}' not found.`)
+          logger.info(`Create it with: crewchief worktree create ${name}`)
+          process.exitCode = 1
+          return
+        }
 
-          if (matches.length === 0) {
-            // Worktree doesn't exist - create it
-            logger.info(`Worktree '${name}' not found. Creating it...`)
+        if (matches.length > 1) {
+          logger.error(`Ambiguous selector '${name}'. Candidates:`)
+          for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
+          process.exitCode = 1
+          return
+        }
 
-            const baseBranch = opts.branch ?? config.repository.mainBranch
-            const basePath = opts.basePath ?? config.repository.worktreeBasePath
-            await wt.initRepository(basePath)
-            const skipCopyIgnored = opts.copyIgnored === false
-            targetPath = await wt.createWorktree(name, baseBranch, basePath, skipCopyIgnored)
-            targetBranch = name
-            logger.success(`Created worktree at ${targetPath} [${baseBranch}]`)
-          } else if (matches.length > 1) {
-            logger.error(`Ambiguous selector '${name}'. Candidates:`)
-            for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
-            process.exitCode = 1
-            return
-          } else {
-            // Worktree exists - use it
-            targetPath = path.resolve(matches[0].path)
-            targetBranch = matches[0].branch
-          }
+        // Worktree exists - use it
+        const targetPath = path.resolve(matches[0].path)
+        const targetBranch = matches[0].branch
 
-          if (opts.print) {
-            process.stdout.write(targetPath + '\n')
-            return
-          }
-
+        if (opts.shell) {
+          // Spawn interactive subshell
           const shell = process.env.SHELL || '/bin/bash'
           const currentBranch = await wt.getCurrentBranch()
           const currentDir = process.cwd()
@@ -249,12 +249,15 @@ export function registerWorktreeCommands(program: Command): void {
 
           const child = spawn(shell, { stdio: 'inherit', cwd: targetPath, env: process.env })
           child.on('exit', (code) => process.exit(code ?? 0))
-        } catch (err) {
-          logger.error('Failed to use worktree:', err)
-          process.exitCode = 1
+        } else {
+          // Default: print path to stdout for scripting
+          process.stdout.write(targetPath + '\n')
         }
-      },
-    )
+      } catch (err) {
+        logger.error('Failed to use worktree:', err)
+        process.exitCode = 1
+      }
+    })
 
   worktree
     .command('copy-ignored')

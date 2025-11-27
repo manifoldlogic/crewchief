@@ -64,6 +64,21 @@ Options:
 
 ## Implementation Notes
 
+### SpawnOptions Type
+
+Define the `SpawnOptions` interface inline in `agent.ts` (since we're deleting `spawn.ts`):
+
+```typescript
+interface SpawnOptions {
+  name?: string
+  vertical?: boolean
+  args?: string
+  noLabel?: boolean
+  backend?: string
+  headless?: boolean
+}
+```
+
 ### Option 1: Move Logic Inline (Recommended)
 
 Move the spawn logic directly into `agent.ts`:
@@ -129,6 +144,11 @@ Choose one:
 Recommendation: Delete the file. The code will live in `agent.ts`.
 
 ### Test File: `packages/cli/src/cli/__tests__/agent-spawn.test.ts`
+
+**Note:** Create the test directory first if it doesn't exist:
+```bash
+mkdir -p packages/cli/src/cli/__tests__
+```
 
 Create test file verifying:
 - Command is accessible at `agent spawn`

@@ -1,7 +1,8 @@
 # Project Review Updates
 
 **Original Review Date:** 2025-11-26
-**Updates Completed:** 2025-11-26
+**First Update:** 2025-11-26
+**Second Update:** 2025-11-27
 **Update Status:** Complete
 
 ## Critical Issues Addressed
@@ -142,6 +143,82 @@ No boundary violations were identified. The project correctly maintains CLI/Serv
 - [x] Rollback plan exists
 
 **Next Steps:**
-1. Run `/create-project-tickets CLIUX` to generate tickets
-2. Execute tickets sequentially
+1. ~~Run `/create-project-tickets CLIUX` to generate tickets~~ ✅ Done
+2. Execute tickets sequentially: CLIUX-1001 → CLIUX-1002 → CLIUX-2001 → CLIUX-3001
 3. Verify with integration tests
+
+---
+
+## Second Review Updates (2025-11-27)
+
+### Review Status
+
+The 2025-11-27 review confirmed the project is **Ready** with:
+- **0 Critical Issues**
+- **0 Boundary Violations**
+- **3 High-Risk Areas** (all adequately mitigated)
+- **2 Minor Technical Gaps** (addressed below)
+- **2 Recommendations** (addressed below)
+
+### Technical Gaps Addressed
+
+#### Gap 1: Test Directory Creation
+
+**Problem:** The `packages/cli/src/cli/__tests__/` directory doesn't exist.
+
+**Resolution:** Added explicit `mkdir -p` instructions to tickets:
+- CLIUX-1001: Added note to create `packages/cli/src/cli/__tests__/`
+- CLIUX-2001: Added note to create `packages/cli/src/cli/__tests__/`
+- CLIUX-3001: Added note to create `packages/cli/src/cli/__tests__/integration/`
+
+#### Gap 2: SpawnOptions Type Location
+
+**Problem:** Ticket CLIUX-2001 didn't specify where to define `SpawnOptions` interface.
+
+**Resolution:** Added explicit guidance to CLIUX-2001:
+- Define `SpawnOptions` interface inline in `agent.ts`
+- Rationale: spawn.ts is being deleted, so inline definition is cleaner
+
+### Recommendations Addressed
+
+#### Recommendation 1: Build Before Integration Tests
+
+**Problem:** CLIUX-3001 should note that `pnpm build` is required before running integration tests.
+
+**Resolution:** Updated CLIUX-3001 Implementation Notes:
+- Emphasized `pnpm build` is **required** before integration tests
+- Reordered steps to clarify build comes first
+
+#### Recommendation 2: Verify Logger Behavior
+
+**Status:** Not automated - this is a quick manual verification to be done during CLIUX-1001 execution.
+- Test: `crewchief worktree use existing-wt | cat`
+- Expected: Only path appears, no logger messages
+
+### Document Changes (Second Update)
+
+| Document | Changes |
+|----------|---------|
+| CLIUX-1001 | Added test directory creation note |
+| CLIUX-2001 | Added SpawnOptions type definition, test directory creation note |
+| CLIUX-3001 | Emphasized build requirement, reordered implementation steps |
+| review-updates.md | Added second review section |
+
+### Final Verification Checklist
+
+- [x] All critical issues resolved (none identified)
+- [x] All boundary violations fixed (none identified)
+- [x] High-risk areas have mitigations
+- [x] Technical gaps addressed
+- [x] Recommendations incorporated
+- [x] Tickets ready for execution
+
+### Project Status
+
+**Ready for Execution**
+
+Execute tickets in order:
+1. CLIUX-1001 (worktree use)
+2. CLIUX-1002 (worktree create)
+3. CLIUX-2001 (agent spawn)
+4. CLIUX-3001 (integration tests)
