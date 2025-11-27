@@ -24,6 +24,7 @@ embedding
 git
 idxclean
 incremental
+iterm
 perf
 release
 research

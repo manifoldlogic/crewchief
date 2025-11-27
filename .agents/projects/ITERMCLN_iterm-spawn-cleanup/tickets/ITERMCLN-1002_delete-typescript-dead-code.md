@@ -1,9 +1,9 @@
 # Ticket: ITERMCLN-1002: Delete Dead TypeScript Bridge Code
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (deletion only)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -31,10 +31,10 @@ The `ITermProvider` in `providers/iterm.ts` currently depends on `ITermService`,
 Reference: ITERMCLN plan.md Phase 1 - Dead Code Removal
 
 ## Acceptance Criteria
-- [ ] `packages/cli/src/iterm/iterm.service.ts` deleted (414 lines)
-- [ ] `packages/cli/src/iterm/iterm.types.ts` deleted (94 lines)
-- [ ] `packages/cli/src/terminal/iterm.adapter.ts` deleted (155 lines)
-- [ ] No TypeScript compilation errors (requires ITERMCLN-2001 complete)
+- [x] `packages/cli/src/iterm/iterm.service.ts` deleted (414 lines)
+- [x] `packages/cli/src/iterm/iterm.types.ts` deleted (94 lines)
+- [x] `packages/cli/src/terminal/iterm.adapter.ts` deleted (155 lines)
+- [x] No TypeScript compilation errors (requires ITERMCLN-2001 complete)
 
 ## Technical Requirements
 - Delete these TypeScript files from `packages/cli/src/`:
