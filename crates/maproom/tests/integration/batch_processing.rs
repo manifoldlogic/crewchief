@@ -190,16 +190,16 @@ impl BatchTestRepo {
                 r#"// File {}
 import {{ Helper }} from '../utils/helper';
 
-export interface Config{} {{
+export interface Config {{
     enabled: boolean;
     threshold: number;
     metadata: Record<string, unknown>;
 }}
 
-export class Processor{} {{
-    private config: Config{};
+export class Processor {{
+    private config: Config;
 
-    constructor(config: Config{}) {{
+    constructor(config: Config) {{
         this.config = config;
     }}
 
@@ -218,18 +218,18 @@ export class Processor{} {{
         return result;
     }}
 
-    public getConfig(): Config{} {{
+    public getConfig(): Config {{
         return {{ ...this.config }};
     }}
 }}
 
-export const DEFAULT_CONFIG: Config{} = {{
+export const DEFAULT_CONFIG: Config = {{
     enabled: true,
     threshold: 1000,
     metadata: {{ version: '1.0.0' }},
 }};
 "#,
-                i, i, i, i, i, i, i, i
+                i
             );
 
             fs::write(&path, content)?;
@@ -335,7 +335,7 @@ async fn test_batch_1000_files() {
     let repo = BatchTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 1000;
     println!("Generating {} files...", batch_size);
@@ -352,7 +352,7 @@ async fn test_batch_1000_files() {
         let hash = FileHasher::hash_file(path).expect("Failed to hash file");
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::New { hash },
+            ChangeType::New(hash),
             Trigger::Save,
         );
 
@@ -398,7 +398,7 @@ async fn test_batch_5000_files() {
     let repo = BatchTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 5000;
     println!("Generating {} files...", batch_size);
@@ -415,7 +415,7 @@ async fn test_batch_5000_files() {
         let hash = FileHasher::hash_file(path).expect("Failed to hash file");
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::New { hash },
+            ChangeType::New(hash),
             Trigger::Save,
         );
 
@@ -444,7 +444,7 @@ async fn test_batch_modifications() {
     let repo = BatchTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 500;
 
@@ -458,7 +458,7 @@ async fn test_batch_modifications() {
         let hash = FileHasher::hash_file(path).expect("Failed to hash file");
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::New { hash },
+            ChangeType::New(hash),
             Trigger::Save,
         );
         processor
@@ -519,7 +519,7 @@ async fn test_batch_deletions() {
     let repo = BatchTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 500;
 
@@ -536,7 +536,7 @@ async fn test_batch_deletions() {
 
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::New { hash },
+            ChangeType::New(hash),
             Trigger::Save,
         );
         processor
@@ -555,7 +555,7 @@ async fn test_batch_deletions() {
     for (path, hash) in paths.iter().zip(file_hashes.iter()) {
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::Deleted { hash: hash.clone() },
+            ChangeType::Deleted(hash.clone()),
             Trigger::Save,
         );
         processor
@@ -585,7 +585,7 @@ async fn test_batch_accuracy() {
     let repo = BatchTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 200;
 
@@ -598,7 +598,7 @@ async fn test_batch_accuracy() {
         let hash = FileHasher::hash_file(path).expect("Failed to hash file");
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::New { hash },
+            ChangeType::New(hash),
             Trigger::Save,
         );
         processor
@@ -670,7 +670,7 @@ async fn test_batch_memory_usage() {
     let repo = BatchTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 1000;
 
@@ -689,7 +689,7 @@ async fn test_batch_memory_usage() {
         fs::write(&path, content).expect("Failed to write file");
 
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
         processor
             .process(task)

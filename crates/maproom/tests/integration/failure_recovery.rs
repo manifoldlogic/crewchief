@@ -295,7 +295,7 @@ async fn test_invalid_file_path_handling() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Try to process a non-existent file
     let non_existent_path = repo.temp_dir.path().join("does_not_exist.ts");
@@ -303,7 +303,7 @@ async fn test_invalid_file_path_handling() {
 
     let task = UpdateTask::new(
         non_existent_path.clone(),
-        ChangeType::New { hash },
+        ChangeType::New(hash),
         Trigger::Save,
     );
 
@@ -325,7 +325,7 @@ async fn test_partial_batch_failure() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create a batch with some valid and some invalid files
     let num_valid = 10;
@@ -338,7 +338,7 @@ async fn test_partial_batch_failure() {
             .write_file(&format!("src/valid_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
         processor
             .process(task)
@@ -351,7 +351,7 @@ async fn test_partial_batch_failure() {
     for i in 0..num_invalid {
         let non_existent = repo.temp_dir.path().join(format!("src/invalid_{}.ts", i));
         let hash = FileHasher::hash_bytes(b"fake");
-        let task = UpdateTask::new(non_existent, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(non_existent, ChangeType::New(hash), Trigger::Save);
 
         if processor.process(task).await.is_err() {
             error_count += 1;
@@ -381,7 +381,7 @@ async fn test_transaction_rollback_on_error() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create a valid file and index it
     let content = "export const value = 1;";
@@ -392,7 +392,7 @@ async fn test_transaction_rollback_on_error() {
 
     let task = UpdateTask::new(
         path.clone(),
-        ChangeType::New { hash: hash.clone() },
+        ChangeType::New(hash.clone()),
         Trigger::Save,
     );
     processor
@@ -441,7 +441,7 @@ async fn test_corrupted_file_content() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create a file with invalid UTF-8 content
     let path = repo.temp_dir.path().join("src/corrupted.ts");
@@ -454,7 +454,7 @@ async fn test_corrupted_file_content() {
     fs::write(&path, &corrupted_data).expect("Failed to write corrupted file");
 
     let hash = FileHasher::hash_bytes(&corrupted_data);
-    let task = UpdateTask::new(path.clone(), ChangeType::New { hash }, Trigger::Save);
+    let task = UpdateTask::new(path.clone(), ChangeType::New(hash), Trigger::Save);
 
     // Should handle gracefully (may succeed with lossy conversion or fail cleanly)
     let result = processor.process(task).await;
@@ -473,7 +473,7 @@ async fn test_filesystem_permission_error() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create a file
     let content = "export const value = 1;";
@@ -491,7 +491,7 @@ async fn test_filesystem_permission_error() {
     }
 
     let hash = FileHasher::hash_bytes(content.as_bytes());
-    let task = UpdateTask::new(path.clone(), ChangeType::New { hash }, Trigger::Save);
+    let task = UpdateTask::new(path.clone(), ChangeType::New(hash), Trigger::Save);
 
     // Should fail gracefully
     let result = processor.process(task).await;
@@ -526,7 +526,7 @@ async fn test_interrupted_batch_consistency() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     let batch_size = 50;
 
@@ -537,7 +537,7 @@ async fn test_interrupted_batch_consistency() {
             .write_file(&format!("src/batch_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
         processor
             .process(task)
@@ -563,7 +563,7 @@ async fn test_interrupted_batch_consistency() {
             .write_file(&format!("src/batch_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
         processor
             .process(task)
@@ -590,7 +590,7 @@ async fn test_cascade_delete_integrity() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create and index files
     let num_files = 20;
@@ -600,7 +600,7 @@ async fn test_cascade_delete_integrity() {
             .write_file(&format!("src/cascade_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
         processor
             .process(task)
@@ -653,7 +653,7 @@ async fn test_recovery_from_pool_exhaustion() {
     let repo = FailureTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Process files normally - if pool is exhausted, operations should wait and eventually succeed
     let num_files = 30;
@@ -664,7 +664,7 @@ async fn test_recovery_from_pool_exhaustion() {
             .write_file(&format!("src/pool_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
         processor
             .process(task)

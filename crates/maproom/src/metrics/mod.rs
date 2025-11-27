@@ -50,4 +50,4 @@ pub mod search_metrics;
 pub use cache_metrics::CacheMetrics;
 pub use performance::{get_performance_metrics, PerformanceMetrics};
 pub use prometheus::{init_metrics_server, metrics_handler};
-pub use search_metrics::{get_metrics, SearchMetrics};
+pub use search_metrics::{get_metrics, get_registry, SearchMetrics};

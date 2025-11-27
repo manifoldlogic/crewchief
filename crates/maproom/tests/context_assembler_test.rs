@@ -93,6 +93,7 @@ fn another_function() {
         let chunk_id = insert_chunk(
             &client,
             file_id,
+            "blob_sha_test_function", // blob_sha (new parameter)
             Some("test_function"),
             "func",
             Some("fn test_function()"),
@@ -104,6 +105,7 @@ fn another_function() {
             1.0,
             0.0,
             None,
+            worktree_id, // worktree_id (new parameter)
         )
         .await?;
 

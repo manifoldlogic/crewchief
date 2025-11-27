@@ -11,10 +11,10 @@
 use std::time::Duration;
 use tokio::time::sleep;
 
+#[path = "../common/mod.rs"]
 mod common;
 use common::TestConfig;
-use crewchief_maproom::config::SearchConfig;
-use crewchief_maproom::config::feature_flags::FeatureFlags;
+use crewchief_maproom::config::{SearchConfig, FeatureFlags};
 use crewchief_maproom::search::fusion::FusionWeights;
 
 #[tokio::test]

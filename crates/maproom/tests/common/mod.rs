@@ -174,6 +174,26 @@ impl TestDb {
     pub fn pool(&self) -> &Pool {
         &self.pool
     }
+
+    /// Get a raw client connection (not from pool).
+    /// Use this when you need to pass ownership of a Client (e.g., to SearchExecutors).
+    pub async fn get_client(&self) -> Result<tokio_postgres::Client> {
+        let postgres_url = env::var("MAPROOM_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
+        let test_db_url = postgres_url.replace("/postgres", &format!("/{}", self.db_name));
+
+        let (client, connection) = tokio_postgres::connect(&test_db_url, NoTls)
+            .await
+            .context("Failed to connect to test database")?;
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("Connection error: {}", e);
+            }
+        });
+
+        Ok(client)
+    }
 }
 
 impl Drop for TestDb {
@@ -247,7 +267,7 @@ pub mod assertions {
     /// Assert that search results contain expected content.
     pub fn assert_contains_result(results: &[ChunkSearchResult], expected_content: &str) {
         assert!(
-            results.iter().any(|r| r.content.contains(expected_content)),
+            results.iter().any(|r| r.preview.contains(expected_content)),
             "Expected to find content '{}' in results, but it was not present",
             expected_content
         );
@@ -257,10 +277,10 @@ pub mod assertions {
     pub fn assert_ordered_by_score(results: &[ChunkSearchResult]) {
         for i in 1..results.len() {
             assert!(
-                results[i - 1].final_score >= results[i].final_score,
+                results[i - 1].score >= results[i].score,
                 "Results are not ordered by score: {} < {}",
-                results[i - 1].final_score,
-                results[i].final_score
+                results[i - 1].score,
+                results[i].score
             );
         }
     }
@@ -269,9 +289,9 @@ pub mod assertions {
     pub fn assert_min_score(results: &[ChunkSearchResult], min_score: f64) {
         for result in results {
             assert!(
-                result.final_score >= min_score,
+                result.score as f64 >= min_score,
                 "Result has score {} which is below minimum {}",
-                result.final_score,
+                result.score,
                 min_score
             );
         }

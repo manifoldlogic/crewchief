@@ -284,7 +284,7 @@ impl TestRepo {
 #[tokio::test]
 async fn test_file_creation() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create a new file
     let content = "export function hello() { return 'world'; }";
@@ -296,7 +296,7 @@ async fn test_file_creation() {
     // Create update task for new file
     let task = UpdateTask::new(
         path.clone(),
-        ChangeType::New { hash: hash.clone() },
+        ChangeType::New(hash.clone()),
         Trigger::Save,
     );
 
@@ -331,7 +331,7 @@ async fn test_file_creation() {
 #[tokio::test]
 async fn test_file_modification() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create and index initial file
     let initial_content = "export function old() { return 'old'; }";
@@ -342,7 +342,7 @@ async fn test_file_modification() {
 
     let task = UpdateTask::new(
         path.clone(),
-        ChangeType::New { hash: old_hash.clone() },
+        ChangeType::New(old_hash.clone()),
         Trigger::Save,
     );
     processor
@@ -405,7 +405,7 @@ async fn test_file_modification() {
 #[tokio::test]
 async fn test_file_deletion() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create and index a file
     let content = "export function toDelete() {}";
@@ -416,7 +416,7 @@ async fn test_file_deletion() {
 
     let task = UpdateTask::new(
         path.clone(),
-        ChangeType::New { hash: hash.clone() },
+        ChangeType::New(hash.clone()),
         Trigger::Save,
     );
     processor
@@ -441,7 +441,7 @@ async fn test_file_deletion() {
     // Process deletion
     let task = UpdateTask::new(
         path.clone(),
-        ChangeType::Deleted { hash },
+        ChangeType::Deleted(hash),
         Trigger::Save,
     );
     processor
@@ -470,7 +470,7 @@ async fn test_file_deletion() {
 #[tokio::test]
 async fn test_file_rename() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create and index a file
     let content = "export function renamed() {}";
@@ -481,7 +481,7 @@ async fn test_file_rename() {
 
     let task = UpdateTask::new(
         old_path.clone(),
-        ChangeType::New { hash: hash.clone() },
+        ChangeType::New(hash.clone()),
         Trigger::Save,
     );
     processor
@@ -506,7 +506,7 @@ async fn test_file_rename() {
     // Process as deletion of old + creation of new
     let delete_task = UpdateTask::new(
         old_path.clone(),
-        ChangeType::Deleted { hash: hash.clone() },
+        ChangeType::Deleted(hash.clone()),
         Trigger::Save,
     );
     processor
@@ -516,7 +516,7 @@ async fn test_file_rename() {
 
     let create_task = UpdateTask::new(
         new_path.clone(),
-        ChangeType::New { hash: hash.clone() },
+        ChangeType::New(hash.clone()),
         Trigger::Save,
     );
     processor
@@ -548,7 +548,7 @@ async fn test_file_rename() {
 #[tokio::test]
 async fn test_mixed_operations() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create multiple files
     let file1_path = repo
@@ -570,7 +570,7 @@ async fn test_mixed_operations() {
         let hash = FileHasher::hash_file(path).expect("Failed to hash file");
         let task = UpdateTask::new(
             path.clone(),
-            ChangeType::New { hash },
+            ChangeType::New(hash),
             Trigger::Save,
         );
         processor
@@ -614,7 +614,7 @@ async fn test_mixed_operations() {
         .expect("Failed to delete file2");
     let delete_task = UpdateTask::new(
         file2_path.clone(),
-        ChangeType::Deleted { hash: hash2 },
+        ChangeType::Deleted(hash2),
         Trigger::Save,
     );
     processor
@@ -629,7 +629,7 @@ async fn test_mixed_operations() {
     let hash4 = FileHasher::hash_file(&file4_path).expect("Failed to hash file4");
     let create_task = UpdateTask::new(
         file4_path.clone(),
-        ChangeType::New { hash: hash4 },
+        ChangeType::New(hash4),
         Trigger::Save,
     );
     processor
@@ -663,14 +663,14 @@ async fn test_mixed_operations() {
 #[tokio::test]
 async fn test_index_consistency_after_operations() {
     let repo = TestRepo::new().await.expect("Failed to create test repo");
-    let processor = IncrementalProcessor::new(repo.pool.clone());
+    let processor = IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf());
 
     // Create and index a file
     let path = repo
         .write_file("src/consistency.ts", "export const x = 1;")
         .expect("Failed to write file");
     let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-    let task = UpdateTask::new(path.clone(), ChangeType::New { hash }, Trigger::Save);
+    let task = UpdateTask::new(path.clone(), ChangeType::New(hash), Trigger::Save);
     processor
         .process(task)
         .await

@@ -11,6 +11,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+#[path = "../common/mod.rs"]
 mod common;
 use common::{TestDb, assertions};
 use crewchief_maproom::embedding::EmbeddingService;
@@ -27,24 +28,23 @@ async fn test_mcp_search_hybrid_mode() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
-    let fusion = Box::new(BasicWeightedFusion::with_weights(FusionWeights::default()));
+    let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Hybrid search (default mode)
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let results = pipeline
         .search("authenticate user", options)
@@ -54,8 +54,7 @@ async fn test_mcp_search_hybrid_mode() {
     // Assertions
     assert!(results.results.len() > 0, "Expected results from hybrid search");
     assertions::assert_ordered_by_score(&results.results);
-    assert!(results.metadata.fusion_method.contains("weighted") || results.metadata.fusion_method.contains("rrf"));
-    assert!(results.timing.total_time_ms > 0.0);
+    assert!(results.metadata.total_time_ms() > 0.0);
 }
 
 #[tokio::test]
@@ -66,29 +65,28 @@ async fn test_mcp_search_fts_mode() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     // For FTS-only mode, we would disable vector search in the fusion weights
     let mut weights = FusionWeights::default();
     weights.vector = 0.0; // Disable vector search
     weights.fts = 1.0;    // FTS only
 
-    let fusion = Box::new(BasicWeightedFusion::with_weights(weights));
+    let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: FTS-only search
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let results = pipeline
         .search("authenticate", options)
@@ -100,8 +98,9 @@ async fn test_mcp_search_fts_mode() {
     assertions::assert_ordered_by_score(&results.results);
 
     // Verify FTS was used (check that fts scores are present)
+    use crewchief_maproom::search::SearchSource;
     for result in &results.results {
-        assert!(result.fts_score.is_some(), "Expected FTS scores in FTS-only mode");
+        assert!(result.source_scores.contains_key(&SearchSource::FTS), "Expected FTS scores in FTS-only mode");
     }
 }
 
@@ -113,29 +112,28 @@ async fn test_mcp_search_vector_mode() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     // For vector-only mode, we disable FTS in the fusion weights
     let mut weights = FusionWeights::default();
     weights.vector = 1.0; // Vector only
     weights.fts = 0.0;    // Disable FTS
 
-    let fusion = Box::new(BasicWeightedFusion::with_weights(weights));
+    let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Vector-only search
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let results = pipeline
         .search("user authentication", options)
@@ -147,8 +145,9 @@ async fn test_mcp_search_vector_mode() {
     assertions::assert_ordered_by_score(&results.results);
 
     // Verify vector search was used (check that vector scores are present)
+    use crewchief_maproom::search::SearchSource;
     for result in &results.results {
-        assert!(result.vector_score.is_some(), "Expected vector scores in vector-only mode");
+        assert!(result.source_scores.contains_key(&SearchSource::Vector), "Expected vector scores in vector-only mode");
     }
 }
 
@@ -160,24 +159,22 @@ async fn test_mcp_search_with_filters() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Search with worktree filter
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1), // Filter by specific worktree
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1), // Filter by specific worktree
+        10);
 
     let results = pipeline
         .search("user", options)
@@ -191,7 +188,7 @@ async fn test_mcp_search_with_filters() {
     for result in &results.results {
         // In a real implementation, we'd check the worktree_id field
         // For now, just verify we have valid results
-        assert!(!result.content.is_empty());
+        assert!(!result.preview.is_empty());
     }
 }
 
@@ -203,24 +200,23 @@ async fn test_mcp_search_debug_mode() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Search with debug mode enabled
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: true, // Enable debug mode
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let results = pipeline
         .search("authenticate", options)
@@ -231,19 +227,20 @@ async fn test_mcp_search_debug_mode() {
     assert!(results.results.len() > 0, "Expected results in debug mode");
 
     // Verify debug information is present
-    assert!(results.timing.processing_time_ms > 0.0, "Expected processing time in debug mode");
-    assert!(results.timing.search_time_ms > 0.0, "Expected search time in debug mode");
-    assert!(results.timing.fusion_time_ms >= 0.0, "Expected fusion time in debug mode");
+    assert!(results.metadata.timing.query_processing_ms > 0.0, "Expected processing time in debug mode");
+    assert!(results.metadata.timing.search_execution_ms > 0.0, "Expected search time in debug mode");
+    assert!(results.metadata.timing.fusion_ms >= 0.0, "Expected fusion time in debug mode");
 
     // Verify query processing details
-    assert!(results.query_processing.tokens.len() > 0, "Expected tokens in debug mode");
-    assert!(!results.query_processing.fts_query.is_empty(), "Expected FTS query in debug mode");
+    assert!(results.metadata.query_processing.token_count > 0, "Expected tokens in debug mode");
+    assert!(!results.metadata.query_processing.fts_query.is_empty(), "Expected FTS query in debug mode");
 
     // Verify individual score components are present
+    use crewchief_maproom::search::SearchSource;
     for result in &results.results {
         // At least one score component should be present
         assert!(
-            result.fts_score.is_some() || result.vector_score.is_some(),
+            result.source_scores.contains_key(&SearchSource::FTS) || result.source_scores.contains_key(&SearchSource::Vector),
             "Expected at least one score component in debug mode"
         );
     }
@@ -257,24 +254,23 @@ async fn test_mcp_backward_compatibility() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Old-style search without mode parameter (should default to hybrid)
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let results = pipeline
         .search("user authentication", options)
@@ -286,8 +282,9 @@ async fn test_mcp_backward_compatibility() {
     assertions::assert_ordered_by_score(&results.results);
 
     // Verify hybrid search is used by default (both FTS and vector scores present)
-    let has_fts = results.results.iter().any(|r| r.fts_score.is_some());
-    let has_vector = results.results.iter().any(|r| r.vector_score.is_some());
+    use crewchief_maproom::search::SearchSource;
+    let has_fts = results.results.iter().any(|r| r.source_scores.contains_key(&SearchSource::FTS));
+    let has_vector = results.results.iter().any(|r| r.source_scores.contains_key(&SearchSource::Vector));
     assert!(has_fts || has_vector, "Expected hybrid mode by default");
 }
 
@@ -298,24 +295,22 @@ async fn test_mcp_error_handling() {
     test_db.run_migrations().await.expect("Failed to run migrations");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Search with invalid repo_id
-    let options = SearchOptions {
-        repo_id: 99999, // Non-existent repo
-        worktree_id: None,
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        99999, // Non-existent repo
+        None,
+        10);
 
     let results = pipeline.search("test", options).await;
 
@@ -340,13 +335,13 @@ async fn test_mcp_concurrent_requests() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = Arc::new(SearchPipeline::with_fusion(processor, executors, fusion));
@@ -360,12 +355,11 @@ async fn test_mcp_concurrent_requests() {
     for i in 0..num_concurrent {
         let pipeline_clone = Arc::clone(&pipeline);
         let handle = tokio::spawn(async move {
-            let options = SearchOptions {
-                repo_id: 1,
-                worktree_id: Some(1),
-                limit: 10,
-                include_debug: false,
-            };
+            let options = SearchOptions::new(
+                1,
+                Some(1),
+                10);
+            ;
 
             let query = format!("test query {}", i);
             pipeline_clone.search(&query, options).await
@@ -400,24 +394,23 @@ async fn test_mcp_performance_target() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Single search with performance measurement
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: true,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let start = Instant::now();
     let results = pipeline
@@ -437,10 +430,10 @@ async fn test_mcp_performance_target() {
     );
 
     println!("Search completed in {}ms", duration.as_millis());
-    println!("  Processing: {:.2}ms", results.timing.processing_time_ms);
-    println!("  Search: {:.2}ms", results.timing.search_time_ms);
-    println!("  Fusion: {:.2}ms", results.timing.fusion_time_ms);
-    println!("  Assembly: {:.2}ms", results.timing.assembly_time_ms);
+    println!("  Processing: {:.2}ms", results.metadata.timing.query_processing_ms);
+    println!("  Search: {:.2}ms", results.metadata.timing.search_execution_ms);
+    println!("  Fusion: {:.2}ms", results.metadata.timing.fusion_ms);
+    println!("  Assembly: {:.2}ms", results.metadata.timing.assembly_ms);
 }
 
 #[tokio::test]
@@ -450,24 +443,23 @@ async fn test_mcp_empty_query_handling() {
     test_db.run_migrations().await.expect("Failed to run migrations");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Empty query
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(
+        1,
+        Some(1),
+        10);
+
 
     let results = pipeline.search("", options).await;
 

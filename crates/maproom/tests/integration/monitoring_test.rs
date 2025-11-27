@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use prometheus::{Encoder, TextEncoder};
 
+#[path = "../common/mod.rs"]
 mod common;
 use common::TestDb;
 use crewchief_maproom::embedding::EmbeddingService;
@@ -29,13 +30,13 @@ async fn test_metrics_query_latency_recording() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
@@ -43,12 +44,7 @@ async fn test_metrics_query_latency_recording() {
     let metrics = get_metrics();
 
     // Execute a search to generate metrics
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: true,
-    };
+    let options = SearchOptions::new(1, Some(1), 10);
 
     let start = Instant::now();
     let results = pipeline

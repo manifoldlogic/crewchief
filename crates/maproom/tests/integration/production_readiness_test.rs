@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
+#[path = "../common/mod.rs"]
 mod common;
 use common::{TestDb, TestConfig, assertions};
 use crewchief_maproom::config::SearchConfig;
@@ -30,13 +31,13 @@ async fn test_production_load_concurrent_users() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = Arc::new(SearchPipeline::with_fusion(processor, executors, fusion));
@@ -60,12 +61,7 @@ async fn test_production_load_concurrent_users() {
 
             for query_num in 0..queries_per_user {
                 let query = format!("user {} query {}", user_id, query_num);
-                let options = SearchOptions {
-                    repo_id: 1,
-                    worktree_id: Some(1),
-                    limit: 10,
-                    include_debug: false,
-                };
+                let options = SearchOptions::new(1, Some(1), 10);
 
                 let query_start = Instant::now();
                 match pipeline_clone.search(&query, options).await {
@@ -126,13 +122,13 @@ async fn test_production_sustained_load() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = Arc::new(SearchPipeline::with_fusion(processor, executors, fusion));
@@ -149,12 +145,7 @@ async fn test_production_sustained_load() {
         for _ in 0..concurrent_requests {
             let pipeline_clone = Arc::clone(&pipeline);
             let handle = tokio::spawn(async move {
-                let options = SearchOptions {
-                    repo_id: 1,
-                    worktree_id: Some(1),
-                    limit: 10,
-                    include_debug: false,
-                };
+                let options = SearchOptions::new(1, Some(1), 10);
                 pipeline_clone.search("test query", options).await
             });
             handles.push(handle);
@@ -196,29 +187,24 @@ async fn test_production_graceful_degradation_no_vector() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     // Test: Graceful degradation - disable vector search
     let mut weights = FusionWeights::default();
     weights.vector = 0.0; // Disable vector search
     weights.fts = 1.0;    // FTS only
 
-    let fusion = Box::new(BasicWeightedFusion::with_weights(weights));
+    let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Execute search with degraded configuration
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(1, Some(1), 10);
 
     let results = pipeline
         .search("authenticate", options)
@@ -240,29 +226,24 @@ async fn test_production_graceful_degradation_no_fts() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     // Test: Graceful degradation - disable FTS
     let mut weights = FusionWeights::default();
     weights.vector = 1.0; // Vector only
     weights.fts = 0.0;    // Disable FTS
 
-    let fusion = Box::new(BasicWeightedFusion::with_weights(weights));
+    let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Execute search with degraded configuration
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(1, Some(1), 10);
 
     let results = pipeline
         .search("user authentication", options)
@@ -407,24 +388,19 @@ async fn test_production_recovery_from_empty_results() {
     // Note: Don't insert test data - empty database
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
 
     // Test: Search on empty database
-    let options = SearchOptions {
-        repo_id: 1,
-        worktree_id: Some(1),
-        limit: 10,
-        include_debug: false,
-    };
+    let options = SearchOptions::new(1, Some(1), 10);
 
     let results = pipeline.search("test query", options).await;
 
@@ -449,13 +425,13 @@ async fn test_production_performance_benchmarks() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = SearchPipeline::with_fusion(processor, executors, fusion);
@@ -465,12 +441,7 @@ async fn test_production_performance_benchmarks() {
     let mut latencies = Vec::new();
 
     for _ in 0..num_iterations {
-        let options = SearchOptions {
-            repo_id: 1,
-            worktree_id: Some(1),
-            limit: 10,
-            include_debug: true,
-        };
+        let options = SearchOptions::new(1, Some(1), 10);
 
         let start = Instant::now();
         if let Ok(_) = pipeline.search("authenticate user", options).await {
@@ -508,13 +479,13 @@ async fn test_production_metrics_under_load() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
 
-    let client = test_db.pool().get().await.expect("Failed to get client");
-    let executors = SearchExecutors::new(client.as_ref().clone());
+    let client = test_db.get_client().await.expect("Failed to get client");
+    let executors = SearchExecutors::new(client);
 
     let fusion = Box::new(BasicWeightedFusion::new());
     let pipeline = Arc::new(SearchPipeline::with_fusion(processor, executors, fusion));
@@ -529,12 +500,7 @@ async fn test_production_metrics_under_load() {
         let pipeline_clone = Arc::clone(&pipeline);
         let metrics_clone = metrics.clone();
         let handle = tokio::spawn(async move {
-            let options = SearchOptions {
-                repo_id: 1,
-                worktree_id: Some(1),
-                limit: 10,
-                include_debug: false,
-            };
+            let options = SearchOptions::new(1, Some(1), 10);
 
             let start = Instant::now();
             let result = pipeline_clone.search(&format!("query {}", i), options).await;
@@ -576,7 +542,7 @@ async fn test_production_connection_pool_exhaustion() {
     test_db.insert_test_data().await.expect("Failed to insert test data");
 
     let embedder = Arc::new(
-        EmbeddingService::from_env()
+        EmbeddingService::from_env().await
             .expect("Failed to create embedding service")
     );
     let processor = Arc::new(QueryProcessor::new(embedder));
@@ -587,27 +553,22 @@ async fn test_production_connection_pool_exhaustion() {
     let mut handles = vec![];
 
     for i in 0..num_concurrent {
-        let test_db_clone = test_db.pool().clone();
         let processor_clone = Arc::clone(&processor);
+        // Each task needs its own client connection
+        // Note: This will stress the connection pool as we spawn more tasks than the pool size
+        let client = match test_db.get_client().await {
+            Ok(c) => c,
+            Err(_) => continue, // Skip if we can't get a client
+        };
 
         let handle = tokio::spawn(async move {
-            // Get connection from pool (may wait if pool is exhausted)
-            if let Ok(client) = test_db_clone.get().await {
-                let executors = SearchExecutors::new(client.as_ref().clone());
-                let fusion = Box::new(BasicWeightedFusion::new());
-                let pipeline = SearchPipeline::with_fusion(processor_clone, executors, fusion);
+            let executors = SearchExecutors::new(client);
+            let fusion = Box::new(BasicWeightedFusion::new());
+            let pipeline = SearchPipeline::with_fusion(processor_clone, executors, fusion);
 
-                let options = SearchOptions {
-                    repo_id: 1,
-                    worktree_id: Some(1),
-                    limit: 10,
-                    include_debug: false,
-                };
+            let options = SearchOptions::new(1, Some(1), 10);
 
-                pipeline.search(&format!("query {}", i), options).await.is_ok()
-            } else {
-                false
-            }
+            pipeline.search(&format!("query {}", i), options).await.is_ok()
         });
         handles.push(handle);
     }

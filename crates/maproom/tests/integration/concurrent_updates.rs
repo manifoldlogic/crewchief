@@ -247,7 +247,7 @@ async fn test_concurrent_file_creation() {
     let repo = ConcurrentTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone()));
+    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf()));
 
     let num_files = 50;
     let mut tasks = JoinSet::new();
@@ -270,7 +270,7 @@ async fn test_concurrent_file_creation() {
 
             // Hash and process
             let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-            let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+            let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
             processor_clone
                 .process(task)
@@ -309,7 +309,7 @@ async fn test_concurrent_modifications() {
     let repo = ConcurrentTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone()));
+    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf()));
 
     let num_files = 20;
 
@@ -320,7 +320,7 @@ async fn test_concurrent_modifications() {
             .write_file(&format!("src/modify_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
         processor
             .process(task)
             .await
@@ -386,7 +386,7 @@ async fn test_concurrent_mixed_operations() {
     let repo = ConcurrentTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone()));
+    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf()));
 
     // Create some initial files
     let num_initial = 10;
@@ -396,7 +396,7 @@ async fn test_concurrent_mixed_operations() {
             .write_file(&format!("src/initial_{}.ts", i), &content)
             .expect("Failed to write file");
         let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-        let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+        let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
         processor
             .process(task)
             .await
@@ -422,7 +422,7 @@ async fn test_concurrent_mixed_operations() {
 
             fs::write(&path, &content).expect("Failed to write file");
             let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-            let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+            let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
             processor_clone
                 .process(task)
@@ -474,7 +474,7 @@ async fn test_concurrent_mixed_operations() {
             let hash = FileHasher::hash_bytes(content.as_bytes());
             let path = repo_path.join(&relpath);
 
-            let task = UpdateTask::new(path, ChangeType::Deleted { hash }, Trigger::Save);
+            let task = UpdateTask::new(path, ChangeType::Deleted(hash), Trigger::Save);
 
             processor_clone
                 .process(task)
@@ -508,7 +508,7 @@ async fn test_transaction_isolation() {
     let repo = ConcurrentTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone()));
+    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf()));
 
     // Create a file
     let content = "export const shared = 1;";
@@ -519,9 +519,7 @@ async fn test_transaction_isolation() {
 
     let task = UpdateTask::new(
         path.clone(),
-        ChangeType::New {
-            hash: initial_hash.clone(),
-        },
+        ChangeType::New(initial_hash.clone()),
         Trigger::Save,
     );
     processor
@@ -597,7 +595,7 @@ async fn test_no_deadlocks_under_load() {
     let repo = ConcurrentTestRepo::new()
         .await
         .expect("Failed to create test repo");
-    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone()));
+    let processor = Arc::new(IncrementalProcessor::new(repo.pool.clone(), repo.temp_dir.path().to_path_buf()));
 
     // Create many files concurrently to stress test lock contention
     let num_files = 100;
@@ -618,7 +616,7 @@ async fn test_no_deadlocks_under_load() {
             fs::write(&path, &content).expect("Failed to write file");
 
             let hash = FileHasher::hash_file(&path).expect("Failed to hash file");
-            let task = UpdateTask::new(path, ChangeType::New { hash }, Trigger::Save);
+            let task = UpdateTask::new(path, ChangeType::New(hash), Trigger::Save);
 
             processor_clone.process(task).await
         });
@@ -628,8 +626,8 @@ async fn test_no_deadlocks_under_load() {
     let timeout = tokio::time::Duration::from_secs(60);
     let deadline = tokio::time::Instant::now() + timeout;
 
-    while let Some(result) = tokio::time::timeout_at(deadline, tasks.join_next()).await {
-        match result {
+    loop {
+        match tokio::time::timeout_at(deadline, tasks.join_next()).await {
             Ok(Some(task_result)) => {
                 task_result
                     .expect("Task panicked")

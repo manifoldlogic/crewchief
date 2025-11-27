@@ -4,13 +4,14 @@
 //! Set OPENAI_API_KEY environment variable to run these tests.
 
 use crewchief_maproom::embedding::{
-    CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig,
+    cache::EmbeddingCache, CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig,
 };
 
 /// Create a test configuration.
 ///
 /// This uses environment variables if available, or returns None if no API key is set.
 fn test_config() -> Option<EmbeddingConfig> {
+    use crewchief_maproom::embedding::ParallelConfig;
     let api_key = std::env::var("OPENAI_API_KEY").ok()?;
 
     Some(EmbeddingConfig {
@@ -26,18 +27,22 @@ fn test_config() -> Option<EmbeddingConfig> {
         retry: RetryConfig::default(),
         api_key: Some(api_key),
         api_endpoint: None,
+        parallel: ParallelConfig::default(),
     })
 }
 
 /// Skip test if no API key is configured.
-fn skip_if_no_api_key() -> Option<EmbeddingService> {
-    let config = test_config()?;
-    EmbeddingService::new(config).ok()
+async fn skip_if_no_api_key() -> Option<EmbeddingService> {
+    // Check if API key is available
+    test_config()?;
+
+    // Use from_env() to create service (will use environment variables)
+    EmbeddingService::from_env().await.ok()
 }
 
 #[tokio::test]
 async fn test_single_embedding_generation() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
@@ -63,7 +68,7 @@ async fn test_single_embedding_generation() {
 
 #[tokio::test]
 async fn test_batch_embedding_generation() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
@@ -97,29 +102,30 @@ async fn test_batch_embedding_generation() {
 
 #[tokio::test]
 async fn test_caching_behavior() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
 
     let text = "This text will be cached.";
 
-    // First call - should hit API
-    let initial_requests = service.cost_metrics().total_requests();
+    // First call - should miss cache
+    let initial_metrics = service.cache_metrics().await;
+    let initial_misses = initial_metrics.misses;
     let embedding1 = service.embed_text(text).await.unwrap();
-    let after_first = service.cost_metrics().total_requests();
+    let after_first = service.cache_metrics().await;
 
     assert!(
-        after_first > initial_requests,
-        "Expected API call for first embedding"
+        after_first.misses > initial_misses,
+        "Expected cache miss for first embedding"
     );
 
-    // Second call - should use cache
+    // Second call - should hit cache
     let embedding2 = service.embed_text(text).await.unwrap();
-    let after_second = service.cost_metrics().total_requests();
+    let after_second = service.cache_metrics().await;
 
-    assert_eq!(
-        after_second, after_first,
+    assert!(
+        after_second.hits > after_first.hits,
         "Expected cache hit for second embedding"
     );
     assert_eq!(
@@ -134,7 +140,7 @@ async fn test_caching_behavior() {
 
 #[tokio::test]
 async fn test_cache_hit_rate() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
@@ -161,7 +167,7 @@ async fn test_cache_hit_rate() {
 
 #[tokio::test]
 async fn test_large_batch_processing() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
@@ -187,51 +193,47 @@ async fn test_large_batch_processing() {
 }
 
 #[tokio::test]
-async fn test_cost_tracking() {
-    let Some(service) = skip_if_no_api_key() else {
+async fn test_cache_insertions() {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
 
-    let initial_tokens = service.cost_metrics().total_tokens();
-    let initial_cost = service.cost_metrics().estimated_cost_usd();
+    let initial_metrics = service.cache_metrics().await;
+    let initial_insertions = initial_metrics.insertions;
 
     // Generate some embeddings
     let texts = vec![
-        "Cost tracking test 1".to_string(),
-        "Cost tracking test 2".to_string(),
+        "Cache insertion test 1".to_string(),
+        "Cache insertion test 2".to_string(),
     ];
     service.embed_batch(texts).await.unwrap();
 
-    let final_tokens = service.cost_metrics().total_tokens();
-    let final_cost = service.cost_metrics().estimated_cost_usd();
+    let final_metrics = service.cache_metrics().await;
 
-    // Verify metrics increased
-    assert!(final_tokens > initial_tokens, "Token count should increase");
-    assert!(final_cost > initial_cost, "Estimated cost should increase");
-
-    // Cost should be reasonable (text-embedding-3-small is $0.02 per 1M tokens)
-    let tokens_used = final_tokens - initial_tokens;
-    assert!(tokens_used > 0, "Should have used some tokens");
+    // Verify cache insertions increased
     assert!(
-        tokens_used < 1000,
-        "Should not use excessive tokens for 2 short texts"
+        final_metrics.insertions > initial_insertions,
+        "Cache insertions should increase"
+    );
+    assert!(
+        final_metrics.insertions >= initial_insertions + 2,
+        "Should have inserted at least 2 new entries"
     );
 }
 
 #[tokio::test]
 async fn test_error_handling_invalid_config() {
-    let mut config = EmbeddingConfig::default();
-    config.dimension = 0; // Invalid
-    config.api_key = Some("test-key".to_string());
+    let mut cache_config = CacheConfig::default();
+    cache_config.max_entries = 0; // Invalid
 
-    let result = EmbeddingService::new(config);
-    assert!(result.is_err(), "Should reject invalid configuration");
+    let result = EmbeddingCache::new(cache_config);
+    assert!(result.is_err(), "Should reject invalid cache configuration");
 }
 
 #[tokio::test]
 async fn test_empty_batch() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
@@ -249,11 +251,11 @@ async fn test_service_from_env() {
         return;
     }
 
-    let service = EmbeddingService::from_env();
+    let service = EmbeddingService::from_env().await;
     assert!(
         service.is_ok(),
         "Failed to create service from env: {:?}",
-        service.err()
+        service.as_ref().err()
     );
 
     let service = service.unwrap();
@@ -262,7 +264,7 @@ async fn test_service_from_env() {
 
 #[tokio::test]
 async fn test_cache_cleanup() {
-    let Some(service) = skip_if_no_api_key() else {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
     };
@@ -281,13 +283,11 @@ async fn test_cache_cleanup() {
 
 #[tokio::test]
 async fn test_dimension_retrieval() {
-    let config = test_config();
-    if config.is_none() {
+    let Some(service) = skip_if_no_api_key().await else {
         eprintln!("Skipping test: OPENAI_API_KEY not set");
         return;
-    }
+    };
 
-    let service = EmbeddingService::new(config.unwrap()).unwrap();
     assert_eq!(service.dimension(), 1536);
 }
 
