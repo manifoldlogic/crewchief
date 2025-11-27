@@ -1,9 +1,27 @@
 # Ticket: IDXCLEAN-4001: Add Non-Blocking Startup Cleanup to Watch Command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [ ] **Task completed** - **BLOCKED** - watch command not functional
+- [ ] **Tests pass** - N/A
 - [ ] **Verified** - by the verify-ticket agent
+
+### BLOCKER (2025-11-27)
+
+The `watch_worktree()` function was **removed** as part of IDXABS-2001 (SQLite-only migration). The watch command currently returns an error:
+
+```
+Watch command is temporarily unavailable.
+The watch_worktree function was removed during SQLite-only migration.
+Use 'scan' for initial indexing and 'upsert' for incremental updates.
+Watch functionality will be reimplemented in a future update.
+```
+
+**Evidence:**
+- `crates/maproom/src/main.rs` lines 981-989: Watch command returns `anyhow::bail!`
+- `crates/maproom/src/indexer/mod.rs` lines 702-705: Comment confirming removal
+
+**Resolution:**
+This ticket is **DEFERRED** until the watch command is reimplemented (IDXABS-2006). Phase 4 is marked as [Optional Enhancement] in the ticket index, so this does not block the IDXCLEAN project's MVP goals.
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
