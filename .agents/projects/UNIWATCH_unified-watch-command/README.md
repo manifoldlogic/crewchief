@@ -1,9 +1,10 @@
 # UNIWATCH: Unified Watch Command
 
-**Status**: Planning Complete ✅
+**Status**: Blocked - Depends on IDXABS-6003
 **Slug**: UNIWATCH
-**Timeline**: 1-2 days
+**Timeline**: 1-2 days (after IDXABS completes)
 **Scope**: Minimal - modify existing watch_worktree(), no new components
+**Blocked By**: IDXABS-6003 (watch command must work first)
 
 ## Problem Statement
 
@@ -158,13 +159,26 @@ vim README.md              # ✓ Changes indexed to main
 
 ## Dependencies
 
+**Project Dependencies**:
+- **IDXABS-6003** - The basic watch command must be implemented for SQLite before UNIWATCH can enhance it
+
 **Required** (existing):
 - `notify` crate - File watching
 - `tokio` - Async runtime
-- `tokio-postgres` - Database
-- Existing `BranchWatcher`, `FileWatcher`, `IncrementalProcessor` components
+- `SqliteStore` - Database (PostgreSQL removed)
+- Existing `IncrementalProcessor` component (must be implemented in IDXABS-6002)
 
 **No new dependencies required** ✅
+
+## Prerequisite Work (IDXABS Project)
+
+Before starting UNIWATCH tickets, the following IDXABS tickets must be complete:
+
+1. **IDXABS-6001** - Migrate tests to SQLite (validation capability)
+2. **IDXABS-6002** - Implement incremental module (core functionality)
+3. **IDXABS-6003** - Implement basic watch command (foundation for UNIWATCH)
+
+**Current IDXABS Status**: The incremental module is stubbed (functions return Ok/empty values). The watch command prints an error. Tests don't compile due to PostgreSQL references.
 
 ## Risks and Mitigations
 

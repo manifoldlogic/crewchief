@@ -3,8 +3,8 @@
 **Project**: IDXABS - Indexer SQLite-Only Migration
 **Created**: 2025-11-27
 **Updated**: 2025-11-27 (post-review)
-**Total Tickets**: 14
-**Estimated Duration**: 20-29 hours
+**Total Tickets**: 18 (14 original + 4 completion)
+**Estimated Duration**: 50-70 hours
 
 ## Overview
 
@@ -24,6 +24,7 @@ This project removes PostgreSQL support entirely, making SQLite the only databas
 | Phase 3 | 3001 | Main.rs Cleanup | 2-3 hours |
 | Phase 4 | 4001-4002 | Testing & Validation | 3-4 hours |
 | Phase 5 | 5001 | Documentation | 1-2 hours |
+| **Phase 6** | **6001-6004** | **Completion (NEW)** | **30-40 hours** |
 
 ## Tickets by Phase
 
@@ -66,6 +67,19 @@ This project removes PostgreSQL support entirely, making SQLite the only databas
 |----|-------|--------|-------|
 | [IDXABS-5001](IDXABS-5001_update-documentation.md) | Update Documentation | ⬜ Pending | rust-indexer-engineer |
 
+### Phase 6: Completion (NEW - Post-Archive Recovery)
+
+| ID | Title | Status | Agent |
+|----|-------|--------|-------|
+| [IDXABS-6001](IDXABS-6001_migrate-tests-to-sqlite.md) | Migrate 35 Test Files to SQLite | 🔴 **BLOCKING** | rust-indexer-engineer |
+| [IDXABS-6002](IDXABS-6002_implement-incremental-module.md) | Implement Stubbed Incremental Module | 🔴 **BLOCKING** | rust-indexer-engineer |
+| [IDXABS-6003](IDXABS-6003_implement-watch-command.md) | Implement Watch Command for SQLite | 🔴 **BLOCKING** | rust-indexer-engineer |
+| [IDXABS-6004](IDXABS-6004_complete-all-sqlite-stubs.md) | Complete All 52 SQLite Stub Implementations | 🔴 **BLOCKING** | rust-indexer-engineer |
+
+**Note**: Phase 6 was added after the project was incorrectly archived. These tickets complete the work that was stubbed during the original migration.
+
+**Scope Discovery**: A TODO search revealed **52 stub implementations** across 21 files, not just the incremental module. IDXABS-6004 tracks all of them.
+
 ## Dependencies
 
 ```
@@ -78,7 +92,11 @@ Phase 3: 3001
 Phase 4: 4001 → 4002
              ↓
 Phase 5: 5001
+             ↓
+Phase 6: 6001 → 6002 → 6003
 ```
+
+**Phase 6 Critical Path**: IDXABS-6001 must complete first (tests must compile) before IDXABS-6002 can be validated. IDXABS-6003 depends on IDXABS-6002 for incremental processing.
 
 Note: Phase 2 tickets 2001-2007 can be partially parallelized as they touch different modules, but sequential execution is safer due to potential shared dependencies.
 

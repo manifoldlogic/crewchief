@@ -2,8 +2,20 @@
 
 **Project**: UNIWATCH (Unified Watch Command)
 **Total Tickets**: 15
-**Timeline**: 1-2 days
-**Status**: All tickets created ✅
+**Timeline**: 1-2 days (after IDXABS completes)
+**Status**: ⚠️ BLOCKED - Waiting on IDXABS-6003
+
+## ⚠️ BLOCKED BY IDXABS PROJECT
+
+**This project cannot start until IDXABS Phase 6 is complete:**
+
+| Blocker Ticket | Description | Impact |
+|----------------|-------------|--------|
+| **IDXABS-6001** | Migrate 35 test files to SQLite | Tests won't compile |
+| **IDXABS-6002** | Implement incremental module | Core watch functionality missing |
+| **IDXABS-6003** | Implement basic watch command | Foundation for UNIWATCH |
+
+**Current State**: The `watch` command prints "temporarily unavailable". The incremental module functions are stubs that do nothing. Tests fail to compile due to PostgreSQL references.
 
 ## Quick Stats
 

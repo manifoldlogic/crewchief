@@ -1,9 +1,9 @@
 # Ticket: IDXABS-2006: Refactor Incremental Module
 
 ## Status
-- [x] **Task completed** - acceptance criteria met
-- [x] **Tests pass** - N/A (no incremental module tests; implementation stubbed for IDXABS-4001)
-- [x] **Verified** - by the verify-ticket agent
+- [ ] **Task completed** - implementation was STUBBED, not completed
+- [ ] **Tests pass** - N/A (no incremental module tests; implementation stubbed)
+- [ ] **Verified** - INCORRECTLY marked verified; watch command doesn't work
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
