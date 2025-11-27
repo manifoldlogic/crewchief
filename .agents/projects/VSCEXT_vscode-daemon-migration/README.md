@@ -1,8 +1,8 @@
 # VSCEXT: VSCode Extension Daemon Migration
 
-**Status**: Planning Complete ✅ (Updated after review)
+**Status**: Tickets Created ✅
 **Slug**: VSCEXT
-**Estimated Effort**: ~12 tickets across 5 phases
+**Tickets**: 12 tickets across 5 phases
 
 ## Problem Statement
 
@@ -117,8 +117,8 @@ Extension activates
 
 ## Next Steps
 
-1. **Create Tickets**: Run `/create-project-tickets VSCEXT`
-2. **Execute**: Run `/work-on-project VSCEXT`
+1. **Execute**: Run `/work-on-project VSCEXT` to implement all tickets
+2. Or run individual tickets with `/single-ticket VSCEXT-1001`
 
 ## Dependencies
 
