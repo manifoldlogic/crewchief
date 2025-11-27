@@ -25,6 +25,7 @@ node_modules
 
 .DS_Store
 
+.crewchief/optimization-runs/
 .crewchief/worktrees/
 **/.crewchief/worktrees/**
 crewchief.config.local.js
