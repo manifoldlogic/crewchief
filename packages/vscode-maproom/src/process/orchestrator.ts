@@ -1,16 +1,16 @@
 /**
- * Process orchestrator for crewchief-maproom watch processes
+ * Process orchestrator for crewchief-maproom watch process
  *
- * Manages the lifecycle of two long-running Rust processes:
- * 1. watch - Monitors file changes and triggers indexing
- * 2. branch-watch - Monitors git branch switches
+ * Manages the lifecycle of a single unified watch process that handles:
+ * - File change monitoring and indexing
+ * - Git branch switch detection (emits branch_switched events)
  *
  * Key features:
  * - Platform-aware binary selection (darwin-x64, linux-arm64, etc.)
  * - Graceful shutdown with SIGTERM → SIGKILL cascade
  * - Comprehensive error handling and reporting
  * - VSCode Output channel integration for logs
- * - PostgreSQL environment variable injection
+ * - Database URL environment variable injection
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -26,7 +26,7 @@ import { CrashRecovery } from './recovery'
 
 import type { SecretsManager } from '../config/secrets'
 import type { EmbeddingProvider } from '../ui/setupWizard'
-import { getRepoName, getBranchName } from '../utils/git'
+import { getRepoName } from '../utils/git'
 
 /**
  * PostgreSQL connection configuration
@@ -45,7 +45,7 @@ export interface PostgresConfig {
 export interface OrchestratorConfig {
   /** Path to extension root (where bin/ directory is located) */
   extensionRoot: string
-  /** Workspace root directory for branch-watch */
+  /** Workspace root directory for file watching */
   workspaceRoot: string
   /** PostgreSQL connection configuration (optional - only needed for postgres mode without databaseUrlOverride) */
   postgres?: PostgresConfig
@@ -96,13 +96,13 @@ export interface OrchestratorEvents {
 }
 
 /**
- * Process orchestrator for watch processes
+ * Process orchestrator for unified watch process
  *
- * Spawns and manages two long-running processes:
- * - watch: Monitors file changes with throttling
- * - branch-watch: Monitors git branch switches
+ * Spawns and manages a single unified watch process that:
+ * - Monitors file changes with throttling
+ * - Detects git branch switches and emits branch_switched events
  *
- * Extends EventEmitter to emit parsed watch events from processes.
+ * Extends EventEmitter to emit parsed watch events from the process.
  */
 export class ProcessOrchestrator extends EventEmitter {
   private readonly outputChannel: OutputChannel
@@ -142,14 +142,15 @@ export class ProcessOrchestrator extends EventEmitter {
   }
 
   /**
-   * Start watching processes
+   * Start watching process
    *
-   * Spawns both watch and branch-watch processes with proper environment setup.
+   * Spawns unified watch process with proper environment setup.
+   * The watch process handles both file monitoring and branch detection.
    *
    * @throws ProcessError if binary not found or spawn fails
    */
   async startWatching(): Promise<void> {
-    this.log('Starting watch processes...')
+    this.log('Starting watch process...')
 
     try {
       // Verify binary exists and is executable
@@ -158,20 +159,17 @@ export class ProcessOrchestrator extends EventEmitter {
       // Prepare environment variables (includes credentials if configured)
       const env = await this.buildEnvironment()
 
-      // Get git repository and branch information
+      // Get git repository information
       const repoName = await getRepoName(this.config.workspaceRoot)
-      const branchName = await getBranchName(this.config.workspaceRoot)
-      this.log(`Repository: ${repoName}, Branch: ${branchName}`)
+      this.log(`Repository: ${repoName}`)
 
-      // Start watch process (file change monitoring)
+      // Start unified watch process (handles file monitoring + branch detection)
       await this.startProcess(
         'watch',
         [
           'watch',
           '--repo',
           repoName,
-          '--worktree',
-          branchName,
           '--path',
           this.config.workspaceRoot,
           '--throttle',
@@ -180,12 +178,9 @@ export class ProcessOrchestrator extends EventEmitter {
         env
       )
 
-      // Start branch-watch process (git branch monitoring)
-      await this.startProcess('branch-watch', ['branch-watch', '--repo', this.config.workspaceRoot], env)
-
-      this.log('All watch processes started successfully')
+      this.log('Watch process started successfully')
     } catch (error: any) {
-      this.logError('Failed to start watch processes', error)
+      this.logError('Failed to start watch process', error)
       // Clean up any started processes
       await this.stopWatching()
       throw error

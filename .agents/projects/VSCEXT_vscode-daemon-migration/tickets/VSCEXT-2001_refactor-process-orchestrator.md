@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-2001: Refactor ProcessOrchestrator for single watch
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,13 +21,13 @@ Reference: planning/plan.md - Phase 2, Ticket 2001
 Reference: planning/architecture.md - Single Watch Process via Refactored ProcessOrchestrator
 
 ## Acceptance Criteria
-- [ ] `startWatching()` spawns single watch process (not watch + branch-watch)
-- [ ] Uses verified CLI flags: `--path`, optional `--repo`, `--throttle`
-- [ ] Parses `branch_switched` events correctly (via existing StdoutParser)
-- [ ] Reuses existing StdoutParser for NDJSON parsing
-- [ ] Reuses existing CrashRecovery for auto-restart with backoff
-- [ ] Clean shutdown on extension deactivation (SIGTERM then SIGKILL)
-- [ ] No references to `branch-watch` command remain
+- [x] `startWatching()` spawns single watch process (not watch + branch-watch)
+- [x] Uses verified CLI flags: `--path`, optional `--repo`, `--throttle`
+- [x] Parses `branch_switched` events correctly (via existing StdoutParser)
+- [x] Reuses existing StdoutParser for NDJSON parsing
+- [x] Reuses existing CrashRecovery for auto-restart with backoff
+- [x] Clean shutdown on extension deactivation (SIGTERM then SIGKILL)
+- [x] No references to `branch-watch` command remain
 
 ## Technical Requirements
 - Keep: `StdoutParser` (process/parser.ts) - already handles NDJSON

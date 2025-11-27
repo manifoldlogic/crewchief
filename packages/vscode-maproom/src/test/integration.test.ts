@@ -336,19 +336,17 @@ describe('Integration: Process Crash Recovery Workflow', () => {
   })
 })
 
-describe('Integration: Multiple Processes Running Simultaneously', () => {
-  it('should manage multiple watch processes independently', async () => {
+describe('Integration: Single Unified Watch Process', () => {
+  it('should manage unified watch process', async () => {
     const outputChannel = new MockOutputChannel()
 
     const watchProcess = createMockProcess()
-    const branchProcess = createMockProcess()
 
     let spawnCallCount = 0
     const { spawn } = await import('node:child_process')
     vi.mocked(spawn).mockImplementation(() => {
       spawnCallCount++
-      // Alternate between processes
-      return spawnCallCount % 2 === 1 ? watchProcess : branchProcess
+      return watchProcess
     })
 
     const config: OrchestratorConfig = {
@@ -365,25 +363,21 @@ describe('Integration: Multiple Processes Running Simultaneously', () => {
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
 
-    // Start watching (spawns both watch and branch-watch)
+    // Start watching (spawns single unified watch process)
     await orchestrator.startWatching()
 
-    // Verify both processes were spawned
-    expect(spawnCallCount).toBeGreaterThanOrEqual(1)
+    // Verify only one process was spawned
+    expect(spawnCallCount).toBe(1)
 
-    // Send events from first process
+    // Send events from watch process (includes file and branch events)
     watchProcess.stdout.push(`${JSON.stringify({ type: 'status', state: 'watching' })}\n`)
-
-    // Send events from second process (if it was spawned)
-    if (spawnCallCount >= 2) {
-      branchProcess.stdout.push(`${JSON.stringify({ type: 'status', state: 'idle' })}\n`)
-    }
 
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    // Get status of all processes
+    // Get status of watch process
     const status = orchestrator.getStatus()
-    expect(status.size).toBeGreaterThan(0)
+    expect(status.size).toBe(1)
+    expect(status.get('watch')).toBeDefined()
 
     // Cleanup
     await orchestrator.stopWatching()

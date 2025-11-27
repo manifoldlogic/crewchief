@@ -46,7 +46,6 @@ vi.mock('node:child_process', async (importOriginal) => {
 // Mock git utilities
 vi.mock('../utils/git', () => ({
   getRepoName: vi.fn().mockResolvedValue('test-owner/test-repo'),
-  getBranchName: vi.fn().mockResolvedValue('main'),
 }))
 
 // Mock OutputChannel for testing
@@ -195,95 +194,76 @@ describe('ProcessOrchestrator', () => {
       const { spawn } = await import('node:child_process')
       const { access } = await import('node:fs/promises')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
       expect(access).toHaveBeenCalled()
     })
 
-    it('should spawn both processes with correct arguments', async () => {
+    it('should spawn single watch process with correct arguments', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
-      vi.mocked(spawn).mockImplementation(((cmd: string, args: string[]) => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+      vi.mocked(spawn).mockImplementation((() => {
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
 
       const calls = vi.mocked(spawn).mock.calls
+      expect(calls).toHaveLength(1) // Only one process spawned
       expect(calls[0][1]).toEqual([
         'watch',
         '--repo',
         'test-owner/test-repo',
-        '--worktree',
-        'main',
         '--path',
         '/test/workspace',
         '--throttle',
         '3s',
       ])
-      expect(calls[1][1]).toEqual(['branch-watch', '--repo', '/test/workspace'])
     })
 
     it('should pass PostgreSQL environment variables', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
-      vi.mocked(spawn).mockImplementation(((cmd: string, args: string[], options: any) => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-
+      vi.mocked(spawn).mockImplementation(((_cmd: string, _args: string[], options: any) => {
         expect(options.env.PGHOST).toBe('localhost')
         expect(options.env.PGPORT).toBe('5433')
         expect(options.env.PGUSER).toBe('maproom')
         expect(options.env.PGPASSWORD).toBe('maproom')
         expect(options.env.PGDATABASE).toBe('maproom')
 
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
     })
 
-    it('should log stdout from processes', async () => {
+    it('should log stdout from process', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
         setTimeout(() => {
           // Push valid NDJSON event
-          child.stdout.push('{"type":"progress","files":100,"complete":50}\n')
-          child.simulateSuccess()
+          mockChild.stdout.push('{"type":"progress","files":100,"complete":50}\n')
+          mockChild.simulateSuccess()
         }, 10)
-        return child as any
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
@@ -313,11 +293,11 @@ describe('ProcessOrchestrator', () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        setTimeout(() => mockChild1.simulateCrash(1), 5)
-        return mockChild1 as any
+        setTimeout(() => mockChild.simulateCrash(1), 5)
+        return mockChild as any
       }) as any)
 
       await expect(orchestrator.startWatching()).rejects.toThrow(/crashed immediately/)
@@ -325,41 +305,32 @@ describe('ProcessOrchestrator', () => {
   })
 
   describe('stopWatching', () => {
-    it('should stop all running processes', async () => {
+    it('should stop the running process', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
       await orchestrator.stopWatching()
 
-      expect(mockChild1.killed).toBe(true)
-      expect(mockChild2.killed).toBe(true)
+      expect(mockChild.killed).toBe(true)
     })
 
     it('should be idempotent', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
@@ -374,38 +345,30 @@ describe('ProcessOrchestrator', () => {
       expect(orchestrator.isRunning()).toBe(false)
     })
 
-    it('should return true after starting processes', async () => {
+    it('should return true after starting process', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
       expect(orchestrator.isRunning()).toBe(true)
     })
 
-    it('should return false after stopping processes', async () => {
+    it('should return false after stopping process', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
@@ -415,31 +378,22 @@ describe('ProcessOrchestrator', () => {
   })
 
   describe('getStatus', () => {
-    it('should return status of all processes', async () => {
+    it('should return status of watch process', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
-      const mockChild1 = new MockChildProcess()
-      const mockChild2 = new MockChildProcess()
-      let count = 0
+      const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation((() => {
-        count++
-        const child = count === 1 ? mockChild1 : mockChild2
-        setTimeout(() => child.simulateSuccess(), 10)
-        return child as any
+        setTimeout(() => mockChild.simulateSuccess(), 10)
+        return mockChild as any
       }) as any)
 
       await orchestrator.startWatching()
 
       const status = orchestrator.getStatus()
+      expect(status.size).toBe(1) // Only one process
       expect(status.get('watch')).toEqual({
-        running: true,
-        crashed: false,
-        exitCode: undefined,
-      })
-
-      expect(status.get('branch-watch')).toEqual({
         running: true,
         crashed: false,
         exitCode: undefined,

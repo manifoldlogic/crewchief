@@ -19,7 +19,7 @@ export async function activateProcessOrchestrator(
   const outputChannel = vscode.window.createOutputChannel('Maproom')
 
   try {
-    // 1. Get workspace root (required for branch-watch)
+    // 1. Get workspace root (required for file watching)
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!workspaceFolders || workspaceFolders.length === 0) {
       vscode.window.showErrorMessage('Maproom: No workspace folder is open')
