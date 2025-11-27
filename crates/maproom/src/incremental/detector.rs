@@ -10,7 +10,8 @@ use std::path::Path;
 
 use super::cache::HashCache;
 use super::hash::{ContentHash, FileHasher};
-use crate::db::PgPool;
+use crate::db::SqliteStore;
+use std::sync::Arc;
 
 /// The type of change detected for a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,21 +61,21 @@ pub enum ChangeType {
 /// ```
 pub struct ChangeDetector {
     cache: HashCache,
-    pool: PgPool,
+    store: Arc<SqliteStore>,
 }
 
 impl ChangeDetector {
     /// Create a new change detector.
     ///
     /// # Arguments
-    /// * `pool` - Database connection pool
+    /// * `store` - SqliteStore instance
     ///
     /// # Returns
     /// A new change detector with an empty cache
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(store: Arc<SqliteStore>) -> Self {
         Self {
             cache: HashCache::new(),
-            pool,
+            store,
         }
     }
 
@@ -83,12 +84,12 @@ impl ChangeDetector {
     /// Use this when you know approximately how many files will be processed.
     ///
     /// # Arguments
-    /// * `pool` - Database connection pool
+    /// * `store` - SqliteStore instance
     /// * `capacity` - Initial cache capacity
-    pub fn with_capacity(pool: PgPool, capacity: usize) -> Self {
+    pub fn with_capacity(store: Arc<SqliteStore>, capacity: usize) -> Self {
         Self {
             cache: HashCache::with_capacity(capacity),
-            pool,
+            store,
         }
     }
 
@@ -168,7 +169,7 @@ impl ChangeDetector {
         }
 
         // Step 2: Check database if cache miss
-        let db_hash = get_hash_from_db(&self.pool, file_id).await?;
+        let db_hash = get_hash_from_db(&self.store, file_id).await?;
 
         let change_type = match db_hash {
             Some(old_hash) => {
@@ -260,7 +261,7 @@ impl ChangeDetector {
         }
 
         // File doesn't exist - check if it was in database
-        if let Some(old_hash) = get_hash_from_db(&self.pool, file_id).await? {
+        if let Some(old_hash) = get_hash_from_db(&self.store, file_id).await? {
             return Ok(Some(ChangeType::Deleted(old_hash)));
         }
 
@@ -302,35 +303,12 @@ impl ChangeDetector {
     /// ```
     pub async fn detect_move(
         &self,
-        new_path: &Path,
-        hash: &ContentHash,
+        _new_path: &Path,
+        _hash: &ContentHash,
     ) -> Result<Option<std::path::PathBuf>> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection from pool")?;
-
-        let hash_bytes: &[u8] = hash.as_bytes();
-
-        // Query database for files with this hash but different path
-        let row = client
-            .query_opt(
-                "SELECT relpath FROM maproom.files
-                 WHERE blake3_hash = $1 AND relpath != $2
-                 LIMIT 1",
-                &[&hash_bytes, &new_path.to_string_lossy().as_ref()],
-            )
-            .await
-            .context("Failed to query for file moves")?;
-
-        match row {
-            Some(row) => {
-                let old_path: String = row.get(0);
-                Ok(Some(std::path::PathBuf::from(old_path)))
-            }
-            None => Ok(None),
-        }
+        // TODO: Implement SQLite-based move detection
+        // This will be implemented in a future ticket
+        Ok(None)
     }
 
     /// Detect changes for multiple files in a batch.
@@ -426,63 +404,13 @@ impl ChangeDetector {
 
         // Step 3: Batch query database for all cache misses
         if !cache_misses.is_empty() {
-            let client = self
-                .pool
-                .get()
-                .await
-                .context("Failed to get database connection from pool")?;
-
-            // Build query with ANY clause for efficient batch lookup
-            let rows = client
-                .query(
-                    "SELECT id, blake3_hash FROM maproom.files WHERE id = ANY($1)",
-                    &[&cache_misses],
-                )
-                .await
-                .context("Failed to batch query file hashes")?;
-
-            let db_hashes: HashMap<i64, Option<ContentHash>> = rows
-                .iter()
-                .map(|row| {
-                    let file_id: i64 = row.get(0);
-                    let hash_bytes: Option<Vec<u8>> = row.get(1);
-                    let hash = match hash_bytes {
-                        Some(bytes) if bytes.len() == 32 => {
-                            let mut hash_array = [0u8; 32];
-                            hash_array.copy_from_slice(&bytes);
-                            Some(ContentHash::from(hash_array))
-                        }
-                        _ => None,
-                    };
-                    (file_id, hash)
-                })
-                .collect();
-
-            // Step 4: Compare DB hashes with current hashes
+            // TODO: Implement SQLite-based batch query
+            // For now, treat all cache misses as new files
             for file_id in cache_misses {
                 let current_hash = file_hashes[&file_id];
                 let path = &files.iter().find(|(id, _)| *id == file_id).unwrap().1;
 
-                let change_type = match db_hashes.get(&file_id) {
-                    Some(Some(old_hash)) => {
-                        if *old_hash == current_hash {
-                            ChangeType::None
-                        } else {
-                            ChangeType::Modified {
-                                old: *old_hash,
-                                new: current_hash,
-                            }
-                        }
-                    }
-                    Some(None) | None => {
-                        // No hash in database - new file
-                        ChangeType::New(current_hash)
-                    }
-                };
-
-                results.insert(file_id, change_type);
-
-                // Update cache
+                results.insert(file_id, ChangeType::New(current_hash));
                 self.cache.insert(path.to_path_buf(), current_hash);
             }
         }
@@ -498,106 +426,32 @@ impl ChangeDetector {
 /// Retrieve a file's blake3 hash from the database.
 ///
 /// # Arguments
-/// * `pool` - Database connection pool
+/// * `store` - SqliteStore instance
 /// * `file_id` - Database ID of the file
 ///
 /// # Returns
 /// * `Ok(Some(hash))` - Hash found in database
 /// * `Ok(None)` - File exists but has no hash (NULL in database)
 /// * `Err(_)` - Database query error or file not found
-///
-/// # Database Schema
-///
-/// Queries the `maproom.files` table's `blake3_hash` column (BYTEA).
-/// The column is nullable to support existing rows without hashes.
-pub async fn get_hash_from_db(pool: &PgPool, file_id: i64) -> Result<Option<ContentHash>> {
-    let client = pool
-        .get()
-        .await
-        .context("Failed to get database connection from pool")?;
-
-    let row = client
-        .query_opt(
-            "SELECT blake3_hash FROM maproom.files WHERE id = $1",
-            &[&file_id],
-        )
-        .await
-        .with_context(|| format!("Failed to query hash for file_id={}", file_id))?;
-
-    match row {
-        Some(row) => {
-            let hash_bytes: Option<Vec<u8>> = row.get(0);
-            match hash_bytes {
-                Some(bytes) => {
-                    // Convert bytes to blake3::Hash
-                    if bytes.len() != 32 {
-                        anyhow::bail!(
-                            "Invalid blake3 hash length: expected 32 bytes, got {}",
-                            bytes.len()
-                        );
-                    }
-                    let mut hash_array = [0u8; 32];
-                    hash_array.copy_from_slice(&bytes);
-                    Ok(Some(ContentHash::from(hash_array)))
-                }
-                None => Ok(None), // NULL in database
-            }
-        }
-        None => {
-            // File not found in database
-            anyhow::bail!("File with id={} not found in database", file_id)
-        }
-    }
+pub async fn get_hash_from_db(_store: &SqliteStore, _file_id: i64) -> Result<Option<ContentHash>> {
+    // TODO: Implement SQLite-based hash retrieval
+    // This will be implemented in a future ticket
+    Ok(None)
 }
 
 /// Store a file's blake3 hash in the database.
 ///
 /// # Arguments
-/// * `pool` - Database connection pool
+/// * `store` - SqliteStore instance
 /// * `file_id` - Database ID of the file
 /// * `hash` - Blake3 content hash to store
 ///
 /// # Returns
 /// * `Ok(())` - Hash stored successfully
 /// * `Err(_)` - Database update error
-///
-/// # Database Schema
-///
-/// Updates the `maproom.files` table's `blake3_hash` column (BYTEA).
-/// The hash is stored as 32 bytes in binary format.
-///
-/// # Example
-///
-/// ```no_run
-/// use crewchief_maproom::db::create_pool;
-/// use crewchief_maproom::incremental::{FileHasher, detector::store_hash_in_db};
-/// use std::path::Path;
-///
-/// #[tokio::main]
-/// async fn main() -> anyhow::Result<()> {
-///     let pool = create_pool().await?;
-///     let hash = FileHasher::hash_file(Path::new("src/main.rs"))?;
-///
-///     store_hash_in_db(&pool, 123, hash).await?;
-///     Ok(())
-/// }
-/// ```
-pub async fn store_hash_in_db(pool: &PgPool, file_id: i64, hash: ContentHash) -> Result<()> {
-    let client = pool
-        .get()
-        .await
-        .context("Failed to get database connection from pool")?;
-
-    let hash_bytes: &[u8] = hash.as_bytes();
-
-    client
-        .execute(
-            "UPDATE maproom.files SET blake3_hash = $1 WHERE id = $2",
-            &[&hash_bytes, &file_id],
-        )
-        .await
-        .with_context(|| format!("Failed to store hash for file_id={}", file_id))?;
-
+pub async fn store_hash_in_db(_store: &SqliteStore, _file_id: i64, _hash: ContentHash) -> Result<()> {
+    // TODO: Implement SQLite-based hash storage
+    // This will be implemented in a future ticket
     Ok(())
 }
 

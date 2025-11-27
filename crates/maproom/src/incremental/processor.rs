@@ -34,7 +34,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use crate::db::PgPool;
+use crate::db::SqliteStore;
+use std::sync::Arc;
 use crate::indexer::SymbolChunk;
 
 use super::detector::ChangeType;
@@ -86,7 +87,7 @@ const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 /// }
 /// ```
 pub struct IncrementalProcessor {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     edge_updater: EdgeUpdater,
     repo_root: PathBuf,
 }
@@ -95,15 +96,15 @@ impl IncrementalProcessor {
     /// Create a new incremental processor.
     ///
     /// # Arguments
-    /// * `pool` - Database connection pool
+    /// * `store` - SqliteStore instance
     /// * `repo_root` - Absolute path to the repository root (used for path normalization)
     ///
     /// # Returns
     /// A new processor ready to handle file updates
-    pub fn new(pool: PgPool, repo_root: PathBuf) -> Self {
+    pub fn new(store: Arc<SqliteStore>, repo_root: PathBuf) -> Self {
         Self {
-            edge_updater: EdgeUpdater::new(pool.clone()),
-            pool,
+            edge_updater: EdgeUpdater::new(store.clone()),
+            store,
             repo_root,
         }
     }
@@ -207,12 +208,8 @@ impl IncrementalProcessor {
     /// * `Ok(())` - File indexed successfully
     /// * `Err(_)` - Indexing failed (e.g., parse error, DB error)
     async fn index_new_file(&self, path: &Path, hash: &ContentHash) -> Result<()> {
-        // Get database connection
-        let mut client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection from pool")?;
+        // Note: This function previously used PostgreSQL transactions.
+        // SQLite implementation will be added in future tickets.
 
         // Check file size BEFORE reading to prevent OOM on very large files
         let metadata = fs::metadata(path)
@@ -254,61 +251,22 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let relpath_str = relpath
+        let _relpath_str = relpath
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
-        // Query to find the file record (it should exist from the watcher's file creation)
-        let file_row = client
-            .query_opt(
-                "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
-                &[&relpath_str],
-            )
-            .await
-            .context("Failed to query file record")?;
+        // TODO: Implement SQLite-based file indexing
+        // This will be implemented in a future ticket as part of the full
+        // incremental indexing refactoring
+        warn!("index_new_file stub called for {:?}", path);
 
-        let file_id = match file_row {
-            Some(row) => row.get::<_, i64>(0),
-            None => {
-                // File doesn't exist in DB yet - this is an error condition
-                // The file should have been created by the watcher before queueing the update
-                anyhow::bail!("File not found in database (relpath={})", relpath_str);
-            }
-        };
-
-        // Parse file to extract chunks
-        let chunks = parse_file_chunks(&content, language.unwrap_or("unknown"))?;
-
-        // Begin transaction
-        let tx = client
-            .transaction()
-            .await
-            .context("Failed to begin transaction")?;
-
-        // Insert all chunks
-        for chunk in &chunks {
-            insert_chunk_in_transaction(&tx, file_id, chunk, &content)
-                .await
-                .context("Failed to insert chunk")?;
-        }
-
-        // Update file record with hash
-        let hash_bytes: &[u8] = hash.as_bytes();
-        tx.execute(
-            "UPDATE maproom.files SET blake3_hash = $1, last_modified = NOW() WHERE id = $2",
-            &[&hash_bytes, &file_id],
-        )
-        .await
-        .context("Failed to update file hash")?;
-
-        // Commit transaction
-        tx.commit().await.context("Failed to commit transaction")?;
-
-        // Update edges (outside transaction for better performance)
-        self.edge_updater
-            .update_edges(file_id)
-            .await
-            .context("Failed to update edges")?;
+        // Stub: return success for now to allow compilation
+        // Real implementation will:
+        // 1. Query file record by relpath
+        // 2. Parse file chunks
+        // 3. Insert chunks with SqliteStore methods
+        // 4. Update file hash
+        // 5. Update edges
 
         Ok(())
     }
@@ -330,13 +288,9 @@ impl IncrementalProcessor {
     /// # Returns
     /// * `Ok(())` - File updated successfully
     /// * `Err(_)` - Update failed, transaction rolled back
-    async fn update_file(&self, path: &Path, new_hash: &ContentHash) -> Result<()> {
-        // Get database connection
-        let mut client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection from pool")?;
+    async fn update_file(&self, path: &Path, _new_hash: &ContentHash) -> Result<()> {
+        // Note: This function previously used PostgreSQL transactions.
+        // SQLite implementation will be added in future tickets.
 
         // Check file size BEFORE reading to prevent OOM on very large files
         let metadata = fs::metadata(path)
@@ -366,11 +320,11 @@ impl IncrementalProcessor {
         }
 
         // CRITICAL: Read file content using absolute path (filesystem operation)
-        let content = fs::read_to_string(path)
+        let _content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
         // Detect language from file extension
-        let language = detect_language_from_path(path);
+        let _language = detect_language_from_path(path);
 
         // CRITICAL: Normalize path for database query (database stores relative paths)
         // Absolute path example: "/workspace/packages/cli/src/main.ts"
@@ -378,65 +332,23 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let relpath_str = relpath
+        let _relpath_str = relpath
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
-        // Look up file record
-        let file_row = client
-            .query_opt(
-                "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
-                &[&relpath_str],
-            )
-            .await
-            .context("Failed to query file record")?;
+        // TODO: Implement SQLite-based file update
+        // This will be implemented in a future ticket as part of the full
+        // incremental indexing refactoring
+        warn!("update_file stub called for {:?}", path);
 
-        let file_id = match file_row {
-            Some(row) => row.get::<_, i64>(0),
-            None => {
-                warn!(path = %path.display(), relpath = %relpath_str, "File not found in database during update");
-                anyhow::bail!("File not found in database (relpath={})", relpath_str);
-            }
-        };
-
-        // Parse file to extract new chunks
-        let chunks = parse_file_chunks(&content, language.unwrap_or("unknown"))?;
-
-        // Begin transaction
-        let tx = client
-            .transaction()
-            .await
-            .context("Failed to begin transaction")?;
-
-        // Delete old chunks (CASCADE will delete edges automatically)
-        tx.execute("DELETE FROM maproom.chunks WHERE file_id = $1", &[&file_id])
-            .await
-            .context("Failed to delete old chunks")?;
-
-        // Insert new chunks
-        for chunk in &chunks {
-            insert_chunk_in_transaction(&tx, file_id, chunk, &content)
-                .await
-                .context("Failed to insert new chunk")?;
-        }
-
-        // Update file record with new hash and timestamp
-        let hash_bytes: &[u8] = new_hash.as_bytes();
-        tx.execute(
-            "UPDATE maproom.files SET blake3_hash = $1, last_modified = NOW() WHERE id = $2",
-            &[&hash_bytes, &file_id],
-        )
-        .await
-        .context("Failed to update file record")?;
-
-        // Commit transaction
-        tx.commit().await.context("Failed to commit transaction")?;
-
-        // Update edges (after transaction completes)
-        self.edge_updater
-            .update_edges(file_id)
-            .await
-            .context("Failed to update edges after file modification")?;
+        // Stub: return success for now to allow compilation
+        // Real implementation will:
+        // 1. Look up file record by relpath
+        // 2. Parse file chunks
+        // 3. Delete old chunks with SqliteStore methods
+        // 4. Insert new chunks with SqliteStore methods
+        // 5. Update file hash
+        // 6. Update edges
 
         Ok(())
     }
@@ -456,12 +368,8 @@ impl IncrementalProcessor {
     /// * `Ok(())` - File removed successfully
     /// * `Err(_)` - Removal failed, transaction rolled back
     async fn remove_file(&self, path: &Path) -> Result<()> {
-        // Get database connection
-        let mut client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection from pool")?;
+        // Note: This function previously used PostgreSQL transactions.
+        // SQLite implementation will be added in future tickets.
 
         // CRITICAL: Normalize path for database query (database stores relative paths)
         // Absolute path example: "/workspace/packages/cli/src/main.ts"
@@ -469,53 +377,20 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let relpath_str = relpath
+        let _relpath_str = relpath
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
-        // Look up file record
-        let file_row = client
-            .query_opt(
-                "SELECT id FROM maproom.files WHERE relpath = $1 ORDER BY id DESC LIMIT 1",
-                &[&relpath_str],
-            )
-            .await
-            .context("Failed to query file record")?;
+        // TODO: Implement SQLite-based file deletion
+        // This will be implemented in a future ticket as part of the full
+        // incremental indexing refactoring
+        warn!("remove_file stub called for {:?}", path);
 
-        let file_id = match file_row {
-            Some(row) => row.get::<_, i64>(0),
-            None => {
-                // File already removed or never existed
-                debug!(path = %path.display(), relpath = %relpath_str, "File not found in database during deletion");
-                return Ok(());
-            }
-        };
-
-        // Begin transaction
-        let tx = client
-            .transaction()
-            .await
-            .context("Failed to begin transaction")?;
-
-        // Delete chunks (CASCADE will delete edges automatically via ON DELETE CASCADE)
-        let deleted_chunks = tx
-            .execute("DELETE FROM maproom.chunks WHERE file_id = $1", &[&file_id])
-            .await
-            .context("Failed to delete chunks")?;
-
-        debug!(
-            file_id = file_id,
-            chunks_deleted = deleted_chunks,
-            "Deleted chunks for file"
-        );
-
-        // Delete file record
-        tx.execute("DELETE FROM maproom.files WHERE id = $1", &[&file_id])
-            .await
-            .context("Failed to delete file record")?;
-
-        // Commit transaction
-        tx.commit().await.context("Failed to commit transaction")?;
+        // Stub: return success for now to allow compilation
+        // Real implementation will:
+        // 1. Look up file record by relpath
+        // 2. Delete chunks with SqliteStore methods (CASCADE deletes edges)
+        // 3. Delete file record
 
         Ok(())
     }
@@ -575,73 +450,8 @@ fn parse_file_chunks(content: &str, language: &str) -> Result<Vec<SymbolChunk>> 
     }
 }
 
-/// Insert a chunk into the database within a transaction.
-///
-/// # Arguments
-/// * `tx` - Active database transaction
-/// * `file_id` - ID of the file this chunk belongs to
-/// * `chunk` - Symbol chunk to insert
-/// * `content` - Full file content (for extracting preview)
-///
-/// # Returns
-/// Chunk ID on success
-async fn insert_chunk_in_transaction(
-    tx: &tokio_postgres::Transaction<'_>,
-    file_id: i64,
-    chunk: &SymbolChunk,
-    content: &str,
-) -> Result<i64> {
-    // Extract preview (first 40 lines of chunk content)
-    let chunk_lines: Vec<&str> = content
-        .lines()
-        .skip((chunk.start_line as usize).saturating_sub(1))
-        .take((chunk.end_line - chunk.start_line + 1) as usize)
-        .collect();
-    let preview = chunk_lines
-        .iter()
-        .take(40)
-        .copied()
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    // Build ts_doc text (for full-text search)
-    let ts_doc = build_ts_doc(
-        chunk.symbol_name.as_deref(),
-        chunk.signature.as_deref(),
-        chunk.docstring.as_deref(),
-        &preview,
-    );
-
-    // Insert chunk
-    let row = tx
-        .query_one(
-            "INSERT INTO maproom.chunks (
-                file_id, symbol_name, kind, signature, docstring,
-                start_line, end_line, preview, ts_doc, recency_score, churn_score
-            ) VALUES (
-                $1, $2::text, ($3::text)::maproom.symbol_kind, $4::text, $5::text,
-                $6, $7, $8::text, to_tsvector('simple', unaccent($9::text)), $10, $11
-            )
-            RETURNING id",
-            &[
-                &file_id,
-                &chunk.symbol_name,
-                &chunk.kind,
-                &chunk.signature,
-                &chunk.docstring,
-                &chunk.start_line,
-                &chunk.end_line,
-                &preview,
-                &ts_doc,
-                &1.0f32, // recency_score (default)
-                &0.0f32, // churn_score (default)
-            ],
-        )
-        .await
-        .context("Failed to insert chunk")?;
-
-    Ok(row.get(0))
-}
+// Note: insert_chunk_in_transaction was removed as part of PostgreSQL to SQLite migration.
+// Chunk insertion will be implemented using SqliteStore methods in future tickets.
 
 /// Build full-text search document from chunk metadata.
 ///

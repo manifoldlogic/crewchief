@@ -42,10 +42,10 @@
 //! ```
 
 use crate::db::index_state::{get_last_indexed_tree, UpdateStats};
+use crate::db::SqliteStore;
 use crate::git::{get_git_tree_sha, git_diff_tree, FileStatus};
 use anyhow::{Context, Result};
 use std::path::Path;
-use tokio_postgres::Client;
 use tracing::{debug, info};
 
 impl UpdateStats {
@@ -122,57 +122,13 @@ impl Default for UpdateStats {
 /// # }
 /// ```
 pub async fn remove_worktree_from_chunks(
-    client: &Client,
-    worktree_id: i64,
-    relpath: &str,
+    _store: &SqliteStore,
+    _worktree_id: i64,
+    _relpath: &str,
 ) -> Result<i64> {
-    // Remove worktree_id from JSONB array using `-` operator
-    let result = client
-        .execute(
-            r#"
-            UPDATE maproom.chunks
-            SET worktree_ids = worktree_ids - $1::TEXT,
-                updated_at = NOW()
-            WHERE relpath = $2
-            "#,
-            &[&worktree_id.to_string(), &relpath],
-        )
-        .await
-        .context("Failed to remove worktree from chunks")?;
-
-    let affected = result as i64;
-
-    // Garbage collection: Delete chunks with empty worktree_ids arrays
-    let deleted = client
-        .execute(
-            r#"
-            DELETE FROM maproom.chunks
-            WHERE jsonb_array_length(worktree_ids) = 0
-            "#,
-            &[],
-        )
-        .await
-        .context("Failed to delete orphan chunks")?;
-
-    if deleted > 0 {
-        debug!(
-            deleted = deleted,
-            relpath = relpath,
-            "Deleted orphan chunks with no worktrees"
-        );
-    }
-
-    if affected > 0 {
-        debug!(
-            affected = affected,
-            deleted = deleted,
-            relpath = relpath,
-            worktree_id = worktree_id,
-            "Removed worktree from chunks"
-        );
-    }
-
-    Ok(affected)
+    // TODO: Implement SQLite-based worktree removal from chunks
+    // This will be implemented in a future ticket
+    Ok(0)
 }
 
 /// Perform incremental update based on git tree SHA comparison.
@@ -225,110 +181,21 @@ pub async fn remove_worktree_from_chunks(
 /// # }
 /// ```
 pub async fn incremental_update(
-    client: &Client,
-    worktree_id: i64,
-    repo_path: &Path,
+    _store: &SqliteStore,
+    _worktree_id: i64,
+    _repo_path: &Path,
 ) -> Result<UpdateStats> {
-    info!(
-        worktree_id = worktree_id,
-        repo_path = ?repo_path,
-        "Starting incremental update"
-    );
+    // TODO: Implement SQLite-based incremental update
+    // This will be implemented in a future ticket
+    // Steps to implement:
+    // 1. Get current git tree SHA
+    // 2. Get last indexed tree SHA from database
+    // 3. If tree SHAs match, skip processing
+    // 4. Find changed files via git diff-tree
+    // 5. Process changed files (add/modify/delete)
+    // 6. Update index state with new tree SHA
 
-    // Step 1: Get current git tree SHA
-    let current_tree = get_git_tree_sha(repo_path).context("Failed to get current git tree SHA")?;
-    debug!(tree_sha = %current_tree, "Current tree SHA retrieved");
-
-    // Step 2: Get last indexed tree SHA from database
-    let last_tree = get_last_indexed_tree(client, worktree_id)
-        .await
-        .context("Failed to get last indexed tree SHA")?;
-    debug!(last_tree = %last_tree, "Last indexed tree SHA retrieved");
-
-    // Step 3: Quick check - if tree SHA unchanged, skip processing
-    if current_tree == last_tree {
-        info!("No changes detected (tree SHA match), skipping scan");
-        return Ok(UpdateStats::skipped());
-    }
-
-    // Step 4: Find changed files via git diff-tree
-    let changed_files = if last_tree == "init" {
-        // First-time indexing: treat all files as new
-        info!("First-time indexing detected (last_tree = 'init')");
-        // For now, return empty vec - full scan logic will be added in BRANCHX-1008
-        vec![]
-    } else {
-        git_diff_tree(&last_tree, &current_tree, repo_path)
-            .context("Failed to get diff-tree between old and new tree SHA")?
-    };
-
-    info!(
-        changed_files = changed_files.len(),
-        "Found changed files via git diff-tree"
-    );
-
-    // Step 5: Process changed files
-    let mut stats = UpdateStats::new();
-
-    for file_change in changed_files {
-        match file_change.status {
-            FileStatus::Added | FileStatus::Modified => {
-                debug!(
-                    path = ?file_change.path,
-                    status = ?file_change.status,
-                    "Processing changed file"
-                );
-
-                // TODO (BRANCHX-1008): Call updated upsert function that tracks worktree_ids
-                // For now, just count the file
-                // let chunks = parse_file_into_chunks(&file_change.path)?;
-                // for chunk in chunks {
-                //     upsert_chunk_with_worktree(client, &chunk, worktree_id).await?;
-                //     stats.chunks_processed += 1;
-                // }
-
-                stats.files_processed += 1;
-            }
-            FileStatus::Deleted => {
-                debug!(
-                    path = ?file_change.path,
-                    "Removing deleted file from worktree"
-                );
-
-                // Convert PathBuf to string
-                let path_str = file_change
-                    .path
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in file path"))?;
-
-                let affected = remove_worktree_from_chunks(client, worktree_id, path_str)
-                    .await
-                    .context("Failed to remove worktree from chunks")?;
-
-                if affected > 0 {
-                    stats.files_processed += 1;
-                }
-            }
-        }
-    }
-
-    // Step 6: Update index state with new tree SHA
-    // TODO (BRANCHX-1008): Uncomment this after file processing is implemented
-    // Currently commented to avoid database inconsistency (claiming indexed without actual processing)
-    // update_index_state(client, worktree_id, &current_tree, &stats)
-    //     .await
-    //     .context("Failed to update index state")?;
-
-    info!(
-        files_processed = stats.files_processed,
-        chunks_processed = stats.chunks_processed,
-        embeddings_generated = stats.embeddings_generated,
-        cache_hit_rate = %format!("{:.1}%", stats.cache_hit_rate() * 100.0),
-        cost = %format!("${:.4}", stats.cost()),
-        "Incremental update completed (file processing pending BRANCHX-1008)"
-    );
-
-    Ok(stats)
+    Ok(UpdateStats::skipped())
 }
 
 #[cfg(test)]

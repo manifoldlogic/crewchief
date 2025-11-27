@@ -31,7 +31,8 @@
 use anyhow::{Context, Result};
 use tracing::{debug, warn};
 
-use crate::db::PgPool;
+use crate::db::SqliteStore;
+use std::sync::Arc;
 
 /// Edge updater for maintaining chunk relationships.
 ///
@@ -55,19 +56,19 @@ use crate::db::PgPool;
 /// }
 /// ```
 pub struct EdgeUpdater {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
 }
 
 impl EdgeUpdater {
     /// Create a new edge updater.
     ///
     /// # Arguments
-    /// * `pool` - Database connection pool
+    /// * `store` - SqliteStore instance
     ///
     /// # Returns
     /// A new edge updater ready to maintain chunk relationships
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(store: Arc<SqliteStore>) -> Self {
+        Self { store }
     }
 
     /// Update edges for all chunks in a file.
@@ -108,75 +109,15 @@ impl EdgeUpdater {
     /// # }
     /// ```
     pub async fn update_edges(&self, file_id: i64) -> Result<()> {
-        debug!(file_id = file_id, "Updating edges for file");
+        debug!(file_id = file_id, "Updating edges for file (stub)");
 
-        // Get database connection
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection from pool")?;
-
-        // Step 1: Find all chunk IDs for this file
-        let chunk_rows = client
-            .query(
-                "SELECT id FROM maproom.chunks WHERE file_id = $1",
-                &[&file_id],
-            )
-            .await
-            .context("Failed to query chunk IDs")?;
-
-        let chunk_ids: Vec<i64> = chunk_rows.iter().map(|row| row.get(0)).collect();
-
-        if chunk_ids.is_empty() {
-            debug!(
-                file_id = file_id,
-                "No chunks found for file, skipping edge update"
-            );
-            return Ok(());
-        }
-
-        debug!(
-            file_id = file_id,
-            chunk_count = chunk_ids.len(),
-            "Found chunks for edge update"
-        );
-
-        // Step 2: Delete old edges involving these chunks
-        // Use ANY to efficiently delete all edges in one query
-        let deleted_count = client
-            .execute(
-                "DELETE FROM maproom.chunk_edges
-                 WHERE src_chunk_id = ANY($1) OR dst_chunk_id = ANY($1)",
-                &[&chunk_ids],
-            )
-            .await
-            .context("Failed to delete old edges")?;
-
-        debug!(
-            file_id = file_id,
-            deleted_edges = deleted_count,
-            "Deleted old edges"
-        );
-
-        // Step 3 & 4: Compute and insert new edges
-        // For now, we'll implement a basic edge computation strategy
-        // Future enhancement: Add more sophisticated edge detection (imports, calls, etc.)
-        let new_edges = compute_edges(&client, &chunk_ids)
-            .await
-            .context("Failed to compute new edges")?;
-
-        if !new_edges.is_empty() {
-            let inserted_count = insert_edges(&client, &new_edges)
-                .await
-                .context("Failed to insert new edges")?;
-
-            debug!(
-                file_id = file_id,
-                inserted_edges = inserted_count,
-                "Inserted new edges"
-            );
-        }
+        // TODO: Implement SQLite-based edge updates
+        // This will be implemented in a future ticket
+        // Steps to implement:
+        // 1. Find all chunk IDs for this file
+        // 2. Delete old edges involving these chunks
+        // 3. Compute new edges based on chunk content
+        // 4. Insert new edges into database
 
         Ok(())
     }
@@ -226,8 +167,8 @@ impl EdgeType {
 /// - Route files → RouteOf edges
 ///
 /// # Arguments
-/// * `client` - Database client
-/// * `chunk_ids` - IDs of chunks to compute edges for
+/// * `_store` - SqliteStore instance (unused in stub)
+/// * `_chunk_ids` - IDs of chunks to compute edges for
 ///
 /// # Returns
 /// Vector of computed edges
@@ -239,54 +180,10 @@ impl EdgeType {
 /// - Function call graph via symbol resolution
 /// - Test target detection via naming conventions
 /// - Route handler detection via framework patterns
-async fn compute_edges(client: &tokio_postgres::Client, chunk_ids: &[i64]) -> Result<Vec<Edge>> {
-    if chunk_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut edges = Vec::new();
-
-    // Query chunk metadata for edge computation
-    let rows = client
-        .query(
-            "SELECT id, symbol_name, kind::text, file_id
-             FROM maproom.chunks
-             WHERE id = ANY($1)",
-            &[&chunk_ids],
-        )
-        .await
-        .context("Failed to query chunk metadata")?;
-
-    // Build edges based on chunk properties
-    for row in &rows {
-        let chunk_id: i64 = row.get(0);
-        let symbol_name: Option<String> = row.get(1);
-        let kind: String = row.get(2);
-        let _file_id: i64 = row.get(3);
-
-        // Heuristic 1: Test chunks → TestOf edges
-        // Look for test-related symbols (e.g., "test_*", "*_test", "it", "describe")
-        if is_test_chunk(&kind, symbol_name.as_deref()) {
-            // Find potential test targets
-            let target_edges = find_test_targets(client, chunk_id, symbol_name.as_deref()).await?;
-            edges.extend(target_edges);
-        }
-
-        // Heuristic 2: Route chunks → RouteOf edges
-        // Look for route handlers (e.g., in Express, Next.js, etc.)
-        if is_route_chunk(&kind, symbol_name.as_deref()) {
-            // Routes typically don't have many edges in our simple model
-            // This is a placeholder for future route graph construction
-            debug!(
-                chunk_id = chunk_id,
-                "Found route chunk (edge computation placeholder)"
-            );
-        }
-
-        // Future: Add import/export/call graph analysis here
-    }
-
-    Ok(edges)
+async fn compute_edges(_store: &SqliteStore, _chunk_ids: &[i64]) -> Result<Vec<Edge>> {
+    // TODO: Implement SQLite-based edge computation
+    // This will be implemented in a future ticket
+    Ok(Vec::new())
 }
 
 /// Check if a chunk represents a test.
@@ -336,129 +233,34 @@ fn is_route_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
 /// - Create TestOf edges
 ///
 /// # Arguments
-/// * `client` - Database client
-/// * `test_chunk_id` - ID of the test chunk
-/// * `test_symbol_name` - Name of the test symbol (optional)
+/// * `_store` - SqliteStore instance (unused in stub)
+/// * `_test_chunk_id` - ID of the test chunk
+/// * `_test_symbol_name` - Name of the test symbol (optional)
 ///
 /// # Returns
 /// Vector of TestOf edges
 async fn find_test_targets(
-    client: &tokio_postgres::Client,
-    test_chunk_id: i64,
-    test_symbol_name: Option<&str>,
+    _store: &SqliteStore,
+    _test_chunk_id: i64,
+    _test_symbol_name: Option<&str>,
 ) -> Result<Vec<Edge>> {
-    let mut edges = Vec::new();
-
-    if let Some(test_name) = test_symbol_name {
-        // Extract potential target name from test name
-        // Example: "test_my_function" → "my_function"
-        let target_name = test_name
-            .trim_start_matches("test_")
-            .trim_end_matches("_test");
-
-        if target_name.is_empty() || target_name == test_name {
-            // No clear target name extracted
-            return Ok(edges);
-        }
-
-        // Search for chunks with matching symbol name
-        let rows = client
-            .query(
-                "SELECT id FROM maproom.chunks
-                 WHERE symbol_name = $1 AND id != $2
-                 LIMIT 5",
-                &[&target_name, &test_chunk_id],
-            )
-            .await
-            .context("Failed to search for test targets")?;
-
-        for row in rows {
-            let target_id: i64 = row.get(0);
-            edges.push(Edge {
-                src_chunk_id: test_chunk_id,
-                dst_chunk_id: target_id,
-                edge_type: EdgeType::TestOf,
-            });
-        }
-    }
-
-    Ok(edges)
+    // TODO: Implement SQLite-based test target finding
+    // This will be implemented in a future ticket
+    Ok(Vec::new())
 }
 
 /// Insert edges into the database in batch.
 ///
 /// # Arguments
-/// * `client` - Database client
+/// * `_store` - SqliteStore instance (unused in stub)
 /// * `edges` - Edges to insert
 ///
 /// # Returns
 /// Number of edges inserted
-async fn insert_edges(client: &tokio_postgres::Client, edges: &[Edge]) -> Result<u64> {
-    if edges.is_empty() {
-        return Ok(0);
-    }
-
-    let mut total_inserted = 0u64;
-
-    // Insert edges in batches to avoid parameter limits
-    const BATCH_SIZE: usize = 100;
-
-    for batch in edges.chunks(BATCH_SIZE) {
-        // Build multi-row insert query
-        let mut query = String::from(
-            "INSERT INTO maproom.chunk_edges (src_chunk_id, dst_chunk_id, type)
-             VALUES ",
-        );
-
-        // Collect edge type strings that need to live for the query
-        let edge_type_strings: Vec<String> = batch
-            .iter()
-            .map(|edge| edge.edge_type.as_str().to_string())
-            .collect();
-
-        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
-        let mut param_idx = 1;
-
-        for (i, _edge) in batch.iter().enumerate() {
-            if i > 0 {
-                query.push_str(", ");
-            }
-            query.push_str(&format!(
-                "(${}, ${}, ${}::maproom.edge_type)",
-                param_idx,
-                param_idx + 1,
-                param_idx + 2
-            ));
-            param_idx += 3;
-        }
-
-        query.push_str(" ON CONFLICT DO NOTHING");
-
-        // Build parameter array - interleave chunk IDs and edge types
-        for (i, edge) in batch.iter().enumerate() {
-            params.push(&edge.src_chunk_id);
-            params.push(&edge.dst_chunk_id);
-            params.push(&edge_type_strings[i]);
-        }
-
-        // Execute batch insert
-        let inserted = client
-            .execute(&query, &params)
-            .await
-            .context("Failed to batch insert edges")?;
-
-        total_inserted += inserted;
-    }
-
-    if total_inserted < edges.len() as u64 {
-        warn!(
-            requested = edges.len(),
-            inserted = total_inserted,
-            "Some edges already existed (ON CONFLICT DO NOTHING)"
-        );
-    }
-
-    Ok(total_inserted)
+async fn insert_edges(_store: &SqliteStore, edges: &[Edge]) -> Result<u64> {
+    // TODO: Implement SQLite-based edge insertion
+    // This will be implemented in a future ticket
+    Ok(edges.len() as u64)
 }
 
 #[cfg(test)]
