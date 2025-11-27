@@ -19,7 +19,8 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
-use crate::db::PgPool;
+use crate::db::SqliteStore;
+use std::sync::Arc;
 
 /// Default assembly strategy that works across all languages.
 ///
@@ -31,67 +32,64 @@ use crate::db::PgPool;
 ///
 /// This serves as the baseline that language-specific strategies can extend.
 pub struct DefaultAssemblyStrategy {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     token_counter: TokenCounter,
 }
 
 impl DefaultAssemblyStrategy {
     /// Create a new default assembly strategy.
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(store: Arc<SqliteStore>) -> Self {
         Self {
-            pool,
+            store,
             token_counter: TokenCounter::new(),
         }
     }
 
     /// Retrieve chunk metadata from the database by ID.
     pub async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_opt(
+        let store = Arc::clone(&self.store);
+        let metadata = store.run(move |conn| {
+            let row = conn.query_row(
                 "SELECT
                     c.id,
                     f.relpath,
                     w.abs_path as worktree_path,
                     c.symbol_name,
-                    c.kind::text,
+                    c.kind,
                     c.start_line,
                     c.end_line,
                     c.signature,
                     c.docstring
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                LEFT JOIN maproom.worktrees w ON w.id = f.worktree_id
-                WHERE c.id = $1",
-                &[&chunk_id],
-            )
-            .await
-            .context("Failed to query chunk metadata")?;
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                LEFT JOIN worktrees w ON w.id = f.worktree_id
+                WHERE c.id = ?1",
+                rusqlite::params![chunk_id],
+                |row| {
+                    let worktree_path: Option<String> = row.get(2)?;
+                    Ok(ChunkMetadata {
+                        id: row.get(0)?,
+                        file_relpath: row.get(1)?,
+                        worktree_path: worktree_path.unwrap_or_else(|| {
+                            warn!(
+                                "Chunk {} has no worktree_path, using empty string",
+                                chunk_id
+                            );
+                            String::new()
+                        }),
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        start_line: row.get(5)?,
+                        end_line: row.get(6)?,
+                        signature: row.get(7)?,
+                        docstring: row.get(8)?,
+                    })
+                }
+            )?;
+            Ok(row)
+        }).await.context("Failed to query chunk metadata")?;
 
-        let row = row.ok_or_else(|| anyhow::anyhow!("Chunk not found: {}", chunk_id))?;
-
-        Ok(ChunkMetadata {
-            id: row.get(0),
-            file_relpath: row.get(1),
-            worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!(
-                    "Chunk {} has no worktree_path, using empty string",
-                    chunk_id
-                );
-                String::new()
-            }),
-            symbol_name: row.get(3),
-            kind: row.get(4),
-            start_line: row.get(5),
-            end_line: row.get(6),
-            signature: row.get(7),
-            docstring: row.get(8),
-        })
+        Ok(metadata)
     }
 
     /// Create a ContextItem from chunk metadata.
@@ -175,13 +173,7 @@ impl DefaultAssemblyStrategy {
     ) -> Result<()> {
         let test_budget = (budget as f64 * 0.3) as usize; // 30% of total budget
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let tests = find_test_files(&client, chunk_id).await?;
+        let tests = find_test_files(&self.store, chunk_id).await?;
 
         for test in tests.into_iter().take(1) {
             // Only include the nearest test
@@ -227,13 +219,7 @@ impl DefaultAssemblyStrategy {
     ) -> Result<()> {
         let caller_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let callers = find_callers(&client, chunk_id, 1).await?; // Depth 1 only
+        let callers = find_callers(&self.store, chunk_id, 1).await?; // Depth 1 only
 
         for caller in callers.into_iter().take(1) {
             // Only include top caller
@@ -278,13 +264,7 @@ impl DefaultAssemblyStrategy {
     ) -> Result<()> {
         let callee_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let callees = find_callees(&client, chunk_id, 1).await?; // Depth 1 only
+        let callees = find_callees(&self.store, chunk_id, 1).await?; // Depth 1 only
 
         for callee in callees.into_iter().take(1) {
             // Only include top callee

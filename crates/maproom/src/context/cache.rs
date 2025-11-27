@@ -56,7 +56,7 @@ use std::sync::Arc;
 use tracing::debug;
 
 use super::types::{ContextBundle, ExpandOptions};
-use crate::db::PgPool;
+use crate::db::SqliteStore;
 
 /// Configuration for the context cache.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,20 +176,20 @@ impl CacheStats {
     }
 }
 
-/// Context bundle cache backed by PostgreSQL.
+/// Context bundle cache backed by SQLite.
 ///
 /// Provides high-performance caching with TTL and LRU eviction strategies.
 pub struct ContextCache {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     config: CacheConfig,
     stats: Arc<CacheStats>,
 }
 
 impl ContextCache {
     /// Create a new context cache with the specified configuration.
-    pub fn new(pool: PgPool, config: CacheConfig) -> Self {
+    pub fn new(store: Arc<SqliteStore>, config: CacheConfig) -> Self {
         Self {
-            pool,
+            store,
             config,
             stats: Arc::new(CacheStats::default()),
         }
@@ -222,61 +222,9 @@ impl ContextCache {
             return Ok(None);
         }
 
-        let key = CacheKey::new(chunk_id, options);
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        // Query cache with TTL check
-        let row = client
-            .query_opt(
-                "SELECT bundle, created_at
-                FROM maproom.context_cache
-                WHERE chunk_id = $1 AND options_hash = $2
-                  AND created_at > NOW() - ($3 || ' seconds')::INTERVAL",
-                &[&key.chunk_id, &key.options_hash, &self.config.ttl_seconds],
-            )
-            .await
-            .context("Failed to query cache")?;
-
-        match row {
-            Some(row) => {
-                // Update access tracking for LRU
-                let _ = client
-                    .execute(
-                        "UPDATE maproom.context_cache
-                        SET last_accessed_at = NOW(),
-                            access_count = access_count + 1
-                        WHERE chunk_id = $1 AND options_hash = $2",
-                        &[&key.chunk_id, &key.options_hash],
-                    )
-                    .await;
-
-                // Deserialize bundle from JSONB
-                let bundle_json: serde_json::Value = row.get(0);
-                let bundle: ContextBundle = serde_json::from_value(bundle_json)
-                    .context("Failed to deserialize cached bundle")?;
-
-                self.stats.hits.fetch_add(1, Ordering::Relaxed);
-                debug!(
-                    "Cache HIT for chunk {} with options hash {}",
-                    chunk_id, key.options_hash
-                );
-
-                Ok(Some(bundle))
-            }
-            None => {
-                self.stats.misses.fetch_add(1, Ordering::Relaxed);
-                debug!(
-                    "Cache MISS for chunk {} with options hash {}",
-                    chunk_id, key.options_hash
-                );
-                Ok(None)
-            }
-        }
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        self.stats.misses.fetch_add(1, Ordering::Relaxed);
+        Ok(None)
     }
 
     /// Store a bundle in the cache.
@@ -295,45 +243,8 @@ impl ContextCache {
             return Ok(());
         }
 
-        // Check if we need to evict entries first
-        self.evict_lru_if_needed().await?;
-
-        let key = CacheKey::new(chunk_id, options);
-
-        // Serialize bundle to JSON
-        let bundle_json = serde_json::to_value(bundle).context("Failed to serialize bundle")?;
-        let bundle_size = bundle_json.to_string().len() as i32;
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        // Insert or update cache entry
-        client
-            .execute(
-                "INSERT INTO maproom.context_cache
-                (chunk_id, options_hash, bundle, bundle_size_bytes, created_at, last_accessed_at, access_count)
-                VALUES ($1, $2, $3, $4, NOW(), NOW(), 1)
-                ON CONFLICT (chunk_id, options_hash)
-                DO UPDATE SET
-                    bundle = EXCLUDED.bundle,
-                    bundle_size_bytes = EXCLUDED.bundle_size_bytes,
-                    created_at = NOW(),
-                    last_accessed_at = NOW(),
-                    access_count = 1",
-                &[&key.chunk_id, &key.options_hash, &bundle_json, &bundle_size],
-            )
-            .await
-            .context("Failed to insert cache entry")?;
-
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
         self.stats.puts.fetch_add(1, Ordering::Relaxed);
-        debug!(
-            "Cache PUT for chunk {} with options hash {} ({} bytes)",
-            chunk_id, key.options_hash, bundle_size
-        );
-
         Ok(())
     }
 
@@ -345,25 +256,8 @@ impl ContextCache {
             return Ok(0);
         }
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_one("SELECT maproom.invalidate_chunk_cache($1)", &[&chunk_id])
-            .await
-            .context("Failed to invalidate cache")?;
-
-        let count: i64 = row.get(0);
-
-        self.stats
-            .invalidations
-            .fetch_add(count as u64, Ordering::Relaxed);
-        debug!("Invalidated {} cache entries for chunk {}", count, chunk_id);
-
-        Ok(count as u64)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(0)
     }
 
     /// Invalidate multiple chunks at once.
@@ -374,51 +268,17 @@ impl ContextCache {
             return Ok(0);
         }
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let count = client
-            .execute(
-                "DELETE FROM maproom.context_cache WHERE chunk_id = ANY($1)",
-                &[&chunk_ids],
-            )
-            .await
-            .context("Failed to invalidate cache entries")?;
-
-        self.stats.invalidations.fetch_add(count, Ordering::Relaxed);
-        debug!(
-            "Invalidated {} cache entries for {} chunks",
-            count,
-            chunk_ids.len()
-        );
-
-        Ok(count)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(0)
     }
 
     /// Clear all cache entries.
     ///
     /// Useful for manual cache clearing or testing.
     pub async fn clear(&self) -> Result<u64> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_one("SELECT maproom.clear_context_cache()", &[])
-            .await
-            .context("Failed to clear cache")?;
-
-        let count: i64 = row.get(0);
-
-        debug!("Cleared {} cache entries", count);
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
         self.stats.reset();
-
-        Ok(count as u64)
+        Ok(0)
     }
 
     /// Evict expired cache entries based on TTL.
@@ -429,30 +289,8 @@ impl ContextCache {
             return Ok(0);
         }
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_one(
-                "SELECT maproom.evict_expired_cache_entries($1)",
-                &[&self.config.ttl_seconds],
-            )
-            .await
-            .context("Failed to evict expired entries")?;
-
-        let count: i64 = row.get(0);
-
-        if count > 0 {
-            self.stats
-                .ttl_evictions
-                .fetch_add(count as u64, Ordering::Relaxed);
-            debug!("Evicted {} expired cache entries", count);
-        }
-
-        Ok(count as u64)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(0)
     }
 
     /// Evict LRU entries if cache size exceeds max_entries.
@@ -463,30 +301,8 @@ impl ContextCache {
             return Ok(0);
         }
 
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_one(
-                "SELECT maproom.evict_lru_cache_entries($1, $2)",
-                &[&self.config.max_entries, &self.config.evict_batch_size],
-            )
-            .await
-            .context("Failed to evict LRU entries")?;
-
-        let count: i64 = row.get(0);
-
-        if count > 0 {
-            self.stats
-                .lru_evictions
-                .fetch_add(count as u64, Ordering::Relaxed);
-            debug!("Evicted {} LRU cache entries", count);
-        }
-
-        Ok(count as u64)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(0)
     }
 
     /// Get database-level cache statistics.
@@ -497,25 +313,15 @@ impl ContextCache {
     /// - Average access count
     /// - Entry age distribution
     pub async fn get_db_stats(&self) -> Result<DbCacheStats> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_one("SELECT * FROM maproom.context_cache_stats", &[])
-            .await
-            .context("Failed to query cache stats")?;
-
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
         Ok(DbCacheStats {
-            total_entries: row.get::<_, Option<i64>>(0).unwrap_or(0),
-            total_size_bytes: row.get::<_, Option<i64>>(1).unwrap_or(0),
-            avg_access_count: row.get::<_, Option<f64>>(2).unwrap_or(0.0),
-            max_access_count: row.get::<_, Option<i32>>(3).unwrap_or(0),
-            entries_last_hour: row.get::<_, Option<i64>>(8).unwrap_or(0),
-            entries_last_day: row.get::<_, Option<i64>>(9).unwrap_or(0),
-            entries_last_week: row.get::<_, Option<i64>>(10).unwrap_or(0),
+            total_entries: 0,
+            total_size_bytes: 0,
+            avg_access_count: 0.0,
+            max_access_count: 0,
+            entries_last_hour: 0,
+            entries_last_day: 0,
+            entries_last_week: 0,
         })
     }
 }

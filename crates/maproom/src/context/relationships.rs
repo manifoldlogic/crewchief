@@ -9,18 +9,17 @@
 //! These functions build on the core graph traversal in graph.rs but provide
 //! semantic meaning and specialized handling for each relationship type.
 
-use super::graph::{find_related_chunks_directional, EdgeType, RelatedChunk};
+use super::graph::{EdgeType, RelatedChunk};
+use crate::db::sqlite::graph::ImportDirection;
+use crate::db::SqliteStore;
 use anyhow::{Context as AnyhowContext, Result};
-use tokio_postgres::Client;
 
 /// Find test files that test the given chunk.
 ///
 /// This function looks for test_of edges pointing to the target chunk.
-/// It uses both the chunk_edges table and the test_links table (which may
-/// have precomputed test relationships for performance).
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Implementation chunk to find tests for
 ///
 /// # Returns
@@ -28,82 +27,62 @@ use tokio_postgres::Client;
 ///
 /// # Example
 /// ```ignore
-/// let tests = find_test_files(&client, 1234).await?;
+/// let tests = find_test_files(&store, 1234).await?;
 /// for test in tests {
 ///     println!("Test: {} in {}", test.symbol_name.unwrap_or_default(), test.relpath);
 /// }
 /// ```
-pub async fn find_test_files(client: &Client, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
-    // Use test_links table for direct test relationships
-    let query = r#"
-        SELECT DISTINCT
-          c.id,
-          f.relpath,
-          c.symbol_name,
-          c.kind::text,
-          c.start_line,
-          c.end_line,
-          c.preview,
-          0 as depth,
-          1.0 as relevance
-        FROM maproom.test_links tl
-        JOIN maproom.chunks c ON c.id = tl.test_chunk_id
-        JOIN maproom.files f ON f.id = c.file_id
-        WHERE tl.target_chunk_id = $1
-        ORDER BY relevance DESC;
-    "#;
+pub async fn find_test_files(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
+    // SQLite doesn't have test_links table, so we query chunk_edges directly
+    // Look for edges where type='test_of' and dst_chunk_id = chunk_id
+    store.run(move |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT
+              c.id,
+              f.relpath,
+              c.symbol_name,
+              c.kind,
+              c.start_line,
+              c.end_line,
+              c.preview,
+              0 as depth,
+              1.0 as relevance
+            FROM chunk_edges e
+            JOIN chunks c ON c.id = e.src_chunk_id
+            JOIN files f ON f.id = c.file_id
+            WHERE e.dst_chunk_id = ?1 AND e.type = 'test_of'
+            ORDER BY relevance DESC"
+        )?;
 
-    let rows = client
-        .query(query, &[&chunk_id])
-        .await
-        .context("Failed to query test_links table")?;
+        let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
+            Ok(RelatedChunk {
+                id: row.get(0)?,
+                relpath: row.get(1)?,
+                symbol_name: row.get(2)?,
+                kind: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                preview: row.get(6)?,
+                depth: row.get(7)?,
+                relevance: row.get(8)?,
+            })
+        })?;
 
-    let mut tests: Vec<RelatedChunk> = rows
-        .into_iter()
-        .map(|row| RelatedChunk {
-            id: row.get(0),
-            relpath: row.get(1),
-            symbol_name: row.get(2),
-            kind: row.get(3),
-            start_line: row.get(4),
-            end_line: row.get(5),
-            preview: row.get(6),
-            depth: row.get(7),
-            relevance: row.get(8),
-        })
-        .collect();
-
-    // Also check chunk_edges for test_of relationships
-    // (in case edge extraction found tests that aren't in test_links yet)
-    let edge_tests = find_related_chunks_directional(
-        client,
-        chunk_id,
-        1, // Only direct tests (depth 1)
-        Some(vec![EdgeType::TestOf]),
-        false, // Backward: find chunks where dst_chunk_id = chunk_id
-    )
-    .await?;
-
-    // Merge results, avoiding duplicates
-    for edge_test in edge_tests {
-        if !tests.iter().any(|t| t.id == edge_test.id) {
-            tests.push(edge_test);
+        let mut tests = Vec::new();
+        for test_result in rows {
+            tests.push(test_result?);
         }
-    }
 
-    // Re-sort by relevance
-    tests.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap());
-
-    Ok(tests)
+        Ok(tests)
+    }).await.context("Failed to find test files")
 }
 
 /// Find callers of the given chunk (what calls this function/method).
 ///
-/// This follows 'called_by' edges backward or 'calls' edges backward
-/// to find chunks that invoke the target chunk.
+/// This follows 'calls' edges backward to find chunks that invoke the target chunk.
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Chunk to find callers for
 /// * `max_depth` - Maximum traversal depth (typically 2-3)
 ///
@@ -112,26 +91,39 @@ pub async fn find_test_files(client: &Client, chunk_id: i64) -> Result<Vec<Relat
 ///
 /// # Example
 /// ```ignore
-/// let callers = find_callers(&client, 1234, 2).await?;
+/// let callers = find_callers(&store, 1234, 2).await?;
 /// for caller in callers {
 ///     println!("Called by: {} (depth {})", caller.symbol_name.unwrap_or_default(), caller.depth);
 /// }
 /// ```
 pub async fn find_callers(
-    client: &Client,
+    store: &SqliteStore,
     chunk_id: i64,
     max_depth: i32,
 ) -> Result<Vec<RelatedChunk>> {
-    // Find chunks where this chunk is the destination of a 'calls' edge
-    // This means: other chunks call this chunk
-    find_related_chunks_directional(
-        client,
-        chunk_id,
-        max_depth,
-        Some(vec![EdgeType::Calls]),
-        false, // Backward: find src where dst = this chunk
-    )
-    .await
+    // Use SqliteStore's find_callers method
+    let graph_results = store.find_callers(chunk_id, Some(max_depth as usize)).await?;
+
+    // Convert GraphResult to RelatedChunk
+    let mut related_chunks = Vec::new();
+    for result in graph_results {
+        // Get chunk details for each caller
+        if let Some(chunk) = store.get_chunk_by_id(result.chunk_id).await? {
+            related_chunks.push(RelatedChunk {
+                id: chunk.id,
+                relpath: chunk.file_path,
+                symbol_name: chunk.symbol_name,
+                kind: chunk.kind,
+                start_line: chunk.start_line,
+                end_line: chunk.end_line,
+                preview: chunk.preview,
+                depth: result.depth as i32,
+                relevance: 0.7_f64.powi(result.depth as i32), // Decay by 0.7 per hop
+            });
+        }
+    }
+
+    Ok(related_chunks)
 }
 
 /// Find callees of the given chunk (what this function/method calls).
@@ -140,7 +132,7 @@ pub async fn find_callers(
 /// by the target chunk.
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Chunk to find callees for
 /// * `max_depth` - Maximum traversal depth (typically 2-3)
 ///
@@ -149,26 +141,39 @@ pub async fn find_callers(
 ///
 /// # Example
 /// ```ignore
-/// let callees = find_callees(&client, 1234, 2).await?;
+/// let callees = find_callees(&store, 1234, 2).await?;
 /// for callee in callees {
 ///     println!("Calls: {} (depth {})", callee.symbol_name.unwrap_or_default(), callee.depth);
 /// }
 /// ```
 pub async fn find_callees(
-    client: &Client,
+    store: &SqliteStore,
     chunk_id: i64,
     max_depth: i32,
 ) -> Result<Vec<RelatedChunk>> {
-    // Find chunks where this chunk is the source of a 'calls' edge
-    // This means: this chunk calls other chunks
-    find_related_chunks_directional(
-        client,
-        chunk_id,
-        max_depth,
-        Some(vec![EdgeType::Calls]),
-        true, // Forward: find dst where src = this chunk
-    )
-    .await
+    // Use SqliteStore's find_callees method
+    let graph_results = store.find_callees(chunk_id, Some(max_depth as usize)).await?;
+
+    // Convert GraphResult to RelatedChunk
+    let mut related_chunks = Vec::new();
+    for result in graph_results {
+        // Get chunk details for each callee
+        if let Some(chunk) = store.get_chunk_by_id(result.chunk_id).await? {
+            related_chunks.push(RelatedChunk {
+                id: chunk.id,
+                relpath: chunk.file_path,
+                symbol_name: chunk.symbol_name,
+                kind: chunk.kind,
+                start_line: chunk.start_line,
+                end_line: chunk.end_line,
+                preview: chunk.preview,
+                depth: result.depth as i32,
+                relevance: 0.7_f64.powi(result.depth as i32), // Decay by 0.7 per hop
+            });
+        }
+    }
+
+    Ok(related_chunks)
 }
 
 /// Find imports (dependencies) of the given chunk.
@@ -177,7 +182,7 @@ pub async fn find_callees(
 /// the target chunk depends on.
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Chunk to find imports for
 ///
 /// # Returns
@@ -185,30 +190,43 @@ pub async fn find_callees(
 ///
 /// # Example
 /// ```ignore
-/// let imports = find_imports(&client, 1234).await?;
+/// let imports = find_imports(&store, 1234).await?;
 /// for import in imports {
 ///     println!("Imports: {} from {}", import.symbol_name.unwrap_or_default(), import.relpath);
 /// }
 /// ```
-pub async fn find_imports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
-    // Find direct imports only (depth 1)
-    find_related_chunks_directional(
-        client,
-        chunk_id,
-        1, // Only direct imports
-        Some(vec![EdgeType::Imports]),
-        true, // Forward: find what this imports
-    )
-    .await
+pub async fn find_imports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
+    // Use SqliteStore's find_imports method (outgoing imports)
+    let graph_results = store.find_imports(chunk_id, ImportDirection::Outgoing, Some(1)).await?;
+
+    // Convert GraphResult to RelatedChunk
+    let mut related_chunks = Vec::new();
+    for result in graph_results {
+        if let Some(chunk) = store.get_chunk_by_id(result.chunk_id).await? {
+            related_chunks.push(RelatedChunk {
+                id: chunk.id,
+                relpath: chunk.file_path,
+                symbol_name: chunk.symbol_name,
+                kind: chunk.kind,
+                start_line: chunk.start_line,
+                end_line: chunk.end_line,
+                preview: chunk.preview,
+                depth: result.depth as i32,
+                relevance: 1.0, // Direct imports have full relevance
+            });
+        }
+    }
+
+    Ok(related_chunks)
 }
 
 /// Find exports (what exports this chunk).
 ///
-/// This follows 'exports' edges backward to find modules/files that
+/// This follows 'exports' edges to find modules/files that
 /// export the target chunk.
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Chunk to find exports for
 ///
 /// # Returns
@@ -216,21 +234,51 @@ pub async fn find_imports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedC
 ///
 /// # Example
 /// ```ignore
-/// let exports = find_exports(&client, 1234).await?;
+/// let exports = find_exports(&store, 1234).await?;
 /// for export in exports {
 ///     println!("Exported by: {}", export.relpath);
 /// }
 /// ```
-pub async fn find_exports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
-    // Find direct exports only (depth 1)
-    find_related_chunks_directional(
-        client,
-        chunk_id,
-        1, // Only direct exports
-        Some(vec![EdgeType::Exports]),
-        false, // Backward: find what exports this
-    )
-    .await
+pub async fn find_exports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
+    // SQLite doesn't have a specific exports edge type in graph module
+    // Query chunk_edges directly for 'exports' edges
+    store.run(move |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT
+              c.id,
+              f.relpath,
+              c.symbol_name,
+              c.kind,
+              c.start_line,
+              c.end_line,
+              c.preview
+            FROM chunk_edges e
+            JOIN chunks c ON c.id = e.src_chunk_id
+            JOIN files f ON f.id = c.file_id
+            WHERE e.dst_chunk_id = ?1 AND e.type = 'exports'"
+        )?;
+
+        let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
+            Ok(RelatedChunk {
+                id: row.get(0)?,
+                relpath: row.get(1)?,
+                symbol_name: row.get(2)?,
+                kind: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                preview: row.get(6)?,
+                depth: 1,
+                relevance: 1.0,
+            })
+        })?;
+
+        let mut exports = Vec::new();
+        for export_result in rows {
+            exports.push(export_result?);
+        }
+
+        Ok(exports)
+    }).await.context("Failed to find exports")
 }
 
 /// Find route definitions that use the given component chunk.
@@ -239,7 +287,7 @@ pub async fn find_exports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedC
 /// reference component chunks.
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Component chunk to find routes for
 ///
 /// # Returns
@@ -247,21 +295,50 @@ pub async fn find_exports(client: &Client, chunk_id: i64) -> Result<Vec<RelatedC
 ///
 /// # Example
 /// ```ignore
-/// let routes = find_routes(&client, 1234).await?;
+/// let routes = find_routes(&store, 1234).await?;
 /// for route in routes {
 ///     println!("Route: {} in {}", route.symbol_name.unwrap_or_default(), route.relpath);
 /// }
 /// ```
-pub async fn find_routes(client: &Client, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
-    // Find routes that reference this component (backward edge)
-    find_related_chunks_directional(
-        client,
-        chunk_id,
-        1, // Only direct routes
-        Some(vec![EdgeType::RouteOf]),
-        false, // Backward: find routes where dst = this component
-    )
-    .await
+pub async fn find_routes(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
+    // Query chunk_edges directly for 'route_of' edges
+    store.run(move |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT
+              c.id,
+              f.relpath,
+              c.symbol_name,
+              c.kind,
+              c.start_line,
+              c.end_line,
+              c.preview
+            FROM chunk_edges e
+            JOIN chunks c ON c.id = e.src_chunk_id
+            JOIN files f ON f.id = c.file_id
+            WHERE e.dst_chunk_id = ?1 AND e.type = 'route_of'"
+        )?;
+
+        let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
+            Ok(RelatedChunk {
+                id: row.get(0)?,
+                relpath: row.get(1)?,
+                symbol_name: row.get(2)?,
+                kind: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                preview: row.get(6)?,
+                depth: 1,
+                relevance: 1.0,
+            })
+        })?;
+
+        let mut routes = Vec::new();
+        for route_result in rows {
+            routes.push(route_result?);
+        }
+
+        Ok(routes)
+    }).await.context("Failed to find routes")
 }
 
 /// Find all relationship types for a chunk (comprehensive).
@@ -270,14 +347,14 @@ pub async fn find_routes(client: &Client, chunk_id: i64) -> Result<Vec<RelatedCh
 /// and returns them organized by category.
 ///
 /// # Arguments
-/// * `client` - PostgreSQL client
+/// * `store` - SqliteStore
 /// * `chunk_id` - Chunk to analyze
 /// * `max_depth` - Maximum depth for caller/callee traversal
 ///
 /// # Returns
 /// Tuple of (tests, callers, callees, imports, exports, routes)
 pub async fn find_all_relationships(
-    client: &Client,
+    store: &SqliteStore,
     chunk_id: i64,
     max_depth: i32,
 ) -> Result<(
@@ -290,12 +367,12 @@ pub async fn find_all_relationships(
 )> {
     // Execute all queries in parallel for performance
     let (tests, callers, callees, imports, exports, routes) = tokio::try_join!(
-        find_test_files(client, chunk_id),
-        find_callers(client, chunk_id, max_depth),
-        find_callees(client, chunk_id, max_depth),
-        find_imports(client, chunk_id),
-        find_exports(client, chunk_id),
-        find_routes(client, chunk_id),
+        find_test_files(store, chunk_id),
+        find_callers(store, chunk_id, max_depth),
+        find_callees(store, chunk_id, max_depth),
+        find_imports(store, chunk_id),
+        find_exports(store, chunk_id),
+        find_routes(store, chunk_id),
     )?;
 
     Ok((tests, callers, callees, imports, exports, routes))

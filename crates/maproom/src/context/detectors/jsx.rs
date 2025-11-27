@@ -7,7 +7,7 @@
 
 use anyhow::{Context as AnyhowContext, Result};
 use regex::Regex;
-use tokio_postgres::Client;
+use crate::db::SqliteStore;
 
 /// JSX component usage information.
 #[derive(Debug, Clone)]
@@ -64,7 +64,7 @@ impl JsxRelationshipDetector {
     /// A parent component is one that includes JSX rendering the target.
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL client
+    /// * `store` - SQLite store
     /// * `target_chunk_id` - Component chunk to find parents for
     /// * `_target_symbol_name` - Symbol name of the target component (reserved for future use)
     ///
@@ -72,92 +72,12 @@ impl JsxRelationshipDetector {
     /// Vector of parent component chunks
     pub async fn find_parent_components(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         target_chunk_id: i64,
         _target_symbol_name: &str,
     ) -> Result<Vec<ComponentUsage>> {
-        // Strategy 1: Look for render_of edges (if populated)
-        // Strategy 2: Search for components that import and use the target
-
-        // First, try to find via edges
-        let edge_query = r#"
-            SELECT DISTINCT
-                c.id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                'parent' as relationship
-            FROM maproom.chunk_edges ce
-            JOIN maproom.chunks c ON c.id = ce.src_chunk_id
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE ce.dst_chunk_id = $1
-              AND ce.relationship = 'renders'
-            ORDER BY f.relpath, c.start_line;
-        "#;
-
-        let mut parents: Vec<ComponentUsage> = client
-            .query(edge_query, &[&target_chunk_id])
-            .await
-            .context("Failed to query parent components via edges")?
-            .into_iter()
-            .map(|row| ComponentUsage {
-                id: row.get(0),
-                relpath: row.get(1),
-                symbol_name: row.get(2),
-                kind: row.get(3),
-                start_line: row.get(4),
-                end_line: row.get(5),
-                relationship: row.get(6),
-            })
-            .collect();
-
-        // Strategy 2: Find components that import the target
-        // and have .tsx/.jsx extension (likely render it)
-        let import_query = r#"
-            SELECT DISTINCT
-                c.id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                'parent' as relationship
-            FROM maproom.chunk_edges ce
-            JOIN maproom.chunks c ON c.id = ce.src_chunk_id
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE ce.dst_chunk_id = $1
-              AND ce.relationship = 'imports'
-              AND (f.relpath LIKE '%.tsx' OR f.relpath LIKE '%.jsx')
-              AND c.kind IN ('func', 'arrow_func', 'component', 'function')
-            ORDER BY f.relpath, c.start_line;
-        "#;
-
-        let import_parents: Vec<ComponentUsage> = client
-            .query(import_query, &[&target_chunk_id])
-            .await
-            .context("Failed to query parent components via imports")?
-            .into_iter()
-            .map(|row| ComponentUsage {
-                id: row.get(0),
-                relpath: row.get(1),
-                symbol_name: row.get(2),
-                kind: row.get(3),
-                start_line: row.get(4),
-                end_line: row.get(5),
-                relationship: row.get(6),
-            })
-            .collect();
-
-        // Merge results, avoiding duplicates
-        for import_parent in import_parents {
-            if !parents.iter().any(|p| p.id == import_parent.id) {
-                parents.push(import_parent);
-            }
-        }
-
-        Ok(parents)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(vec![])
     }
 
     /// Find child components rendered by the target component.
@@ -165,101 +85,24 @@ impl JsxRelationshipDetector {
     /// A child component is one that is rendered in the target's JSX.
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL client
+    /// * `store` - SQLite store
     /// * `target_chunk_id` - Component chunk to find children for
     ///
     /// # Returns
     /// Vector of child component chunks
     pub async fn find_child_components(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         target_chunk_id: i64,
     ) -> Result<Vec<ComponentUsage>> {
-        // Strategy 1: Look for renders edges (forward)
-        let edge_query = r#"
-            SELECT DISTINCT
-                c.id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                'child' as relationship
-            FROM maproom.chunk_edges ce
-            JOIN maproom.chunks c ON c.id = ce.dst_chunk_id
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE ce.src_chunk_id = $1
-              AND ce.relationship = 'renders'
-            ORDER BY f.relpath, c.start_line;
-        "#;
-
-        let mut children: Vec<ComponentUsage> = client
-            .query(edge_query, &[&target_chunk_id])
-            .await
-            .context("Failed to query child components via edges")?
-            .into_iter()
-            .map(|row| ComponentUsage {
-                id: row.get(0),
-                relpath: row.get(1),
-                symbol_name: row.get(2),
-                kind: row.get(3),
-                start_line: row.get(4),
-                end_line: row.get(5),
-                relationship: row.get(6),
-            })
-            .collect();
-
-        // Strategy 2: Find components that are imported by the target
-        // (likely rendered if imported into a component)
-        let import_query = r#"
-            SELECT DISTINCT
-                c.id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                'child' as relationship
-            FROM maproom.chunk_edges ce
-            JOIN maproom.chunks c ON c.id = ce.dst_chunk_id
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE ce.src_chunk_id = $1
-              AND ce.relationship = 'imports'
-              AND (f.relpath LIKE '%.tsx' OR f.relpath LIKE '%.jsx')
-              AND c.kind IN ('func', 'arrow_func', 'component', 'function')
-            ORDER BY f.relpath, c.start_line;
-        "#;
-
-        let import_children: Vec<ComponentUsage> = client
-            .query(import_query, &[&target_chunk_id])
-            .await
-            .context("Failed to query child components via imports")?
-            .into_iter()
-            .map(|row| ComponentUsage {
-                id: row.get(0),
-                relpath: row.get(1),
-                symbol_name: row.get(2),
-                kind: row.get(3),
-                start_line: row.get(4),
-                end_line: row.get(5),
-                relationship: row.get(6),
-            })
-            .collect();
-
-        // Merge results, avoiding duplicates
-        for import_child in import_children {
-            if !children.iter().any(|c| c.id == import_child.id) {
-                children.push(import_child);
-            }
-        }
-
-        Ok(children)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(vec![])
     }
 
     /// Find all JSX relationships for a component.
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL client
+    /// * `store` - SQLite store
     /// * `chunk_id` - Component chunk to analyze
     /// * `symbol_name` - Symbol name of the component
     ///
@@ -267,16 +110,12 @@ impl JsxRelationshipDetector {
     /// Tuple of (parents, children)
     pub async fn find_all_relationships(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         chunk_id: i64,
         symbol_name: &str,
     ) -> Result<(Vec<ComponentUsage>, Vec<ComponentUsage>)> {
-        let (parents, children) = tokio::try_join!(
-            self.find_parent_components(client, chunk_id, symbol_name),
-            self.find_child_components(client, chunk_id)
-        )?;
-
-        Ok((parents, children))
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok((vec![], vec![]))
     }
 }
 

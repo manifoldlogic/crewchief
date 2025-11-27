@@ -18,7 +18,8 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
-use crate::db::PgPool;
+use crate::db::SqliteStore;
+use std::sync::Arc;
 
 /// Configuration for React assembly strategy.
 #[derive(Debug, Clone)]
@@ -74,7 +75,7 @@ impl ReactConfig {
 /// - Hook inclusion
 /// - JSX relationship handling
 pub struct ReactAssemblyStrategy {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     base_assembler: BasicContextAssembler,
     config: ReactConfig,
     component_detector: ComponentDetector,
@@ -85,15 +86,15 @@ pub struct ReactAssemblyStrategy {
 
 impl ReactAssemblyStrategy {
     /// Create a new React assembly strategy.
-    pub fn new(pool: PgPool) -> Self {
-        Self::with_config(pool, ReactConfig::default())
+    pub fn new(store: Arc<SqliteStore>) -> Self {
+        Self::with_config(store, ReactConfig::default())
     }
 
     /// Create a new React assembly strategy with custom configuration.
-    pub fn with_config(pool: PgPool, config: ReactConfig) -> Self {
+    pub fn with_config(store: Arc<SqliteStore>, config: ReactConfig) -> Self {
         Self {
-            base_assembler: BasicContextAssembler::new_without_cache(pool.clone()),
-            pool,
+            base_assembler: BasicContextAssembler::new_without_cache(Arc::clone(&store)),
+            store,
             config,
             component_detector: ComponentDetector::new(),
             hook_detector: HookDetector::new(),

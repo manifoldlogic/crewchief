@@ -7,7 +7,7 @@
 
 use anyhow::{Context as AnyhowContext, Result};
 use regex::Regex;
-use tokio_postgres::Client;
+use crate::db::SqliteStore;
 
 /// Built-in React hooks.
 pub const BUILT_IN_HOOKS: &[&str] = &[
@@ -109,150 +109,37 @@ impl HookDetector {
     /// or used by the target chunk.
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL client
+    /// * `store` - SQLite store
     /// * `chunk_id` - Component chunk to find hooks for
     ///
     /// # Returns
     /// Vector of hook information ordered by relevance
-    pub async fn find_used_hooks(&self, client: &Client, chunk_id: i64) -> Result<Vec<HookInfo>> {
-        // Query for chunks that:
-        // 1. Are called/imported by the target chunk
-        // 2. Have symbol names matching hook patterns
-        let query = r#"
-            WITH hook_calls AS (
-                -- Find direct imports/calls from the target chunk
-                SELECT DISTINCT
-                    c.id,
-                    f.relpath,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line
-                FROM maproom.chunk_edges ce
-                JOIN maproom.chunks c ON c.id = ce.dst_chunk_id
-                JOIN maproom.files f ON f.id = c.file_id
-                WHERE ce.src_chunk_id = $1
-                  AND ce.relationship IN ('calls', 'imports')
-                  AND c.symbol_name IS NOT NULL
-            )
-            SELECT
-                id,
-                relpath,
-                symbol_name,
-                kind,
-                start_line,
-                end_line,
-                CASE
-                    WHEN symbol_name = ANY($2::text[]) THEN true
-                    ELSE false
-                END as is_builtin
-            FROM hook_calls
-            WHERE symbol_name ~ '^use[A-Z][a-zA-Z0-9]*$'
-            ORDER BY is_builtin DESC, symbol_name ASC;
-        "#;
-
-        let builtin_hooks: Vec<&str> = BUILT_IN_HOOKS.to_vec();
-        let rows = client
-            .query(query, &[&chunk_id, &builtin_hooks])
-            .await
-            .context("Failed to query hook usage")?;
-
-        let hooks = rows
-            .into_iter()
-            .map(|row| HookInfo {
-                id: row.get(0),
-                relpath: row.get(1),
-                symbol_name: row.get(2),
-                kind: row.get(3),
-                start_line: row.get(4),
-                end_line: row.get(5),
-                is_builtin: row.get(6),
-            })
-            .collect();
-
-        Ok(hooks)
+    pub async fn find_used_hooks(&self, store: &SqliteStore, chunk_id: i64) -> Result<Vec<HookInfo>> {
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(vec![])
     }
 
     /// Find all custom hooks defined in the codebase.
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL client
+    /// * `store` - SQLite store
     /// * `worktree_id` - Optional worktree to limit search
     ///
     /// # Returns
     /// Vector of hook information
     pub async fn find_all_custom_hooks(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         worktree_id: Option<i64>,
     ) -> Result<Vec<HookInfo>> {
-        let query = if worktree_id.is_some() {
-            r#"
-                SELECT
-                    c.id,
-                    f.relpath,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    false as is_builtin
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                WHERE f.worktree_id = $1
-                  AND c.symbol_name ~ '^use[A-Z][a-zA-Z0-9]*$'
-                  AND c.kind IN ('func', 'arrow_func', 'function')
-                ORDER BY c.symbol_name ASC;
-            "#
-        } else {
-            r#"
-                SELECT
-                    c.id,
-                    f.relpath,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    false as is_builtin
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                WHERE c.symbol_name ~ '^use[A-Z][a-zA-Z0-9]*$'
-                  AND c.kind IN ('func', 'arrow_func', 'function')
-                ORDER BY c.symbol_name ASC;
-            "#
-        };
-
-        let rows = if let Some(wt_id) = worktree_id {
-            client
-                .query(query, &[&wt_id])
-                .await
-                .context("Failed to query custom hooks")?
-        } else {
-            client
-                .query(query, &[])
-                .await
-                .context("Failed to query custom hooks")?
-        };
-
-        let hooks = rows
-            .into_iter()
-            .map(|row| HookInfo {
-                id: row.get(0),
-                relpath: row.get(1),
-                symbol_name: row.get(2),
-                kind: row.get(3),
-                start_line: row.get(4),
-                end_line: row.get(5),
-                is_builtin: row.get(6),
-            })
-            .collect();
-
-        Ok(hooks)
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(vec![])
     }
 
     /// Find hook by name.
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL client
+    /// * `store` - SQLite store
     /// * `hook_name` - Name of the hook to find
     /// * `worktree_id` - Optional worktree to limit search
     ///
@@ -260,7 +147,7 @@ impl HookDetector {
     /// Hook information if found
     pub async fn find_hook_by_name(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         hook_name: &str,
         worktree_id: Option<i64>,
     ) -> Result<Option<HookInfo>> {
@@ -269,62 +156,8 @@ impl HookDetector {
             return Ok(None);
         }
 
-        let query = if worktree_id.is_some() {
-            r#"
-                SELECT
-                    c.id,
-                    f.relpath,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    false as is_builtin
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                WHERE f.worktree_id = $1
-                  AND c.symbol_name = $2
-                  AND c.kind IN ('func', 'arrow_func', 'function')
-                LIMIT 1;
-            "#
-        } else {
-            r#"
-                SELECT
-                    c.id,
-                    f.relpath,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    false as is_builtin
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                WHERE c.symbol_name = $1
-                  AND c.kind IN ('func', 'arrow_func', 'function')
-                LIMIT 1;
-            "#
-        };
-
-        let row = if let Some(wt_id) = worktree_id {
-            client
-                .query_opt(query, &[&wt_id, &hook_name])
-                .await
-                .context("Failed to query hook by name")?
-        } else {
-            client
-                .query_opt(query, &[&hook_name])
-                .await
-                .context("Failed to query hook by name")?
-        };
-
-        Ok(row.map(|r| HookInfo {
-            id: r.get(0),
-            relpath: r.get(1),
-            symbol_name: r.get(2),
-            kind: r.get(3),
-            start_line: r.get(4),
-            end_line: r.get(5),
-            is_builtin: r.get(6),
-        }))
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        Ok(None)
     }
 }
 

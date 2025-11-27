@@ -10,7 +10,7 @@ use super::file_loader::FileLoader;
 use super::graph::{load_relationships_parallel, RelatedChunk};
 use super::token_counter::TokenCounter;
 use super::types::{ContextBundle, ContextItem, ExpandOptions, LineRange};
-use crate::db::PgPool;
+use crate::db::SqliteStore;
 use crate::profile_scope;
 
 /// Chunk metadata retrieved from the database.
@@ -104,29 +104,29 @@ pub trait ContextAssembler: Send + Sync {
 /// }
 /// ```
 pub struct BasicContextAssembler {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     token_counter: TokenCounter,
     cache: Arc<ContextCache>,
 }
 
 impl BasicContextAssembler {
     /// Create a new basic context assembler with the specified cache configuration.
-    pub fn new(pool: PgPool, cache_config: CacheConfig) -> Self {
-        let cache = Arc::new(ContextCache::new(pool.clone(), cache_config));
+    pub fn new(store: Arc<SqliteStore>, cache_config: CacheConfig) -> Self {
+        let cache = Arc::new(ContextCache::new(store.clone(), cache_config));
         Self {
-            pool,
+            store,
             token_counter: TokenCounter::new(),
             cache,
         }
     }
 
     /// Create a new basic context assembler with caching disabled.
-    pub fn new_without_cache(pool: PgPool) -> Self {
+    pub fn new_without_cache(store: Arc<SqliteStore>) -> Self {
         let cache_config = CacheConfig {
             enabled: false,
             ..Default::default()
         };
-        Self::new(pool, cache_config)
+        Self::new(store, cache_config)
     }
 
     /// Get a reference to the cache for statistics and management.
@@ -137,52 +137,8 @@ impl BasicContextAssembler {
     /// Retrieve chunk metadata from the database by ID.
     async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
         profile_scope!("get_chunk_metadata");
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_opt(
-                "SELECT
-                    c.id,
-                    f.relpath,
-                    w.abs_path as worktree_path,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    c.signature,
-                    c.docstring
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                LEFT JOIN maproom.worktrees w ON w.id = f.worktree_id
-                WHERE c.id = $1",
-                &[&chunk_id],
-            )
-            .await
-            .context("Failed to query chunk metadata")?;
-
-        let row = row.ok_or_else(|| anyhow::anyhow!("Chunk not found: {}", chunk_id))?;
-
-        Ok(ChunkMetadata {
-            id: row.get(0),
-            file_relpath: row.get(1),
-            worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!(
-                    "Chunk {} has no worktree_path, using empty string",
-                    chunk_id
-                );
-                String::new()
-            }),
-            symbol_name: row.get(3),
-            kind: row.get(4),
-            start_line: row.get(5),
-            end_line: row.get(6),
-            signature: row.get(7),
-            docstring: row.get(8),
-        })
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        anyhow::bail!("get_chunk_metadata not yet implemented for SQLite")
     }
 
     /// Create a ContextItem from chunk metadata.
@@ -341,29 +297,29 @@ impl ContextAssembler for BasicContextAssembler {
 /// }
 /// ```
 pub struct ParallelContextAssembler {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     token_counter: TokenCounter,
     cache: Arc<ContextCache>,
 }
 
 impl ParallelContextAssembler {
     /// Create a new parallel context assembler with the specified cache configuration.
-    pub fn new(pool: PgPool, cache_config: CacheConfig) -> Self {
-        let cache = Arc::new(ContextCache::new(pool.clone(), cache_config));
+    pub fn new(store: Arc<SqliteStore>, cache_config: CacheConfig) -> Self {
+        let cache = Arc::new(ContextCache::new(store.clone(), cache_config));
         Self {
-            pool,
+            store,
             token_counter: TokenCounter::new(),
             cache,
         }
     }
 
     /// Create a new parallel context assembler with caching disabled.
-    pub fn new_without_cache(pool: PgPool) -> Self {
+    pub fn new_without_cache(store: Arc<SqliteStore>) -> Self {
         let cache_config = CacheConfig {
             enabled: false,
             ..Default::default()
         };
-        Self::new(pool, cache_config)
+        Self::new(store, cache_config)
     }
 
     /// Get a reference to the cache for statistics and management.
@@ -373,52 +329,8 @@ impl ParallelContextAssembler {
 
     /// Retrieve chunk metadata from the database by ID (same as BasicContextAssembler).
     async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_opt(
-                "SELECT
-                    c.id,
-                    f.relpath,
-                    w.abs_path as worktree_path,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    c.signature,
-                    c.docstring
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                LEFT JOIN maproom.worktrees w ON w.id = f.worktree_id
-                WHERE c.id = $1",
-                &[&chunk_id],
-            )
-            .await
-            .context("Failed to query chunk metadata")?;
-
-        let row = row.ok_or_else(|| anyhow::anyhow!("Chunk not found: {}", chunk_id))?;
-
-        Ok(ChunkMetadata {
-            id: row.get(0),
-            file_relpath: row.get(1),
-            worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!(
-                    "Chunk {} has no worktree_path, using empty string",
-                    chunk_id
-                );
-                String::new()
-            }),
-            symbol_name: row.get(3),
-            kind: row.get(4),
-            start_line: row.get(5),
-            end_line: row.get(6),
-            signature: row.get(7),
-            docstring: row.get(8),
-        })
+        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        anyhow::bail!("get_chunk_metadata not yet implemented for SQLite")
     }
 
     /// Create a ContextItem from chunk metadata.
@@ -564,7 +476,7 @@ impl ParallelContextAssembler {
     /// Helper to clone necessary components for parallel tasks.
     fn clone_for_parallel(&self) -> Self {
         Self {
-            pool: self.pool.clone(),
+            store: self.store.clone(),
             token_counter: self.token_counter.clone(),
             cache: self.cache.clone(),
         }
@@ -574,7 +486,7 @@ impl ParallelContextAssembler {
 impl Clone for ParallelContextAssembler {
     fn clone(&self) -> Self {
         Self {
-            pool: self.pool.clone(),
+            store: self.store.clone(),
             token_counter: self.token_counter.clone(),
             cache: self.cache.clone(),
         }
@@ -610,16 +522,10 @@ impl ContextAssembler for ParallelContextAssembler {
         let allocation = budget_mgr.allocate().unwrap();
 
         // Phase 1: Load primary chunk metadata and relationships in parallel
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
         let (metadata_result, relationships) =
             tokio::join!(self.get_chunk_metadata(chunk_id), async {
                 if options.callers || options.callees || options.tests {
-                    load_relationships_parallel(&client, chunk_id, options.max_depth).await
+                    load_relationships_parallel(&*self.store, chunk_id, options.max_depth).await
                 } else {
                     (Vec::new(), Vec::new(), Vec::new())
                 }

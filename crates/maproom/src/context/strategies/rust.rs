@@ -18,7 +18,8 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
-use crate::db::PgPool;
+use crate::db::SqliteStore;
+use std::sync::Arc;
 
 /// Configuration for Rust assembly strategy.
 #[derive(Debug, Clone)]
@@ -52,7 +53,7 @@ impl Default for RustConfig {
 /// - Module structure
 /// - Rust test patterns
 pub struct RustAssemblyStrategy {
-    pool: PgPool,
+    store: Arc<SqliteStore>,
     default: DefaultAssemblyStrategy,
     config: RustConfig,
     token_counter: TokenCounter,
@@ -60,15 +61,15 @@ pub struct RustAssemblyStrategy {
 
 impl RustAssemblyStrategy {
     /// Create a new Rust assembly strategy.
-    pub fn new(pool: PgPool) -> Self {
-        Self::with_config(pool, RustConfig::default())
+    pub fn new(store: Arc<SqliteStore>) -> Self {
+        Self::with_config(store, RustConfig::default())
     }
 
     /// Create a new Rust assembly strategy with custom configuration.
-    pub fn with_config(pool: PgPool, config: RustConfig) -> Self {
+    pub fn with_config(store: Arc<SqliteStore>, config: RustConfig) -> Self {
         Self {
-            default: DefaultAssemblyStrategy::new(pool.clone()),
-            pool,
+            default: DefaultAssemblyStrategy::new(Arc::clone(&store)),
+            store,
             config,
             token_counter: TokenCounter::new(),
         }
