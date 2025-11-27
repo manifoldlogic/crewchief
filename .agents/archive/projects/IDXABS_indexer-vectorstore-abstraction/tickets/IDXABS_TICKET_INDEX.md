@@ -2,9 +2,9 @@
 
 **Project**: IDXABS - Indexer SQLite-Only Migration
 **Created**: 2025-11-27
-**Updated**: 2025-11-27 (post-review)
+**Updated**: 2025-11-27 (post-project-review update)
 **Total Tickets**: 18 (14 original + 4 completion)
-**Estimated Duration**: 50-70 hours
+**Estimated Duration**: 60-90 hours (revised from 50-70 hours)
 
 ## Overview
 
@@ -24,7 +24,7 @@ This project removes PostgreSQL support entirely, making SQLite the only databas
 | Phase 3 | 3001 | Main.rs Cleanup | 2-3 hours |
 | Phase 4 | 4001-4002 | Testing & Validation | 3-4 hours |
 | Phase 5 | 5001 | Documentation | 1-2 hours |
-| **Phase 6** | **6001-6004** | **Completion (NEW)** | **30-40 hours** |
+| **Phase 6** | **6001-6004** | **Completion (NEW)** | **40-60 hours** |
 
 ## Tickets by Phase
 
@@ -71,7 +71,7 @@ This project removes PostgreSQL support entirely, making SQLite the only databas
 
 | ID | Title | Status | Agent |
 |----|-------|--------|-------|
-| [IDXABS-6001](IDXABS-6001_migrate-tests-to-sqlite.md) | Migrate 35 Test Files to SQLite | 🔴 **BLOCKING** | rust-indexer-engineer |
+| [IDXABS-6001](IDXABS-6001_migrate-tests-to-sqlite.md) | Migrate 29 Test Files to SQLite | 🔴 **BLOCKING** | rust-indexer-engineer |
 | [IDXABS-6002](IDXABS-6002_implement-incremental-module.md) | Implement Stubbed Incremental Module | 🔴 **BLOCKING** | rust-indexer-engineer |
 | [IDXABS-6003](IDXABS-6003_implement-watch-command.md) | Implement Watch Command for SQLite | 🔴 **BLOCKING** | rust-indexer-engineer |
 | [IDXABS-6004](IDXABS-6004_complete-all-sqlite-stubs.md) | Complete All 52 SQLite Stub Implementations | 🔴 **BLOCKING** | rust-indexer-engineer |

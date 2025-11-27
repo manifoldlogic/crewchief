@@ -1,9 +1,36 @@
 # Project: IDXABS_indexer-vectorstore-abstraction
 
-**Status**: In Progress - Phase 6 (Completion) Required
+**Status**: Archived (2025-11-27) - Partially Complete
+**Archive Reason**: Project scope conflated PostgreSQL removal with SQLite implementation. Phases 1-3 (removal) complete; Phase 6 (implementation) superseded by new project.
+
+## Archive Summary
+
+**What Was Accomplished**:
+- PostgreSQL files deleted from `db/` module
+- VectorStore trait removed, SqliteStore used directly
+- Feature flags removed from Cargo.toml
+- Main.rs backend switching logic removed
+- Basic commands work: `scan`, `upsert`, `search`, `generate-embeddings`
+
+**What Remains Incomplete**:
+- 32 test files still reference PostgreSQL (don't compile)
+- 52 TODO stubs across 21 files (return empty/placeholder values)
+- Watch command disabled (prints error)
+- Incremental indexing not implemented
+
+**Successor Project**: Create new project with clearer scope focusing on implementing SQLite functionality rather than "refactoring from PostgreSQL".
+
+---
+
+*Original README preserved below for reference*
+
+---
+
+**Original Status**: In Progress - Phase 6 (Completion) Required
 **Note**: Project was incorrectly archived. Core modules stubbed, tests don't compile.
 **Tickets**: 18 tickets total (14 original + 4 completion tickets)
 **TODOs Found**: 52 stub implementations across 21 files
+**Estimated Duration**: 60-90 hours total (Phases 1-5 done, Phase 6: 40-60 hours remaining)
 
 ## Current State
 
@@ -16,20 +43,22 @@
 - Basic commands work: `scan`, `upsert`, `search`, `generate-embeddings`
 
 ### What's NOT Done ❌
-1. **Watch command stubbed** - Prints "temporarily unavailable" error
-2. **Incremental module stubbed** - Functions have TODO comments, no implementation
-3. **35 test files still reference PostgreSQL** - `cargo test` fails to compile
+1. **Watch command stubbed** - Prints "temporarily unavailable" error (IDXABS-6003)
+2. **Incremental module stubbed** - Functions have TODO comments, no implementation (IDXABS-6002)
+3. **29 test files still reference PostgreSQL** - `cargo test` fails to compile (IDXABS-6001)
 4. **No tests validate incremental functionality**
-5. **52 TODO stubs across 21 files** - Search, context, strategies all have placeholders
+5. **52 TODO stubs across 21 files** - Search, context, strategies all have placeholders (IDXABS-6004)
+
+> **IMPORTANT**: The `watch` command is currently unavailable. Use `scan` for initial indexing and `upsert` for incremental updates until IDXABS-6003 is complete.
 
 ## Remaining Work (Phase 6)
 
-| Ticket | Description | Priority |
-|--------|-------------|----------|
-| **IDXABS-6001** | Migrate 35 test files from PostgreSQL to SQLite | High |
-| **IDXABS-6002** | Implement stubbed incremental module functions (13 TODOs) | High |
-| **IDXABS-6003** | Implement watch command for SQLite | High |
-| **IDXABS-6004** | Complete all 52 SQLite stub implementations | High |
+| Ticket | Description | Priority | Est. Time |
+|--------|-------------|----------|-----------|
+| **IDXABS-6001** | Migrate 29 test files from PostgreSQL to SQLite | High | 8-12 hours |
+| **IDXABS-6002** | Implement stubbed incremental module functions (13 TODOs) | High | 10-15 hours |
+| **IDXABS-6003** | Implement watch command for SQLite | High | 6-10 hours |
+| **IDXABS-6004** | Complete all 52 SQLite stub implementations | High | 16-23 hours |
 
 ## Success Criteria (Current Reality)
 
@@ -44,7 +73,7 @@ cargo run --bin crewchief-maproom -- search "function"      ✅
 cargo run --bin crewchief-maproom -- watch                  ❌ (prints error)
 
 # Tests:
-cargo test                                                   ❌ (35 files fail to compile)
+cargo test                                                   ❌ (29 files fail to compile)
 ```
 
 ## Target Success Criteria
@@ -86,8 +115,10 @@ The following functions in `crates/maproom/src/incremental/` are stubs:
 - `remove_worktree_from_chunks()` - Returns `Ok(0)`
 - `incremental_update()` - Returns `UpdateStats::skipped()`
 
-### Test Files Using PostgreSQL (35 files)
+### Test Files Using PostgreSQL (29 files)
 All files in `crates/maproom/tests/` that reference `tokio_postgres`, `PgPool`, or `postgres::` will fail to compile. See IDXABS-6001 for full list.
+
+Note: The actual count of affected test files is 29 (verified via grep). The IDXABS-6001 ticket lists additional files that may not require migration or can be deleted.
 
 ## Phases
 
@@ -118,6 +149,13 @@ All files in `crates/maproom/tests/` that reference `tokio_postgres`, `PgPool`, 
 ## Dependencies
 
 - **UNIWATCH depends on IDXABS-6003** - Watch command must work before UNIWATCH can enhance it
+
+## Rollback Strategy
+
+If a ticket causes issues:
+1. **Git revert**: Each ticket produces a single commit - use `git revert <commit>` to undo
+2. **Database**: SQLite database can be deleted and recreated via `scan` command
+3. **Partial rollback**: Test files are independent - individual test migrations can be reverted without affecting others
 
 ## Quick Reference
 

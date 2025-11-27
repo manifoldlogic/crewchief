@@ -4,9 +4,11 @@
 
 Remove PostgreSQL support entirely, making SQLite the only database backend. This simplifies the codebase by deleting PostgreSQL-specific files (~5 in db/), removing the VectorStore trait abstraction, eliminating feature flags, and refactoring ~26 files with PostgreSQL references (~140 references total).
 
-**Estimated Duration**: 20-29 hours
-**Total Tickets**: 14
+**Estimated Duration**: 60-90 hours (Phases 1-5: 20-29 hours + Phase 6: 40-60 hours)
+**Total Tickets**: 18 (14 original + 4 completion)
 **Primary Agent**: rust-indexer-engineer
+
+> **Note**: The original Phase 1-5 work is complete but resulted in stubbed implementations. Phase 6 was added to complete the full migration.
 
 ## Phase 1: Delete PostgreSQL Code
 
@@ -366,13 +368,95 @@ Note: Phase 2 tickets 2001-2007 can be partially parallelized as they touch diff
 | Missing SqliteStore methods | Add as needed during refactor |
 | Test failures | Fix as encountered |
 
+## Phase 6: Completion (Post-Review Addition)
+
+**Goal**: Complete stubbed implementations and ensure all tests pass.
+
+> **Background**: The original migration (Phases 1-5) left many functions as stubs with TODO comments. Phase 6 was added after project review to complete the work.
+
+### Ticket 6001: Migrate Test Files to SQLite
+
+**Summary**: Migrate 29 test files from PostgreSQL to SQLite.
+
+**Scope**:
+- Migrate all test files that reference `tokio_postgres`, `PgPool`, or `postgres::`
+- Update test helpers to use `SqliteStore::connect(":memory:")`
+- Delete PostgreSQL-specific tests that don't apply
+
+**Acceptance Criteria**:
+- [ ] All tests compile (`cargo test -p crewchief-maproom --no-run`)
+- [ ] No PostgreSQL references in tests
+- [ ] Core tests pass
+
+**Agent**: rust-indexer-engineer
+**Estimated**: 8-12 hours
+
+### Ticket 6002: Implement Incremental Module
+
+**Summary**: Implement 13 stubbed functions in the incremental module.
+
+**Scope**:
+- `processor.rs`: index_new_file(), update_file(), remove_file()
+- `detector.rs`: get_hash_from_db(), store_hash_in_db(), detect_move()
+- `edge_updater.rs`: update_edges(), compute_edges(), find_test_targets(), insert_edges()
+- `tree_sha_update.rs`: remove_worktree_from_chunks(), incremental_update()
+
+**Acceptance Criteria**:
+- [ ] All incremental functions implemented
+- [ ] Incremental tests pass
+- [ ] Upsert command triggers incremental updates
+
+**Agent**: rust-indexer-engineer
+**Estimated**: 10-15 hours
+
+### Ticket 6003: Implement Watch Command
+
+**Summary**: Replace watch command stub with working implementation.
+
+**Scope**:
+- Integrate with implemented incremental module
+- Use notify crate for file watching
+- Support NDJSON output for VSCode extension
+
+**Acceptance Criteria**:
+- [ ] `crewchief-maproom watch` starts watching
+- [ ] File changes are detected and indexed
+- [ ] Ctrl+C terminates gracefully
+
+**Agent**: rust-indexer-engineer
+**Estimated**: 6-10 hours
+
+### Ticket 6004: Complete Remaining Stubs
+
+**Summary**: Implement 52 TODO stubs across 21 files (minus overlap with 6002).
+
+**Scope** (by priority):
+1. **High**: Search module (7 TODOs) - recency, churn, graph, fts, vector
+2. **High**: Context assembler (3 TODOs) - context assembly
+3. **Medium**: Context cache (8 TODOs) - caching operations
+4. **Medium**: Context graph (3 TODOs) - relationship queries
+5. **Lower**: Language strategies (6 TODOs) - React/Python/Rust context
+6. **Lower**: Detectors (6 TODOs) - React hooks/JSX
+7. **Lower**: Other (5 TODOs) - migrate, embedding, db scoring
+
+**Acceptance Criteria**:
+- [ ] All TODOs either implemented or documented as intentionally deferred
+- [ ] Search functionality complete
+- [ ] Context assembly complete
+
+**Agent**: rust-indexer-engineer
+**Estimated**: 16-23 hours
+
+> **Note**: Consider splitting 6004 into sub-tickets if scope becomes unwieldy during execution.
+
 ## Timeline
 
-| Phase | Tickets | Estimated Duration |
-|-------|---------|-------------------|
-| Phase 1 | 1001-1003 | 4-5 hours |
-| Phase 2 | 2001-2007 | 10-15 hours |
-| Phase 3 | 3001 | 2-3 hours |
-| Phase 4 | 4001-4002 | 3-4 hours |
-| Phase 5 | 5001 | 1-2 hours |
-| **Total** | | **20-29 hours** |
+| Phase | Tickets | Estimated Duration | Status |
+|-------|---------|-------------------|--------|
+| Phase 1 | 1001-1003 | 4-5 hours | ✅ Complete |
+| Phase 2 | 2001-2007 | 10-15 hours | ⚠️ Stubbed |
+| Phase 3 | 3001 | 2-3 hours | ✅ Complete |
+| Phase 4 | 4001-4002 | 3-4 hours | ⚠️ Partial |
+| Phase 5 | 5001 | 1-2 hours | ✅ Complete |
+| **Phase 6** | **6001-6004** | **40-60 hours** | 🔴 Not Started |
+| **Total** | | **60-90 hours** | |

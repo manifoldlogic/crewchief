@@ -12,7 +12,9 @@
 - commit-ticket
 
 ## Summary
-Migrate all 35 integration test files from PostgreSQL (`tokio_postgres`) to SQLite (`SqliteStore`). Currently, tests don't compile because they still reference the removed PostgreSQL dependency.
+Migrate 29 test files from PostgreSQL (`tokio_postgres`) to SQLite (`SqliteStore`). Currently, tests don't compile because they still reference the removed PostgreSQL dependency.
+
+> **Note**: Actual count is 29 files (verified via `grep -l`). The list below includes some files that may not need migration or can be deleted.
 
 ## Background
 The IDXABS project removed PostgreSQL from the main crate, but the test files were not migrated. This blocks:
@@ -21,13 +23,13 @@ The IDXABS project removed PostgreSQL from the main crate, but the test files we
 - Validating watch functionality
 
 ## Acceptance Criteria
-- [ ] All 35 test files compile without PostgreSQL references
+- [ ] All 29 affected test files compile without PostgreSQL references
 - [ ] `cargo test -p crewchief-maproom` completes successfully
 - [ ] No `tokio_postgres`, `PgPool`, or `postgres::` references in `/tests/`
 - [ ] Tests use `SqliteStore::connect(":memory:")` or temp files for isolation
 - [ ] At least one test per module validates the incremental functionality
 
-## Test Files to Migrate (35 files)
+## Test Files to Migrate (29 files confirmed + candidates for deletion)
 
 ### High Priority - Incremental Module Tests
 1. `tests/incremental_update.rs`
@@ -130,4 +132,11 @@ Files to MODIFY: All 35 test files listed above
 Files to potentially DELETE: Tests that only validate PostgreSQL behavior
 
 ## Estimated Effort
-High - 35 files to migrate, each requiring careful analysis and conversion.
+High - 29 files to migrate, each requiring careful analysis and conversion. Some files may be deletable.
+**Estimated time**: 8-12 hours
+
+## Migration Strategy
+1. **Start with simpler tests** (index_state, cleanup) to establish patterns
+2. **Create common test helper** in `tests/common/mod.rs` early
+3. **Delete PostgreSQL-specific tests** that don't translate (e.g., pool tests, PostgreSQL migration tests)
+4. **Document any missing SqliteStore methods** discovered during migration

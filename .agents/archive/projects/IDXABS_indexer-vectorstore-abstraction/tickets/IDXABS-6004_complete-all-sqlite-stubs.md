@@ -146,4 +146,23 @@ The following methods already exist and should be used:
 
 ## Estimated Effort
 High - 52 TODOs to resolve, significant implementation work.
-Recommend splitting into sub-tickets by module if needed.
+**Estimated time**: 16-23 hours
+
+## Splitting Recommendation
+
+If scope becomes unwieldy during execution, consider splitting into sub-tickets:
+- **IDXABS-6004A**: Search module TODOs (7 items) - HIGH priority
+- **IDXABS-6004B**: Context module TODOs (21 items) - MEDIUM priority
+- **IDXABS-6004C**: Strategy/detector TODOs (11 items) - LOWER priority
+- **IDXABS-6004D**: Other TODOs (5 items) - LOWER priority
+
+Note: 13 incremental module TODOs are covered by IDXABS-6002.
+
+## Data Source Clarifications
+
+For implementing search signals:
+- **Recency scoring**: Use file `last_modified` timestamp from files table
+- **Churn scoring**: Use `recency_score` and `churn_score` fields already in chunks table (populated during indexing)
+
+For context cache:
+- Evaluate existing `crate::cache` module first before implementing new caching
