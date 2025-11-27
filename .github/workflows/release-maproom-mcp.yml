@@ -90,14 +90,12 @@ jobs:
 
       - name: Debug - Show downloaded files
         run: |
-          echo "=== Root directory structure ==="
-          ls -la
           echo "=== packages/ directory ==="
           ls -la packages/ || echo "packages/ not found"
           echo "=== packages/maproom-mcp/ ==="
           ls -la packages/maproom-mcp/ || echo "packages/maproom-mcp/ not found"
-          echo "=== packages/daemon-client/ ==="
-          ls -la packages/daemon-client/ || echo "packages/daemon-client/ not found"
+          echo "=== packages/maproom-mcp/dist/ ==="
+          ls -la packages/maproom-mcp/dist/ || echo "packages/maproom-mcp/dist/ not found"
 
       - name: Verify binary structure
         run: |
@@ -152,13 +150,13 @@ jobs:
           echo "✓ maproom-mcp dist found"
           ls -la packages/maproom-mcp/dist/
 
-          # Verify daemon-client dist/ (dependency)
-          if [ ! -d "packages/daemon-client/dist" ]; then
-            echo "ERROR: daemon-client dist not found"
+          # Verify daemon-client is embedded in maproom-mcp dist
+          if [ ! -d "packages/maproom-mcp/dist/daemon-client" ]; then
+            echo "ERROR: daemon-client embedded module not found"
             exit 1
           fi
-          echo "✓ daemon-client dist found"
-          ls -la packages/daemon-client/dist/
+          echo "✓ daemon-client embedded module found"
+          ls -la packages/maproom-mcp/dist/daemon-client/
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

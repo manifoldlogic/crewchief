@@ -387,7 +387,7 @@ async fn test_find_all_relationships() -> Result<()> {
     use crewchief_maproom::context::find_all_relationships;
 
     // Find all relationships for authenticate function
-    let (tests, callers, callees, imports, exports, routes) =
+    let (tests, _callers, callees, imports, _exports, _routes) =
         find_all_relationships(&client, authenticate, 2).await?;
 
     // Verify tests

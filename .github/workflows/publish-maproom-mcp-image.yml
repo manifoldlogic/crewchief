@@ -23,7 +23,7 @@ permissions:
 
 env:
   DOCKER_HUB_REPO: manifoldlogic/crewchief_maproom-mcp
-  DOCKERFILE_PATH: packages/maproom-mcp/config/Dockerfile.combined
+  DOCKERFILE_PATH: Dockerfile.maproom
   BUILD_CONTEXT: .
 
 jobs:
