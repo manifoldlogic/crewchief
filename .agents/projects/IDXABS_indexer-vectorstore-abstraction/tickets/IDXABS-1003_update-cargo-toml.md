@@ -1,9 +1,9 @@
 # Ticket: IDXABS-1003: Update Cargo.toml
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (dependency resolution verified, code errors expected until Phase 2)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - `cargo build` should succeed for the crate dependencies
@@ -25,20 +25,32 @@ With PostgreSQL code deleted, the PostgreSQL dependencies are no longer needed. 
 **Architecture**: See `planning/architecture.md` - "Decision 2: Remove Feature Flags"
 
 ## Acceptance Criteria
-- [ ] `tokio-postgres` dependency removed
-- [ ] `pgvector` dependency removed (if present)
-- [ ] `deadpool-postgres` dependency removed (if present)
-- [ ] `deadpool` dependency removed (if present)
-- [ ] `postgres-types` dependency removed (if present)
-- [ ] `default = ["postgres"]` removed from features
-- [ ] `postgres = []` feature removed
-- [ ] `sqlite = ["rusqlite", "r2d2", "r2d2_sqlite"]` feature removed (no longer optional)
-- [ ] `rusqlite` is a required dependency (not optional)
-- [ ] `r2d2` is a required dependency (not optional)
-- [ ] `r2d2_sqlite` is a required dependency (not optional)
-- [ ] `cargo build -p crewchief-maproom` succeeds (for dependency resolution)
-- [ ] `cargo tree -p crewchief-maproom | grep -i postgres` returns nothing
-- [ ] Document list of compilation errors remaining for Phase 2
+- [x] `tokio-postgres` dependency removed
+- [x] `pgvector` dependency removed (if present)
+- [x] `deadpool-postgres` dependency removed (if present)
+- [x] `deadpool` dependency removed (if present)
+- [x] `postgres-types` dependency removed (if present)
+- [x] `default = ["postgres"]` removed from features
+- [x] `postgres = []` feature removed
+- [x] `sqlite = ["rusqlite", "r2d2", "r2d2_sqlite"]` feature removed (no longer optional)
+- [x] `rusqlite` is a required dependency (not optional)
+- [x] `r2d2` is a required dependency (not optional)
+- [x] `r2d2_sqlite` is a required dependency (not optional)
+- [x] `cargo build -p crewchief-maproom` succeeds (for dependency resolution)
+- [x] `cargo tree -p crewchief-maproom | grep -i postgres` returns nothing
+- [x] Document list of compilation errors remaining for Phase 2
+
+## Phase 2 Error Summary (82 errors)
+Errors remaining that will be fixed in Phase 2 tickets:
+- 17x `tokio_postgres` unresolved module (embedding/, context/, indexer/)
+- 16x `tokio_postgres` unresolved import
+- 10x `crate::db::PgPool` unresolved
+- 5x `deadpool_postgres` unresolved module
+- 5x each: `insert_chunk`, `get_or_create_worktree`, `get_or_create_repo` not found
+- 4x `PgPool` type not found
+- 3x each: `upsert_file`, `get_or_create_commit` not found
+- 2x each: `insert_chunks_batch`, `find_chunk_by_symbol` not found
+- 1x `queries` module, `VectorStore` trait, `pool` module references
 
 ## Technical Requirements
 - Remove dependencies completely, not just comment out

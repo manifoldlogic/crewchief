@@ -39,11 +39,10 @@ humantime = "2.3"
 config = "0.14"
 dirs = "5"  # Cross-platform home directory resolution for SQLite default path
 
-# Database (use tokio-postgres to avoid heavy deps)
-tokio-postgres = { version = "0.7", features = ["runtime", "with-chrono-0_4", "array-impls", "with-uuid-1", "with-serde_json-1"] }
-pgvector = { version = "0.4", features = ["postgres"] }
-deadpool-postgres = "0.14"
-deadpool = "0.12"
+# SQLite database (the only backend)
+rusqlite = { version = "0.29.0", features = ["bundled", "chrono"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.22"
 
 # Parsing (Tree-sitter)
 tree-sitter = "0.22"
@@ -86,10 +85,6 @@ rayon = "1.10"
 crossbeam = "0.8"
 futures = "0.3"
 
-# SQLite support
-rusqlite = { version = "0.29.0", features = ["bundled", "chrono"], optional = true }
-r2d2 = { version = "0.8", optional = true }
-r2d2_sqlite = { version = "0.22", optional = true }
 
 [build-dependencies]
 cc = "1.0"
@@ -125,10 +120,7 @@ predicates = "3.0"
 nix = { version = "0.29", features = ["signal"] }
 
 [features]
-default = ["postgres"]
 profiling = ["puffin"]
-sqlite = ["rusqlite", "r2d2", "r2d2_sqlite"]
-postgres = []
 
 
 [[bench]]
@@ -182,7 +174,6 @@ harness = false
 [[bench]]
 name = "sqlite_benchmark"
 harness = false
-required-features = ["sqlite"]
 
 [[bench]]
 name = "ollama_parallel_bench"
