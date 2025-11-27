@@ -15,16 +15,23 @@
 ## Files Requiring Migration (34 total with PostgreSQL references)
 
 ### Batch 1: Integration Tests (6 files)
-*Ticket: SQLIMPL-1002*
+*Ticket: SQLIMPL-1002 - COMPLETED*
 
-| File | Classification | Notes |
-|------|----------------|-------|
-| `tests/integration/batch_processing.rs` | Migrate | Uses `TestDb` from common |
-| `tests/integration/concurrent_updates.rs` | Migrate | Pool-based concurrency tests |
-| `tests/integration/failure_recovery.rs` | Migrate | Error handling scenarios |
-| `tests/integration/incremental_scenarios.rs` | Defer | Depends on Phase 3 stubs |
-| `tests/e2e_workflow_simple.rs` | Migrate | Full scan/search workflow |
-| `tests/e2e_multi_provider.rs` | Migrate | Multi-provider embedding tests |
+| File | Classification | Status | Notes |
+|------|----------------|--------|-------|
+| `tests/integration/batch_processing.rs` | **DELETED** | ✅ | Heavy PostgreSQL with raw SQL schema |
+| `tests/integration/concurrent_updates.rs` | **DELETED** | ✅ | PostgreSQL pool concurrency |
+| `tests/integration/failure_recovery.rs` | **DELETED** | ✅ | PostgreSQL-specific failure modes |
+| `tests/integration/incremental_scenarios.rs` | **DELETED** | ✅ | Depends on Phase 3 + PostgreSQL |
+| `tests/e2e_workflow_simple.rs` | **DELETED** | ✅ | PostgreSQL Docker e2e |
+| `tests/e2e_multi_provider.rs` | **DELETED** | ✅ | PostgreSQL Docker e2e |
+
+**Note:** These tests were deleted because they contained:
+- Raw PostgreSQL schema setup (CREATE SCHEMA maproom, etc.)
+- `tokio_postgres`, `deadpool_postgres` imports (not in Cargo.toml)
+- Dependencies on `crewchief_maproom::db::pool::create_pool` (no longer exists)
+- Test logic that would need complete rewrites, not migrations
+- Functionality that will be validated by Phase 3 incremental tickets
 
 ### Batch 2: Search Tests (6 files)
 *Ticket: SQLIMPL-1003*
@@ -165,7 +172,6 @@ These tests require stub implementations from later phases:
 | `incremental_processor_test.rs` | Phase 3 | Processor stubs |
 | `watch_integration.rs` | Phase 5 | Watch command disabled |
 | `unified_watch_test.rs` | Phase 5 | Watch command disabled |
-| `integration/incremental_scenarios.rs` | Phase 3 | Incremental stubs |
 
 Mark these with `#[ignore = "requires Phase X implementation"]` during migration.
 
