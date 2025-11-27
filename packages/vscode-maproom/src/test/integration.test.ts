@@ -192,13 +192,7 @@ describe('Integration: NDJSON Event Flow', () => {
     const config: OrchestratorConfig = {
       extensionRoot: '/mock/extension',
       workspaceRoot: '/mock/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5432,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
@@ -254,13 +248,7 @@ describe('Integration: NDJSON Event Flow', () => {
     const config: OrchestratorConfig = {
       extensionRoot: '/mock/extension',
       workspaceRoot: '/mock/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5432,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
@@ -352,13 +340,7 @@ describe('Integration: Single Unified Watch Process', () => {
     const config: OrchestratorConfig = {
       extensionRoot: '/mock/extension',
       workspaceRoot: '/mock/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5432,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
@@ -395,13 +377,7 @@ describe('Integration: Error Propagation Through Stack', () => {
     const config: OrchestratorConfig = {
       extensionRoot: '/mock/extension',
       workspaceRoot: '/mock/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5432,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
@@ -437,13 +413,7 @@ describe('Integration: Error Propagation Through Stack', () => {
     const config: OrchestratorConfig = {
       extensionRoot: '/mock/extension',
       workspaceRoot: '/mock/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5432,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
@@ -509,13 +479,7 @@ describe('Integration: Extension Workflow Simulation', () => {
     const config: OrchestratorConfig = {
       extensionRoot: '/mock/extension',
       workspaceRoot: '/mock/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5432,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     const orchestrator = new ProcessOrchestrator(outputChannel as any, config)

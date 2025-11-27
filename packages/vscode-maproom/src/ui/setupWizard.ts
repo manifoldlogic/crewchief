@@ -13,7 +13,7 @@
  * - Password-masked input for API keys
  * - Re-runnable via command palette
  * - Graceful error handling for network issues
- * - SQLite-only database mode (no PostgreSQL)
+ * - SQLite-only database mode
  */
 
 import * as vscode from 'vscode'

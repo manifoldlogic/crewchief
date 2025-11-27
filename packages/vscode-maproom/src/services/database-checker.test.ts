@@ -2,7 +2,7 @@
  * Tests for database-checker.ts
  *
  * Verifies database configuration resolution and availability checking
- * for both SQLite and PostgreSQL backends.
+ * for SQLite backend.
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
@@ -34,25 +34,6 @@ vi.mock('node:fs', () => ({
 // Mock node:os
 vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/mock/home'),
-}))
-
-// Mock postgres-checker - we need to track calls
-const mockCheckPostgresAvailable = vi.fn().mockResolvedValue(true)
-const mockGetPostgresConfigFromSettings = vi.fn().mockReturnValue({
-  host: 'localhost',
-  port: 5432,
-  user: 'maproom',
-  password: 'maproom',
-  database: 'maproom',
-})
-const mockGetPostgresUrl = vi.fn().mockReturnValue('postgresql://maproom:maproom@localhost:5432/maproom')
-const mockGetPostgresUnavailableMessage = vi.fn().mockReturnValue('PostgreSQL is not running.')
-
-vi.mock('./postgres-checker', () => ({
-  checkPostgresAvailable: (...args: any[]) => mockCheckPostgresAvailable(...args),
-  getPostgresConfigFromSettings: (...args: any[]) => mockGetPostgresConfigFromSettings(...args),
-  getPostgresUrl: (...args: any[]) => mockGetPostgresUrl(...args),
-  getPostgresUnavailableMessage: (...args: any[]) => mockGetPostgresUnavailableMessage(...args),
 }))
 
 describe('expandPath', () => {
@@ -88,8 +69,7 @@ describe('resolveDatabaseConfig', () => {
     vi.clearAllMocks()
   })
 
-  it('returns sqlite config when provider is sqlite', () => {
-    mockSettings['provider'] = 'sqlite'
+  it('returns sqlite config by default', () => {
     mockSettings['sqlitePath'] = ''
 
     const config = resolveDatabaseConfig()
@@ -99,28 +79,7 @@ describe('resolveDatabaseConfig', () => {
     expect(config.path).toBeDefined()
   })
 
-  it('returns postgresql config when provider is postgres', () => {
-    mockSettings['provider'] = 'postgres'
-
-    const config = resolveDatabaseConfig()
-
-    expect(config.type).toBe('postgresql')
-    expect(config.url).toBe('postgresql://maproom:maproom@localhost:5432/maproom')
-    expect(config.path).toBeUndefined()
-  })
-
-  it('uses default sqlite when provider not set', () => {
-    // No provider setting (uses default 'sqlite')
-    mockSettings['provider'] = undefined
-    mockSettings['sqlitePath'] = ''
-
-    const config = resolveDatabaseConfig()
-
-    expect(config.type).toBe('sqlite')
-  })
-
   it('expands tilde in sqlite path', () => {
-    mockSettings['provider'] = 'sqlite'
     mockSettings['sqlitePath'] = '~/.maproom/custom.db'
 
     const config = resolveDatabaseConfig()
@@ -130,7 +89,6 @@ describe('resolveDatabaseConfig', () => {
   })
 
   it('uses default path when sqlitePath is empty', () => {
-    mockSettings['provider'] = 'sqlite'
     mockSettings['sqlitePath'] = ''
 
     const config = resolveDatabaseConfig()
@@ -139,7 +97,6 @@ describe('resolveDatabaseConfig', () => {
   })
 
   it('uses custom path when sqlitePath is set', () => {
-    mockSettings['provider'] = 'sqlite'
     mockSettings['sqlitePath'] = '/custom/path/mydb.db'
 
     const config = resolveDatabaseConfig()
@@ -149,7 +106,6 @@ describe('resolveDatabaseConfig', () => {
   })
 
   it('resolves relative paths to absolute for sqlite', () => {
-    mockSettings['provider'] = 'sqlite'
     mockSettings['sqlitePath'] = 'relative/path/db.sqlite'
 
     const config = resolveDatabaseConfig()
@@ -157,15 +113,6 @@ describe('resolveDatabaseConfig', () => {
     // Should be resolved to absolute path
     expect(config.path).toContain('relative/path/db.sqlite')
     expect(config.path?.startsWith('/')).toBe(true)
-  })
-
-  it('delegates to postgres-checker for postgresql config', () => {
-    mockSettings['provider'] = 'postgres'
-
-    resolveDatabaseConfig()
-
-    expect(mockGetPostgresConfigFromSettings).toHaveBeenCalled()
-    expect(mockGetPostgresUrl).toHaveBeenCalled()
   })
 })
 
@@ -204,35 +151,10 @@ describe('checkDatabaseAvailable', () => {
 
     expect(result).toBe(false)
   })
-
-  it('delegates to postgres-checker for postgresql', async () => {
-    const config: DatabaseConfig = {
-      type: 'postgresql',
-      url: 'postgresql://maproom:maproom@localhost:5432/maproom',
-    }
-    mockCheckPostgresAvailable.mockResolvedValue(true)
-
-    const result = await checkDatabaseAvailable(config)
-
-    expect(mockCheckPostgresAvailable).toHaveBeenCalled()
-    expect(result).toBe(true)
-  })
-
-  it('returns false when postgres check fails', async () => {
-    const config: DatabaseConfig = {
-      type: 'postgresql',
-      url: 'postgresql://maproom:maproom@localhost:5432/maproom',
-    }
-    mockCheckPostgresAvailable.mockResolvedValue(false)
-
-    const result = await checkDatabaseAvailable(config)
-
-    expect(result).toBe(false)
-  })
 })
 
 describe('getDatabaseUrl', () => {
-  it('returns url from config for sqlite', () => {
+  it('returns url from config', () => {
     const config: DatabaseConfig = {
       type: 'sqlite',
       url: 'sqlite:///path/to/db.sqlite',
@@ -242,17 +164,6 @@ describe('getDatabaseUrl', () => {
     const url = getDatabaseUrl(config)
 
     expect(url).toBe('sqlite:///path/to/db.sqlite')
-  })
-
-  it('returns url from config for postgresql', () => {
-    const config: DatabaseConfig = {
-      type: 'postgresql',
-      url: 'postgresql://maproom:maproom@localhost:5432/maproom',
-    }
-
-    const url = getDatabaseUrl(config)
-
-    expect(url).toBe('postgresql://maproom:maproom@localhost:5432/maproom')
   })
 })
 
@@ -270,19 +181,6 @@ describe('getDatabaseUnavailableMessage', () => {
     expect(message).toContain('/path/to/db.sqlite')
     expect(message).toContain('crewchief-maproom scan')
   })
-
-  it('returns postgres message with setup instructions', () => {
-    const config: DatabaseConfig = {
-      type: 'postgresql',
-      url: 'postgresql://maproom:maproom@localhost:5432/maproom',
-    }
-    mockGetPostgresUnavailableMessage.mockReturnValue('PostgreSQL is not running.')
-
-    const message = getDatabaseUnavailableMessage(config)
-
-    expect(mockGetPostgresUnavailableMessage).toHaveBeenCalled()
-    expect(message).toBe('PostgreSQL is not running.')
-  })
 })
 
 describe('DatabaseConfig Interface', () => {
@@ -296,16 +194,5 @@ describe('DatabaseConfig Interface', () => {
     expect(config.type).toBe('sqlite')
     expect(config.url).toBeDefined()
     expect(config.path).toBeDefined()
-  })
-
-  it('postgresql config has required fields', () => {
-    const config: DatabaseConfig = {
-      type: 'postgresql',
-      url: 'postgresql://localhost/test',
-    }
-
-    expect(config.type).toBe('postgresql')
-    expect(config.url).toBeDefined()
-    expect(config.path).toBeUndefined()
   })
 })

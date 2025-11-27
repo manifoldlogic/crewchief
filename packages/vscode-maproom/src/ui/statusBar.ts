@@ -169,7 +169,7 @@ export class StatusBarManager implements vscode.Disposable {
   /**
    * Set database configuration for tooltip display
    *
-   * Shows database mode (SQLite/PostgreSQL) and path in the status bar tooltip.
+   * Shows database path in the status bar tooltip.
    *
    * @param config - Database configuration from resolveDatabaseConfig()
    */
@@ -416,10 +416,9 @@ export class StatusBarManager implements vscode.Disposable {
   private buildTooltip(): string {
     const lines: string[] = ['Maproom Semantic Search']
 
-    // Database mode and path
+    // Database path
     if (this.databaseConfig) {
-      const dbType = this.databaseConfig.type === 'sqlite' ? 'SQLite' : 'PostgreSQL'
-      lines.push(`Database: ${dbType}`)
+      lines.push(`Database: SQLite`)
       if (this.databaseConfig.path) {
         lines.push(`Path: ${this.databaseConfig.path}`)
       }

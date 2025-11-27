@@ -174,8 +174,8 @@ export class MCPConfigWriter {
    */
   private buildEnvironment(provider: EmbeddingProvider): Record<string, string> {
     const env: Record<string, string> = {
-      // Always include database URL (required for MCP server)
-      MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+      // Always include database URL (required for MCP server) - uses SQLite
+      MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
       // Always include provider selection
       MAPROOM_EMBEDDING_PROVIDER: provider,
     }

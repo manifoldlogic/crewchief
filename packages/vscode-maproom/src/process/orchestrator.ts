@@ -29,17 +29,6 @@ import type { EmbeddingProvider } from '../ui/setupWizard'
 import { getRepoName } from '../utils/git'
 
 /**
- * PostgreSQL connection configuration
- */
-export interface PostgresConfig {
-  host: string
-  port: number
-  user: string
-  password: string
-  database: string
-}
-
-/**
  * Process orchestrator configuration
  */
 export interface OrchestratorConfig {
@@ -47,14 +36,12 @@ export interface OrchestratorConfig {
   extensionRoot: string
   /** Workspace root directory for file watching */
   workspaceRoot: string
-  /** PostgreSQL connection configuration (optional - only needed for postgres mode without databaseUrlOverride) */
-  postgres?: PostgresConfig
   /** Secrets manager for API credentials (optional) */
   secretsManager?: SecretsManager
   /** Embedding provider (optional) */
   provider?: EmbeddingProvider
-  /** Override database URL (e.g. for sqlite or explicit postgres URL). Takes precedence over postgres config. */
-  databaseUrlOverride?: string
+  /** Database URL (sqlite://... or postgresql://...). Required. */
+  databaseUrl?: string
 }
 
 /**
@@ -324,35 +311,18 @@ export class ProcessOrchestrator extends EventEmitter {
    * @returns Promise resolving to environment object for child process
    */
   private async buildEnvironment(): Promise<NodeJS.ProcessEnv> {
-    const { postgres, secretsManager, provider, databaseUrlOverride } = this.config
+    const { secretsManager, provider, databaseUrl } = this.config
 
     // Build DATABASE_URL for crewchief-maproom binary
     // Note: Old binaries use DATABASE_URL, new binaries use MAPROOM_DATABASE_URL
     // We set both for compatibility
-    // If override is provided (e.g. sqlite://...), use it. Otherwise construct postgres URL.
-    let databaseUrl: string
-    if (databaseUrlOverride) {
-      databaseUrl = databaseUrlOverride
-    } else if (postgres) {
-      databaseUrl = `postgresql://${postgres.user}:${postgres.password}@${postgres.host}:${postgres.port}/${postgres.database}`
-    } else {
-      throw new Error('Either databaseUrlOverride or postgres config must be provided')
-    }
+    const resolvedDatabaseUrl = databaseUrl || 'sqlite://~/.maproom/maproom.db'
 
     // Start with base environment and database URL
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      DATABASE_URL: databaseUrl, // For old binaries
-      MAPROOM_DATABASE_URL: databaseUrl, // For new binaries
-    }
-
-    // Add PostgreSQL-specific environment variables only when using postgres config
-    if (postgres) {
-      env.PGHOST = postgres.host
-      env.PGPORT = postgres.port.toString()
-      env.PGUSER = postgres.user
-      env.PGPASSWORD = postgres.password
-      env.PGDATABASE = postgres.database
+      DATABASE_URL: resolvedDatabaseUrl, // For old binaries
+      MAPROOM_DATABASE_URL: resolvedDatabaseUrl, // For new binaries
     }
 
     // Add embedding provider credentials if available

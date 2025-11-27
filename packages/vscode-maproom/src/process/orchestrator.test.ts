@@ -132,13 +132,7 @@ describe('ProcessOrchestrator', () => {
     config = {
       extensionRoot: '/test/extension',
       workspaceRoot: '/test/workspace',
-      postgres: {
-        host: 'localhost',
-        port: 5433,
-        user: 'maproom',
-        password: 'maproom',
-        database: 'maproom',
-      },
+      databaseUrl: 'sqlite://~/.maproom/maproom.db',
     }
 
     vi.spyOn(platform, 'detectPlatform').mockReturnValue('linux-x64')
@@ -231,18 +225,15 @@ describe('ProcessOrchestrator', () => {
       ])
     })
 
-    it('should pass PostgreSQL environment variables', async () => {
+    it('should pass SQLite database URL in environment variables', async () => {
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
       const { spawn } = await import('node:child_process')
 
       const mockChild = new MockChildProcess()
 
       vi.mocked(spawn).mockImplementation(((_cmd: string, _args: string[], options: any) => {
-        expect(options.env.PGHOST).toBe('localhost')
-        expect(options.env.PGPORT).toBe('5433')
-        expect(options.env.PGUSER).toBe('maproom')
-        expect(options.env.PGPASSWORD).toBe('maproom')
-        expect(options.env.PGDATABASE).toBe('maproom')
+        expect(options.env.DATABASE_URL).toBe('sqlite://~/.maproom/maproom.db')
+        expect(options.env.MAPROOM_DATABASE_URL).toBe('sqlite://~/.maproom/maproom.db')
 
         setTimeout(() => mockChild.simulateSuccess(), 10)
         return mockChild as any

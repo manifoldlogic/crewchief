@@ -336,7 +336,7 @@ async function initializeServices(
     orchestrator = new ProcessOrchestrator(outputChannel!, {
       extensionRoot: context.extensionPath,
       workspaceRoot,
-      databaseUrlOverride: getDatabaseUrl(dbConfig),
+      databaseUrl: getDatabaseUrl(dbConfig),
       secretsManager,
       provider,
     })

@@ -45,7 +45,7 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
-            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'openai',
             OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
           },
@@ -64,7 +64,7 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
-            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'google',
             GOOGLE_APPLICATION_CREDENTIALS: '${env:GOOGLE_APPLICATION_CREDENTIALS}',
           },
@@ -83,7 +83,7 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
-            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'ollama',
           },
         })
@@ -199,7 +199,7 @@ describe('MCPConfigWriter', () => {
           command: 'npx',
           args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
           env: {
-            MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+            MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'openai',
             OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
           },
@@ -385,7 +385,7 @@ describe('MCPConfigWriter', () => {
       const config = JSON.parse(content)
 
       expect(config.servers.maproom.env).toEqual({
-        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
         MAPROOM_EMBEDDING_PROVIDER: 'ollama',
       })
     })
@@ -403,7 +403,7 @@ describe('MCPConfigWriter', () => {
       let config = JSON.parse(content)
 
       expect(config.servers.maproom.env).toEqual({
-        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
         MAPROOM_EMBEDDING_PROVIDER: 'ollama',
       })
 
@@ -422,7 +422,7 @@ describe('MCPConfigWriter', () => {
 
       // Verify Maproom updated to OpenAI
       expect(config.servers.maproom.env).toEqual({
-        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
         MAPROOM_EMBEDDING_PROVIDER: 'openai',
         OPENAI_API_KEY: '${env:OPENAI_API_KEY}',
       })
@@ -441,7 +441,7 @@ describe('MCPConfigWriter', () => {
 
       // Verify Maproom updated to Google
       expect(config.servers.maproom.env).toEqual({
-        MAPROOM_DATABASE_URL: 'postgresql://maproom:maproom@localhost:5433/maproom',
+        MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
         MAPROOM_EMBEDDING_PROVIDER: 'google',
         GOOGLE_APPLICATION_CREDENTIALS: '${env:GOOGLE_APPLICATION_CREDENTIALS}',
       })

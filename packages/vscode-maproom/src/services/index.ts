@@ -3,9 +3,10 @@
  */
 
 export {
-  checkPostgresAvailable,
-  getPostgresUrl,
-  getPostgresUnavailableMessage,
-  DEFAULT_POSTGRES_CONFIG,
-  type PostgresConfig,
-} from './postgres-checker'
+  resolveDatabaseConfig,
+  checkDatabaseAvailable,
+  getDatabaseUrl,
+  getDatabaseUnavailableMessage,
+  expandPath,
+  type DatabaseConfig,
+} from './database-checker'

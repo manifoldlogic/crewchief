@@ -8,7 +8,6 @@ export {
   ProcessOrchestrator,
   ProcessError,
   type OrchestratorConfig,
-  type PostgresConfig,
   type OrchestratorEvents,
 } from './orchestrator'
 
