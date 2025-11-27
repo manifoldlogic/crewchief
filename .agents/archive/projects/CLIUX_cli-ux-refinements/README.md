@@ -1,6 +1,10 @@
 # CLIUX: CLI UX Refinements
 
-## Status: Ready for Ticket Creation
+## Status: Complete
+
+**Completed**: 2025-11-27
+
+All tickets implemented, tested, and verified.
 
 ## Overview
 
@@ -88,6 +92,12 @@ crewchief worktree create new-feature --shell
 3. **--print flag**: Kept as no-op alias for backwards compatibility
 4. **Sequential execution**: Recommended over parallel for simplicity
 
-## Next Step
+## Completion Summary
 
-Run `/create-project-tickets CLIUX` to generate tickets.
+All 4 tickets completed and verified:
+- CLIUX-1001: `worktree use` now prints path by default, requires existing worktree
+- CLIUX-1002: `worktree create` now prints path by default
+- CLIUX-2001: `spawn` command migrated to `agent spawn`
+- CLIUX-3001: Integration tests added to verify behavior
+
+This project is complete and archived.
