@@ -2,8 +2,8 @@
 
 **Project**: Index Stale Worktree Cleanup
 **Project Slug**: IDXCLEAN
-**Total Tickets**: 17 (across 5 phases)
-**Status**: All tickets created ✅
+**Total Tickets**: 18 (across 5 phases)
+**Status**: All tickets created ✅ (IDXCLEAN-3005 added for SQLite migration)
 
 ---
 
@@ -42,18 +42,21 @@
 
 **Goal**: Ensure cleanup is safe and correct
 
+**⚠️ STATUS**: Tests exist but need migration from PostgreSQL to SQLite (IDXCLEAN-3005)
+
 | Ticket ID | Title | Agent | Status | Files |
 |-----------|-------|-------|--------|-------|
-| IDXCLEAN-3001 | Detection Accuracy Tests | integration-tester | 🟡 Pending | `crates/maproom/tests/cleanup_detection_test.rs` (new) |
-| IDXCLEAN-3002 | Deletion Safety Tests | integration-tester | 🟡 Pending | `crates/maproom/tests/cleanup_deletion_test.rs` (new) |
-| IDXCLEAN-3003 | CLI Integration Tests | integration-tester | 🟡 Pending | `crates/maproom/tests/cleanup_cli_test.rs` (new) |
+| IDXCLEAN-3001 | Detection Accuracy Tests | integration-tester | ⚠️ Needs Migration | `crates/maproom/tests/cleanup_detection_test.rs` |
+| IDXCLEAN-3002 | Deletion Safety Tests | integration-tester | ⚠️ Needs Migration | `crates/maproom/tests/cleanup_deletion_test.rs` |
+| IDXCLEAN-3003 | CLI Integration Tests | integration-tester | ⚠️ Needs Migration | `crates/maproom/tests/cleanup_cli_test.rs` |
 | IDXCLEAN-3004 | Manual Validation on Staging | integration-tester | 🟡 Pending | This ticket (validation report) |
+| **IDXCLEAN-3005** | **Migrate Integration Tests to SQLite** | rust-indexer-engineer | 🔴 **Blocker** | All test files above |
 
-**Dependencies**: Phase 2 complete
-**Risk Level**: High (testing data deletion)
+**Dependencies**: Phase 2 complete, IDXCLEAN-3005 must be done first
+**Risk Level**: Medium (straightforward migration)
 
-**Critical Tests**:
-- Multi-worktree chunk safety (Scenario 4)
+**Critical Tests** (after SQLite migration):
+- Multi-worktree chunk safety (Scenario 4) - uses `chunk_worktrees` junction table
 - Garbage collection accuracy (Scenario 5)
 - Transaction rollback verification
 

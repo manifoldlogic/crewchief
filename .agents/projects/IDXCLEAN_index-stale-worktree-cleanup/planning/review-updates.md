@@ -1,7 +1,8 @@
 # Project Review Updates: IDXCLEAN
 
 **Original Review Date**: 2025-11-18
-**Updates Completed**: 2025-11-18
+**Second Review Date**: 2025-11-27
+**Updates Completed**: 2025-11-27
 **Update Status**: Complete
 
 ---
@@ -634,3 +635,81 @@ Existing `remove_worktree_from_chunks()` function in `incremental/tree_sha_updat
 **Review Updates Completed**: 2025-11-18
 **Update Quality**: Comprehensive
 **Ready for Execution**: ✅ YES
+
+---
+
+## Second Review Updates (2025-11-27)
+
+### Critical Issue: Integration Tests Written for PostgreSQL, Database is SQLite
+
+**Problem Identified**:
+The integration tests were originally written for PostgreSQL using `tokio_postgres::Client` connections. However, Maproom has migrated to SQLite exclusively. All cleanup integration tests are marked `#[ignore = "requires PostgreSQL database"]` and cannot execute.
+
+**Evidence**:
+- `crates/maproom/tests/cleanup_detection_test.rs` - All tests ignored
+- `crates/maproom/tests/cleanup_deletion_test.rs` - All tests ignored
+- `crates/maproom/tests/cleanup_cli_test.rs` - All tests ignored
+- `crates/maproom/src/db/cleanup.rs` - Implementation uses `SqliteStore`
+
+**Changes Made**:
+
+#### 1. Created New Ticket IDXCLEAN-3005
+**File**: `tickets/IDXCLEAN-3005_migrate-integration-tests-sqlite.md`
+- New ticket for migrating integration tests from PostgreSQL to SQLite
+- Detailed acceptance criteria for all test file migrations
+- Technical notes showing old vs new patterns
+- Estimated 6-8 hours of work
+- Assigned to rust-indexer-engineer
+
+#### 2. Updated quality-strategy.md
+- Changed test fixtures from PostgreSQL to SQLite pattern:
+  - OLD: `setup_temp_postgres().await`
+  - NEW: `SqliteStore::new_test().await`
+- Updated multi-worktree chunk tests to use `chunk_worktrees` junction table
+- Updated Scenario 4 and 5 test code examples for SQLite
+
+#### 3. Updated plan.md
+- Added IDXCLEAN-3005 ticket to Phase 3
+- Updated Phase 3 header to show 5 tickets (was 4)
+- Updated Phase 3 status: "⚠️ STATUS: Tests exist but need migration from PostgreSQL to SQLite"
+- Updated dependencies in summary: SQLite instead of PostgreSQL
+- Updated total ticket count: 18 (was 17)
+
+#### 4. Updated IDXCLEAN_TICKET_INDEX.md
+- Added IDXCLEAN-3005 as blocker ticket (🔴 **Blocker**)
+- Changed status of 3001-3003 to "⚠️ Needs Migration"
+- Added note about SQLite migration requirement
+- Updated total ticket count to 18
+
+**Result**: ✅ Issue addressed with concrete remediation plan
+- New ticket created with clear acceptance criteria
+- Documentation updated to reflect SQLite patterns
+- Test migration is straightforward (6-8 hours)
+- No implementation changes needed, only test files
+
+### Summary of 2025-11-27 Changes
+
+| Document | Changes Made |
+|----------|-------------|
+| `quality-strategy.md` | Updated test fixtures from PostgreSQL to SQLite, updated test scenarios 4 & 5 |
+| `plan.md` | Added IDXCLEAN-3005, updated Phase 3 header, updated ticket counts |
+| `IDXCLEAN_TICKET_INDEX.md` | Added IDXCLEAN-3005, updated ticket statuses, updated total count |
+| `IDXCLEAN-3005_*.md` | NEW: Complete ticket specification for SQLite migration |
+
+### Remaining Work
+
+1. **IDXCLEAN-3005**: Migrate integration tests to SQLite (6-8 hours)
+2. After IDXCLEAN-3005: Re-verify IDXCLEAN-3001, 3002, 3003 completion
+3. After tests pass: Proceed to IDXCLEAN-3004 (manual validation)
+
+### Success Probability Update
+
+**After 2025-11-27 updates**:
+- Current state: 80% (tests cannot run)
+- After IDXCLEAN-3005 completion: 95% (all tests pass)
+
+---
+
+**Final Review Updates Completed**: 2025-11-27
+**Update Quality**: Comprehensive
+**Ready for Execution**: ✅ YES (with IDXCLEAN-3005 as priority)

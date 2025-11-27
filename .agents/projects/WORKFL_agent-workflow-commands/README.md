@@ -1,11 +1,34 @@
 # Project: WORKFL_agent-workflow-commands
 
 ## Project Summary
-Migrate the agentic workflow logic currently residing in `.claude/commands` (prompt files) into executable CLI commands within `packages/cli`. This project creates deterministic code paths for `crewchief project create`, `crewchief tickets generate`, and `crewchief tickets verify`. Instead of relying on the LLM to "read the prompt and do the right thing," the CLI will implement the standard operating procedures (SOPs) directly, generating the standard markdown structures for plans and tickets programmatically. This reduces hallucination risk and standardizes the output format across all agents.
+
+Create CLI commands that support the project workflow by providing deterministic scaffolding and status operations. These commands can be used by **both human users and AI agents** to ensure consistency and reduce the tokens required to perform workflow tasks.
+
+**Key Benefits:**
+- **Dual Audience**: Commands work for humans at the terminal AND agents via tool calls
+- **Token Efficiency**: Agents using CLI commands require fewer tokens than reading/interpreting prompt files
+- **Consistency**: Deterministic CLI output vs variable LLM interpretation of prompts
+- **Slash Command Integration**: CLI commands support (not replace) existing slash commands
+- **Future Skills**: Enables creation of project workflow skills that compose CLI primitives
+
+**Important Clarification**: CLI commands handle *scaffolding* (folder/file creation) and *status reporting* (parsing ticket states). The slash commands (e.g., `/create-project`, `/work-on-project`) continue to orchestrate the full workflow, including content generation that requires LLM creativity.
+
+## Commands Overview
+
+```
+crewchief project
+  ├── init <slug> <name>        # Scaffold new project structure
+  ├── list                       # List active projects
+  ├── status <slug>              # Show project completion status
+  └── tickets
+      ├── list <slug>            # List tickets with detailed status
+      └── show <slug> <id>       # Show full ticket details
+```
 
 ## Relevant Agents
-- **Typescript Engineer**: To implement the CLI commands.
-- **Prompt Engineer**: To verify the logic matches the original intent of the prompts.
+
+- **TypeScript Engineer**: Implement the CLI commands
+- **Prompt Engineer**: Verify logic matches original intent of prompts
 
 ## Planning Documents
 - [Analysis](./planning/analysis.md)

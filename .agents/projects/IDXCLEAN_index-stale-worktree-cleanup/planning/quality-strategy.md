@@ -299,17 +299,17 @@ async fn test_periodic_cleanup_defers_when_indexer_busy() {
 
 ### Test Fixtures
 
-**Database fixtures:**
+**Database fixtures (SQLite):**
 ```rust
-async fn setup_test_db() -> TestDatabase {
-    // Create temporary PostgreSQL database
-    let db_url = setup_temp_postgres().await;
-    run_migrations(&db_url).await;
-    TestDatabase::new(db_url)
+async fn setup_test_db() -> SqliteStore {
+    // Create temporary in-memory SQLite database
+    let store = SqliteStore::new_test().await.expect("create test store");
+    // Migrations run automatically on store creation
+    store
 }
 
-async fn create_stale_worktree(db: &TestDatabase, path: &str) -> i32 {
-    db.insert_worktree(Worktree {
+async fn create_stale_worktree(store: &SqliteStore, path: &str) -> i64 {
+    store.insert_worktree(Worktree {
         name: format!("stale-{}", uuid::Uuid::new_v4()),
         abs_path: path.into(),
         repo_id: 1,
@@ -317,9 +317,9 @@ async fn create_stale_worktree(db: &TestDatabase, path: &str) -> i32 {
     }).await.unwrap()
 }
 
-async fn create_valid_worktree(db: &TestDatabase) -> i32 {
+async fn create_valid_worktree(store: &SqliteStore) -> i64 {
     let temp_dir = tempfile::tempdir().unwrap();
-    db.insert_worktree(Worktree {
+    store.insert_worktree(Worktree {
         name: "main".into(),
         abs_path: temp_dir.path().to_string_lossy().into(),
         repo_id: 1,
@@ -421,80 +421,85 @@ async fn test_parallel_detection_performance() {
 }
 ```
 
-**Scenario 4: Multi-Worktree Chunk Safety**
+**Scenario 4: Multi-Worktree Chunk Safety (SQLite)**
 ```rust
 #[tokio::test]
 async fn test_multi_worktree_chunk_preserved_on_partial_deletion() {
-    let db = setup_test_db().await;
+    let store = setup_test_db().await;
 
-    // Create 2 worktrees sharing a chunk
-    let worktree_a_id = create_valid_worktree(&db, "worktree-a").await;
-    let worktree_b_id = create_stale_worktree(&db, "/tmp/stale-b").await;
+    // Create 2 worktrees sharing a chunk via chunk_worktrees junction table
+    let worktree_a_id = create_valid_worktree(&store).await;
+    let worktree_b_id = create_stale_worktree(&store, "/tmp/stale-b").await;
 
-    // Create a file and chunk that belongs to BOTH worktrees
-    let file_id = db.insert_file(File {
+    // Create a file and chunk
+    let file_id = store.insert_file(File {
         relpath: "shared.rs".into(),
         worktree_id: worktree_a_id,
         // ...
     }).await.unwrap();
 
-    let chunk_id = db.insert_chunk(Chunk {
+    let chunk_id = store.insert_chunk(Chunk {
         file_id,
-        worktree_ids: json!([worktree_a_id.to_string(), worktree_b_id.to_string()]),
         // ...
     }).await.unwrap();
 
-    // Verify chunk exists with both worktree IDs
-    let chunk = db.get_chunk(chunk_id).await.unwrap();
-    assert_eq!(chunk.worktree_ids.as_array().unwrap().len(), 2);
+    // Associate chunk with BOTH worktrees via junction table
+    store.add_chunk_worktree(chunk_id, worktree_a_id).await.unwrap();
+    store.add_chunk_worktree(chunk_id, worktree_b_id).await.unwrap();
+
+    // Verify chunk exists in both worktrees
+    let worktree_ids = store.get_chunk_worktrees(chunk_id).await.unwrap();
+    assert_eq!(worktree_ids.len(), 2);
 
     // Delete stale worktree B (A is still valid)
     let stale = vec![StaleWorktree { id: worktree_b_id, exists: false, /* ... */ }];
-    let cleaner = WorktreeCleaner::new(db.clone(), false);
+    let cleaner = WorktreeCleaner::new(store.clone(), false);
     let report = cleaner.cleanup_stale_worktrees(stale).await.unwrap();
     assert_eq!(report.deleted_count, 1);
 
     // Critical assertion: chunk MUST still exist
-    let chunk = db.get_chunk(chunk_id).await.unwrap();
+    let chunk = store.get_chunk(chunk_id).await.unwrap();
     assert!(chunk.is_some(), "Multi-worktree chunk should not be deleted");
 
-    // Critical assertion: worktree_ids array updated correctly
-    let worktree_ids = chunk.unwrap().worktree_ids.as_array().unwrap();
-    assert_eq!(worktree_ids.len(), 1, "Chunk should have 1 worktree ID after removal");
-    assert_eq!(worktree_ids[0].as_str().unwrap(), worktree_a_id.to_string());
+    // Critical assertion: chunk_worktrees junction table updated correctly
+    let remaining_worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
+    assert_eq!(remaining_worktrees.len(), 1, "Chunk should have 1 worktree after removal");
+    assert_eq!(remaining_worktrees[0], worktree_a_id);
 
     // Verify worktree A (valid) still exists
-    assert!(db.get_worktree(worktree_a_id).await.is_ok());
+    assert!(store.get_worktree(worktree_a_id).await.is_ok());
 }
 ```
 
-**Scenario 5: Garbage Collection Accuracy**
+**Scenario 5: Garbage Collection Accuracy (SQLite)**
 ```rust
 #[tokio::test]
 async fn test_single_worktree_chunk_garbage_collected() {
-    let db = setup_test_db().await;
+    let store = setup_test_db().await;
 
     // Create a stale worktree with a chunk that ONLY belongs to this worktree
-    let stale_id = create_stale_worktree(&db, "/tmp/stale").await;
+    let stale_id = create_stale_worktree(&store, "/tmp/stale").await;
 
-    let file_id = db.insert_file(File {
+    let file_id = store.insert_file(File {
         relpath: "orphan.rs".into(),
         worktree_id: stale_id,
         // ...
     }).await.unwrap();
 
-    let chunk_id = db.insert_chunk(Chunk {
+    let chunk_id = store.insert_chunk(Chunk {
         file_id,
-        worktree_ids: json!([stale_id.to_string()]),  // Only in this worktree
         // ...
     }).await.unwrap();
 
+    // Associate chunk with ONLY this worktree via junction table
+    store.add_chunk_worktree(chunk_id, stale_id).await.unwrap();
+
     // Verify chunk exists before deletion
-    assert!(db.get_chunk(chunk_id).await.is_ok());
+    assert!(store.get_chunk(chunk_id).await.is_ok());
 
     // Delete the stale worktree
     let stale = vec![StaleWorktree { id: stale_id, exists: false, /* ... */ }];
-    let cleaner = WorktreeCleaner::new(db.clone(), false);
+    let cleaner = WorktreeCleaner::new(store.clone(), false);
     let report = cleaner.cleanup_stale_worktrees(stale).await.unwrap();
 
     // Verify report shows chunk was cleaned
@@ -502,12 +507,13 @@ async fn test_single_worktree_chunk_garbage_collected() {
     assert_eq!(report.chunks_cleaned, 1);
 
     // Critical assertion: chunk MUST be deleted (garbage collection)
-    let chunk = db.get_chunk(chunk_id).await;
+    // Cleanup removes chunk_worktrees entry, then garbage collects orphaned chunks
+    let chunk = store.get_chunk(chunk_id).await;
     assert!(chunk.is_err() || chunk.unwrap().is_none(),
             "Single-worktree chunk should be garbage collected");
 
     // Verify worktree also deleted
-    assert!(db.get_worktree(stale_id).await.is_err());
+    assert!(store.get_worktree(stale_id).await.is_err());
 }
 ```
 

@@ -52,14 +52,18 @@
 ### Phase 3: Integration Testing and Safety Validation (Week 2)
 **Goal:** Ensure cleanup is safe and correct
 
+**⚠️ STATUS:** Tests exist but need migration from PostgreSQL to SQLite.
+
 **Deliverables:**
-- Integration test suite (database interactions)
+- Integration test suite (SQLite database interactions)
 - Safety validation tests (no false positives)
 - Transaction rollback tests
+- Test migration from PostgreSQL to SQLite (IDXCLEAN-3005)
 - Manual validation on staging database
 
-**Agent Assignment:** integration-tester
-**Risk Level:** High (testing data deletion)
+**Tickets:** 5 (IDXCLEAN-3001 to 3005)
+**Agent Assignment:** rust-indexer-engineer (3005), integration-tester (3001-3004)
+**Risk Level:** Medium (straightforward test migration)
 
 ### Phase 4: Watch Integration (Week 3+) [Optional Enhancement]
 **Goal:** Automatic cleanup during watch command
@@ -524,9 +528,58 @@ async fn test_cli_default_is_dry_run() {
 **Files Modified:**
 - Update ticket with validation report
 
-**Dependencies:** IDXCLEAN-2003, 3001, 3002, 3003
+**Dependencies:** IDXCLEAN-2003, 3001, 3002, 3003, 3005
 
 **Estimated Effort:** 0.5 day
+
+---
+
+#### Ticket IDXCLEAN-3005: Migrate Integration Tests to SQLite
+**Description:** Migrate cleanup integration tests from PostgreSQL to SQLite to match current database implementation.
+
+**Background:** The integration tests were originally written for PostgreSQL using `tokio_postgres::Client` connections. However, Maproom has migrated to SQLite exclusively. All cleanup integration tests are currently marked `#[ignore = "requires PostgreSQL database"]` and cannot run.
+
+**Acceptance Criteria:**
+- [ ] `cleanup_detection_test.rs` rewritten to use `SqliteStore` instead of `tokio_postgres`
+- [ ] `cleanup_deletion_test.rs` rewritten to use `SqliteStore` with `chunk_worktrees` junction table
+- [ ] `cleanup_cli_test.rs` rewritten to use `SqliteStore`
+- [ ] All `#[ignore = "requires PostgreSQL database"]` annotations removed
+- [ ] Test fixtures use in-memory SQLite databases (`SqliteStore::new_test()`)
+- [ ] Multi-worktree chunk tests use `chunk_worktrees` junction table (not JSONB arrays)
+- [ ] All 15+ integration tests pass with `cargo test --test cleanup`
+- [ ] CI/CD passes with cleanup tests enabled
+
+**Technical Notes:**
+```rust
+// OLD (PostgreSQL):
+async fn setup_test_db() -> Client {
+    let db_url = setup_temp_postgres().await;
+    let (client, _) = tokio_postgres::connect(&db_url, NoTls).await.unwrap();
+    client
+}
+
+// NEW (SQLite):
+async fn setup_test_db() -> SqliteStore {
+    SqliteStore::new_test().await.expect("create test store")
+}
+
+// Multi-worktree chunk association (junction table, not JSONB):
+store.add_chunk_worktree(chunk_id, worktree_a_id).await.unwrap();
+store.add_chunk_worktree(chunk_id, worktree_b_id).await.unwrap();
+```
+
+**Files Modified:**
+- `crates/maproom/tests/cleanup_detection_test.rs` (rewrite for SQLite)
+- `crates/maproom/tests/cleanup_deletion_test.rs` (rewrite for SQLite)
+- `crates/maproom/tests/cleanup_cli_test.rs` (rewrite for SQLite)
+
+**Dependencies:** IDXCLEAN-1001, 1002 (cleanup module must be implemented for SQLite)
+
+**Estimated Effort:** 6-8 hours
+
+**Agent Assignment:** rust-indexer-engineer
+
+**Risk Level:** Low (straightforward migration, no implementation changes needed)
 
 ---
 
@@ -1093,11 +1146,11 @@ Behavior:
 
 **Ticket Count:**
 - Phase 1: 3 tickets (core infrastructure)
-- Phase 2: 3 tickets (CLI interface)
-- Phase 3: 4 tickets (testing and validation)
-- Phase 4: 4 tickets (watch integration, optional)
+- Phase 2: 4 tickets (CLI interface)
+- Phase 3: 5 tickets (testing and validation, including SQLite migration)
+- Phase 4: 3 tickets (watch integration, optional)
 - Phase 5: 3 tickets (deployment and verification)
-- **Total: 17 tickets**
+- **Total: 18 tickets**
 
 **Key Success Factors:**
 1. Safety first: Multiple layers of defense against data loss
@@ -1107,7 +1160,7 @@ Behavior:
 
 **Dependencies:**
 - None external (self-contained project)
-- PostgreSQL database (existing)
+- SQLite database (existing - migrated from PostgreSQL)
 - Rust toolchain (existing)
 - maproom codebase (existing)
 
