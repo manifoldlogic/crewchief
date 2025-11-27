@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TerminalProvider, WindowOptions, SplitDirection } from '../interface'
+import { TerminalProvider, WindowOptions, SplitDirection, AgentInfo } from '../interface'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -107,5 +107,72 @@ export class ITermProvider implements TerminalProvider {
   async focus(_paneId: string): Promise<void> {
     // Focus the iTerm app - individual pane focusing would require more complex scripting
     spawnSync('osascript', ['-e', 'tell application "iTerm2" to activate'])
+  }
+
+  /**
+   * Send a message to an agent pane via send_to_pane.py
+   * Matches TerminalProvider interface: sendMessage?(paneId: string, message: string): Promise<boolean>
+   */
+  async sendMessage(paneId: string, message: string): Promise<boolean> {
+    if (!this.scriptsDir) return false
+
+    // Extract agent type from paneId (format: name__type) for proper Enter key handling
+    const agentType = this.parseAgentType(paneId)
+
+    const args = [join(this.scriptsDir, 'send_to_pane.py'), '--to', paneId, '--text', message]
+    if (agentType && agentType !== 'unknown') {
+      args.push('--agent', agentType)
+    }
+
+    const result = spawnSync('python3', args, { encoding: 'utf-8' })
+    return result.status === 0
+  }
+
+  /**
+   * List all agent panes by calling list_panes.py and filtering for agent naming convention
+   */
+  async listAgents(): Promise<AgentInfo[]> {
+    if (!this.scriptsDir) return []
+
+    const result = spawnSync('python3', [join(this.scriptsDir, 'list_panes.py')], { encoding: 'utf-8' })
+
+    if (result.status !== 0) return []
+    return this.parsePaneList(result.stdout)
+  }
+
+  /**
+   * Parse list_panes.py output to extract agent information
+   * Output format: " N. [label]     Window:W Tab:T ID:session_id"
+   */
+  private parsePaneList(output: string): AgentInfo[] {
+    const agents: AgentInfo[] = []
+    const lines = output.trim().split('\n')
+
+    for (const line of lines) {
+      // Parse output like: " 1. [label]     Window:1 Tab:1 ID:3C31E1FF..."
+      const match = line.match(/\[([^\]]+)\].*ID:(\S+)/)
+      if (match) {
+        const [, label, sessionId] = match
+        // Filter for agent panes (name__type format)
+        if (label.includes('__')) {
+          const parts = label.split('__')
+          agents.push({
+            id: sessionId,
+            name: label,
+            type: parts[parts.length - 1],
+            status: 'running', // iTerm panes are always running (if they exist)
+          })
+        }
+      }
+    }
+    return agents
+  }
+
+  /**
+   * Extract agent type from paneId (format: name__type)
+   */
+  private parseAgentType(paneId: string): string {
+    const parts = paneId.split('__')
+    return parts.length > 1 ? parts[parts.length - 1] : 'unknown'
   }
 }
