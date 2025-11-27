@@ -1,9 +1,9 @@
 # Ticket: IDXCLEAN-5002: Create Deployment Procedure and Monitoring Setup
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docs-writer
@@ -19,12 +19,12 @@ The stale worktree cleanup feature involves automated data deletion in productio
 This ticket implements Phase 5 - Production Deployment (IDXCLEAN-5002) from plan.md (lines 728-754), specifically the deployment checklist, rollback procedures, and monitoring setup requirements.
 
 ## Acceptance Criteria
-- [ ] Deployment checklist created with phased rollout steps
-- [ ] Rollback procedure documented with data recovery steps
-- [ ] Monitoring configuration specified (error alerts, performance metrics)
-- [ ] Log aggregation configured for audit trail
-- [ ] Performance baseline established for cleanup operations
-- [ ] Incident response playbook created with escalation paths
+- [x] Deployment checklist created with phased rollout steps (`docs/deployment-cleanup.md`)
+- [x] Rollback procedure documented with data recovery steps (in deployment guide)
+- [x] Monitoring configuration specified (error alerts, performance metrics) (in deployment guide)
+- [x] Log aggregation configured for audit trail (in deployment guide)
+- [x] Performance baseline established for cleanup operations (from IDXCLEAN-3004: 14ms)
+- [x] Incident response playbook created with escalation paths (`docs/incident-response-cleanup.md`)
 
 ## Technical Requirements
 - Phased rollout plan (staging → production → watch integration)
@@ -175,6 +175,31 @@ Document baseline metrics from staging validation (IDXCLEAN-3004):
   - **Mitigation**: Practice data recovery in staging, document all steps clearly
 
 ## Files/Packages Affected
-- `docs/deployment-cleanup.md` (new file)
-- `docs/incident-response-cleanup.md` (new file)
-- Potentially `docs/monitoring-setup.md` (if needed for detailed configuration)
+- `docs/deployment-cleanup.md` (new file) - Complete deployment guide with phased rollout
+- `docs/incident-response-cleanup.md` (new file) - Incident response playbook with runbooks
+
+## Implementation Notes
+
+### Created Documentation
+
+**docs/deployment-cleanup.md** covers:
+- Pre-deployment checklist (tests, backups, team briefing)
+- Phase 1: Development validation
+- Phase 2: Staging deployment with 24h monitoring
+- Phase 3: Production deployment with 48h monitoring
+- Phase 4: Watch integration (future - blocked pending watch reimplementation)
+- Rollback procedures for CLI and watch integration
+- Data recovery options (full restore, selective re-index, upsert)
+- Configuration reference (env vars, CLI flags, exit codes)
+- Monitoring configuration (alerts, log queries, performance baseline)
+
+**docs/incident-response-cleanup.md** covers:
+- Severity levels (P0-P3) with response times
+- Initial response checklist
+- Runbook: Incorrect Deletion (P0) - immediate stop, identify, recover
+- Runbook: Cleanup Failures (P1) - diagnostics and resolution
+- Runbook: Performance Issues (P2) - monitoring and optimization
+- Data recovery procedures (3 options)
+- Escalation path with communication templates
+- Post-incident review process
+- Prevention measures and maintenance schedule
