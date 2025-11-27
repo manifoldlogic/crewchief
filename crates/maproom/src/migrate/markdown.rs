@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio_postgres::Client;
+use crate::db::SqliteStore;
 use tracing::{error, info, warn};
 
 use crate::indexer::parser;
@@ -69,18 +69,18 @@ struct MarkdownFile {
 
 /// Handles migration of markdown chunks from regex parser to tree-sitter parser
 pub struct MarkdownMigrator {
-    client: Client,
+    store: SqliteStore,
 }
 
 impl MarkdownMigrator {
-    /// Create a new migrator with a database client
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    /// Create a new migrator with a database store
+    pub fn new(store: SqliteStore) -> Self {
+        Self { store }
     }
 
     /// Run the complete migration for a repository
     pub async fn migrate(
-        &mut self,
+        &self,
         repo_name: &str,
         worktree_name: Option<&str>,
     ) -> Result<MigrationResult> {
@@ -147,31 +147,32 @@ impl MarkdownMigrator {
     async fn create_backup(&self) -> Result<String> {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
         let backup_table = format!("chunks_backup_{}", timestamp);
+        let backup_table_clone = backup_table.clone();
 
-        // Create backup table with same schema as chunks
-        self.client
-            .execute(
+        self.store.run(move |conn| {
+            // Create backup table with same schema as chunks
+            conn.execute(
                 &format!(
-                    "CREATE TABLE maproom.{} AS
-                     SELECT * FROM maproom.chunks
+                    "CREATE TABLE {} AS
+                     SELECT * FROM chunks
                      WHERE file_id IN (
-                         SELECT id FROM maproom.files WHERE language IN ('md', 'mdx')
+                         SELECT id FROM files WHERE language IN ('md', 'mdx')
                      )",
-                    backup_table
+                    backup_table_clone
                 ),
-                &[],
+                [],
             )
-            .await
             .context("Failed to create backup table")?;
 
-        // Add index on file_id for faster rollback
-        self.client
-            .execute(
-                &format!("CREATE INDEX ON maproom.{} (file_id)", backup_table),
-                &[],
+            // Add index on file_id for faster rollback
+            conn.execute(
+                &format!("CREATE INDEX idx_{}_file_id ON {} (file_id)", backup_table_clone, backup_table_clone),
+                [],
             )
-            .await
             .context("Failed to create backup index")?;
+
+            Ok(())
+        }).await?;
 
         Ok(backup_table)
     }
@@ -182,136 +183,154 @@ impl MarkdownMigrator {
         repo_name: &str,
         worktree_name: Option<&str>,
     ) -> Result<Vec<MarkdownFile>> {
-        let query = if let Some(_worktree) = worktree_name {
-            "SELECT f.id, f.relpath,
-                    COALESCE(
-                        (SELECT content FROM maproom.file_contents WHERE file_id = f.id LIMIT 1),
-                        ''
-                    ) as content
-             FROM maproom.files f
-             JOIN maproom.repos r ON f.repo_id = r.id
-             JOIN maproom.worktrees w ON f.worktree_id = w.id
-             WHERE r.name = $1 AND w.name = $2 AND f.language IN ('md', 'mdx')
-             ORDER BY f.relpath"
-        } else {
-            "SELECT f.id, f.relpath,
-                    COALESCE(
-                        (SELECT content FROM maproom.file_contents WHERE file_id = f.id LIMIT 1),
-                        ''
-                    ) as content
-             FROM maproom.files f
-             JOIN maproom.repos r ON f.repo_id = r.id
-             WHERE r.name = $1 AND f.language IN ('md', 'mdx')
-             ORDER BY f.relpath"
-        };
+        let repo_name = repo_name.to_string();
+        let worktree_name = worktree_name.map(|s| s.to_string());
 
-        let rows = if let Some(worktree) = worktree_name {
-            self.client.query(query, &[&repo_name, &worktree]).await?
-        } else {
-            self.client.query(query, &[&repo_name]).await?
-        };
+        self.store.run(move |conn| {
+            use rusqlite::params;
 
-        let mut files = Vec::new();
-        for row in rows {
-            let id: i64 = row.get(0);
-            let relpath: String = row.get(1);
-            let content: String = row.get(2);
+            let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(ref worktree) = worktree_name {
+                (
+                    "SELECT f.id, f.relpath,
+                            COALESCE(
+                                (SELECT content FROM file_contents WHERE file_id = f.id LIMIT 1),
+                                ''
+                            ) as content
+                     FROM files f
+                     JOIN repos r ON f.repo_id = r.id
+                     JOIN worktrees w ON f.worktree_id = w.id
+                     WHERE r.name = ?1 AND w.name = ?2 AND f.language IN ('md', 'mdx')
+                     ORDER BY f.relpath".to_string(),
+                    vec![Box::new(repo_name.clone()), Box::new(worktree.clone())]
+                )
+            } else {
+                (
+                    "SELECT f.id, f.relpath,
+                            COALESCE(
+                                (SELECT content FROM file_contents WHERE file_id = f.id LIMIT 1),
+                                ''
+                            ) as content
+                     FROM files f
+                     JOIN repos r ON f.repo_id = r.id
+                     WHERE r.name = ?1 AND f.language IN ('md', 'mdx')
+                     ORDER BY f.relpath".to_string(),
+                    vec![Box::new(repo_name.clone())]
+                )
+            };
 
-            // If content is empty, try to read from filesystem
-            // This is a fallback for when file_contents table doesn't have the data
-            if content.is_empty() {
-                warn!("File {} has no content in database, skipping", relpath);
-                continue;
+            let mut stmt = conn.prepare(&query)?;
+            let params_slice: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+
+            let rows = stmt.query_map(params_slice.as_slice(), |row| {
+                Ok(MarkdownFile {
+                    id: row.get(0)?,
+                    relpath: row.get(1)?,
+                    content: row.get(2)?,
+                })
+            })?;
+
+            let mut files = Vec::new();
+            for row_result in rows {
+                let file = row_result?;
+
+                // If content is empty, skip the file
+                if file.content.is_empty() {
+                    warn!("File {} has no content in database, skipping", file.relpath);
+                    continue;
+                }
+
+                files.push(file);
             }
 
-            files.push(MarkdownFile {
-                id,
-                relpath,
-                content,
-            });
-        }
-
-        Ok(files)
+            Ok(files)
+        }).await
     }
 
     /// Migrate a single file
     async fn migrate_file(
-        &mut self,
+        &self,
         file: &MarkdownFile,
         stats: &mut MigrationStats,
     ) -> Result<FileMigrationStats> {
-        // Start transaction
-        let tx = self.client.build_transaction().start().await?;
+        let file_clone = file.clone();
+        let store = self.store.clone();
 
-        // Count old chunks
-        let old_count_row = tx
-            .query_one(
-                "SELECT COUNT(*) FROM maproom.chunks WHERE file_id = $1",
-                &[&file.id],
-            )
-            .await?;
-        let old_chunks: i64 = old_count_row.get(0);
+        let file_stats = store.run(move |conn| {
+            use rusqlite::params;
 
-        // Parse with new parser
-        let new_chunks = parser::extract_chunks(&file.content, "md");
+            // Start transaction
+            let tx = conn.transaction()?;
 
-        // Delete old chunks
-        tx.execute("DELETE FROM maproom.chunks WHERE file_id = $1", &[&file.id])
-            .await
-            .context("Failed to delete old chunks")?;
+            // Count old chunks
+            let old_chunks: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
+                params![file_clone.id],
+                |row| row.get(0),
+            )?;
 
-        // Insert new chunks
-        let mut inserted_count = 0;
-        for chunk in &new_chunks {
-            let preview = Self::extract_preview(&file.content, chunk.start_line, chunk.end_line);
-            let ts_doc = Self::build_ts_doc(&file.relpath, chunk, &preview);
+            // Parse with new parser
+            let new_chunks = parser::extract_chunks(&file_clone.content, "md");
 
-            // Insert chunk directly in transaction
-            tx.query_one(
-                "INSERT INTO maproom.chunks (
-                   file_id, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata
-                 ) VALUES (
-                   $1, $2::text, ($3::text)::maproom.symbol_kind, $4::text, $5::text, $6, $7, $8::text, to_tsvector('simple', unaccent($9::text)), $10, $11, $12::jsonb
-                 )
-                 ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
-                   symbol_name = EXCLUDED.symbol_name,
-                   kind = EXCLUDED.kind,
-                   signature = EXCLUDED.signature,
-                   docstring = EXCLUDED.docstring,
-                   preview = EXCLUDED.preview,
-                   ts_doc = EXCLUDED.ts_doc,
-                   metadata = EXCLUDED.metadata
-                 RETURNING id",
-                &[
-                    &file.id,
-                    &chunk.symbol_name,
-                    &chunk.kind,
-                    &chunk.signature,
-                    &chunk.docstring,
-                    &chunk.start_line,
-                    &chunk.end_line,
-                    &preview,
-                    &ts_doc,
-                    &1.0f32,
-                    &0.0f32,
-                    &chunk.metadata,
-                ],
-            )
-            .await?;
+            // Delete old chunks
+            tx.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_clone.id])
+                .context("Failed to delete old chunks")?;
 
-            inserted_count += 1;
-        }
+            // Insert new chunks
+            let mut inserted_count = 0;
+            for chunk in &new_chunks {
+                let preview = Self::extract_preview(&file_clone.content, chunk.start_line, chunk.end_line);
+                let ts_doc = Self::build_ts_doc(&file_clone.relpath, chunk, &preview);
 
-        // Commit transaction
-        tx.commit().await?;
+                // Convert metadata to JSON string for SQLite
+                let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
 
-        let file_stats = FileMigrationStats {
-            file_id: file.id,
-            relpath: file.relpath.clone(),
-            old_chunks: old_chunks as usize,
-            new_chunks: inserted_count,
-            delta: inserted_count as i64 - old_chunks,
-        };
+                // Insert chunk directly in transaction
+                // TODO: SQLite doesn't have FTS tsvector - consider using FTS5 table or storing as text
+                tx.execute(
+                    "INSERT INTO chunks (
+                       file_id, blob_sha, symbol_name, kind, signature, docstring, start_line, end_line, preview, ts_doc_text, recency_score, churn_score, metadata
+                     ) VALUES (
+                       ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+                     )
+                     ON CONFLICT(file_id, start_line, end_line) DO UPDATE SET
+                       symbol_name = excluded.symbol_name,
+                       kind = excluded.kind,
+                       signature = excluded.signature,
+                       docstring = excluded.docstring,
+                       preview = excluded.preview,
+                       ts_doc_text = excluded.ts_doc_text,
+                       metadata = excluded.metadata",
+                    params![
+                        file_clone.id,
+                        "", // blob_sha - TODO: compute actual blob SHA
+                        chunk.symbol_name,
+                        chunk.kind,
+                        chunk.signature,
+                        chunk.docstring,
+                        chunk.start_line,
+                        chunk.end_line,
+                        preview,
+                        ts_doc,
+                        1.0f32,
+                        0.0f32,
+                        metadata_json,
+                    ],
+                )?;
+
+                inserted_count += 1;
+            }
+
+            // Commit transaction
+            tx.commit()?;
+
+            Ok(FileMigrationStats {
+                file_id: file_clone.id,
+                relpath: file_clone.relpath.clone(),
+                old_chunks: old_chunks as usize,
+                new_chunks: inserted_count,
+                delta: inserted_count as i64 - old_chunks,
+            })
+        }).await?;
 
         stats.record_file(file_stats.clone());
 
@@ -319,96 +338,86 @@ impl MarkdownMigrator {
     }
 
     /// Rollback migration from a backup table
-    pub async fn rollback(&mut self, backup_table: &str) -> Result<()> {
+    pub async fn rollback(&self, backup_table: &str) -> Result<()> {
         info!("Starting rollback from backup table: {}", backup_table);
 
-        // Verify backup table exists
-        let exists_row = self
-            .client
-            .query_opt(
-                "SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_schema = 'maproom'
-                    AND table_name = $1
-                )",
-                &[&backup_table],
-            )
-            .await?;
+        let backup_table = backup_table.to_string();
+        let store = self.store.clone();
 
-        let exists: bool = exists_row.and_then(|row| row.get(0)).unwrap_or(false);
+        store.run(move |conn| {
+            use rusqlite::params;
 
-        if !exists {
-            anyhow::bail!("Backup table {} does not exist", backup_table);
-        }
+            // Verify backup table exists
+            let exists: bool = conn.query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                params![&backup_table],
+                |row| row.get(0),
+            )?;
 
-        // Start transaction
-        let tx = self.client.build_transaction().start().await?;
+            if !exists {
+                anyhow::bail!("Backup table {} does not exist", backup_table);
+            }
 
-        // Get file IDs from backup
-        let file_ids: Vec<i64> = tx
-            .query(
-                &format!("SELECT DISTINCT file_id FROM maproom.{}", backup_table),
-                &[],
-            )
-            .await?
-            .iter()
-            .map(|row| row.get(0))
-            .collect();
+            // Start transaction
+            let tx = conn.transaction()?;
 
-        info!("Restoring {} files from backup", file_ids.len());
+            // Get file IDs from backup
+            let mut stmt = tx.prepare(&format!("SELECT DISTINCT file_id FROM {}", backup_table))?;
+            let file_ids: Vec<i64> = stmt.query_map([], |row| row.get(0))?
+                .collect::<Result<Vec<_>, _>>()?;
 
-        // Delete current chunks for these files
-        tx.execute(
-            "DELETE FROM maproom.chunks WHERE file_id = ANY($1)",
-            &[&file_ids],
-        )
-        .await?;
+            info!("Restoring {} files from backup", file_ids.len());
 
-        // Restore from backup
-        tx.execute(
-            &format!(
-                "INSERT INTO maproom.chunks
-                 SELECT * FROM maproom.{}",
-                backup_table
-            ),
-            &[],
-        )
-        .await?;
+            // Delete current chunks for these files
+            let placeholders = file_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let delete_query = format!("DELETE FROM chunks WHERE file_id IN ({})", placeholders);
+            let file_id_params: Vec<&dyn rusqlite::ToSql> = file_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+            tx.execute(&delete_query, file_id_params.as_slice())?;
 
-        // Commit transaction
-        tx.commit().await?;
+            // Restore from backup
+            tx.execute(
+                &format!("INSERT INTO chunks SELECT * FROM {}", backup_table),
+                [],
+            )?;
 
-        info!("Rollback complete");
+            // Commit transaction
+            tx.commit()?;
 
-        Ok(())
+            info!("Rollback complete");
+
+            Ok(())
+        }).await
     }
 
     /// List available backup tables
     pub async fn list_backups(&self) -> Result<Vec<String>> {
-        let rows = self
-            .client
-            .query(
-                "SELECT table_name FROM information_schema.tables
-                 WHERE table_schema = 'maproom'
-                 AND table_name LIKE 'chunks_backup_%'
-                 ORDER BY table_name DESC",
-                &[],
-            )
-            .await?;
+        self.store.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT name FROM sqlite_master
+                 WHERE type='table'
+                 AND name LIKE 'chunks_backup_%'
+                 ORDER BY name DESC"
+            )?;
 
-        Ok(rows.iter().map(|row| row.get(0)).collect())
+            let backups = stmt.query_map([], |row| row.get(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(backups)
+        }).await
     }
 
     /// Delete a backup table
-    pub async fn delete_backup(&mut self, backup_table: &str) -> Result<()> {
+    pub async fn delete_backup(&self, backup_table: &str) -> Result<()> {
         info!("Deleting backup table: {}", backup_table);
 
-        self.client
-            .execute(
-                &format!("DROP TABLE IF EXISTS maproom.{}", backup_table),
-                &[],
-            )
-            .await?;
+        let backup_table = backup_table.to_string();
+        self.store.run(move |conn| {
+            conn.execute(
+                &format!("DROP TABLE IF EXISTS {}", backup_table),
+                [],
+            )?;
+            Ok(())
+        }).await?;
 
         info!("Backup table deleted");
 
@@ -447,70 +456,69 @@ impl MarkdownMigrator {
 }
 
 /// Verify migration integrity
-pub async fn verify_migration(client: &Client, repo_name: &str) -> Result<HashMap<String, usize>> {
-    let mut results = HashMap::new();
+pub async fn verify_migration(store: &SqliteStore, repo_name: &str) -> Result<HashMap<String, usize>> {
+    let repo_name = repo_name.to_string();
 
-    // Count markdown files
-    let file_count_row = client
-        .query_one(
-            "SELECT COUNT(*) FROM maproom.files f
-             JOIN maproom.repos r ON f.repo_id = r.id
-             WHERE r.name = $1 AND f.language IN ('md', 'mdx')",
-            &[&repo_name],
-        )
-        .await?;
-    let file_count: i64 = file_count_row.get(0);
-    results.insert("markdown_files".to_string(), file_count as usize);
+    store.run(move |conn| {
+        use rusqlite::params;
 
-    // Count chunks
-    let chunk_count_row = client
-        .query_one(
-            "SELECT COUNT(*) FROM maproom.chunks c
-             JOIN maproom.files f ON c.file_id = f.id
-             JOIN maproom.repos r ON f.repo_id = r.id
-             WHERE r.name = $1 AND f.language IN ('md', 'mdx')",
-            &[&repo_name],
-        )
-        .await?;
-    let chunk_count: i64 = chunk_count_row.get(0);
-    results.insert("total_chunks".to_string(), chunk_count as usize);
+        let mut results = HashMap::new();
 
-    // Count chunks with parent_path (from metadata)
-    let parent_path_count_row = client
-        .query_one(
-            "SELECT COUNT(*) FROM maproom.chunks c
-             JOIN maproom.files f ON c.file_id = f.id
-             JOIN maproom.repos r ON f.repo_id = r.id
-             WHERE r.name = $1 AND f.language IN ('md', 'mdx')
+        // Count markdown files
+        let file_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM files f
+             JOIN repos r ON f.repo_id = r.id
+             WHERE r.name = ?1 AND f.language IN ('md', 'mdx')",
+            params![&repo_name],
+            |row| row.get(0),
+        )?;
+        results.insert("markdown_files".to_string(), file_count as usize);
+
+        // Count chunks
+        let chunk_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chunks c
+             JOIN files f ON c.file_id = f.id
+             JOIN repos r ON f.repo_id = r.id
+             WHERE r.name = ?1 AND f.language IN ('md', 'mdx')",
+            params![&repo_name],
+            |row| row.get(0),
+        )?;
+        results.insert("total_chunks".to_string(), chunk_count as usize);
+
+        // Count chunks with parent_path (from metadata)
+        // In SQLite, we need to parse JSON differently
+        let parent_path_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chunks c
+             JOIN files f ON c.file_id = f.id
+             JOIN repos r ON f.repo_id = r.id
+             WHERE r.name = ?1 AND f.language IN ('md', 'mdx')
                AND c.metadata IS NOT NULL
-               AND c.metadata->>'parent_path' IS NOT NULL",
-            &[&repo_name],
-        )
-        .await?;
-    let parent_path_count: i64 = parent_path_count_row.get(0);
-    results.insert(
-        "chunks_with_parent_path".to_string(),
-        parent_path_count as usize,
-    );
+               AND json_extract(c.metadata, '$.parent_path') IS NOT NULL",
+            params![&repo_name],
+            |row| row.get(0),
+        )?;
+        results.insert(
+            "chunks_with_parent_path".to_string(),
+            parent_path_count as usize,
+        );
 
-    // Count code blocks with language metadata
-    let code_block_count_row = client
-        .query_one(
-            "SELECT COUNT(*) FROM maproom.chunks c
-             JOIN maproom.files f ON c.file_id = f.id
-             JOIN maproom.repos r ON f.repo_id = r.id
-             WHERE r.name = $1 AND f.language IN ('md', 'mdx')
+        // Count code blocks with language metadata
+        let code_block_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chunks c
+             JOIN files f ON c.file_id = f.id
+             JOIN repos r ON f.repo_id = r.id
+             WHERE r.name = ?1 AND f.language IN ('md', 'mdx')
                AND c.kind = 'code_block'
                AND c.metadata IS NOT NULL
-               AND c.metadata->>'language' IS NOT NULL",
-            &[&repo_name],
-        )
-        .await?;
-    let code_block_count: i64 = code_block_count_row.get(0);
-    results.insert(
-        "code_blocks_with_language".to_string(),
-        code_block_count as usize,
-    );
+               AND json_extract(c.metadata, '$.language') IS NOT NULL",
+            params![&repo_name],
+            |row| row.get(0),
+        )?;
+        results.insert(
+            "code_blocks_with_language".to_string(),
+            code_block_count as usize,
+        );
 
-    Ok(results)
+        Ok(results)
+    }).await
 }

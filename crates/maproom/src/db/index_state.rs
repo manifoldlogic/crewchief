@@ -8,15 +8,14 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::db::{create_pool, get_last_indexed_tree, update_index_state, UpdateStats};
+//! use crewchief_maproom::db::{self, UpdateStats};
 //!
 //! # async fn example() -> anyhow::Result<()> {
-//! let pool = create_pool().await?;
+//! let store = db::connect().await?;
 //! let worktree_id = 1;
 //!
 //! // Check if worktree has been indexed
-//! let client = pool.get().await?;
-//! let last_tree = get_last_indexed_tree(&*client, worktree_id).await?;
+//! let last_tree = db::get_last_indexed_tree(&store, worktree_id).await?;
 //! if last_tree == "init" {
 //!     println!("First-time indexing required");
 //! }
@@ -27,13 +26,13 @@
 //!     chunks_processed: 500,
 //!     embeddings_generated: 500,
 //! };
-//! update_index_state(&*client, worktree_id, "abc123...", &stats).await?;
+//! db::update_index_state(&store, worktree_id, "abc123...", &stats).await?;
 //! # Ok(())
 //! # }
 //! ```
 
 use anyhow::Result;
-use tokio_postgres::Client;
+use crate::db::SqliteStore;
 
 /// Metrics for tracking indexing progress and costs.
 ///
@@ -57,7 +56,7 @@ pub struct UpdateStats {
 ///
 /// # Arguments
 ///
-/// * `client` - Database client from connection pool
+/// * `store` - SQLite database store
 /// * `worktree_id` - ID of the worktree to query
 ///
 /// # Returns
@@ -68,11 +67,10 @@ pub struct UpdateStats {
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::db::{create_pool, get_last_indexed_tree};
+/// # use crewchief_maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
-/// # let pool = create_pool().await?;
-/// # let client = pool.get().await?;
-/// let tree_sha = get_last_indexed_tree(&*client, 1).await?;
+/// # let store = db::connect().await?;
+/// let tree_sha = db::get_last_indexed_tree(&store, 1).await?;
 /// match tree_sha.as_str() {
 ///     "init" => println!("Never indexed, full scan required"),
 ///     sha => println!("Last indexed at tree {}", sha),
@@ -80,34 +78,31 @@ pub struct UpdateStats {
 /// # Ok(())
 /// # }
 /// ```
-pub async fn get_last_indexed_tree(client: &Client, worktree_id: i64) -> Result<String> {
-    let row = client
-        .query_opt(
-            "SELECT last_tree_sha FROM maproom.worktree_index_state WHERE worktree_id = $1",
-            &[&worktree_id],
-        )
-        .await?;
+pub async fn get_last_indexed_tree(store: &SqliteStore, worktree_id: i64) -> Result<String> {
+    store.run(move |conn| {
+        use rusqlite::{params, OptionalExtension};
 
-    match row {
-        Some(row) => {
-            let sha: String = row.get(0);
-            Ok(sha)
-        }
-        None => Ok("init".to_string()),
-    }
+        let result: Option<String> = conn.query_row(
+            "SELECT last_tree_sha FROM worktree_index_state WHERE worktree_id = ?1",
+            params![worktree_id],
+            |row| row.get(0),
+        ).optional()?;
+
+        Ok(result.unwrap_or_else(|| "init".to_string()))
+    }).await
 }
 
 /// Updates the index state for a worktree, inserting new or updating existing records.
 ///
-/// Uses PostgreSQL's `ON CONFLICT ... DO UPDATE` (upsert) pattern to handle
+/// Uses SQLite's `INSERT ... ON CONFLICT DO UPDATE` (upsert) pattern to handle
 /// both first-time indexing (INSERT) and subsequent updates (UPDATE) with a
 /// single query.
 ///
-/// The `last_indexed` timestamp is automatically set to `NOW()` on every update.
+/// The `last_indexed` timestamp is automatically set to the current time on every update.
 ///
 /// # Arguments
 ///
-/// * `client` - Database client from connection pool
+/// * `store` - SQLite database store
 /// * `worktree_id` - ID of the worktree being indexed
 /// * `tree_sha` - Current git tree SHA (40-character hex string)
 /// * `stats` - Indexing metrics for progress tracking
@@ -120,49 +115,54 @@ pub async fn get_last_indexed_tree(client: &Client, worktree_id: i64) -> Result<
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::db::{create_pool, update_index_state, UpdateStats};
+/// # use crewchief_maproom::db::{self, UpdateStats};
 /// # async fn example() -> anyhow::Result<()> {
-/// # let pool = create_pool().await?;
-/// # let client = pool.get().await?;
+/// # let store = db::connect().await?;
 /// let stats = UpdateStats {
 ///     files_processed: 150,
 ///     chunks_processed: 750,
 ///     embeddings_generated: 750,
 /// };
-/// update_index_state(&*client, 1, "a1b2c3d4...", &stats).await?;
+/// db::update_index_state(&store, 1, "a1b2c3d4...", &stats).await?;
 /// println!("Index state updated");
 /// # Ok(())
 /// # }
 /// ```
 pub async fn update_index_state(
-    client: &Client,
+    store: &SqliteStore,
     worktree_id: i64,
     tree_sha: &str,
     stats: &UpdateStats,
 ) -> Result<()> {
-    client
-        .execute(
+    let tree_sha = tree_sha.to_string();
+    let chunks_processed = stats.chunks_processed;
+    let embeddings_generated = stats.embeddings_generated;
+
+    store.run(move |conn| {
+        use rusqlite::params;
+
+        conn.execute(
             r#"
-            INSERT INTO maproom.worktree_index_state
+            INSERT INTO worktree_index_state
               (worktree_id, last_tree_sha, last_indexed, chunks_processed, embeddings_generated)
-            VALUES ($1, $2, NOW(), $3, $4)
+            VALUES (?1, ?2, datetime('now'), ?3, ?4)
             ON CONFLICT (worktree_id) DO UPDATE
             SET
-              last_tree_sha = EXCLUDED.last_tree_sha,
-              last_indexed = NOW(),
-              chunks_processed = EXCLUDED.chunks_processed,
-              embeddings_generated = EXCLUDED.embeddings_generated
+              last_tree_sha = excluded.last_tree_sha,
+              last_indexed = datetime('now'),
+              chunks_processed = excluded.chunks_processed,
+              embeddings_generated = excluded.embeddings_generated
             "#,
-            &[
-                &worktree_id,
-                &tree_sha,
-                &stats.chunks_processed,
-                &stats.embeddings_generated,
+            params![
+                worktree_id,
+                tree_sha,
+                chunks_processed,
+                embeddings_generated,
             ],
-        )
-        .await?;
+        )?;
 
-    Ok(())
+        Ok(())
+    }).await
 }
 
 #[cfg(test)]

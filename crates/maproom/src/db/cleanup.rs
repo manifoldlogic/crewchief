@@ -8,7 +8,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio_postgres::Client;
+use crate::db::SqliteStore;
 use tracing::{debug, warn};
 
 /// Errors specific to cleanup operations
@@ -16,7 +16,7 @@ use tracing::{debug, warn};
 pub enum CleanupError {
     /// Database transaction failed during cleanup
     #[error("Database transaction failed during cleanup: {0}")]
-    TransactionFailed(#[source] tokio_postgres::Error),
+    TransactionFailed(String),
 
     /// Failed to validate worktree path on disk
     #[error("Failed to validate worktree path {path}: {source}")]
@@ -32,7 +32,7 @@ pub enum CleanupError {
 
     /// Database connection failed
     #[error("Database connection failed: {0}")]
-    ConnectionFailed(#[from] tokio_postgres::Error),
+    ConnectionFailed(String),
 
     /// Cleanup operation cancelled by user
     #[error("Cleanup operation cancelled by user")]
@@ -67,31 +67,30 @@ pub struct StaleWorktree {
 
 /// Detector for identifying stale worktrees
 pub struct StaleWorktreeDetector<'a> {
-    client: &'a Client,
+    store: &'a SqliteStore,
 }
 
 impl<'a> StaleWorktreeDetector<'a> {
     /// Create a new stale worktree detector
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL database client
+    /// * `store` - SQLite database store
     ///
     /// # Example
     /// ```no_run
     /// use crewchief_maproom::db::cleanup::StaleWorktreeDetector;
-    /// use tokio_postgres::NoTls;
+    /// use crewchief_maproom::db;
     ///
     /// # async fn example() -> anyhow::Result<()> {
-    /// let (client, connection) = tokio_postgres::connect("postgresql://...", NoTls).await?;
-    /// tokio::spawn(async move { connection.await });
+    /// let store = db::connect().await?;
     ///
-    /// let detector = StaleWorktreeDetector::new(&client);
+    /// let detector = StaleWorktreeDetector::new(&store);
     /// let stale_worktrees = detector.detect_stale_worktrees().await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(client: &'a Client) -> Self {
-        Self { client }
+    pub fn new(store: &'a SqliteStore) -> Self {
+        Self { store }
     }
 
     /// Detect all stale worktrees in the database
@@ -143,26 +142,19 @@ impl<'a> StaleWorktreeDetector<'a> {
 
     /// Query all worktrees from the database
     async fn query_all_worktrees(&self) -> Result<Vec<Worktree>> {
-        let rows = self
-            .client
-            .query(
-                "SELECT id, repo_id, name, abs_path FROM maproom.worktrees ORDER BY id",
-                &[],
-            )
-            .await
-            .context("Failed to query worktrees from database")?;
-
-        let worktrees = rows
-            .into_iter()
-            .map(|row| Worktree {
-                id: row.get(0),
-                repo_id: row.get(1),
-                name: row.get(2),
-                abs_path: row.get(3),
-            })
-            .collect();
-
-        Ok(worktrees)
+        self.store.run(move |conn| {
+            let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees ORDER BY id")?;
+            let worktrees = stmt.query_map([], |row| {
+                Ok(Worktree {
+                    id: row.get(0)?,
+                    repo_id: row.get(1)?,
+                    name: row.get(2)?,
+                    abs_path: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+            Ok(worktrees)
+        }).await
     }
 
     /// Validate a single worktree and return its status
@@ -205,19 +197,9 @@ impl<'a> StaleWorktreeDetector<'a> {
 
     /// Count chunks for a specific worktree
     ///
-    /// Counts chunks where the worktree_id appears in the worktree_ids JSONB array.
+    /// Counts chunks via the chunk_worktrees junction table.
     async fn count_chunks_for_worktree(&self, worktree_id: i64) -> Result<i64> {
-        let row = self
-            .client
-            .query_one(
-                "SELECT COUNT(*) FROM maproom.chunks WHERE worktree_ids ? $1::text",
-                &[&worktree_id.to_string()],
-            )
-            .await
-            .with_context(|| format!("Failed to count chunks for worktree {}", worktree_id))?;
-
-        let count: i64 = row.get(0);
-        Ok(count)
+        self.store.get_worktree_chunk_count(worktree_id).await
     }
 }
 
@@ -257,7 +239,7 @@ impl CleanupReport {
 
 /// Cleaner for safely deleting stale worktrees
 pub struct WorktreeCleaner<'a> {
-    client: &'a mut Client,
+    store: &'a SqliteStore,
     dry_run: bool,
 }
 
@@ -265,24 +247,23 @@ impl<'a> WorktreeCleaner<'a> {
     /// Create a new worktree cleaner
     ///
     /// # Arguments
-    /// * `client` - PostgreSQL database client (requires mutable reference for transactions)
+    /// * `store` - SQLite database store
     /// * `dry_run` - If true, no actual deletions are performed
     ///
     /// # Example
     /// ```no_run
     /// use crewchief_maproom::db::cleanup::{WorktreeCleaner, StaleWorktreeDetector};
-    /// use tokio_postgres::NoTls;
+    /// use crewchief_maproom::db;
     ///
     /// # async fn example() -> anyhow::Result<()> {
-    /// let (mut client, connection) = tokio_postgres::connect("postgresql://...", NoTls).await?;
-    /// tokio::spawn(async move { connection.await });
+    /// let store = db::connect().await?;
     ///
     /// // Detect stale worktrees
-    /// let detector = StaleWorktreeDetector::new(&client);
+    /// let detector = StaleWorktreeDetector::new(&store);
     /// let stale_worktrees = detector.detect_stale_worktrees().await?;
     ///
     /// // Clean up stale worktrees
-    /// let mut cleaner = WorktreeCleaner::new(&mut client, false);
+    /// let cleaner = WorktreeCleaner::new(&store, false);
     /// let report = cleaner.cleanup_stale_worktrees(stale_worktrees).await?;
     ///
     /// println!("Deleted {} worktrees, cleaned {} chunks",
@@ -290,31 +271,27 @@ impl<'a> WorktreeCleaner<'a> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(client: &'a mut Client, dry_run: bool) -> Self {
-        Self { client, dry_run }
+    pub fn new(store: &'a SqliteStore, dry_run: bool) -> Self {
+        Self { store, dry_run }
     }
 
     /// Clean up stale worktrees
     ///
-    /// Deletes stale worktrees from the database using array-based deletion pattern
-    /// to protect multi-worktree chunks. All deletions occur within a single transaction
-    /// for atomicity.
+    /// Deletes stale worktrees from the database. In SQLite, this uses the chunk_worktrees
+    /// junction table to track multi-worktree chunks. All deletions occur within a single
+    /// transaction for atomicity.
     ///
     /// # Algorithm
     /// For each stale worktree:
-    /// 1. Remove worktree ID from all chunks' worktree_ids arrays
-    /// 2. Garbage collect chunks with empty worktree_ids arrays
+    /// 1. Remove entries from chunk_worktrees junction table
+    /// 2. Garbage collect chunks with no remaining worktree associations
     /// 3. Delete the worktree record
     ///
     /// # Safety
-    /// - Multi-worktree chunks are preserved (array removal, not CASCADE)
+    /// - Multi-worktree chunks are preserved (only junction entries removed)
     /// - Single-worktree chunks are garbage collected
     /// - All operations in transaction (atomic commit)
     /// - Partial failures are collected but don't abort transaction
-    ///
-    /// # Performance
-    /// Uses GIN index on worktree_ids for fast chunk queries.
-    /// Target: <2 seconds for 95 deletions with 500,000 chunks.
     ///
     /// # Arguments
     /// * `stale` - Vector of stale worktrees to delete
@@ -322,73 +299,69 @@ impl<'a> WorktreeCleaner<'a> {
     /// # Returns
     /// CleanupReport with statistics and any failures
     pub async fn cleanup_stale_worktrees(
-        &mut self,
+        &self,
         stale: Vec<StaleWorktree>,
     ) -> Result<CleanupReport> {
         if self.dry_run {
             return Ok(self.create_dry_run_report(&stale));
         }
 
-        // Create a single transaction for all deletions
-        let mut tx = self
-            .client
-            .transaction()
-            .await
-            .context("Failed to create cleanup transaction")?;
+        let store = self.store.clone();
+        store.run(move |conn| {
+            let tx = conn.transaction()?;
 
-        let mut deleted_ids = Vec::new();
-        let mut chunks_cleaned = 0i64;
-        let mut failed_deletions = Vec::new();
+            let mut deleted_ids = Vec::new();
+            let mut chunks_cleaned = 0i64;
+            let mut failed_deletions = Vec::new();
 
-        // Process each worktree deletion within the same transaction
-        for wt in &stale {
-            match Self::delete_worktree_tx(&mut tx, wt.id).await {
-                Ok(cleaned) => {
-                    deleted_ids.push(wt.id);
-                    chunks_cleaned += cleaned;
-                    tracing::info!(
-                        worktree_id = wt.id,
-                        name = %wt.name,
-                        abs_path = %wt.abs_path,
-                        chunks_cleaned = cleaned,
-                        "Deleted stale worktree"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        worktree_id = wt.id,
-                        name = %wt.name,
-                        error = %e,
-                        "Failed to delete stale worktree"
-                    );
-                    failed_deletions.push((wt.id, e.to_string()));
+            // Process each worktree deletion within the same transaction
+            for wt in &stale {
+                match Self::delete_worktree_tx(&tx, wt.id) {
+                    Ok(cleaned) => {
+                        deleted_ids.push(wt.id);
+                        chunks_cleaned += cleaned;
+                        tracing::info!(
+                            worktree_id = wt.id,
+                            name = %wt.name,
+                            abs_path = %wt.abs_path,
+                            chunks_cleaned = cleaned,
+                            "Deleted stale worktree"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            worktree_id = wt.id,
+                            name = %wt.name,
+                            error = %e,
+                            "Failed to delete stale worktree"
+                        );
+                        failed_deletions.push((wt.id, e.to_string()));
+                    }
                 }
             }
-        }
 
-        // Commit all deletions at once
-        tx.commit()
-            .await
-            .context("Failed to commit cleanup transaction")?;
+            // Commit all deletions at once
+            tx.commit()
+                .context("Failed to commit cleanup transaction")?;
 
-        Ok(CleanupReport {
-            total_stale: stale.len(),
-            deleted_count: deleted_ids.len(),
-            chunks_cleaned,
-            failed_count: failed_deletions.len(),
-            deleted_ids,
-            failed_deletions,
-        })
+            Ok(CleanupReport {
+                total_stale: stale.len(),
+                deleted_count: deleted_ids.len(),
+                chunks_cleaned,
+                failed_count: failed_deletions.len(),
+                deleted_ids,
+                failed_deletions,
+            })
+        }).await
     }
 
     /// Delete a single worktree within a transaction
     ///
-    /// Uses array-based deletion pattern from incremental/tree_sha_update.rs::remove_worktree_from_chunks
-    /// but operates at worktree-level scope (all chunks) instead of file-level scope.
+    /// In SQLite, we use the chunk_worktrees junction table instead of JSONB arrays.
     ///
     /// # Steps
-    /// 1. Remove worktree_id from chunks.worktree_ids arrays
-    /// 2. Garbage collect chunks with empty arrays
+    /// 1. Remove entries from chunk_worktrees junction table for this worktree
+    /// 2. Garbage collect chunks with no remaining worktree associations
     /// 3. Delete worktree record
     ///
     /// # Arguments
@@ -396,52 +369,42 @@ impl<'a> WorktreeCleaner<'a> {
     /// * `worktree_id` - ID of worktree to delete
     ///
     /// # Returns
-    /// Number of chunks garbage collected (had empty worktree_ids after removal)
-    async fn delete_worktree_tx(
-        tx: &mut tokio_postgres::Transaction<'_>,
+    /// Number of chunks garbage collected (had no remaining worktree associations)
+    fn delete_worktree_tx(
+        tx: &rusqlite::Transaction<'_>,
         worktree_id: i64,
     ) -> Result<i64> {
-        // Step 1: Remove worktree from chunks.worktree_ids JSONB arrays
-        // Uses JSONB operator: worktree_ids - 'X'::TEXT removes X from array
-        // WHERE clause uses GIN index: worktree_ids ? 'X' checks if array contains X
-        let _affected = tx
-            .execute(
-                r#"
-                UPDATE maproom.chunks
-                SET worktree_ids = worktree_ids - $1::TEXT,
-                    updated_at = NOW()
-                WHERE worktree_ids ? $1::TEXT
-                "#,
-                &[&worktree_id.to_string()],
-            )
-            .await
-            .with_context(|| format!("Failed to remove worktree {} from chunks", worktree_id))?;
+        use rusqlite::params;
 
-        // Step 2: Garbage collection - delete chunks with empty worktree_ids
+        // Step 1: Remove entries from chunk_worktrees junction table
+        tx.execute(
+            "DELETE FROM chunk_worktrees WHERE worktree_id = ?1",
+            params![worktree_id],
+        )
+        .with_context(|| format!("Failed to remove worktree {} from chunk_worktrees", worktree_id))?;
+
+        // Step 2: Garbage collection - delete chunks with no remaining worktree associations
         // These are chunks that belonged ONLY to the deleted worktree
-        let deleted = tx
-            .execute(
-                r#"
-                DELETE FROM maproom.chunks
-                WHERE jsonb_array_length(worktree_ids) = 0
-                "#,
-                &[],
+        let deleted = tx.execute(
+            r#"
+            DELETE FROM chunks
+            WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)
+            "#,
+            params![],
+        )
+        .with_context(|| {
+            format!(
+                "Failed to garbage collect chunks for worktree {}",
+                worktree_id
             )
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to garbage collect chunks for worktree {}",
-                    worktree_id
-                )
-            })?;
+        })?;
 
         // Step 3: Delete worktree record
         // This also cascades to worktree_index_state via ON DELETE CASCADE
         tx.execute(
-            "DELETE FROM maproom.worktrees WHERE id = $1",
-            &[&worktree_id],
+            "DELETE FROM worktrees WHERE id = ?1",
+            params![worktree_id],
         )
-        .await
         .with_context(|| format!("Failed to delete worktree record {}", worktree_id))?;
 
         Ok(deleted as i64)

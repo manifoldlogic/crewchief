@@ -1322,7 +1322,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Migrate { command } => {
             use crewchief_maproom::migrate::{verify_migration, MarkdownMigrator};
 
-            let client = db::connect().await?;
+            let store = db::connect().await?;
 
             match command {
                 MigrateCommand::Markdown { repo, worktree } => {
@@ -1331,7 +1331,7 @@ async fn main() -> anyhow::Result<()> {
                         println!("Worktree: {}", wt);
                     }
 
-                    let mut migrator = MarkdownMigrator::new(client);
+                    let migrator = MarkdownMigrator::new(store.clone());
                     let result = migrator.migrate(&repo, worktree.as_deref()).await?;
 
                     println!("\n{}", "=".repeat(60));
@@ -1357,13 +1357,13 @@ async fn main() -> anyhow::Result<()> {
 
                 MigrateCommand::Rollback { backup } => {
                     println!("Rolling back migration from backup: {}", backup);
-                    let mut migrator = MarkdownMigrator::new(client);
+                    let migrator = MarkdownMigrator::new(store.clone());
                     migrator.rollback(&backup).await?;
                     println!("Rollback complete");
                 }
 
                 MigrateCommand::ListBackups => {
-                    let migrator = MarkdownMigrator::new(client);
+                    let migrator = MarkdownMigrator::new(store.clone());
                     let backups = migrator.list_backups().await?;
 
                     if backups.is_empty() {
@@ -1378,14 +1378,14 @@ async fn main() -> anyhow::Result<()> {
 
                 MigrateCommand::DeleteBackup { backup } => {
                     println!("Deleting backup table: {}", backup);
-                    let mut migrator = MarkdownMigrator::new(client);
+                    let migrator = MarkdownMigrator::new(store.clone());
                     migrator.delete_backup(&backup).await?;
                     println!("Backup deleted");
                 }
 
                 MigrateCommand::Verify { repo } => {
                     println!("Verifying migration for repo: {}", repo);
-                    let results = verify_migration(&client, &repo).await?;
+                    let results = verify_migration(&store, &repo).await?;
 
                     println!("\n{}", "=".repeat(60));
                     println!("Migration Verification Results");
