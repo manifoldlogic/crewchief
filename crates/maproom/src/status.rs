@@ -1,13 +1,12 @@
 //! Status module for querying indexed repositories and worktrees.
 //!
-//! This module uses the VectorStore trait abstraction to work with both
-//! PostgreSQL and SQLite backends.
+//! This module uses SqliteStore for database access.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::db::VectorStore;
+use crate::db::SqliteStore;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatusResponse {
@@ -27,15 +26,15 @@ pub struct WorktreeStatus {
     pub last_updated: Option<String>,
 }
 
-/// Query database for worktree status information using VectorStore trait.
+/// Query database for worktree status information.
 ///
-/// This function works with both PostgreSQL and SQLite backends.
+/// Uses SqliteStore for database access.
 pub async fn get_status(
-    store: Arc<dyn VectorStore>,
+    store: Arc<SqliteStore>,
     repo_filter: Option<String>,
     worktree_filter: Option<String>,
 ) -> Result<StatusResponse> {
-    // Get all repositories using trait method
+    // Get all repositories
     let repos = store.list_repos().await?;
 
     let mut repo_statuses = Vec::new();

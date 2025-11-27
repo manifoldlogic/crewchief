@@ -7,7 +7,6 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
-use crewchief_maproom::db::{BackendType, VectorStore};
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{db, indexer};
 
@@ -130,15 +129,6 @@ enum Commands {
         /// Force full scan, bypassing incremental tree SHA optimization (BRANCHX-1011)
         #[arg(long, default_value_t = false)]
         force: bool,
-        /// Enable parallel batch processing for improved performance (PERF_OPT-3001)
-        #[arg(long, default_value_t = false)]
-        parallel: bool,
-        /// Number of parallel database workers (only with --parallel)
-        #[arg(long, default_value_t = 4)]
-        parallel_workers: usize,
-        /// Batch size for database inserts (only with --parallel)
-        #[arg(long, default_value_t = 50)]
-        batch_size: usize,
         /// Automatically generate embeddings after scanning (default: true)
         #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         generate_embeddings: bool,
@@ -423,16 +413,10 @@ async fn auto_generate_embeddings(
     };
 
     // Connect to database
-    let client = crewchief_maproom::db::connect().await?;
+    let store = crewchief_maproom::db::connect().await?;
 
     // Count chunks needing embeddings
-    let count_row = client
-        .query_one(
-            "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NULL OR text_embedding IS NULL",
-            &[],
-        )
-        .await?;
-    let chunk_count: i64 = count_row.get(0);
+    let chunk_count = store.get_chunks_needing_embeddings_count().await?;
 
     if chunk_count == 0 {
         println!("   ✓ All chunks already have embeddings");
@@ -451,7 +435,7 @@ async fn auto_generate_embeddings(
     let pipeline = EmbeddingPipeline::new(service, config);
     let stats = pipeline
         .run_with_progress(
-            &client,
+            &store,
             Some(&|processed, _total| {
                 progress.update_chunks(processed);
                 if progress.should_print() {
@@ -545,15 +529,6 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     Ok((repo_name, branch_name, commit_hash))
 }
 
-/// Get a VectorStore instance along with its backend type.
-///
-/// This helper provides convenient access to both the store and backend detection
-/// for commands that need to handle backend-specific behavior.
-async fn get_store_with_type() -> anyhow::Result<(Arc<dyn VectorStore>, BackendType)> {
-    let store = db::factory::get_store().await?;
-    let backend_type = store.backend_type();
-    Ok((store, backend_type))
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -569,29 +544,19 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
-                let (store, backend_type) = get_store_with_type().await?;
-                match backend_type {
-                    BackendType::PostgreSQL => {
-                        let client = db::connect().await?;
-                        db::migrate(&client).await?;
-                        tracing::info!("migrations applied");
-                        println!("✅ PostgreSQL migrations applied successfully");
-                    }
-                    BackendType::SQLite => {
-                        // SQLite auto-migrates on connection, but we still run migrate for consistency
-                        store.migrate().await?;
-                        println!("✅ SQLite database is up to date (auto-migrates on connection)");
-                    }
-                }
+                let store = db::connect().await?;
+                // SQLite auto-migrates on connection, but we still run migrate for consistency
+                store.migrate().await?;
+                println!("✅ SQLite database is up to date (auto-migrates on connection)");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking
                 let start_time = std::time::Instant::now();
 
-                // Get store using VectorStore trait
-                let store = db::factory::get_store().await?;
+                // Get store
+                let store = db::connect().await?;
 
-                // Phase 1: Detection using VectorStore trait
+                // Phase 1: Detection
                 println!("🔍 Detecting stale worktrees...");
                 let stale = match store.detect_stale_worktrees().await {
                     Ok(worktrees) => worktrees,
@@ -684,28 +649,11 @@ async fn main() -> anyhow::Result<()> {
             languages,
             exclude,
             force,
-            parallel,
-            parallel_workers,
-            batch_size,
             generate_embeddings,
             embedding_batch_size,
             provider,
             verbose,
         } => {
-            // Check backend type - scan requires PostgreSQL (Phase 2 for SQLite)
-            let (_, backend_type) = get_store_with_type().await?;
-            if backend_type == BackendType::SQLite {
-                anyhow::bail!(
-                    "The 'scan' command requires PostgreSQL backend.\n\
-                     SQLite support for indexing is coming in Phase 2.\n\
-                     Set MAPROOM_DATABASE_URL to a PostgreSQL connection string to use this command."
-                );
-            }
-
-            // Warn about --parallel for SQLite (future-proofing)
-            if parallel && backend_type == BackendType::SQLite {
-                eprintln!("Warning: --parallel flag ignored for SQLite backend (single-writer limitation)");
-            }
 
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
@@ -718,8 +666,8 @@ async fn main() -> anyhow::Result<()> {
             let commit = commit.unwrap_or(commit_hash);
 
             tracing::info!(
-                "Scanning repo: {}, worktree: {}, commit: {}, parallel: {}, force: {}, generate_embeddings: {}",
-                repo, worktree, commit, parallel, force, generate_embeddings
+                "Scanning repo: {}, worktree: {}, commit: {}, force: {}, generate_embeddings: {}",
+                repo, worktree, commit, force, generate_embeddings
             );
 
             // Log scan mode for user awareness
@@ -753,8 +701,8 @@ async fn main() -> anyhow::Result<()> {
             // a fallback to full scan. We never skip incorrectly.
 
             // Create database connection for tree SHA check
-            // This must happen before parallel/sequential decision so we can skip if needed
-            let client = db::connect().await?;
+            // This must happen before scanning so we can skip if needed
+            let store = db::connect().await?;
 
             // Get git tree SHA using existing function from git.rs
             let tree_sha = match crewchief_maproom::git::get_git_tree_sha(&path) {
@@ -770,11 +718,10 @@ async fn main() -> anyhow::Result<()> {
 
             // Query worktree_index_state if we have tree SHA
             if let Some(ref current_sha) = tree_sha {
-                // Get repo and worktree IDs using EXISTING functions from db/queries.rs
+                // Get repo and worktree IDs using store methods
                 // Note: Using get_or_create functions ensures worktrees are created if they don't exist
                 let root_abs = path.canonicalize().context("invalid root path")?;
-                let repo_id = match db::get_or_create_repo(
-                    &client,
+                let repo_id = match store.get_or_create_repo(
                     &repo,
                     root_abs.to_string_lossy().as_ref(),
                 )
@@ -788,8 +735,7 @@ async fn main() -> anyhow::Result<()> {
                 };
 
                 if let Some(repo_id) = repo_id {
-                    let worktree_id = match db::get_or_create_worktree(
-                        &client,
+                    let worktree_id = match store.get_or_create_worktree(
                         repo_id,
                         &worktree,
                         root_abs.to_string_lossy().as_ref(),
@@ -807,8 +753,8 @@ async fn main() -> anyhow::Result<()> {
                     };
 
                     if let Some(wt_id) = worktree_id {
-                        // Get last indexed tree SHA using existing function from db/index_state.rs
-                        match db::get_last_indexed_tree(&client, wt_id).await {
+                        // Get last indexed tree SHA
+                        match store.get_last_indexed_tree(wt_id).await {
                             Ok(last_sha) if last_sha == *current_sha && !force => {
                                 println!("✓ No changes detected (tree SHA match), skipping scan");
                                 tracing::info!(
@@ -834,50 +780,20 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            // Scan execution: parallel or sequential mode
-            if parallel {
-                // Use parallel batch processing pipeline (PERF_OPT-3001)
-                use crewchief_maproom::indexer::parallel::ParallelConfig;
-
-                let pool = db::create_pool().await?;
-                let config = ParallelConfig {
-                    batch_size,
-                    parallel_workers,
-                    max_file_size: 10 * 1024 * 1024, // 10MB
-                    file_queue_capacity: 1000,
-                    chunk_queue_capacity: 10000,
-                };
-
-                indexer::scan_worktree_parallel(
-                    &pool,
-                    &repo,
-                    &worktree,
-                    &path,
-                    &commit,
-                    languages,
-                    exclude,
-                    config,
-                    Some(&progress),
-                )
-                .await
-                .with_context(|| format!("parallel scan failed for {}@{}", worktree, commit))?;
-            } else {
-                // Use sequential single-client processing
-                // Reuse client from tree SHA check (line 606)
-                indexer::scan_worktree(
-                    &client,
-                    &repo,
-                    &worktree,
-                    &path,
-                    &commit,
-                    concurrency,
-                    languages,
-                    exclude,
-                    Some(&progress),
-                )
-                .await
-                .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;
-            }
+            // Scan execution
+            indexer::scan_worktree(
+                &store,
+                &repo,
+                &worktree,
+                &path,
+                &commit,
+                concurrency,
+                languages,
+                exclude,
+                Some(&progress),
+            )
+            .await
+            .with_context(|| format!("scan failed for {}@{}", worktree, commit))?;
 
             // Auto-generate embeddings after scan if enabled
             if generate_embeddings {
@@ -923,85 +839,72 @@ async fn main() -> anyhow::Result<()> {
                     embeddings_generated,
                 };
 
-                // Get database client based on scan mode
-                // Sequential mode: reuse existing client
-                // Parallel mode: get client from pool (or create new connection)
-                match db::connect().await {
-                    Ok(state_client) => {
-                        let root_abs = match path.canonicalize() {
-                            Ok(p) => p,
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Could not canonicalize path for state update: {}",
-                                    e
-                                );
-                                path.clone()
-                            }
-                        };
+                // Update index state using existing store
+                let root_abs = match path.canonicalize() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not canonicalize path for state update: {}",
+                            e
+                        );
+                        path.clone()
+                    }
+                };
 
-                        // Get repo ID
-                        let repo_id = match db::get_or_create_repo(
-                            &state_client,
-                            &repo,
-                            root_abs.to_string_lossy().as_ref(),
+                // Get repo ID
+                let repo_id = match store.get_or_create_repo(
+                    &repo,
+                    root_abs.to_string_lossy().as_ref(),
+                )
+                .await
+                {
+                    Ok(id) => Some(id),
+                    Err(e) => {
+                        tracing::warn!("Could not get repo ID for state update: {}", e);
+                        None
+                    }
+                };
+
+                if let Some(repo_id) = repo_id {
+                    // Get worktree ID
+                    let worktree_id = match store.get_or_create_worktree(
+                        repo_id,
+                        &worktree,
+                        root_abs.to_string_lossy().as_ref(),
+                    )
+                    .await
+                    {
+                        Ok(id) => Some(id),
+                        Err(e) => {
+                            tracing::warn!(
+                                "Could not get worktree ID for state update: {}",
+                                e
+                            );
+                            None
+                        }
+                    };
+
+                    if let Some(wt_id) = worktree_id {
+                        // Update index state with current tree SHA and stats
+                        match store.update_index_state(
+                            wt_id,
+                            current_tree_sha,
+                            &scan_stats,
                         )
                         .await
                         {
-                            Ok(id) => Some(id),
-                            Err(e) => {
-                                tracing::warn!("Could not get repo ID for state update: {}", e);
-                                None
+                            Ok(_) => {
+                                tracing::info!(
+                                    "✓ Updated index state: tree {} ({} files, {} chunks, {} embeddings)",
+                                    current_tree_sha, files_processed, chunks_processed, embeddings_generated
+                                );
                             }
-                        };
-
-                        if let Some(repo_id) = repo_id {
-                            // Get worktree ID
-                            let worktree_id = match db::get_or_create_worktree(
-                                &state_client,
-                                repo_id,
-                                &worktree,
-                                root_abs.to_string_lossy().as_ref(),
-                            )
-                            .await
-                            {
-                                Ok(id) => Some(id),
-                                Err(e) => {
-                                    tracing::warn!(
-                                        "Could not get worktree ID for state update: {}",
-                                        e
-                                    );
-                                    None
-                                }
-                            };
-
-                            if let Some(wt_id) = worktree_id {
-                                // Update index state with current tree SHA and stats
-                                match db::update_index_state(
-                                    &state_client,
-                                    wt_id,
-                                    current_tree_sha,
-                                    &scan_stats,
-                                )
-                                .await
-                                {
-                                    Ok(_) => {
-                                        tracing::info!(
-                                            "✓ Updated index state: tree {} ({} files, {} chunks, {} embeddings)",
-                                            current_tree_sha, files_processed, chunks_processed, embeddings_generated
-                                        );
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!("Failed to update index state: {}", e);
-                                        tracing::warn!("Scan completed successfully, but next scan may be slower");
-                                        // Don't fail the scan - state update is advisory only
-                                    }
-                                }
+                            Err(e) => {
+                                tracing::warn!("Failed to update index state: {}", e);
+                                tracing::warn!("Scan completed successfully, but next scan may be slower");
+                                // Don't fail the scan - state update is advisory only
                             }
                         }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Could not create connection for state update: {}", e);
-                        tracing::warn!("Scan completed successfully, but state was not persisted");
                     }
                 }
             }
@@ -1017,18 +920,8 @@ async fn main() -> anyhow::Result<()> {
             embedding_batch_size,
             provider,
         } => {
-            // Check backend type - upsert requires PostgreSQL (Phase 2 for SQLite)
-            let (_, backend_type) = get_store_with_type().await?;
-            if backend_type == BackendType::SQLite {
-                anyhow::bail!(
-                    "The 'upsert' command requires PostgreSQL backend.\n\
-                     SQLite support for indexing is coming in Phase 2.\n\
-                     Set MAPROOM_DATABASE_URL to a PostgreSQL connection string to use this command."
-                );
-            }
-
-            let client = db::connect().await?;
-            indexer::upsert_files(&client, &repo, &worktree, &root, &commit, &paths)
+            let store = db::connect().await?;
+            indexer::upsert_files(&store, &repo, &worktree, &root, &commit, &paths)
                 .await
                 .with_context(|| "upsert failed")?;
 
@@ -1057,16 +950,6 @@ async fn main() -> anyhow::Result<()> {
             path,
             throttle,
         } => {
-            // Check backend type - watch requires PostgreSQL (Phase 2 for SQLite)
-            let (_, backend_type) = get_store_with_type().await?;
-            if backend_type == BackendType::SQLite {
-                anyhow::bail!(
-                    "The 'watch' command requires PostgreSQL backend.\n\
-                     SQLite support for file watching is coming in Phase 2.\n\
-                     Set MAPROOM_DATABASE_URL to a PostgreSQL connection string to use this command."
-                );
-            }
-
             // Default path to current directory if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
 
@@ -1095,8 +978,8 @@ async fn main() -> anyhow::Result<()> {
                 "Starting watch"
             );
 
-            let client = db::connect().await?;
-            indexer::watch_worktree(&client, &repo, &worktree, &path, &throttle).await?;
+            let store = db::connect().await?;
+            indexer::watch_worktree(&store, &repo, &worktree, &path, &throttle).await?;
         }
 
         Commands::Search {
@@ -1107,7 +990,7 @@ async fn main() -> anyhow::Result<()> {
             debug,
             deduplicate,
         } => {
-            let store = db::factory::get_store().await?;
+            let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
             let hits = store.search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug)
@@ -1135,8 +1018,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
 
-            // Use VectorStore trait for backend-agnostic search
-            let store = db::factory::get_store().await?;
+            let store = db::connect().await?;
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
@@ -1155,7 +1037,7 @@ async fn main() -> anyhow::Result<()> {
                 threshold
             );
 
-            // Execute vector search using VectorStore trait
+            // Execute vector search
             let search_hits = match store.search_chunks_vector(
                 &repo,
                 worktree.as_deref(),
@@ -1221,10 +1103,9 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::bail!("--worktree requires --repo to be specified");
             }
 
-            // Use VectorStore trait for backend-agnostic status
-            let (store, _backend_type) = get_store_with_type().await?;
+            let store = db::connect().await?;
 
-            match status::get_status(store, repo, worktree).await {
+            match status::get_status(Arc::new(store), repo, worktree).await {
                 Ok(status_data) => {
                     if json {
                         let output = status::format_json(&status_data)?;
@@ -1280,17 +1161,12 @@ async fn main() -> anyhow::Result<()> {
             );
 
             // Connect to database
-            let client = db::connect().await?;
+            let store = db::connect().await?;
 
             // Get chunk count for cost estimation
-            let count_query = if config.incremental {
-                "SELECT COUNT(*) FROM maproom.chunks WHERE code_embedding IS NULL OR text_embedding IS NULL"
-            } else {
-                "SELECT COUNT(*) FROM maproom.chunks"
-            };
-
-            let count_row = client.query_one(count_query, &[]).await?;
-            let chunk_count: i64 = count_row.get(0);
+            // Note: Always uses chunks needing embeddings count.
+            // If --force is used, the pipeline will regenerate all embeddings anyway.
+            let chunk_count = store.get_chunks_needing_embeddings_count().await?;
 
             tracing::info!("Found {} chunks needing embeddings", chunk_count);
 
@@ -1309,7 +1185,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Run pipeline
             let pipeline = EmbeddingPipeline::new(service, config);
-            let stats = pipeline.run(&client).await?;
+            let stats = pipeline.run(&store).await?;
 
             // Display results
             println!("\n{}\n", "=".repeat(60));
