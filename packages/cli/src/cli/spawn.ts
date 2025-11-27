@@ -46,7 +46,7 @@ export function registerSpawnCommand(program: Command): void {
     .option('--no-label', 'Skip labeling the pane')
     .option('--backend <backend>', 'Force specific backend (iterm only)')
     .option('--headless', 'Force headless mode (no terminal UI)')
-    .action(async (agent: string, task: string | undefined, options: SpawnOptions) => {
+    .action(async (agents: string, task: string | undefined, options: SpawnOptions) => {
       try {
         // Detect terminal provider
         const terminal = TerminalFactory.autoDetect()
@@ -55,19 +55,49 @@ export function registerSpawnCommand(program: Command): void {
         // Use the new Scheduler architecture
         const scheduler = new Scheduler(terminal)
 
-        if (agent.includes(',')) {
-          console.error(chalk.red('❌ Multi-agent spawn not yet supported in new architecture'))
+        // Parse comma-separated agent types
+        const agentTypes = agents.split(',').map((a) => a.trim()).filter((a) => a.length > 0)
+
+        if (agentTypes.length === 0) {
+          console.error(chalk.red('❌ No valid agent types specified'))
           process.exit(1)
         }
 
         // Determine effective task name/description
         const effectiveTask = task || options.name || `agent-${Date.now()}`
 
-        console.log(chalk.cyan(`🚀 Spawning agent ${agent} via ${terminal.id}...`))
+        if (agentTypes.length === 1) {
+          // Single agent - existing logic
+          console.log(chalk.cyan(`🚀 Spawning agent ${agentTypes[0]} via ${terminal.id}...`))
 
-        const runId = await scheduler.assignSingleAgent(effectiveTask, agent)
+          const runId = await scheduler.assignSingleAgent(effectiveTask, agentTypes[0])
 
-        console.log(chalk.green(`✅ Agent spawned successfully [Run ID: ${runId}]`))
+          console.log(chalk.green(`✅ Agent spawned successfully [Run ID: ${runId}]`))
+        } else {
+          // Multi-agent spawn
+          console.log(chalk.cyan(`🚀 Spawning ${agentTypes.length} agents via ${terminal.id}...`))
+
+          const results = await Promise.allSettled(
+            agentTypes.map((type) => scheduler.assignSingleAgent(effectiveTask, type))
+          )
+
+          // Report results for each agent
+          let successCount = 0
+          results.forEach((result, i) => {
+            if (result.status === 'fulfilled') {
+              console.log(chalk.green(`✅ ${agentTypes[i]}: spawned [Run ID: ${result.value}]`))
+              successCount++
+            } else {
+              console.log(chalk.red(`❌ ${agentTypes[i]}: ${result.reason?.message || result.reason}`))
+            }
+          })
+
+          console.log(chalk.cyan(`\n📊 Summary: ${successCount}/${agentTypes.length} agents spawned successfully`))
+
+          if (successCount === 0) {
+            process.exit(1)
+          }
+        }
 
         if (terminal.id === 'headless') {
           console.log(chalk.blue('ℹ️  Running in headless mode. Press Ctrl+C to stop all agents.'))

@@ -9,6 +9,46 @@
       "branchName": "cc-mock-agent-agent-1764203754595-20251127003554",
       "status": "running",
       "startedAt": "2025-11-27T00:35:57.416Z"
+    },
+    {
+      "id": "38f157e4-b1e6-4d21-b933-4dd0f6ba8227",
+      "agentTypeId": "mock-agent",
+      "task": "test-multi",
+      "paneId": "headless-window-1764204598183",
+      "worktreePath": "/workspace/packages/cli/.crewchief/worktrees/cc-mock-agent-test-multi-20251127004954",
+      "branchName": "cc-mock-agent-test-multi-20251127004954",
+      "status": "running",
+      "startedAt": "2025-11-27T00:49:58.183Z"
+    },
+    {
+      "id": "4d58af3f-6df1-4679-aedf-bd752e691ad4",
+      "agentTypeId": "backend-developer",
+      "task": "test-multi",
+      "paneId": "headless-window-1764204598230",
+      "worktreePath": "/workspace/packages/cli/.crewchief/worktrees/cc-backend-developer-test-multi-20251127004954",
+      "branchName": "cc-backend-developer-test-multi-20251127004954",
+      "status": "running",
+      "startedAt": "2025-11-27T00:49:58.230Z"
+    },
+    {
+      "id": "9cefd003-3709-4612-ad9f-cb94e18bfe04",
+      "agentTypeId": "mock-agent",
+      "task": "test-partial",
+      "paneId": "headless-window-1764204610799",
+      "worktreePath": "/workspace/packages/cli/.crewchief/worktrees/cc-mock-agent-test-partial-20251127005006",
+      "branchName": "cc-mock-agent-test-partial-20251127005006",
+      "status": "running",
+      "startedAt": "2025-11-27T00:50:10.800Z"
+    },
+    {
+      "id": "1037c776-73c1-42aa-addf-f3a86a034a62",
+      "agentTypeId": "mock-agent",
+      "task": "test-single-1764204628",
+      "paneId": "headless-window-1764204633257",
+      "worktreePath": "/workspace/packages/cli/.crewchief/worktrees/cc-mock-agent-test-single-1764204628-20251127005028",
+      "branchName": "cc-mock-agent-test-single-1764204628-20251127005028",
+      "status": "running",
+      "startedAt": "2025-11-27T00:50:33.257Z"
     }
   ]
 }
