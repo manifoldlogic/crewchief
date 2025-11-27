@@ -13,3 +13,20 @@ export {
   type OllamaTagsResponse,
   type PullProgress,
 } from './client'
+
+export {
+  OllamaNotRunningError,
+  ModelPullError,
+  ModelCheckError,
+} from './errors'
+
+export {
+  ensureOllamaModel,
+  showOllamaNotRunningError,
+  showModelPullError,
+  checkModelAvailability,
+  DEFAULT_EMBEDDING_MODEL,
+  OLLAMA_INSTALL_URL,
+  type ModelCheckResult,
+  type EnsureModelOptions,
+} from './model-manager'

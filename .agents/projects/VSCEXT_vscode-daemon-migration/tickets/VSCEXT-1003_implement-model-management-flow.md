@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-1003: Implement model management flow
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,12 +21,12 @@ Reference: planning/plan.md - Phase 1, Ticket 1003
 Reference: planning/architecture.md - Simplified Extension Flow
 
 ## Acceptance Criteria
-- [ ] `ensureOllamaModel(modelName)` function created in `src/ollama/model-manager.ts`
-- [ ] Shows VSCode progress notification during model pull
-- [ ] Handles "Ollama not running" with helpful error and "Install Ollama" link
-- [ ] Handles network errors with retry option
-- [ ] Skips pull gracefully if model already exists
-- [ ] Custom error types for different failure modes
+- [x] `ensureOllamaModel(modelName)` function created in `src/ollama/model-manager.ts`
+- [x] Shows VSCode progress notification during model pull
+- [x] Handles "Ollama not running" with helpful error and "Install Ollama" link
+- [x] Handles network errors with retry option
+- [x] Skips pull gracefully if model already exists
+- [x] Custom error types for different failure modes
 
 ## Technical Requirements
 - Create `OllamaNotRunningError` custom error class
