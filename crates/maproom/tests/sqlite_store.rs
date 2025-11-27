@@ -1,17 +1,14 @@
 //! SQLite backend integration tests
 //!
-//! Run with: cargo test --features sqlite
-//!
 //! These tests validate the SQLite backend implementation including:
 //! - Connection and schema migration
 //! - CRUD operations (repos, worktrees, commits, files, chunks)
 //! - FTS5 full-text search functionality
 //! - Edge cases and error handling
 
-#[cfg(feature = "sqlite")]
 mod sqlite_tests {
     use crewchief_maproom::db::sqlite::SqliteStore;
-    use crewchief_maproom::db::{ChunkRecord, FileRecord, VectorStore};
+    use crewchief_maproom::db::{ChunkRecord, FileRecord};
 
     /// Helper to create an in-memory store with schema
     async fn setup_store() -> SqliteStore {

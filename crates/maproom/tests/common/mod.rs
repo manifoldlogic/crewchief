@@ -1,231 +1,186 @@
 //! Common test utilities for integration tests.
 //!
 //! This module provides shared test infrastructure including:
-//! - Database setup and teardown
-//! - Test fixture loading
-//! - Configuration helpers
-//! - Assertion utilities
+//! - Database setup with in-memory SQLite
+//! - Test fixture helpers for chunks, embeddings, and edges
+//! - Assertion utilities for search results
 
-use anyhow::{Context, Result};
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
-use std::env;
+use anyhow::Result;
 use std::path::PathBuf;
-use tokio_postgres::{Config, NoTls};
 
-/// Test database configuration.
+use crewchief_maproom::db::sqlite::SqliteStore;
+use crewchief_maproom::db::{ChunkRecord, FileRecord};
+
+// Re-export for test convenience
+pub use crewchief_maproom::db::sqlite::SqliteStore as TestStore;
+
+/// Create an in-memory SQLite store for testing.
+///
+/// The store is fully initialized with schema migrations.
+/// Each call creates an isolated database instance.
+pub async fn setup_test_db() -> Result<SqliteStore> {
+    let store = SqliteStore::connect(":memory:").await?;
+    store.migrate().await?;
+    Ok(store)
+}
+
+/// Synchronous wrapper for setup_test_db (for non-async test contexts).
+/// Note: Requires tokio runtime to be available.
+pub fn test_store() -> SqliteStore {
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+    rt.block_on(async {
+        setup_test_db().await.expect("Failed to create test database")
+    })
+}
+
+/// Test database wrapper with helper methods.
 pub struct TestDb {
-    pub pool: Pool,
-    pub db_name: String,
+    pub store: SqliteStore,
+    pub repo_id: i64,
+    pub worktree_id: i64,
+    pub commit_id: i64,
 }
 
 impl TestDb {
-    /// Create a new test database with a unique name.
+    /// Create a new test database with a pre-initialized repo, worktree, and commit.
     pub async fn new() -> Result<Self> {
-        let db_name = format!("maproom_test_{}", uuid::Uuid::new_v4().simple());
+        let store = setup_test_db().await?;
 
-        // Connect to postgres database to create test db
-        let postgres_url = env::var("MAPROOM_DATABASE_URL")
-            .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
-
-        let (client, connection) = tokio_postgres::connect(&postgres_url, NoTls)
-            .await
-            .context("Failed to connect to PostgreSQL")?;
-
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("Connection error: {}", e);
-            }
-        });
-
-        // Create test database
-        client
-            .execute(&format!("CREATE DATABASE {}", db_name), &[])
-            .await
-            .context("Failed to create test database")?;
-
-        // Connect to test database
-        let test_db_url = postgres_url.replace("/postgres", &format!("/{}", db_name));
-
-        let mut pg_config = Config::new();
-        pg_config.host("localhost");
-        pg_config.user("postgres");
-        pg_config.password("postgres");
-        pg_config.dbname(&db_name);
-
-        let mgr_config = ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        };
-        let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr)
-            .max_size(5)
-            .build()
-            .context("Failed to create connection pool")?;
-
-        Ok(Self { pool, db_name })
-    }
-
-    /// Run migrations on the test database.
-    pub async fn run_migrations(&self) -> Result<()> {
-        let client = self.pool.get().await?;
-
-        // Enable required extensions
-        client
-            .execute("CREATE EXTENSION IF NOT EXISTS vector", &[])
-            .await
-            .context("Failed to create vector extension")?;
-
-        // Run basic schema creation
-        // Note: In a real implementation, this would run proper migrations
-        client
-            .batch_execute(
-                r#"
-                CREATE TABLE IF NOT EXISTS repos (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    root_path TEXT NOT NULL,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                );
-
-                CREATE TABLE IF NOT EXISTS worktrees (
-                    id SERIAL PRIMARY KEY,
-                    repo_id INTEGER NOT NULL REFERENCES repos(id),
-                    name TEXT NOT NULL,
-                    path TEXT NOT NULL,
-                    commit_hash TEXT NOT NULL,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    UNIQUE(repo_id, name)
-                );
-
-                CREATE TABLE IF NOT EXISTS chunks (
-                    id SERIAL PRIMARY KEY,
-                    worktree_id INTEGER NOT NULL REFERENCES worktrees(id),
-                    rel_path TEXT NOT NULL,
-                    chunk_index INTEGER NOT NULL,
-                    content TEXT NOT NULL,
-                    start_line INTEGER NOT NULL,
-                    end_line INTEGER NOT NULL,
-                    chunk_type TEXT NOT NULL,
-                    language TEXT,
-                    embedding vector(1536),
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    UNIQUE(worktree_id, rel_path, chunk_index)
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_chunks_worktree
-                    ON chunks(worktree_id);
-                CREATE INDEX IF NOT EXISTS idx_chunks_embedding
-                    ON chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-
-                CREATE TABLE IF NOT EXISTS chunk_edges (
-                    id SERIAL PRIMARY KEY,
-                    from_chunk_id INTEGER NOT NULL REFERENCES chunks(id),
-                    to_chunk_id INTEGER NOT NULL,
-                    edge_type TEXT NOT NULL,
-                    weight DOUBLE PRECISION DEFAULT 1.0,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                );
-                "#,
-            )
-            .await
-            .context("Failed to create schema")?;
-
-        Ok(())
-    }
-
-    /// Insert test data into the database.
-    pub async fn insert_test_data(&self) -> Result<()> {
-        let client = self.pool.get().await?;
-
-        // Insert test repo
-        let repo_id: i32 = client
-            .query_one(
-                "INSERT INTO repos (name, root_path) VALUES ($1, $2) RETURNING id",
-                &[&"test-repo", &"/tmp/test-repo"],
-            )
-            .await?
-            .get(0);
-
-        // Insert test worktree
-        let worktree_id: i32 = client
-            .query_one(
-                "INSERT INTO worktrees (repo_id, name, path, commit_hash)
-                 VALUES ($1, $2, $3, $4) RETURNING id",
-                &[&repo_id, &"main", &"/tmp/test-repo", &"abc123"],
-            )
-            .await?
-            .get(0);
-
-        // Insert test chunks
-        client
-            .execute(
-                "INSERT INTO chunks (worktree_id, rel_path, chunk_index, content, start_line, end_line, chunk_type, language)
-                 VALUES
-                 ($1, 'src/auth.ts', 0, 'export function authenticate(user: User) { return user.isValid(); }', 1, 1, 'function', 'typescript'),
-                 ($1, 'src/user.ts', 0, 'export class User { constructor(public name: string) {} }', 1, 1, 'class', 'typescript'),
-                 ($1, 'README.md', 0, '# Test Project\n\nThis is a test project for authentication.', 1, 3, 'text', 'markdown')",
-                &[&worktree_id],
-            )
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/tmp/test-repo")
             .await?;
 
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/tmp/test-repo")
+            .await?;
+
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123def456", None)
+            .await?;
+
+        Ok(Self {
+            store,
+            repo_id,
+            worktree_id,
+            commit_id,
+        })
+    }
+
+    /// Get a reference to the underlying store.
+    pub fn store(&self) -> &SqliteStore {
+        &self.store
+    }
+
+    /// Insert test data with sample chunks.
+    pub async fn insert_test_data(&self) -> Result<()> {
+        for (relpath, symbol, content, ts_doc) in sample_chunk_data() {
+            let file = FileRecord {
+                repo_id: self.repo_id,
+                worktree_id: self.worktree_id,
+                commit_id: self.commit_id,
+                relpath: relpath.to_string(),
+                language: Some(detect_language(relpath)),
+                content_hash: format!("hash_{}", relpath.replace("/", "_")),
+                size_bytes: content.len() as i64,
+                last_modified: None,
+            };
+            let file_id = self.store.upsert_file(&file).await?;
+
+            let chunk = ChunkRecord {
+                file_id,
+                blob_sha: format!("blob_{}", symbol),
+                symbol_name: Some(symbol.to_string()),
+                kind: "function".to_string(),
+                signature: Some(format!("fn {}()", symbol)),
+                docstring: None,
+                start_line: 1,
+                end_line: 10,
+                preview: content.to_string(),
+                ts_doc_text: ts_doc.to_string(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+                worktree_id: self.worktree_id,
+            };
+            self.store.insert_chunk(&chunk).await?;
+        }
         Ok(())
-    }
-
-    /// Get the connection pool.
-    pub fn pool(&self) -> &Pool {
-        &self.pool
-    }
-
-    /// Get a raw client connection (not from pool).
-    /// Use this when you need to pass ownership of a Client (e.g., to SearchExecutors).
-    pub async fn get_client(&self) -> Result<tokio_postgres::Client> {
-        let postgres_url = env::var("MAPROOM_DATABASE_URL")
-            .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
-        let test_db_url = postgres_url.replace("/postgres", &format!("/{}", self.db_name));
-
-        let (client, connection) = tokio_postgres::connect(&test_db_url, NoTls)
-            .await
-            .context("Failed to connect to test database")?;
-
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("Connection error: {}", e);
-            }
-        });
-
-        Ok(client)
     }
 }
 
-impl Drop for TestDb {
-    fn drop(&mut self) {
-        // Clean up will be handled by the Drop implementation
-        // In a real scenario, we'd use async Drop when stable
-        let db_name = self.db_name.clone();
-        tokio::spawn(async move {
-            let postgres_url = env::var("MAPROOM_DATABASE_URL")
-                .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
+/// Sample chunk data for test fixtures: (relpath, symbol_name, content, ts_doc_text)
+pub fn sample_chunk_data() -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
+    vec![
+        (
+            "src/auth.ts",
+            "authenticate",
+            "export function authenticate(user: User) { return user.isValid(); }",
+            "authenticate user validation",
+        ),
+        (
+            "src/user.ts",
+            "User",
+            "export class User { constructor(public name: string) {} }",
+            "user class constructor",
+        ),
+        (
+            "README.md",
+            "readme",
+            "# Test Project\n\nThis is a test project for authentication.",
+            "test project authentication readme",
+        ),
+    ]
+}
 
-            if let Ok((client, connection)) = tokio_postgres::connect(&postgres_url, NoTls).await {
-                tokio::spawn(async move { connection.await });
+/// Create sample chunks for testing.
+pub fn sample_chunks(file_id: i64, worktree_id: i64) -> Vec<ChunkRecord> {
+    sample_chunk_data()
+        .into_iter()
+        .map(|(relpath, symbol, content, ts_doc)| ChunkRecord {
+            file_id,
+            blob_sha: format!("blob_{}", symbol),
+            symbol_name: Some(symbol.to_string()),
+            kind: "function".to_string(),
+            signature: Some(format!("fn {}()", symbol)),
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: content.to_string(),
+            ts_doc_text: ts_doc.to_string(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+            worktree_id,
+        })
+        .collect()
+}
 
-                // Terminate connections
-                let _ = client
-                    .execute(
-                        &format!(
-                            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'",
-                            db_name
-                        ),
-                        &[],
-                    )
-                    .await;
-
-                // Drop database
-                let _ = client
-                    .execute(&format!("DROP DATABASE IF EXISTS {}", db_name), &[])
-                    .await;
-            }
-        });
+/// Create a sample file record for testing.
+pub fn sample_file(repo_id: i64, worktree_id: i64, commit_id: i64, relpath: &str) -> FileRecord {
+    FileRecord {
+        repo_id,
+        worktree_id,
+        commit_id,
+        relpath: relpath.to_string(),
+        language: Some(detect_language(relpath)),
+        content_hash: format!("hash_{}", relpath.replace("/", "_")),
+        size_bytes: 1024,
+        last_modified: None,
     }
+}
+
+/// Detect language from file extension.
+fn detect_language(path: &str) -> String {
+    match path.rsplit('.').next() {
+        Some("rs") => "rust",
+        Some("ts") | Some("tsx") => "typescript",
+        Some("js") | Some("jsx") => "javascript",
+        Some("py") => "python",
+        Some("go") => "go",
+        Some("md") => "markdown",
+        _ => "unknown",
+    }
+    .to_string()
 }
 
 /// Test configuration helper.
@@ -236,7 +191,10 @@ pub struct TestConfig {
 impl TestConfig {
     /// Create a temporary test configuration directory.
     pub fn new() -> Result<Self> {
-        let config_dir = std::env::temp_dir().join(format!("maproom_test_config_{}", uuid::Uuid::new_v4().simple()));
+        let config_dir = std::env::temp_dir().join(format!(
+            "maproom_test_config_{}",
+            uuid::Uuid::new_v4().simple()
+        ));
         std::fs::create_dir_all(&config_dir)?;
         Ok(Self { config_dir })
     }
@@ -268,8 +226,9 @@ pub mod assertions {
     pub fn assert_contains_result(results: &[ChunkSearchResult], expected_content: &str) {
         assert!(
             results.iter().any(|r| r.preview.contains(expected_content)),
-            "Expected to find content '{}' in results, but it was not present",
-            expected_content
+            "Expected to find content '{}' in results, but it was not present.\nResults: {:?}",
+            expected_content,
+            results.iter().map(|r| &r.preview).collect::<Vec<_>>()
         );
     }
 
@@ -296,6 +255,11 @@ pub mod assertions {
             );
         }
     }
+
+    /// Assert that no results are empty.
+    pub fn assert_non_empty_results(results: &[ChunkSearchResult]) {
+        assert!(!results.is_empty(), "Expected non-empty search results");
+    }
 }
 
 #[cfg(test)]
@@ -303,15 +267,48 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore = "requires PostgreSQL database"]
-    async fn test_db_creation() {
-        let test_db = TestDb::new().await.expect("Failed to create test database");
-        assert!(test_db.db_name.starts_with("maproom_test_"));
+    async fn test_setup_test_db() {
+        let store = setup_test_db().await.expect("Failed to create test database");
+        // Verify we can create a repo (proves migrations ran)
+        let repo_id = store
+            .get_or_create_repo("test", "/test")
+            .await
+            .expect("Failed to create repo");
+        assert!(repo_id > 0);
+    }
+
+    #[tokio::test]
+    async fn test_db_wrapper() {
+        let test_db = TestDb::new().await.expect("Failed to create TestDb");
+        assert!(test_db.repo_id > 0);
+        assert!(test_db.worktree_id > 0);
+        assert!(test_db.commit_id > 0);
+    }
+
+    #[tokio::test]
+    async fn test_insert_test_data() {
+        let test_db = TestDb::new().await.expect("Failed to create TestDb");
+        test_db.insert_test_data().await.expect("Failed to insert test data");
+
+        // Verify data was inserted by searching
+        let results = test_db.store
+            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false)
+            .await
+            .expect("Search failed");
+
+        assert!(!results.is_empty(), "Should find authenticate chunk");
     }
 
     #[test]
     fn test_config_creation() {
         let test_config = TestConfig::new().expect("Failed to create test config");
         assert!(test_config.dir().exists());
+    }
+
+    #[test]
+    fn test_sample_chunks_generation() {
+        let chunks = sample_chunks(1, 1);
+        assert_eq!(chunks.len(), 3);
+        assert!(chunks.iter().any(|c| c.symbol_name.as_deref() == Some("authenticate")));
     }
 }
