@@ -1,3 +1,14 @@
 {
-  "runs": []
+  "runs": [
+    {
+      "id": "d4e5beef-f737-46a4-9b2b-62ca4ec2f86a",
+      "agentTypeId": "mock-agent",
+      "task": "agent-1764203754595",
+      "paneId": "headless-window-1764203757416",
+      "worktreePath": "/workspace/packages/cli/.crewchief/worktrees/cc-mock-agent-agent-1764203754595-20251127003554",
+      "branchName": "cc-mock-agent-agent-1764203754595-20251127003554",
+      "status": "running",
+      "startedAt": "2025-11-27T00:35:57.416Z"
+    }
+  ]
 }
