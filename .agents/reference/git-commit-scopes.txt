@@ -33,6 +33,7 @@ search
 search-opt
 security
 semrank
+terminal
 test
 tests
 tools

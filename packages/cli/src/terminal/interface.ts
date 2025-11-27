@@ -6,6 +6,20 @@ export interface WindowOptions {
 
 export type SplitDirection = 'vertical' | 'horizontal'
 
+/**
+ * Information about a spawned agent
+ */
+export interface AgentInfo {
+  /** Pane ID or process ID */
+  id: string
+  /** Human-readable name (typically task__type format) */
+  name: string
+  /** Agent type: claude, gemini, codex, etc. */
+  type: string
+  /** Current status */
+  status: 'running' | 'stopped'
+}
+
 export interface TerminalProvider {
   /**
    * Unique identifier for the provider implementation
@@ -54,4 +68,20 @@ export interface TerminalProvider {
    * Focus a specific pane/window.
    */
   focus(paneId: string): Promise<void>
+
+  // Optional messaging methods (Phase 3 - ITERMCLN)
+
+  /**
+   * Send a message to an agent in a specific pane.
+   * @param paneId - The pane/process identifier
+   * @param message - The message text to send
+   * @returns true if message was sent successfully, false otherwise
+   */
+  sendMessage?(paneId: string, message: string): Promise<boolean>
+
+  /**
+   * List all agents managed by this provider.
+   * @returns Array of agent information objects
+   */
+  listAgents?(): Promise<AgentInfo[]>
 }

@@ -1,9 +1,9 @@
 # Ticket: ITERMCLN-3001: Extend TerminalProvider Interface with Messaging Methods
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (type definition change only, build passes)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,11 +28,11 @@ This implements Phase 3 of the ITERMCLN architecture, setting up the foundation 
 Reference: `.agents/projects/ITERMCLN_iterm-spawn-cleanup/planning/architecture.md` - Extended TerminalProvider Interface
 
 ## Acceptance Criteria
-- [ ] `TerminalProvider` interface extended with optional `sendMessage()` method
-- [ ] `TerminalProvider` interface extended with optional `listAgents()` method
-- [ ] New `AgentInfo` type exported from interface module
-- [ ] TypeScript compilation succeeds with no errors
-- [ ] Existing provider implementations still work (no breaking changes)
+- [x] `TerminalProvider` interface extended with optional `sendMessage()` method
+- [x] `TerminalProvider` interface extended with optional `listAgents()` method
+- [x] New `AgentInfo` type exported from interface module
+- [x] TypeScript compilation succeeds with no errors
+- [x] Existing provider implementations still work (no breaking changes)
 
 ## Technical Requirements
 
