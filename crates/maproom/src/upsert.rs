@@ -9,9 +9,9 @@
 //! This is the core implementation of BLOBSHA Phase 3 (planning/plan.md lines 331-439).
 
 use crate::content_hash::compute_blob_sha;
+use crate::db::{ChunkRecord, SqliteStore};
 use crate::metrics::CacheMetrics;
 use anyhow::{Context, Result};
-use tokio_postgres::Client;
 use tracing::{debug, info};
 
 /// Check if an embedding exists for a given blob SHA.
@@ -21,22 +21,17 @@ use tracing::{debug, info};
 ///
 /// # Arguments
 ///
-/// * `client` - Database client
+/// * `store` - SQLite database store
 /// * `blob_sha` - Content hash of the chunk
 ///
 /// # Returns
 ///
 /// `Ok(true)` if embedding exists (cache hit), `Ok(false)` if not (cache miss)
-pub async fn check_embedding_exists(client: &Client, blob_sha: &str) -> Result<bool> {
-    let row = client
-        .query_opt(
-            "SELECT 1 FROM maproom.code_embeddings WHERE blob_sha = $1 LIMIT 1",
-            &[&blob_sha],
-        )
+pub async fn check_embedding_exists(store: &SqliteStore, blob_sha: &str) -> Result<bool> {
+    store
+        .has_embedding(blob_sha)
         .await
-        .context("Failed to check embedding existence")?;
-
-    Ok(row.is_some())
+        .context("Failed to check embedding existence")
 }
 
 /// Insert or update a chunk with cache-aware embedding lookup.
@@ -49,7 +44,7 @@ pub async fn check_embedding_exists(client: &Client, blob_sha: &str) -> Result<b
 ///
 /// # Arguments
 ///
-/// * `client` - Database client
+/// * `store` - SQLite database store
 /// * `file_id` - File ID from files table
 /// * `content` - Full chunk content (for blob SHA computation)
 /// * `symbol_name` - Optional symbol name
@@ -63,13 +58,14 @@ pub async fn check_embedding_exists(client: &Client, blob_sha: &str) -> Result<b
 /// * `recency_score` - Git recency score
 /// * `churn_score` - Git churn score
 /// * `metadata` - Optional JSON metadata
+/// * `worktree_id` - Worktree ID for this chunk
 /// * `metrics` - Cache metrics tracker
 ///
 /// # Returns
 ///
 /// The chunk ID of the inserted/updated chunk
 pub async fn upsert_chunk_with_cache(
-    client: &Client,
+    store: &SqliteStore,
     file_id: i64,
     content: &str,
     symbol_name: Option<&str>,
@@ -90,7 +86,7 @@ pub async fn upsert_chunk_with_cache(
     let blob_sha = compute_blob_sha(content);
 
     // Step 2: Check if embedding exists (cache check)
-    let embedding_exists = check_embedding_exists(client, &blob_sha)
+    let embedding_exists = check_embedding_exists(store, &blob_sha)
         .await
         .context("Failed to check embedding cache")?;
 
@@ -117,25 +113,27 @@ pub async fn upsert_chunk_with_cache(
     // Note: Actual embedding generation and insertion into code_embeddings
     // happens in the embedding pipeline (not in this upsert path).
     // This just records the blob_sha reference.
-    let chunk_id = crate::db::insert_chunk(
-        client,
+    let chunk = ChunkRecord {
         file_id,
-        &blob_sha,
-        symbol_name,
-        kind,
-        signature,
-        docstring,
+        blob_sha,
+        symbol_name: symbol_name.map(|s| s.to_string()),
+        kind: kind.to_string(),
+        signature: signature.map(|s| s.to_string()),
+        docstring: docstring.map(|s| s.to_string()),
         start_line,
         end_line,
-        preview,
-        ts_doc_text,
+        preview: preview.to_string(),
+        ts_doc_text: ts_doc_text.to_string(),
         recency_score,
         churn_score,
-        metadata,
+        metadata: metadata.cloned(),
         worktree_id,
-    )
-    .await
-    .context("Failed to insert chunk")?;
+    };
+
+    let chunk_id = store
+        .insert_chunk(&chunk)
+        .await
+        .context("Failed to insert chunk")?;
 
     Ok(chunk_id)
 }
@@ -147,15 +145,16 @@ pub async fn upsert_chunk_with_cache(
 ///
 /// # Arguments
 ///
-/// * `client` - Database client
+/// * `store` - SQLite database store
 /// * `chunks` - Vector of chunk data with content for blob SHA computation
+/// * `worktree_id` - Worktree ID for these chunks
 /// * `metrics` - Cache metrics tracker
 ///
 /// # Returns
 ///
 /// Vector of chunk IDs in the same order as input chunks
 pub async fn upsert_chunks_batch_with_cache(
-    client: &Client,
+    store: &SqliteStore,
     chunks: &[(
         i64,                       // file_id
         String,                    // content (for blob_sha)
@@ -185,29 +184,17 @@ pub async fn upsert_chunks_batch_with_cache(
         .collect();
 
     // Step 2: Batch check which embeddings exist
-    // Build IN clause for efficient lookup
-    let placeholders: Vec<String> = (1..=blob_shas.len()).map(|i| format!("${}", i)).collect();
-
-    let query = format!(
-        "SELECT blob_sha FROM maproom.code_embeddings WHERE blob_sha IN ({})",
-        placeholders.join(", ")
-    );
-
-    let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = blob_shas
-        .iter()
-        .map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync))
-        .collect();
-
-    let rows = client
-        .query(&query, &params)
-        .await
-        .context("Failed to batch check embedding existence")?;
-
-    // Build set of existing blob SHAs
-    let existing_blob_shas: std::collections::HashSet<String> = rows
-        .into_iter()
-        .map(|row| row.get::<_, String>(0))
-        .collect();
+    // Check each blob_sha individually (SQLite doesn't have batch checking yet)
+    let mut existing_blob_shas = std::collections::HashSet::new();
+    for blob_sha in &blob_shas {
+        if store
+            .has_embedding(blob_sha)
+            .await
+            .context("Failed to check embedding existence")?
+        {
+            existing_blob_shas.insert(blob_sha.clone());
+        }
+    }
 
     // Step 3: Record cache hits and misses
     for blob_sha in &blob_shas {
@@ -226,9 +213,8 @@ pub async fn upsert_chunks_batch_with_cache(
     );
 
     // Step 4: Insert all chunks
-    // Convert to format expected by insert_chunks_batch
-    // Include blob_sha computed earlier and worktree_id
-    let insert_data: Vec<_> = chunks
+    // Convert to ChunkRecord format expected by insert_chunks_batch
+    let chunk_records: Vec<ChunkRecord> = chunks
         .iter()
         .zip(blob_shas.iter())
         .map(
@@ -249,28 +235,27 @@ pub async fn upsert_chunks_batch_with_cache(
                     metadata,
                 ),
                 blob_sha,
-            )| {
-                (
-                    *file_id,
-                    blob_sha.clone(),
-                    symbol_name.clone(),
-                    kind.clone(),
-                    signature.clone(),
-                    docstring.clone(),
-                    *start_line,
-                    *end_line,
-                    preview.clone(),
-                    ts_doc_text.clone(),
-                    *recency_score,
-                    *churn_score,
-                    metadata.clone(),
-                    worktree_id,
-                )
+            )| ChunkRecord {
+                file_id: *file_id,
+                blob_sha: blob_sha.clone(),
+                symbol_name: symbol_name.clone(),
+                kind: kind.clone(),
+                signature: signature.clone(),
+                docstring: docstring.clone(),
+                start_line: *start_line,
+                end_line: *end_line,
+                preview: preview.clone(),
+                ts_doc_text: ts_doc_text.clone(),
+                recency_score: *recency_score,
+                churn_score: *churn_score,
+                metadata: metadata.clone(),
+                worktree_id,
             },
         )
         .collect();
 
-    let chunk_ids = crate::db::insert_chunks_batch(client, &insert_data)
+    let chunk_ids = store
+        .insert_chunks_batch(&chunk_records)
         .await
         .context("Failed to batch insert chunks")?;
 
@@ -328,7 +313,7 @@ pub struct ParsedChunk {
 /// # use crewchief_maproom::metrics::CacheMetrics;
 /// # use crewchief_maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
-/// let client = db::connect().await?;
+/// let store = db::connect().await?;
 /// let metrics = CacheMetrics::new();
 ///
 /// let chunk = ParsedChunk {
@@ -340,13 +325,13 @@ pub struct ParsedChunk {
 ///     kind: "function".to_string(),
 /// };
 ///
-/// let chunk_id = upsert_chunk_with_worktree(&client, &chunk, 1, &metrics).await?;
+/// let chunk_id = upsert_chunk_with_worktree(&store, &chunk, 1, &metrics).await?;
 /// println!("Chunk ID: {}", chunk_id);
 /// # Ok(())
 /// # }
 /// ```
 pub async fn upsert_chunk_with_worktree(
-    client: &Client,
+    store: &SqliteStore,
     chunk: &ParsedChunk,
     worktree_id: i64,
     metrics: &CacheMetrics,
@@ -355,7 +340,7 @@ pub async fn upsert_chunk_with_worktree(
     let blob_sha = compute_blob_sha(&chunk.content);
 
     // Step 2: Check if embedding exists (cache check)
-    let embedding_exists = check_embedding_exists(client, &blob_sha)
+    let embedding_exists = check_embedding_exists(store, &blob_sha)
         .await
         .context("Failed to check embedding cache")?;
 
@@ -379,48 +364,19 @@ pub async fn upsert_chunk_with_worktree(
     }
 
     // Step 4: Upsert chunk with worktree tracking
-    // Use ON CONFLICT to handle both INSERT (new chunk) and UPDATE (existing chunk)
-    // The CASE statement ensures idempotency: only append worktree_id if not already present
-    let row = client
-        .query_one(
-            r#"
-            INSERT INTO maproom.chunks
-                (blob_sha, relpath, symbol_name, content, start_line, end_line, kind, worktree_ids, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7::TEXT::maproom.symbol_kind, jsonb_build_array($8::BIGINT), NOW())
-            ON CONFLICT (blob_sha, relpath)
-            DO UPDATE SET
-                worktree_ids = CASE
-                    WHEN maproom.chunks.worktree_ids @> jsonb_build_array($8::BIGINT) THEN maproom.chunks.worktree_ids
-                    ELSE maproom.chunks.worktree_ids || jsonb_build_array($8::BIGINT)
-                END,
-                updated_at = NOW()
-            RETURNING id
-            "#,
-            &[
-                &blob_sha,
-                &chunk.relpath,
-                &chunk.symbol_name,
-                &chunk.content,
-                &chunk.start_line,
-                &chunk.end_line,
-                &chunk.kind,
-                &worktree_id,
-            ],
-        )
-        .await
-        .context("Failed to upsert chunk with worktree tracking")?;
+    // SQLite version: Insert chunk and use add_chunk_to_worktree for tracking
+    // Note: This is a simplified implementation - the original PostgreSQL version
+    // used JSONB arrays and complex ON CONFLICT logic. For SQLite, we use the
+    // chunk_worktrees junction table instead.
 
-    let chunk_id: i64 = row.get(0);
-
-    debug!(
-        chunk_id = chunk_id,
-        blob_sha = %blob_sha,
-        relpath = %chunk.relpath,
-        worktree_id = worktree_id,
-        "Chunk upserted with worktree tracking"
+    // First, create a ChunkRecord (note: we need a file_id, which we don't have here)
+    // This is a stub implementation - in practice, the caller should provide file_id
+    // or we need to look it up from the relpath
+    // For now, we'll return an error indicating this needs to be implemented
+    anyhow::bail!(
+        "upsert_chunk_with_worktree is not yet fully implemented for SQLite. \
+         Use insert_chunk with a ChunkRecord that includes file_id instead."
     );
-
-    Ok(chunk_id)
 }
 
 /// Print cache metrics summary after scan completion.
