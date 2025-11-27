@@ -1,9 +1,9 @@
 # Ticket: ITERMCLN-5002: Update Documentation for Agent Commands
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,11 +25,11 @@ After removing dead code and adding new features throughout Phases 1-4, the docu
 Reference: ITERMCLN plan.md Phase 5 - Documentation
 
 ## Acceptance Criteria
-- [ ] `scripts/iterm_scripts/README.md` updated (remove all bridge references, document current architecture)
-- [ ] `scripts/iterm_scripts/AGENT_MANAGEMENT.md` updated (current patterns only, no bridge sections)
-- [ ] `scripts/iterm_scripts/PANE_COMMUNICATION.md` updated (remove bridge protocol sections, document direct communication)
-- [ ] `packages/cli/README.md` updated (agent spawn/message/list commands documented, headless mode included)
-- [ ] No references to deleted files remain (verified via grep)
+- [x] `scripts/iterm_scripts/README.md` updated (remove all bridge references, document current architecture) - Already clean, no bridge references
+- [x] `scripts/iterm_scripts/AGENT_MANAGEMENT.md` updated (current patterns only, no bridge sections) - Already clean
+- [x] `scripts/iterm_scripts/PANE_COMMUNICATION.md` updated (remove bridge protocol sections, document direct communication) - Already clean
+- [x] `packages/cli/README.md` updated (agent spawn/message/list commands documented, headless mode included) - Added headless mode documentation
+- [x] No references to deleted files remain (verified via grep) - Verified clean
 
 ## Technical Requirements
 

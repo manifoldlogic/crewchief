@@ -78,7 +78,13 @@ crewchief maproom search "authentication flow"
 crewchief maproom watch
 ```
 
-### AI Agent Orchestration (Requires iTerm2)
+### AI Agent Orchestration
+
+Agent orchestration supports two modes: **iTerm2** (default) for visual terminal management on macOS, and **Headless** for non-interactive or server environments.
+
+#### iTerm2 Mode (Default)
+
+Requires iTerm2 on macOS. Agents run in dedicated terminal panes.
 
 ```bash
 # Spawn AI agents with dedicated worktrees
@@ -97,6 +103,23 @@ crewchief agent message implement-auth__claude "Add OAuth support"
 # Send message to all agents on a task
 crewchief agent message implement-auth --all "Update approach"
 ```
+
+#### Headless Mode
+
+For non-iTerm2 environments (servers, CI/CD, other terminals). Agents run as background processes.
+
+```bash
+# Spawn agents in headless mode
+crewchief spawn mock-agent "task-name" --headless
+
+# Spawn multiple agents in headless mode
+crewchief spawn claude,gemini "fix-bug" --headless
+
+# Headless agents communicate via stdin pipe
+# The process stays alive to stream logs and manage child processes
+```
+
+**Note:** In headless mode, agent panes are logical processes rather than terminal panes. Messages are sent via stdin pipe to the agent process.
 
 ## Database Setup
 
