@@ -1,9 +1,9 @@
 # Ticket: TESTFIX-1002: Verify Local Test Environment
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (this ticket documents test status, does not create/modify tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - unit-test-runner
@@ -17,12 +17,27 @@ Run all test suites and document exact baseline failure counts for Rust and Type
 Before fixing tests, we need accurate baseline counts to measure progress. The project review identified approximate counts that need verification: 190 Rust compilation errors, 53 CLI failures, 16 VSCode failures, 5 daemon-client failures. This ticket documents the actual state after environment cleanup (TESTFIX-1001).
 
 ## Acceptance Criteria
-- [ ] `cargo check --tests` error count documented (target baseline: ~190)
-- [ ] `pnpm test` in packages/cli failure count documented (target baseline: ~53 after vitest config)
-- [ ] `pnpm test` in packages/vscode-maproom failure count documented (target baseline: ~16)
-- [ ] `pnpm test` in packages/daemon-client results documented (42 pass, 5 fail expected)
-- [ ] MCP test status documented (database connectivity issue confirmed)
-- [ ] Baseline summary added to project README or analysis.md
+- [x] `cargo check --tests` error count documented (target baseline: ~190)
+- [x] `pnpm test` in packages/cli failure count documented (target baseline: ~53 after vitest config)
+- [x] `pnpm test` in packages/vscode-maproom failure count documented (target baseline: ~16)
+- [x] `pnpm test` in packages/daemon-client results documented (42 pass, 5 fail expected)
+- [x] MCP test status documented (database connectivity issue confirmed)
+- [x] Baseline summary added to project README or analysis.md
+
+### Verified Baseline Results (2025-11-27)
+
+| Package | Test Files | Tests | Passing | Failing | Skipped | Notes |
+|---------|------------|-------|---------|---------|---------|-------|
+| **Rust** | N/A | N/A | N/A | 190 errors | N/A | Compilation errors |
+| **CLI** | 53 | 1094 | 1078 | 16 | 0 | After vitest fix |
+| **VSCode** | 15 | 352 | 336 | 16 | 0 | Timeout issues |
+| **Daemon-client** | 5 | 80 | 60 | 16 | 4 | Daemon crashes |
+| **MCP** | N/A | 3 | 2 | 1 | N/A | DB connectivity |
+
+**Notes:**
+- CLI failures reduced from 53 to 16 after TESTFIX-1001 (vitest config)
+- Daemon-client has more failures than expected (16 vs 5)
+- MCP `test:connection` passes, full test requires PostgreSQL (`maproom-postgres` not found)
 
 ## Technical Requirements
 - Run `cargo check --tests 2>&1 | grep "^error" | wc -l` for Rust error count

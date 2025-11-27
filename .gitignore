@@ -49,3 +49,7 @@ maproom-sa-key.json
 .config/gcp/.crewchief/claude-code-plugins
 
 coverage/
+
+# Test report output directories
+test-reports-*/
+**/test-reports-*/

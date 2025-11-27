@@ -20,6 +20,25 @@ The test suite across the CrewChief monorepo has significant failures that preve
 - Missing `vitest.config.ts` in CLI package causes test discovery in nested worktree directories
 - Stale worktree at `packages/cli/.crewchief/worktrees/variant-test-*` causes ~30 duplicate test executions
 
+---
+
+### Verified Baseline (TESTFIX-1002, 2025-11-27)
+
+After TESTFIX-1001 environment cleanup:
+
+| Package | Test Files | Tests | Passing | Failing | Skipped | Notes |
+|---------|------------|-------|---------|---------|---------|-------|
+| **Rust (cargo check --tests)** | N/A | N/A | N/A | 190 errors | N/A | Compilation errors, not runtime |
+| **CLI** | 53 | 1094 | 1078 | 16 | 0 | Vitest config fixed discovery |
+| **VSCode** | 15 | 352 | 336 | 16 | 0 | Timeout issues in orchestrator |
+| **Daemon-client** | 5 | 80 | 60 | 16 | 4 | Requires daemon binary |
+| **MCP** | N/A | N/A | 2 | 1 | N/A | DB connectivity (`maproom-postgres` not found) |
+
+**Key findings:**
+- CLI failures reduced from 53 to 16 after vitest config fix (TESTFIX-1001)
+- Daemon-client has more failures than expected (16 vs 5) - daemon crashes on startup
+- MCP `test:connection` passes, full test requires PostgreSQL
+
 **CI Configuration**
 - Workflow: `.github/workflows/test.yml`
 - Jobs: SQLite E2E, MCP SQLite, Rust SQLite, PostgreSQL Integration, Rust PostgreSQL
