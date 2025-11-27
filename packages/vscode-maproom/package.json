@@ -62,6 +62,12 @@
           "default": "",
           "markdownDescription": "Path to SQLite database file. Leave empty for default (`~/.maproom/maproom.db`). Supports tilde (`~`) for home directory.",
           "scope": "machine-overridable"
+        },
+        "maproom.ollama.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "markdownDescription": "Ollama API endpoint URL. Use `http://host.docker.internal:11434` when running in a devcontainer to access Ollama on the host machine.",
+          "scope": "machine-overridable"
         }
       }
     }

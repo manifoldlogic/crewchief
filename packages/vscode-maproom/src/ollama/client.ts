@@ -5,8 +5,8 @@
  * and pull models with progress streaming. Used by the extension to ensure
  * the required embedding model is available before starting the watch process.
  *
- * SECURITY: Base URL is hardcoded to localhost:11434 and is not configurable.
- * This prevents potential SSRF attacks through user-controlled URLs.
+ * SECURITY: Base URL is validated to only allow localhost, 127.0.0.1, or
+ * host.docker.internal to prevent SSRF attacks.
  */
 
 /** Timeout for health check requests in milliseconds */
@@ -14,6 +14,12 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000
 
 /** Regex pattern for validating model names (security measure) */
 const MODEL_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*(?::[a-z0-9._-]+)?$/i
+
+/** Allowed hostnames for Ollama endpoint (security measure) */
+const ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'host.docker.internal']
+
+/** Default Ollama endpoint */
+const DEFAULT_ENDPOINT = 'http://127.0.0.1:11434'
 
 /** Error thrown when model name validation fails */
 export class InvalidModelNameError extends Error {
@@ -31,6 +37,16 @@ export class OllamaApiError extends Error {
   ) {
     super(message)
     this.name = 'OllamaApiError'
+  }
+}
+
+/** Error thrown when endpoint URL is invalid or not allowed */
+export class InvalidEndpointError extends Error {
+  constructor(endpoint: string) {
+    super(
+      `Invalid Ollama endpoint: ${endpoint}. Only localhost, 127.0.0.1, and host.docker.internal are allowed.`
+    )
+    this.name = 'InvalidEndpointError'
   }
 }
 
@@ -59,7 +75,11 @@ export interface PullProgress {
  *
  * @example
  * ```typescript
+ * // Default endpoint (localhost)
  * const client = new OllamaClient()
+ *
+ * // Custom endpoint (e.g., for devcontainers)
+ * const dockerClient = new OllamaClient('http://host.docker.internal:11434')
  *
  * if (await client.isRunning()) {
  *   if (!await client.hasModel('nomic-embed-text')) {
@@ -73,9 +93,45 @@ export interface PullProgress {
 export class OllamaClient {
   /**
    * Base URL for Ollama API
-   * SECURITY: Hardcoded to localhost - not configurable to prevent SSRF
+   * SECURITY: Validated to only allow safe hostnames
    */
-  private readonly baseUrl = 'http://127.0.0.1:11434'
+  private readonly baseUrl: string
+
+  /**
+   * Create a new OllamaClient
+   *
+   * @param endpoint - Ollama API base URL (default: http://127.0.0.1:11434)
+   * @throws InvalidEndpointError if endpoint hostname is not in allowed list
+   */
+  constructor(endpoint: string = DEFAULT_ENDPOINT) {
+    this.baseUrl = OllamaClient.validateEndpoint(endpoint)
+  }
+
+  /**
+   * Validate and normalize an Ollama endpoint URL
+   *
+   * SECURITY: Only allows localhost, 127.0.0.1, and host.docker.internal
+   * to prevent SSRF attacks through user-controlled URLs.
+   *
+   * @param endpoint - Endpoint URL to validate
+   * @returns Normalized endpoint URL (without trailing slash)
+   * @throws InvalidEndpointError if hostname is not allowed
+   */
+  static validateEndpoint(endpoint: string): string {
+    try {
+      const url = new URL(endpoint)
+      if (!ALLOWED_HOSTS.includes(url.hostname)) {
+        throw new InvalidEndpointError(endpoint)
+      }
+      // Return normalized URL without trailing slash
+      return `${url.protocol}//${url.host}`
+    } catch (e) {
+      if (e instanceof InvalidEndpointError) {
+        throw e
+      }
+      throw new InvalidEndpointError(endpoint)
+    }
+  }
 
   /**
    * Check if Ollama is running and accessible
@@ -245,4 +301,31 @@ export class OllamaClient {
   static isValidModelName(name: string): boolean {
     return MODEL_NAME_PATTERN.test(name)
   }
+}
+
+/**
+ * Get the configured Ollama endpoint from VS Code settings
+ *
+ * @returns Ollama endpoint URL from settings, or default if not configured
+ */
+export function getOllamaEndpoint(): string {
+  // Dynamic import to avoid issues in test environments
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const vscode = require('vscode') as typeof import('vscode')
+    const config = vscode.workspace.getConfiguration('maproom')
+    return (config.get('ollama.endpoint') as string | undefined) || DEFAULT_ENDPOINT
+  } catch {
+    // In test environment where vscode is not available
+    return DEFAULT_ENDPOINT
+  }
+}
+
+/**
+ * Create an OllamaClient using the configured endpoint from VS Code settings
+ *
+ * @returns OllamaClient configured with the user's endpoint setting
+ */
+export function createOllamaClient(): OllamaClient {
+  return new OllamaClient(getOllamaEndpoint())
 }

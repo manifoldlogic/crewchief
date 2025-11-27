@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode'
-import { OllamaClient, OllamaApiError } from './client'
+import { OllamaClient, OllamaApiError, createOllamaClient } from './client'
 import { OllamaNotRunningError, ModelPullError, ModelCheckError } from './errors'
 
 /** Default embedding model used by the extension */
@@ -65,7 +65,7 @@ export async function ensureOllamaModel(
   modelName: string = DEFAULT_EMBEDDING_MODEL,
   options: EnsureModelOptions = {}
 ): Promise<void> {
-  const client = new OllamaClient()
+  const client = createOllamaClient()
 
   // Check if Ollama is running
   if (!(await client.isRunning())) {
@@ -200,7 +200,7 @@ export async function showModelPullError(
 export async function checkModelAvailability(
   modelName: string = DEFAULT_EMBEDDING_MODEL
 ): Promise<ModelCheckResult> {
-  const client = new OllamaClient()
+  const client = createOllamaClient()
 
   try {
     if (!(await client.isRunning())) {

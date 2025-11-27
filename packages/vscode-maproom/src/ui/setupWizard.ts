@@ -22,7 +22,7 @@ import { homedir } from 'os'
 import * as path from 'path'
 import { SecretsManager } from '../config/secrets'
 import { MCPConfigWriter } from '../config/mcp-writer'
-import { OllamaClient } from '../ollama'
+import { createOllamaClient } from '../ollama/client'
 import { resolveDatabaseConfig, type DatabaseConfig } from '../services/database-checker'
 
 /**
@@ -193,7 +193,7 @@ function buildProviderOptions(ollamaRunning: boolean): ProviderOption[] {
  * @returns Promise resolving to true if Ollama detected, false otherwise
  */
 export async function detectOllama(): Promise<boolean> {
-  const client = new OllamaClient()
+  const client = createOllamaClient()
   return client.isRunning()
 }
 

@@ -188,9 +188,22 @@ export class MCPConfigWriter {
       case 'google':
         env.GOOGLE_APPLICATION_CREDENTIALS = '${env:GOOGLE_APPLICATION_CREDENTIALS}'
         break
-      case 'ollama':
-        // Ollama doesn't need environment variables
+      case 'ollama': {
+        // Check if custom Ollama endpoint is configured
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const vscode = require('vscode') as typeof import('vscode')
+          const config = vscode.workspace.getConfiguration('maproom')
+          const endpoint = config.get('ollama.endpoint') as string | undefined
+          if (endpoint && endpoint !== 'http://127.0.0.1:11434') {
+            // Add /api/embed suffix for the Rust daemon
+            env.MAPROOM_EMBEDDING_API_ENDPOINT = endpoint.replace(/\/?$/, '/api/embed')
+          }
+        } catch {
+          // In test environment where vscode is not available - use defaults
+        }
         break
+      }
       default:
         // TypeScript should prevent this, but handle unknown providers gracefully
         const _exhaustive: never = provider

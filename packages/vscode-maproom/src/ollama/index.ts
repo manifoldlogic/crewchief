@@ -6,8 +6,11 @@
  */
 
 export {
+  getOllamaEndpoint,
+  createOllamaClient,
   OllamaClient,
   InvalidModelNameError,
+  InvalidEndpointError,
   OllamaApiError,
   type OllamaModel,
   type OllamaTagsResponse,
