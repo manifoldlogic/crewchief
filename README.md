@@ -267,6 +267,27 @@ MAPROOM_EMBEDDING_PARALLEL_MAX_CONCURRENCY=8      # Concurrent requests (default
 - Expected performance improvements (10-20x on Apple Silicon)
 - Troubleshooting tips for slow performance, OOM, or timeouts
 
+## Database Maintenance
+
+### Cleanup Stale Worktrees
+
+Remove worktrees that no longer exist on disk to improve search quality:
+
+```bash
+# Preview what will be deleted (safe - no changes)
+crewchief maproom db cleanup-stale
+
+# Actually delete stale worktrees
+crewchief maproom db cleanup-stale --confirm
+
+# Show detailed information
+crewchief maproom db cleanup-stale --verbose
+```
+
+**Exit codes:** 0 (success), 1 (error), 2 (no stale worktrees found)
+
+See [User Guide: Cleanup](docs/user-guide-cleanup.md) for detailed instructions and [Admin Guide: Cleanup](docs/admin-guide-cleanup.md) for automation.
+
 ## Requirements
 
 - Node.js >= 18

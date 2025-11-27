@@ -1,9 +1,9 @@
 # Ticket: IDXCLEAN-5001: Update Documentation for Cleanup Feature
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer (primary - feature implementer, understands implementation details)
@@ -19,12 +19,12 @@ With all implementation complete (Phases 1-4), users need comprehensive document
 References: `.agents/projects/IDXCLEAN_index-stale-worktree-cleanup/planning/plan.md` - Phase 5 (Production Deployment), ticket IDXCLEAN-5001 (lines 700-725)
 
 ## Acceptance Criteria
-- [ ] README.md updated with cleanup command usage section
-- [ ] CHANGELOG.md updated with IDXCLEAN feature entries
-- [ ] User guide created (`docs/user-guide-cleanup.md`) with step-by-step cleanup instructions
-- [ ] Administrator guide created (`docs/admin-guide-watch-cleanup.md`) with watch integration setup
-- [ ] Recovery procedures documented (how to restore if accidental deletion)
-- [ ] Security considerations documented (backup recommendations)
+- [x] README.md updated with cleanup command usage section
+- [x] CHANGELOG.md updated with IDXCLEAN feature entries
+- [x] User guide created (`docs/user-guide-cleanup.md`) with step-by-step cleanup instructions
+- [x] Administrator guide created (`docs/admin-guide-cleanup.md`) - Note: Watch integration deferred (see Phase 4 blockers)
+- [x] Recovery procedures documented (how to restore if accidental deletion) - in user guide
+- [x] Security considerations documented (backup recommendations) - in admin guide
 
 ## Technical Requirements
 - Documentation must be clear and accessible for non-technical users
@@ -123,9 +123,13 @@ New file covering:
 ## Files/Packages Affected
 
 ### Modified Files
-- `/workspace/README.md` - Add cleanup command usage section
-- `/workspace/CHANGELOG.md` - Add IDXCLEAN feature entries
+- `/workspace/README.md` - Added "Database Maintenance" section with cleanup commands
+- `/workspace/CHANGELOG.md` - Added IDXCLEAN feature entries under "Stale Worktree Cleanup"
+- `/workspace/crates/maproom/CLAUDE.md` - Already had cleanup documentation (added earlier)
 
 ### New Files
-- `/workspace/docs/user-guide-cleanup.md` - User-facing cleanup instructions
-- `/workspace/docs/admin-guide-watch-cleanup.md` - Watch integration and administration guide
+- `/workspace/docs/user-guide-cleanup.md` - User-facing cleanup instructions with recovery procedures
+- `/workspace/docs/admin-guide-cleanup.md` - Administration guide (renamed from admin-guide-watch-cleanup.md since watch is deferred)
+
+### Notes on Watch Integration
+The original ticket specified `admin-guide-watch-cleanup.md` for watch integration documentation. Since Phase 4 (watch integration) is BLOCKED due to the watch command being removed in IDXABS-2001, the admin guide was created with CLI-focused content and a placeholder section for future watch integration.

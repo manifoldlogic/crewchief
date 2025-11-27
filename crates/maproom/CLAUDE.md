@@ -62,6 +62,26 @@ cargo clippy -p crewchief-maproom
 cargo fmt
 ```
 
+## Cleanup Stale Worktrees
+
+Remove worktrees that no longer exist on disk (reduces search result duplication):
+
+```bash
+# Preview what will be deleted (dry-run, default behavior)
+cargo run --bin crewchief-maproom -- db cleanup-stale
+
+# Actually delete stale worktrees
+cargo run --bin crewchief-maproom -- db cleanup-stale --confirm
+
+# Show detailed information
+cargo run --bin crewchief-maproom -- db cleanup-stale --verbose
+```
+
+**Exit codes:**
+- `0` - Success (cleanup completed or dry-run)
+- `1` - Error (database connection failed)
+- `2` - No stale worktrees found
+
 ## Quick Start
 
 ```bash

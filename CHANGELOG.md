@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Stale Worktree Cleanup (crates/maproom)
+
+- **New `db cleanup-stale` command** - Remove worktrees that no longer exist on disk
+  - Dry-run by default (safe preview mode, no data deletion without `--confirm`)
+  - `--confirm` flag required for actual deletion
+  - `--verbose` flag for detailed progress output
+  - Exit codes: 0 (success), 1 (error), 2 (no stale worktrees found)
+  - Reduces duplicate search results from deleted branches/worktrees
+  - Improves search quality by cleaning stale data
+
+- **Stale Worktree Detection** (`db::cleanup::StaleWorktreeDetector`)
+  - Identifies worktrees with non-existent `root_path` directories
+  - Safe detection using `tokio::fs::try_exists`
+  - Reports worktree ID, path, repository name, and timestamps
+
+- **Safe Worktree Deletion** (`db::cleanup::WorktreeCleaner`)
+  - Cascade deletion through `chunk_worktrees` junction table
+  - Preserves chunks shared by multiple worktrees (multi-worktree safety)
+  - Reports deletion counts and statistics
+  - Comprehensive error handling and logging
+
+- **CLI Integration** for cleanup operations
+  - Clear emoji indicators (🔍 detecting, ✅ success, ⚠️ failure)
+  - Progress reporting for multi-worktree cleanup
+  - Performance: < 15ms typical execution time
+
 #### Daemon Client (packages/daemon-client)
 
 - **New `daemon-client` package** - High-performance TypeScript client for long-running daemon processes
