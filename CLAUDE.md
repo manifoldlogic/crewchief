@@ -92,12 +92,32 @@ Long-term codebase documentation. Read by both agents and humans.
 - API references
 - Technical specifications
 
-### Public documentation
-For public documentation for programming languages, frameworks, libraries, tools, etc., outside the codebase, prefer the 'Ref' tools to find information.
-- `ref_read_url` when you have a URL, to see if the information is available, rather than reading the page yourself, where possible.
-- `ref_search_documentation` for general documentation search.
-
 **Rule**: Agents document active work in `.agents/`, finalized knowledge goes in `docs/`.
+
+### Documentation vs Web Search Tools
+
+**Ref** — Use for official API/library/framework documentation lookup
+- `ref_search_documentation` — Search technical docs with full sentence queries (e.g., "Stripe API create subscription endpoint")
+- `ref_read_url` — Read a specific documentation URL
+
+**Exa** — Use for code examples, implementation patterns, and general web content
+- `get_code_context_exa` — Find code snippets and examples from GitHub, Stack Overflow, etc.
+- `web_search_exa` — General web search for current information
+- `crawling_exa` — Extract content from a specific URL
+- `company_research_exa` — Research companies
+- `linkedin_search_exa` — Search LinkedIn profiles/companies
+- `deep_researcher_start` / `deep_researcher_check` — Complex multi-source research
+
+### Quick Decision Guide
+
+| Need | Tool |
+|------|------|
+| API parameters, library syntax, official docs | Ref |
+| "How do I implement X" code examples | Exa (`get_code_context_exa`) |
+| Current info, news, general questions | Exa (`web_search_exa`) |
+| Read a non-docs URL | Exa (`crawling_exa`) |
+
+**Rule**: Ref for authoritative documentation. Exa for code examples and web content. Prefer both over built-in Web Search for better token efficiency.
 
 ## Architecture
 
