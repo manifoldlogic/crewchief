@@ -158,3 +158,13 @@ pub struct WorktreeCleanupResult {
     pub files_deleted: u64,
     pub embeddings_deleted: u64,
 }
+
+/// Chunk data needed for embedding generation
+#[derive(Debug, Clone)]
+pub struct ChunkForEmbedding {
+    pub id: i64,
+    pub blob_sha: String,
+    pub signature: Option<String>,
+    pub docstring: Option<String>,
+    pub preview: String,
+}

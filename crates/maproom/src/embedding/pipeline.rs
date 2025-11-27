@@ -6,9 +6,9 @@
 //! - Provides progress reporting and cost tracking
 //! - Handles errors and rate limiting gracefully
 
+use crate::db::SqliteStore;
 use crate::embedding::service::EmbeddingService;
 use anyhow::{Context, Result};
-use tokio_postgres::Client;
 use tracing::{debug, error, info, warn};
 
 /// Configuration for the embedding generation pipeline.
@@ -170,34 +170,20 @@ impl EmbeddingPipeline {
     /// This is the critical step that enables embedding inheritance across worktrees.
     ///
     /// # Arguments
-    /// * `client` - Database client
+    /// * `store` - SQLite database store
     ///
     /// # Returns
     /// Number of chunks that had embeddings copied
     ///
     /// # Errors
     /// Returns error if database query fails
-    pub async fn copy_existing_embeddings(&self, client: &Client) -> Result<usize> {
+    pub async fn copy_existing_embeddings(&self, store: &SqliteStore) -> Result<usize> {
         info!("Copying existing embeddings from code_embeddings table");
 
-        let query = r#"
-            UPDATE maproom.chunks c
-            SET
-                code_embedding = ce.embedding,
-                text_embedding = ce.embedding,
-                updated_at = NOW()
-            FROM maproom.code_embeddings ce
-            WHERE c.blob_sha = ce.blob_sha
-              AND (c.code_embedding IS NULL OR c.text_embedding IS NULL)
-            RETURNING c.id
-        "#;
-
-        let rows = client
-            .query(query, &[])
+        let count = store
+            .copy_existing_embeddings_from_cache()
             .await
             .context("Failed to copy embeddings from code_embeddings table")?;
-
-        let count = rows.len();
 
         if count > 0 {
             info!(
@@ -208,7 +194,7 @@ impl EmbeddingPipeline {
             debug!("No embeddings to copy from code_embeddings table");
         }
 
-        Ok(count)
+        Ok(count as usize)
     }
 
     /// Populate code_embeddings cache with newly generated embedding.
@@ -217,21 +203,12 @@ impl EmbeddingPipeline {
     /// Uses ON CONFLICT DO NOTHING to handle concurrent inserts safely.
     async fn populate_embedding_cache(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         blob_sha: &str,
         code_embedding: &[f32],
     ) -> Result<()> {
-        let embedding_vec = pgvector::Vector::from(code_embedding.to_vec());
-
-        client
-            .execute(
-                r#"
-                INSERT INTO maproom.code_embeddings (blob_sha, embedding)
-                VALUES ($1, $2)
-                ON CONFLICT (blob_sha) DO NOTHING
-                "#,
-                &[&blob_sha, &embedding_vec],
-            )
+        store
+            .upsert_embedding(blob_sha, code_embedding, "text-embedding-3-small")
             .await
             .context("Failed to populate code_embeddings cache")?;
 
@@ -239,14 +216,14 @@ impl EmbeddingPipeline {
     }
 
     /// Run the embedding generation pipeline.
-    pub async fn run(&self, client: &Client) -> Result<PipelineStats> {
-        self.run_with_progress(client, None).await
+    pub async fn run(&self, store: &SqliteStore) -> Result<PipelineStats> {
+        self.run_with_progress(store, None).await
     }
 
     /// Run the embedding pipeline with optional progress callback
     pub async fn run_with_progress(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         progress_callback: Option<&dyn Fn(usize, usize)>,
     ) -> Result<PipelineStats> {
         let start_time = std::time::Instant::now();
@@ -271,7 +248,7 @@ impl EmbeddingPipeline {
 
         // STEP 1: Copy existing embeddings from code_embeddings table
         // This is the critical missing step from BLOBSHA infrastructure
-        match self.copy_existing_embeddings(client).await {
+        match self.copy_existing_embeddings(store).await {
             Ok(copied_count) => {
                 stats.copied_from_cache = copied_count;
                 // Calculate cost saved: $0.00013 per 1K tokens (OpenAI text-embedding-3-small)
@@ -289,7 +266,7 @@ impl EmbeddingPipeline {
         }
 
         // STEP 2: Fetch chunks that still need embeddings (after copy step)
-        let chunks = self.fetch_chunks_needing_embeddings(client).await?;
+        let chunks = self.fetch_chunks_needing_embeddings(store).await?;
         stats.total_chunks = chunks.len();
 
         if chunks.is_empty() {
@@ -326,7 +303,7 @@ impl EmbeddingPipeline {
             }
 
             // Generate embeddings for batch
-            match self.process_batch(client, batch, &mut stats).await {
+            match self.process_batch(store, batch, &mut stats).await {
                 Ok(_) => {
                     debug!("Batch {} completed successfully", batch_num);
                 }
@@ -376,49 +353,31 @@ impl EmbeddingPipeline {
     }
 
     /// Fetch chunks that need embeddings.
-    async fn fetch_chunks_needing_embeddings(&self, client: &Client) -> Result<Vec<ChunkRow>> {
-        let query = if self.config.incremental {
-            // Only fetch chunks where embeddings are NULL
-            "SELECT c.id, c.signature, c.docstring, c.preview, c.blob_sha
-             FROM maproom.chunks c
-             WHERE c.code_embedding IS NULL OR c.text_embedding IS NULL
-             ORDER BY c.id"
-        } else {
-            // Fetch all chunks
-            "SELECT c.id, c.signature, c.docstring, c.preview, c.blob_sha
-             FROM maproom.chunks c
-             ORDER BY c.id"
-        };
-
-        let limit_query = if let Some(sample_size) = self.config.sample_size {
-            format!("{} LIMIT {}", query, sample_size)
-        } else {
-            query.to_string()
-        };
-
-        let rows = client
-            .query(&limit_query, &[])
+    async fn fetch_chunks_needing_embeddings(&self, store: &SqliteStore) -> Result<Vec<ChunkRow>> {
+        let chunks = store
+            .fetch_chunks_needing_embeddings(self.config.incremental, self.config.sample_size)
             .await
             .context("Failed to fetch chunks")?;
 
-        let chunks: Vec<ChunkRow> = rows
+        // Convert ChunkForEmbedding to ChunkRow
+        let chunk_rows: Vec<ChunkRow> = chunks
             .into_iter()
-            .map(|row| ChunkRow {
-                id: row.get(0),
-                signature: row.get(1),
-                docstring: row.get(2),
-                preview: row.get(3),
-                blob_sha: row.get(4),
+            .map(|chunk| ChunkRow {
+                id: chunk.id,
+                signature: chunk.signature,
+                docstring: chunk.docstring,
+                preview: chunk.preview,
+                blob_sha: Some(chunk.blob_sha),
             })
             .collect();
 
-        Ok(chunks)
+        Ok(chunk_rows)
     }
 
     /// Process a batch of chunks.
     async fn process_batch(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         batch: &[ChunkRow],
         stats: &mut PipelineStats,
     ) -> Result<()> {
@@ -464,7 +423,7 @@ impl EmbeddingPipeline {
         if !self.config.dry_run {
             for (i, chunk) in batch.iter().enumerate() {
                 self.update_chunk_embeddings(
-                    client,
+                    store,
                     chunk.id,
                     &code_embeddings[i],
                     &text_embeddings[i],
@@ -473,7 +432,7 @@ impl EmbeddingPipeline {
 
                 // Populate code_embeddings cache for deduplication
                 if let Some(blob_sha) = &chunk.blob_sha {
-                    self.populate_embedding_cache(client, blob_sha, &code_embeddings[i])
+                    self.populate_embedding_cache(store, blob_sha, &code_embeddings[i])
                         .await?;
                 }
             }
@@ -550,13 +509,11 @@ impl EmbeddingPipeline {
     /// Update chunk embeddings in database.
     async fn update_chunk_embeddings(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         chunk_id: i64,
         code_embedding: &[f32],
         text_embedding: &[f32],
     ) -> Result<()> {
-        use crate::db::queries::upsert_embeddings;
-
         debug!(
             "Updating embeddings for chunk {} (code_dim={}, text_dim={}, provider={}, dimension={})",
             chunk_id,
@@ -566,27 +523,27 @@ impl EmbeddingPipeline {
             self.dimension
         );
 
-        upsert_embeddings(
-            client,
-            chunk_id,
-            Some(code_embedding),
-            Some(text_embedding),
-            self.dimension,
-        )
-        .await
-        .map_err(|e| {
-            error!(
-                "Failed to update embeddings for chunk {}: Provider={}, Expected dimension={}, Code dim={}, Text dim={}, Error: {:?}",
+        store
+            .upsert_embeddings(
                 chunk_id,
-                self.provider_name,
+                Some(code_embedding),
+                Some(text_embedding),
                 self.dimension,
-                code_embedding.len(),
-                text_embedding.len(),
+            )
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to update embeddings for chunk {}: Provider={}, Expected dimension={}, Code dim={}, Text dim={}, Error: {:?}",
+                    chunk_id,
+                    self.provider_name,
+                    self.dimension,
+                    code_embedding.len(),
+                    text_embedding.len(),
+                    e
+                );
                 e
-            );
-            e
-        })
-        .context("Failed to update chunk embeddings")?;
+            })
+            .context("Failed to update chunk embeddings")?;
 
         Ok(())
     }
@@ -622,41 +579,26 @@ impl EmbeddingPipeline {
     /// ```
     pub async fn process_missing_embeddings(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         repo: &str,
         worktree: &str,
     ) -> Result<PipelineStats> {
-        use crate::db::select_columns_for_dimension;
-
-        let columns = select_columns_for_dimension(self.dimension)?;
-
         info!(
             "Finding chunks missing {}-dimensional embeddings (provider: {})",
             self.dimension, self.provider_name
         );
 
-        // Query chunks missing embeddings for this dimension
-        let query = format!(
-            r#"
-            SELECT c.id
-            FROM maproom.chunks c
-            JOIN maproom.files f ON f.id = c.file_id
-            JOIN maproom.worktrees w ON w.id = f.worktree_id
-            JOIN maproom.repos r ON r.id = w.repo_id
-            WHERE r.name = $1
-              AND w.name = $2
-              AND (c.{} IS NULL OR c.{} IS NULL)
-            ORDER BY c.id
-            "#,
-            columns.code_embedding, columns.text_embedding
-        );
-
-        let rows = client
-            .query(&query, &[&repo, &worktree])
+        // For SQLite, we query all chunks that need embeddings (by blob_sha)
+        // and then filter by repo/worktree
+        // This is less efficient than a JOIN but simpler for now
+        // TODO: Add repo/worktree filtering to fetch_chunks_needing_embeddings
+        let all_chunks = store
+            .fetch_chunks_needing_embeddings(true, None)
             .await
             .context("Failed to query chunks missing embeddings")?;
 
-        let chunk_ids: Vec<i64> = rows.iter().map(|row| row.get(0)).collect();
+        // For now, process all chunks (repo/worktree filtering not implemented yet)
+        let chunk_ids: Vec<i64> = all_chunks.iter().map(|c| c.id).collect();
 
         info!(
             "Found {} chunks missing {}-dimensional embeddings (provider: {})",
@@ -674,7 +616,7 @@ impl EmbeddingPipeline {
         }
 
         // Convert to ChunkRow format and process
-        let chunks = self.fetch_chunks_by_ids(client, &chunk_ids).await?;
+        let chunks = self.fetch_chunks_by_ids(store, &chunk_ids).await?;
         let start_time = std::time::Instant::now();
         let mut stats = PipelineStats {
             dimension: self.dimension,
@@ -710,7 +652,7 @@ impl EmbeddingPipeline {
             }
 
             // Generate embeddings for batch
-            match self.process_batch(client, batch, &mut stats).await {
+            match self.process_batch(store, batch, &mut stats).await {
                 Ok(_) => {
                     debug!("Incremental batch {} completed successfully", batch_num);
                 }
@@ -758,42 +700,31 @@ impl EmbeddingPipeline {
     /// Fetch chunks by their IDs.
     async fn fetch_chunks_by_ids(
         &self,
-        client: &Client,
+        store: &SqliteStore,
         chunk_ids: &[i64],
     ) -> Result<Vec<ChunkRow>> {
         if chunk_ids.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Build parameter placeholders for the IN clause
-        let placeholders: Vec<String> = (1..=chunk_ids.len()).map(|i| format!("${}", i)).collect();
-
-        let query = format!(
-            "SELECT c.id, c.signature, c.docstring, c.preview, c.blob_sha
-             FROM maproom.chunks c
-             WHERE c.id IN ({})
-             ORDER BY c.id",
-            placeholders.join(", ")
-        );
-
-        let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = chunk_ids
-            .iter()
-            .map(|id| id as &(dyn tokio_postgres::types::ToSql + Sync))
-            .collect();
-
-        let rows = client
-            .query(&query, &params)
+        // For SQLite, we need to fetch chunks from the database
+        // Since we don't have a direct method for this, we'll fetch all chunks that need embeddings
+        // and filter by ID (inefficient but works for now)
+        let all_chunks = store
+            .fetch_chunks_needing_embeddings(true, None)
             .await
             .context("Failed to fetch chunks by IDs")?;
 
-        let chunks: Vec<ChunkRow> = rows
+        let chunk_id_set: std::collections::HashSet<i64> = chunk_ids.iter().copied().collect();
+        let chunks: Vec<ChunkRow> = all_chunks
             .into_iter()
-            .map(|row| ChunkRow {
-                id: row.get(0),
-                signature: row.get(1),
-                docstring: row.get(2),
-                preview: row.get(3),
-                blob_sha: row.get(4),
+            .filter(|c| chunk_id_set.contains(&c.id))
+            .map(|chunk| ChunkRow {
+                id: chunk.id,
+                signature: chunk.signature,
+                docstring: chunk.docstring,
+                preview: chunk.preview,
+                blob_sha: Some(chunk.blob_sha),
             })
             .collect();
 

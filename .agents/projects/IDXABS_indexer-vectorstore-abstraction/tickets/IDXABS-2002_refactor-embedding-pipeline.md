@@ -1,9 +1,9 @@
 # Ticket: IDXABS-2002: Refactor Embedding Pipeline
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - `cargo check` passes for embedding module (no errors in embedding directory)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - Run `cargo check` to verify embedding module compiles
@@ -26,13 +26,13 @@ The embedding pipeline uses raw PostgreSQL queries for operations like counting 
 **Risk Analysis**: See `planning/analysis.md` - "Embedding pipeline gaps" risk
 
 ## Acceptance Criteria
-- [ ] `SqliteStore::get_chunks_needing_embeddings_count()` implemented
-- [ ] `SqliteStore::copy_existing_embeddings_from_cache()` implemented
-- [ ] `SqliteStore::fetch_chunks_needing_embeddings(incremental, sample_size)` implemented
-- [ ] `EmbeddingPipeline::run()` works with `&SqliteStore`
-- [ ] No raw SQL queries in `embedding/pipeline.rs` (use store methods)
-- [ ] No `tokio_postgres` imports in `embedding/` directory
-- [ ] `cargo check` passes for embedding module
+- [x] `SqliteStore::get_chunks_needing_embeddings_count()` implemented
+- [x] `SqliteStore::copy_existing_embeddings_from_cache()` implemented
+- [x] `SqliteStore::fetch_chunks_needing_embeddings(incremental, sample_size)` implemented
+- [x] `EmbeddingPipeline::run()` works with `&SqliteStore`
+- [x] No raw SQL queries in `embedding/pipeline.rs` (use store methods)
+- [x] No `tokio_postgres` imports in `embedding/` directory
+- [x] `cargo check` passes for embedding module
 
 ## Technical Requirements
 

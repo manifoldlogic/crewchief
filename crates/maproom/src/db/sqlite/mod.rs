@@ -1860,6 +1860,92 @@ impl SqliteStore {
         self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
             .await
     }
+
+    /// Count chunks where blob_sha is NOT in code_embeddings table
+    ///
+    /// This returns the count of chunks that need embeddings generated.
+    /// In SQLite, embeddings are stored by blob_sha in the code_embeddings table,
+    /// so a chunk needs embedding if its blob_sha doesn't exist in that table.
+    pub async fn get_chunks_needing_embeddings_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                r#"
+                SELECT COUNT(DISTINCT c.blob_sha)
+                FROM chunks c
+                WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)
+                "#,
+                [],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Copy embeddings from code_embeddings cache table to chunks
+    ///
+    /// This is a no-op for SQLite since embeddings are already accessible
+    /// via the blob_sha key. This method exists for API compatibility with
+    /// the PostgreSQL implementation but doesn't need to do anything in SQLite.
+    ///
+    /// Returns the count of chunks that would have been updated (0).
+    pub async fn copy_existing_embeddings_from_cache(&self) -> anyhow::Result<i64> {
+        // In SQLite, embeddings are stored by blob_sha and accessed via joins.
+        // There's no "copying" needed - chunks reference embeddings via blob_sha.
+        // This method exists for API compatibility but is effectively a no-op.
+        Ok(0)
+    }
+
+    /// Fetch chunks that need embeddings generated
+    ///
+    /// Returns chunks where the blob_sha is not in the code_embeddings table.
+    ///
+    /// # Arguments
+    /// * `incremental` - If true, only return chunks without embeddings (always respected)
+    /// * `sample_size` - Optional limit on number of chunks to return
+    pub async fn fetch_chunks_needing_embeddings(
+        &self,
+        incremental: bool,
+        sample_size: Option<usize>,
+    ) -> anyhow::Result<Vec<crate::db::ChunkForEmbedding>> {
+        self.run(move |conn| {
+            // Build query based on parameters
+            let mut query = String::from(
+                r#"
+                SELECT c.id, c.blob_sha, c.signature, c.docstring, c.preview
+                FROM chunks c
+                "#,
+            );
+
+            // In SQLite, we only fetch chunks where blob_sha is not in code_embeddings
+            // The incremental parameter doesn't change this since we always check blob_sha
+            if incremental {
+                query.push_str("WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)\n");
+            }
+
+            query.push_str("ORDER BY c.id\n");
+
+            // Add LIMIT if sample_size is specified
+            if let Some(limit) = sample_size {
+                query.push_str(&format!("LIMIT {}", limit));
+            }
+
+            let mut stmt = conn.prepare(&query)?;
+            let rows = stmt.query_map([], |row| {
+                Ok(crate::db::ChunkForEmbedding {
+                    id: row.get(0)?,
+                    blob_sha: row.get(1)?,
+                    signature: row.get(2)?,
+                    docstring: row.get(3)?,
+                    preview: row.get(4)?,
+                })
+            })?;
+
+            let chunks: Result<Vec<_>, _> = rows.collect();
+            Ok(chunks?)
+        })
+        .await
+    }
 }
 
 #[cfg(test)]
