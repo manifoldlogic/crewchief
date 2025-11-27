@@ -1,25 +1,16 @@
 //! Database access layer for Maproom.
 //!
-//! This module provides database connectivity, connection pooling, and query utilities.
-
-/// Backend type for runtime detection
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackendType {
-    PostgreSQL,
-    SQLite,
-}
+//! This module provides SQLite database connectivity and query utilities.
+//! PostgreSQL support has been removed - SQLite is the only backend.
 
 pub mod cleanup;
 pub mod columns;
 pub mod connection;
 pub mod index_state;
-pub mod materialized_views;
-pub mod pool;
-pub mod queries;
-pub mod postgres;
-#[cfg(feature = "sqlite")]
 pub mod sqlite;
-pub mod factory;
+
+// Re-export SqliteStore as the primary store type
+pub use sqlite::SqliteStore;
 
 // Re-export cleanup types for convenience
 pub use cleanup::{
@@ -32,18 +23,33 @@ pub use columns::{select_columns_for_dimension, ColumnSet};
 // Re-export index state functions for convenience
 pub use index_state::{get_last_indexed_tree, update_index_state, UpdateStats};
 
-// Re-export pool types for convenience
-pub use pool::{create_pool, pool_stats, PgPool, PoolStats};
+// Re-export connection utilities
+pub use connection::get_database_url;
 
-// Re-export query functions for convenience
-// TODO: Phase this out in favor of VectorStore trait
-pub use queries::*;
-
-use async_trait::async_trait;
 use serde::Serialize;
-use std::collections::HashSet;
 
-// ... (rest of the file - Trait definitions) ...
+/// Connect to the SQLite database.
+///
+/// Uses `MAPROOM_DATABASE_URL` env var if set, otherwise defaults to
+/// `~/.maproom/maproom.db`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use crewchief_maproom::db;
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let store = db::connect().await?;
+///     // Use store for indexing, search, etc.
+///     Ok(())
+/// }
+/// ```
+pub async fn connect() -> anyhow::Result<SqliteStore> {
+    let url = connection::get_database_url()?;
+    SqliteStore::connect(&url).await
+}
+
 /// Record for inserting/updating a file
 #[derive(Debug, Clone)]
 pub struct FileRecord {
@@ -151,149 +157,4 @@ pub struct WorktreeCleanupResult {
     pub chunks_deleted: u64,
     pub files_deleted: u64,
     pub embeddings_deleted: u64,
-}
-
-/// Common interface for Vector/FTS storage backends.
-#[async_trait]
-pub trait VectorStore: Send + Sync {
-    /// Returns the backend type for runtime feature detection
-    fn backend_type(&self) -> BackendType;
-
-    // --- Repository & Worktree ---
-    async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64>;
-    async fn get_or_create_worktree(
-        &self,
-        repo_id: i64,
-        name: &str,
-        abs_path: &str,
-    ) -> anyhow::Result<i64>;
-    async fn get_or_create_commit(
-        &self,
-        repo_id: i64,
-        sha: &str,
-        committed_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> anyhow::Result<i64>;
-
-    /// Get repository by name
-    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<RepoInfo>>;
-
-    /// Get worktree by name within a repository
-    async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<WorktreeInfo>>;
-
-    /// List all repositories
-    async fn list_repos(&self) -> anyhow::Result<Vec<RepoInfo>>;
-
-    /// List all worktrees for a repository
-    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<WorktreeInfo>>;
-
-    /// Get chunk count for a worktree
-    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64>;
-
-    // --- Indexing ---
-    async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64>;
-    async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64>;
-    async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>>;
-    async fn insert_chunk_edge(
-        &self,
-        src_chunk_id: i64,
-        dst_chunk_id: i64,
-        edge_type: &str,
-    ) -> anyhow::Result<()>;
-
-    // --- Embeddings ---
-    async fn upsert_embeddings(
-        &self,
-        chunk_id: i64,
-        code_embedding: Option<&[f32]>,
-        text_embedding: Option<&[f32]>,
-        dimension: usize,
-    ) -> anyhow::Result<()>;
-    
-    async fn batch_upsert_embeddings(
-        &self,
-        embeddings: &[(i64, Option<Vec<f32>>, Option<Vec<f32>>)],
-        dimension: usize,
-    ) -> anyhow::Result<()>;
-
-    // --- Search ---
-    async fn search_chunks_fts(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        query: &str,
-        k: i64,
-        debug: bool,
-    ) -> anyhow::Result<Vec<SearchHit>>;
-
-    /// Vector similarity search using embedding
-    async fn search_chunks_vector(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        embedding: &[f32],
-        k: i64,
-        debug: bool,
-    ) -> anyhow::Result<Vec<SearchHit>>;
-
-    /// Hybrid search combining FTS and vector similarity using RRF fusion
-    async fn search_chunks_hybrid(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        query: &str,          // Text query for FTS
-        embedding: &[f32],    // Query embedding for vector search
-        k: i64,
-        debug: bool,
-    ) -> anyhow::Result<Vec<SearchHit>>;
-
-    // --- Lookup ---
-    async fn find_chunk_by_symbol(
-        &self,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        symbol_name: &str,
-        relpath: Option<&str>,
-    ) -> anyhow::Result<Option<i64>>;
-
-    // --- Context Assembly ---
-    /// Get a single chunk by ID with full content
-    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;
-
-    /// Get all chunks for a file
-    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<ChunkSummary>>;
-
-    /// Get chunk with surrounding context (N chunks before/after by line number)
-    async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<ChunkContext>>;
-
-    // --- Index State ---
-    /// Get the last indexed git tree SHA for a worktree
-    /// Returns "init" for never-indexed worktrees
-    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String>;
-
-    /// Update index state after successful indexing
-    async fn update_index_state(
-        &self,
-        worktree_id: i64,
-        tree_sha: &str,
-        stats: &UpdateStats,
-    ) -> anyhow::Result<()>;
-
-    // --- Cleanup & Maintenance ---
-    /// Detect worktrees that no longer exist on disk
-    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<StaleWorktree>>;
-
-    /// Delete all data for a worktree (chunks, files, embeddings)
-    async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<WorktreeCleanupResult>;
-
-    /// Delete all chunks for a specific file (for incremental re-indexing)
-    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64>;
-
-    /// Get chunks by blob SHA (for content-addressed deduplication)
-    async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<ChunkSummary>>;
-
-    // --- Migrations ---
-    async fn migrate(&self) -> anyhow::Result<()>;
-
-    // --- Stats/Maintenance ---
-    async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>>;
 }

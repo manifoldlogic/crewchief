@@ -7,14 +7,13 @@ pub mod hybrid;
 pub mod graph;
 
 use anyhow::Context;
-use async_trait::async_trait;
 use rusqlite::{Connection, params, OptionalExtension};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::spawn_blocking;
 
-use crate::db::{BackendType, ChunkRecord, FileRecord, SearchHit, VectorStore};
+use crate::db::{ChunkRecord, FileRecord, SearchHit};
 use migrations::MigrationRunner;
 
 // Declare the C extension init function from sqlite-vec
@@ -126,13 +125,9 @@ fn verify_vec_extension(conn: &Connection) -> bool {
         .is_ok()
 }
 
-#[async_trait]
-impl VectorStore for SqliteStore {
-    fn backend_type(&self) -> BackendType {
-        BackendType::SQLite
-    }
-
-    async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
+// Database operations - these were previously in VectorStore trait
+impl SqliteStore {
+    pub async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let name = name.to_string();
         let root_path = root_path.to_string();
         self.run(move |conn| {
@@ -157,7 +152,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_or_create_worktree(
+    pub async fn get_or_create_worktree(
         &self,
         repo_id: i64,
         name: &str,
@@ -185,7 +180,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_or_create_commit(
+    pub async fn get_or_create_commit(
         &self,
         repo_id: i64,
         sha: &str,
@@ -214,7 +209,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
+    pub async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
         let name = name.to_string();
         self.run(move |conn| {
             let result = conn.query_row(
@@ -230,7 +225,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<crate::db::WorktreeInfo>> {
+    pub async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<crate::db::WorktreeInfo>> {
         let name = name.to_string();
         self.run(move |conn| {
             let result = conn.query_row(
@@ -247,7 +242,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
+    pub async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, name, root_path FROM repos ORDER BY name")?;
             let repos = stmt.query_map([], |row| {
@@ -262,7 +257,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
+    pub async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees WHERE repo_id = ?1 ORDER BY name")?;
             let worktrees = stmt.query_map(params![repo_id], |row| {
@@ -278,7 +273,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+    pub async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
         self.run(move |conn| {
             // SQLite: count chunks via chunk_worktrees junction table
             let count: i64 = conn.query_row(
@@ -290,7 +285,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
+    pub async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
         self.run(move |conn| {
             conn.execute(
@@ -321,7 +316,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
+    pub async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
         self.run(move |conn| {
             let tx = conn.transaction()?;
@@ -389,7 +384,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
+    pub async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
         let chunks = chunks.to_vec();
         self.run(move |conn| {
             let tx = conn.transaction()?;
@@ -454,7 +449,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn insert_chunk_edge(
+    pub async fn insert_chunk_edge(
         &self,
         src_chunk_id: i64,
         dst_chunk_id: i64,
@@ -472,7 +467,7 @@ impl VectorStore for SqliteStore {
 
     // NOTE: This method is deprecated. Use SqliteStore::upsert_embedding() instead for content-based deduplication.
     // Cannot use #[deprecated] attribute on trait method implementations.
-    async fn upsert_embeddings(
+    pub async fn upsert_embeddings(
         &self,
         chunk_id: i64,
         code_embedding: Option<&[f32]>,
@@ -544,7 +539,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn batch_upsert_embeddings(
+    pub async fn batch_upsert_embeddings(
         &self,
         embeddings: &[(i64, Option<Vec<f32>>, Option<Vec<f32>>)],
         _dimension: usize,
@@ -613,7 +608,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn search_chunks_fts(
+    pub async fn search_chunks_fts(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -752,7 +747,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn search_chunks_vector(
+    pub async fn search_chunks_vector(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -859,7 +854,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn search_chunks_hybrid(
+    pub async fn search_chunks_hybrid(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -983,7 +978,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn find_chunk_by_symbol(
+    pub async fn find_chunk_by_symbol(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
@@ -1043,7 +1038,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+    pub async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
         self.run(move |conn| {
             let result = conn.query_row(
                 "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
@@ -1072,7 +1067,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+    pub async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
@@ -1101,7 +1096,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+    pub async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<crate::db::ChunkContext>> {
         self.run(move |conn| {
             // First, get the target chunk
             let chunk = conn.query_row(
@@ -1170,7 +1165,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
+    pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
         self.run(move |conn| {
             let result = conn.query_row(
                 "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
@@ -1186,7 +1181,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn update_index_state(
+    pub async fn update_index_state(
         &self,
         worktree_id: i64,
         tree_sha: &str,
@@ -1210,7 +1205,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
+    pub async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT w.id, w.repo_id, w.name, w.abs_path FROM worktrees w ORDER BY w.id"
@@ -1254,7 +1249,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
+    pub async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
         self.run(move |conn| {
             // Get count of chunks that will be deleted
             let chunks_deleted: i64 = conn.query_row(
@@ -1341,7 +1336,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
+    pub async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
         self.run(move |conn| {
             // Get count of chunks to delete
             let count: i64 = conn.query_row(
@@ -1386,7 +1381,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+    pub async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
         let blob_sha = blob_sha.to_string();
         self.run(move |conn| {
             let mut stmt = conn.prepare(
@@ -1416,7 +1411,7 @@ impl VectorStore for SqliteStore {
         }).await
     }
 
-    async fn migrate(&self) -> anyhow::Result<()> {
+    pub async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);
             runner.migrate()
@@ -1437,7 +1432,7 @@ impl VectorStore for SqliteStore {
         Ok(())
     }
 
-    async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
+    pub async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
         self.run(move |conn| {
             let exists: bool = conn.query_row(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
@@ -1459,10 +1454,9 @@ impl VectorStore for SqliteStore {
             Ok(versions)
         }).await
     }
-}
 
-// Additional SQLite-specific methods not in VectorStore trait
-impl SqliteStore {
+    // Additional SQLite-specific methods
+
     /// Add chunk to additional worktree
     pub async fn add_chunk_to_worktree(&self, chunk_id: i64, worktree_id: i64) -> anyhow::Result<()> {
         self.run(move |conn| {
@@ -1487,7 +1481,7 @@ impl SqliteStore {
         }).await
     }
 
-    /// Store or update embedding by content hash (SQLite-specific, not in VectorStore trait)
+    /// Store or update embedding by content hash
     pub async fn upsert_embedding(
         &self,
         blob_sha: &str,
@@ -1508,7 +1502,7 @@ impl SqliteStore {
         Ok(embedding_id)
     }
 
-    /// Batch upsert embeddings with deduplication (SQLite-specific, not in VectorStore trait)
+    /// Batch upsert embeddings with deduplication
     pub async fn upsert_embeddings_batch_new(
         &self,
         embeddings_vec: &[embeddings::EmbeddingRecord],
@@ -1529,7 +1523,7 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Check if embedding exists for blob_sha (SQLite-specific, not in VectorStore trait)
+    /// Check if embedding exists for blob_sha
     pub async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
         let blob_sha = blob_sha.to_string();
 
@@ -1538,7 +1532,7 @@ impl SqliteStore {
         }).await
     }
 
-    /// Get embedding by blob_sha (SQLite-specific, not in VectorStore trait)
+    /// Get embedding by blob_sha
     pub async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
         let blob_sha = blob_sha.to_string();
 
@@ -1871,7 +1865,6 @@ impl SqliteStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::VectorStore;
     use std::sync::atomic::AtomicUsize;
 
     // Counter for unique test database names

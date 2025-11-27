@@ -1,18 +1,11 @@
 {
   "mcpServers": {
     "maproom": {
-      "command": "docker",
+      "command": "npx",
       "args": [
-        "exec",
-        "-i",
-        "maproom-mcp",
-        "node",
-        "/app/dist/index.js"
-      ],
-      "env": {
-        "MAPROOM_EMBEDDING_PROVIDER": "openai",
-        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
-      }
+        "-y",
+        "@crewchief/maproom-mcp@latest"
+      ]
     },
     "Ref": {
       "type": "http",
