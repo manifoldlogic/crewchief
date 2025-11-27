@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-2002: Update StatusBarManager integration
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,11 +21,11 @@ Reference: planning/plan.md - Phase 2, Ticket 2002
 Reference: planning/architecture.md - NDJSON Event Types
 
 ## Acceptance Criteria
-- [ ] Status bar shows current branch name from `branch_switched` events
-- [ ] Status bar shows "Reconciling..." during startup reconciliation
-- [ ] Status bar transitions to "Watching" after ready
-- [ ] Error states display correctly with appropriate icons
-- [ ] Existing state machine (starting → watching → error) preserved
+- [x] Status bar shows current branch name from `branch_switched` events
+- [x] Status bar shows "Reconciling..." during startup reconciliation
+- [x] Status bar transitions to "Watching" after ready
+- [x] Error states display correctly with appropriate icons
+- [x] Existing state machine (starting → watching → error) preserved
 
 ## Technical Requirements
 - Handle `branch_switched` events to update branch display

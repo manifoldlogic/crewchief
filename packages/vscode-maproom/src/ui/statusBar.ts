@@ -27,13 +27,17 @@ const STATUS_CONFIG = {
     icon: 'sync~spin',
     text: 'Starting...',
   },
+  reconciling: {
+    icon: 'sync~spin',
+    text: 'Reconciling...',
+  },
   idle: {
     icon: 'database',
     text: 'Maproom Ready',
   },
   watching: {
     icon: 'eye',
-    text: 'Watching...',
+    text: 'Watching',
   },
   indexing: {
     icon: 'sync~spin',
@@ -48,7 +52,12 @@ const STATUS_CONFIG = {
 /**
  * Current state of the status bar
  */
-type StatusBarState = 'starting' | 'idle' | 'watching' | 'indexing' | 'error'
+type StatusBarState = 'starting' | 'reconciling' | 'idle' | 'watching' | 'indexing' | 'error'
+
+/**
+ * Maximum length for branch name display (longer names are truncated)
+ */
+const MAX_BRANCH_LENGTH = 20
 
 /**
  * Debounce interval for status bar updates (milliseconds)
@@ -86,6 +95,7 @@ export class StatusBarManager implements vscode.Disposable {
   private readonly watchEventHandler: (processName: string, event: WatchEvent) => void
   private isDisposed = false
   private databaseConfig: DatabaseConfig | undefined
+  private currentBranch: string | undefined
 
   /**
    * Create a new status bar manager
@@ -169,6 +179,19 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   /**
+   * Set the current branch name for display
+   *
+   * Branch name is shown in parentheses after the state when in watching state.
+   * Long branch names are truncated with ellipsis.
+   *
+   * @param branchName - Current git branch name
+   */
+  setBranch(branchName: string): void {
+    this.currentBranch = branchName
+    this.scheduleUpdate()
+  }
+
+  /**
    * Handle watch events from ProcessOrchestrator
    *
    * @param processName - Name of the process that emitted the event
@@ -195,7 +218,21 @@ export class StatusBarManager implements vscode.Disposable {
       case 'file_processed':
         this.handleFileProcessedEvent(event.file_path)
         break
+
+      case 'branch_switched':
+        this.handleBranchSwitchedEvent(event.new_branch)
+        break
     }
+  }
+
+  /**
+   * Handle branch switched event from unified watch process
+   *
+   * @param newBranch - Name of the new branch
+   */
+  private handleBranchSwitchedEvent(newBranch: string): void {
+    this.currentBranch = newBranch
+    this.scheduleUpdate()
   }
 
   /**
@@ -344,16 +381,31 @@ export class StatusBarManager implements vscode.Disposable {
       // Show file count during indexing with locale formatting
       const formattedTotal = this.totalFiles.toLocaleString()
       text = `$(${config.icon}) ${config.text}: ${formattedTotal} files`
-    } else if (this.currentState === 'watching' && this.currentFileCount > 0) {
-      // Show indexed file count when watching
-      const formattedCount = this.currentFileCount.toLocaleString()
-      text = `$(${config.icon}) Indexed: ${formattedCount} files`
+    } else if (this.currentState === 'watching') {
+      // Show branch name when watching
+      if (this.currentBranch) {
+        const branchDisplay = this.truncateBranch(this.currentBranch)
+        text = `$(${config.icon}) ${config.text} (${branchDisplay})`
+      }
     }
 
     this.statusBarItem.text = text
 
     // Build detailed tooltip
     this.statusBarItem.tooltip = this.buildTooltip()
+  }
+
+  /**
+   * Truncate branch name if too long
+   *
+   * @param branchName - Full branch name
+   * @returns Truncated branch name with ellipsis if needed
+   */
+  private truncateBranch(branchName: string): string {
+    if (branchName.length <= MAX_BRANCH_LENGTH) {
+      return branchName
+    }
+    return branchName.substring(0, MAX_BRANCH_LENGTH - 3) + '...'
   }
 
   /**
@@ -371,6 +423,11 @@ export class StatusBarManager implements vscode.Disposable {
       if (this.databaseConfig.path) {
         lines.push(`Path: ${this.databaseConfig.path}`)
       }
+    }
+
+    // Current branch (full name in tooltip)
+    if (this.currentBranch) {
+      lines.push(`Branch: ${this.currentBranch}`)
     }
 
     // Current state

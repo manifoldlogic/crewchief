@@ -135,13 +135,13 @@ describe('StatusBarManager', () => {
   })
 
   describe('status event handling', () => {
-    it('should update text to "Watching..." on watching state', async () => {
+    it('should update text to "Watching" on watching state', async () => {
       orchestrator.emitWatchEvent('watch', { type: 'status', state: 'watching' })
 
       // Wait for debounce
       await sleep(1100)
 
-      expect(statusBarItem.text).toContain('Watching...')
+      expect(statusBarItem.text).toContain('Watching')
       expect(statusBarItem.text).toContain('$(eye)')
     })
 
@@ -219,8 +219,7 @@ describe('StatusBarManager', () => {
       // Wait for debounce
       await sleep(1100)
 
-      expect(statusBarItem.text).toContain('Indexed')
-      expect(statusBarItem.text).toContain('100 files')
+      expect(statusBarItem.text).toContain('Watching')
       expect(statusBarItem.text).toContain('$(eye)')
     })
 
@@ -463,6 +462,84 @@ describe('StatusBarManager', () => {
       await sleep(1100)
 
       expect(statusBarItem.tooltip).toContain('Last indexed: 2 days ago')
+    })
+  })
+
+  describe('reconciling state', () => {
+    it('should show "Reconciling..." when setState is called with reconciling', async () => {
+      statusBar.setState('reconciling')
+      await sleep(1100)
+
+      expect(statusBarItem.text).toContain('Reconciling...')
+      expect(statusBarItem.text).toContain('$(sync~spin)')
+    })
+
+    it('should include reconciling state in tooltip', async () => {
+      statusBar.setState('reconciling')
+      await sleep(1100)
+
+      expect(statusBarItem.tooltip).toContain('Status: reconciling')
+    })
+  })
+
+  describe('branch display', () => {
+    it('should show branch name when setBranch is called', async () => {
+      statusBar.setBranch('main')
+      statusBar.setState('watching')
+      await sleep(1100)
+
+      expect(statusBarItem.text).toContain('(main)')
+    })
+
+    it('should update branch display on branch_switched event', async () => {
+      statusBar.setState('watching')
+      await sleep(1100)
+
+      orchestrator.emitWatchEvent('watch', {
+        type: 'branch_switched',
+        timestamp: new Date().toISOString(),
+        repo: 'test-repo',
+        old_branch: 'main',
+        new_branch: 'feature/test',
+        old_worktree_id: 1,
+        new_worktree_id: 2,
+        worktree_created: false,
+      } as WatchEvent)
+      await sleep(1100)
+
+      expect(statusBarItem.text).toContain('(feature/test)')
+    })
+
+    it('should truncate long branch names', async () => {
+      statusBar.setBranch('feature/very-long-branch-name-that-exceeds-max')
+      statusBar.setState('watching')
+      await sleep(1100)
+
+      // Should be truncated to 20 chars total with ellipsis
+      expect(statusBarItem.text).toContain('feature/very-long...')
+      expect(statusBarItem.text.length).toBeLessThan(100)
+    })
+
+    it('should show full branch name in tooltip', async () => {
+      const longBranch = 'feature/very-long-branch-name-that-exceeds-max'
+      statusBar.setBranch(longBranch)
+      statusBar.setState('watching')
+      await sleep(1100)
+
+      expect(statusBarItem.tooltip).toContain(`Branch: ${longBranch}`)
+    })
+
+    it('should preserve branch across state transitions', async () => {
+      statusBar.setBranch('develop')
+
+      // Go through state transitions
+      statusBar.setState('reconciling')
+      await sleep(1100)
+      expect(statusBarItem.tooltip).toContain('Branch: develop')
+
+      statusBar.setState('watching')
+      await sleep(1100)
+      expect(statusBarItem.text).toContain('(develop)')
     })
   })
 
