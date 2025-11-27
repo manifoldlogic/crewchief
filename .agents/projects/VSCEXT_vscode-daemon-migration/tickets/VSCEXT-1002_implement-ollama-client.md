@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-1002: Implement OllamaClient class
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,13 +21,13 @@ Reference: planning/plan.md - Phase 1, Ticket 1002
 Reference: planning/architecture.md - Ollama Model Management section
 
 ## Acceptance Criteria
-- [ ] OllamaClient class created at `src/ollama/client.ts`
-- [ ] `isRunning()` method detects running Ollama (2s timeout)
-- [ ] `hasModel(name)` method checks model existence via `/api/tags` endpoint
-- [ ] `pullModel(name, onProgress)` method streams progress via NDJSON callback
-- [ ] Hardcoded to localhost:11434 (security requirement - not configurable)
-- [ ] Model name validated with regex before API calls
-- [ ] Unit tests with mocked HTTP pass
+- [x] OllamaClient class created at `src/ollama/client.ts`
+- [x] `isRunning()` method detects running Ollama (2s timeout)
+- [x] `hasModel(name)` method checks model existence via `/api/tags` endpoint
+- [x] `pullModel(name, onProgress)` method streams progress via NDJSON callback
+- [x] Hardcoded to localhost:11434 (security requirement - not configurable)
+- [x] Model name validated with regex before API calls
+- [x] Unit tests with mocked HTTP pass
 
 ## Technical Requirements
 - **Security**: Base URL MUST be hardcoded to `http://127.0.0.1:11434`
