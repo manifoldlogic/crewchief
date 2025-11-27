@@ -252,7 +252,9 @@ impl MarkdownMigrator {
         file: &MarkdownFile,
         stats: &mut MigrationStats,
     ) -> Result<FileMigrationStats> {
-        let file_clone = file.clone();
+        let file_id = file.id;
+        let file_relpath = file.relpath.clone();
+        let file_content = file.content.clone();
         let store = self.store.clone();
 
         let file_stats = store.run(move |conn| {
@@ -264,22 +266,22 @@ impl MarkdownMigrator {
             // Count old chunks
             let old_chunks: i64 = tx.query_row(
                 "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
-                params![file_clone.id],
+                params![file_id],
                 |row| row.get(0),
             )?;
 
             // Parse with new parser
-            let new_chunks = parser::extract_chunks(&file_clone.content, "md");
+            let new_chunks = parser::extract_chunks(&file_content, "md");
 
             // Delete old chunks
-            tx.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_clone.id])
-                .context("Failed to delete old chunks")?;
+            tx.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])
+                .map_err(|e| anyhow::anyhow!("Failed to delete old chunks: {}", e))?;
 
             // Insert new chunks
             let mut inserted_count = 0;
             for chunk in &new_chunks {
-                let preview = Self::extract_preview(&file_clone.content, chunk.start_line, chunk.end_line);
-                let ts_doc = Self::build_ts_doc(&file_clone.relpath, chunk, &preview);
+                let preview = Self::extract_preview(&file_content, chunk.start_line, chunk.end_line);
+                let ts_doc = Self::build_ts_doc(&file_relpath, chunk, &preview);
 
                 // Convert metadata to JSON string for SQLite
                 let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
@@ -301,7 +303,7 @@ impl MarkdownMigrator {
                        ts_doc_text = excluded.ts_doc_text,
                        metadata = excluded.metadata",
                     params![
-                        file_clone.id,
+                        file_id,
                         "", // blob_sha - TODO: compute actual blob SHA
                         chunk.symbol_name,
                         chunk.kind,
@@ -324,8 +326,8 @@ impl MarkdownMigrator {
             tx.commit()?;
 
             Ok(FileMigrationStats {
-                file_id: file_clone.id,
-                relpath: file_clone.relpath.clone(),
+                file_id,
+                relpath: file_relpath,
                 old_chunks: old_chunks as usize,
                 new_chunks: inserted_count,
                 delta: inserted_count as i64 - old_chunks,
@@ -362,9 +364,11 @@ impl MarkdownMigrator {
             let tx = conn.transaction()?;
 
             // Get file IDs from backup
-            let mut stmt = tx.prepare(&format!("SELECT DISTINCT file_id FROM {}", backup_table))?;
-            let file_ids: Vec<i64> = stmt.query_map([], |row| row.get(0))?
-                .collect::<Result<Vec<_>, _>>()?;
+            let file_ids: Vec<i64> = {
+                let mut stmt = tx.prepare(&format!("SELECT DISTINCT file_id FROM {}", backup_table))?;
+                let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+                rows.collect::<Result<Vec<_>, _>>()?
+            };
 
             info!("Restoring {} files from backup", file_ids.len());
 

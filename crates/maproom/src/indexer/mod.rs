@@ -773,6 +773,9 @@ mod tests {
     /// 3. Initialization uses get_or_create_repo() and get_or_create_worktree()
     /// 4. Arc/RwLock semantics work (can acquire read/write locks)
     /// 5. Values match the input parameters
+    ///
+    /// DISABLED: PostgreSQL-specific test referencing removed db::pool module
+    #[cfg(disabled_postgresql_test)]
     #[tokio::test]
     async fn test_worktree_tracking_initialization() {
         // Setup test database
@@ -925,6 +928,9 @@ mod tests {
     /// 4. current_worktree_id Arc<RwLock<i64>> is updated to new worktree_id
     /// 5. Incremental update is triggered for the new branch
     /// 6. Function returns Ok(()) on success
+    ///
+    /// DISABLED: handle_branch_switch function removed (SQLite migration)
+    #[cfg(disabled_postgresql_test)]
     #[tokio::test]
     async fn test_handle_branch_switch_updates_state() {
         use std::sync::{Arc, RwLock};
@@ -1090,6 +1096,9 @@ mod tests {
     /// 3. No database operations are performed (performance optimization)
     /// 4. Shared state remains unchanged
     /// 5. Function returns Ok(()) quickly
+    ///
+    /// DISABLED: handle_branch_switch function removed (SQLite migration)
+    #[cfg(disabled_postgresql_test)]
     #[tokio::test]
     async fn test_handle_branch_switch_skips_if_same_branch() {
         use std::sync::{Arc, RwLock};

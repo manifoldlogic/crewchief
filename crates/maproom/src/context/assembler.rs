@@ -135,7 +135,7 @@ impl BasicContextAssembler {
     }
 
     /// Retrieve chunk metadata from the database by ID.
-    async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
+    pub async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
         profile_scope!("get_chunk_metadata");
         // TODO: Implement using SqliteStore methods in IDXABS-4001
         anyhow::bail!("get_chunk_metadata not yet implemented for SQLite")

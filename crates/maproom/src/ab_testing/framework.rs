@@ -238,170 +238,37 @@ impl Default for TrafficSplitter {
 
 /// Experiment lifecycle manager
 pub struct ExperimentManager {
-    db_pool: deadpool_postgres::Pool,
+    // Stubbed: A/B testing not yet implemented for SQLite
+    _phantom: std::marker::PhantomData<()>,
 }
 
 impl ExperimentManager {
-    pub fn new(db_pool: deadpool_postgres::Pool) -> Self {
-        Self { db_pool }
+    pub fn new() -> Self {
+        Self { _phantom: std::marker::PhantomData }
     }
 
     /// Create a new experiment
-    pub async fn create_experiment(&self, config: ExperimentConfig) -> anyhow::Result<Uuid> {
-        config.validate()?;
-
-        let client = self.db_pool.get().await?;
-
-        let quality_gates_json = serde_json::to_value(&config.quality_gates)?;
-
-        // Combine quality gates into metadata for storage
-        let mut full_config = config.metadata.clone();
-        full_config.insert("quality_gates".to_string(), quality_gates_json);
-
-        let full_config_json = serde_json::to_value(&full_config)?;
-
-        client
-            .execute(
-                "INSERT INTO experiments (id, name, description, rollout_percentage, start_date, end_date, status, config)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                &[
-                    &config.id,
-                    &config.name,
-                    &config.description,
-                    &config.rollout_percentage,
-                    &config.start_date,
-                    &config.end_date,
-                    &config.status.to_string(),
-                    &full_config_json,
-                ],
-            )
-            .await?;
-
-        tracing::info!(
-            experiment_id = %config.id,
-            experiment_name = %config.name,
-            rollout_percentage = config.rollout_percentage,
-            "Created experiment"
-        );
-
-        Ok(config.id)
+    pub async fn create_experiment(&self, _config: ExperimentConfig) -> anyhow::Result<Uuid> {
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Get experiment by ID
-    pub async fn get_experiment(&self, id: Uuid) -> anyhow::Result<Option<ExperimentConfig>> {
-        let client = self.db_pool.get().await?;
-
-        let row = client
-            .query_opt(
-                "SELECT id, name, description, rollout_percentage, start_date, end_date, status, config
-                 FROM experiments WHERE id = $1",
-                &[&id],
-            )
-            .await?;
-
-        match row {
-            Some(row) => {
-                let config_json: serde_json::Value = row.get("config");
-                let metadata: HashMap<String, serde_json::Value> =
-                    serde_json::from_value(config_json.clone())?;
-
-                // Extract quality gates from metadata
-                let quality_gates = if let Some(gates_value) = metadata.get("quality_gates") {
-                    serde_json::from_value(gates_value.clone())?
-                } else {
-                    QualityGates::default()
-                };
-
-                // Remove quality_gates from metadata to avoid duplication
-                let mut clean_metadata = metadata;
-                clean_metadata.remove("quality_gates");
-
-                let status_str: String = row.get("status");
-                let status: ExperimentStatus = status_str.parse()?;
-
-                Ok(Some(ExperimentConfig {
-                    id: row.get("id"),
-                    name: row.get("name"),
-                    description: row.get("description"),
-                    rollout_percentage: row.get("rollout_percentage"),
-                    start_date: row.get("start_date"),
-                    end_date: row.get("end_date"),
-                    status,
-                    quality_gates,
-                    metadata: clean_metadata,
-                }))
-            }
-            None => Ok(None),
-        }
+    pub async fn get_experiment(&self, _id: Uuid) -> anyhow::Result<Option<ExperimentConfig>> {
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// List all active experiments
     pub async fn list_active_experiments(&self) -> anyhow::Result<Vec<ExperimentConfig>> {
-        let client = self.db_pool.get().await?;
-
-        let rows = client
-            .query(
-                "SELECT id, name, description, rollout_percentage, start_date, end_date, status, config
-                 FROM experiments WHERE status = 'running' ORDER BY start_date DESC",
-                &[],
-            )
-            .await?;
-
-        let mut experiments = Vec::new();
-        for row in rows {
-            let config_json: serde_json::Value = row.get("config");
-            let metadata: HashMap<String, serde_json::Value> = serde_json::from_value(config_json)?;
-
-            let quality_gates = if let Some(gates_value) = metadata.get("quality_gates") {
-                serde_json::from_value(gates_value.clone())?
-            } else {
-                QualityGates::default()
-            };
-
-            let mut clean_metadata = metadata;
-            clean_metadata.remove("quality_gates");
-
-            let status_str: String = row.get("status");
-            let status: ExperimentStatus = status_str.parse()?;
-
-            experiments.push(ExperimentConfig {
-                id: row.get("id"),
-                name: row.get("name"),
-                description: row.get("description"),
-                rollout_percentage: row.get("rollout_percentage"),
-                start_date: row.get("start_date"),
-                end_date: row.get("end_date"),
-                status,
-                quality_gates,
-                metadata: clean_metadata,
-            });
-        }
-
-        Ok(experiments)
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Update experiment status
     pub async fn update_status(
         &self,
-        id: Uuid,
-        new_status: ExperimentStatus,
+        _id: Uuid,
+        _new_status: ExperimentStatus,
     ) -> anyhow::Result<()> {
-        let client = self.db_pool.get().await?;
-
-        client
-            .execute(
-                "UPDATE experiments SET status = $1 WHERE id = $2",
-                &[&new_status.to_string(), &id],
-            )
-            .await?;
-
-        tracing::info!(
-            experiment_id = %id,
-            new_status = %new_status,
-            "Updated experiment status"
-        );
-
-        Ok(())
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Pause an experiment
@@ -420,29 +287,8 @@ impl ExperimentManager {
     }
 
     /// Update rollout percentage for gradual rollout
-    pub async fn update_rollout(&self, id: Uuid, new_percentage: i32) -> anyhow::Result<()> {
-        if !(0..=100).contains(&new_percentage) {
-            return Err(anyhow::anyhow!(
-                "Rollout percentage must be between 0 and 100"
-            ));
-        }
-
-        let client = self.db_pool.get().await?;
-
-        client
-            .execute(
-                "UPDATE experiments SET rollout_percentage = $1 WHERE id = $2",
-                &[&new_percentage, &id],
-            )
-            .await?;
-
-        tracing::info!(
-            experiment_id = %id,
-            new_percentage = new_percentage,
-            "Updated experiment rollout percentage"
-        );
-
-        Ok(())
+    pub async fn update_rollout(&self, _id: Uuid, _new_percentage: i32) -> anyhow::Result<()> {
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Validate quality gates for an experiment
@@ -450,54 +296,15 @@ impl ExperimentManager {
     /// Returns true if the experiment meets all quality gates and can be promoted
     pub async fn validate_quality_gates(
         &self,
-        experiment_id: Uuid,
-        recall: f64,
-        precision: f64,
-        ndcg: f64,
-        latency_increase_ms: i32,
-        error_rate_increase: f64,
-        p_value: f64,
+        _experiment_id: Uuid,
+        _recall: f64,
+        _precision: f64,
+        _ndcg: f64,
+        _latency_increase_ms: i32,
+        _error_rate_increase: f64,
+        _p_value: f64,
     ) -> anyhow::Result<bool> {
-        let experiment = self
-            .get_experiment(experiment_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Experiment not found"))?;
-
-        let gates = &experiment.quality_gates;
-
-        let passes_recall = recall >= gates.min_recall;
-        let passes_precision = precision >= gates.min_precision;
-        let passes_ndcg = ndcg >= gates.min_ndcg;
-        let passes_latency = latency_increase_ms <= gates.max_latency_increase_ms;
-        let passes_error_rate = error_rate_increase <= gates.max_error_rate_increase;
-        let passes_significance = p_value < gates.significance_threshold;
-
-        let all_pass = passes_recall
-            && passes_precision
-            && passes_ndcg
-            && passes_latency
-            && passes_error_rate
-            && passes_significance;
-
-        tracing::info!(
-            experiment_id = %experiment_id,
-            recall = recall,
-            precision = precision,
-            ndcg = ndcg,
-            latency_increase_ms = latency_increase_ms,
-            error_rate_increase = error_rate_increase,
-            p_value = p_value,
-            passes_recall = passes_recall,
-            passes_precision = passes_precision,
-            passes_ndcg = passes_ndcg,
-            passes_latency = passes_latency,
-            passes_error_rate = passes_error_rate,
-            passes_significance = passes_significance,
-            all_pass = all_pass,
-            "Quality gates validation"
-        );
-
-        Ok(all_pass)
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 }
 

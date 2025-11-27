@@ -124,81 +124,12 @@ impl RustAssemblyStrategy {
     /// Find and add trait implementations for a type.
     async fn add_trait_impls(
         &self,
-        bundle: &mut ContextBundle,
-        chunk_id: i64,
-        budget: usize,
+        _bundle: &mut ContextBundle,
+        _chunk_id: i64,
+        _budget: usize,
     ) -> Result<()> {
-        if !self.config.include_trait_impls || bundle.total_tokens >= budget {
-            return Ok(());
-        }
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        // Query for trait implementations
-        // (This assumes edge extraction identifies trait implementations)
-        let query = r#"
-            SELECT DISTINCT
-                c.id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                c.preview
-            FROM maproom.chunks c
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE c.kind = 'impl'
-              AND c.file_id = (
-                  SELECT file_id FROM maproom.chunks WHERE id = $1
-              )
-            LIMIT $2;
-        "#;
-
-        let rows = client
-            .query(query, &[&chunk_id, &(self.config.max_trait_impls as i64)])
-            .await
-            .context("Failed to query trait implementations")?;
-
-        for row in rows {
-            if bundle.total_tokens >= budget {
-                break;
-            }
-
-            let impl_id: i64 = row.get(0);
-            if impl_id == chunk_id {
-                // Skip the primary chunk itself
-                continue;
-            }
-
-            let impl_metadata = self.default.get_chunk_metadata(impl_id).await?;
-
-            let symbol_name: Option<String> = row.get(2);
-            let reason = format!(
-                "Trait implementation: {} (related to primary chunk)",
-                symbol_name.unwrap_or_else(|| "impl".to_string())
-            );
-
-            match self
-                .default
-                .create_context_item(impl_metadata, "trait_impl", &reason)
-                .await
-            {
-                Ok(item) => {
-                    if !bundle.would_exceed_budget(item.tokens, budget) {
-                        debug!("Adding trait impl: {} tokens", item.tokens);
-                        bundle.add_item(item);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to create trait impl context item: {}", e);
-                }
-            }
-        }
-
+        // TODO: Implement trait impl queries for SQLite backend using graph module
+        // For now, this feature is disabled
         Ok(())
     }
 

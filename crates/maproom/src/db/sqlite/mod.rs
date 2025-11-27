@@ -100,7 +100,7 @@ impl SqliteStore {
     }
 
     // Helper to run a blocking closure with a connection
-    async fn run<F, T>(&self, f: F) -> anyhow::Result<T>
+    pub async fn run<F, T>(&self, f: F) -> anyhow::Result<T>
     where
         F: FnOnce(&mut rusqlite::Connection) -> anyhow::Result<T> + Send + 'static,
         T: Send + 'static,

@@ -929,16 +929,24 @@ mod tests {
     // ========================================================================
     // Tests for copy_existing_embeddings() - EMBCOPY-1002
     // ========================================================================
+    //
+    // REMOVED: PostgreSQL-specific test helpers that reference removed dependencies
+    // (tokio_postgres, pgvector, crate::db::queries). These tests are disabled after
+    // the SQLite migration. If PostgreSQL support is re-added, these can be restored.
 
+    /*
+    // PostgreSQL-specific test helpers - only compile when NOT using sqlite feature
+    #[cfg(not(feature = "sqlite"))]
     /// Helper function to create a test database client
-    async fn create_test_client() -> Result<Client> {
+    async fn create_test_client() -> Result<tokio_postgres::Client> {
         crate::db::queries::connect().await
     }
 
+    #[cfg(not(feature = "sqlite"))]
     /// Helper function to set up test data for embedding copy tests
     /// Returns (repo_id, worktree_id, file_id, chunk_id, blob_sha)
     async fn setup_test_chunk(
-        client: &Client,
+        client: &tokio_postgres::Client,
         with_embeddings: bool,
     ) -> Result<(i64, i64, i64, i64, String)> {
         // Generate unique repo name to avoid conflicts in parallel tests
@@ -1032,8 +1040,9 @@ mod tests {
         ))
     }
 
+    #[cfg(not(feature = "sqlite"))]
     /// Helper function to insert a code_embeddings cache entry
-    async fn insert_cache_entry(client: &Client, blob_sha: &str) -> Result<()> {
+    async fn insert_cache_entry(client: &tokio_postgres::Client, blob_sha: &str) -> Result<()> {
         let embedding_vec = pgvector::Vector::from(vec![0.5; 1536]);
         client
             .execute(
@@ -1048,10 +1057,11 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(feature = "sqlite"))]
     /// Helper function to clean up test data
     /// Also accepts the blob_sha to ensure we clean up code_embeddings even if chunks are deleted
     async fn cleanup_test_data(
-        client: &Client,
+        client: &tokio_postgres::Client,
         repo_id: i64,
         blob_sha: Option<&str>,
     ) -> Result<()> {
@@ -1089,7 +1099,10 @@ mod tests {
             .await?;
         Ok(())
     }
+    */
 
+    // PostgreSQL tests also disabled (they reference the removed helper functions above)
+    /*
     #[tokio::test]
     #[serial_test::serial]
     #[cfg(not(feature = "sqlite"))]
@@ -1307,4 +1320,5 @@ mod tests {
             .await
             .expect("Failed to cleanup test data");
     }
+    */
 }

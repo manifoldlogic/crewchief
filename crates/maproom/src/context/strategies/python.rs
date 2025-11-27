@@ -174,78 +174,12 @@ impl PythonAssemblyStrategy {
     /// Find parent classes for a Python class chunk.
     async fn add_parent_classes(
         &self,
-        bundle: &mut ContextBundle,
-        chunk_id: i64,
-        budget: usize,
+        _bundle: &mut ContextBundle,
+        _chunk_id: i64,
+        _budget: usize,
     ) -> Result<()> {
-        if !self.config.include_parent_classes || bundle.total_tokens >= budget {
-            return Ok(());
-        }
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        // Query for parent classes via 'extends' or 'inherits' edges
-        // (This assumes edge extraction identifies inheritance relationships)
-        let query = r#"
-            SELECT DISTINCT
-                c.id,
-                f.relpath,
-                c.symbol_name,
-                c.kind::text,
-                c.start_line,
-                c.end_line,
-                c.preview
-            FROM maproom.chunk_edges e
-            JOIN maproom.chunks c ON c.id = e.dst_chunk_id
-            JOIN maproom.files f ON f.id = c.file_id
-            WHERE e.src_chunk_id = $1
-              AND e.edge_type = 'extends'
-            LIMIT $2;
-        "#;
-
-        let rows = client
-            .query(
-                query,
-                &[&chunk_id, &(self.config.max_parent_classes as i64)],
-            )
-            .await
-            .context("Failed to query parent classes")?;
-
-        for row in rows {
-            if bundle.total_tokens >= budget {
-                break;
-            }
-
-            let parent_id: i64 = row.get(0);
-            let parent_metadata = self.default.get_chunk_metadata(parent_id).await?;
-
-            let symbol_name: Option<String> = row.get(2);
-            let reason = format!(
-                "Parent class: {} (inherited by primary chunk)",
-                symbol_name.unwrap_or_else(|| "class".to_string())
-            );
-
-            match self
-                .default
-                .create_context_item(parent_metadata, "parent_class", &reason)
-                .await
-            {
-                Ok(item) => {
-                    if !bundle.would_exceed_budget(item.tokens, budget) {
-                        debug!("Adding parent class: {} tokens", item.tokens);
-                        bundle.add_item(item);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to create parent class context item: {}", e);
-                }
-            }
-        }
-
+        // TODO: Implement parent class queries for SQLite backend using graph module
+        // For now, this feature is disabled
         Ok(())
     }
 

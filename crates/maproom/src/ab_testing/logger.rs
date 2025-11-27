@@ -175,190 +175,47 @@ impl From<(Uuid, &ShadowModeResults)> for ShadowResultLog {
 
 /// Batch logger for A/B testing events
 pub struct ABTestLogger {
-    db_pool: deadpool_postgres::Pool,
-    shadow_result_buffer: Arc<Mutex<Vec<ShadowResultLog>>>,
-    interaction_buffer: Arc<Mutex<Vec<InteractionEvent>>>,
-    batch_size: usize,
-    flush_interval_secs: u64,
+    // Stubbed: A/B testing not yet implemented for SQLite
+    _phantom: std::marker::PhantomData<()>,
 }
 
 impl ABTestLogger {
     /// Create a new logger with default settings (batch_size=100, flush every 10s)
-    pub fn new(db_pool: deadpool_postgres::Pool) -> Self {
-        Self {
-            db_pool,
-            shadow_result_buffer: Arc::new(Mutex::new(Vec::new())),
-            interaction_buffer: Arc::new(Mutex::new(Vec::new())),
-            batch_size: 100,
-            flush_interval_secs: 10,
-        }
+    pub fn new() -> Self {
+        Self { _phantom: std::marker::PhantomData }
     }
 
     /// Create with custom batch size and flush interval
     pub fn with_config(
-        db_pool: deadpool_postgres::Pool,
-        batch_size: usize,
-        flush_interval_secs: u64,
+        _batch_size: usize,
+        _flush_interval_secs: u64,
     ) -> Self {
-        Self {
-            db_pool,
-            shadow_result_buffer: Arc::new(Mutex::new(Vec::new())),
-            interaction_buffer: Arc::new(Mutex::new(Vec::new())),
-            batch_size,
-            flush_interval_secs,
-        }
+        Self { _phantom: std::marker::PhantomData }
     }
 
     /// Log shadow mode results
     pub async fn log_shadow_results(
         &self,
-        experiment_id: Uuid,
-        results: &ShadowModeResults,
+        _experiment_id: Uuid,
+        _results: &ShadowModeResults,
     ) -> anyhow::Result<()> {
-        let log = ShadowResultLog::from((experiment_id, results));
-
-        let mut buffer = self.shadow_result_buffer.lock().await;
-        buffer.push(log);
-
-        // Flush if buffer is full
-        if buffer.len() >= self.batch_size {
-            let logs = buffer.drain(..).collect::<Vec<_>>();
-            drop(buffer); // Release lock before async operation
-            self.flush_shadow_results(logs).await?;
-        }
-
-        Ok(())
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Log user interaction event
-    pub async fn log_interaction(&self, event: InteractionEvent) -> anyhow::Result<()> {
-        let mut buffer = self.interaction_buffer.lock().await;
-        buffer.push(event);
-
-        // Flush if buffer is full
-        if buffer.len() >= self.batch_size {
-            let events = buffer.drain(..).collect::<Vec<_>>();
-            drop(buffer); // Release lock before async operation
-            self.flush_interactions(events).await?;
-        }
-
-        Ok(())
-    }
-
-    /// Flush shadow results buffer to database
-    async fn flush_shadow_results(&self, logs: Vec<ShadowResultLog>) -> anyhow::Result<()> {
-        if logs.is_empty() {
-            return Ok(());
-        }
-
-        let mut client = self.db_pool.get().await?;
-        let transaction = client.transaction().await?;
-
-        for log in &logs {
-            let old_results_json = serde_json::to_value(&log.old_results)?;
-            let new_results_json = log
-                .new_results
-                .as_ref()
-                .map(serde_json::to_value)
-                .transpose()?;
-
-            transaction.execute(
-                "INSERT INTO shadow_results
-                 (id, experiment_id, query, old_results, new_results, old_latency_ms, new_latency_ms, new_error, timestamp, user_id)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
-                &[
-                    &log.id,
-                    &log.experiment_id,
-                    &log.query,
-                    &old_results_json,
-                    &new_results_json,
-                    &log.old_latency_ms,
-                    &log.new_latency_ms,
-                    &log.new_error,
-                    &log.timestamp,
-                    &log.user_id,
-                ],
-            ).await?;
-        }
-
-        transaction.commit().await?;
-
-        tracing::debug!(count = logs.len(), "Flushed shadow results to database");
-
-        Ok(())
-    }
-
-    /// Flush interaction events buffer to database
-    async fn flush_interactions(&self, events: Vec<InteractionEvent>) -> anyhow::Result<()> {
-        if events.is_empty() {
-            return Ok(());
-        }
-
-        let mut client = self.db_pool.get().await?;
-        let transaction = client.transaction().await?;
-
-        for event in &events {
-            transaction.execute(
-                "INSERT INTO interaction_events
-                 (id, experiment_id, query, event_type, result_position, dwell_time_ms, timestamp, user_id, metadata)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                &[
-                    &event.id,
-                    &event.experiment_id,
-                    &event.query,
-                    &event.event_type.to_string(),
-                    &event.result_position,
-                    &event.dwell_time_ms,
-                    &event.timestamp,
-                    &event.user_id,
-                    &event.metadata,
-                ],
-            ).await?;
-        }
-
-        transaction.commit().await?;
-
-        tracing::debug!(
-            count = events.len(),
-            "Flushed interaction events to database"
-        );
-
-        Ok(())
+    pub async fn log_interaction(&self, _event: InteractionEvent) -> anyhow::Result<()> {
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Manually flush all buffers
     pub async fn flush_all(&self) -> anyhow::Result<()> {
-        let shadow_logs = {
-            let mut buffer = self.shadow_result_buffer.lock().await;
-            buffer.drain(..).collect::<Vec<_>>()
-        };
-
-        let interaction_events = {
-            let mut buffer = self.interaction_buffer.lock().await;
-            buffer.drain(..).collect::<Vec<_>>()
-        };
-
-        self.flush_shadow_results(shadow_logs).await?;
-        self.flush_interactions(interaction_events).await?;
-
-        Ok(())
+        anyhow::bail!("A/B testing not implemented for SQLite backend")
     }
 
     /// Start background flusher task that periodically writes buffers to database
     pub fn start_background_flusher(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
-        let interval = self.flush_interval_secs;
-
         tokio::spawn(async move {
-            let mut interval_timer =
-                tokio::time::interval(tokio::time::Duration::from_secs(interval));
-
-            loop {
-                interval_timer.tick().await;
-
-                if let Err(e) = self.flush_all().await {
-                    tracing::error!(error = %e, "Failed to flush A/B test logs");
-                }
-            }
+            // Stub: do nothing
         })
     }
 }

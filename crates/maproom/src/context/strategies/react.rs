@@ -168,285 +168,56 @@ impl ReactAssemblyStrategy {
 
     /// Retrieve chunk metadata from the database by ID.
     async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let row = client
-            .query_opt(
-                "SELECT
-                    c.id,
-                    f.relpath,
-                    w.abs_path as worktree_path,
-                    c.symbol_name,
-                    c.kind::text,
-                    c.start_line,
-                    c.end_line,
-                    c.signature,
-                    c.docstring
-                FROM maproom.chunks c
-                JOIN maproom.files f ON f.id = c.file_id
-                LEFT JOIN maproom.worktrees w ON w.id = f.worktree_id
-                WHERE c.id = $1",
-                &[&chunk_id],
-            )
-            .await
-            .context("Failed to query chunk metadata")?;
-
-        let row = row.ok_or_else(|| anyhow::anyhow!("Chunk not found: {}", chunk_id))?;
-
-        Ok(ChunkMetadata {
-            id: row.get(0),
-            file_relpath: row.get(1),
-            worktree_path: row.get::<_, Option<String>>(2).unwrap_or_else(|| {
-                warn!(
-                    "Chunk {} has no worktree_path, using empty string",
-                    chunk_id
-                );
-                String::new()
-            }),
-            symbol_name: row.get(3),
-            kind: row.get(4),
-            start_line: row.get(5),
-            end_line: row.get(6),
-            signature: row.get(7),
-            docstring: row.get(8),
-        })
+        // Use the base assembler's implementation which works with SQLite
+        self.base_assembler.get_chunk_metadata(chunk_id).await
     }
 
     /// Add route definitions to the context bundle.
     async fn add_routes(
         &self,
-        bundle: &mut ContextBundle,
-        chunk_id: i64,
-        budget: usize,
+        _bundle: &mut ContextBundle,
+        _chunk_id: i64,
+        _budget: usize,
     ) -> Result<()> {
-        if !self.config.include_routes {
-            return Ok(());
-        }
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let routes = find_routes(&client, chunk_id).await?;
-
-        for route in routes.into_iter().take(1) {
-            // Only include the nearest route
-            if bundle.would_exceed_budget(0, budget) {
-                break;
-            }
-
-            // Get metadata with worktree path from database
-            let metadata = self.get_chunk_metadata(route.id).await?;
-
-            let reason = format!(
-                "Route definition: {} (referenced by component)",
-                route.symbol_name.unwrap_or_else(|| "route".to_string())
-            );
-
-            match self.create_context_item(metadata, "route", &reason).await {
-                Ok(item) => {
-                    if !bundle.would_exceed_budget(item.tokens, budget) {
-                        debug!("Adding route: {} tokens", item.tokens);
-                        bundle.add_item(item);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to create route context item: {}", e);
-                }
-            }
-        }
-
+        // TODO: Implement route queries for SQLite backend using graph module
+        // For now, this feature is disabled
         Ok(())
     }
 
     /// Add hooks to the context bundle.
     async fn add_hooks(
         &self,
-        bundle: &mut ContextBundle,
-        chunk_id: i64,
-        budget: usize,
+        _bundle: &mut ContextBundle,
+        _chunk_id: i64,
+        _budget: usize,
     ) -> Result<()> {
-        if !self.config.include_hooks {
-            return Ok(());
-        }
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let hooks = self
-            .hook_detector
-            .find_used_hooks(&client, chunk_id)
-            .await?;
-
-        for (idx, hook) in hooks.into_iter().enumerate() {
-            if idx >= self.config.max_hooks {
-                debug!("Reached max hooks limit ({})", self.config.max_hooks);
-                break;
-            }
-
-            if bundle.would_exceed_budget(0, budget) {
-                break;
-            }
-
-            // Skip built-in hooks (no definition to include)
-            if hook.is_builtin {
-                continue;
-            }
-
-            let metadata = self.get_chunk_metadata(hook.id).await?;
-
-            let reason = format!("Custom hook: {} (used by component)", hook.symbol_name);
-
-            match self.create_context_item(metadata, "hook", &reason).await {
-                Ok(item) => {
-                    if !bundle.would_exceed_budget(item.tokens, budget) {
-                        debug!("Adding hook {}: {} tokens", hook.symbol_name, item.tokens);
-                        bundle.add_item(item);
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to create hook context item for {}: {}",
-                        hook.symbol_name, e
-                    );
-                }
-            }
-        }
-
+        // TODO: Implement hook queries for SQLite backend using graph module
+        // For now, this feature is disabled
         Ok(())
     }
 
     /// Add JSX parent components to the context bundle.
     async fn add_jsx_parents(
         &self,
-        bundle: &mut ContextBundle,
-        chunk_id: i64,
-        symbol_name: &str,
-        budget: usize,
+        _bundle: &mut ContextBundle,
+        _chunk_id: i64,
+        _symbol_name: &str,
+        _budget: usize,
     ) -> Result<()> {
-        if !self.config.include_jsx_parents {
-            return Ok(());
-        }
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let parents = self
-            .jsx_detector
-            .find_parent_components(&client, chunk_id, symbol_name)
-            .await?;
-
-        for (idx, parent) in parents.into_iter().enumerate() {
-            if idx >= self.config.max_jsx_parents {
-                debug!(
-                    "Reached max JSX parents limit ({})",
-                    self.config.max_jsx_parents
-                );
-                break;
-            }
-
-            if bundle.would_exceed_budget(0, budget) {
-                break;
-            }
-
-            let metadata = self.get_chunk_metadata(parent.id).await?;
-
-            let reason = format!(
-                "Parent component: {} (renders this component)",
-                parent
-                    .symbol_name
-                    .unwrap_or_else(|| "component".to_string())
-            );
-
-            match self
-                .create_context_item(metadata, "jsx_parent", &reason)
-                .await
-            {
-                Ok(item) => {
-                    if !bundle.would_exceed_budget(item.tokens, budget) {
-                        debug!("Adding JSX parent: {} tokens", item.tokens);
-                        bundle.add_item(item);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to create JSX parent context item: {}", e);
-                }
-            }
-        }
-
+        // TODO: Implement JSX parent queries for SQLite backend using graph module
+        // For now, this feature is disabled
         Ok(())
     }
 
     /// Add JSX child components to the context bundle.
     async fn add_jsx_children(
         &self,
-        bundle: &mut ContextBundle,
-        chunk_id: i64,
-        budget: usize,
+        _bundle: &mut ContextBundle,
+        _chunk_id: i64,
+        _budget: usize,
     ) -> Result<()> {
-        if !self.config.include_jsx_children {
-            return Ok(());
-        }
-
-        let client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get database connection")?;
-
-        let children = self
-            .jsx_detector
-            .find_child_components(&client, chunk_id)
-            .await?;
-
-        for (idx, child) in children.into_iter().enumerate() {
-            if idx >= self.config.max_jsx_children {
-                debug!(
-                    "Reached max JSX children limit ({})",
-                    self.config.max_jsx_children
-                );
-                break;
-            }
-
-            if bundle.would_exceed_budget(0, budget) {
-                break;
-            }
-
-            let metadata = self.get_chunk_metadata(child.id).await?;
-
-            let reason = format!(
-                "Child component: {} (rendered by this component)",
-                child.symbol_name.unwrap_or_else(|| "component".to_string())
-            );
-
-            match self
-                .create_context_item(metadata, "jsx_child", &reason)
-                .await
-            {
-                Ok(item) => {
-                    if !bundle.would_exceed_budget(item.tokens, budget) {
-                        debug!("Adding JSX child: {} tokens", item.tokens);
-                        bundle.add_item(item);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to create JSX child context item: {}", e);
-                }
-            }
-        }
-
+        // TODO: Implement JSX child queries for SQLite backend using graph module
+        // For now, this feature is disabled
         Ok(())
     }
 }
