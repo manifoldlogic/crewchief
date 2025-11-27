@@ -7,21 +7,22 @@
  *
  * Key features:
  * - QuickPick selection UI with provider options
- * - Ollama auto-detection via HTTP ping (localhost:11434)
+ * - Ollama auto-detection via OllamaClient.isRunning()
  * - Provider selection saved to workspace state
  * - Secure API credential collection for OpenAI/Google
  * - Password-masked input for API keys
  * - Re-runnable via command palette
  * - Graceful error handling for network issues
+ * - SQLite-only database mode (no PostgreSQL)
  */
 
 import * as vscode from 'vscode'
-import * as http from 'http'
 import { existsSync } from 'fs'
 import { homedir } from 'os'
 import * as path from 'path'
 import { SecretsManager } from '../config/secrets'
 import { MCPConfigWriter } from '../config/mcp-writer'
+import { OllamaClient } from '../ollama'
 import { resolveDatabaseConfig, type DatabaseConfig } from '../services/database-checker'
 
 /**
@@ -37,11 +38,6 @@ interface ProviderOption {
   detail: string
   value: EmbeddingProvider
 }
-
-/**
- * Timeout for Ollama detection (milliseconds)
- */
-const OLLAMA_DETECTION_TIMEOUT_MS = 2000
 
 /**
  * Key for storing provider selection in workspace state
@@ -190,35 +186,15 @@ function buildProviderOptions(ollamaRunning: boolean): ProviderOption[] {
 /**
  * Detect if Ollama is running on localhost:11434
  *
- * Performs a simple HTTP GET request with a 2-second timeout.
- * Returns true if any response received (indicates Ollama is running).
- * Returns false if timeout or connection error.
+ * Uses OllamaClient to check if Ollama service is accessible.
+ * Returns true if Ollama is running and responding.
+ * Returns false if not running or connection error.
  *
  * @returns Promise resolving to true if Ollama detected, false otherwise
  */
 export async function detectOllama(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      // Timeout - Ollama not detected
-      req.destroy()
-      resolve(false)
-    }, OLLAMA_DETECTION_TIMEOUT_MS)
-
-    const req = http.get('http://localhost:11434', (res) => {
-      // Got response - Ollama is running
-      clearTimeout(timeout)
-      resolve(true)
-      res.resume() // Drain response
-    })
-
-    req.on('error', () => {
-      // Connection error - Ollama not running
-      clearTimeout(timeout)
-      resolve(false)
-    })
-
-    req.end()
-  })
+  const client = new OllamaClient()
+  return client.isRunning()
 }
 
 /**
@@ -443,19 +419,12 @@ export async function showNoSqliteGuidance(): Promise<boolean> {
 /**
  * Run database setup based on current configuration
  *
- * Entry point for database-aware setup that routes to appropriate
- * flow based on configured database provider.
+ * Entry point for SQLite database setup that handles detection
+ * and user guidance for creating or finding the database.
  *
  * @returns true if setup completed successfully, false if cancelled
  */
 export async function runDatabaseSetup(): Promise<boolean> {
   const dbConfig = resolveDatabaseConfig()
-
-  if (dbConfig.type === 'sqlite') {
-    return await runSqliteSetup(dbConfig)
-  }
-
-  // PostgreSQL mode - no additional setup needed here
-  // (Docker setup is handled in extension.ts)
-  return true
+  return await runSqliteSetup(dbConfig)
 }

@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-3003: Update setup wizard
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -21,12 +21,12 @@ Reference: planning/plan.md - Phase 3, Ticket 3003
 Reference: planning/analysis.md - Reusable Extension Infrastructure
 
 ## Acceptance Criteria
-- [ ] Setup wizard works for Ollama, OpenAI, and Google providers
-- [ ] No Docker or PostgreSQL references in wizard
-- [ ] First run shows SQLite guidance (preserve `showNoSqliteGuidance()`)
-- [ ] Re-run setup works correctly (command palette: "Maproom: Setup")
-- [ ] Provider validation before saving selection
-- [ ] API key input for OpenAI/Google providers
+- [x] Setup wizard works for Ollama, OpenAI, and Google providers
+- [x] No Docker or PostgreSQL references in wizard
+- [x] First run shows SQLite guidance (preserve `showNoSqliteGuidance()`)
+- [x] Re-run setup works correctly (command palette: "Maproom: Setup")
+- [x] Provider validation before saving selection
+- [x] API key input for OpenAI/Google providers
 
 ## Technical Requirements
 - Keep: `showNoSqliteGuidance()` function for first-run UX
