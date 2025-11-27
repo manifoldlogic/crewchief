@@ -22,12 +22,10 @@ name: Test
 # are in docs/architecture/DATABASE_ARCHITECTURE.md
 # =============================================================================
 
-# Run tests on push to main and all pull request events
+# Run tests only on pull requests
 # Path filters: Only run tests when code, dependencies, workflows, or schemas change
 on:
-  push:
-    branches:
-      - main
+  pull_request:
     paths:
       # Rust code
       - 'crates/**'
@@ -53,26 +51,6 @@ on:
       - 'packages/maproom-mcp/config/init.sql'
       - 'crates/maproom/migrations/**'
 
-      # E2E tests
-      - 'tests/e2e/**'
-
-  pull_request:
-    paths:
-      # Same paths as push (keep in sync!)
-      - 'crates/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '**.rs'
-      - 'packages/*/src/**'
-      - 'packages/*/tests/**'
-      - 'packages/**/package.json'
-      - '**.ts'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/test.yml'
-      - '.github/workflows/reusable-rust-build.yml'
-      - '.github/workflows/reusable-typescript-build.yml'
-      - 'packages/maproom-mcp/config/init.sql'
-      - 'crates/maproom/migrations/**'
       # E2E tests
       - 'tests/e2e/**'
 

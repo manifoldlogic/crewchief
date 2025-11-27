@@ -233,42 +233,54 @@ jobs:
           git push origin main --tags
 
   # ============================================
-  # Phase 2: Wait for tag-triggered workflows
-  # The individual release workflows are triggered by tags
+  # Phase 2: Trigger release workflows
+  # Using workflow_dispatch since tag pushes from GITHUB_TOKEN don't trigger workflows
   # ============================================
 
-  # CLI release is triggered by @crewchief/cli@v* tag
-  wait-cli-release:
-    name: CLI Release (via tag)
+  # CLI release
+  trigger-cli-release:
+    name: CLI Release
     needs: [validate, prepare-releases]
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_cli == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for CLI release workflow
+      - name: Trigger CLI release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "CLI release triggered by tag: @crewchief/cli@v${{ needs.validate.outputs.cli_version }}"
-          echo "The release-cli.yml workflow will handle the actual publish using OIDC Trusted Publishers"
+          echo "Triggering CLI release workflow"
+          gh workflow run release-cli.yml \
+            --repo ${{ github.repository }} \
+            -f dry_run=false
+
           echo ""
+          echo "CLI release workflow triggered!"
           echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-cli.yml"
 
-  # Maproom-MCP release is triggered by @crewchief/maproom-mcp@v* tag
-  wait-mcp-release:
-    name: MCP Release (via tag)
-    needs: [validate, prepare-releases, wait-cli-release]
+  # Maproom-MCP release (depends on CLI for ordering)
+  trigger-mcp-release:
+    name: MCP Release
+    needs: [validate, prepare-releases, trigger-cli-release]
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_maproom_mcp == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for MCP release workflow
+      - name: Trigger MCP release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "MCP release triggered by tag: @crewchief/maproom-mcp@v${{ needs.validate.outputs.maproom_mcp_version }}"
-          echo "The release-maproom-mcp.yml workflow will handle the actual publish using OIDC Trusted Publishers"
+          echo "Triggering MCP release workflow"
+          gh workflow run release-maproom-mcp.yml \
+            --repo ${{ github.repository }} \
+            -f dry_run=false
+
           echo ""
+          echo "MCP release workflow triggered!"
           echo "Monitor at: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-maproom-mcp.yml"
 
-  # VSCode extension requires manual trigger (no tag-based workflow)
+  # VSCode extension release (depends on MCP for ordering)
   trigger-vscode-release:
-    name: VSCode Release (manual trigger)
-    needs: [validate, prepare-releases, wait-cli-release, wait-mcp-release]
+    name: VSCode Release
+    needs: [validate, prepare-releases, trigger-cli-release, trigger-mcp-release]
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_vscode == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -292,7 +304,7 @@ jobs:
   # ============================================
   summary:
     name: Release Summary
-    needs: [validate, prepare-releases, wait-cli-release, wait-mcp-release, trigger-vscode-release]
+    needs: [validate, prepare-releases, trigger-cli-release, trigger-mcp-release, trigger-vscode-release]
     if: always()
     runs-on: ubuntu-latest
 
@@ -307,11 +319,11 @@ jobs:
           echo "|---------|---------|--------|" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.validate.outputs.release_cli }}" = "true" ]; then
-            echo "| @crewchief/cli | ${{ needs.validate.outputs.cli_version }} | Tag pushed → release-cli.yml |" >> $GITHUB_STEP_SUMMARY
+            echo "| @crewchief/cli | ${{ needs.validate.outputs.cli_version }} | Triggered → release-cli.yml |" >> $GITHUB_STEP_SUMMARY
           fi
 
           if [ "${{ needs.validate.outputs.release_maproom_mcp }}" = "true" ]; then
-            echo "| @crewchief/maproom-mcp | ${{ needs.validate.outputs.maproom_mcp_version }} | Tag pushed → release-maproom-mcp.yml |" >> $GITHUB_STEP_SUMMARY
+            echo "| @crewchief/maproom-mcp | ${{ needs.validate.outputs.maproom_mcp_version }} | Triggered → release-maproom-mcp.yml |" >> $GITHUB_STEP_SUMMARY
           fi
 
           if [ "${{ needs.validate.outputs.release_vscode }}" = "true" ]; then
@@ -322,9 +334,9 @@ jobs:
           echo "## How It Works" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "This workflow **orchestrates** releases by:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Bumping versions and pushing tags" >> $GITHUB_STEP_SUMMARY
-          echo "2. Tags trigger the individual release workflows (which use OIDC Trusted Publishers)" >> $GITHUB_STEP_SUMMARY
-          echo "3. VSCode release is manually triggered (no tag-based workflow)" >> $GITHUB_STEP_SUMMARY
+          echo "1. Bumping versions and creating tags" >> $GITHUB_STEP_SUMMARY
+          echo "2. Triggering individual release workflows via workflow_dispatch" >> $GITHUB_STEP_SUMMARY
+          echo "3. Each release workflow uses OIDC Trusted Publishers for npm" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Monitor individual workflows:" >> $GITHUB_STEP_SUMMARY
           echo "- [release-cli.yml](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release-cli.yml)" >> $GITHUB_STEP_SUMMARY
