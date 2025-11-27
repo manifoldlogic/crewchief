@@ -31,7 +31,7 @@ export interface ScanConfig {
   extensionRoot: string
   /** Workspace root directory to scan */
   workspaceRoot: string
-  /** PostgreSQL connection string (DATABASE_URL) */
+  /** Database connection string (DATABASE_URL) */
   databaseUrl: string
   /** Output channel for logging */
   outputChannel: vscode.OutputChannel
@@ -150,7 +150,7 @@ async function verifyBinary(binaryPath: string, outputChannel: vscode.OutputChan
  *
  * @param binaryPath - Path to crewchief-maproom binary
  * @param workspaceRoot - Workspace root to scan
- * @param databaseUrl - PostgreSQL connection string
+ * @param databaseUrl - Database connection string
  * @param env - Environment variables
  * @param progress - VSCode progress reporter
  * @param outputChannel - Output channel for logging

@@ -299,7 +299,7 @@ export class ProcessOrchestrator extends EventEmitter {
    * Build environment variables for spawned processes
    *
    * Includes:
-   * - PostgreSQL connection details
+   * - Database connection URL
    * - Embedding provider API credentials (if configured)
    * - Parent process environment
    *
