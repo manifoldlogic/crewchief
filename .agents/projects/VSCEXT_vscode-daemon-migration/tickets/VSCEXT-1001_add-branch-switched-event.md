@@ -1,9 +1,9 @@
 # Ticket: VSCEXT-1001: Add BranchSwitchedEvent to events.ts
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -20,10 +20,10 @@ The Rust `watch` command was unified (UNIWATCH project) to handle both file watc
 Reference: planning/plan.md - Phase 1, Ticket 1001
 
 ## Acceptance Criteria
-- [ ] `BranchSwitchedEvent` interface defined with all required fields
-- [ ] `WatchEvent` union type includes `BranchSwitchedEvent`
-- [ ] `isWatchEvent()` type guard validates `branch_switched` events
-- [ ] Unit tests pass for valid and invalid branch_switched events
+- [x] `BranchSwitchedEvent` interface defined with all required fields
+- [x] `WatchEvent` union type includes `BranchSwitchedEvent`
+- [x] `isWatchEvent()` type guard validates `branch_switched` events
+- [x] Unit tests pass for valid and invalid branch_switched events
 
 ## Technical Requirements
 - Add interface to `packages/vscode-maproom/src/process/events.ts`

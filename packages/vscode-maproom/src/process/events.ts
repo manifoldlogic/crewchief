@@ -108,9 +108,37 @@ export interface FileProcessedEvent {
 }
 
 /**
+ * Branch switched event - emitted when git branch changes
+ *
+ * Example:
+ * ```json
+ * {"type":"branch_switched","timestamp":"2025-01-16T10:30:00Z","repo":"crewchief",
+ *  "old_branch":"main","new_branch":"feature-auth","old_worktree_id":1,
+ *  "new_worktree_id":42,"worktree_created":false}
+ * ```
+ */
+export interface BranchSwitchedEvent {
+  type: 'branch_switched'
+  /** ISO 8601 timestamp when branch switched */
+  timestamp: string
+  /** Repository name */
+  repo: string
+  /** Previous branch name */
+  old_branch: string
+  /** New branch name */
+  new_branch: string
+  /** Worktree ID of the previous branch */
+  old_worktree_id: number
+  /** Worktree ID of the new branch */
+  new_worktree_id: number
+  /** True if a new worktree entry was created in SQLite */
+  worktree_created: boolean
+}
+
+/**
  * Union type of all possible watch events
  */
-export type WatchEvent = ProgressEvent | ErrorEvent | CompleteEvent | StatusEvent | FileProcessedEvent
+export type WatchEvent = ProgressEvent | ErrorEvent | CompleteEvent | StatusEvent | FileProcessedEvent | BranchSwitchedEvent
 
 /**
  * Type guard to check if object is a valid WatchEvent
@@ -174,6 +202,17 @@ export function isWatchEvent(obj: unknown): obj is WatchEvent {
         typeof event.file_path === 'string' &&
         typeof event.elapsed === 'number' &&
         event.elapsed >= 0
+      )
+
+    case 'branch_switched':
+      return (
+        typeof event.timestamp === 'string' &&
+        typeof event.repo === 'string' &&
+        typeof event.old_branch === 'string' &&
+        typeof event.new_branch === 'string' &&
+        typeof event.old_worktree_id === 'number' &&
+        typeof event.new_worktree_id === 'number' &&
+        typeof event.worktree_created === 'boolean'
       )
 
     default:
