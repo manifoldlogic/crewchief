@@ -252,8 +252,12 @@ describe('MCP Context Tool E2E', () => {
 
 ### Test Database Fixture
 
+> **Owner:** CTXCLI-4001 is responsible for creating this fixture file.
+
 ```sql
 -- tests/fixtures/context_test.sql
+-- Created by: CTXCLI-4001
+-- Purpose: Test fixture for daemon context integration tests
 
 -- Insert test repository
 INSERT INTO repos (id, name, remote_url) VALUES (1, 'test-repo', 'git@github.com:test/repo.git');

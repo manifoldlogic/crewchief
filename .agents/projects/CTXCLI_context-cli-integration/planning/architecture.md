@@ -137,6 +137,8 @@ pub struct ExpandConfig {
     pub max_depth: i32,
     // React-specific
     #[serde(default)]
+    pub routes: bool,
+    #[serde(default)]
     pub hooks: bool,
     #[serde(default)]
     pub jsx_parents: bool,
@@ -149,6 +151,34 @@ fn default_max_depth() -> i32 { 2 }
 ```
 
 **Location:** `crates/maproom/src/daemon/mod.rs`
+
+#### DaemonState with Context Support
+
+The `BasicContextAssembler` must be part of `DaemonState` to enable caching across requests:
+
+```rust
+// Updated DaemonState with context assembler
+pub struct DaemonState {
+    pub store: Arc<SqliteStore>,
+    pub embedding_service: EmbeddingService,
+    pub context_assembler: BasicContextAssembler,  // NEW: enables caching
+}
+
+impl DaemonState {
+    pub fn new(store: Arc<SqliteStore>, embedding_service: EmbeddingService) -> Self {
+        Self {
+            store: store.clone(),
+            embedding_service,
+            context_assembler: BasicContextAssembler::new(
+                store,
+                CacheConfig::default(),  // LRU cache with 100 bundles
+            ),
+        }
+    }
+}
+```
+
+#### Request Handler
 
 ```rust
 async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> JsonRpcResponse {
@@ -178,18 +208,17 @@ async fn execute_context(
         docs: params.expand.docs,
         config: params.expand.config,
         max_depth: params.expand.max_depth,
+        routes: params.expand.routes,
         hooks: params.expand.hooks,
         jsx_parents: params.expand.jsx_parents,
         jsx_children: params.expand.jsx_children,
         ..Default::default()
     };
 
-    let assembler = BasicContextAssembler::new(
-        state.store.clone(),
-        CacheConfig::default(),
-    );
-
-    let bundle = assembler.assemble(chunk_id, params.budget_tokens, options).await?;
+    // Use state's assembler (not new instance) to benefit from caching
+    let bundle = state.context_assembler
+        .assemble(chunk_id, params.budget_tokens, options)
+        .await?;
 
     Ok(serde_json::to_value(bundle)?)
 }
@@ -221,9 +250,74 @@ export async function handleContextTool(
 }
 ```
 
-### 4. Response Schema
+### 4. Response Schema and Mapping
 
-The daemon returns a `ContextBundle` that matches the existing MCP schema:
+#### Schema Synchronization
+
+The Rust and TypeScript schemas must stay in sync:
+
+| Field | Rust Location | TypeScript Location |
+|-------|---------------|---------------------|
+| `ExpandOptions` | `crates/maproom/src/context/types.rs` | `packages/maproom-mcp/src/tools/context_schema.ts` |
+| `ContextBundle` | `crates/maproom/src/context/types.rs` | `packages/maproom-mcp/src/tools/context.ts` |
+
+#### Rust ContextBundle (Daemon Response)
+
+```rust
+// crates/maproom/src/context/types.rs
+pub struct ContextBundle {
+    pub items: Vec<ContextItem>,
+    pub total_tokens: usize,
+    pub truncated: bool,
+}
+```
+
+#### MCP ContextBundle (Enhanced for Clients)
+
+```typescript
+// packages/maproom-mcp/src/tools/context.ts
+interface ContextBundle {
+  items: ContextItem[]
+  total_tokens: number
+  budget_tokens: number      // Computed: from request params
+  budget_remaining: number   // Computed: budget_tokens - total_tokens
+  truncated: boolean
+  metadata: {                // Computed: from first item
+    worktree: string
+    repo: string
+  }
+  warnings?: string[]        // Optional: any assembly warnings
+}
+```
+
+#### Mapping Layer (CTXCLI-3002)
+
+The MCP tool must map the Rust response to the enhanced format.
+
+**Important**: The Rust `ContextItem` struct does NOT contain `worktree` or `repo` fields. These must be passed from the MCP request context (derived from prior search results or chunk_id lookup).
+
+```typescript
+function mapRustToMcpBundle(
+  rustBundle: RustContextBundle,
+  requestParams: ContextParams,
+  requestContext: { worktree: string; repo: string }  // From MCP request context
+): ContextBundle {
+  const budgetTokens = requestParams.budget_tokens ?? 6000
+  return {
+    items: rustBundle.items,
+    total_tokens: rustBundle.total_tokens,
+    budget_tokens: budgetTokens,
+    budget_remaining: budgetTokens - rustBundle.total_tokens,
+    truncated: rustBundle.truncated,
+    metadata: {
+      worktree: requestContext.worktree,
+      repo: requestContext.repo,
+    },
+  }
+}
+```
+
+#### Example Daemon Response
 
 ```json
 {

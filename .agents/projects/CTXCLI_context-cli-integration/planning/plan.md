@@ -26,49 +26,37 @@ This plan outlines the implementation phases for exposing the Rust context assem
 
 ---
 
-### CTXCLI-1002: Implement Daemon Context Handler
+### CTXCLI-1002: Implement Daemon Context Handler with State Support
 
-**Description:** Add `context` method handler to JSON-RPC daemon.
+**Description:** Add `context` method handler to JSON-RPC daemon with `BasicContextAssembler` in `DaemonState` to enable caching across requests.
+
+> **Note:** This ticket combines the original CTXCLI-1002 (handler) and CTXCLI-1003 (state support) to ensure proper initialization order. The assembler must be in DaemonState *before* the handler is called to enable caching.
 
 **Files:**
 - `crates/maproom/src/daemon/mod.rs`
 
 **Tasks:**
-1. Add `context` case to `handle_request()` match
-2. Implement `execute_context()` function
-3. Convert `ContextParams` to `ExpandOptions`
-4. Call `BasicContextAssembler::assemble()`
-5. Serialize result to JSON-RPC response
-6. Handle errors with appropriate codes
+1. Add `BasicContextAssembler` to `DaemonState` struct
+2. Initialize assembler with `CacheConfig::default()` in `DaemonState::new()`
+3. Share `SqliteStore` between search and context assembler
+4. Add `context` case to `handle_request()` match
+5. Implement `execute_context()` function using `state.assembler`
+6. Convert `ContextParams` to `ExpandOptions`
+7. Call `assembler.assemble()` on the state's assembler (not a new instance)
+8. Serialize result to JSON-RPC response
+9. Handle errors with appropriate codes
 
 **Acceptance Criteria:**
+- [ ] `BasicContextAssembler` is in `DaemonState` struct
+- [ ] Assembler reuses database connection from `SqliteStore`
+- [ ] Context cache persists across requests (verified by test)
 - [ ] Daemon responds to `context` method
 - [ ] Returns valid `ContextBundle` JSON
 - [ ] Returns -32000 error for missing chunk
 - [ ] Returns -32602 error for invalid params
-
-**Dependencies:** CTXCLI-1001
-
----
-
-### CTXCLI-1003: Add DaemonState Context Support
-
-**Description:** Update `DaemonState` to include context assembler.
-
-**Files:**
-- `crates/maproom/src/daemon/mod.rs`
-
-**Tasks:**
-1. Add `BasicContextAssembler` to `DaemonState`
-2. Initialize with `CacheConfig::default()` for caching
-3. Share `SqliteStore` between search and context
-
-**Acceptance Criteria:**
-- [ ] Assembler reuses database connection
-- [ ] Context cache persists across requests
 - [ ] No performance regression for search
 
-**Dependencies:** CTXCLI-1002
+**Dependencies:** CTXCLI-1001
 
 ---
 
@@ -166,7 +154,7 @@ This plan outlines the implementation phases for exposing the Rust context assem
 
 ### CTXCLI-3001: Update MCP Context Schema
 
-**Description:** Extend MCP context schema with React-specific options.
+**Description:** Extend MCP context schema with React-specific options, ensuring full parity with Rust `ExpandOptions`.
 
 **Files:**
 - `packages/maproom-mcp/src/tools/context_schema.ts`
@@ -175,34 +163,48 @@ This plan outlines the implementation phases for exposing the Rust context assem
 1. Add `hooks`, `jsx_parents`, `jsx_children` to expand schema
 2. Update Zod validation
 3. Update TypeScript types
+4. Add comment referencing Rust `ExpandOptions` location for future sync
 
 **Acceptance Criteria:**
 - [ ] Schema accepts React-specific options
 - [ ] Validation rejects invalid values
-- [ ] Types match Rust implementation
+- [ ] Types match Rust `ExpandOptions` exactly (callers, callees, tests, docs, config, max_depth, hooks, jsx_parents, jsx_children)
+- [ ] Cross-reference comment added: `// Sync with: crates/maproom/src/context/types.rs ExpandOptions`
 
 ---
 
 ### CTXCLI-3002: Replace PostgreSQL with Daemon Client
 
-**Description:** Update MCP context tool to use daemon client instead of PostgreSQL.
+**Description:** Update MCP context tool to use daemon client instead of PostgreSQL, including adding the `DaemonClient.context()` method and mapping the Rust response to MCP format.
+
+> **Note:** Follow the pattern established in `search.ts` for daemon client integration, including error handling for `DaemonStartError`, `DaemonTimeoutError`, and `RpcError`.
 
 **Files:**
+- `packages/daemon-client/src/index.ts` (add `context()` method)
 - `packages/maproom-mcp/src/tools/context.ts`
 
 **Tasks:**
-1. Import `DaemonClient` from daemon-client package
-2. Remove `pg` client usage
-3. Call `daemonClient.call('context', params)`
-4. Map response to MCP format
-5. Update error handling
+1. Add `context()` method to `DaemonClient` class in daemon-client package
+2. Define TypeScript types for `ContextParams` and `ContextBundle`
+3. Import `DaemonClient` from daemon-client package in context.ts
+4. Remove `pg` client usage
+5. Call `daemonClient.context(params)`
+6. Map Rust `ContextBundle` response to MCP format:
+   - Pass through: `items`, `total_tokens`, `truncated`
+   - Compute: `budget_tokens` (from request params)
+   - Compute: `budget_remaining` = `budget_tokens - total_tokens`
+   - Add: `metadata` object (worktree info from first item)
+7. Update error handling following `search.ts` pattern
 
 **Acceptance Criteria:**
-- [ ] MCP context tool uses daemon
-- [ ] Response format unchanged
+- [ ] `DaemonClient.context()` method exists in daemon-client package
+- [ ] MCP context tool uses daemon (not PostgreSQL)
+- [ ] Response format matches existing MCP ContextBundle interface:
+  - `items`, `total_tokens`, `budget_tokens`, `budget_remaining`, `truncated`, `metadata`
+- [ ] Error handling follows `search.ts` pattern
 - [ ] Error messages match existing format
 
-**Dependencies:** CTXCLI-3001, CTXCLI-1003
+**Dependencies:** CTXCLI-3001, CTXCLI-1002
 
 ---
 
@@ -230,22 +232,30 @@ This plan outlines the implementation phases for exposing the Rust context assem
 
 ### CTXCLI-4001: Add Daemon Context Integration Tests
 
-**Description:** Add integration tests for daemon context method.
+**Description:** Add integration tests for daemon context method, including creating the test database fixture.
 
 **Files:**
 - `crates/maproom/tests/context_daemon_test.rs`
+- `crates/maproom/tests/fixtures/context_test.sql` (create)
 
 **Tasks:**
-1. Create test database fixture
-2. Test successful context retrieval
-3. Test expand options
-4. Test error cases
+1. Create test database fixture (`tests/fixtures/context_test.sql`):
+   - Insert test repository and worktree
+   - Insert test file and chunks (primary, callers, callees, tests)
+   - Insert chunk_edges for relationship testing
+2. Create test helper to load fixture into in-memory SQLite
+3. Test successful context retrieval
+4. Test expand options (callers, callees, tests, docs, config)
+5. Test cache persistence across requests (call twice, verify faster second call)
+6. Test error cases (missing chunk, invalid params)
 
 **Acceptance Criteria:**
+- [ ] Test fixture file `context_test.sql` created and committed
 - [ ] Tests pass in CI
 - [ ] Coverage > 75% for handler
+- [ ] Cache persistence verified by test
 
-**Dependencies:** CTXCLI-1003
+**Dependencies:** CTXCLI-1002
 
 ---
 
@@ -317,24 +327,25 @@ This plan outlines the implementation phases for exposing the Rust context assem
 | Phase | Ticket | Description | Effort |
 |-------|--------|-------------|--------|
 | 1 | CTXCLI-1001 | Context params types | S |
-| 1 | CTXCLI-1002 | Daemon context handler | M |
-| 1 | CTXCLI-1003 | DaemonState context support | S |
+| 1 | CTXCLI-1002 | Daemon context handler + state support | M |
 | 2 | CTXCLI-2001 | CLI context command variant | S |
 | 2 | CTXCLI-2002 | CLI context handler | M |
 | 2 | CTXCLI-2003 | Human-readable output | S |
 | 3 | CTXCLI-3001 | MCP context schema update | S |
-| 3 | CTXCLI-3002 | Replace PostgreSQL with daemon | M |
+| 3 | CTXCLI-3002 | Replace PostgreSQL with daemon + DaemonClient.context() | M |
 | 3 | CTXCLI-3003 | Daemon client in MCP server | S |
-| 4 | CTXCLI-4001 | Daemon integration tests | M |
+| 4 | CTXCLI-4001 | Daemon integration tests + test fixture | M |
 | 4 | CTXCLI-4002 | CLI integration tests | M |
 | 4 | CTXCLI-4003 | MCP E2E tests | M |
 | 4 | CTXCLI-4004 | Documentation updates | S |
 
-**Total: 13 tickets** (5 Small, 6 Medium, 2 Large)
+**Total: 12 tickets** (5 Small, 7 Medium)
+
+> **Note:** Original CTXCLI-1002 and CTXCLI-1003 merged per review findings to fix initialization order.
 
 ## Execution Order
 
-1. **Foundation**: CTXCLI-1001 → CTXCLI-1002 → CTXCLI-1003
+1. **Foundation**: CTXCLI-1001 → CTXCLI-1002
 2. **CLI**: CTXCLI-2001 → CTXCLI-2002 → CTXCLI-2003
 3. **MCP**: CTXCLI-3001 → CTXCLI-3002 → CTXCLI-3003
 4. **Testing**: CTXCLI-4001, CTXCLI-4002, CTXCLI-4003 (parallel)

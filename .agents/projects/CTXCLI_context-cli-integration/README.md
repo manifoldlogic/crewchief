@@ -49,18 +49,19 @@ tickets/
 | ID | Description | Phase |
 |----|-------------|-------|
 | CTXCLI-1001 | Context params types | 1: Daemon |
-| CTXCLI-1002 | Daemon context handler | 1: Daemon |
-| CTXCLI-1003 | DaemonState context support | 1: Daemon |
+| CTXCLI-1002 | Daemon context handler + state support | 1: Daemon |
 | CTXCLI-2001 | CLI context command variant | 2: CLI |
 | CTXCLI-2002 | CLI context handler | 2: CLI |
 | CTXCLI-2003 | Human-readable output | 2: CLI |
 | CTXCLI-3001 | MCP context schema update | 3: MCP |
-| CTXCLI-3002 | Replace PostgreSQL with daemon | 3: MCP |
+| CTXCLI-3002 | Replace PostgreSQL with daemon + DaemonClient.context() | 3: MCP |
 | CTXCLI-3003 | Daemon client in MCP server | 3: MCP |
-| CTXCLI-4001 | Daemon integration tests | 4: Testing |
+| CTXCLI-4001 | Daemon integration tests + test fixture | 4: Testing |
 | CTXCLI-4002 | CLI integration tests | 4: Testing |
 | CTXCLI-4003 | MCP E2E tests | 4: Testing |
 | CTXCLI-4004 | Documentation updates | 4: Testing |
+
+> **Note:** Original CTXCLI-1002 and CTXCLI-1003 merged per project review to fix initialization order.
 
 ## Success Criteria
 
@@ -82,5 +83,5 @@ tickets/
 - [x] Architecture defined
 - [x] Quality strategy defined
 - [x] Implementation plan created
-- [ ] Tickets generated
+- [x] Tickets generated (12 tickets)
 - [ ] Implementation started
