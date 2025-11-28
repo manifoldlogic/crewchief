@@ -32,14 +32,26 @@ Execute all tickets for project "$ARGUMENTS" systematically using autonomous wor
 
 **Autonomous operation:** Work independently without requesting user input or permission. Make decisions confidently based on project documentation.
 
+**CRITICAL: You MUST use the SlashCommand tool to invoke `/single-ticket` for each ticket.**
+
+Do NOT manually implement ticket phases. The `/single-ticket` command handles the complete workflow including implementation, verification, and commit. Skipping this invocation results in incomplete work (missing verification and commits).
+
 **Execution rhythm:**
 ```
-1. Execute: /single-ticket <ticket-id>
-2. Move to next ticket
-3. Repeat until all tickets complete
+For each ticket:
+1. Use SlashCommand tool: /single-ticket <ticket-id>
+2. Wait for single-ticket to complete fully (implementation + verification + commit)
+3. Confirm ticket shows [x] Verified checkbox
+4. Move to next ticket
+5. Repeat until all tickets complete
 ```
 
-**Maintain momentum:** 1→2→1→2→1→2... Keep this rhythm flowing through all phases.
+**Example invocation:**
+```
+SlashCommand tool with command: "/single-ticket PROJ-1001"
+```
+
+**Maintain momentum:** Keep this rhythm flowing through all phases. Each `/single-ticket` call should result in a committed ticket before proceeding.
 
 ## Ticket Sequencing
 
@@ -132,10 +144,13 @@ After each ticket completion:
 
 Project complete when:
 - ✓ All tickets in all phases completed or explicitly resolved
+- ✓ **Each ticket has `[x] Verified` checkbox checked** (proof that /single-ticket was used)
 - ✓ All test tickets passing
-- ✓ No orphaned changes or uncommitted work
+- ✓ No orphaned changes or uncommitted work (run `git status` to confirm)
 - ✓ Follow-up tickets documented in backlog
 - ✓ Project deliverables match plan objectives
+
+**Before declaring project complete:** Run `git status` to verify no uncommitted changes remain. If modified files exist, tickets were not properly committed.
 
 ## Output
 
