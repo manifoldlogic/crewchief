@@ -195,6 +195,22 @@ Maproom uses SQLite for storage:
 - Be pragmatic rather than theoretical or ideological in choosing libraries and tools.
 - For major decisions about libraries and tools, call out top choices, and the reasoning behind them, during the planning phase. If the user does not provide a decision, move forward with your top choice based on your own analysis and pragmatism. 
 
+## Git Workflow
+
+**CRITICAL**: Always sync with origin before committing to avoid divergent branches.
+
+Before creating any commit:
+```bash
+git fetch origin main
+git rebase origin/main  # Or git pull --rebase origin main
+```
+
+This prevents conflicts when external processes (like CI release workflows) push commits to origin between your local changes.
+
+**If rebase fails with conflicts**:
+1. Resolve conflicts manually, or
+2. Use `git merge origin/main` as an alternative (creates a merge commit)
+
 ## Safety Rules
 
 **CRITICAL**: File operations must stay within current worktree.
