@@ -451,6 +451,25 @@ async fn auto_generate_embeddings(
     Ok(stats)
 }
 
+/// Parse a throttle string like "2s" or "500ms" into milliseconds.
+fn parse_throttle(throttle: &str) -> anyhow::Result<u64> {
+    let throttle = throttle.trim();
+
+    if let Some(ms_str) = throttle.strip_suffix("ms") {
+        ms_str.parse::<u64>()
+            .with_context(|| format!("Invalid throttle value: {}", throttle))
+    } else if let Some(s_str) = throttle.strip_suffix("s") {
+        let secs: u64 = s_str.parse()
+            .with_context(|| format!("Invalid throttle value: {}", throttle))?;
+        Ok(secs * 1000)
+    } else {
+        // Default to treating as seconds if no suffix
+        let secs: u64 = throttle.parse()
+            .with_context(|| format!("Invalid throttle value: {}. Use format like '2s' or '500ms'", throttle))?;
+        Ok(secs * 1000)
+    }
+}
+
 /// Extract git information from a repository path
 fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     // Get the repository name from remote origin
@@ -978,15 +997,83 @@ async fn main() -> anyhow::Result<()> {
                 "Starting watch"
             );
 
-            // TODO: watch_worktree was removed in IDXABS-2001 (SQLite-only migration)
-            // It will be reimplemented in a future ticket using SqliteStore
-            let _store = db::connect().await?;
-            anyhow::bail!(
-                "Watch command is temporarily unavailable.\n\
-                The watch_worktree function was removed during SQLite-only migration.\n\
-                Use 'scan' for initial indexing and 'upsert' for incremental updates.\n\
-                Watch functionality will be reimplemented in a future update."
-            );
+            // Connect to database
+            let store = Arc::new(db::connect().await?);
+
+            // Canonicalize path for the watcher
+            let watch_path = path.canonicalize()
+                .with_context(|| format!("Failed to canonicalize path: {}", path.display()))?;
+            let watch_path_str = watch_path.to_string_lossy().to_string();
+
+            // Ensure repo and worktree exist
+            let repo_id = store.get_or_create_repo(&repo, &watch_path_str).await?;
+            let worktree_id = store.get_or_create_worktree(repo_id, &worktree, &watch_path_str).await?;
+
+            // Create and start the file watcher
+            use crewchief_maproom::incremental::{MultiWatcher, WatcherConfig};
+
+            let debounce_ms = parse_throttle(&throttle)?;
+            let config = WatcherConfig {
+                debounce_ms,
+                ..Default::default()
+            };
+
+            let (mut multi_watcher, mut event_rx) = MultiWatcher::new(config);
+
+            // Add the worktree to watch
+            multi_watcher.add_worktree(
+                worktree.clone(),
+                watch_path.clone(),
+            ).await?;
+
+            println!("👀 Watching {} for changes...", watch_path.display());
+            println!("   Repository: {}", repo);
+            println!("   Worktree: {}", worktree);
+            println!("   Throttle: {}", throttle);
+            println!();
+            println!("Press Ctrl+C to stop.");
+
+            // Handle events
+            use crewchief_maproom::incremental::incremental_update;
+            use tokio::signal;
+
+            loop {
+                tokio::select! {
+                    // Handle shutdown signal
+                    _ = signal::ctrl_c() => {
+                        println!("\n🛑 Shutting down watch...");
+                        multi_watcher.shutdown().await?;
+                        break;
+                    }
+                    // Handle file events
+                    Some(event) = event_rx.recv() => {
+                        use crewchief_maproom::incremental::EventType;
+
+                        let event_type = match event.event_type {
+                            EventType::Modified => "modified",
+                            EventType::Deleted => "deleted",
+                            EventType::Renamed => "renamed",
+                        };
+
+                        println!("📁 {} {}", event_type, event.path.display());
+
+                        // Trigger incremental update for the worktree
+                        match incremental_update(&store, worktree_id, &watch_path).await {
+                            Ok(stats) => {
+                                if stats.files_processed > 0 {
+                                    println!("   ✅ Processed {} files", stats.files_processed);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Incremental update failed: {}", e);
+                                println!("   ⚠️  Update failed: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+
+            println!("Watch complete.");
         }
 
         Commands::Search {
