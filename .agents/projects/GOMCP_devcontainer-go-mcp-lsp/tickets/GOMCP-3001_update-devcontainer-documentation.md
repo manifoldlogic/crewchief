@@ -1,9 +1,9 @@
 # Ticket: GOMCP-3001: Update Devcontainer Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation only)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -19,9 +19,9 @@ With Go and MCP Language Server now installed via GOMCP-1001 and GOMCP-2001, the
 Reference: plan.md Phase 3 - Documentation Update
 
 ## Acceptance Criteria
-- [ ] `.devcontainer/CLAUDE.md` updated to include Go in languages list
-- [ ] Languages list shows: Node.js 20, Rust, Python, Go
-- [ ] No other documentation changes needed (minimal update)
+- [x] `.devcontainer/CLAUDE.md` updated to include Go in languages list
+- [x] Languages list shows: Node.js 20, Rust, Python, Go
+- [x] No other documentation changes needed (minimal update)
 
 ## Technical Requirements
 - Update the "What's Included" section in CLAUDE.md

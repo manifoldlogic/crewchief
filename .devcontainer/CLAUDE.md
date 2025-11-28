@@ -31,7 +31,7 @@ Working with the development container at `/.devcontainer`.
 
 ## What's Included
 
-- **Languages**: Node.js 20, Rust, Python
+- **Languages**: Node.js 20, Rust, Python, Go
 - **Features**: Git, GitHub CLI, Docker-in-Docker
 - **Database**: PostgreSQL via maproom-mcp network
 - **Tools**: bash, tmux, ripgrep, fd
