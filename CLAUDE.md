@@ -76,6 +76,63 @@ This codebase is indexed! Use maproom MCP tools for semantic search.
 
 **Tips**: Use concepts not keywords. If no results, check `status` first. Use `debug: true` to understand rankings.
 
+## Language Server MCP Tools
+
+This codebase has language server MCP tools for Rust and TypeScript. These provide semantic code understanding powered by rust-analyzer and typescript-language-server.
+
+### When to Use Language Servers
+
+**Use Language Server tools** for:
+- Finding symbol definitions (structs, functions, types, classes)
+- Finding all references to a symbol across the codebase
+- Getting type information and documentation at a position
+- Finding compiler warnings and errors in a file
+- Renaming symbols safely across all usages
+
+**Use `Grep/Glob`** for:
+- Text searches that aren't symbol-based
+- Finding TODOs, FIXMEs, or comment patterns
+- Searching in non-code files
+
+### Available Tools
+
+#### rust-language-server (for `crates/`)
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `definition` | Find where a symbol is defined | `definition({ symbolName: "BasicContextAssembler" })` |
+| `references` | Find all usages of a symbol | `references({ symbolName: "ExpandOptions" })` |
+| `hover` | Get type info at a position | `hover({ filePath: "...", line: 88, column: 12 })` |
+| `diagnostics` | Get warnings/errors in a file | `diagnostics({ filePath: "crates/maproom/src/context/assembler.rs" })` |
+| `rename_symbol` | Rename across codebase | `rename_symbol({ filePath: "...", line: 10, column: 5, newName: "NewName" })` |
+
+#### ts-language-server (for `packages/`)
+
+Same tools as rust-language-server, but for TypeScript/JavaScript files.
+
+### Quick Workflow
+
+```
+# Find a struct/class definition
+mcp__rust-language-server__definition({ symbolName: "SqliteStore" })
+
+# Find all usages of a type
+mcp__rust-language-server__references({ symbolName: "ContextBundle" })
+
+# Check for compiler errors
+mcp__rust-language-server__diagnostics({ filePath: "crates/maproom/src/main.rs" })
+
+# Get type info at cursor position
+mcp__rust-language-server__hover({ filePath: "...", line: 100, column: 15 })
+```
+
+### Tips
+
+- **Symbol names**: Use the simple name (e.g., `BasicContextAssembler`), not the full path
+- **Definition vs References**: Use `definition` to jump to implementation, `references` to find all callers/usages
+- **Diagnostics**: Great for finding unused variables, dead code, and type errors before running tests
+- **Hover**: Useful for understanding complex types or checking documentation
+
 ## Documentation
 
 ### `.agents/` - Work in Flight
