@@ -52,6 +52,11 @@ print_step "Installing CrewChief CLI globally..."
 npm install -g @crewchief/cli@latest || print_error "Failed to install CrewChief CLI"
 print_success "CrewChief CLI installed globally"
 
+# Install TypeScript Language Server globally
+print_step "Installing TypeScript Language Server globally..."
+npm install -g typescript typescript-language-server || print_error "Failed to install TypeScript Language Server"
+print_success "TypeScript Language Server installed globally"
+
 # Install Go tools
 if command -v go &> /dev/null; then
     print_step "Installing MCP Language Server..."
