@@ -96,42 +96,56 @@ This codebase has language server MCP tools for Rust and TypeScript. These provi
 
 ### Available Tools
 
-#### rust-language-server (for `crates/`)
+Both language servers provide identical tools:
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `definition` | Find where a symbol is defined | `definition({ symbolName: "BasicContextAssembler" })` |
-| `references` | Find all usages of a symbol | `references({ symbolName: "ExpandOptions" })` |
-| `hover` | Get type info at a position | `hover({ filePath: "...", line: 88, column: 12 })` |
-| `diagnostics` | Get warnings/errors in a file | `diagnostics({ filePath: "crates/maproom/src/context/assembler.rs" })` |
-| `rename_symbol` | Rename across codebase | `rename_symbol({ filePath: "...", line: 10, column: 5, newName: "NewName" })` |
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `definition` | Find where a symbol is defined | `{ symbolName: "MyClass" }` |
+| `references` | Find all usages of a symbol | `{ symbolName: "MyFunction" }` |
+| `hover` | Get type info at a position | `{ filePath, line, column }` |
+| `diagnostics` | Get warnings/errors in a file | `{ filePath }` |
+| `rename_symbol` | Rename across codebase | `{ filePath, line, column, newName }` |
 
-#### ts-language-server (for `packages/`)
+### Which Server to Use
 
-Same tools as rust-language-server, but for TypeScript/JavaScript files.
+| Language Server | Use For | File Patterns |
+|-----------------|---------|---------------|
+| `mcp__rust-language-server__*` | Rust code | `crates/**/*.rs` |
+| `mcp__ts-language-server__*` | TypeScript/JavaScript | `packages/**/*.ts`, `*.tsx`, `*.js` |
 
 ### Quick Workflow
 
 ```
-# Find a struct/class definition
+# Rust: Find a struct definition
 mcp__rust-language-server__definition({ symbolName: "SqliteStore" })
 
-# Find all usages of a type
+# TypeScript: Find a class definition
+mcp__ts-language-server__definition({ symbolName: "DaemonClient" })
+
+# Rust: Find all usages of a type
 mcp__rust-language-server__references({ symbolName: "ContextBundle" })
 
-# Check for compiler errors
+# TypeScript: Find all usages of an interface
+mcp__ts-language-server__references({ symbolName: "SearchParams" })
+
+# Rust: Check for compiler warnings
 mcp__rust-language-server__diagnostics({ filePath: "crates/maproom/src/main.rs" })
 
-# Get type info at cursor position
+# TypeScript: Check for type errors
+mcp__ts-language-server__diagnostics({ filePath: "packages/daemon-client/src/client.ts" })
+
+# Get type info at cursor (works the same for both)
 mcp__rust-language-server__hover({ filePath: "...", line: 100, column: 15 })
+mcp__ts-language-server__hover({ filePath: "...", line: 50, column: 10 })
 ```
 
 ### Tips
 
-- **Symbol names**: Use the simple name (e.g., `BasicContextAssembler`), not the full path
+- **Symbol names**: Use the simple name (e.g., `BasicContextAssembler`, `DaemonClient`), not the full path
 - **Definition vs References**: Use `definition` to jump to implementation, `references` to find all callers/usages
 - **Diagnostics**: Great for finding unused variables, dead code, and type errors before running tests
 - **Hover**: Useful for understanding complex types or checking documentation
+- **Choose the right server**: Use rust-language-server for `.rs` files, ts-language-server for `.ts`/`.js` files
 
 ## Documentation
 

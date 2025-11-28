@@ -12,6 +12,7 @@ cache
 ci
 cli
 config
+daemon
 daemon-client
 db
 devcontainer

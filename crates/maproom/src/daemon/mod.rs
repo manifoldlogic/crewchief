@@ -6,10 +6,11 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
+use crewchief_maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
 use crewchief_maproom::db::{connect, SearchHit, SqliteStore};
 use crewchief_maproom::embedding::EmbeddingService;
 
-use self::types::{JsonRpcRequest, JsonRpcResponse, SearchParams};
+use self::types::{ContextParams, JsonRpcRequest, JsonRpcResponse, SearchParams};
 
 /// Deduplicate search hits by identity (file_relpath, symbol_name, start_line).
 fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit> {
@@ -51,6 +52,17 @@ fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit>
 struct DaemonState {
     store: Arc<SqliteStore>,
     embedding_service: EmbeddingService,
+    context_assembler: DefaultAssemblyStrategy,
+}
+
+impl DaemonState {
+    fn new(store: Arc<SqliteStore>, embedding_service: EmbeddingService) -> Self {
+        Self {
+            store: store.clone(),
+            embedding_service,
+            context_assembler: DefaultAssemblyStrategy::new(store),
+        }
+    }
 }
 
 pub async fn run() -> Result<()> {
@@ -65,10 +77,7 @@ pub async fn run() -> Result<()> {
         .await
         .context("Failed to initialize embedding service")?;
 
-    let state = Arc::new(DaemonState {
-        store,
-        embedding_service,
-    });
+    let state = Arc::new(DaemonState::new(store, embedding_service));
 
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
@@ -127,6 +136,35 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                         id,
                         -32000,
                         "Search failed".to_string(),
+                        Some(serde_json::json!(e.to_string())),
+                    )
+                }
+            }
+        }
+        "context" => {
+            let params: ContextParams = match serde_json::from_value(
+                request.params.clone().unwrap_or(serde_json::Value::Null),
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    return JsonRpcResponse::error(
+                        id,
+                        -32602,
+                        "Invalid params".to_string(),
+                        Some(serde_json::json!(e.to_string())),
+                    )
+                }
+            };
+
+            match execute_context(state, params).await {
+                Ok(bundle) => JsonRpcResponse::success(id, bundle),
+                Err(e) => {
+                    error!("Context assembly failed: {}", e);
+                    // Use -32000 for "chunk not found" or general errors
+                    JsonRpcResponse::error(
+                        id,
+                        -32000,
+                        "Context assembly failed".to_string(),
                         Some(serde_json::json!(e.to_string())),
                     )
                 }
@@ -276,4 +314,43 @@ async fn execute_search(
         "threshold": params.threshold,
         "deduplicate": deduplicate,
     }))
+}
+
+/// Execute a context assembly request.
+///
+/// Converts ContextParams to ExpandOptions and assembles a context bundle
+/// using the DefaultAssemblyStrategy stored in DaemonState.
+async fn execute_context(
+    state: Arc<DaemonState>,
+    params: ContextParams,
+) -> Result<serde_json::Value> {
+    // Parse chunk_id from string to i64
+    let chunk_id = params
+        .chunk_id
+        .parse::<i64>()
+        .context("Invalid chunk_id: must be a valid integer")?;
+
+    // Convert ExpandConfig to ExpandOptions
+    let options = ExpandOptions {
+        callers: params.expand.callers,
+        callees: params.expand.callees,
+        tests: params.expand.tests,
+        docs: params.expand.docs,
+        config: params.expand.config,
+        max_depth: params.expand.max_depth,
+        routes: params.expand.routes,
+        hooks: params.expand.hooks,
+        jsx_parents: params.expand.jsx_parents,
+        jsx_children: params.expand.jsx_children,
+    };
+
+    // Use the state's context assembler (enables caching across requests)
+    let bundle = state
+        .context_assembler
+        .assemble(chunk_id, params.budget_tokens, options)
+        .await
+        .context("Failed to assemble context bundle")?;
+
+    // Serialize the bundle to JSON
+    serde_json::to_value(bundle).context("Failed to serialize context bundle")
 }
