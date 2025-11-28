@@ -1,8 +1,16 @@
 # UNIWATCH: Unified Watch Command
 
 **Slug**: UNIWATCH
-**Status**: Ready for Implementation
+**Status**: Ready for Implementation (Updated 2025-01-28)
 **Scope**: Add runtime branch detection to existing watch command
+
+## Updates from Project Review
+
+Planning documents updated to reflect current codebase state:
+- **Phase 0 added**: Module exports required before implementation
+- **handle_branch_switch()**: Must be newly implemented (was removed in IDXABS-2001)
+- **Tests**: 4 disabled PostgreSQL tests identified for SQLite migration
+- **E2E script**: Migration from PostgreSQL to SQLite documented
 
 ## Problem
 
@@ -66,12 +74,21 @@ Add `.git/HEAD` file watching to the existing `tokio::select!` event loop. When 
 
 ## Existing Components to Reuse
 
+Components in `indexer/mod.rs` that exist but need export (Phase 0):
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `setup_head_watcher()` | indexer/mod.rs:668 | **Needs `pub` export** |
+| `DebouncedHandler` | indexer/mod.rs:33 | **Needs `pub` export** |
+| `BranchSwitchEvent` | indexer/mod.rs:112 | **Needs `pub` export** |
+
+Components already public and ready to use:
+
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `setup_head_watcher()` | indexer/mod.rs:668 | Creates .git/HEAD watcher |
-| `DebouncedHandler` | indexer/mod.rs:33 | Rate limits rapid events |
-| `BranchSwitchEvent` | indexer/mod.rs:112 | NDJSON event struct |
 | `get_current_branch()` | git/mod.rs | Reads current branch |
+| `incremental_update()` | incremental/mod.rs | Re-indexes worktree files |
+| `get_or_create_worktree()` | db/sqlite/mod.rs | Database worktree management |
 
 ## Success Criteria
 
@@ -84,12 +101,14 @@ Add `.git/HEAD` file watching to the existing `tokio::select!` event loop. When 
 
 ## Agents
 
-| Phase | Agent |
-|-------|-------|
-| Implementation | rust-indexer-engineer |
-| Integration Tests | integration-tester |
-| Verification | verify-ticket |
-| Commit | commit-ticket |
+| Phase | Agent | Notes |
+|-------|-------|-------|
+| Phase 0 (Exports) | rust-indexer-engineer | Simple visibility changes |
+| Phases 1-3 (Implementation) | rust-indexer-engineer | Core feature work |
+| Phase 4 (Enable tests) | rust-indexer-engineer | SQLite test migration |
+| Phase 4 (Integration Tests) | integration-tester | New integration tests |
+| Verification | verify-ticket | Manual testing checklist |
+| Commit | commit-ticket | After verification passes |
 
 ## Next Steps
 

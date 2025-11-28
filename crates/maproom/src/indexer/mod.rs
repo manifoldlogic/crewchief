@@ -29,8 +29,7 @@ pub mod parser;
 ///
 /// The last event timestamp is protected by a `Mutex` to allow safe access
 /// from the event handler thread.
-#[allow(dead_code)] // Used in UNIWATCH-1004 for branch switch debouncing
-struct DebouncedHandler {
+pub struct DebouncedHandler {
     /// Timestamp of the last processed event, protected by mutex for thread safety
     last_event: std::sync::Mutex<std::time::Instant>,
     /// Minimum duration between processed events
@@ -51,7 +50,7 @@ impl DebouncedHandler {
     ///
     /// let debouncer = DebouncedHandler::new(Duration::from_secs(2));
     /// ```
-    fn new(debounce_duration: std::time::Duration) -> Self {
+    pub fn new(debounce_duration: std::time::Duration) -> Self {
         Self {
             last_event: std::sync::Mutex::new(std::time::Instant::now() - debounce_duration),
             debounce_duration,
@@ -72,7 +71,7 @@ impl DebouncedHandler {
     ///
     /// - `true` - Process the event (>= debounce_duration since last event)
     /// - `false` - Ignore the event (< debounce_duration since last event)
-    fn should_handle(&self) -> bool {
+    pub fn should_handle(&self) -> bool {
         let mut last = self.last_event.lock().unwrap();
         let now = std::time::Instant::now();
 
@@ -107,18 +106,17 @@ impl DebouncedHandler {
 /// - `old_worktree_id`: Database worktree ID before the switch (BIGINT/i64)
 /// - `new_worktree_id`: Database worktree ID after the switch (BIGINT/i64)
 /// - `worktree_created`: Whether a new worktree record was created in the database
-#[allow(dead_code)] // Used in tests; will be used when watch_worktree is reimplemented
 #[derive(serde::Serialize)]
-struct BranchSwitchEvent {
+pub struct BranchSwitchEvent {
     #[serde(rename = "type")]
-    event_type: &'static str,
-    timestamp: String,
-    repo: String,
-    old_branch: String,
-    new_branch: String,
-    old_worktree_id: i64,
-    new_worktree_id: i64,
-    worktree_created: bool,
+    pub event_type: &'static str,
+    pub timestamp: String,
+    pub repo: String,
+    pub old_branch: String,
+    pub new_branch: String,
+    pub old_worktree_id: i64,
+    pub new_worktree_id: i64,
+    pub worktree_created: bool,
 }
 
 /// Process Python imports from chunk metadata and create import edges in chunk_edges table
@@ -664,8 +662,7 @@ pub async fn upsert_files(
 ///     Ok(())
 /// }
 /// ```
-#[allow(dead_code)] // Used in tests; will be used when watch_worktree is reimplemented
-fn setup_head_watcher(
+pub fn setup_head_watcher(
     git_head: &Path,
     tx: tokio::sync::mpsc::Sender<notify::Event>,
 ) -> anyhow::Result<notify::RecommendedWatcher> {
