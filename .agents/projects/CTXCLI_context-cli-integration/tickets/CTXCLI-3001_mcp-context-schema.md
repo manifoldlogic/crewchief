@@ -1,9 +1,9 @@
 # Ticket: CTXCLI-3001: Update MCP Context Schema
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -20,13 +20,13 @@ This is the first ticket of Phase 3 (MCP Integration). The MCP context tool's sc
 Reference: [planning/architecture.md](../planning/architecture.md) - Section 4: Schema Synchronization
 
 ## Acceptance Criteria
-- [ ] `routes`, `hooks`, `jsx_parents`, `jsx_children` added to expand schema
-- [ ] Zod validation updated for new fields
-- [ ] TypeScript types updated to match
-- [ ] Schema accepts React-specific options in tool calls
-- [ ] Validation rejects invalid values (wrong types, unknown fields)
-- [ ] Types match Rust `ExpandOptions` exactly (all 10 fields)
-- [ ] Cross-reference comment added: `// Sync with: crates/maproom/src/context/types.rs ExpandOptions`
+- [x] `routes`, `hooks`, `jsx_parents`, `jsx_children` added to expand schema
+- [x] Zod validation updated for new fields
+- [x] TypeScript types updated to match
+- [x] Schema accepts React-specific options in tool calls
+- [x] Validation rejects invalid values (wrong types, unknown fields)
+- [x] Types match Rust `ExpandOptions` exactly (all 10 fields)
+- [x] Cross-reference comment added: `// Sync with: crates/maproom/src/context/types.rs ExpandOptions`
 
 ## Technical Requirements
 - Update Zod schema in `context_schema.ts`

@@ -328,3 +328,143 @@ describe('Context Tool - Integration Scenarios', () => {
     expect(request.expand.tests).toBe(true)
   })
 })
+
+describe('Context Tool - React-Specific Options (CTXCLI-3001)', () => {
+  it('should accept React-specific expand options', () => {
+    const expand = {
+      callers: true,
+      callees: true,
+      tests: true,
+      docs: false,
+      config: false,
+      max_depth: 2,
+      routes: true,
+      hooks: true,
+      jsx_parents: true,
+      jsx_children: true
+    }
+
+    // All 10 fields should be present (matching Rust ExpandOptions)
+    expect(expand).toHaveProperty('callers')
+    expect(expand).toHaveProperty('callees')
+    expect(expand).toHaveProperty('tests')
+    expect(expand).toHaveProperty('docs')
+    expect(expand).toHaveProperty('config')
+    expect(expand).toHaveProperty('max_depth')
+    expect(expand).toHaveProperty('routes')
+    expect(expand).toHaveProperty('hooks')
+    expect(expand).toHaveProperty('jsx_parents')
+    expect(expand).toHaveProperty('jsx_children')
+  })
+
+  it('should accept partial React-specific options', () => {
+    const expand = {
+      hooks: true,
+      jsx_children: true
+    }
+    expect(expand.hooks).toBe(true)
+    expect(expand.jsx_children).toBe(true)
+  })
+
+  it('should accept request with all React-specific options', () => {
+    const request = {
+      chunk_id: '789',
+      budget_tokens: 12000,
+      expand: {
+        callers: false,
+        callees: false,
+        tests: false,
+        docs: false,
+        config: false,
+        max_depth: 5,
+        routes: true,
+        hooks: true,
+        jsx_parents: true,
+        jsx_children: true
+      }
+    }
+
+    expect(request.expand.routes).toBe(true)
+    expect(request.expand.hooks).toBe(true)
+    expect(request.expand.jsx_parents).toBe(true)
+    expect(request.expand.jsx_children).toBe(true)
+    expect(request.expand.max_depth).toBe(5)
+  })
+})
+
+describe('Context Tool - Schema Validation (CTXCLI-3001)', () => {
+  // Import schema from built dist
+  const { validateContextParams } = require('../dist/tools/context_schema.js')
+
+  it('should validate minimal params with defaults', () => {
+    const params = validateContextParams({ chunk_id: '123' })
+    expect(params.chunk_id).toBe('123')
+    expect(params.budget_tokens).toBe(6000) // default
+    expect(params.expand.callers).toBe(false) // default
+    expect(params.expand.max_depth).toBe(2) // default
+  })
+
+  it('should validate all expand options including React-specific', () => {
+    const params = validateContextParams({
+      chunk_id: '456',
+      budget_tokens: 8000,
+      expand: {
+        callers: true,
+        callees: true,
+        tests: true,
+        docs: true,
+        config: true,
+        max_depth: 5,
+        routes: true,
+        hooks: true,
+        jsx_parents: true,
+        jsx_children: true
+      }
+    })
+
+    expect(params.expand.routes).toBe(true)
+    expect(params.expand.hooks).toBe(true)
+    expect(params.expand.jsx_parents).toBe(true)
+    expect(params.expand.jsx_children).toBe(true)
+  })
+
+  it('should apply default false to all boolean expand options', () => {
+    const params = validateContextParams({ chunk_id: '789' })
+
+    // All boolean expand options should default to false
+    expect(params.expand.callers).toBe(false)
+    expect(params.expand.callees).toBe(false)
+    expect(params.expand.tests).toBe(false)
+    expect(params.expand.docs).toBe(false)
+    expect(params.expand.config).toBe(false)
+    expect(params.expand.routes).toBe(false)
+    expect(params.expand.hooks).toBe(false)
+    expect(params.expand.jsx_parents).toBe(false)
+    expect(params.expand.jsx_children).toBe(false)
+  })
+
+  it('should reject max_depth above 10', () => {
+    expect(() => {
+      validateContextParams({
+        chunk_id: '123',
+        expand: { max_depth: 15 }
+      })
+    }).toThrow()
+  })
+
+  it('should reject invalid chunk_id (non-positive)', () => {
+    expect(() => {
+      validateContextParams({ chunk_id: '0' })
+    }).toThrow()
+
+    expect(() => {
+      validateContextParams({ chunk_id: '-5' })
+    }).toThrow()
+  })
+
+  it('should reject invalid chunk_id (non-numeric)', () => {
+    expect(() => {
+      validateContextParams({ chunk_id: 'abc' })
+    }).toThrow()
+  })
+})
