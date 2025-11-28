@@ -1,9 +1,9 @@
 # Ticket: GOMCP-1001: Add Go Devcontainer Feature
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (configuration change, verified by container rebuild)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (configuration change, verified by container rebuild)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -19,10 +19,10 @@ The devcontainer needs Go language support to enable installation of Go-based to
 Reference: plan.md Phase 1 - Add Go Support
 
 ## Acceptance Criteria
-- [ ] Go feature added to `.devcontainer/devcontainer.json` features block
-- [ ] Feature configured with `version: "latest"`
-- [ ] JSON syntax is valid (no parsing errors)
-- [ ] Pattern matches existing features (Node, Rust)
+- [x] Go feature added to `.devcontainer/devcontainer.json` features block
+- [x] Feature configured with `version: "latest"`
+- [x] JSON syntax is valid (no parsing errors)
+- [x] Pattern matches existing features (Node, Rust)
 
 ## Technical Requirements
 - Use feature: `ghcr.io/devcontainers/features/go:1`
