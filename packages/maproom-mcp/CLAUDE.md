@@ -63,11 +63,61 @@ pnpm test
 
 - `search` - Semantic search (FTS/vector/hybrid)
 - `open` - Get code with line ranges
-- `context` - Related chunks (imports, callers, tests)
+- `context` - Context assembly via daemon (imports, callers, tests, React components)
 - `status` - Index stats
 - `scan` - Full repo indexing (via daemon)
 - `upsert` - Update specific files
 - `explain` - Symbol documentation
+
+## Context Tool
+
+Retrieves contextually relevant code around a specific code chunk. Uses the Rust daemon for assembly (20-50x faster than previous PostgreSQL implementation).
+
+### Usage
+
+```typescript
+const result = await server.callTool('context', {
+  chunk_id: '12345',
+  budget_tokens: 6000,  // default: 6000, range: 1000-20000
+  expand: {
+    callers: true,      // functions that call this chunk
+    callees: true,      // functions called by this chunk
+    tests: true,        // related test files
+    docs: false,        // documentation chunks
+    config: false,      // configuration files
+    max_depth: 2,       // relationship traversal depth (1-10)
+    routes: false,      // route handlers
+    hooks: true,        // React hooks
+    jsx_parents: true,  // parent React components
+    jsx_children: true, // child React components
+  },
+})
+```
+
+### Response Format
+
+```typescript
+{
+  items: ContextItem[],    // Array of context chunks
+  total_tokens: number,    // Tokens used
+  budget_tokens: number,   // Budget from request
+  budget_remaining: number,// Remaining budget
+  truncated: boolean,      // True if budget exceeded
+  metadata: {
+    chunk_id: number,
+    expand_options: object,
+  }
+}
+```
+
+### Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `DAEMON_START_FAILED` | Daemon binary not found | Ensure crewchief-maproom is installed |
+| `CHUNK_NOT_FOUND` | Invalid chunk_id | Use search tool to find valid chunk IDs |
+| `CONTEXT_TIMEOUT` | Request took too long | Reduce budget_tokens or check database |
+| `INVALID_PARAMS` | Bad parameters | Check chunk_id is positive integer |
 
 ## Rust Daemon
 

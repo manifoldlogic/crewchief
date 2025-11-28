@@ -102,7 +102,74 @@ cargo run --bin crewchief-maproom -- generate-embeddings --repo myrepo
 
 # 6. Hybrid search (FTS + vector)
 cargo run --bin crewchief-maproom -- search --query "authentication" --repo myrepo --mode hybrid
+
+# 7. Get context for a code chunk
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --json
 ```
+
+## Context Command
+
+Retrieve contextually relevant code around a specific chunk (callers, callees, tests, imports).
+
+### Basic Usage
+
+```bash
+# Get context for chunk ID from search results
+cargo run --bin crewchief-maproom -- context --chunk-id 12345
+
+# Output as JSON
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --json
+```
+
+### Expand Options
+
+```bash
+# Include callers and callees
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees
+
+# Include tests and documentation
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --tests --docs
+
+# Custom budget and depth
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --budget 4000 --max-depth 3
+
+# All options
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 \
+  --callers --callees --tests --docs --config \
+  --routes --hooks --jsx-parents --jsx-children \
+  --budget 6000 --max-depth 2 --json
+```
+
+### Daemon Context Method
+
+The daemon also exposes context via JSON-RPC:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "context",
+  "params": {
+    "chunk_id": "12345",
+    "budget_tokens": 6000,
+    "expand": {
+      "callers": true,
+      "callees": true,
+      "tests": true,
+      "max_depth": 2
+    }
+  },
+  "id": 1
+}
+```
+
+### Error Codes
+
+| Code | Meaning |
+|------|---------|
+| -32000 | Chunk not found |
+| -32001 | File not found on disk |
+| -32002 | Budget exceeded |
+| -32602 | Invalid parameters |
 
 ## Key Dependencies
 

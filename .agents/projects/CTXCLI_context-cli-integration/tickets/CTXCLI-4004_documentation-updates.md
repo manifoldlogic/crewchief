@@ -1,9 +1,9 @@
 # Ticket: CTXCLI-4004: Documentation Updates
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation only)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - technical-researcher
@@ -19,12 +19,12 @@ This is the final ticket of Phase 4 (Testing & Polish). Documentation must be up
 Reference: [planning/plan.md](../planning/plan.md) - CTXCLI-4004
 
 ## Acceptance Criteria
-- [ ] `crates/maproom/CLAUDE.md` updated with context command usage
-- [ ] `packages/maproom-mcp/CLAUDE.md` updated with context tool changes
-- [ ] Common errors and troubleshooting documented
-- [ ] Examples for CLI usage provided
-- [ ] Examples for MCP tool usage provided
-- [ ] Documentation is clear and accurate
+- [x] `crates/maproom/CLAUDE.md` updated with context command usage
+- [x] `packages/maproom-mcp/CLAUDE.md` updated with context tool changes
+- [x] Common errors and troubleshooting documented
+- [x] Examples for CLI usage provided
+- [x] Examples for MCP tool usage provided
+- [x] Documentation is clear and accurate
 
 ## Technical Requirements
 - Follow existing CLAUDE.md format and style
