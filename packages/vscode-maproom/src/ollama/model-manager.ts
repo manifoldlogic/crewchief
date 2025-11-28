@@ -7,7 +7,9 @@
  */
 
 import * as vscode from 'vscode'
-import { OllamaClient, OllamaApiError, createOllamaClient } from './client'
+// NOTE: Ollama endpoint fallback logic is centralized in ./client.ts
+// See getOllamaEndpointFallbackList() for the single source of truth
+import { OllamaClient, OllamaApiError, createOllamaClientWithFallback } from './client'
 import { OllamaNotRunningError, ModelPullError, ModelCheckError } from './errors'
 
 /** Default embedding model used by the extension */
@@ -65,10 +67,11 @@ export async function ensureOllamaModel(
   modelName: string = DEFAULT_EMBEDDING_MODEL,
   options: EnsureModelOptions = {}
 ): Promise<void> {
-  const client = createOllamaClient()
+  // Try to find a working Ollama endpoint (with devcontainer fallback)
+  const client = await createOllamaClientWithFallback()
 
-  // Check if Ollama is running
-  if (!(await client.isRunning())) {
+  // No working endpoint found
+  if (!client) {
     throw new OllamaNotRunningError()
   }
 
@@ -200,13 +203,14 @@ export async function showModelPullError(
 export async function checkModelAvailability(
   modelName: string = DEFAULT_EMBEDDING_MODEL
 ): Promise<ModelCheckResult> {
-  const client = createOllamaClient()
+  // Try to find a working Ollama endpoint (with devcontainer fallback)
+  const client = await createOllamaClientWithFallback()
+
+  if (!client) {
+    return { exists: false, error: 'Ollama is not running' }
+  }
 
   try {
-    if (!(await client.isRunning())) {
-      return { exists: false, error: 'Ollama is not running' }
-    }
-
     const exists = await client.hasModel(modelName)
     return { exists }
   } catch (error) {

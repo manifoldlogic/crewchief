@@ -22,7 +22,9 @@ import { homedir } from 'os'
 import * as path from 'path'
 import { SecretsManager } from '../config/secrets'
 import { MCPConfigWriter } from '../config/mcp-writer'
-import { createOllamaClient } from '../ollama/client'
+// NOTE: Ollama endpoint fallback logic is centralized in ../ollama/client.ts
+// See getOllamaEndpointFallbackList() for the single source of truth
+import { createOllamaClientWithFallback } from '../ollama/client'
 import { resolveDatabaseConfig, type DatabaseConfig } from '../services/database-checker'
 
 /**
@@ -146,6 +148,21 @@ export function getConfiguredProvider(
 }
 
 /**
+ * Set the configured provider in workspace state
+ *
+ * Used for zero-config setup to default to Ollama without showing wizard.
+ *
+ * @param context - Extension context
+ * @param provider - Provider to set
+ */
+export async function setConfiguredProvider(
+  context: vscode.ExtensionContext,
+  provider: EmbeddingProvider
+): Promise<void> {
+  await context.workspaceState.update(PROVIDER_STATE_KEY, provider)
+}
+
+/**
  * Build provider options for QuickPick
  *
  * @param ollamaRunning - Whether Ollama was detected running
@@ -193,8 +210,9 @@ function buildProviderOptions(ollamaRunning: boolean): ProviderOption[] {
  * @returns Promise resolving to true if Ollama detected, false otherwise
  */
 export async function detectOllama(): Promise<boolean> {
-  const client = createOllamaClient()
-  return client.isRunning()
+  // Try to find a working Ollama endpoint (with devcontainer fallback)
+  const client = await createOllamaClientWithFallback()
+  return client !== undefined
 }
 
 /**

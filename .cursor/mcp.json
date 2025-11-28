@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@crewchief/maproom-mcp@3.0.0"
+        "@crewchief/maproom-mcp"
       ],
       "env": {
         "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/maproom.db",

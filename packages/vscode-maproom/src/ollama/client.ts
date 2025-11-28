@@ -21,6 +21,9 @@ const ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'host.docker.internal']
 /** Default Ollama endpoint */
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:11434'
 
+/** Fallback endpoint for devcontainers (host machine) */
+const DOCKER_HOST_ENDPOINT = 'http://host.docker.internal:11434'
+
 /** Error thrown when model name validation fails */
 export class InvalidModelNameError extends Error {
   constructor(modelName: string) {
@@ -328,4 +331,121 @@ export function getOllamaEndpoint(): string {
  */
 export function createOllamaClient(): OllamaClient {
   return new OllamaClient(getOllamaEndpoint())
+}
+
+/**
+ * Get list of Ollama endpoints to try, in priority order
+ *
+ * This is the SINGLE SOURCE OF TRUTH for Ollama endpoint fallback logic.
+ * All endpoint detection should use this function to ensure consistency.
+ *
+ * Priority order:
+ * 1. User-configured endpoint (from VS Code settings maproom.ollama.endpoint)
+ * 2. localhost:11434 (default)
+ * 3. host.docker.internal:11434 (devcontainer/docker fallback)
+ *
+ * IMPORTANT: If you need to modify the fallback logic, this is the ONLY place
+ * to change. The following functions use this list:
+ * - createOllamaClientWithFallback() - returns working client or undefined
+ *
+ * @returns Array of endpoint URLs to try in order
+ */
+export function getOllamaEndpointFallbackList(): string[] {
+  const configuredEndpoint = getOllamaEndpoint()
+  const endpoints = [configuredEndpoint]
+
+  // Add fallback endpoints if not already in the list
+  if (configuredEndpoint !== DEFAULT_ENDPOINT) {
+    endpoints.push(DEFAULT_ENDPOINT)
+  }
+  if (!endpoints.includes(DOCKER_HOST_ENDPOINT)) {
+    endpoints.push(DOCKER_HOST_ENDPOINT)
+  }
+
+  return endpoints
+}
+
+/**
+ * Result of Ollama detection with fallback
+ */
+export interface OllamaDetectionResult {
+  /** OllamaClient instance if found */
+  client: OllamaClient
+  /** The endpoint URL that worked (e.g., "http://host.docker.internal:11434") */
+  endpoint: string
+}
+
+/**
+ * Cached detected Ollama endpoint from last successful detection
+ * Used by getDetectedOllamaEndpoint() to retrieve without re-probing
+ */
+let cachedDetectedEndpoint: string | null = null
+
+/**
+ * Create an OllamaClient with automatic endpoint detection
+ *
+ * Uses getOllamaEndpointFallbackList() to try multiple endpoints in order
+ * until one responds. This enables zero-config for devcontainers where
+ * Ollama runs on the host machine.
+ *
+ * IMPORTANT: When Ollama is found, the endpoint is cached and can be retrieved
+ * via getDetectedOllamaEndpoint() for passing to the Rust binary.
+ *
+ * @returns Promise resolving to OllamaClient with working endpoint, or undefined if none found
+ */
+export async function createOllamaClientWithFallback(): Promise<OllamaClient | undefined> {
+  const result = await detectOllamaWithFallback()
+  return result?.client
+}
+
+/**
+ * Detect Ollama with fallback and return both client and endpoint
+ *
+ * Uses getOllamaEndpointFallbackList() to try multiple endpoints in order
+ * until one responds. Caches the detected endpoint for later retrieval.
+ *
+ * @returns Promise resolving to detection result, or undefined if not found
+ */
+export async function detectOllamaWithFallback(): Promise<OllamaDetectionResult | undefined> {
+  const endpoints = getOllamaEndpointFallbackList()
+
+  // Try each endpoint until one works
+  for (const endpoint of endpoints) {
+    try {
+      const client = new OllamaClient(endpoint)
+      if (await client.isRunning()) {
+        // Cache the detected endpoint
+        cachedDetectedEndpoint = endpoint
+        return { client, endpoint }
+      }
+    } catch {
+      // Invalid endpoint or connection failed, try next
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Get the last detected Ollama endpoint
+ *
+ * Returns the endpoint URL from the last successful Ollama detection.
+ * This should be passed to the Rust binary via MAPROOM_EMBEDDING_API_ENDPOINT
+ * when Ollama is the configured provider.
+ *
+ * IMPORTANT: This returns the cached endpoint from the last call to
+ * createOllamaClientWithFallback() or detectOllamaWithFallback().
+ * If Ollama hasn't been detected yet, returns null.
+ *
+ * @returns The detected endpoint URL, or null if not detected
+ */
+export function getDetectedOllamaEndpoint(): string | null {
+  return cachedDetectedEndpoint
+}
+
+/**
+ * Clear the cached Ollama endpoint (for testing)
+ */
+export function clearDetectedOllamaEndpoint(): void {
+  cachedDetectedEndpoint = null
 }

@@ -1,11 +1,9 @@
 /**
  * Tests for database URL resolution functions
  *
- * Verifies the four-tier database URL resolution:
- * 1. Explicit MAPROOM_DATABASE_URL
- * 2. IN_DEVCONTAINER detection
- * 3. SQLite default (~/.maproom/maproom.db if exists)
- * 4. Default localhost:5433
+ * Verifies SQLite-only database URL resolution:
+ * 1. Explicit MAPROOM_DATABASE_URL (must be sqlite://)
+ * 2. SQLite default (~/.maproom/maproom.db)
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
@@ -36,7 +34,6 @@ describe('resolveDatabase', () => {
     // Reset environment before each test
     process.env = { ...originalEnv }
     delete process.env.MAPROOM_DATABASE_URL
-    delete process.env.IN_DEVCONTAINER
     mockExistsSync.mockReturnValue(false)
   })
 
@@ -45,33 +42,24 @@ describe('resolveDatabase', () => {
   })
 
   test('uses MAPROOM_DATABASE_URL when set', () => {
-    process.env.MAPROOM_DATABASE_URL = 'postgresql://custom@host:5432/db'
-    expect(resolveDatabase()).toBe('postgresql://custom@host:5432/db')
+    process.env.MAPROOM_DATABASE_URL = 'sqlite:///custom/path/db.sqlite'
+    expect(resolveDatabase()).toBe('sqlite:///custom/path/db.sqlite')
   })
 
-  test('uses container hostname when IN_DEVCONTAINER=true', () => {
-    process.env.IN_DEVCONTAINER = 'true'
-    expect(resolveDatabase()).toBe('postgresql://maproom:maproom@maproom-postgres:5432/maproom')
-  })
-
-  test('defaults to localhost:5433 when no env vars set', () => {
-    expect(resolveDatabase()).toBe('postgresql://maproom:maproom@localhost:5433/maproom')
-  })
-
-  test('MAPROOM_DATABASE_URL takes precedence over IN_DEVCONTAINER', () => {
-    process.env.MAPROOM_DATABASE_URL = 'postgresql://explicit@host:5432/db'
-    process.env.IN_DEVCONTAINER = 'true'
-    expect(resolveDatabase()).toBe('postgresql://explicit@host:5432/db')
-  })
-
-  test('handles IN_DEVCONTAINER=false as not set', () => {
-    process.env.IN_DEVCONTAINER = 'false'
-    expect(resolveDatabase()).toBe('postgresql://maproom:maproom@localhost:5433/maproom')
+  test('defaults to ~/.maproom/maproom.db when no env vars set', () => {
+    const expectedPath = `${homedir()}/.maproom/maproom.db`
+    expect(resolveDatabase()).toBe(`sqlite://${expectedPath}`)
   })
 
   test('handles empty MAPROOM_DATABASE_URL as not set', () => {
     process.env.MAPROOM_DATABASE_URL = ''
-    expect(resolveDatabase()).toBe('postgresql://maproom:maproom@localhost:5433/maproom')
+    const expectedPath = `${homedir()}/.maproom/maproom.db`
+    expect(resolveDatabase()).toBe(`sqlite://${expectedPath}`)
+  })
+
+  test('throws error for postgresql:// URL', () => {
+    process.env.MAPROOM_DATABASE_URL = 'postgresql://user:pass@host:5432/db'
+    expect(() => resolveDatabase()).toThrow('Only SQLite is supported')
   })
 })
 
@@ -96,7 +84,6 @@ describe('resolveDatabaseConfig', () => {
   beforeEach(() => {
     process.env = { ...originalEnv }
     delete process.env.MAPROOM_DATABASE_URL
-    delete process.env.IN_DEVCONTAINER
     mockExistsSync.mockReturnValue(false)
   })
 
@@ -135,30 +122,21 @@ describe('resolveDatabaseConfig', () => {
     })
   })
 
-  describe('PostgreSQL URL parsing', () => {
-    test('parses postgresql:// URL', () => {
+  describe('PostgreSQL rejection', () => {
+    test('throws error for postgresql:// URL', () => {
       process.env.MAPROOM_DATABASE_URL = 'postgresql://user:pass@host:5432/db'
-      const config = resolveDatabaseConfig()
-
-      expect(config.type).toBe('postgresql')
-      expect(config.url).toBe('postgresql://user:pass@host:5432/db')
-      expect(config.path).toBeUndefined()
+      expect(() => resolveDatabaseConfig()).toThrow('Only SQLite is supported')
     })
 
-    test('parses postgres:// URL', () => {
+    test('throws error for postgres:// URL', () => {
       process.env.MAPROOM_DATABASE_URL = 'postgres://user:pass@host:5432/db'
-      const config = resolveDatabaseConfig()
-
-      expect(config.type).toBe('postgresql')
-      expect(config.url).toBe('postgres://user:pass@host:5432/db')
-      expect(config.path).toBeUndefined()
+      expect(() => resolveDatabaseConfig()).toThrow('Only SQLite is supported')
     })
   })
 
   describe('resolution priority', () => {
-    test('explicit SQLite URL takes precedence over everything', () => {
+    test('explicit SQLite URL takes precedence', () => {
       process.env.MAPROOM_DATABASE_URL = 'sqlite:///custom/path.db'
-      process.env.IN_DEVCONTAINER = 'true'
       mockExistsSync.mockReturnValue(true)
 
       const config = resolveDatabaseConfig()
@@ -166,17 +144,7 @@ describe('resolveDatabaseConfig', () => {
       expect(config.path).toBe('/custom/path.db')
     })
 
-    test('DevContainer takes precedence over SQLite auto-detection', () => {
-      process.env.IN_DEVCONTAINER = 'true'
-      mockExistsSync.mockReturnValue(true)
-
-      const config = resolveDatabaseConfig()
-      expect(config.type).toBe('postgresql')
-      expect(config.url).toBe('postgresql://maproom:maproom@maproom-postgres:5432/maproom')
-    })
-
-    test('detects SQLite when ~/.maproom/maproom.db exists', () => {
-      mockExistsSync.mockReturnValue(true)
+    test('defaults to ~/.maproom/maproom.db when no URL set', () => {
       const expectedPath = `${homedir()}/.maproom/maproom.db`
 
       const config = resolveDatabaseConfig()
@@ -184,15 +152,6 @@ describe('resolveDatabaseConfig', () => {
       expect(config.type).toBe('sqlite')
       expect(config.url).toBe(`sqlite://${expectedPath}`)
       expect(config.path).toBe(expectedPath)
-      expect(mockExistsSync).toHaveBeenCalledWith(expectedPath)
-    })
-
-    test('falls back to PostgreSQL when SQLite default not found', () => {
-      mockExistsSync.mockReturnValue(false)
-
-      const config = resolveDatabaseConfig()
-      expect(config.type).toBe('postgresql')
-      expect(config.url).toBe('postgresql://maproom:maproom@localhost:5433/maproom')
     })
   })
 })

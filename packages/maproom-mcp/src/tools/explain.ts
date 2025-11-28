@@ -38,9 +38,10 @@ const DEFAULT_CONFIG: ExplainToolConfig = {
 
 /**
  * Query chunk details from database
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param chunkId - Chunk ID
  * @returns Chunk data with file and worktree information
+ * @deprecated Legacy function for PostgreSQL. Not used with SQLite backend.
  */
 async function queryChunkDetails(client: Client, chunkId: number) {
   const { rows } = await client.query(
@@ -77,9 +78,10 @@ async function queryChunkDetails(client: Client, chunkId: number) {
 
 /**
  * Query relationships for a chunk
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param chunkId - Chunk ID
  * @returns Relationships grouped by type
+ * @deprecated Legacy function for PostgreSQL. Not used with SQLite backend.
  */
 async function queryChunkRelationships(client: Client, chunkId: number) {
   // Query outgoing edges (imports, exports, calls)
@@ -200,9 +202,10 @@ async function loadCodePreview(
 
 /**
  * Generate symbol card from chunk data
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param chunkId - Chunk ID
  * @returns Symbol card object
+ * @deprecated Legacy function for PostgreSQL. Not used with SQLite backend.
  */
 async function generateSymbolCard(
   client: Client,
@@ -263,7 +266,7 @@ async function generateSymbolCard(
 /**
  * Execute Explain tool handler
  * @param params - Tool parameters
- * @param client - PostgreSQL client
+ * @param client - Database client (legacy, not used with SQLite)
  * @param config - Configuration options
  * @returns Formatted markdown explanation
  */

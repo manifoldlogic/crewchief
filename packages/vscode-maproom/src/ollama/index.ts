@@ -7,7 +7,12 @@
 
 export {
   getOllamaEndpoint,
+  getOllamaEndpointFallbackList,
   createOllamaClient,
+  createOllamaClientWithFallback,
+  detectOllamaWithFallback,
+  getDetectedOllamaEndpoint,
+  clearDetectedOllamaEndpoint,
   OllamaClient,
   InvalidModelNameError,
   InvalidEndpointError,
@@ -15,6 +20,7 @@ export {
   type OllamaModel,
   type OllamaTagsResponse,
   type PullProgress,
+  type OllamaDetectionResult,
 } from './client'
 
 export {

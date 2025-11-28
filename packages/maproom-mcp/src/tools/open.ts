@@ -47,7 +47,7 @@ const DEFAULT_CONFIG: OpenToolConfig = {
  * Handles database pollution gracefully by trying all matching worktrees in order
  * until a valid filesystem path is found.
  *
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param worktreeName - Name of worktree to lookup
  * @param relpath - Relative path to file (used for database join and validation)
  * @param expectedRoot - Optional root path for security validation; skips candidates with abs_path outside this directory
@@ -56,6 +56,7 @@ const DEFAULT_CONFIG: OpenToolConfig = {
  *
  * @throws {ValidationError} FILE_NOT_FOUND - No worktree found with the given name
  * @throws {ValidationError} FILE_NOT_FOUND - All candidate worktrees failed filesystem validation (database pollution detected)
+ * @deprecated Legacy function for PostgreSQL. Not used with SQLite backend.
  *
  * @example
  * // Single valid worktree
@@ -231,7 +232,7 @@ async function readFileFromFilesystem(
 /**
  * Execute Open tool handler
  * @param params - Tool parameters
- * @param client - PostgreSQL client
+ * @param client - Database client (legacy, not used with SQLite)
  * @param config - Configuration options
  * @returns FileContent object
  * @throws ValidationError for invalid parameters or file access errors

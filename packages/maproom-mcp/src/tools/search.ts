@@ -49,7 +49,6 @@ import { validateSearchParams } from './search_schema.js'
 import { ValidationError } from '../utils/validation.js'
 import { ProcessError } from '../utils/process.js'
 import { getDaemonClient } from '../daemon.js'
-import { resolveDatabaseConfig } from '../utils/resolve-database.js'
 import {
   DaemonError,
   DaemonStartError,
@@ -131,10 +130,11 @@ interface RustSearchOutput {
  * The Rust binary doesn't return chunk IDs, so we need to query them
  * from the database using relpath + start_line + end_line.
  *
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param repo - Repository name
  * @param hits - Search hits from Rust binary
  * @returns Map of "relpath:start_line:end_line" -> chunk_id
+ * @deprecated Legacy function for PostgreSQL. Not used with SQLite backend.
  */
 async function fetchChunkIds(
   client: Client,
@@ -189,7 +189,7 @@ async function fetchChunkIds(
  * results with chunk IDs from the database.
  *
  * @param params - Tool parameters
- * @param client - PostgreSQL client (for chunk ID lookup)
+ * @param client - Database client (legacy, not used with SQLite)
  * @returns SearchBundle with results
  * @throws ValidationError for invalid parameters
  * @throws ProcessError for binary execution failures
@@ -320,21 +320,9 @@ export async function handleSearchTool(
 
   log.debug({ hitCount: rustOutput.hits.length }, 'Received search results from daemon')
 
-  // Fetch chunk IDs from database (skip for SQLite - no PostgreSQL available)
-  const dbConfig = resolveDatabaseConfig()
-  let chunkIdMap: Map<string, number>
-
-  if (dbConfig.type === 'sqlite') {
-    // SQLite: daemon doesn't return chunk IDs and we can't query PostgreSQL
-    log.warn(
-      { hits: rustOutput.hits.length },
-      'SQLite mode: chunk IDs unavailable, using 0'
-    )
-    chunkIdMap = new Map() // Empty map = all chunk_id will be 0
-  } else {
-    // PostgreSQL: use existing fetchChunkIds
-    chunkIdMap = await fetchChunkIds(client, repo, rustOutput.hits)
-  }
+  // Chunk IDs are not available from SQLite daemon
+  // Legacy PostgreSQL code path has been removed
+  const chunkIdMap = new Map<string, number>() // Empty map = all chunk_id will be 0
 
   // Transform Rust hits to SearchResult format (SEMRANK-2006: include score_breakdown if debug=true)
   const hits: SearchResult[] = rustOutput.hits.map((hit) => {

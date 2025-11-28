@@ -1,6 +1,6 @@
 # @crewchief/maproom-mcp
 
-MCP server for semantic code search powered by PostgreSQL, pgvector, and your choice of embedding provider.
+MCP server for semantic code search powered by SQLite and your choice of embedding provider.
 
 ## Breaking Changes (v3.0.0)
 
@@ -9,8 +9,7 @@ MCP server for semantic code search powered by PostgreSQL, pgvector, and your ch
 ### What Changed
 
 - **Removed**: `setup`, `scan`, `watch` CLI subcommands
-- **Removed**: Docker orchestration (PostgreSQL, Ollama container management)
-- **Removed**: Container-based MCP server
+- **Removed**: Docker orchestration (container management)
 - **New**: Database must exist before MCP server starts
 - **New**: MCP server runs on host via `npx`, not in a container
 
@@ -22,7 +21,7 @@ MCP server for semantic code search powered by PostgreSQL, pgvector, and your ch
 
 ## Features
 
-- **Fast Hybrid Search** - Vector similarity + full-text search with PostgreSQL
+- **Fast Hybrid Search** - Vector similarity + full-text search with SQLite
 - **Semantic Ranking** - Implementations rank higher than tests or docs
 - **Choice of Providers** - OpenAI (recommended), Google Vertex AI, or Ollama
 - **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
@@ -44,7 +43,7 @@ Add to your editor's MCP configuration:
       "command": "npx",
       "args": ["-y", "@crewchief/maproom-mcp"],
       "env": {
-        "MAPROOM_DATABASE_URL": "postgresql://maproom:maproom@localhost:5433/maproom",
+        "MAPROOM_DATABASE_URL": "sqlite:///Users/you/.maproom/maproom.db",
         "MAPROOM_EMBEDDING_PROVIDER": "openai",
         "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
       }
@@ -57,12 +56,12 @@ Add to your editor's MCP configuration:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `MAPROOM_DATABASE_URL` | PostgreSQL connection string | Auto-detected¹ |
+| `MAPROOM_DATABASE_URL` | SQLite database URL | Auto-detected¹ |
 | `MAPROOM_EMBEDDING_PROVIDER` | `openai`, `google`, or `ollama` | Yes |
 | `OPENAI_API_KEY` | OpenAI API key | If provider=openai |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials path | If provider=google |
 
-¹ Auto-detection: `MAPROOM_DATABASE_URL` > `IN_DEVCONTAINER` > `localhost:5433`
+¹ Auto-detection: `MAPROOM_DATABASE_URL` > `~/.maproom/maproom.db`
 
 ## MCP Tools
 
@@ -77,49 +76,31 @@ Add to your editor's MCP configuration:
 
 If you were using the CLI commands (`setup`, `scan`, `watch`), follow these steps:
 
-### Step 1: Start PostgreSQL
-
-```bash
-docker run -d --name maproom-postgres \
-  -e POSTGRES_USER=maproom \
-  -e POSTGRES_PASSWORD=maproom \
-  -e POSTGRES_DB=maproom \
-  -p 5433:5432 \
-  pgvector/pgvector:pg16
-```
-
-### Step 2: Run Migrations
+### Step 1: Create Index
 
 ```bash
 # Install the CLI if needed
 npm install -g @crewchief/cli
 
-# Run database migrations
-crewchief-maproom db migrate
-```
-
-### Step 3: Configure MCP Client
-
-Add the MCP configuration above to your editor.
-
-### Step 4: Index Your Codebase
-
-```bash
+# Scan your repository (creates database at ~/.maproom/maproom.db)
 crewchief-maproom scan /path/to/your/repo
 ```
+
+### Step 2: Configure MCP Client
+
+Add the MCP configuration above to your editor.
 
 ## Database Connection
 
 The MCP server auto-detects the database URL:
 
-1. **Explicit**: Uses `MAPROOM_DATABASE_URL` if set
-2. **DevContainer**: Uses `maproom-postgres:5432` if `IN_DEVCONTAINER=true`
-3. **Default**: Uses `localhost:5433` (VSCode extension port)
+1. **Explicit**: Uses `MAPROOM_DATABASE_URL` if set (must be `sqlite://...`)
+2. **Default**: Uses `~/.maproom/maproom.db`
 
 ## Requirements
 
 - Node.js 18+
-- PostgreSQL with pgvector extension
+- SQLite database (auto-created on first scan)
 - One of: OpenAI API key, Google credentials, or Ollama installation
 
 ## Semantic Ranking

@@ -94,7 +94,7 @@ export function registerMaproomCommands(program: Command) {
 
   maproom
     .command('scan')
-    .description('Scan and index repository files into PostgreSQL (auto-detects git context)')
+    .description('Scan and index repository files into SQLite (auto-detects git context)')
     .allowUnknownOption(true)
     .argument('[args...]')
     .addHelpText(
@@ -134,7 +134,7 @@ export function registerMaproomCommands(program: Command) {
   const db = maproom.command('db').description('Database operations')
 
   db.command('migrate')
-    .description('Initialize/migrate PostgreSQL database for code indexing')
+    .description('Initialize/migrate SQLite database for code indexing')
     .allowUnknownOption(true)
     .argument('[args...]')
     .action((args) => runMaproomForward(['db', 'migrate', ...(args || [])]))

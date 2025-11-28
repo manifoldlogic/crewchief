@@ -4,7 +4,7 @@ Working with the MCP server at `/packages/maproom-mcp`.
 
 ## Overview
 
-Single-purpose MCP server for semantic code search. Runs via stdio, expects database to exist.
+Single-purpose MCP server for semantic code search. Runs via stdio, expects SQLite database to exist.
 
 ```bash
 # Usage (via MCP client)
@@ -22,20 +22,19 @@ MCP Server (index.ts)
     ↓ spawns daemon on first request
 Rust Daemon (crewchief-maproom serve)
     ↓ queries
-PostgreSQL + pgvector
+SQLite Database
 ```
 
 ## Database Connection
 
-Three-tier auto-detection:
+Two-tier auto-detection:
 
-1. **Explicit**: `MAPROOM_DATABASE_URL` environment variable
-2. **DevContainer**: `IN_DEVCONTAINER=true` → uses `maproom-postgres:5432`
-3. **Default**: `localhost:5433` (VSCode extension port)
+1. **Explicit**: `MAPROOM_DATABASE_URL` environment variable (must be `sqlite://...`)
+2. **Default**: `~/.maproom/maproom.db`
 
 ```bash
 # Override example
-MAPROOM_DATABASE_URL=postgresql://user:pass@host:5432/db npx @crewchief/maproom-mcp
+MAPROOM_DATABASE_URL=sqlite:///path/to/custom.db npx @crewchief/maproom-mcp
 ```
 
 ## Directory Structure
@@ -71,7 +70,7 @@ pnpm test
 
 ## Context Tool
 
-Retrieves contextually relevant code around a specific code chunk. Uses the Rust daemon for assembly (20-50x faster than previous PostgreSQL implementation).
+Retrieves contextually relevant code around a specific code chunk. Uses the Rust daemon for assembly.
 
 ### Usage
 
@@ -131,17 +130,15 @@ Wraps `../../packages/cli/bin/<platform>/crewchief-maproom`:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MAPROOM_DATABASE_URL` | Database connection string | Auto-detected |
-| `IN_DEVCONTAINER` | Set `true` for devcontainer network | Not set |
-| `MAPROOM_EMBEDDING_PROVIDER` | `openai`, `google`, or `ollama` | Required |
+| `MAPROOM_DATABASE_URL` | SQLite database URL (sqlite://...) | `~/.maproom/maproom.db` |
+| `MAPROOM_EMBEDDING_PROVIDER` | `openai`, `google`, or `ollama` | Auto-detected |
 | `OPENAI_API_KEY` | OpenAI API key (if using openai) | Required for openai |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials (if using google) | Required for google |
 
 ## Key Points
 
 - **Single purpose**: Run MCP server only (no setup/scan/watch commands)
-- **Database required**: PostgreSQL with pgvector must be running
+- **Database required**: SQLite database must exist at configured path
 - **ESM modules**
 - **Zod** for MCP validation
 - **Pino** for logging
-- **pg** for PostgreSQL

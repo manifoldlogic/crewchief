@@ -34,8 +34,8 @@ import { reconcileChanges } from './process/reconcile'
 import {
   runSetupWizard,
   getConfiguredProvider,
+  setConfiguredProvider,
   registerSetupCommand,
-  showNoSqliteGuidance,
 } from './ui/setupWizard'
 import { SecretsManager } from './config/secrets'
 import {
@@ -50,7 +50,9 @@ import {
   OllamaNotRunningError,
   ModelPullError,
   DEFAULT_EMBEDDING_MODEL,
+  getDetectedOllamaEndpoint,
 } from './ollama'
+import { runInitialScan } from './process/scan'
 
 /**
  * Output channel for extension logging
@@ -156,16 +158,18 @@ export function activate(context: vscode.ExtensionContext): void {
   outputChannel.appendLine('Commands registered')
 
   // Step 5: Check for provider configuration (fast, synchronous)
-  const configuredProvider = getConfiguredProvider(context)
+  // Default to Ollama for zero-config experience - user can change via setup wizard
+  let configuredProvider = getConfiguredProvider(context)
   if (!configuredProvider) {
-    // No provider configured - show setup wizard
-    outputChannel.appendLine('No provider configured, showing setup wizard...')
-    void runFirstTimeSetup(context, workspaceFolder.uri.fsPath)
+    outputChannel.appendLine('No provider configured, defaulting to Ollama...')
+    configuredProvider = 'ollama'
+    void setConfiguredProvider(context, 'ollama')
   } else {
-    // Provider already configured - proceed with normal initialization
     outputChannel.appendLine(`Provider configured: ${configuredProvider}`)
-    void initializeServices(context, workspaceFolder.uri.fsPath)
   }
+
+  // Proceed with initialization (zero-config, no setup wizard required)
+  void initializeServices(context, workspaceFolder.uri.fsPath)
 
   // Step 6: Check and prompt for MCP setup if needed (fast, asynchronous)
   void checkAndPromptForSetup(context)
@@ -182,56 +186,6 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   console.log(`Maproom extension activated in ${activationTime.toFixed(0)}ms (background initialization starting...)`)
 }
-
-/**
- * First-time setup flow
- *
- * Runs the setup wizard to select embedding provider, then proceeds with
- * normal initialization (Ollama model check, reconciliation, watch).
- * If user cancels setup, initialization is skipped.
- *
- * @param context - Extension context
- * @param workspaceRoot - Workspace root path
- */
-async function runFirstTimeSetup(
-  context: vscode.ExtensionContext,
-  workspaceRoot: string
-): Promise<void> {
-  try {
-    // Run setup wizard
-    const provider = await runSetupWizard(context)
-
-    if (!provider) {
-      // User cancelled setup
-      outputChannel?.appendLine('Setup cancelled by user')
-      vscode.window.showInformationMessage(
-        'Maproom setup cancelled. Run "Maproom: Setup" to configure later.'
-      )
-      statusBar?.setState('idle')
-      return
-    }
-
-    // Setup complete - show success message
-    outputChannel?.appendLine(`Setup complete: ${provider} selected`)
-    vscode.window.showInformationMessage(
-      `Maproom configured to use ${provider.toUpperCase()} for embeddings`
-    )
-
-    // Proceed with normal initialization
-    await initializeServices(context, workspaceRoot)
-  } catch (error: any) {
-    const errorMessage = `Setup failed: ${error.message}`
-    outputChannel?.appendLine(`ERROR: ${errorMessage}`)
-    console.error(errorMessage, error)
-
-    // Show error notification
-    vscode.window.showErrorMessage(errorMessage)
-
-    // Set status bar to error state
-    statusBar?.setState('error', error.message)
-  }
-}
-
 
 /**
  * Background service initialization
@@ -291,18 +245,55 @@ async function initializeServices(
       outputChannel?.appendLine(`Using ${provider} provider - skipping Ollama model check`)
     }
 
-    // Step 2: Check SQLite database availability
+    // Step 2: Check SQLite database availability and run initial scan if needed
     outputChannel?.appendLine(`Checking database at ${dbConfig.path || dbConfig.url}...`)
     const dbAvailable = await checkDatabaseAvailable(dbConfig)
 
     if (!dbAvailable) {
-      // Database not found - show guidance and enter degraded mode
-      outputChannel?.appendLine('SQLite database not found - run crewchief-maproom scan to create index')
-      await showNoSqliteGuidance()
-      statusBar?.setState('idle')
-      return
+      // Database not found - run initial scan to create it (zero-config experience)
+      outputChannel?.appendLine('Database not found - running initial scan...')
+      statusBar?.setState('indexing', 'Starting initial scan...')
+
+      // Create secrets manager for API key resolution
+      const secretsManager = new SecretsManager(context.secrets)
+
+      // Build environment with embedding provider credentials
+      const providerEnv = await secretsManager.getEnvironmentVars(provider)
+      const scanEnv: NodeJS.ProcessEnv = {
+        MAPROOM_EMBEDDING_PROVIDER: provider,
+        ...providerEnv,
+      }
+
+      // If using Ollama and we detected it on a non-default endpoint (e.g., host.docker.internal),
+      // pass that endpoint to the Rust binary so it can find Ollama
+      if (provider === 'ollama') {
+        const detectedEndpoint = getDetectedOllamaEndpoint()
+        if (detectedEndpoint) {
+          // Rust binary expects the full API endpoint URL
+          scanEnv.MAPROOM_EMBEDDING_API_ENDPOINT = `${detectedEndpoint}/api/embed`
+          outputChannel?.appendLine(`Using Ollama endpoint: ${detectedEndpoint}`)
+        }
+      }
+
+      try {
+        await runInitialScan({
+          extensionRoot: context.extensionPath,
+          workspaceRoot,
+          databaseUrl: getDatabaseUrl(dbConfig),
+          outputChannel: outputChannel!,
+          statusBarManager: statusBar!,
+          env: scanEnv,
+        })
+        outputChannel?.appendLine('Initial scan complete')
+      } catch (error: any) {
+        outputChannel?.appendLine(`Initial scan failed: ${error.message}`)
+        statusBar?.setState('error', 'Scan failed')
+        vscode.window.showErrorMessage(`Maproom: Initial scan failed. ${error.message}`)
+        return
+      }
+    } else {
+      outputChannel?.appendLine('Database found')
     }
-    outputChannel?.appendLine('Database found')
 
     // Step 3: Run startup reconciliation
     statusBar?.setState('reconciling')

@@ -11,7 +11,7 @@
  * const client = new DaemonClient({
  *   binaryPath: '/path/to/crewchief-maproom',
  *   env: {
- *     MAPROOM_DATABASE_URL: 'postgresql://...',
+ *     MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
  *     OPENAI_API_KEY: 'sk-...',
  *   },
  *   timeout: 30000,

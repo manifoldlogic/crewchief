@@ -27,6 +27,9 @@ import { CrashRecovery } from './recovery'
 import type { SecretsManager } from '../config/secrets'
 import type { EmbeddingProvider } from '../ui/setupWizard'
 import { getRepoName } from '../utils/git'
+// NOTE: Ollama endpoint fallback logic is centralized in ../ollama/client.ts
+// See getOllamaEndpointFallbackList() for the single source of truth
+import { getDetectedOllamaEndpoint } from '../ollama/client'
 
 /**
  * Process orchestrator configuration
@@ -40,7 +43,7 @@ export interface OrchestratorConfig {
   secretsManager?: SecretsManager
   /** Embedding provider (optional) */
   provider?: EmbeddingProvider
-  /** Database URL (sqlite://... or postgresql://...). Required. */
+  /** Database URL (sqlite://...). Required. */
   databaseUrl?: string
 }
 
@@ -339,6 +342,17 @@ export class ProcessOrchestrator extends EventEmitter {
       } catch (error: any) {
         // Log error but don't fail - Ollama doesn't need credentials
         this.log(`Warning: Failed to retrieve embedding credentials: ${error.message}`)
+      }
+
+      // If using Ollama and we detected it on a non-default endpoint (e.g., host.docker.internal),
+      // pass that endpoint to the Rust binary so it can find Ollama
+      if (provider === 'ollama') {
+        const detectedEndpoint = getDetectedOllamaEndpoint()
+        if (detectedEndpoint) {
+          // Rust binary expects the full API endpoint URL
+          env.MAPROOM_EMBEDDING_API_ENDPOINT = `${detectedEndpoint}/api/embed`
+          this.log(`Using Ollama endpoint: ${detectedEndpoint}`)
+        }
       }
     }
 

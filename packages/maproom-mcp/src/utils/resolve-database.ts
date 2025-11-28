@@ -1,11 +1,11 @@
 /**
  * Database URL resolution for Maproom MCP Server
  *
- * Four-tier hierarchy for database connection:
+ * Resolution hierarchy:
  * 1. Explicit MAPROOM_DATABASE_URL environment variable
- * 2. DevContainer detection (IN_DEVCONTAINER=true)
- * 3. SQLite default (~/.maproom/maproom.db if exists)
- * 4. Default localhost:5433 (VSCode extension port)
+ * 2. SQLite default (~/.maproom/maproom.db)
+ *
+ * Note: Only SQLite is supported. PostgreSQL support was removed.
  */
 
 import { existsSync } from 'node:fs'
@@ -16,12 +16,12 @@ import { resolve, isAbsolute } from 'node:path'
  * Database configuration with backend type information
  */
 export interface DatabaseConfig {
-  /** Database backend type */
-  type: 'postgresql' | 'sqlite'
+  /** Database backend type (SQLite only) */
+  type: 'sqlite'
   /** Full database URL */
   url: string
-  /** SQLite file path (only for sqlite type) */
-  path?: string
+  /** SQLite file path */
+  path: string
 }
 
 /**
@@ -60,46 +60,32 @@ function parseSqliteUrl(url: string): DatabaseConfig {
  * Resolve database configuration using environment-based hierarchy
  *
  * Resolution priority:
- * 1. Explicit MAPROOM_DATABASE_URL environment variable
- * 2. DevContainer detection (IN_DEVCONTAINER=true) → PostgreSQL container
- * 3. SQLite default (~/.maproom/maproom.db) if file exists
- * 4. PostgreSQL fallback (localhost:5433)
+ * 1. Explicit MAPROOM_DATABASE_URL environment variable (must be sqlite://)
+ * 2. SQLite default (~/.maproom/maproom.db)
  *
  * @returns Database configuration with type and URL
+ * @throws Error if non-SQLite URL is provided
  */
 export function resolveDatabaseConfig(): DatabaseConfig {
   const url = process.env.MAPROOM_DATABASE_URL
 
   // Tier 1: Explicit URL
   if (url) {
-    if (isSqliteUrl(url)) {
-      return parseSqliteUrl(url)
+    if (!isSqliteUrl(url)) {
+      throw new Error(
+        `Invalid database URL: ${url}\n` +
+          'Only SQLite is supported. Use: sqlite:///path/to/database.db'
+      )
     }
-    return { type: 'postgresql', url }
+    return parseSqliteUrl(url)
   }
 
-  // Tier 2: DevContainer
-  if (process.env.IN_DEVCONTAINER === 'true') {
-    return {
-      type: 'postgresql',
-      url: 'postgresql://maproom:maproom@maproom-postgres:5432/maproom',
-    }
-  }
-
-  // Tier 3: SQLite default
+  // Tier 2: SQLite default
   const sqlitePath = expandPath('~/.maproom/maproom.db')
-  if (existsSync(sqlitePath)) {
-    return {
-      type: 'sqlite',
-      url: `sqlite://${sqlitePath}`,
-      path: sqlitePath,
-    }
-  }
-
-  // Tier 4: PostgreSQL fallback
   return {
-    type: 'postgresql',
-    url: 'postgresql://maproom:maproom@localhost:5433/maproom',
+    type: 'sqlite',
+    url: `sqlite://${sqlitePath}`,
+    path: sqlitePath,
   }
 }
 

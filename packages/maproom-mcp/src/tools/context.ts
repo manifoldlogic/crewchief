@@ -5,10 +5,7 @@
  * (imports, callers, callees, tests, etc.) within a token budget.
  *
  * This implementation uses the daemon client to communicate with the
- * Rust context assembler, avoiding PostgreSQL duplication.
- *
- * Migration note: CTXCLI-3002 replaced direct PostgreSQL queries with
- * daemon client calls for 20-50x performance improvement.
+ * Rust context assembler via SQLite.
  */
 
 import pino from 'pino'

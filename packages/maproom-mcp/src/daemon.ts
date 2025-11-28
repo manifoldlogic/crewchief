@@ -54,7 +54,7 @@ export function getDaemonClient(): DaemonClient {
       )
     }
 
-    // Resolve database configuration (handles SQLite and PostgreSQL)
+    // Resolve database configuration (SQLite only)
     const dbConfig = resolveDatabaseConfig()
 
     // Validate SQLite file exists before spawning daemon

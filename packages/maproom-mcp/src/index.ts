@@ -209,7 +209,7 @@ DEBUG: Set debug=true to see score breakdowns`,
             repo_id: { type: 'integer', description: 'Filter by specific repository ID' },
             worktree_id: { type: 'integer', description: 'Filter by specific worktree ID' },
             file_type: { type: 'string', description: 'Filter by file extension(s). Single: "ts" or multiple: "ts,tsx,js" (comma-separated, max 20 extensions)' },
-            recency_threshold: { type: 'string', description: 'Filter by file modification time (PostgreSQL interval, e.g., "7 days", "1 month")' }
+            recency_threshold: { type: 'string', description: 'Filter by file modification time (e.g., "7 days", "1 month")' }
           }
         },
         debug: {
@@ -336,8 +336,9 @@ DEBUG: Set debug=true to see score breakdowns`,
 ]
 
 async function getPg(): Promise<Client> {
-  // Default to maproom-postgres connection for zero-config experience
-  const DEFAULT_DATABASE_URL = 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+  // DEPRECATED: PostgreSQL support removed. This function is dead code kept for reference.
+  // All database operations now use SQLite via the Rust daemon.
+  const DEFAULT_DATABASE_URL = 'postgresql://maproom:maproom@localhost:5432/maproom'
   const connectionString = process.env.MAPROOM_DATABASE_URL || process.env.PG_DATABASE_URL || DEFAULT_DATABASE_URL
 
   log.debug({ connectionString: connectionString.replace(/:[^@]+@/, ':***@') }, 'Connecting to database')
@@ -1465,11 +1466,12 @@ const worktreeIdCache = new LRUCache<string, number>({
 
 /**
  * Look up worktree ID from database with LRU caching
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param repo - Repository name
  * @param worktreeName - Worktree name to lookup
  * @returns Worktree ID
  * @throws Error if worktree not found
+ * @deprecated This function uses legacy PostgreSQL queries. Use daemon instead.
  */
 async function lookupWorktreeId(
   client: Client,
@@ -1520,10 +1522,11 @@ async function lookupWorktreeId(
  * Tier 3 (Fallback): Try "main" worktree
  * Tier 4 (Last resort): Return null (search all)
  *
- * @param client - PostgreSQL client
+ * @param client - Database client
  * @param repo - Repository name
  * @param explicitWorktree - Optional explicit worktree parameter (string or null)
  * @returns Object with worktree ID and resolution metadata
+ * @deprecated This function uses legacy PostgreSQL queries. Use daemon instead.
  */
 async function resolveWorktreeId(
   client: Client,
