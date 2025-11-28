@@ -11,6 +11,26 @@
       "type": "http",
       "url": "https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa,crawling_exa,company_research_exa,linkedin_search_exa,deep_researcher_start,deep_researcher_check"
     },
+    "rust-language-server": {
+      "command": "mcp-language-server",
+      "args": [
+        "--workspace",
+        "/workspace",
+        "--lsp",
+        "rust-analyzer"
+      ]
+    },
+    "ts-language-server": {
+      "command": "mcp-language-server",
+      "args": [
+        "--workspace",
+        "/workspace",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
+      ]
+    },
     "Ref": {
       "type": "http",
       "url": "https://api.ref.tools/mcp",
