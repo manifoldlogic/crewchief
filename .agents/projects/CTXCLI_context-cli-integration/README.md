@@ -65,11 +65,11 @@ tickets/
 
 ## Success Criteria
 
-- [ ] `crewchief-maproom context --chunk-id <id>` returns valid bundle
-- [ ] MCP `context` tool uses daemon (no PostgreSQL)
-- [ ] All expand options work (callers, callees, tests, hooks, jsx, etc.)
-- [ ] Context assembly < 100ms (cached)
-- [ ] All tests pass in CI
+- [x] `crewchief-maproom context --chunk-id <id>` returns valid bundle
+- [x] MCP `context` tool uses daemon (no PostgreSQL)
+- [x] All expand options work (callers, callees, tests, hooks, jsx, etc.)
+- [x] Context assembly < 100ms (cached)
+- [x] All tests pass in CI
 
 ## Dependencies
 
@@ -84,4 +84,4 @@ tickets/
 - [x] Quality strategy defined
 - [x] Implementation plan created
 - [x] Tickets generated (12 tickets)
-- [ ] Implementation started
+- [x] Implementation complete (all 12 tickets verified)
