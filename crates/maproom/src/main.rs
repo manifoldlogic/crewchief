@@ -1171,6 +1171,13 @@ async fn main() -> anyhow::Result<()> {
                 watch_path.clone(),
             ).await?;
 
+            // Set up HEAD file watcher to detect branch switches
+            use crewchief_maproom::indexer::setup_head_watcher;
+            let git_head = watch_path.join(".git/HEAD");
+            let (head_tx, mut head_rx) = tokio::sync::mpsc::channel(10);
+            // Store watcher handle to prevent premature drop (watcher stops if dropped)
+            let _head_watcher = setup_head_watcher(&git_head, head_tx)?;
+
             println!("👀 Watching {} for changes...", watch_path.display());
             println!("   Repository: {}", repo);
             println!("   Worktree: {}", worktree);
@@ -1217,6 +1224,13 @@ async fn main() -> anyhow::Result<()> {
                                 println!("   ⚠️  Update failed: {}", e);
                             }
                         }
+                    }
+
+                    // Handle HEAD file changes (branch switches)
+                    Some(_head_event) = head_rx.recv() => {
+                        // Branch switch detected - handler implemented in UNIWATCH-3001
+                        tracing::info!("HEAD file changed - branch switch detected");
+                        println!("🔀 Branch switch detected");
                     }
                 }
             }
