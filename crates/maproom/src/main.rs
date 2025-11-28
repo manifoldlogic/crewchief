@@ -80,6 +80,121 @@ fn format_number(n: i64) -> String {
     result
 }
 
+/// Get 8-character short commit SHA for detached HEAD state.
+///
+/// Used when the branch name is "HEAD" (detached state) to identify the worktree.
+fn get_short_commit_sha(path: &Path) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--short=8", "HEAD"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to run git rev-parse: {}. Is git installed?", e))?;
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "git rev-parse failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Handle a branch switch detected by the HEAD watcher.
+///
+/// NEW IMPLEMENTATION for SQLite (original PostgreSQL version removed in IDXABS-2001).
+/// Debounces rapid switches, updates dynamic state, triggers re-indexing, and emits NDJSON.
+async fn handle_branch_switch(
+    watch_path: &Path,
+    store: &db::SqliteStore,
+    repo: &str,
+    repo_id: i64,
+    current_branch: &Arc<RwLock<String>>,
+    worktree_id: &Arc<RwLock<i64>>,
+    debouncer: &indexer::DebouncedHandler,
+) -> anyhow::Result<()> {
+    use crewchief_maproom::git::get_current_branch;
+    use crewchief_maproom::incremental::incremental_update;
+    use crewchief_maproom::indexer::BranchSwitchEvent;
+
+    // 0. Check debounce (skip if rapid switch)
+    if !debouncer.should_handle() {
+        tracing::debug!("Debouncing rapid branch switch");
+        return Ok(());
+    }
+
+    // 1. Detect new branch
+    let new_branch = match get_current_branch(watch_path) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("Failed to get current branch: {}", e);
+            return Ok(()); // Continue watching, retry on next event
+        }
+    };
+
+    // 2. Handle detached HEAD (use 8-char SHA as branch name)
+    let effective_branch = if new_branch == "HEAD" {
+        match get_short_commit_sha(watch_path) {
+            Ok(sha) => sha,
+            Err(e) => {
+                tracing::warn!("Failed to get commit SHA for detached HEAD: {}", e);
+                return Ok(()); // Continue watching
+            }
+        }
+    } else {
+        new_branch
+    };
+
+    // 3. Check if actually changed
+    let old_branch = current_branch.read().unwrap().clone();
+    let old_wt_id = *worktree_id.read().unwrap();
+    if old_branch == effective_branch {
+        tracing::debug!("Same branch '{}', skipping", effective_branch);
+        return Ok(()); // Same branch, skip
+    }
+
+    tracing::info!("Branch switch: '{}' -> '{}'", old_branch, effective_branch);
+
+    // 4. Get/create worktree record
+    let watch_path_str = watch_path.to_string_lossy().to_string();
+    let new_wt_id = match store.get_or_create_worktree(repo_id, &effective_branch, &watch_path_str).await {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::warn!("Failed to get/create worktree: {}. Continuing with old worktree_id.", e);
+            return Ok(()); // Continue with old worktree_id
+        }
+    };
+    let worktree_created = new_wt_id != old_wt_id;
+
+    // 5. Update state (brief lock hold)
+    {
+        *current_branch.write().unwrap() = effective_branch.clone();
+        *worktree_id.write().unwrap() = new_wt_id;
+    }
+
+    // 6. Re-index (log errors, don't crash)
+    if let Err(e) = incremental_update(store, new_wt_id, watch_path).await {
+        tracing::warn!("Incremental update after branch switch failed: {}", e);
+    }
+
+    // 7. Emit NDJSON event to stdout (for VSCode extension)
+    let event = BranchSwitchEvent {
+        event_type: "branch_switched",
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: repo.to_string(),
+        old_branch,
+        new_branch: effective_branch,
+        old_worktree_id: old_wt_id,
+        new_worktree_id: new_wt_id,
+        worktree_created,
+    };
+    if let Ok(json) = serde_json::to_string(&event) {
+        println!("{}", json);
+    }
+
+    Ok(())
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "crewchief-maproom", version, about = "Maproom indexer & CLI")]
 struct Cli {
@@ -1151,8 +1266,11 @@ async fn main() -> anyhow::Result<()> {
             // Wrap worktree_id and current_branch in thread-safe state for dynamic updates
             // Uses std::sync::RwLock (not tokio::sync) to match existing codebase patterns
             let worktree_id: Arc<RwLock<i64>> = Arc::new(RwLock::new(initial_worktree_id));
-            // current_branch will be used by UNIWATCH-3001 (Branch Switch Handler)
-            let _current_branch: Arc<RwLock<String>> = Arc::new(RwLock::new(worktree.clone()));
+            let current_branch: Arc<RwLock<String>> = Arc::new(RwLock::new(worktree.clone()));
+
+            // Create debouncer for branch switch events (2-second window)
+            use crewchief_maproom::indexer::DebouncedHandler;
+            let branch_debouncer = DebouncedHandler::new(std::time::Duration::from_secs(2));
 
             // Create and start the file watcher
             use crewchief_maproom::incremental::{MultiWatcher, WatcherConfig};
@@ -1228,9 +1346,17 @@ async fn main() -> anyhow::Result<()> {
 
                     // Handle HEAD file changes (branch switches)
                     Some(_head_event) = head_rx.recv() => {
-                        // Branch switch detected - handler implemented in UNIWATCH-3001
-                        tracing::info!("HEAD file changed - branch switch detected");
-                        println!("🔀 Branch switch detected");
+                        if let Err(e) = handle_branch_switch(
+                            &watch_path,
+                            &store,
+                            &repo,
+                            repo_id,
+                            &current_branch,
+                            &worktree_id,
+                            &branch_debouncer,
+                        ).await {
+                            tracing::warn!("Branch switch handler error: {}", e);
+                        }
                     }
                 }
             }

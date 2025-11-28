@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-3001: Implement Branch Switch Handler
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (tests disabled, will be migrated in UNIWATCH-4001)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -28,16 +28,16 @@ When the HEAD watcher detects a branch switch, this handler:
 **Plan Reference:** Phase 3 - Branch Switch Handler
 
 ## Acceptance Criteria
-- [ ] `handle_branch_switch()` async function implemented in main.rs
-- [ ] Debouncing works (rapid switches within 2s are coalesced)
-- [ ] New branch detected via `get_current_branch()`
-- [ ] Detached HEAD handled with 8-char commit SHA as branch name
-- [ ] Same-branch switches skipped (no-op if branch unchanged)
-- [ ] `get_or_create_worktree()` called with SqliteStore
-- [ ] `Arc<RwLock>` state updated with new worktree_id and branch
-- [ ] `incremental_update()` triggered for new branch (errors logged, not fatal)
-- [ ] `BranchSwitchEvent` NDJSON emitted to stdout
-- [ ] `cargo check -p crewchief-maproom` passes
+- [x] `handle_branch_switch()` async function implemented in main.rs
+- [x] Debouncing works (rapid switches within 2s are coalesced)
+- [x] New branch detected via `get_current_branch()`
+- [x] Detached HEAD handled with 8-char commit SHA as branch name
+- [x] Same-branch switches skipped (no-op if branch unchanged)
+- [x] `get_or_create_worktree()` called with SqliteStore
+- [x] `Arc<RwLock>` state updated with new worktree_id and branch
+- [x] `incremental_update()` triggered for new branch (errors logged, not fatal)
+- [x] `BranchSwitchEvent` NDJSON emitted to stdout
+- [x] `cargo check -p crewchief-maproom` passes
 
 ## Technical Requirements
 ```rust
