@@ -1,431 +1,248 @@
 # Architecture: Unified Watch Command
 
-## Executive Summary
+## Overview
 
-**Approach**: Modify existing `watch_worktree()` function to add branch detection, achieving unified watching with ~150 lines of modifications instead of creating new infrastructure.
+Add runtime branch switch detection to the watch command by integrating `.git/HEAD` file watching into the existing event loop.
 
-**Key Insight**: The existing `watch_worktree()` function already has all the pieces we need:
-- WorktreeWatcher for file monitoring
-- Event processing loop
-- IncrementalProcessor integration
-- Database connection pool
+## Current Architecture
 
-**What's Missing**: Just need to add .git/HEAD watching to the same event loop.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Commands::Watch Handler                       │
+│                     (main.rs:1105-1216)                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. Startup                                                     │
+│     └── Auto-detect branch via get_current_branch() ✅          │
+│     └── Create worktree_id (HARDCODED, never changes) ❌        │
+│                                                                 │
+│  2. MultiWatcher                                                │
+│     └── Watches repository files for changes ✅                 │
+│     └── Sends FileEvent to event_rx channel ✅                  │
+│                                                                 │
+│  3. Event Loop (tokio::select!)                                │
+│     ├── Ctrl+C → shutdown ✅                                    │
+│     └── FileEvent → incremental_update(worktree_id) ✅          │
+│         └── Uses HARDCODED worktree_id from startup ❌          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## Technical Approach
+**Problem**: When user runs `git checkout feature`, the watch command doesn't know. Files continue to be indexed to the original worktree.
+
+## Target Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Commands::Watch Handler                       │
+│                     (main.rs:1105-1216)                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. Startup                                                     │
+│     └── Auto-detect branch via get_current_branch()             │
+│     └── Create Arc<RwLock<i64>> for worktree_id  [NEW]          │
+│     └── Create Arc<RwLock<String>> for branch    [NEW]          │
+│                                                                 │
+│  2. MultiWatcher (existing)                                     │
+│     └── Watches repository files for changes                    │
+│     └── Sends FileEvent to event_rx channel                     │
+│                                                                 │
+│  3. HEAD Watcher [NEW]                                          │
+│     └── Watches .git/HEAD for branch switches                   │
+│     └── Sends notify::Event to head_rx channel                  │
+│     └── Uses existing setup_head_watcher() from indexer         │
+│                                                                 │
+│  4. Event Loop (tokio::select!)                                │
+│     ├── Ctrl+C → shutdown                                       │
+│     ├── FileEvent → incremental_update(*worktree_id.read())     │
+│     │   └── Reads DYNAMIC worktree_id [CHANGED]                 │
+│     └── HeadEvent → handle_branch_switch() [NEW]                │
+│         ├── Detect new branch                                   │
+│         ├── Update worktree_id and branch locks                 │
+│         ├── Trigger incremental_update for new branch           │
+│         └── Emit BranchSwitchEvent NDJSON                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Key Components
+
+### 1. Dynamic Worktree State
+
+Replace static variables with thread-safe mutable state:
 
 ```rust
-// MODIFY existing watch_worktree() function (~150 lines)
-pub async fn watch_worktree(
-    _client: &Client,
-    repo: &str,
-    worktree: &str,  // Optional - auto-detect if empty
-    root: &Path,
-    throttle: &str,
-) -> anyhow::Result<()> {
-    // EXISTING: WorktreeWatcher setup (lines 756-820)
-    let (mut watcher, mut event_rx) = WorktreeWatcher::new(...);
-    watcher.start()?;
+// BEFORE (line 1149)
+let worktree_id = store.get_or_create_worktree(...).await?;
 
-    // NEW: Add .git/HEAD watcher (20 lines)
-    let git_head = root.join(".git/HEAD");
-    let (head_tx, mut head_rx) = tokio::sync::mpsc::channel(10);
-    let head_watcher = setup_head_watcher(&git_head, head_tx)?;
+// AFTER
+let worktree_id = Arc::new(RwLock::new(
+    store.get_or_create_worktree(...).await?
+));
+let current_branch = Arc::new(RwLock::new(worktree.clone()));
+```
 
-    // NEW: Track current worktree dynamically (10 lines)
-    let current_worktree = Arc::new(RwLock::new(worktree.to_string()));
-    let current_worktree_id = Arc::new(RwLock::new(/* get from db */));
+### 2. HEAD Watcher
 
-    // MODIFY: Event loop to handle both sources (50 lines)
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                Some(file_event) = event_rx.recv() => {
-                    // EXISTING file processing logic (lines 848-950)
-                    // Just read current_worktree_id instead of hardcoded
-                },
-                Some(head_event) = head_rx.recv() => {
-                    // NEW: Handle branch switch (30 lines)
-                    handle_branch_switch(&current_worktree, &current_worktree_id).await;
-                }
-            }
+Use the existing `setup_head_watcher()` function from `indexer/mod.rs`:
+
+```rust
+// Initialize HEAD watcher (before event loop)
+let git_head = watch_path.join(".git/HEAD");
+let (head_tx, mut head_rx) = tokio::sync::mpsc::channel(10);
+let _head_watcher = crewchief_maproom::indexer::setup_head_watcher(&git_head, head_tx)?;
+```
+
+### 3. Modified Event Loop
+
+Add HEAD events to the existing `tokio::select!`:
+
+```rust
+loop {
+    tokio::select! {
+        _ = signal::ctrl_c() => { /* shutdown */ }
+
+        Some(event) = event_rx.recv() => {
+            // Read dynamic worktree_id
+            let wt_id = *worktree_id.read().unwrap();
+            incremental_update(&store, wt_id, &watch_path).await?;
         }
-    });
 
-    // EXISTING: Shutdown handling (lines 950+)
+        Some(_head_event) = head_rx.recv() => {
+            // NEW: Handle branch switch
+            handle_branch_switch(
+                &watch_path,
+                &store,
+                &repo,
+                &current_branch,
+                &worktree_id,
+            ).await?;
+        }
+    }
 }
 ```
 
-**Total**: ~150 lines of modifications to existing function
+### 4. Branch Switch Handler
 
-## Why This Works
+New function to handle branch switches:
 
-### 1. **Reuses Proven Infrastructure**
-- WorktreeWatcher already tags events correctly
-- Event processing pipeline already exists
-- Database pool already initialized
-- Error handling already implemented
-
-### 2. **Single Event Loop**
-- No need to coordinate two separate watchers
-- tokio::select! handles channel multiplexing
-- Both event types in same async context
-- Simpler shutdown coordination
-
-### 3. **Minimal New Code**
-- Just add .git/HEAD watching
-- Just add worktree ID mutation
-- Modify existing event handler to read dynamic worktree_id
-- Everything else stays the same
-
-### 4. **Integration is Trivial**
-```rust
-// In main.rs Commands::Watch handler
-Commands::Watch { repo, worktree, path, throttle } => {
-    let repo = repo.unwrap_or_else(|| get_git_info(&path).0);
-    let worktree = worktree.unwrap_or_else(|| get_current_branch(&path));
-
-    // Just call existing function - no API change needed!
-    indexer::watch_worktree(&client, &repo, &worktree, &path, &throttle).await?;
-}
-```
-
-## Detailed Design
-
-### Component 1: .git/HEAD Watcher
-
-**Purpose**: Detect branch switches
-
-**Implementation** (20 lines):
-```rust
-fn setup_head_watcher(
-    git_head: &Path,
-    tx: tokio::sync::mpsc::Sender<notify::Event>
-) -> Result<notify::RecommendedWatcher> {
-    use notify::{Watcher, RecursiveMode};
-
-    let (sync_tx, mut sync_rx) = std::sync::mpsc::channel();
-
-    let mut watcher = notify::recommended_watcher(move |res| {
-        if let Ok(event) = res {
-            let _ = sync_tx.send(event);
-        }
-    })?;
-
-    watcher.watch(git_head, RecursiveMode::NonRecursive)?;
-
-    // Bridge std::sync::mpsc to tokio::mpsc
-    tokio::spawn(async move {
-        while let Ok(event) = sync_rx.recv() {
-            let _ = tx.send(event).await;
-        }
-    });
-
-    Ok(watcher)
-}
-```
-
-**Why this works**:
-- Reuses same notify::RecommendedWatcher as BranchWatcher
-- Bridges sync channel to async (same pattern as WorktreeWatcher internally)
-- Simple, tested approach
-
-### Component 2: Dynamic Worktree Tracking
-
-**Purpose**: Update worktree_id when branch changes
-
-**Implementation** (10 lines):
-```rust
-// At start of watch_worktree()
-let current_branch = Arc::new(RwLock::new(worktree.to_string()));
-let current_worktree_id = Arc::new(RwLock::new({
-    let (repo_id, _) = get_or_create_repo(&pool, repo).await?;
-    let (worktree_id, _) = get_or_create_worktree(&pool, repo_id, worktree, root).await?;
-    worktree_id
-}));
-```
-
-**Thread Safety**:
-- Arc allows sharing across event loop and handler tasks
-- RwLock allows concurrent reads, exclusive writes
-- Same pattern used throughout maproom codebase
-
-### Component 3: Branch Switch Handler
-
-**Purpose**: Update worktree when .git/HEAD changes
-
-**Implementation** (30 lines):
 ```rust
 async fn handle_branch_switch(
-    repo_path: &Path,
-    current_branch: &Arc<RwLock<String>>,
-    current_worktree_id: &Arc<RwLock<i32>>,
-    pool: &PgPool,
+    watch_path: &Path,
+    store: &SqliteStore,
     repo: &str,
+    current_branch: &Arc<RwLock<String>>,
+    worktree_id: &Arc<RwLock<i64>>,
 ) -> Result<()> {
-    // Get new branch name
-    let new_branch = get_current_branch(repo_path)?;
+    // 1. Detect new branch
+    let new_branch = get_current_branch(watch_path)?;
 
-    // Check if actually changed
-    {
-        let current = current_branch.read().unwrap();
-        if *current == new_branch {
-            return Ok(()); // False alarm or duplicate event
-        }
+    // 2. Check if actually changed
+    let old_branch = current_branch.read().unwrap().clone();
+    if old_branch == new_branch {
+        return Ok(()); // Same branch, skip
     }
 
-    info!("Branch switch detected: {} -> {}",
-          current_branch.read().unwrap(), new_branch);
+    // 3. Get/create worktree record
+    let repo_id = store.get_repo_id(repo).await?;
+    let new_wt_id = store.get_or_create_worktree(repo_id, &new_branch, ...).await?;
 
-    // Get/create worktree record
-    let (repo_id, _) = get_or_create_repo(pool, repo).await?;
-    let (new_worktree_id, created) = get_or_create_worktree(
-        pool, repo_id, &new_branch, repo_path
-    ).await?;
+    // 4. Update state
+    *current_branch.write().unwrap() = new_branch.clone();
+    *worktree_id.write().unwrap() = new_wt_id;
 
-    // Update tracking
-    {
-        let mut branch = current_branch.write().unwrap();
-        *branch = new_branch;
-    }
-    {
-        let mut id = current_worktree_id.write().unwrap();
-        *id = new_worktree_id;
-    }
+    // 5. Re-index new branch
+    incremental_update(&store, new_wt_id, watch_path).await?;
 
-    // Trigger incremental update
-    incremental_update(pool, repo, &new_branch, repo_path).await?;
+    // 6. Emit NDJSON event
+    let event = BranchSwitchEvent {
+        event_type: "branch_switched",
+        old_branch,
+        new_branch,
+        // ...
+    };
+    println!("{}", serde_json::to_string(&event)?);
 
-    info!("Switched to worktree_id={} (created={})", new_worktree_id, created);
     Ok(())
 }
 ```
 
-**Debouncing**: Reuse DebouncedHandler from watcher.rs (copy 20 lines)
-
-### Component 4: Modified Event Processing
-
-**Change**: Read dynamic worktree_id instead of using hardcoded
-
-**Before** (line 818):
-```rust
-let worktree_id = format!("{}:{}", repo, worktree);
-let (mut watcher, mut event_rx) = WorktreeWatcher::new(worktree_id.clone(), ...);
-```
-
-**After**:
-```rust
-// Start with initial worktree, but WorktreeWatcher's worktree_id is just for logging
-let initial_worktree_id = format!("{}:{}", repo, worktree);
-let (mut watcher, mut event_rx) = WorktreeWatcher::new(initial_worktree_id, ...);
-
-// For actual database operations, read from current_worktree_id
-let worktree_id = *current_worktree_id.read().unwrap();
-```
-
-**Impact**: ~10 line change in event processing loop
-
 ## Event Flow
 
 ```
-User Action: git checkout feature
+User runs: git checkout feature
     ↓
-.git/HEAD modified
+.git/HEAD modified: "ref: refs/heads/feature"
     ↓
-notify event → head_rx channel
+notify crate detects change
     ↓
-tokio::select! branch: head_rx.recv()
+setup_head_watcher sends to head_rx
     ↓
-handle_branch_switch()
-    - get_current_branch() → "feature"
-    - get_or_create_worktree() → worktree_id=42
-    - Update current_worktree_id → 42
-    - Call incremental_update()
+tokio::select! receives HeadEvent
     ↓
-File changes detected
+handle_branch_switch() called
+    ├── get_current_branch() → "feature"
+    ├── Check old_branch != new_branch
+    ├── get_or_create_worktree() → worktree_id=42
+    ├── Update Arc<RwLock> state
+    ├── incremental_update(42, path)
+    └── Emit BranchSwitchEvent NDJSON
     ↓
-FileWatcher → event_rx channel
-    ↓
-tokio::select! branch: event_rx.recv()
-    ↓
-Process with *current_worktree_id.read() → 42
-    ↓
-Indexed to correct worktree ✓
+Future file events use worktree_id=42 ✓
 ```
 
-## Integration Strategy
+## Debouncing
 
-### Phase 1: Add .git/HEAD watching (30 lines)
-- setup_head_watcher() function
-- Add to watch_worktree() initialization
-- Bridge channels
+Use the existing `DebouncedHandler` from `indexer/mod.rs` to prevent rapid branch switches from causing excessive indexing:
 
-### Phase 2: Add dynamic worktree tracking (20 lines)
-- Arc<RwLock<String>> for branch
-- Arc<RwLock<i32>> for worktree_id
-- Initialize from parameters
+```rust
+let debouncer = DebouncedHandler::new(Duration::from_secs(2));
 
-### Phase 3: Add branch switch handler (30 lines)
-- handle_branch_switch() function
-- Call from event loop
+// In handle_branch_switch()
+if !debouncer.should_handle() {
+    tracing::debug!("Debouncing rapid branch switch");
+    return Ok(());
+}
+```
 
-### Phase 4: Modify event loop (50 lines)
-- Change while let to loop + tokio::select!
-- Add head_rx branch
-- Read current_worktree_id instead of hardcoded
+## NDJSON Event
 
-### Phase 5: Update CLI (20 lines)
-- Auto-detect branch if --worktree not provided
-- Deprecation warning if --worktree provided
-
-**Total: ~150 lines of modifications/additions**
-
-## NDJSON Event Format
-
-### New Event: branch_switched
+The `BranchSwitchEvent` struct already exists in `indexer/mod.rs`:
 
 ```json
 {
   "type": "branch_switched",
   "timestamp": "2025-01-16T10:30:00Z",
-  "repo": "crewchief",
+  "repo": "myproject",
   "old_branch": "main",
-  "new_branch": "feature-auth",
+  "new_branch": "feature",
   "old_worktree_id": 1,
   "new_worktree_id": 42,
   "worktree_created": false
 }
 ```
 
-**Implementation** (15 lines):
-```rust
-#[derive(Serialize)]
-struct BranchSwitchEvent {
-    #[serde(rename = "type")]
-    event_type: &'static str,
-    timestamp: String,
-    repo: String,
-    old_branch: String,
-    new_branch: String,
-    old_worktree_id: i32,
-    new_worktree_id: i32,
-    worktree_created: bool,
-}
+## Error Handling
 
-// Emit after handle_branch_switch()
-let event = BranchSwitchEvent { ... };
-println!("{}", serde_json::to_string(&event)?);
-```
+| Scenario | Behavior |
+|----------|----------|
+| `.git/HEAD` unreadable | Log warning, continue file watching |
+| Database connection lost | Log error, retry on next event |
+| Detached HEAD state | Use short commit SHA as branch name |
+| Rapid branch switches | Debounce, process only final state |
 
-## Error Recovery
+## Thread Safety
 
-### Scenario 1: .git/HEAD Deleted
-```rust
-// In setup_head_watcher() - handle watch failure
-if let Err(e) = watcher.watch(git_head, RecursiveMode::NonRecursive) {
-    warn!("Failed to watch .git/HEAD: {}. Branch detection disabled.", e);
-    // Continue with file watching only
-}
-```
+- `Arc<RwLock<i64>>` for worktree_id allows concurrent reads, exclusive writes
+- Lock held briefly (copy value, drop lock, then use)
+- Same pattern used throughout maproom codebase
 
-### Scenario 2: Branch Detection Failure
-```rust
-// In handle_branch_switch()
-if let Err(e) = get_current_branch(repo_path) {
-    error!("Failed to detect branch: {}. Keeping current worktree.", e);
-    return Ok(()); // Preserve state
-}
-```
+## Existing Components to Reuse
 
-### Scenario 3: Database Connection Loss
-```rust
-// Already handled in existing watch_worktree() code
-// Event processing continues, errors logged
-```
-
-## Security Assessment
-
-**No new security risks introduced**:
-- ✅ Same components (just coordinated differently)
-- ✅ Same database queries (parameterized)
-- ✅ Same file operations (read-only)
-- ✅ Same thread safety patterns (Arc<RwLock>)
-
-See security-review.md for full analysis.
-
-## Performance
-
-**Expected**:
-- CPU idle: <2% (same as current, just one additional file watcher)
-- Memory: ~20MB (vs 35MB for two processes)
-- Branch detection: <1 second
-- No file events lost (buffered channels)
-
-**Why this approach is efficient**:
-- Single event loop (no context switching)
-- Shared database pool (no connection overhead)
-- Minimal synchronization points (just worktree_id updates)
-
-## Testing Strategy
-
-### Unit Tests (8 tests)
-1. setup_head_watcher() creates watcher
-2. handle_branch_switch() updates state
-3. handle_branch_switch() calls incremental_update()
-4. Dynamic worktree_id read in event processing
-5. Debouncing prevents rapid switches
-6. Error recovery preserves state
-7. NDJSON event serialization
-8. Channel bridging works correctly
-
-### Integration Tests (4 tests)
-1. Complete branch switch workflow
-2. Rapid branch switches debounced
-3. File changes during branch switch
-4. Backward compatibility (--worktree flag)
-
-### E2E Tests (1 test)
-1. Developer workflow (bash script) - real git operations, real database
-
-### Manual Testing (1 checklist)
-- Real-world developer workflow validation
-- Error scenarios
-- NDJSON event verification
-
-**Total: 15 tests**
-
-## Migration Path
-
-**None needed!** The function signature doesn't change:
-
-```rust
-// Before and After
-pub async fn watch_worktree(
-    _client: &Client,
-    repo: &str,
-    worktree: &str,
-    root: &Path,
-    throttle: &str,
-) -> anyhow::Result<()>
-```
-
-**CLI usage**:
-```bash
-# Old way - still works
-maproom watch --repo myproject --worktree main
-
-# New way - auto-detects
-maproom watch --repo myproject
-
-# Both produce same result!
-```
-
-## Advantages
-
-1. **Less Code**: ~150 lines of modifications vs creating new infrastructure
-2. **Reuses Proven Components**: WorktreeWatcher, event processing, db pool
-3. **Simpler Testing**: Fewer components to test
-4. **Lower Risk**: Modifying existing vs creating new
-5. **Easier Review**: Changes visible in unified diff
-6. **Backward Compatible**: Same function signature
-7. **Faster Implementation**: 1-2 days instead of 2-3 days
+| Component | Location | Status |
+|-----------|----------|--------|
+| `setup_head_watcher()` | `indexer/mod.rs:668` | Exists, ready to use |
+| `DebouncedHandler` | `indexer/mod.rs:33` | Exists, ready to use |
+| `BranchSwitchEvent` | `indexer/mod.rs:112` | Exists, ready to use |
+| `get_current_branch()` | `git/mod.rs` | Exists, ready to use |
+| `incremental_update()` | `incremental/mod.rs` | Exists, ready to use |
