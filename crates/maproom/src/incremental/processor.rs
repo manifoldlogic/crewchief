@@ -70,7 +70,7 @@ const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 /// async fn main() -> anyhow::Result<()> {
 ///     let pool = create_pool().await?;
 ///     let repo_root = PathBuf::from("/workspace");
-///     let processor = IncrementalProcessor::new(pool, repo_root);
+///     let processor = IncrementalProcessor::new(pool, repo_root, 1, 1, 1);
 ///
 ///     // Process a file update
 ///     let path = PathBuf::from("/workspace/src/main.rs");
@@ -90,6 +90,9 @@ pub struct IncrementalProcessor {
     store: Arc<SqliteStore>,
     edge_updater: EdgeUpdater,
     repo_root: PathBuf,
+    repo_id: i64,
+    worktree_id: i64,
+    commit_id: i64,
 }
 
 impl IncrementalProcessor {
@@ -98,14 +101,26 @@ impl IncrementalProcessor {
     /// # Arguments
     /// * `store` - SqliteStore instance
     /// * `repo_root` - Absolute path to the repository root (used for path normalization)
+    /// * `repo_id` - Database ID of the repository
+    /// * `worktree_id` - Database ID of the worktree
+    /// * `commit_id` - Database ID of the commit
     ///
     /// # Returns
     /// A new processor ready to handle file updates
-    pub fn new(store: Arc<SqliteStore>, repo_root: PathBuf) -> Self {
+    pub fn new(
+        store: Arc<SqliteStore>,
+        repo_root: PathBuf,
+        repo_id: i64,
+        worktree_id: i64,
+        commit_id: i64,
+    ) -> Self {
         Self {
             edge_updater: EdgeUpdater::new(store.clone()),
             store,
             repo_root,
+            repo_id,
+            worktree_id,
+            commit_id,
         }
     }
 
@@ -251,22 +266,87 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let _relpath_str = relpath
+        let relpath_str = relpath
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
-        // TODO: Implement SQLite-based file indexing
-        // This will be implemented in a future ticket as part of the full
-        // incremental indexing refactoring
-        warn!("index_new_file stub called for {:?}", path);
+        // 1. Create file record
+        let file_record = crate::db::FileRecord {
+            repo_id: self.repo_id,
+            worktree_id: self.worktree_id,
+            commit_id: self.commit_id,
+            relpath: relpath_str.to_string(),
+            language: language.map(|s| s.to_string()),
+            content_hash: hash.to_hex().to_string(),
+            size_bytes: metadata.len() as i32,
+            last_modified: Some(chrono::Utc::now()),
+        };
 
-        // Stub: return success for now to allow compilation
-        // Real implementation will:
-        // 1. Query file record by relpath
-        // 2. Parse file chunks
-        // 3. Insert chunks with SqliteStore methods
-        // 4. Update file hash
-        // 5. Update edges
+        let file_id = self.store.upsert_file(&file_record).await
+            .with_context(|| format!("Failed to upsert file record: {}", path.display()))?;
+
+        // 2. Parse file to extract chunks
+        let lang_str = language.unwrap_or("unknown");
+        let symbol_chunks = parse_file_chunks(&content, lang_str)
+            .with_context(|| format!("Failed to parse file: {}", path.display()))?;
+
+        // 3. Create chunk records and insert them
+        let mut chunk_ids = Vec::new();
+        for chunk in &symbol_chunks {
+            let preview = content
+                .lines()
+                .skip((chunk.start_line - 1) as usize)
+                .take((chunk.end_line - chunk.start_line + 1) as usize)
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            let ts_doc_text = build_ts_doc(
+                chunk.symbol_name.as_deref(),
+                chunk.signature.as_deref(),
+                chunk.docstring.as_deref(),
+                &preview,
+            );
+
+            // Compute blob_sha for this chunk's content
+            let chunk_content = &preview;
+            let blob_sha = super::hash::FileHasher::hash_bytes(chunk_content.as_bytes())
+                .to_hex()
+                .to_string();
+
+            let chunk_record = crate::db::ChunkRecord {
+                file_id,
+                blob_sha,
+                symbol_name: chunk.symbol_name.clone(),
+                kind: chunk.kind.clone(),
+                signature: chunk.signature.clone(),
+                docstring: chunk.docstring.clone(),
+                start_line: chunk.start_line,
+                end_line: chunk.end_line,
+                preview,
+                ts_doc_text,
+                recency_score: 1.0, // New file = max recency
+                churn_score: 0.0,   // New file = no churn
+                metadata: chunk.metadata.clone(),
+                worktree_id: self.worktree_id,
+            };
+
+            let chunk_id = self.store.insert_chunk(&chunk_record).await
+                .with_context(|| format!("Failed to insert chunk for file: {}", path.display()))?;
+            chunk_ids.push(chunk_id);
+        }
+
+        // 4. Update edges for new chunks (delegate to EdgeUpdater)
+        // Note: EdgeUpdater.update_edges takes file_id, not chunk_ids
+        // Edge computation is done by file for consistency
+        self.edge_updater.update_edges(file_id).await
+            .with_context(|| format!("Failed to update edges for file: {}", path.display()))?;
+
+        debug!(
+            path = %path.display(),
+            file_id = file_id,
+            chunks = chunk_ids.len(),
+            "Indexed new file"
+        );
 
         Ok(())
     }
@@ -320,11 +400,11 @@ impl IncrementalProcessor {
         }
 
         // CRITICAL: Read file content using absolute path (filesystem operation)
-        let _content = fs::read_to_string(path)
+        let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
         // Detect language from file extension
-        let _language = detect_language_from_path(path);
+        let language = detect_language_from_path(path);
 
         // CRITICAL: Normalize path for database query (database stores relative paths)
         // Absolute path example: "/workspace/packages/cli/src/main.ts"
@@ -332,23 +412,90 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let _relpath_str = relpath
+        let relpath_str = relpath
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
-        // TODO: Implement SQLite-based file update
-        // This will be implemented in a future ticket as part of the full
-        // incremental indexing refactoring
-        warn!("update_file stub called for {:?}", path);
+        // 1. Look up existing file by relpath
+        let file_id = self.store.get_file_id_by_relpath(relpath_str, self.worktree_id).await
+            .with_context(|| format!("Failed to look up file: {}", path.display()))?;
 
-        // Stub: return success for now to allow compilation
-        // Real implementation will:
-        // 1. Look up file record by relpath
-        // 2. Parse file chunks
-        // 3. Delete old chunks with SqliteStore methods
-        // 4. Insert new chunks with SqliteStore methods
-        // 5. Update file hash
-        // 6. Update edges
+        let file_id = match file_id {
+            Some(id) => id,
+            None => {
+                // File doesn't exist in DB yet - treat as new file
+                debug!(path = %path.display(), "File not found in DB, treating as new");
+                return self.index_new_file(path, _new_hash).await;
+            }
+        };
+
+        // 2. Delete old chunks (this also cleans up edges and embeddings)
+        let chunks_deleted = self.store.delete_chunks_by_file(file_id).await
+            .with_context(|| format!("Failed to delete old chunks for file: {}", path.display()))?;
+
+        debug!(path = %path.display(), chunks_deleted = chunks_deleted, "Deleted old chunks");
+
+        // 3. Parse file to extract new chunks
+        let lang_str = language.unwrap_or("unknown");
+        let symbol_chunks = parse_file_chunks(&content, lang_str)
+            .with_context(|| format!("Failed to parse file: {}", path.display()))?;
+
+        // 4. Insert new chunks
+        let mut chunk_ids = Vec::new();
+        for chunk in &symbol_chunks {
+            let preview = content
+                .lines()
+                .skip((chunk.start_line - 1) as usize)
+                .take((chunk.end_line - chunk.start_line + 1) as usize)
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            let ts_doc_text = build_ts_doc(
+                chunk.symbol_name.as_deref(),
+                chunk.signature.as_deref(),
+                chunk.docstring.as_deref(),
+                &preview,
+            );
+
+            // Compute blob_sha for this chunk's content
+            let chunk_content = &preview;
+            let blob_sha = super::hash::FileHasher::hash_bytes(chunk_content.as_bytes())
+                .to_hex()
+                .to_string();
+
+            let chunk_record = crate::db::ChunkRecord {
+                file_id,
+                blob_sha,
+                symbol_name: chunk.symbol_name.clone(),
+                kind: chunk.kind.clone(),
+                signature: chunk.signature.clone(),
+                docstring: chunk.docstring.clone(),
+                start_line: chunk.start_line,
+                end_line: chunk.end_line,
+                preview,
+                ts_doc_text,
+                recency_score: 1.0, // Modified = high recency
+                churn_score: 0.5,   // Modified = some churn
+                metadata: chunk.metadata.clone(),
+                worktree_id: self.worktree_id,
+            };
+
+            let chunk_id = self.store.insert_chunk(&chunk_record).await
+                .with_context(|| format!("Failed to insert chunk for file: {}", path.display()))?;
+            chunk_ids.push(chunk_id);
+        }
+
+        // 5. Update edges for new chunks
+        // Note: EdgeUpdater.update_edges takes file_id, not chunk_ids
+        self.edge_updater.update_edges(file_id).await
+            .with_context(|| format!("Failed to update edges for file: {}", path.display()))?;
+
+        debug!(
+            path = %path.display(),
+            file_id = file_id,
+            chunks = chunk_ids.len(),
+            "Updated file"
+        );
 
         Ok(())
     }
@@ -377,20 +524,37 @@ impl IncrementalProcessor {
         let relpath = normalize_to_relpath(path, &self.repo_root)
             .with_context(|| format!("Failed to normalize path: {}", path.display()))?;
 
-        let _relpath_str = relpath
+        let relpath_str = relpath
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
-        // TODO: Implement SQLite-based file deletion
-        // This will be implemented in a future ticket as part of the full
-        // incremental indexing refactoring
-        warn!("remove_file stub called for {:?}", path);
+        // 1. Look up file by relpath
+        let file_id = self.store.get_file_id_by_relpath(relpath_str, self.worktree_id).await
+            .with_context(|| format!("Failed to look up file: {}", path.display()))?;
 
-        // Stub: return success for now to allow compilation
-        // Real implementation will:
-        // 1. Look up file record by relpath
-        // 2. Delete chunks with SqliteStore methods (CASCADE deletes edges)
+        let file_id = match file_id {
+            Some(id) => id,
+            None => {
+                // File doesn't exist in DB - nothing to delete
+                debug!(path = %path.display(), "File not found in DB, nothing to delete");
+                return Ok(());
+            }
+        };
+
+        // 2. Delete chunks (this also cleans up edges and embeddings via CASCADE)
+        let chunks_deleted = self.store.delete_chunks_by_file(file_id).await
+            .with_context(|| format!("Failed to delete chunks for file: {}", path.display()))?;
+
         // 3. Delete file record
+        self.store.delete_file(file_id).await
+            .with_context(|| format!("Failed to delete file record: {}", path.display()))?;
+
+        debug!(
+            path = %path.display(),
+            file_id = file_id,
+            chunks_deleted = chunks_deleted,
+            "Removed file"
+        );
 
         Ok(())
     }

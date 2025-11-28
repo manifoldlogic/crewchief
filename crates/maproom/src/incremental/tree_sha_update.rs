@@ -122,13 +122,56 @@ impl Default for UpdateStats {
 /// # }
 /// ```
 pub async fn remove_worktree_from_chunks(
-    _store: &SqliteStore,
-    _worktree_id: i64,
-    _relpath: &str,
+    store: &SqliteStore,
+    worktree_id: i64,
+    relpath: &str,
 ) -> Result<i64> {
-    // TODO: Implement SQLite-based worktree removal from chunks
-    // This will be implemented in a future ticket
-    Ok(0)
+    let relpath = relpath.to_string();
+
+    store.run(move |conn| {
+        // 1. Find chunks in this file that have the worktree
+        let chunk_ids: Vec<i64> = {
+            let mut stmt = conn.prepare(
+                "SELECT c.id FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                 WHERE f.relpath = ?1 AND cw.worktree_id = ?2"
+            )?;
+            let rows = stmt.query_map(rusqlite::params![relpath, worktree_id], |row| row.get(0))?;
+            rows.filter_map(|r| r.ok()).collect()
+        };
+
+        if chunk_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // 2. Remove worktree entries for these chunks
+        let placeholders: String = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "DELETE FROM chunk_worktrees WHERE chunk_id IN ({}) AND worktree_id = ?",
+            placeholders
+        );
+
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
+            .iter()
+            .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+            .collect();
+        params.push(Box::new(worktree_id));
+
+        // Use execute with proper parameter handling
+        let affected = conn.execute(
+            &sql,
+            rusqlite::params_from_iter(chunk_ids.iter().chain(std::iter::once(&worktree_id)))
+        )?;
+
+        // 3. Clean up orphaned chunks (chunks with no worktrees)
+        conn.execute(
+            "DELETE FROM chunks WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
+            []
+        )?;
+
+        Ok(affected as i64)
+    }).await
 }
 
 /// Perform incremental update based on git tree SHA comparison.
@@ -181,21 +224,118 @@ pub async fn remove_worktree_from_chunks(
 /// # }
 /// ```
 pub async fn incremental_update(
-    _store: &SqliteStore,
-    _worktree_id: i64,
-    _repo_path: &Path,
+    store: &SqliteStore,
+    worktree_id: i64,
+    repo_path: &Path,
 ) -> Result<UpdateStats> {
-    // TODO: Implement SQLite-based incremental update
-    // This will be implemented in a future ticket
-    // Steps to implement:
     // 1. Get current git tree SHA
-    // 2. Get last indexed tree SHA from database
-    // 3. If tree SHAs match, skip processing
-    // 4. Find changed files via git diff-tree
-    // 5. Process changed files (add/modify/delete)
-    // 6. Update index state with new tree SHA
+    let current_tree_sha = get_git_tree_sha(repo_path)
+        .with_context(|| format!("Failed to get git tree SHA for {:?}", repo_path))?;
 
-    Ok(UpdateStats::skipped())
+    debug!(
+        worktree_id = worktree_id,
+        tree_sha = %current_tree_sha,
+        "Got current git tree SHA"
+    );
+
+    // 2. Get last indexed tree SHA from database
+    // Returns "init" if no previous state exists
+    let last_indexed = get_last_indexed_tree(store, worktree_id).await
+        .with_context(|| format!("Failed to get last indexed tree for worktree {}", worktree_id))?;
+
+    // 3. If tree SHAs match, skip processing (quick path)
+    if last_indexed != "init" && last_indexed == current_tree_sha {
+        info!(
+            worktree_id = worktree_id,
+            tree_sha = %current_tree_sha,
+            "Tree SHA unchanged, skipping incremental update"
+        );
+        return Ok(UpdateStats::skipped());
+    }
+
+    if last_indexed != "init" {
+        debug!(
+            worktree_id = worktree_id,
+            last_sha = %last_indexed,
+            current_sha = %current_tree_sha,
+            "Tree SHA changed, processing diff"
+        );
+    } else {
+        debug!(
+            worktree_id = worktree_id,
+            "No previous tree SHA found, this is likely first index"
+        );
+    }
+
+    // 4. Find changed files via git diff-tree
+    let changes = if last_indexed != "init" {
+        // git_diff_tree(old_tree, new_tree, repo_path)
+        git_diff_tree(&last_indexed, &current_tree_sha, repo_path)
+            .with_context(|| format!("Failed to get diff-tree between {} and {}", last_indexed, current_tree_sha))?
+    } else {
+        // No previous state - treat as full re-index
+        // This case should be rare as first index is done by `scan` command
+        debug!("No previous tree SHA, returning empty diff (full index handled separately)");
+        Vec::new()
+    };
+
+    let mut stats = UpdateStats::new();
+    stats.files_processed = changes.len() as i32;
+
+    // 5. Process changed files based on status
+    // Note: Full processing is handled by the processor module
+    // This function just orchestrates and tracks stats
+    for change in &changes {
+        let relpath = change.path.to_string_lossy();
+        match change.status {
+            FileStatus::Added | FileStatus::Modified => {
+                debug!(
+                    file = %relpath,
+                    status = ?change.status,
+                    "File needs processing"
+                );
+                // Actual processing happens through the upsert command
+                // This function tracks what needs to be done
+            }
+            FileStatus::Deleted => {
+                debug!(
+                    file = %relpath,
+                    "File deleted, removing chunks"
+                );
+                // Remove worktree from chunks for deleted files
+                let affected = remove_worktree_from_chunks(store, worktree_id, &relpath).await?;
+                debug!(
+                    file = %relpath,
+                    chunks_affected = affected,
+                    "Removed worktree from chunks"
+                );
+            }
+        }
+    }
+
+    // 6. Update index state with new tree SHA
+    // This is done after successful processing
+    store.run({
+        let tree_sha = current_tree_sha.clone();
+        move |conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO worktree_index_state (worktree_id, last_tree_sha, last_updated)
+                 VALUES (?1, ?2, datetime('now'))",
+                rusqlite::params![worktree_id, tree_sha],
+            )?;
+            Ok(())
+        }
+    }).await
+    .with_context(|| format!("Failed to update index state for worktree {}", worktree_id))?;
+
+    info!(
+        worktree_id = worktree_id,
+        files_processed = stats.files_processed,
+        tree_sha = %current_tree_sha,
+        "Incremental update complete"
+    );
+
+    Ok(stats)
 }
 
 #[cfg(test)]

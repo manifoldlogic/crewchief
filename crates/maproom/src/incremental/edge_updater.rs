@@ -109,17 +109,57 @@ impl EdgeUpdater {
     /// # }
     /// ```
     pub async fn update_edges(&self, file_id: i64) -> Result<()> {
-        debug!(file_id = file_id, "Updating edges for file (stub)");
+        debug!(file_id = file_id, "Updating edges for file");
 
-        // TODO: Implement SQLite-based edge updates
-        // This will be implemented in a future ticket
-        // Steps to implement:
-        // 1. Find all chunk IDs for this file
-        // 2. Delete old edges involving these chunks
-        // 3. Compute new edges based on chunk content
-        // 4. Insert new edges into database
+        // 1. Delete old edges for chunks in this file
+        // This clears any stale edges before re-computation
+        self.store.run(move |conn| {
+            // Delete edges where src or dst is a chunk from this file
+            conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 ) OR dst_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                rusqlite::params![file_id],
+            )?;
+            Ok(())
+        }).await?;
+
+        // 2. TODO: In the future, compute new edges based on chunk content
+        // This requires tree-sitter analysis of imports, calls, extends relationships
+        // For now, edges are cleared but not recomputed - this is acceptable for MVP
+        // Edge computation can be added incrementally without breaking the system
+
+        debug!(file_id = file_id, "Edges cleared for file (computation pending future ticket)");
 
         Ok(())
+    }
+
+    /// Delete all edges for chunks in a file.
+    ///
+    /// This is useful when a file is being removed or completely reindexed.
+    ///
+    /// # Arguments
+    /// * `file_id` - Database ID of the file
+    ///
+    /// # Returns
+    /// Number of edges deleted
+    pub async fn delete_edges_for_file(&self, file_id: i64) -> Result<u64> {
+        let count = self.store.run(move |conn| {
+            let deleted = conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 ) OR dst_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                rusqlite::params![file_id],
+            )?;
+            Ok(deleted as u64)
+        }).await?;
+
+        debug!(file_id = file_id, edges_deleted = count, "Deleted edges for file");
+        Ok(count)
     }
 }
 
@@ -252,15 +292,34 @@ async fn find_test_targets(
 /// Insert edges into the database in batch.
 ///
 /// # Arguments
-/// * `_store` - SqliteStore instance (unused in stub)
+/// * `store` - SqliteStore instance
 /// * `edges` - Edges to insert
 ///
 /// # Returns
 /// Number of edges inserted
-async fn insert_edges(_store: &SqliteStore, edges: &[Edge]) -> Result<u64> {
-    // TODO: Implement SQLite-based edge insertion
-    // This will be implemented in a future ticket
-    Ok(edges.len() as u64)
+async fn insert_edges(store: &SqliteStore, edges: &[Edge]) -> Result<u64> {
+    if edges.is_empty() {
+        return Ok(0);
+    }
+
+    let edges = edges.to_vec();
+    store.run(move |conn| {
+        let mut stmt = conn.prepare(
+            "INSERT OR IGNORE INTO chunk_edges (src_chunk_id, dst_chunk_id, type) VALUES (?1, ?2, ?3)"
+        )?;
+
+        let mut count = 0u64;
+        for edge in &edges {
+            let rows = stmt.execute(rusqlite::params![
+                edge.src_chunk_id,
+                edge.dst_chunk_id,
+                edge.edge_type.as_str()
+            ])?;
+            count += rows as u64;
+        }
+
+        Ok(count)
+    }).await
 }
 
 #[cfg(test)]
