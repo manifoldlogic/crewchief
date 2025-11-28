@@ -373,7 +373,7 @@ vsce publish
 The VSMAP extension does NOT implement file watching or indexing logic. Instead:
 
 ✅ **DO:**
-- Spawn Rust binary processes (`crewchief-maproom watch`, `crewchief-maproom branch-watch`)
+- Spawn Rust binary processes (`crewchief-maproom watch`)
 - Parse NDJSON stdout from spawned processes
 - Update StatusBarItem based on parsed events
 - Manage Docker services lifecycle
@@ -382,10 +382,10 @@ The VSMAP extension does NOT implement file watching or indexing logic. Instead:
 
 ❌ **DO NOT:**
 - Implement FileSystemWatcher (Rust binary handles file watching)
-- Reimplement branch detection (Rust binary has `branch-watch`)
 - Create custom debouncing/throttling (Rust binary has configurable --throttle)
 - Build complex state machines (keep orchestration simple)
-- Watch .git/HEAD manually (Rust binary handles this)
+
+> **Note**: The unified `watch` command handles file watching and branch auto-detection at startup. Runtime branch switch detection (while watch is running) is planned in the UNIWATCH project.
 
 **Why this matters:**
 The Rust binary (`crewchief-maproom`) already has battle-tested implementations of file watching, branch detection, and incremental indexing. The extension's job is to:
