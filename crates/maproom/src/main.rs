@@ -97,6 +97,54 @@ enum Commands {
         command: crewchief_maproom::cli::CacheCommand,
     },
 
+    /// Retrieve context bundle for a chunk
+    ///
+    /// Assembles a context bundle containing the primary chunk and optionally
+    /// related code (callers, callees, tests, docs, config) within a token budget.
+    ///
+    /// Examples:
+    ///   maproom context --chunk-id 12345                   # Basic context retrieval
+    ///   maproom context --chunk-id 12345 --callers         # Include caller functions
+    ///   maproom context --chunk-id 12345 --budget 4000     # Custom token budget
+    ///   maproom context --chunk-id 12345 --json            # Output as JSON
+    Context {
+        /// Chunk ID to retrieve context for
+        #[arg(long)]
+        chunk_id: i64,
+
+        /// Maximum tokens for the bundle (default: 6000)
+        #[arg(long, default_value_t = 6000)]
+        budget: usize,
+
+        /// Include caller functions
+        #[arg(long)]
+        callers: bool,
+
+        /// Include callee functions
+        #[arg(long)]
+        callees: bool,
+
+        /// Include test files
+        #[arg(long)]
+        tests: bool,
+
+        /// Include documentation
+        #[arg(long)]
+        docs: bool,
+
+        /// Include configuration files
+        #[arg(long)]
+        config: bool,
+
+        /// Maximum traversal depth (default: 2)
+        #[arg(long, default_value_t = 2)]
+        max_depth: i32,
+
+        /// Output as JSON instead of human-readable
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Scan and index a worktree with real-time progress display
     ///
     /// By default, uses incremental scanning to only process changed files based on
@@ -1372,6 +1420,22 @@ async fn main() -> anyhow::Result<()> {
         Commands::Serve => {
             daemon::run().await?;
         }
+
+        Commands::Context {
+            chunk_id: _,
+            budget: _,
+            callers: _,
+            callees: _,
+            tests: _,
+            docs: _,
+            config: _,
+            max_depth: _,
+            json: _,
+        } => {
+            // Handler implementation in CTXCLI-2002
+            eprintln!("Context command handler not yet implemented (CTXCLI-2002)");
+            std::process::exit(1);
+        }
     }
 
     Ok(())
@@ -1437,6 +1501,112 @@ mod tests {
             assert_eq!(verbose, true);
         } else {
             panic!("Expected cleanup-stale command");
+        }
+    }
+
+    #[test]
+    fn test_context_command_parsing_minimal() {
+        let cli = Cli::parse_from(&["maproom", "context", "--chunk-id", "12345"]);
+        if let Commands::Context {
+            chunk_id,
+            budget,
+            callers,
+            callees,
+            tests,
+            docs,
+            config,
+            max_depth,
+            json,
+        } = cli.command
+        {
+            assert_eq!(chunk_id, 12345);
+            assert_eq!(budget, 6000); // default
+            assert_eq!(callers, false);
+            assert_eq!(callees, false);
+            assert_eq!(tests, false);
+            assert_eq!(docs, false);
+            assert_eq!(config, false);
+            assert_eq!(max_depth, 2); // default
+            assert_eq!(json, false);
+        } else {
+            panic!("Expected Context command");
+        }
+    }
+
+    #[test]
+    fn test_context_command_parsing_with_expands() {
+        let cli = Cli::parse_from(&[
+            "maproom", "context",
+            "--chunk-id", "99999",
+            "--budget", "4000",
+            "--callers",
+            "--callees",
+            "--tests",
+            "--max-depth", "5",
+        ]);
+        if let Commands::Context {
+            chunk_id,
+            budget,
+            callers,
+            callees,
+            tests,
+            docs,
+            config,
+            max_depth,
+            json,
+        } = cli.command
+        {
+            assert_eq!(chunk_id, 99999);
+            assert_eq!(budget, 4000);
+            assert_eq!(callers, true);
+            assert_eq!(callees, true);
+            assert_eq!(tests, true);
+            assert_eq!(docs, false); // not specified
+            assert_eq!(config, false); // not specified
+            assert_eq!(max_depth, 5);
+            assert_eq!(json, false);
+        } else {
+            panic!("Expected Context command");
+        }
+    }
+
+    #[test]
+    fn test_context_command_parsing_all_flags() {
+        let cli = Cli::parse_from(&[
+            "maproom", "context",
+            "--chunk-id", "42",
+            "--budget", "8000",
+            "--callers",
+            "--callees",
+            "--tests",
+            "--docs",
+            "--config",
+            "--max-depth", "3",
+            "--json",
+        ]);
+        if let Commands::Context {
+            chunk_id,
+            budget,
+            callers,
+            callees,
+            tests,
+            docs,
+            config,
+            max_depth,
+            json,
+        } = cli.command
+        {
+            assert_eq!(chunk_id, 42);
+            assert_eq!(budget, 8000);
+            assert_eq!(callers, true);
+            assert_eq!(callees, true);
+            assert_eq!(tests, true);
+            assert_eq!(docs, true);
+            assert_eq!(config, true);
+            assert_eq!(max_depth, 3);
+            assert_eq!(json, true);
+        } else {
+            panic!("Expected Context command");
         }
     }
 }

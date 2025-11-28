@@ -1,9 +1,9 @@
 # Ticket: CTXCLI-2001: Add CLI Context Command Variant
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,14 +20,14 @@ This is the first ticket of Phase 2 (CLI Context Command). It defines the CLI in
 Reference: [planning/architecture.md](../planning/architecture.md) - Section 1: CLI Context Command
 
 ## Acceptance Criteria
-- [ ] `Context` variant added to `Commands` enum in `main.rs`
-- [ ] `crewchief-maproom context --help` shows all options with descriptions
-- [ ] Required argument: `--chunk-id <ID>` (i64)
-- [ ] Optional arguments with defaults: `--budget` (6000), `--max-depth` (2)
-- [ ] Boolean flags: `--callers`, `--callees`, `--tests`, `--docs`, `--config`, `--json`
-- [ ] Arguments parse correctly for minimal input: `context --chunk-id 12345`
-- [ ] Arguments parse correctly with all flags
-- [ ] Unit tests pass for argument parsing
+- [x] `Context` variant added to `Commands` enum in `main.rs`
+- [x] `crewchief-maproom context --help` shows all options with descriptions
+- [x] Required argument: `--chunk-id <ID>` (i64)
+- [x] Optional arguments with defaults: `--budget` (6000), `--max-depth` (2)
+- [x] Boolean flags: `--callers`, `--callees`, `--tests`, `--docs`, `--config`, `--json`
+- [x] Arguments parse correctly for minimal input: `context --chunk-id 12345`
+- [x] Arguments parse correctly with all flags
+- [x] Unit tests pass for argument parsing
 
 ## Technical Requirements
 - Use clap derive macros for argument definition
