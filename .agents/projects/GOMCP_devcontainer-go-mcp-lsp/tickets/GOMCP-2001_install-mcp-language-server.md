@@ -1,9 +1,9 @@
 # Ticket: GOMCP-2001: Install MCP Language Server in Post-Create
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (configuration change, verified by container rebuild)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (configuration change, verified by container rebuild)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - docker-engineer
@@ -19,11 +19,11 @@ With Go available from GOMCP-1001, we can now install the MCP Language Server wh
 Reference: plan.md Phase 2 - Install MCP Language Server
 
 ## Acceptance Criteria
-- [ ] Go installation check added before `go install` command
-- [ ] `go install github.com/isaacphi/mcp-language-server@latest` command added
-- [ ] Uses existing `print_step`, `print_success`, `print_error` functions
-- [ ] Non-fatal error handling (uses `|| print_error` pattern)
-- [ ] Shell script syntax is valid (`bash -n` passes)
+- [x] Go installation check added before `go install` command
+- [x] `go install github.com/isaacphi/mcp-language-server@latest` command added
+- [x] Uses existing `print_step`, `print_success`, `print_error` functions
+- [x] Non-fatal error handling (uses `|| print_error` pattern)
+- [x] Shell script syntax is valid (`bash -n` passes)
 
 ## Technical Requirements
 - Check `command -v go` before attempting installation

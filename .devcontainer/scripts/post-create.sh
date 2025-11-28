@@ -52,6 +52,15 @@ print_step "Installing CrewChief CLI globally..."
 npm install -g @crewchief/cli@latest || print_error "Failed to install CrewChief CLI"
 print_success "CrewChief CLI installed globally"
 
+# Install Go tools
+if command -v go &> /dev/null; then
+    print_step "Installing MCP Language Server..."
+    go install github.com/isaacphi/mcp-language-server@latest || print_error "Failed to install MCP Language Server"
+    print_success "MCP Language Server installed"
+else
+    print_error "Go not found, skipping MCP Language Server installation"
+fi
+
 # Install pnpm dependencies
 print_step "Installing Node.js dependencies..."
 pnpm install
