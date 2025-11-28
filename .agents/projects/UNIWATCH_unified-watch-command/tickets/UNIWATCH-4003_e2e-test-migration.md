@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-4003: Migrate E2E Test Script to SQLite
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,11 +20,11 @@ The E2E test script was written during the PostgreSQL era and uses `psql` comman
 **Plan Reference:** Phase 4 - Testing, Task 3
 
 ## Acceptance Criteria
-- [ ] Script updated to use SQLite database path (`~/.maproom/maproom.db`)
-- [ ] All `psql` commands replaced with `sqlite3` or maproom CLI equivalents
-- [ ] Branch switch scenarios added to test script
-- [ ] Script runs successfully: `./crates/maproom/tests/e2e/test_unified_watch_workflow.sh`
-- [ ] Script cleans up test artifacts properly
+- [x] Script updated to use SQLite database path (`~/.maproom/maproom.db`)
+- [x] All `psql` commands replaced with `sqlite3` or maproom CLI equivalents
+- [x] Branch switch scenarios added to test script
+- [x] Script runs successfully: `./crates/maproom/tests/e2e/test_unified_watch_workflow.sh`
+- [x] Script cleans up test artifacts properly
 
 ## Technical Requirements
 **Current (PostgreSQL) pattern to replace:**
