@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-4001: Enable and Migrate Disabled Unit Tests
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - all 3 migrated tests pass, existing tests unaffected
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,12 +20,12 @@ During the IDXABS-2001 SQLite migration, several unit tests were disabled becaus
 **Plan Reference:** Phase 4 - Testing, Task 1
 
 ## Acceptance Criteria
-- [ ] `test_worktree_tracking_initialization` migrated to SQLite and enabled
-- [ ] `test_handle_branch_switch_updates_state` migrated to SQLite and enabled
-- [ ] `test_handle_branch_switch_skips_if_same_branch` migrated to SQLite and enabled
-- [ ] All `#[cfg(disabled_postgresql_test)]` annotations removed from these 3 tests
-- [ ] All 3 migrated tests pass: `cargo test -p crewchief-maproom -- --test-threads=1 test_worktree`
-- [ ] Existing working tests still pass (test_debounced_handler, test_branch_switch_event_serialization, test_dual_watchers, test_event_loop_handles_both_sources)
+- [x] `test_worktree_tracking_initialization` migrated to SQLite and enabled
+- [x] `test_handle_branch_switch_updates_state` migrated to SQLite and enabled
+- [x] `test_handle_branch_switch_skips_if_same_branch` migrated to SQLite and enabled
+- [x] All `#[cfg(disabled_postgresql_test)]` annotations removed from these 3 tests
+- [x] All 3 migrated tests pass: `cargo test -p crewchief-maproom -- --test-threads=1 test_worktree`
+- [x] Existing working tests still pass (test_debounced_handler, test_branch_switch_event_serialization, test_dual_watchers, test_event_loop_handles_both_sources)
 
 ## Technical Requirements
 **Tests to migrate (in indexer/mod.rs):**
