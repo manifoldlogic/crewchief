@@ -172,14 +172,65 @@ impl PythonAssemblyStrategy {
     }
 
     /// Find parent classes for a Python class chunk.
+    ///
+    /// Uses graph traversal to find classes that this class extends.
     async fn add_parent_classes(
         &self,
-        _bundle: &mut ContextBundle,
-        _chunk_id: i64,
-        _budget: usize,
+        bundle: &mut ContextBundle,
+        chunk_id: i64,
+        budget: usize,
     ) -> Result<()> {
-        // TODO: Implement parent class queries for SQLite backend using graph module
-        // For now, this feature is disabled
+        use crate::db::sqlite::graph::ImportDirection;
+
+        if !self.config.include_parent_classes || bundle.total_tokens >= budget {
+            return Ok(());
+        }
+
+        // Find classes that this class extends (Outgoing direction = superclasses)
+        let parent_classes = self.store.find_extensions(
+            chunk_id,
+            ImportDirection::Outgoing,
+            Some(1), // Only direct parents
+        ).await?;
+
+        let mut added_count = 0;
+        for parent in parent_classes {
+            if added_count >= self.config.max_parent_classes || bundle.total_tokens >= budget {
+                break;
+            }
+
+            // Get the parent class metadata
+            if let Some(chunk) = self.store.get_chunk_by_id(parent.chunk_id).await? {
+                // Get worktree path for file loading
+                let metadata = self.default.get_chunk_metadata(chunk_id).await?;
+
+                let file_loader = FileLoader::new(&metadata.worktree_path);
+                let range = LineRange::new(chunk.start_line, chunk.end_line);
+
+                if let Ok(content) = file_loader.load_range(&chunk.file_path, range).await {
+                    let tokens = self.token_counter.count(&content)?;
+
+                    if !bundle.would_exceed_budget(tokens, budget) {
+                        let parent_name = chunk.symbol_name.as_deref().unwrap_or("ParentClass");
+                        let item = ContextItem {
+                            relpath: chunk.file_path.clone(),
+                            range: LineRange::new(chunk.start_line, chunk.end_line),
+                            role: "parent_class".to_string(),
+                            reason: format!(
+                                "Parent class: {} provides inherited functionality",
+                                parent_name
+                            ),
+                            content,
+                            tokens,
+                        };
+                        debug!("Adding parent class {}: {} tokens", parent_name, tokens);
+                        bundle.add_item(item);
+                        added_count += 1;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

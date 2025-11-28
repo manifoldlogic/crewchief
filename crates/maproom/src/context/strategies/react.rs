@@ -171,6 +171,12 @@ impl ReactAssemblyStrategy {
         self.base_assembler.get_chunk_metadata(chunk_id).await
     }
 
+    /// Get the worktree path for a chunk.
+    async fn get_worktree_path(&self, chunk_id: i64) -> Result<String> {
+        let metadata = self.get_chunk_metadata(chunk_id).await?;
+        Ok(metadata.worktree_path)
+    }
+
     /// Add route definitions to the context bundle.
     async fn add_routes(
         &self,
@@ -184,39 +190,174 @@ impl ReactAssemblyStrategy {
     }
 
     /// Add hooks to the context bundle.
+    ///
+    /// Uses the HookDetector to find hooks used by the component and
+    /// adds their definitions to the context bundle.
     async fn add_hooks(
         &self,
-        _bundle: &mut ContextBundle,
-        _chunk_id: i64,
-        _budget: usize,
+        bundle: &mut ContextBundle,
+        chunk_id: i64,
+        budget: usize,
     ) -> Result<()> {
-        // TODO: Implement hook queries for SQLite backend using graph module
-        // For now, this feature is disabled
+        if !self.config.include_hooks || bundle.total_tokens >= budget {
+            return Ok(());
+        }
+
+        // Find hooks used by this component
+        let hooks = self.hook_detector.find_used_hooks(&self.store, chunk_id).await?;
+
+        let mut added_count = 0;
+        for hook in hooks {
+            if added_count >= self.config.max_hooks || bundle.total_tokens >= budget {
+                break;
+            }
+
+            // Skip built-in hooks (they don't have definitions in the codebase)
+            if hook.is_builtin {
+                continue;
+            }
+
+            // Get the hook's metadata and create a context item
+            if let Some(chunk) = self.store.get_chunk_by_id(hook.id).await? {
+                let metadata = ChunkMetadata {
+                    id: chunk.id,
+                    file_relpath: chunk.file_path.clone(),
+                    worktree_path: self.get_worktree_path(chunk_id).await.unwrap_or_default(),
+                    kind: chunk.kind.clone(),
+                    symbol_name: chunk.symbol_name.clone(),
+                    start_line: chunk.start_line,
+                    end_line: chunk.end_line,
+                    signature: None,
+                    docstring: None,
+                };
+
+                if let Ok(item) = self.create_context_item(
+                    metadata,
+                    "hook",
+                    &format!("Custom hook: {} provides reusable logic", hook.symbol_name),
+                ).await {
+                    if !bundle.would_exceed_budget(item.tokens, budget) {
+                        debug!("Adding hook {}: {} tokens", hook.symbol_name, item.tokens);
+                        bundle.add_item(item);
+                        added_count += 1;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
     /// Add JSX parent components to the context bundle.
+    ///
+    /// Uses the JsxRelationshipDetector to find components that render this component.
     async fn add_jsx_parents(
         &self,
-        _bundle: &mut ContextBundle,
-        _chunk_id: i64,
-        _symbol_name: &str,
-        _budget: usize,
+        bundle: &mut ContextBundle,
+        chunk_id: i64,
+        symbol_name: &str,
+        budget: usize,
     ) -> Result<()> {
-        // TODO: Implement JSX parent queries for SQLite backend using graph module
-        // For now, this feature is disabled
+        if !self.config.include_jsx_parents || bundle.total_tokens >= budget {
+            return Ok(());
+        }
+
+        // Find parent components that render this component
+        let parents = self.jsx_detector.find_parent_components(
+            &self.store,
+            chunk_id,
+            symbol_name,
+        ).await?;
+
+        let mut added_count = 0;
+        for parent in parents {
+            if added_count >= self.config.max_jsx_parents || bundle.total_tokens >= budget {
+                break;
+            }
+
+            // Get the parent's metadata and create a context item
+            if let Some(chunk) = self.store.get_chunk_by_id(parent.id).await? {
+                let metadata = ChunkMetadata {
+                    id: chunk.id,
+                    file_relpath: chunk.file_path.clone(),
+                    worktree_path: self.get_worktree_path(chunk_id).await.unwrap_or_default(),
+                    kind: chunk.kind.clone(),
+                    symbol_name: chunk.symbol_name.clone(),
+                    start_line: chunk.start_line,
+                    end_line: chunk.end_line,
+                    signature: None,
+                    docstring: None,
+                };
+
+                let parent_name = parent.symbol_name.as_deref().unwrap_or("ParentComponent");
+                if let Ok(item) = self.create_context_item(
+                    metadata,
+                    "jsx_parent",
+                    &format!("JSX parent: {} renders this component", parent_name),
+                ).await {
+                    if !bundle.would_exceed_budget(item.tokens, budget) {
+                        debug!("Adding JSX parent {}: {} tokens", parent_name, item.tokens);
+                        bundle.add_item(item);
+                        added_count += 1;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
     /// Add JSX child components to the context bundle.
+    ///
+    /// Uses the JsxRelationshipDetector to find components rendered by this component.
     async fn add_jsx_children(
         &self,
-        _bundle: &mut ContextBundle,
-        _chunk_id: i64,
-        _budget: usize,
+        bundle: &mut ContextBundle,
+        chunk_id: i64,
+        budget: usize,
     ) -> Result<()> {
-        // TODO: Implement JSX child queries for SQLite backend using graph module
-        // For now, this feature is disabled
+        if !self.config.include_jsx_children || bundle.total_tokens >= budget {
+            return Ok(());
+        }
+
+        // Find child components rendered by this component
+        let children = self.jsx_detector.find_child_components(&self.store, chunk_id).await?;
+
+        let mut added_count = 0;
+        for child in children {
+            if added_count >= self.config.max_jsx_children || bundle.total_tokens >= budget {
+                break;
+            }
+
+            // Get the child's metadata and create a context item
+            if let Some(chunk) = self.store.get_chunk_by_id(child.id).await? {
+                let metadata = ChunkMetadata {
+                    id: chunk.id,
+                    file_relpath: chunk.file_path.clone(),
+                    worktree_path: self.get_worktree_path(chunk_id).await.unwrap_or_default(),
+                    kind: chunk.kind.clone(),
+                    symbol_name: chunk.symbol_name.clone(),
+                    start_line: chunk.start_line,
+                    end_line: chunk.end_line,
+                    signature: None,
+                    docstring: None,
+                };
+
+                let child_name = child.symbol_name.as_deref().unwrap_or("ChildComponent");
+                if let Ok(item) = self.create_context_item(
+                    metadata,
+                    "jsx_child",
+                    &format!("JSX child: {} is rendered by this component", child_name),
+                ).await {
+                    if !bundle.would_exceed_budget(item.tokens, budget) {
+                        debug!("Adding JSX child {}: {} tokens", child_name, item.tokens);
+                        bundle.add_item(item);
+                        added_count += 1;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

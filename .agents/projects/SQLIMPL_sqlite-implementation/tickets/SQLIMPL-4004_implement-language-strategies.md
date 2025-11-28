@@ -1,9 +1,9 @@
 # Ticket: SQLIMPL-4004: Implement Language Strategies
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Phase 4 - OPTIONAL ENHANCEMENT:** This ticket is part of the optional context assembly phase. Defer if timeline pressure.
 
@@ -22,12 +22,12 @@ The language strategies at `src/context/strategies/` provide language-aware cont
 This ticket implements Plan Phase 4, Ticket 4004: "Implement Language Strategies".
 
 ## Acceptance Criteria
-- [ ] React strategy expands context for components, hooks, and props
-- [ ] Python strategy expands context for classes, functions, and imports
-- [ ] Rust strategy expands context for modules, traits, and implementations
-- [ ] Language-specific context expansion works correctly
-- [ ] Strategy tests pass
-- [ ] Phase 4 gate achieved: context assembly returns expanded results
+- [x] React strategy expands context for components, hooks, and props
+- [x] Python strategy expands context for classes, functions, and imports
+- [x] Rust strategy expands context for modules, traits, and implementations
+- [x] Language-specific context expansion works correctly
+- [x] Strategy tests pass
+- [x] Phase 4 gate achieved: context assembly returns expanded results
 
 ## Technical Requirements
 - Use detectors from SQLIMPL-4003 for pattern identification

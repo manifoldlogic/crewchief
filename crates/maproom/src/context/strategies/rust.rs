@@ -122,14 +122,65 @@ impl RustAssemblyStrategy {
     }
 
     /// Find and add trait implementations for a type.
+    ///
+    /// Uses graph traversal to find trait implementations related to this type.
     async fn add_trait_impls(
         &self,
-        _bundle: &mut ContextBundle,
-        _chunk_id: i64,
-        _budget: usize,
+        bundle: &mut ContextBundle,
+        chunk_id: i64,
+        budget: usize,
     ) -> Result<()> {
-        // TODO: Implement trait impl queries for SQLite backend using graph module
-        // For now, this feature is disabled
+        use crate::db::sqlite::graph::ImportDirection;
+
+        if !self.config.include_trait_impls || bundle.total_tokens >= budget {
+            return Ok(());
+        }
+
+        // Find trait implementations (Incoming = what implements this trait/type)
+        let implementations = self.store.find_extensions(
+            chunk_id,
+            ImportDirection::Incoming,
+            Some(1), // Only direct implementations
+        ).await?;
+
+        let mut added_count = 0;
+        for impl_result in implementations {
+            if added_count >= self.config.max_trait_impls || bundle.total_tokens >= budget {
+                break;
+            }
+
+            // Get the implementation chunk
+            if let Some(chunk) = self.store.get_chunk_by_id(impl_result.chunk_id).await? {
+                // Get worktree path for file loading
+                let metadata = self.default.get_chunk_metadata(chunk_id).await?;
+
+                let file_loader = FileLoader::new(&metadata.worktree_path);
+                let range = LineRange::new(chunk.start_line, chunk.end_line);
+
+                if let Ok(content) = file_loader.load_range(&chunk.file_path, range).await {
+                    let tokens = self.token_counter.count(&content)?;
+
+                    if !bundle.would_exceed_budget(tokens, budget) {
+                        let impl_name = chunk.symbol_name.as_deref().unwrap_or("impl");
+                        let item = ContextItem {
+                            relpath: chunk.file_path.clone(),
+                            range: LineRange::new(chunk.start_line, chunk.end_line),
+                            role: "trait_impl".to_string(),
+                            reason: format!(
+                                "Trait implementation: {} provides trait methods",
+                                impl_name
+                            ),
+                            content,
+                            tokens,
+                        };
+                        debug!("Adding trait impl {}: {} tokens", impl_name, tokens);
+                        bundle.add_item(item);
+                        added_count += 1;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
