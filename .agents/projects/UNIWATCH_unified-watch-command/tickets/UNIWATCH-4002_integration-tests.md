@@ -1,9 +1,9 @@
 # Ticket: UNIWATCH-4002: Create Integration Tests for Unified Watch
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - integration-tester
@@ -20,13 +20,13 @@ Integration tests validate that all components work together correctly: HEAD wat
 **Plan Reference:** Phase 4 - Testing, Tasks 2-3
 
 ## Acceptance Criteria
-- [ ] Test file created: `crates/maproom/tests/unified_watch_test.rs`
-- [ ] Test 1: Complete branch switch workflow (main → feature → verify indexing)
-- [ ] Test 2: Rapid branch switches are debounced (3 switches in <2s → only final processed)
-- [ ] Test 3: File changes during branch switch don't get lost
-- [ ] Test 4: Detached HEAD creates SHA-named worktree
-- [ ] Test 5: --worktree flag backward compatibility (warning shown, auto-detection used)
-- [ ] All 5 integration tests pass: `cargo test --test unified_watch_test -- --nocapture`
+- [x] Test file created: `crates/maproom/tests/unified_watch_test.rs`
+- [x] Test 1: Complete branch switch workflow (main → feature → verify indexing)
+- [x] Test 2: Rapid branch switches are debounced (3 switches in <2s → only final processed)
+- [x] Test 3: File changes during branch switch don't get lost
+- [x] Test 4: Detached HEAD creates SHA-named worktree
+- [x] Test 5: --worktree flag backward compatibility (warning shown, auto-detection used)
+- [x] All 5 integration tests pass: `cargo test --test unified_watch_test -- --nocapture`
 
 ## Technical Requirements
 **Test file location:** `crates/maproom/tests/unified_watch_test.rs`
