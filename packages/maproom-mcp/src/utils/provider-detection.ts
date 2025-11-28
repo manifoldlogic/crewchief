@@ -37,7 +37,8 @@ export async function detectProvider(): Promise<ProviderConfig> {
   // 2. Try Ollama auto-detection
   console.log('Auto-detecting embedding provider...')
   if (await isOllamaAvailable()) {
-    console.log('✓ Ollama detected at localhost:11434')
+    const endpoint = getOllamaEndpoint() || 'localhost:11434'
+    console.log(`✓ Ollama detected at ${endpoint}`)
     return {
       provider: 'ollama',
       dimension: 768,
@@ -76,46 +77,74 @@ export async function detectProvider(): Promise<ProviderConfig> {
 }
 
 /**
- * Check if Ollama is running locally and has the nomic-embed-text model
+ * Detected Ollama endpoint (cached after successful detection)
+ */
+let detectedOllamaEndpoint: string | null = null
+
+/**
+ * Get the detected Ollama endpoint URL
+ *
+ * @returns The Ollama base URL (e.g., "http://localhost:11434" or "http://host.docker.internal:11434")
+ */
+export function getOllamaEndpoint(): string | null {
+  return detectedOllamaEndpoint
+}
+
+/**
+ * Check if Ollama is running and has the nomic-embed-text model
+ *
+ * Checks multiple endpoints in priority order:
+ * 1. localhost:11434 (native development)
+ * 2. host.docker.internal:11434 (Docker/DevContainer)
  *
  * @returns True if Ollama is available and properly configured
  */
 export async function isOllamaAvailable(): Promise<boolean> {
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 2000) // 2s timeout
+  // Endpoints to try in priority order
+  const endpoints = [
+    'http://localhost:11434',
+    'http://host.docker.internal:11434',
+  ]
 
-    const response = await fetch('http://localhost:11434/api/tags', {
-      method: 'GET',
-      signal: controller.signal,
-    })
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 2000) // 2s timeout
 
-    clearTimeout(timeout)
+      const response = await fetch(`${endpoint}/api/tags`, {
+        method: 'GET',
+        signal: controller.signal,
+      })
 
-    if (response.ok) {
-      const data = await response.json()
-      // Verify nomic-embed-text model is available
-      const models = data.models || []
-      const hasEmbedModel = models.some(
-        (m: any) => m.name.includes('nomic-embed-text')
-      )
+      clearTimeout(timeout)
 
-      if (!hasEmbedModel) {
-        console.warn(
-          '⚠ Ollama is running but nomic-embed-text model not found. ' +
-          'Run: ollama pull nomic-embed-text'
+      if (response.ok) {
+        const data = await response.json()
+        // Verify nomic-embed-text model is available
+        const models = data.models || []
+        const hasEmbedModel = models.some(
+          (m: any) => m.name.includes('nomic-embed-text')
         )
-        return false
+
+        if (!hasEmbedModel) {
+          console.warn(
+            `⚠ Ollama is running at ${endpoint} but nomic-embed-text model not found. ` +
+            'Run: ollama pull nomic-embed-text'
+          )
+          return false
+        }
+
+        // Cache the detected endpoint for use by daemon
+        detectedOllamaEndpoint = endpoint
+        return true
       }
-
-      return true
+    } catch (error) {
+      // Connection refused, timeout, or network error - try next endpoint
+      continue
     }
-
-    return false
-  } catch (error) {
-    // Connection refused, timeout, or network error
-    return false
   }
+
+  return false
 }
 
 /**

@@ -5,7 +5,7 @@
  * Handles provider-specific environment variables and merges with existing configurations.
  *
  * Key features:
- * - Versioned package reference using @crewchief/maproom-mcp@VERSION
+ * - Uses latest @crewchief/maproom-mcp via npx
  * - Provider-specific environment variable mapping (OpenAI, Google, Ollama)
  * - Preserves existing MCP server configurations
  * - Path validation to prevent directory traversal attacks
@@ -19,7 +19,6 @@
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { MAPROOM_MCP_VERSION } from '../constants'
 
 /**
  * Supported embedding providers
@@ -122,7 +121,7 @@ export class MCPConfigWriter {
     // Build Maproom server configuration
     const maproomConfig: MCPServerConfig = {
       command: 'npx',
-      args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
+      args: ['-y', '@crewchief/maproom-mcp'],
     }
 
     // Add provider-specific environment variables

@@ -10,7 +10,6 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
 import { MCPConfigWriter } from './mcp-writer'
-import { MAPROOM_MCP_VERSION } from '../constants'
 
 describe('MCPConfigWriter', () => {
   let writer: MCPConfigWriter
@@ -43,7 +42,7 @@ describe('MCPConfigWriter', () => {
 
         expect(config.servers.maproom).toEqual({
           command: 'npx',
-          args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
+          args: ['-y', '@crewchief/maproom-mcp'],
           env: {
             MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'openai',
@@ -62,7 +61,7 @@ describe('MCPConfigWriter', () => {
 
         expect(config.servers.maproom).toEqual({
           command: 'npx',
-          args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
+          args: ['-y', '@crewchief/maproom-mcp'],
           env: {
             MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'google',
@@ -81,7 +80,7 @@ describe('MCPConfigWriter', () => {
 
         expect(config.servers.maproom).toEqual({
           command: 'npx',
-          args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
+          args: ['-y', '@crewchief/maproom-mcp'],
           env: {
             MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'ollama',
@@ -92,7 +91,7 @@ describe('MCPConfigWriter', () => {
         expect(Object.keys(config.servers.maproom.env)).toHaveLength(2)
       })
 
-      it('should use versioned package reference from constant', async () => {
+      it('should use unversioned package reference for latest', async () => {
         const configPath = path.join(tempDir, '.vscode', 'mcp.json')
 
         await writer.registerMCPServer(tempDir, 'ollama')
@@ -100,9 +99,9 @@ describe('MCPConfigWriter', () => {
         const content = await fs.readFile(configPath, 'utf-8')
         const config = JSON.parse(content)
 
-        expect(config.servers.maproom.args).toContain(
-          `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`
-        )
+        expect(config.servers.maproom.args).toContain('@crewchief/maproom-mcp')
+        // Should NOT contain version suffix
+        expect(config.servers.maproom.args[1]).not.toMatch(/@\d+\.\d+\.\d+$/)
       })
 
       it('should never write plaintext credentials', async () => {
@@ -197,7 +196,7 @@ describe('MCPConfigWriter', () => {
 
         expect(config.servers.maproom).toEqual({
           command: 'npx',
-          args: ['-y', `@crewchief/maproom-mcp@${MAPROOM_MCP_VERSION}`],
+          args: ['-y', '@crewchief/maproom-mcp'],
           env: {
             MAPROOM_DATABASE_URL: 'sqlite://~/.maproom/maproom.db',
             MAPROOM_EMBEDDING_PROVIDER: 'openai',

@@ -20,6 +20,7 @@
 import { existsSync } from 'node:fs'
 import { DaemonClient } from './daemon-client/index.js'
 import { findMaproomBinary } from './utils/process.js'
+import { getOllamaEndpoint } from './utils/provider-detection.js'
 import { resolveDatabaseConfig } from './utils/resolve-database.js'
 
 /**
@@ -71,6 +72,9 @@ export function getDaemonClient(): DaemonClient {
 
     // Create daemon client with configuration
     // Note: args are hardcoded to ['serve'] in DaemonLifecycle
+    // Get detected Ollama endpoint (from provider detection) or use explicit env var
+    const ollamaEndpoint = getOllamaEndpoint() || process.env.OLLAMA_BASE_URL
+
     daemonClient = new DaemonClient({
       binaryPath,
       env: {
@@ -80,7 +84,10 @@ export function getDaemonClient(): DaemonClient {
         // Optional: Embedding provider credentials
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-        OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
+        // Pass detected Ollama endpoint to Rust daemon (converts base URL to API endpoint)
+        ...(ollamaEndpoint && {
+          MAPROOM_EMBEDDING_API_ENDPOINT: `${ollamaEndpoint}/api/embed`,
+        }),
 
         // Optional: Logging configuration
         RUST_LOG: process.env.RUST_LOG || 'info',

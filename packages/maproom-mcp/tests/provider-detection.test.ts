@@ -18,6 +18,7 @@ import {
   validateExplicitProvider,
   getProviderConfig,
   clearProviderCache,
+  getOllamaEndpoint,
 } from '../src/utils/provider-detection'
 
 describe('Provider Detection', () => {
@@ -120,8 +121,8 @@ describe('Provider Detection', () => {
   })
 
   describe('Auto-detection', () => {
-    it('should detect Ollama when available', async () => {
-      // Mock successful Ollama response
+    it('should detect Ollama when available on localhost', async () => {
+      // Mock successful Ollama response on localhost
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -140,6 +141,30 @@ describe('Provider Detection', () => {
         'http://localhost:11434/api/tags',
         expect.objectContaining({ method: 'GET' })
       )
+      expect(getOllamaEndpoint()).toBe('http://localhost:11434')
+    })
+
+    it('should detect Ollama on host.docker.internal when localhost fails', async () => {
+      // Mock localhost failure, host.docker.internal success
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url === 'http://localhost:11434/api/tags') {
+          return Promise.reject(new Error('Connection refused'))
+        }
+        if (url === 'http://host.docker.internal:11434/api/tags') {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              models: [{ name: 'nomic-embed-text:latest' }],
+            }),
+          })
+        }
+        return Promise.reject(new Error('Unknown endpoint'))
+      })
+
+      const config = await detectProvider()
+
+      expect(config.provider).toBe('ollama')
+      expect(getOllamaEndpoint()).toBe('http://host.docker.internal:11434')
     })
 
     it('should fall back to OpenAI when Ollama not available', async () => {
@@ -275,7 +300,7 @@ describe('Provider Detection', () => {
       expect(available).toBe(false)
     })
 
-    it('should use 2 second timeout', async () => {
+    it('should use 2 second timeout per endpoint', async () => {
       const startTime = Date.now()
 
       // Mock fetch that respects abort signal
@@ -299,9 +324,9 @@ describe('Provider Detection', () => {
       await isOllamaAvailable()
 
       const duration = Date.now() - startTime
-      // Should complete within ~2 seconds (allow some margin)
-      expect(duration).toBeLessThan(2500)
-      expect(duration).toBeGreaterThanOrEqual(2000)
+      // Now tries 2 endpoints (localhost, host.docker.internal), 2s each = ~4s total
+      expect(duration).toBeLessThan(4500)
+      expect(duration).toBeGreaterThanOrEqual(4000)
     })
   })
 
@@ -479,7 +504,7 @@ describe('Provider Detection', () => {
 
       expect(consoleLogSpy).toHaveBeenCalledWith('Auto-detecting embedding provider...')
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        '✓ Ollama detected at localhost:11434'
+        '✓ Ollama detected at http://localhost:11434'
       )
 
       consoleLogSpy.mockRestore()
