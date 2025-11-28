@@ -1,6 +1,6 @@
 //! Context bundle caching system.
 //!
-//! This module provides a PostgreSQL-backed cache for assembled context bundles,
+//! This module provides a SQLite-backed cache for assembled context bundles,
 //! significantly improving performance by avoiding redundant graph traversals and
 //! assembly operations.
 //!
@@ -24,14 +24,15 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::context::{ContextCache, ExpandOptions};
-//! use crewchief_maproom::db::create_pool;
+//! use crewchief_maproom::context::{ContextCache, ExpandOptions, CacheConfig};
+//! use crewchief_maproom::db::SqliteStore;
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let pool = create_pool().await?;
+//!     let store = Arc::new(SqliteStore::connect(":memory:")?);
 //!     let config = CacheConfig::default();
-//!     let cache = ContextCache::new(pool, config);
+//!     let cache = ContextCache::new(store, config);
 //!
 //!     let options = ExpandOptions::with_common();
 //!
@@ -48,7 +49,8 @@
 //! }
 //! ```
 
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::Result;
+use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -222,9 +224,48 @@ impl ContextCache {
             return Ok(None);
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        self.stats.misses.fetch_add(1, Ordering::Relaxed);
-        Ok(None)
+        let key = CacheKey::new(chunk_id, options);
+        let cache_key = format!("{}:{}", key.chunk_id, key.options_hash);
+        let cache_key_clone = cache_key.clone();
+
+        let result = self.store.run(move |conn| {
+            // Query for non-expired entry
+            let bundle_json: Option<String> = conn
+                .query_row(
+                    "SELECT bundle_json FROM context_cache
+                     WHERE cache_key = ?1 AND expires_at > datetime('now')",
+                    params![cache_key],
+                    |row| row.get(0),
+                )
+                .optional()?;
+
+            Ok(bundle_json)
+        }).await?;
+
+        match result {
+            Some(json) => {
+                // Update accessed_at for LRU tracking
+                let cache_key_for_update = cache_key_clone.clone();
+                self.store.run(move |conn| {
+                    conn.execute(
+                        "UPDATE context_cache SET accessed_at = datetime('now') WHERE cache_key = ?1",
+                        params![cache_key_for_update],
+                    )?;
+                    Ok(())
+                }).await?;
+
+                // Deserialize the bundle
+                let bundle: ContextBundle = serde_json::from_str(&json)?;
+                self.stats.hits.fetch_add(1, Ordering::Relaxed);
+                debug!("Cache hit for chunk_id={}", chunk_id);
+                Ok(Some(bundle))
+            }
+            None => {
+                self.stats.misses.fetch_add(1, Ordering::Relaxed);
+                debug!("Cache miss for chunk_id={}", chunk_id);
+                Ok(None)
+            }
+        }
     }
 
     /// Store a bundle in the cache.
@@ -243,8 +284,26 @@ impl ContextCache {
             return Ok(());
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        // Run LRU eviction if needed before inserting
+        self.evict_lru_if_needed().await?;
+
+        let key = CacheKey::new(chunk_id, options);
+        let cache_key = format!("{}:{}", key.chunk_id, key.options_hash);
+        let bundle_json = serde_json::to_string(bundle)?;
+        let ttl_seconds = self.config.ttl_seconds;
+
+        self.store.run(move |conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO context_cache
+                 (cache_key, bundle_json, created_at, expires_at, accessed_at)
+                 VALUES (?1, ?2, datetime('now'), datetime('now', '+' || ?3 || ' seconds'), datetime('now'))",
+                params![cache_key, bundle_json, ttl_seconds],
+            )?;
+            Ok(())
+        }).await?;
+
         self.stats.puts.fetch_add(1, Ordering::Relaxed);
+        debug!("Cached bundle for chunk_id={}", chunk_id);
         Ok(())
     }
 
@@ -256,8 +315,21 @@ impl ContextCache {
             return Ok(0);
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(0)
+        // Delete all entries with cache_key starting with "chunk_id:"
+        let prefix = format!("{}:", chunk_id);
+        let count = self.store.run(move |conn| {
+            let deleted = conn.execute(
+                "DELETE FROM context_cache WHERE cache_key LIKE ?1 || '%'",
+                params![prefix],
+            )?;
+            Ok(deleted as u64)
+        }).await?;
+
+        if count > 0 {
+            self.stats.invalidations.fetch_add(count, Ordering::Relaxed);
+            debug!("Invalidated {} cache entries for chunk_id={}", count, chunk_id);
+        }
+        Ok(count)
     }
 
     /// Invalidate multiple chunks at once.
@@ -268,17 +340,40 @@ impl ContextCache {
             return Ok(0);
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(0)
+        // Build a list of prefixes to match
+        let prefixes: Vec<String> = chunk_ids.iter().map(|id| format!("{}:", id)).collect();
+
+        let count = self.store.run(move |conn| {
+            let mut total_deleted = 0u64;
+            for prefix in prefixes {
+                let deleted = conn.execute(
+                    "DELETE FROM context_cache WHERE cache_key LIKE ?1 || '%'",
+                    params![prefix],
+                )?;
+                total_deleted += deleted as u64;
+            }
+            Ok(total_deleted)
+        }).await?;
+
+        if count > 0 {
+            self.stats.invalidations.fetch_add(count, Ordering::Relaxed);
+            debug!("Invalidated {} cache entries for {} chunks", count, chunk_ids.len());
+        }
+        Ok(count)
     }
 
     /// Clear all cache entries.
     ///
     /// Useful for manual cache clearing or testing.
     pub async fn clear(&self) -> Result<u64> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        let count = self.store.run(|conn| {
+            let deleted = conn.execute("DELETE FROM context_cache", [])?;
+            Ok(deleted as u64)
+        }).await?;
+
         self.stats.reset();
-        Ok(0)
+        debug!("Cleared {} cache entries", count);
+        Ok(count)
     }
 
     /// Evict expired cache entries based on TTL.
@@ -289,8 +384,19 @@ impl ContextCache {
             return Ok(0);
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(0)
+        let count = self.store.run(|conn| {
+            let deleted = conn.execute(
+                "DELETE FROM context_cache WHERE expires_at < datetime('now')",
+                [],
+            )?;
+            Ok(deleted as u64)
+        }).await?;
+
+        if count > 0 {
+            self.stats.ttl_evictions.fetch_add(count, Ordering::Relaxed);
+            debug!("Evicted {} expired cache entries", count);
+        }
+        Ok(count)
     }
 
     /// Evict LRU entries if cache size exceeds max_entries.
@@ -301,8 +407,44 @@ impl ContextCache {
             return Ok(0);
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(0)
+        let max_entries = self.config.max_entries;
+        let evict_batch_size = self.config.evict_batch_size;
+
+        let count = self.store.run(move |conn| {
+            // Check current entry count
+            let current_count: i32 = conn.query_row(
+                "SELECT COUNT(*) FROM context_cache",
+                [],
+                |row| row.get(0),
+            )?;
+
+            if current_count <= max_entries {
+                return Ok(0u64);
+            }
+
+            // Delete oldest entries by accessed_at (LRU)
+            let to_evict = std::cmp::min(
+                evict_batch_size,
+                current_count - max_entries + evict_batch_size, // Evict enough to make room
+            );
+
+            let deleted = conn.execute(
+                "DELETE FROM context_cache WHERE cache_key IN (
+                    SELECT cache_key FROM context_cache
+                    ORDER BY accessed_at ASC
+                    LIMIT ?1
+                )",
+                params![to_evict],
+            )?;
+
+            Ok(deleted as u64)
+        }).await?;
+
+        if count > 0 {
+            self.stats.lru_evictions.fetch_add(count, Ordering::Relaxed);
+            debug!("LRU evicted {} cache entries", count);
+        }
+        Ok(count)
     }
 
     /// Get database-level cache statistics.
@@ -313,16 +455,51 @@ impl ContextCache {
     /// - Average access count
     /// - Entry age distribution
     pub async fn get_db_stats(&self) -> Result<DbCacheStats> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(DbCacheStats {
-            total_entries: 0,
-            total_size_bytes: 0,
-            avg_access_count: 0.0,
-            max_access_count: 0,
-            entries_last_hour: 0,
-            entries_last_day: 0,
-            entries_last_week: 0,
-        })
+        self.store.run(|conn| {
+            // Get total entries and total size
+            let (total_entries, total_size_bytes): (i64, i64) = conn
+                .query_row(
+                    "SELECT COUNT(*), COALESCE(SUM(LENGTH(bundle_json)), 0) FROM context_cache",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap_or((0, 0));
+
+            // Get entries by time period
+            let entries_last_hour: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM context_cache WHERE created_at > datetime('now', '-1 hour')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            let entries_last_day: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM context_cache WHERE created_at > datetime('now', '-1 day')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            let entries_last_week: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM context_cache WHERE created_at > datetime('now', '-7 day')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            Ok(DbCacheStats {
+                total_entries,
+                total_size_bytes,
+                avg_access_count: 0.0, // Not tracked in current schema
+                max_access_count: 0,   // Not tracked in current schema
+                entries_last_hour,
+                entries_last_day,
+                entries_last_week,
+            })
+        }).await
     }
 }
 
@@ -416,5 +593,174 @@ mod tests {
         assert_eq!(stats.hits.load(Ordering::Relaxed), 0);
         assert_eq!(stats.misses.load(Ordering::Relaxed), 0);
         assert_eq!(stats.puts.load(Ordering::Relaxed), 0);
+    }
+
+    // Async integration tests
+    use crate::context::types::{ContextItem, LineRange};
+    use std::sync::atomic::AtomicUsize;
+
+    // Counter for unique test database names
+    static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    async fn setup_test_store() -> Arc<crate::db::SqliteStore> {
+        // Use file:memdb?mode=memory&cache=shared for shared in-memory database
+        // Each test gets a unique name to avoid interference
+        let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let db_name = format!("file:memdb_cache_test_{}?mode=memory&cache=shared", counter);
+        let store = crate::db::SqliteStore::connect(&db_name).await.expect("Failed to create test store");
+        store.migrate().await.expect("Failed to run migrations");
+        Arc::new(store)
+    }
+
+    fn create_test_bundle() -> ContextBundle {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(ContextItem {
+            relpath: "test.rs".to_string(),
+            range: LineRange::new(1, 10),
+            role: "primary".to_string(),
+            reason: "Test item".to_string(),
+            content: "fn test() {}".to_string(),
+            tokens: 5,
+        });
+        bundle
+    }
+
+    #[tokio::test]
+    async fn test_cache_put_and_get() {
+        let store = setup_test_store().await;
+        let config = CacheConfig::default();
+        let cache = ContextCache::new(store, config);
+
+        let options = ExpandOptions::with_common();
+        let bundle = create_test_bundle();
+
+        // Initially should be a miss
+        let result = cache.get(123, &options).await.unwrap();
+        assert!(result.is_none());
+        assert_eq!(cache.stats().misses.load(Ordering::Relaxed), 1);
+
+        // Put the bundle
+        cache.put(123, &options, &bundle).await.unwrap();
+        assert_eq!(cache.stats().puts.load(Ordering::Relaxed), 1);
+
+        // Now should be a hit
+        let result = cache.get(123, &options).await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(cache.stats().hits.load(Ordering::Relaxed), 1);
+
+        // Verify content
+        let retrieved = result.unwrap();
+        assert_eq!(retrieved.items.len(), 1);
+        assert_eq!(retrieved.items[0].relpath, "test.rs");
+    }
+
+    #[tokio::test]
+    async fn test_cache_invalidate() {
+        let store = setup_test_store().await;
+        let config = CacheConfig::default();
+        let cache = ContextCache::new(store, config);
+
+        let options = ExpandOptions::with_common();
+        let bundle = create_test_bundle();
+
+        // Put and verify
+        cache.put(123, &options, &bundle).await.unwrap();
+        let result = cache.get(123, &options).await.unwrap();
+        assert!(result.is_some());
+
+        // Invalidate
+        let count = cache.invalidate(123).await.unwrap();
+        assert_eq!(count, 1);
+
+        // Should be a miss now
+        let result = cache.get(123, &options).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cache_clear() {
+        let store = setup_test_store().await;
+        let config = CacheConfig::default();
+        let cache = ContextCache::new(store, config);
+
+        let options = ExpandOptions::with_common();
+        let bundle = create_test_bundle();
+
+        // Put multiple entries
+        cache.put(100, &options, &bundle).await.unwrap();
+        cache.put(200, &options, &bundle).await.unwrap();
+        cache.put(300, &options, &bundle).await.unwrap();
+
+        // Clear all
+        let count = cache.clear().await.unwrap();
+        assert_eq!(count, 3);
+
+        // All should be misses
+        assert!(cache.get(100, &options).await.unwrap().is_none());
+        assert!(cache.get(200, &options).await.unwrap().is_none());
+        assert!(cache.get(300, &options).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cache_db_stats() {
+        let store = setup_test_store().await;
+        let config = CacheConfig::default();
+        let cache = ContextCache::new(store, config);
+
+        let options = ExpandOptions::with_common();
+        let bundle = create_test_bundle();
+
+        // Initially empty
+        let stats = cache.get_db_stats().await.unwrap();
+        assert_eq!(stats.total_entries, 0);
+
+        // Add some entries
+        cache.put(100, &options, &bundle).await.unwrap();
+        cache.put(200, &options, &bundle).await.unwrap();
+
+        let stats = cache.get_db_stats().await.unwrap();
+        assert_eq!(stats.total_entries, 2);
+        assert!(stats.total_size_bytes > 0);
+        assert_eq!(stats.entries_last_hour, 2);
+    }
+
+    #[tokio::test]
+    async fn test_cache_disabled() {
+        let store = setup_test_store().await;
+        let mut config = CacheConfig::default();
+        config.enabled = false;
+        let cache = ContextCache::new(store, config);
+
+        let options = ExpandOptions::with_common();
+        let bundle = create_test_bundle();
+
+        // Put should be no-op
+        cache.put(123, &options, &bundle).await.unwrap();
+
+        // Get should always return None
+        let result = cache.get(123, &options).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cache_different_options() {
+        let store = setup_test_store().await;
+        let config = CacheConfig::default();
+        let cache = ContextCache::new(store, config);
+
+        let options1 = ExpandOptions::with_common();
+        let options2 = ExpandOptions::with_all();
+        let bundle = create_test_bundle();
+
+        // Put with options1
+        cache.put(123, &options1, &bundle).await.unwrap();
+
+        // Get with options1 - hit
+        let result = cache.get(123, &options1).await.unwrap();
+        assert!(result.is_some());
+
+        // Get with options2 - miss (different options hash)
+        let result = cache.get(123, &options2).await.unwrap();
+        assert!(result.is_none());
     }
 }

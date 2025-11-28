@@ -360,6 +360,33 @@ DROP INDEX IF EXISTS idx_index_state_worktree;
 DROP TABLE IF EXISTS index_state;
                 "#,
             },
+            Migration {
+                version: 9,
+                name: "add_context_cache",
+                up: r#"
+-- Create context cache table for storing assembled context bundles
+-- Supports TTL and LRU eviction strategies
+CREATE TABLE IF NOT EXISTS context_cache (
+    cache_key TEXT PRIMARY KEY,
+    bundle_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    accessed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Create index for expiration queries
+CREATE INDEX IF NOT EXISTS idx_context_cache_expires ON context_cache(expires_at);
+
+-- Create index for LRU eviction queries
+CREATE INDEX IF NOT EXISTS idx_context_cache_accessed ON context_cache(accessed_at);
+                "#,
+                down: r#"
+-- Rollback: drop the context_cache table and indexes
+DROP INDEX IF EXISTS idx_context_cache_accessed;
+DROP INDEX IF EXISTS idx_context_cache_expires;
+DROP TABLE IF EXISTS context_cache;
+                "#,
+            },
         ]
     }
 }
@@ -400,19 +427,19 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version (8)
-        assert_eq!(runner.current_version().unwrap(), 8);
+        // Should now be at latest version (9)
+        assert_eq!(runner.current_version().unwrap(), 9);
         assert!(!runner.needs_migration().unwrap());
 
         // Verify core tables exist (excluding virtual tables and dropped tables)
         let table_count: i32 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations', 'chunk_worktrees', 'code_embeddings', 'index_state')",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations', 'chunk_worktrees', 'code_embeddings', 'index_state', 'context_cache')",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(table_count, 10, "Expected 10 core tables to be created");
+        assert_eq!(table_count, 11, "Expected 11 core tables to be created");
 
         // Verify vec_chunks table does NOT exist (dropped by migration 6)
         let vec_chunks_exists: bool = conn
@@ -459,7 +486,7 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 8);
+        assert_eq!(version_after_second, 9);
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
@@ -469,7 +496,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(migration_count, 8, "Expected 8 migrations to be recorded");
+        assert_eq!(migration_count, 9, "Expected 9 migrations to be recorded");
     }
 
     #[test]

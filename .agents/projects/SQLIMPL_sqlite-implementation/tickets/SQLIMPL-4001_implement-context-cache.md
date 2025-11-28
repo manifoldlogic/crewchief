@@ -1,9 +1,9 @@
 # Ticket: SQLIMPL-4001: Implement Context Cache
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Phase 4 - OPTIONAL ENHANCEMENT:** This ticket is part of the optional context assembly phase. Defer if timeline pressure.
 
@@ -22,14 +22,14 @@ The context cache at `src/context/cache.rs` has 8 stubbed methods. These provide
 This ticket implements Plan Phase 4, Ticket 4001: "Implement Context Cache".
 
 ## Acceptance Criteria
-- [ ] **Verify schema:** Confirm `context_cache` table exists (or create if needed)
-- [ ] `get()` retrieves cached context by key
-- [ ] `put()` stores context with TTL
-- [ ] `invalidate()` deletes by cache_key prefix
-- [ ] `evict_expired()` removes expired entries
-- [ ] `evict_lru_if_needed()` enforces size limits
-- [ ] All 8 cache methods implemented
-- [ ] Cache tests (from Phase 1) pass
+- [x] **Verify schema:** Confirm `context_cache` table exists (or create if needed)
+- [x] `get()` retrieves cached context by key
+- [x] `put()` stores context with TTL
+- [x] `invalidate()` deletes by cache_key prefix
+- [x] `evict_expired()` removes expired entries
+- [x] `evict_lru_if_needed()` enforces size limits
+- [x] All 8 cache methods implemented
+- [x] Cache tests (from Phase 1) pass
 
 ## Technical Requirements
 - Use `SqliteStore::run()` pattern for database access
