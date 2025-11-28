@@ -45,6 +45,56 @@ export interface SearchResult {
 }
 
 /**
+ * Context parameters for daemon context method
+ *
+ * Sync with: crates/maproom/src/daemon/types.rs ContextParams
+ */
+export interface ContextParams {
+  chunk_id: string
+  budget_tokens?: number
+  expand?: {
+    callers?: boolean
+    callees?: boolean
+    tests?: boolean
+    docs?: boolean
+    config?: boolean
+    max_depth?: number
+    routes?: boolean
+    hooks?: boolean
+    jsx_parents?: boolean
+    jsx_children?: boolean
+  }
+}
+
+/**
+ * Context item in a bundle
+ *
+ * Sync with: crates/maproom/src/context/types.rs ContextItem
+ */
+export interface RustContextItem {
+  relpath: string
+  range: {
+    start: number
+    end: number
+  }
+  role: string
+  reason: string
+  content: string
+  tokens: number
+}
+
+/**
+ * Context bundle from daemon
+ *
+ * Sync with: crates/maproom/src/context/types.rs ContextBundle
+ */
+export interface RustContextBundle {
+  items: RustContextItem[]
+  total_tokens: number
+  truncated: boolean
+}
+
+/**
  * Daemon client for communicating with crewchief-maproom daemon
  */
 export class DaemonClient {
@@ -70,7 +120,27 @@ export class DaemonClient {
    * Send search request to daemon
    */
   async search(params: SearchParams): Promise<SearchResult> {
-    return await this.sendRequest<SearchResult>('search', params)
+    // Ensure deduplicate has a default value (true)
+    const searchParams = {
+      ...params,
+      deduplicate: params.deduplicate ?? true,
+    }
+    return await this.sendRequest<SearchResult>('search', searchParams)
+  }
+
+  /**
+   * Send context request to daemon
+   *
+   * Retrieves a context bundle for a chunk, optionally including
+   * related code (callers, callees, tests, etc.) within a token budget.
+   */
+  async context(params: ContextParams): Promise<RustContextBundle> {
+    // Apply default budget_tokens
+    const contextParams = {
+      ...params,
+      budget_tokens: params.budget_tokens ?? 6000,
+    }
+    return await this.sendRequest<RustContextBundle>('context', contextParams)
   }
 
   /**

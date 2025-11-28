@@ -1234,14 +1234,8 @@ async function handleExplain(params: any): Promise<any> {
  * with relationship traversal, budget management, and multi-chunk assembly.
  */
 async function handleContext(params: any): Promise<any> {
-  const client = await getPg()
-  try {
-    const { handleContextTool } = await import('./tools/context.js')
-    const result = await handleContextTool(params, client)
-    return result
-  } finally {
-    await client.end().catch(() => {})
-  }
+  const { handleContextTool } = await import('./tools/context.js')
+  return await handleContextTool(params)
 }
 
 async function streamToString(s: Readable): Promise<string> {

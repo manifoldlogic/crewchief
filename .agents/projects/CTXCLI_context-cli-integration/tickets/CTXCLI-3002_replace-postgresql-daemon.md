@@ -1,9 +1,9 @@
 # Ticket: CTXCLI-3002: Replace PostgreSQL with Daemon Client
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - vscode-extension-specialist
@@ -20,19 +20,19 @@ This is the core integration ticket of Phase 3. The MCP context tool currently u
 Reference: [planning/architecture.md](../planning/architecture.md) - Section 3: MCP Context Tool Update, Section 4: Mapping Layer
 
 ## Acceptance Criteria
-- [ ] `DaemonClient.context()` method added to daemon-client package
-- [ ] TypeScript types defined for `ContextParams` and `RustContextBundle`
-- [ ] `ContextParams` and `RustContextBundle` types exported from `packages/daemon-client/src/index.ts`
-- [ ] MCP context tool uses daemon client (not PostgreSQL)
-- [ ] PostgreSQL client (`pg`) usage removed from context.ts
-- [ ] Response mapping layer implemented:
+- [x] `DaemonClient.context()` method added to daemon-client package
+- [x] TypeScript types defined for `ContextParams` and `RustContextBundle`
+- [x] `ContextParams` and `RustContextBundle` types exported from `packages/daemon-client/src/index.ts`
+- [x] MCP context tool uses daemon client (not PostgreSQL)
+- [x] PostgreSQL client (`pg`) usage removed from context.ts
+- [x] Response mapping layer implemented:
   - Pass through: `items`, `total_tokens`, `truncated`
   - Compute: `budget_tokens` (from request params)
   - Compute: `budget_remaining` = `budget_tokens - total_tokens`
   - Compute: `metadata.worktree` and `metadata.repo` (from chunk_id lookup via daemon OR passed in request context)
-- [ ] Response format matches existing MCP ContextBundle interface
-- [ ] Error handling follows `search.ts` pattern (DaemonStartError, DaemonTimeoutError, RpcError)
-- [ ] Error messages match existing format
+- [x] Response format matches existing MCP ContextBundle interface
+- [x] Error handling follows `search.ts` pattern (DaemonStartError, DaemonTimeoutError, RpcError)
+- [x] Error messages match existing format
 
 ## Technical Requirements
 - Follow `search.ts` pattern exactly for daemon integration

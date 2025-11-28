@@ -33,7 +33,13 @@
 
 // Main client
 export { DaemonClient } from './client.js'
-export type { SearchParams, SearchResult } from './client.js'
+export type {
+  SearchParams,
+  SearchResult,
+  ContextParams,
+  RustContextItem,
+  RustContextBundle,
+} from './client.js'
 
 // Configuration and types
 export type { DaemonConfig, DaemonProcessDef, PendingRequest } from './types.js'

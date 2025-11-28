@@ -4,17 +4,27 @@
  * Assembles a ContextBundle with the target chunk plus related context
  * (imports, callers, callees, tests, etc.) within a token budget.
  *
- * This implementation integrates with the Rust context assembler via
- * direct database access and file loading, matching the assembler's logic.
+ * This implementation uses the daemon client to communicate with the
+ * Rust context assembler, avoiding PostgreSQL duplication.
+ *
+ * Migration note: CTXCLI-3002 replaced direct PostgreSQL queries with
+ * daemon client calls for 20-50x performance improvement.
  */
 
-import path from 'node:path'
-import fs from 'node:fs/promises'
-import { Client } from 'pg'
 import pino from 'pino'
-import type { ContextParams, ExpandOptions } from './context_schema.js'
+import type { ContextParams as SchemaContextParams, ExpandOptions } from './context_schema.js'
 import { validateContextParams } from './context_schema.js'
 import { ValidationError } from '../utils/validation.js'
+import { ProcessError } from '../utils/process.js'
+import { getDaemonClient } from '../daemon.js'
+import {
+  DaemonError,
+  DaemonStartError,
+  DaemonTimeoutError,
+  RpcError,
+  type RustContextBundle,
+  type RustContextItem,
+} from '../daemon-client/index.js'
 
 const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
 const log = LOG_FILE
@@ -30,7 +40,7 @@ export interface ContextItem {
     start: number
     end: number
   }
-  role: 'primary' | 'caller' | 'callee' | 'test' | 'doc' | 'config' | 'import'
+  role: 'primary' | 'caller' | 'callee' | 'test' | 'doc' | 'config' | 'import' | 'hook' | 'jsx_parent' | 'jsx_child' | string
   reason: string
   content: string
   tokens: number
@@ -49,197 +59,63 @@ export interface ContextBundle {
   truncated: boolean
   metadata: {
     chunk_id: number
-    worktree: string
+    worktree?: string
     expand_options: ExpandOptions
   }
   warnings?: string[]
 }
 
 /**
- * Chunk metadata from database
+ * Map Rust context item to MCP context item format
  */
-interface ChunkMetadata {
-  id: number
-  file_relpath: string
-  worktree_name: string
-  worktree_path: string
-  symbol_name: string | null
-  kind: string
-  start_line: number
-  end_line: number
-  signature: string | null
-  docstring: string | null
-}
-
-/**
- * Estimate token count from text
- * Uses rough approximation: ~4 characters per token for code
- * This matches the Rust implementation's simple estimation
- */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
-}
-
-/**
- * Extract line range from file content
- */
-function extractLines(content: string, start: number, end: number): string {
-  const lines = content.split('\n')
-  return lines.slice(start - 1, end).join('\n')
-}
-
-/**
- * Retrieve chunk metadata from database
- */
-async function getChunkMetadata(
-  client: Client,
-  chunkId: number
-): Promise<ChunkMetadata | null> {
-  const { rows } = await client.query(
-    `
-    SELECT
-      c.id,
-      f.relpath as file_relpath,
-      w.name as worktree_name,
-      w.abs_path as worktree_path,
-      c.symbol_name,
-      c.kind::text,
-      c.start_line,
-      c.end_line,
-      c.metadata->>'signature' as signature,
-      c.metadata->>'docstring' as docstring
-    FROM maproom.chunks c
-    JOIN maproom.files f ON f.id = c.file_id
-    JOIN maproom.worktrees w ON w.id = f.worktree_id
-    WHERE c.id = $1
-  `,
-    [chunkId]
-  )
-
-  if (rows.length === 0) {
-    return null
-  }
-
-  const row = rows[0]
+function mapRustItemToMcp(item: RustContextItem): ContextItem {
   return {
-    id: row.id,
-    file_relpath: row.file_relpath,
-    worktree_name: row.worktree_name,
-    worktree_path: row.worktree_path,
-    symbol_name: row.symbol_name,
-    kind: row.kind,
-    start_line: row.start_line,
-    end_line: row.end_line,
-    signature: row.signature,
-    docstring: row.docstring,
+    relpath: item.relpath,
+    range: {
+      start: item.range.start,
+      end: item.range.end,
+    },
+    role: item.role as ContextItem['role'],
+    reason: item.reason,
+    content: item.content,
+    tokens: item.tokens,
   }
 }
 
 /**
- * Read file content from filesystem
+ * Map Rust context bundle to MCP context bundle format
+ *
+ * The Rust daemon returns a simpler ContextBundle structure.
+ * This function adds the MCP-specific computed fields:
+ * - budget_tokens (from request params)
+ * - budget_remaining (computed)
+ * - metadata (from request params)
  */
-async function readFileContent(
-  worktreePath: string,
-  relpath: string
-): Promise<string> {
-  const absolutePath = path.join(worktreePath, relpath)
+function mapRustToMcpBundle(
+  rustBundle: RustContextBundle,
+  requestParams: SchemaContextParams,
+): ContextBundle {
+  const budgetTokens = requestParams.budget_tokens
+  const expand = requestParams.expand
 
-  try {
-    const content = await fs.readFile(absolutePath, 'utf8')
-    return content
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      throw new ValidationError(
-        `File not found: ${relpath}. File may have been moved or deleted since indexing.`,
-        'FILE_NOT_FOUND'
-      )
-    }
-    throw new ValidationError(
-      `Failed to read file: ${error.message}`,
-      'FILE_READ_ERROR'
-    )
+  return {
+    items: rustBundle.items.map(mapRustItemToMcp),
+    total_tokens: rustBundle.total_tokens,
+    budget_tokens: budgetTokens,
+    budget_remaining: budgetTokens - rustBundle.total_tokens,
+    truncated: rustBundle.truncated,
+    metadata: {
+      chunk_id: parseInt(requestParams.chunk_id, 10),
+      expand_options: expand,
+    },
   }
 }
 
 /**
- * Get related chunks via relationships
- * This queries the maproom.relationships table to find connected chunks
- */
-async function getRelatedChunks(
-  client: Client,
-  chunkId: number,
-  expand: ExpandOptions
-): Promise<Array<{ chunk_id: number; relationship_type: string; score: number }>> {
-  if (!expand.callers && !expand.callees && !expand.tests && !expand.docs && !expand.config) {
-    // No expansion requested
-    return []
-  }
-
-  // Build relationship type filters
-  const relationshipTypes: string[] = []
-  if (expand.callers) {
-    relationshipTypes.push('calls', 'invokes', 'uses')
-  }
-  if (expand.callees) {
-    relationshipTypes.push('called_by', 'invoked_by', 'used_by')
-  }
-  if (expand.tests) {
-    relationshipTypes.push('tests', 'tested_by')
-  }
-  if (expand.docs) {
-    relationshipTypes.push('documents', 'documented_by')
-  }
-  if (expand.config) {
-    relationshipTypes.push('configures', 'configured_by')
-  }
-
-  if (relationshipTypes.length === 0) {
-    return []
-  }
-
-  // Query relationships
-  // Note: The relationships table may not exist yet in all environments
-  // We'll handle this gracefully by checking if the table exists first
-  try {
-    const { rows } = await client.query(
-      `
-      SELECT
-        CASE
-          WHEN from_chunk_id = $1 THEN to_chunk_id
-          ELSE from_chunk_id
-        END as chunk_id,
-        relationship_type,
-        1.0 as score
-      FROM maproom.relationships
-      WHERE (from_chunk_id = $1 OR to_chunk_id = $1)
-        AND relationship_type = ANY($2::text[])
-      LIMIT 20
-    `,
-      [chunkId, relationshipTypes]
-    )
-
-    return rows.map((row) => ({
-      chunk_id: row.chunk_id,
-      relationship_type: row.relationship_type,
-      score: parseFloat(row.score),
-    }))
-  } catch (error: any) {
-    // If relationships table doesn't exist, just log and return empty
-    if (error.code === '42P01') {
-      // undefined_table
-      log.debug('Relationships table does not exist yet, skipping relationship expansion')
-      return []
-    }
-    throw error
-  }
-}
-
-/**
- * Assemble context bundle for a chunk
+ * Assemble context bundle for a chunk using daemon client
  */
 export async function handleContextTool(
   params: unknown,
-  client: Client
 ): Promise<ContextBundle> {
   // Validate parameters
   const validatedParams = validateContextParams(params)
@@ -247,172 +123,97 @@ export async function handleContextTool(
 
   log.debug({ chunk_id, budget_tokens, expand }, 'handleContextTool called')
 
-  // Parse chunk_id to integer
-  const chunkIdNum = parseInt(chunk_id, 10)
+  // Get daemon client singleton
+  const daemon = getDaemonClient()
 
-  // Retrieve chunk metadata
-  const chunkMetadata = await getChunkMetadata(client, chunkIdNum)
-  if (!chunkMetadata) {
-    throw new ValidationError(
-      `Chunk not found with id ${chunkIdNum}. Verify the chunk_id from search results.`,
-      'CHUNK_NOT_FOUND'
-    )
-  }
-
-  // Read file content
-  const fileContent = await readFileContent(
-    chunkMetadata.worktree_path,
-    chunkMetadata.file_relpath
-  )
-
-  // Extract primary chunk content
-  const primaryContent = extractLines(
-    fileContent,
-    chunkMetadata.start_line,
-    chunkMetadata.end_line
-  )
-  const primaryTokens = estimateTokens(primaryContent)
-
-  // Initialize bundle
-  const bundle: ContextBundle = {
-    items: [],
-    total_tokens: 0,
-    budget_tokens,
-    budget_remaining: budget_tokens,
-    truncated: false,
-    metadata: {
-      chunk_id: chunkIdNum,
-      worktree: chunkMetadata.worktree_name,
-      expand_options: expand,
-    },
-    warnings: [],
-  }
-
-  // Add primary chunk
-  const primaryItem: ContextItem = {
-    relpath: chunkMetadata.file_relpath,
-    range: {
-      start: chunkMetadata.start_line,
-      end: chunkMetadata.end_line,
-    },
-    role: 'primary',
-    reason: 'Target chunk requested by user',
-    content: primaryContent,
-    tokens: primaryTokens,
-    symbol_name: chunkMetadata.symbol_name || undefined,
-    kind: chunkMetadata.kind,
-  }
-
-  bundle.items.push(primaryItem)
-  bundle.total_tokens = primaryTokens
-  bundle.budget_remaining = budget_tokens - primaryTokens
-
-  // Check if primary chunk alone exceeds budget
-  if (primaryTokens > budget_tokens) {
-    bundle.truncated = true
-    bundle.warnings?.push(
-      `Primary chunk (${primaryTokens} tokens) exceeds budget (${budget_tokens} tokens). Only primary chunk included.`
-    )
-    log.warn({ chunkIdNum, primaryTokens, budget_tokens }, 'Primary chunk exceeds budget')
-    return bundle
-  }
-
-  // Get related chunks if expansion is enabled
-  const relatedChunks = await getRelatedChunks(client, chunkIdNum, expand)
-
-  log.debug({ relatedCount: relatedChunks.length }, 'Found related chunks')
-
-  // Add related chunks within budget
-  for (const related of relatedChunks) {
-    // Check if we have budget remaining
-    if (bundle.budget_remaining <= 100) {
-      // Reserve at least 100 tokens for meaningful content
-      bundle.truncated = true
-      bundle.warnings?.push(
-        `Budget exhausted after ${bundle.items.length} items. Some related context omitted.`
-      )
-      break
-    }
-
-    // Fetch related chunk metadata
-    const relatedMetadata = await getChunkMetadata(client, related.chunk_id)
-    if (!relatedMetadata) {
-      log.warn({ chunk_id: related.chunk_id }, 'Related chunk not found, skipping')
-      continue
-    }
-
-    // Read related file content
-    let relatedFileContent: string
-    try {
-      relatedFileContent = await readFileContent(
-        relatedMetadata.worktree_path,
-        relatedMetadata.file_relpath
-      )
-    } catch (error) {
-      log.warn(
-        { chunk_id: related.chunk_id, error },
-        'Failed to read related chunk file, skipping'
-      )
-      continue
-    }
-
-    // Extract related chunk content
-    const relatedContent = extractLines(
-      relatedFileContent,
-      relatedMetadata.start_line,
-      relatedMetadata.end_line
-    )
-    const relatedTokens = estimateTokens(relatedContent)
-
-    // Check if adding this chunk would exceed budget
-    if (bundle.total_tokens + relatedTokens > budget_tokens) {
-      bundle.truncated = true
-      bundle.warnings?.push(
-        `Budget limit reached. ${relatedChunks.length - bundle.items.length + 1} related chunks omitted.`
-      )
-      break
-    }
-
-    // Determine role based on relationship type
-    let role: ContextItem['role'] = 'caller'
-    if (related.relationship_type.includes('test')) {
-      role = 'test'
-    } else if (related.relationship_type.includes('doc')) {
-      role = 'doc'
-    } else if (related.relationship_type.includes('config')) {
-      role = 'config'
-    } else if (
-      related.relationship_type.includes('called_by') ||
-      related.relationship_type.includes('invoked_by')
-    ) {
-      role = 'callee'
-    } else if (related.relationship_type.includes('import')) {
-      role = 'import'
-    }
-
-    // Add related chunk
-    const relatedItem: ContextItem = {
-      relpath: relatedMetadata.file_relpath,
-      range: {
-        start: relatedMetadata.start_line,
-        end: relatedMetadata.end_line,
+  // Call daemon context method
+  let rustBundle: RustContextBundle
+  try {
+    rustBundle = await daemon.context({
+      chunk_id,
+      budget_tokens,
+      expand: {
+        callers: expand.callers,
+        callees: expand.callees,
+        tests: expand.tests,
+        docs: expand.docs,
+        config: expand.config,
+        max_depth: expand.max_depth,
+        routes: expand.routes,
+        hooks: expand.hooks,
+        jsx_parents: expand.jsx_parents,
+        jsx_children: expand.jsx_children,
       },
-      role,
-      reason: `Related via ${related.relationship_type} relationship`,
-      content: relatedContent,
-      tokens: relatedTokens,
-      symbol_name: relatedMetadata.symbol_name || undefined,
-      kind: relatedMetadata.kind,
+    })
+  } catch (error) {
+    // Convert daemon errors to MCP-friendly errors
+    if (error instanceof DaemonStartError) {
+      throw new ProcessError(
+        `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure crewchief-maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
+        'DAEMON_START_FAILED'
+      )
     }
 
-    bundle.items.push(relatedItem)
-    bundle.total_tokens += relatedTokens
-    bundle.budget_remaining = budget_tokens - bundle.total_tokens
+    if (error instanceof DaemonTimeoutError) {
+      throw new ProcessError(
+        `Context request timed out: ${error.message}\n\nTroubleshooting:\n1. Check database connectivity\n2. Verify network is not slow\n3. Try reducing budget_tokens`,
+        'CONTEXT_TIMEOUT'
+      )
+    }
+
+    if (error instanceof RpcError) {
+      // Check for chunk not found error (error code -32000)
+      if (error.rpcCode === -32000 || error.message.includes('not found')) {
+        throw new ValidationError(
+          `Chunk not found with id ${chunk_id}. Verify the chunk_id from search results.`,
+          'CHUNK_NOT_FOUND'
+        )
+      }
+
+      // Check for invalid params (error code -32602)
+      if (error.isInvalidParams()) {
+        throw new ValidationError(
+          `Invalid parameters: ${error.message}`,
+          'INVALID_PARAMS'
+        )
+      }
+
+      throw new ProcessError(
+        `Daemon RPC error: ${error.message}`,
+        'RPC_ERROR'
+      )
+    }
+
+    if (error instanceof DaemonError) {
+      throw new ProcessError(
+        `Daemon error: ${error.message}`,
+        'DAEMON_ERROR'
+      )
+    }
+
+    // Unknown error type
+    throw new ProcessError(
+      `Context assembly failed: ${error instanceof Error ? error.message : String(error)}`,
+      'CONTEXT_FAILED'
+    )
   }
 
   log.debug(
     {
-      chunk_id: chunkIdNum,
+      chunk_id,
+      items: rustBundle.items.length,
+      total_tokens: rustBundle.total_tokens,
+      truncated: rustBundle.truncated,
+    },
+    'Received context bundle from daemon'
+  )
+
+  // Map Rust bundle to MCP format
+  const bundle = mapRustToMcpBundle(rustBundle, validatedParams)
+
+  log.debug(
+    {
+      chunk_id,
       items: bundle.items.length,
       total_tokens: bundle.total_tokens,
       truncated: bundle.truncated,
@@ -442,7 +243,34 @@ export function formatContextError(error: unknown): any {
                   ? 'Use the search tool to find valid chunks and get their chunk_id values.'
                   : error.code === 'FILE_NOT_FOUND'
                     ? 'Try re-indexing with the upsert tool if files have been moved or deleted.'
-                    : 'Check your parameters and try again.',
+                    : error.code === 'INVALID_PARAMS'
+                      ? 'Check chunk_id format (must be positive integer) and budget_tokens range (1000-20000).'
+                      : 'Check your parameters and try again.',
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    }
+  }
+
+  if (error instanceof ProcessError) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              error: error.code,
+              message: error.message,
+              hint:
+                error.code === 'DAEMON_START_FAILED'
+                  ? 'Check that the crewchief-maproom binary is installed and database is accessible.'
+                  : error.code === 'CONTEXT_TIMEOUT'
+                    ? 'The request timed out. Try reducing budget_tokens or checking database performance.'
+                    : 'Context assembly failed. Check logs for details.',
             },
             null,
             2
