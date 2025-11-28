@@ -268,5 +268,6 @@ Report should be:
 - **Actionable:** Provide clear steps to address problems
 - **Balanced:** Acknowledge good work while identifying issues
 - **Risk-focused:** Prioritize issues that could break functionality
+- Include `🎯 Next step: /work-on-project {SLUG} to execute tickets or /update-reviewed-project {SLUG} to apply suggested changes`
 
 Conduct thorough, systematic review and produce detailed report with clear findings and actionable recommendations.

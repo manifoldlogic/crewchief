@@ -809,6 +809,9 @@ Tickets Created: {Yes - X tickets | No - Pre-ticket review}
 3. {Third key action}
 
 Full review available at: .agents/projects/{SLUG}-*/planning/project-review.md
+
+🎯 Next step: Run `/update-reviewed-project {SLUG}` before creating tickets
+or proceed to `/create-project-tickets {SLUG}` if review passes
 ```
 
 ## Review Standards

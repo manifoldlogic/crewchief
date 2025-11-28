@@ -7,7 +7,10 @@
 //! # Auto-detection Strategy
 //!
 //! 1. Check if `MAPROOM_EMBEDDING_PROVIDER` environment variable is set
-//! 2. If not set, attempt to detect Ollama at `localhost:11434/api/tags`
+//! 2. If not set, attempt to detect Ollama using fallback chain:
+//!    - `MAPROOM_EMBEDDING_API_ENDPOINT` (extract base URL)
+//!    - `localhost:11434` (native development)
+//!    - `host.docker.internal:11434` (Docker/DevContainer)
 //! 3. If Ollama is unavailable, return an error with helpful configuration guidance
 //!
 //! # Examples
@@ -90,7 +93,10 @@ use crate::embedding::provider::EmbeddingProvider;
 /// # Auto-detection Process
 ///
 /// 1. **Explicit Configuration**: If `MAPROOM_EMBEDDING_PROVIDER` is set, use that provider
-/// 2. **Ollama Detection**: Otherwise, check if Ollama is available at `localhost:11434`
+/// 2. **Ollama Detection**: Otherwise, detect Ollama using fallback chain:
+///    - `MAPROOM_EMBEDDING_API_ENDPOINT` (extract base URL from embed endpoint)
+///    - `localhost:11434` (native development)
+///    - `host.docker.internal:11434` (Docker/DevContainer environments)
 /// 3. **Configuration Error**: If no provider is available, return helpful error message
 ///
 /// # Supported Providers
@@ -153,29 +159,33 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
     // Check explicit config first
     let explicit_provider = env::var("MAPROOM_EMBEDDING_PROVIDER").ok();
 
-    let provider_name = match explicit_provider.as_deref() {
+    // Track detected endpoint for Ollama auto-detection
+    let (provider_name, detected_endpoint) = match explicit_provider.as_deref() {
         Some(p) => {
             tracing::debug!(
                 "Using explicit provider from MAPROOM_EMBEDDING_PROVIDER: {}",
                 p
             );
-            p.to_lowercase()
+            (p.to_lowercase(), None)
         }
         None => {
-            // Auto-detect Ollama
+            // Auto-detect Ollama using fallback chain
             tracing::debug!("No MAPROOM_EMBEDDING_PROVIDER set, attempting Ollama auto-detection");
-            if is_ollama_available().await {
-                tracing::info!("Ollama detected at localhost:11434");
-                "ollama".to_string()
-            } else {
-                tracing::warn!("Ollama not detected and no MAPROOM_EMBEDDING_PROVIDER configured");
-                return Err(EmbeddingError::Config(ConfigError::MissingConfig(
-                    "No embedding provider configured. Options:\n\
-                     1. Install and start Ollama (https://ollama.ai) for zero-config local embeddings\n\
-                     2. Set MAPROOM_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
-                     3. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future)"
-                        .to_string(),
-                )));
+            match detect_ollama_endpoint().await {
+                Some(endpoint) => {
+                    tracing::info!("Ollama detected at: {}", endpoint);
+                    ("ollama".to_string(), Some(endpoint))
+                }
+                None => {
+                    tracing::warn!("Ollama not detected and no MAPROOM_EMBEDDING_PROVIDER configured");
+                    return Err(EmbeddingError::Config(ConfigError::MissingConfig(
+                        "No embedding provider configured. Options:\n\
+                         1. Install and start Ollama (https://ollama.ai) for zero-config local embeddings\n\
+                         2. Set MAPROOM_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
+                         3. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future)"
+                            .to_string(),
+                    )));
+                }
             }
         }
     };
@@ -183,8 +193,11 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
     // Create provider based on name
     match provider_name.as_str() {
         "ollama" => {
-            let endpoint = env::var("MAPROOM_EMBEDDING_API_ENDPOINT")
-                .unwrap_or_else(|_| "http://localhost:11434/api/embed".to_string());
+            // Use detected endpoint if available, else check env var, else default to localhost
+            let endpoint = detected_endpoint
+                .map(|base| format!("{}/api/embed", base))
+                .or_else(|| env::var("MAPROOM_EMBEDDING_API_ENDPOINT").ok())
+                .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string());
             let model = env::var("MAPROOM_EMBEDDING_MODEL")
                 .unwrap_or_else(|_| "nomic-embed-text".to_string());
 
@@ -381,37 +394,81 @@ fn validate_service_account_json(path: &std::path::Path) -> Result<(), Embedding
     Ok(())
 }
 
-/// Check if Ollama is available on localhost.
+/// Extract the base URL from an Ollama embed endpoint.
 ///
-/// This function performs a health check by sending an HTTP GET request to the
-/// Ollama API tags endpoint. A 2-second timeout ensures startup isn't blocked
-/// by network issues.
+/// Given a full embed endpoint URL (e.g., `http://host:port/api/embed`),
+/// extracts just the base URL (e.g., `http://host:port`) for health checks.
 ///
-/// # Detection Strategy
+/// # Supported Suffixes
 ///
-/// 1. Build HTTP client with 2-second timeout
-/// 2. Send GET request to `http://localhost:11434/api/tags`
-/// 3. Check if response status is successful (2xx)
+/// - `/api/embed` - Standard Ollama embedding endpoint
+/// - `/api/embeddings` - Alternative endpoint format
+///
+/// Handles trailing slashes gracefully.
 ///
 /// # Returns
 ///
-/// - `true` - Ollama is running and responding at localhost:11434
-/// - `false` - Ollama is not available (not installed, not running, or timeout)
+/// - `Some(base_url)` - Base URL without the embed suffix
+/// - `None` - URL doesn't have a recognized suffix
+///
+/// # Examples
+///
+/// ```
+/// # fn example() {
+/// assert_eq!(
+///     extract_base_url("http://localhost:11434/api/embed"),
+///     Some("http://localhost:11434".to_string())
+/// );
+/// assert_eq!(
+///     extract_base_url("http://host:8080/api/embeddings/"),
+///     Some("http://host:8080".to_string())
+/// );
+/// assert_eq!(extract_base_url("http://host:8080/custom"), None);
+/// # }
+/// ```
+fn extract_base_url(endpoint: &str) -> Option<String> {
+    // Handle trailing slashes: "http://host:port/api/embed/" → "http://host:port"
+    let endpoint = endpoint.trim_end_matches('/');
+    endpoint
+        .strip_suffix("/api/embed")
+        .or_else(|| endpoint.strip_suffix("/api/embeddings"))
+        .map(|s| s.to_string())
+}
+
+/// Detect Ollama endpoint using fallback chain.
+///
+/// This function attempts to detect a running Ollama instance by checking
+/// multiple endpoints in priority order. This enables zero-config operation
+/// in various environments including Docker and DevContainers.
+///
+/// # Detection Order
+///
+/// 1. **Explicit Configuration**: `MAPROOM_EMBEDDING_API_ENDPOINT` env var
+///    (extracts base URL from the embed endpoint)
+/// 2. **Native Development**: `localhost:11434`
+/// 3. **Docker/DevContainer**: `host.docker.internal:11434`
+///
+/// Each endpoint is checked with a 2-second timeout. Total worst-case
+/// detection time is 6 seconds (all endpoints timeout).
+///
+/// # Returns
+///
+/// - `Some(base_url)` - First reachable Ollama endpoint's base URL
+/// - `None` - No Ollama instance detected at any endpoint
 ///
 /// # Examples
 ///
 /// ```no_run
-/// # use crewchief_maproom::embedding::factory::is_ollama_available;
 /// # async fn example() {
-/// if is_ollama_available().await {
-///     println!("Ollama is available for local embeddings");
+/// if let Some(endpoint) = detect_ollama_endpoint().await {
+///     println!("Ollama available at: {}", endpoint);
 /// } else {
-///     println!("Ollama not detected, consider installing from https://ollama.ai");
+///     println!("Ollama not detected");
 /// }
 /// # }
 /// ```
-async fn is_ollama_available() -> bool {
-    // Build HTTP client with short timeout
+async fn detect_ollama_endpoint() -> Option<String> {
+    // Build HTTP client with short timeout per endpoint
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
         .build()
@@ -419,26 +476,54 @@ async fn is_ollama_available() -> bool {
         Ok(c) => c,
         Err(e) => {
             tracing::debug!("Failed to build HTTP client for Ollama detection: {}", e);
-            return false;
+            return None;
         }
     };
 
-    // Check Ollama API endpoint
-    match client.get("http://localhost:11434/api/tags").send().await {
-        Ok(response) => {
-            let is_success = response.status().is_success();
-            tracing::debug!(
-                "Ollama detection request completed with status: {} (available: {})",
-                response.status(),
-                is_success
-            );
-            is_success
-        }
-        Err(e) => {
-            tracing::debug!("Ollama detection request failed: {}", e);
-            false
+    // Build fallback list
+    let mut endpoints = Vec::new();
+
+    // 1. Check explicit endpoint config (extract base URL)
+    if let Ok(embed_endpoint) = env::var("MAPROOM_EMBEDDING_API_ENDPOINT") {
+        if let Some(base) = extract_base_url(&embed_endpoint) {
+            endpoints.push(base);
         }
     }
+
+    // 2. localhost (native development)
+    endpoints.push("http://localhost:11434".to_string());
+
+    // 3. Docker host (containerized development)
+    endpoints.push("http://host.docker.internal:11434".to_string());
+
+    // Log all endpoints we'll try (helpful for debugging)
+    tracing::debug!("Ollama detection fallback chain: {:?}", endpoints);
+
+    // Try each endpoint sequentially
+    for base in endpoints {
+        let check_url = format!("{}/api/tags", base);
+        tracing::debug!("Checking Ollama at: {}", check_url);
+
+        match client.get(&check_url).send().await {
+            Ok(response) if response.status().is_success() => {
+                tracing::info!("Ollama detected at: {}", base);
+                return Some(base);
+            }
+            Ok(response) => {
+                tracing::debug!(
+                    "Ollama check failed at {}: status {}",
+                    base,
+                    response.status()
+                );
+            }
+            Err(e) => {
+                tracing::debug!("Ollama not available at {}: {}", base, e);
+            }
+        }
+    }
+
+    tracing::debug!("No Ollama endpoint detected");
+    None
 }
 
 #[cfg(test)]
@@ -459,17 +544,90 @@ mod tests {
         assert_eq!("OpenAI".to_lowercase(), "openai");
     }
 
+    #[test]
+    fn test_extract_base_url_embed_suffix() {
+        // Standard /api/embed suffix
+        assert_eq!(
+            extract_base_url("http://localhost:11434/api/embed"),
+            Some("http://localhost:11434".to_string())
+        );
+        // Custom host with port
+        assert_eq!(
+            extract_base_url("http://ollama.local:11434/api/embed"),
+            Some("http://ollama.local:11434".to_string())
+        );
+        // Docker host
+        assert_eq!(
+            extract_base_url("http://host.docker.internal:11434/api/embed"),
+            Some("http://host.docker.internal:11434".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_base_url_embeddings_suffix() {
+        // Alternative /api/embeddings suffix
+        assert_eq!(
+            extract_base_url("http://host:8080/api/embeddings"),
+            Some("http://host:8080".to_string())
+        );
+        // With different port
+        assert_eq!(
+            extract_base_url("http://localhost:9999/api/embeddings"),
+            Some("http://localhost:9999".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_base_url_trailing_slash() {
+        // Trailing slash on /api/embed
+        assert_eq!(
+            extract_base_url("http://localhost:11434/api/embed/"),
+            Some("http://localhost:11434".to_string())
+        );
+        // Trailing slash on /api/embeddings
+        assert_eq!(
+            extract_base_url("http://host:8080/api/embeddings/"),
+            Some("http://host:8080".to_string())
+        );
+        // Multiple trailing slashes
+        assert_eq!(
+            extract_base_url("http://localhost:11434/api/embed///"),
+            Some("http://localhost:11434".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_base_url_no_suffix() {
+        // No recognized suffix - returns None
+        assert_eq!(extract_base_url("http://localhost:11434/custom"), None);
+        assert_eq!(extract_base_url("http://localhost:11434/api/generate"), None);
+        assert_eq!(extract_base_url("http://localhost:11434"), None);
+        // Partial match shouldn't work
+        assert_eq!(extract_base_url("http://localhost:11434/api/embe"), None);
+    }
+
+    #[test]
+    fn test_extract_base_url_empty() {
+        // Empty string
+        assert_eq!(extract_base_url(""), None);
+        // Just slashes
+        assert_eq!(extract_base_url("/"), None);
+        assert_eq!(extract_base_url("///"), None);
+    }
+
     #[tokio::test]
     async fn test_ollama_detection_timeout() {
-        // This test verifies that Ollama detection respects the 2-second timeout
-        // by attempting to connect to a non-existent host
+        // This test verifies that Ollama detection respects the 2-second timeout per endpoint
+        // The fallback chain tries up to 3 endpoints (custom, localhost, host.docker.internal)
+        // Worst case: 3 endpoints × 2s timeout = 6s
         let start = std::time::Instant::now();
-        let _result = is_ollama_available().await;
+        let _result = detect_ollama_endpoint().await;
         let elapsed = start.elapsed();
 
-        // Should complete within 3 seconds (2s timeout + 1s margin)
+        // Should complete within 7 seconds (3 × 2s timeout + 1s margin)
+        // In practice, localhost usually fails fast (connection refused) rather than timing out
         assert!(
-            elapsed.as_secs() < 3,
+            elapsed.as_secs() < 7,
             "Ollama detection took too long: {:?}",
             elapsed
         );
@@ -631,11 +789,15 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_create_provider_google_missing_credentials() {
-        // Clean up all environment variables first
+        // Clean up all environment variables first (including MAPROOM_ prefixed variants)
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
         env::remove_var("OPENAI_API_KEY");
+        env::remove_var("MAPROOM_OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("MAPROOM_GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+        env::remove_var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS");
 
         // Set provider and project ID but not credentials
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
@@ -673,12 +835,17 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_provider_google_credentials_file_not_found() {
-        // Clean up all environment variables first
+        // Clean up all environment variables first (including MAPROOM_ prefixed variants)
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
         env::remove_var("OPENAI_API_KEY");
+        env::remove_var("MAPROOM_OPENAI_API_KEY");
         env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("MAPROOM_GOOGLE_PROJECT_ID");
         env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+        env::remove_var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS");
 
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
         env::set_var("GOOGLE_PROJECT_ID", "test-project");

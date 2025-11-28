@@ -74,5 +74,6 @@ Create ticket index: `.agents/projects/$ARGUMENTS_*/tickets/$ARGUMENTS_TICKET_IN
 - List all tickets organized by phase
 - Include ticket IDs, titles, and status
 - Reference plan sections for traceability
+- Include `🎯 Next step: Run /review-tickets {SLUG} to validate quality or proceed to /work-on-project {SLUG} to execute tickets` 
 
 Work systematically through the plan, providing rich context to ticket-creator for each ticket to ensure quality and completeness.

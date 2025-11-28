@@ -1,9 +1,9 @@
 # Ticket: OLLDET-1001: Implement Ollama Endpoint Detection Fallback
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (20/20 factory tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,21 +20,21 @@ The current `is_ollama_available()` function is hardcoded to check `localhost:11
 **Plan Reference:** See `planning/plan.md` Phase 1: Implementation
 
 ## Acceptance Criteria
-- [ ] Add `extract_base_url()` function that handles trailing slashes
-- [ ] Add `detect_ollama_endpoint()` function with fallback chain:
+- [x] Add `extract_base_url()` function that handles trailing slashes
+- [x] Add `detect_ollama_endpoint()` function with fallback chain:
       1. `MAPROOM_EMBEDDING_API_ENDPOINT` (extract base)
       2. `localhost:11434`
       3. `host.docker.internal:11434`
-- [ ] Update `create_provider_from_env()` to use detected endpoint
-- [ ] Add unit tests for `extract_base_url()` covering:
+- [x] Update `create_provider_from_env()` to use detected endpoint
+- [x] Add unit tests for `extract_base_url()` covering:
       - Standard `/api/embed` suffix
       - Alternative `/api/embeddings` suffix
       - Trailing slash handling
       - No recognized suffix (returns None)
       - Empty string
-- [ ] Existing tests pass (adjust `test_ollama_detection_timeout` if needed for 7s timeout)
-- [ ] Logs show which endpoint was detected (info level)
-- [ ] Debug logs show fallback chain and each endpoint check
+- [x] Existing tests pass (adjusted `test_ollama_detection_timeout` to 7s timeout)
+- [x] Logs show which endpoint was detected (info level)
+- [x] Debug logs show fallback chain and each endpoint check
 
 ## Technical Requirements
 
