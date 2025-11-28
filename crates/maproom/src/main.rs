@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -7,7 +8,9 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
-use crewchief_maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
+use crewchief_maproom::context::{
+    AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
+};
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{db, indexer};
 
@@ -517,6 +520,93 @@ fn parse_throttle(throttle: &str) -> anyhow::Result<u64> {
             .with_context(|| format!("Invalid throttle value: {}. Use format like '2s' or '500ms'", throttle))?;
         Ok(secs * 1000)
     }
+}
+
+/// Map context item role to an emoji for human-readable output.
+fn role_emoji(role: &str) -> &'static str {
+    match role.to_lowercase().as_str() {
+        "primary" => "📄",
+        "caller" => "🔗",
+        "callee" => "📤",
+        "test" => "🧪",
+        "doc" => "📚",
+        "config" => "⚙️",
+        "hook" => "🪝",
+        "jsx_parent" => "⬆️",
+        "jsx_child" => "⬇️",
+        _ => "📎",
+    }
+}
+
+/// Format a context bundle for human-readable CLI output.
+///
+/// Displays a header with budget/usage information followed by each context item
+/// with its role, file path, line range, reason (for non-primary items), and token count.
+fn format_context_bundle(bundle: &ContextBundle, chunk_id: i64, budget: usize) -> String {
+    let mut output = String::new();
+
+    // Header
+    let _ = writeln!(output, "📦 Context Bundle for chunk #{}", chunk_id);
+    let _ = writeln!(
+        output,
+        "   Budget: {} tokens | Used: {} tokens | Truncated: {}",
+        budget,
+        bundle.total_tokens,
+        if bundle.truncated { "Yes" } else { "No" }
+    );
+    let _ = writeln!(output);
+
+    // Items grouped by display
+    for item in &bundle.items {
+        let emoji = role_emoji(&item.role);
+        let role_upper = item.role.to_uppercase();
+
+        // File path with line range
+        let _ = writeln!(
+            output,
+            "{} {}: {}:{}-{}",
+            emoji,
+            role_upper,
+            item.relpath,
+            item.range.start,
+            item.range.end
+        );
+
+        // For primary chunks, show a content preview
+        if item.role.to_lowercase() == "primary" {
+            let _ = writeln!(output, "   ─────────────────────────────────────────");
+            // Show first few lines of content (max 10 lines, max 80 chars per line)
+            for (i, line) in item.content.lines().take(10).enumerate() {
+                let truncated_line = if line.len() > 80 {
+                    format!("{}...", &line[..77])
+                } else {
+                    line.to_string()
+                };
+                let _ = writeln!(output, "   {}", truncated_line);
+                if i >= 9 {
+                    let _ = writeln!(output, "   ... (content truncated)");
+                    break;
+                }
+            }
+            let _ = writeln!(output, "   ─────────────────────────────────────────");
+        } else {
+            // For non-primary items, show the reason
+            if !item.reason.is_empty() {
+                let _ = writeln!(output, "   Reason: {}", item.reason);
+            }
+        }
+
+        // Token count for every item
+        let _ = writeln!(output, "   Tokens: {}", item.tokens);
+        let _ = writeln!(output);
+    }
+
+    // Handle empty bundle
+    if bundle.items.is_empty() {
+        let _ = writeln!(output, "   (No context items found)");
+    }
+
+    output
 }
 
 /// Extract git information from a repository path
@@ -1462,13 +1552,7 @@ async fn main() -> anyhow::Result<()> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&bundle)?);
             } else {
-                // Placeholder text - human-readable format in CTXCLI-2003
-                println!("Context bundle for chunk #{}", chunk_id);
-                println!("Items: {}", bundle.items.len());
-                println!("Total tokens: {}", bundle.total_tokens);
-                if bundle.truncated {
-                    println!("(truncated)");
-                }
+                print!("{}", format_context_bundle(&bundle, chunk_id, budget));
             }
         }
     }
@@ -1643,5 +1727,133 @@ mod tests {
         } else {
             panic!("Expected Context command");
         }
+    }
+
+    #[test]
+    fn test_role_emoji_known_roles() {
+        assert_eq!(super::role_emoji("primary"), "📄");
+        assert_eq!(super::role_emoji("caller"), "🔗");
+        assert_eq!(super::role_emoji("callee"), "📤");
+        assert_eq!(super::role_emoji("test"), "🧪");
+        assert_eq!(super::role_emoji("doc"), "📚");
+        assert_eq!(super::role_emoji("config"), "⚙️");
+        assert_eq!(super::role_emoji("hook"), "🪝");
+        assert_eq!(super::role_emoji("jsx_parent"), "⬆️");
+        assert_eq!(super::role_emoji("jsx_child"), "⬇️");
+    }
+
+    #[test]
+    fn test_role_emoji_unknown_role() {
+        assert_eq!(super::role_emoji("unknown"), "📎");
+        assert_eq!(super::role_emoji("foobar"), "📎");
+    }
+
+    #[test]
+    fn test_role_emoji_case_insensitive() {
+        assert_eq!(super::role_emoji("PRIMARY"), "📄");
+        assert_eq!(super::role_emoji("Caller"), "🔗");
+        assert_eq!(super::role_emoji("TEST"), "🧪");
+    }
+
+    #[test]
+    fn test_format_context_bundle_basic() {
+        use crewchief_maproom::context::{ContextBundle, ContextItem, LineRange};
+
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(ContextItem {
+            relpath: "src/auth.ts".to_string(),
+            range: LineRange::new(10, 30),
+            role: "primary".to_string(),
+            reason: "".to_string(),
+            content: "async function authenticate(user: User) {\n  return token;\n}".to_string(),
+            tokens: 150,
+        });
+
+        let output = super::format_context_bundle(&bundle, 12345, 6000);
+
+        assert!(output.contains("📦 Context Bundle for chunk #12345"));
+        assert!(output.contains("Budget: 6000 tokens"));
+        assert!(output.contains("Used: 150 tokens"));
+        assert!(output.contains("Truncated: No"));
+        assert!(output.contains("📄 PRIMARY: src/auth.ts:10-30"));
+        assert!(output.contains("Tokens: 150"));
+        assert!(output.contains("authenticate")); // content preview
+    }
+
+    #[test]
+    fn test_format_context_bundle_empty() {
+        use crewchief_maproom::context::ContextBundle;
+
+        let bundle = ContextBundle::new();
+        let output = super::format_context_bundle(&bundle, 99999, 6000);
+
+        assert!(output.contains("📦 Context Bundle for chunk #99999"));
+        assert!(output.contains("Used: 0 tokens"));
+        assert!(output.contains("(No context items found)"));
+    }
+
+    #[test]
+    fn test_format_context_bundle_truncated() {
+        use crewchief_maproom::context::{ContextBundle, ContextItem, LineRange};
+
+        let mut bundle = ContextBundle::new();
+        bundle.truncated = true;
+        bundle.add_item(ContextItem {
+            relpath: "src/main.rs".to_string(),
+            range: LineRange::new(1, 10),
+            role: "primary".to_string(),
+            reason: "".to_string(),
+            content: "fn main() {}".to_string(),
+            tokens: 5500,
+        });
+
+        let output = super::format_context_bundle(&bundle, 42, 6000);
+
+        assert!(output.contains("Truncated: Yes"));
+    }
+
+    #[test]
+    fn test_format_context_bundle_with_related_items() {
+        use crewchief_maproom::context::{ContextBundle, ContextItem, LineRange};
+
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(ContextItem {
+            relpath: "src/auth.ts".to_string(),
+            range: LineRange::new(10, 30),
+            role: "primary".to_string(),
+            reason: "".to_string(),
+            content: "function authenticate() {}".to_string(),
+            tokens: 100,
+        });
+        bundle.add_item(ContextItem {
+            relpath: "src/login.ts".to_string(),
+            range: LineRange::new(40, 60),
+            role: "caller".to_string(),
+            reason: "Calls authenticate function".to_string(),
+            content: "function login() { authenticate(); }".to_string(),
+            tokens: 120,
+        });
+        bundle.add_item(ContextItem {
+            relpath: "src/__tests__/auth.test.ts".to_string(),
+            range: LineRange::new(5, 25),
+            role: "test".to_string(),
+            reason: "Test file for primary function".to_string(),
+            content: "test('auth', () => {});".to_string(),
+            tokens: 80,
+        });
+
+        let output = super::format_context_bundle(&bundle, 12345, 6000);
+
+        // Check all items are present
+        assert!(output.contains("📄 PRIMARY: src/auth.ts:10-30"));
+        assert!(output.contains("🔗 CALLER: src/login.ts:40-60"));
+        assert!(output.contains("🧪 TEST: src/__tests__/auth.test.ts:5-25"));
+
+        // Check reasons are shown for non-primary items
+        assert!(output.contains("Reason: Calls authenticate function"));
+        assert!(output.contains("Reason: Test file for primary function"));
+
+        // Check total tokens
+        assert!(output.contains("Used: 300 tokens")); // 100 + 120 + 80
     }
 }

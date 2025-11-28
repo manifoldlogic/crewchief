@@ -108,10 +108,18 @@ Both language servers provide identical tools:
 
 ### Which Server to Use
 
-| Language Server | Use For | File Patterns |
-|-----------------|---------|---------------|
-| `mcp__rust-language-server__*` | Rust code | `crates/**/*.rs` |
-| `mcp__ts-language-server__*` | TypeScript/JavaScript | `packages/**/*.ts`, `*.tsx`, `*.js` |
+| Language Server | Use For | File Patterns | Status |
+|-----------------|---------|---------------|--------|
+| `mcp__rust-language-server__*` | Rust code | `crates/**/*.rs` | ✅ Working |
+| `mcp__ts-language-server__*` | TypeScript/JavaScript | `packages/**/*.ts`, `*.tsx`, `*.js` | ⚠️ Known issues |
+
+> **TypeScript Language Server Limitations** ([GitHub issues](https://github.com/isaacphi/mcp-language-server/issues?q=typescript)):
+> - **Slow startup**: May take 10+ seconds to initialize
+> - **Diagnostics unreliable**: TypeScript doesn't support `textDocument/diagnostic` method; relies on async notifications
+> - **References partial**: Class references may not be found (methods work better)
+> - **May hang**: Some operations timeout without response
+>
+> **Workarounds**: Use `Grep` for TypeScript code searches, or use the built-in TypeScript compiler (`pnpm tsc --noEmit`) for diagnostics.
 
 ### Quick Workflow
 

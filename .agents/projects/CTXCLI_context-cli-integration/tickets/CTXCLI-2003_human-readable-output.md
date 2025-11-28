@@ -1,9 +1,9 @@
 # Ticket: CTXCLI-2003: Add Human-Readable Output Format
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,13 +20,13 @@ This is the final ticket of Phase 2 (CLI Context Command). While `--json` output
 Reference: [planning/plan.md](../planning/plan.md) - CTXCLI-2003 Example Output
 
 ## Acceptance Criteria
-- [ ] `format_context_bundle()` function created
-- [ ] Output without `--json` is readable and well-formatted
-- [ ] Primary chunk displayed with file path, line range, and symbol name
-- [ ] Related items grouped by role (CALLER, CALLEE, TEST, HOOK, etc.)
-- [ ] Token counts displayed for each item and total
-- [ ] Truncation status clearly indicated
-- [ ] Budget usage summary shown (used/total)
+- [x] `format_context_bundle()` function created
+- [x] Output without `--json` is readable and well-formatted
+- [x] Primary chunk displayed with file path, line range, and symbol name
+- [x] Related items grouped by role (CALLER, CALLEE, TEST, HOOK, etc.)
+- [x] Token counts displayed for each item and total
+- [x] Truncation status clearly indicated
+- [x] Budget usage summary shown (used/total)
 
 ## Technical Requirements
 - Create standalone `format_context_bundle()` function (or module)
