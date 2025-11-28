@@ -78,82 +78,34 @@ This codebase is indexed! Use maproom MCP tools for semantic search.
 
 ## Language Server MCP Tools
 
-This codebase has language server MCP tools for Rust and TypeScript. These provide semantic code understanding powered by rust-analyzer and typescript-language-server.
+Use `mcp__rust-language-server__*` for Rust (`crates/**/*.rs`) and `mcp__ts-language-server__*` for TypeScript (`packages/**/*.ts`).
 
-### When to Use Language Servers
+### Working Tools
 
-**Use Language Server tools** for:
-- Finding symbol definitions (structs, functions, types, classes)
-- Finding all references to a symbol across the codebase
-- Getting type information and documentation at a position
-- Finding compiler warnings and errors in a file
-- Renaming symbols safely across all usages
+| Tool | Parameters | Example |
+|------|------------|---------|
+| `definition` | `{ symbolName }` | Find where `SqliteStore` or `DaemonClient` is defined |
+| `references` | `{ symbolName }` | Find all usages of a symbol across the codebase |
+| `diagnostics` | `{ filePath }` | Get compiler warnings/errors for a file |
+| `hover` | `{ filePath, line, column }` | Get type info (Rust only) |
 
-**Use `Grep/Glob`** for:
-- Text searches that aren't symbol-based
-- Finding TODOs, FIXMEs, or comment patterns
-- Searching in non-code files
-
-### Available Tools
-
-Both language servers provide identical tools:
-
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `definition` | Find where a symbol is defined | `{ symbolName: "MyClass" }` |
-| `references` | Find all usages of a symbol | `{ symbolName: "MyFunction" }` |
-| `hover` | Get type info at a position | `{ filePath, line, column }` |
-| `diagnostics` | Get warnings/errors in a file | `{ filePath }` |
-| `rename_symbol` | Rename across codebase | `{ filePath, line, column, newName }` |
-
-### Which Server to Use
-
-| Language Server | Use For | File Patterns | Status |
-|-----------------|---------|---------------|--------|
-| `mcp__rust-language-server__*` | Rust code | `crates/**/*.rs` | ✅ Working |
-| `mcp__ts-language-server__*` | TypeScript/JavaScript | `packages/**/*.ts`, `*.tsx`, `*.js` | ⚠️ Known issues |
-
-> **TypeScript Language Server Limitations** ([GitHub issues](https://github.com/isaacphi/mcp-language-server/issues?q=typescript)):
-> - **Slow startup**: May take 10+ seconds to initialize
-> - **Diagnostics unreliable**: TypeScript doesn't support `textDocument/diagnostic` method; relies on async notifications
-> - **References partial**: Class references may not be found (methods work better)
-> - **May hang**: Some operations timeout without response
->
-> **Workarounds**: Use `Grep` for TypeScript code searches, or use the built-in TypeScript compiler (`pnpm tsc --noEmit`) for diagnostics.
-
-### Quick Workflow
+### Examples
 
 ```
-# Rust: Find a struct definition
+# Find definitions
 mcp__rust-language-server__definition({ symbolName: "SqliteStore" })
+mcp__ts-language-server__definition({ symbolName: "DaemonConfig" })
 
-# TypeScript: Find a class definition
-mcp__ts-language-server__definition({ symbolName: "DaemonClient" })
-
-# Rust: Find all usages of a type
+# Find all usages
 mcp__rust-language-server__references({ symbolName: "ContextBundle" })
+mcp__ts-language-server__references({ symbolName: "DaemonClient" })
 
-# TypeScript: Find all usages of an interface
-mcp__ts-language-server__references({ symbolName: "SearchParams" })
-
-# Rust: Check for compiler warnings
+# Check for errors
 mcp__rust-language-server__diagnostics({ filePath: "crates/maproom/src/main.rs" })
-
-# TypeScript: Check for type errors
 mcp__ts-language-server__diagnostics({ filePath: "packages/daemon-client/src/client.ts" })
-
-# Get type info at cursor (works the same for both)
-mcp__rust-language-server__hover({ filePath: "...", line: 100, column: 15 })
-mcp__ts-language-server__hover({ filePath: "...", line: 50, column: 10 })
 ```
 
-### Tips
-
-- **Symbol names**: Use the simple name (e.g., `BasicContextAssembler`, `DaemonClient`), not the full path
-- **Definition vs References**: Use `definition` to jump to implementation, `references` to find all callers/usages
-- **Diagnostics**: Great for finding unused variables, dead code, and type errors before running tests
-- **Hover**: Useful for understanding complex types or checking documentation
-- **Choose the right server**: Use rust-language-server for `.rs` files, ts-language-server for `.ts`/`.js` files
+Use simple symbol names (e.g., `DaemonClient` not `daemon_client::DaemonClient`). For text searches or non-code files, use `Grep/Glob` instead.
 
 ## Documentation
 
