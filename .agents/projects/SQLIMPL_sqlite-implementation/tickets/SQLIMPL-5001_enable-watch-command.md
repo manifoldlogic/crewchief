@@ -1,9 +1,9 @@
 # Ticket: SQLIMPL-5001: Enable Watch Command in CLI
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - 82 incremental tests passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,11 +20,11 @@ The watch command is currently disabled at CLI level with an error message sayin
 This ticket implements Plan Phase 5, Ticket 5001: "Enable Watch Command in CLI".
 
 ## Acceptance Criteria
-- [ ] "Temporarily unavailable" error removed from `src/main.rs`
-- [ ] Watch command wired to incremental module
-- [ ] File system watcher (notify crate) is configured
-- [ ] `cargo run -- watch --repo test` starts without error
-- [ ] Watch command shows status messages when starting
+- [x] "Temporarily unavailable" error removed from `src/main.rs`
+- [x] Watch command wired to incremental module (MultiWatcher + incremental_update)
+- [x] File system watcher (notify crate) is configured via WatcherConfig
+- [x] `cargo run -- watch --repo test` starts without error
+- [x] Watch command shows status messages when starting (repo, worktree, throttle)
 
 ## Technical Requirements
 - Remove the error guard in `src/main.rs` watch handler

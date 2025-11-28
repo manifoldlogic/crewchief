@@ -1,9 +1,9 @@
 # Ticket: SQLIMPL-3001: Implement Change Detector
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - 82 incremental tests passing
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-indexer-engineer
@@ -20,12 +20,12 @@ The change detector at `src/incremental/detector.rs` has 4 stubbed methods for h
 This ticket implements Plan Phase 3, Ticket 3001: "Implement Change Detector".
 
 ## Acceptance Criteria
-- [ ] `get_hash_from_db()` retrieves file hash from `files` table
-- [ ] `store_hash_in_db()` updates file hash in `files` table
-- [ ] `detect_move()` identifies renamed files by comparing blob_sha
-- [ ] Additional hash-related method implemented (4th method at line 453)
-- [ ] Hash storage and retrieval work correctly in tests
-- [ ] Move detection correctly identifies file renames
+- [x] `get_hash_from_db()` retrieves file hash from `files` table
+- [x] `store_hash_in_db()` updates file hash in `files` table
+- [x] `detect_move()` identifies renamed files by comparing content_hash
+- [x] Additional hash-related method implemented (`get_hashes_batch_from_db()` for batch queries)
+- [x] Hash storage and retrieval work correctly in tests
+- [x] Move detection correctly identifies file renames
 
 ## Technical Requirements
 - **Verify schema first:** Confirm `files` table has `content_hash` or `blob_sha` column
