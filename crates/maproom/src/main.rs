@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crewchief_maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{db, indexer};
 
@@ -1422,19 +1423,53 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Context {
-            chunk_id: _,
-            budget: _,
-            callers: _,
-            callees: _,
-            tests: _,
-            docs: _,
-            config: _,
-            max_depth: _,
-            json: _,
+            chunk_id,
+            budget,
+            callers,
+            callees,
+            tests,
+            docs,
+            config,
+            max_depth,
+            json,
         } => {
-            // Handler implementation in CTXCLI-2002
-            eprintln!("Context command handler not yet implemented (CTXCLI-2002)");
-            std::process::exit(1);
+            // Connect to database
+            let store = db::connect()
+                .await
+                .context("Database connection failed")?;
+
+            // Create assembler (uses DefaultAssemblyStrategy which has working get_chunk_metadata)
+            let assembler = DefaultAssemblyStrategy::new(Arc::new(store));
+
+            // Build expand options from CLI args
+            let options = ExpandOptions {
+                callers,
+                callees,
+                tests,
+                docs,
+                config,
+                max_depth,
+                ..Default::default()
+            };
+
+            // Execute context assembly
+            let bundle = assembler
+                .assemble(chunk_id, budget, options)
+                .await
+                .with_context(|| format!("Failed to assemble context for chunk {}", chunk_id))?;
+
+            // Output
+            if json {
+                println!("{}", serde_json::to_string_pretty(&bundle)?);
+            } else {
+                // Placeholder text - human-readable format in CTXCLI-2003
+                println!("Context bundle for chunk #{}", chunk_id);
+                println!("Items: {}", bundle.items.len());
+                println!("Total tokens: {}", bundle.total_tokens);
+                if bundle.truncated {
+                    println!("(truncated)");
+                }
+            }
         }
     }
 
