@@ -5,7 +5,7 @@
 //! - Child components rendered by a target component
 //! - Props passed between components
 
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::Result;
 use regex::Regex;
 use crate::db::SqliteStore;
 
@@ -62,11 +62,12 @@ impl JsxRelationshipDetector {
     /// Find parent components that render the target component.
     ///
     /// A parent component is one that includes JSX rendering the target.
+    /// Uses graph traversal to find chunks that call/import this component.
     ///
     /// # Arguments
     /// * `store` - SQLite store
     /// * `target_chunk_id` - Component chunk to find parents for
-    /// * `_target_symbol_name` - Symbol name of the target component (reserved for future use)
+    /// * `target_symbol_name` - Symbol name of the target component
     ///
     /// # Returns
     /// Vector of parent component chunks
@@ -74,15 +75,65 @@ impl JsxRelationshipDetector {
         &self,
         store: &SqliteStore,
         target_chunk_id: i64,
-        _target_symbol_name: &str,
+        target_symbol_name: &str,
     ) -> Result<Vec<ComponentUsage>> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(vec![])
+        use crate::db::sqlite::graph::ImportDirection;
+
+        let mut parents = Vec::new();
+
+        // Find chunks that call/reference this component (incoming edges)
+        let callers = store.find_callers(target_chunk_id, Some(1)).await?;
+
+        for caller in callers {
+            // Get chunk details
+            if let Some(chunk) = store.get_chunk_by_id(caller.chunk_id).await? {
+                // Check if this chunk contains JSX usage of the target component
+                let jsx_components = self.find_jsx_components(&chunk.preview);
+                if jsx_components.contains(&target_symbol_name.to_string()) {
+                    parents.push(ComponentUsage {
+                        id: chunk.id,
+                        relpath: chunk.file_path,
+                        symbol_name: chunk.symbol_name,
+                        kind: chunk.kind,
+                        start_line: chunk.start_line,
+                        end_line: chunk.end_line,
+                        relationship: "parent".to_string(),
+                    });
+                }
+            }
+        }
+
+        // Also check imports - chunks that import this component
+        let importers = store.find_imports(target_chunk_id, ImportDirection::Incoming, Some(1)).await?;
+
+        for importer in importers {
+            if let Some(chunk) = store.get_chunk_by_id(importer.chunk_id).await? {
+                // Check if this chunk uses the target component in JSX
+                let jsx_components = self.find_jsx_components(&chunk.preview);
+                if jsx_components.contains(&target_symbol_name.to_string()) {
+                    // Avoid duplicates
+                    if !parents.iter().any(|p| p.id == chunk.id) {
+                        parents.push(ComponentUsage {
+                            id: chunk.id,
+                            relpath: chunk.file_path,
+                            symbol_name: chunk.symbol_name,
+                            kind: chunk.kind,
+                            start_line: chunk.start_line,
+                            end_line: chunk.end_line,
+                            relationship: "parent".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(parents)
     }
 
     /// Find child components rendered by the target component.
     ///
     /// A child component is one that is rendered in the target's JSX.
+    /// Uses graph traversal to find chunks that are called/imported by this component.
     ///
     /// # Arguments
     /// * `store` - SQLite store
@@ -95,11 +146,73 @@ impl JsxRelationshipDetector {
         store: &SqliteStore,
         target_chunk_id: i64,
     ) -> Result<Vec<ComponentUsage>> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(vec![])
+        use crate::db::sqlite::graph::ImportDirection;
+
+        let mut children = Vec::new();
+
+        // First, get the target chunk to analyze its JSX
+        let target_chunk = store.get_chunk_by_id(target_chunk_id).await?;
+        if target_chunk.is_none() {
+            return Ok(vec![]);
+        }
+        let target_chunk = target_chunk.unwrap();
+
+        // Find JSX component names used in this component
+        let jsx_components = self.find_jsx_components(&target_chunk.preview);
+
+        // Find chunks that this component calls (outgoing edges)
+        let callees = store.find_callees(target_chunk_id, Some(1)).await?;
+
+        for callee in callees {
+            if let Some(chunk) = store.get_chunk_by_id(callee.chunk_id).await? {
+                // Check if this chunk is a component used in the target's JSX
+                if let Some(ref symbol_name) = chunk.symbol_name {
+                    if jsx_components.contains(symbol_name) {
+                        children.push(ComponentUsage {
+                            id: chunk.id,
+                            relpath: chunk.file_path,
+                            symbol_name: chunk.symbol_name,
+                            kind: chunk.kind,
+                            start_line: chunk.start_line,
+                            end_line: chunk.end_line,
+                            relationship: "child".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Also check imports - chunks that this component imports
+        let imports = store.find_imports(target_chunk_id, ImportDirection::Outgoing, Some(1)).await?;
+
+        for import in imports {
+            if let Some(chunk) = store.get_chunk_by_id(import.chunk_id).await? {
+                // Check if this imported chunk is used as a component
+                if let Some(ref symbol_name) = chunk.symbol_name {
+                    if jsx_components.contains(symbol_name) {
+                        // Avoid duplicates
+                        if !children.iter().any(|c| c.id == chunk.id) {
+                            children.push(ComponentUsage {
+                                id: chunk.id,
+                                relpath: chunk.file_path,
+                                symbol_name: chunk.symbol_name,
+                                kind: chunk.kind,
+                                start_line: chunk.start_line,
+                                end_line: chunk.end_line,
+                                relationship: "child".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(children)
     }
 
     /// Find all JSX relationships for a component.
+    ///
+    /// Uses tokio::join! to load parents and children concurrently.
     ///
     /// # Arguments
     /// * `store` - SQLite store
@@ -114,8 +227,13 @@ impl JsxRelationshipDetector {
         chunk_id: i64,
         symbol_name: &str,
     ) -> Result<(Vec<ComponentUsage>, Vec<ComponentUsage>)> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok((vec![], vec![]))
+        // Load parents and children in parallel
+        let (parents, children) = tokio::join!(
+            self.find_parent_components(store, chunk_id, symbol_name),
+            self.find_child_components(store, chunk_id)
+        );
+
+        Ok((parents.unwrap_or_default(), children.unwrap_or_default()))
     }
 }
 

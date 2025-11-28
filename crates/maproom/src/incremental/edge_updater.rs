@@ -28,8 +28,8 @@
 //! - Edge computation: Depends on chunk complexity (typically <100ms)
 //! - Edge insertion: Batch operation, <50ms for typical files
 
-use anyhow::{Context, Result};
-use tracing::{debug, warn};
+use anyhow::Result;
+use tracing::debug;
 
 use crate::db::SqliteStore;
 use std::sync::Arc;

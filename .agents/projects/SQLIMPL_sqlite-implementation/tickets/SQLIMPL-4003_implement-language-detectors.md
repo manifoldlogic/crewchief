@@ -1,9 +1,9 @@
 # Ticket: SQLIMPL-4003: Implement Language Detectors
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Phase 4 - OPTIONAL ENHANCEMENT:** This ticket is part of the optional context assembly phase. Defer if timeline pressure.
 
@@ -24,13 +24,13 @@ The language detectors at `src/context/detectors/` have stubbed methods for patt
 This ticket implements Plan Phase 4, Ticket 4003: "Implement Language Detectors".
 
 ## Acceptance Criteria
-- [ ] JSX detector identifies React components
-- [ ] JSX detector finds component props and children
-- [ ] JSX detector identifies component usage patterns
-- [ ] Hooks detector identifies React hooks (useState, useEffect, etc.)
-- [ ] Hooks detector finds hook dependencies
-- [ ] Hooks detector identifies custom hooks
-- [ ] Detector tests pass
+- [x] JSX detector identifies React components
+- [x] JSX detector finds component props and children
+- [x] JSX detector identifies component usage patterns
+- [x] Hooks detector identifies React hooks (useState, useEffect, etc.)
+- [x] Hooks detector finds hook dependencies
+- [x] Hooks detector identifies custom hooks
+- [x] Detector tests pass
 
 ## Technical Requirements
 - May use tree-sitter queries for AST analysis

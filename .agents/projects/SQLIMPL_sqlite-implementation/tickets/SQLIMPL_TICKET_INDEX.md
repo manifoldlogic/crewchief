@@ -5,8 +5,8 @@ Complete SQLite implementation for maproom indexer by migrating tests, wiring se
 
 ## Ticket Summary
 - **Total Tickets:** 19
-- **Core MVP Completed:** 15 tickets (Phases 1, 2, 3, 5) ✅
-- **Optional Enhancement:** 4 tickets (Phase 4) - Deferred
+- **Completed:** 15 tickets (Phases 1, 2, 3, 5) ✅
+- **Remaining:** 4 tickets (Phase 4) - Required
 
 ---
 
@@ -53,18 +53,18 @@ Complete SQLite implementation for maproom indexer by migrating tests, wiring se
 
 ---
 
-## Phase 4: Context Assembly (4 tickets) - DEFERRED
+## Phase 4: Context Assembly (4 tickets) - REQUIRED
 *Objective: Make context expansion and caching work*
-*Status: Optional enhancement - deferred per plan (not required for core MVP)*
+*Status: Required - completes full feature set*
 
 | Ticket | Title | Status | Dependencies |
 |--------|-------|--------|--------------|
-| [SQLIMPL-4001](SQLIMPL-4001_implement-context-cache.md) | Implement Context Cache | Deferred | Phase 1 Complete |
-| [SQLIMPL-4002](SQLIMPL-4002_implement-context-graph.md) | Implement Context Graph | Deferred | Phase 1 Complete |
-| [SQLIMPL-4003](SQLIMPL-4003_implement-language-detectors.md) | Implement Language Detectors | Deferred | Phase 1 Complete |
-| [SQLIMPL-4004](SQLIMPL-4004_implement-language-strategies.md) | Implement Language Strategies | Deferred | SQLIMPL-4002, SQLIMPL-4003 |
+| [SQLIMPL-4001](SQLIMPL-4001_implement-context-cache.md) | Implement Context Cache | Not Started | Phase 1 Complete |
+| [SQLIMPL-4002](SQLIMPL-4002_implement-context-graph.md) | Implement Context Graph | Not Started | Phase 1 Complete |
+| [SQLIMPL-4003](SQLIMPL-4003_implement-language-detectors.md) | Implement Language Detectors | Not Started | Phase 1 Complete |
+| [SQLIMPL-4004](SQLIMPL-4004_implement-language-strategies.md) | Implement Language Strategies | Not Started | SQLIMPL-4002, SQLIMPL-4003 |
 
-**Phase Gate:** Deferred - Context assembly returns expanded results with related chunks
+**Phase Gate:** Context assembly returns expanded results with related chunks
 
 ---
 
@@ -83,9 +83,9 @@ Complete SQLite implementation for maproom indexer by migrating tests, wiring se
 ## Dependency Graph
 
 ```
-Phase 1 (Tests) ──┬──▶ Phase 2 (Search) ✅
-                  ├──▶ Phase 3 (Incremental) ✅ ──▶ Phase 5 (Watch) ✅
-                  └──▶ Phase 4 (Context) [DEFERRED]
+Phase 1 (Tests) ✅ ──┬──▶ Phase 2 (Search) ✅
+                     ├──▶ Phase 3 (Incremental) ✅ ──▶ Phase 5 (Watch) ✅
+                     └──▶ Phase 4 (Context) [IN PROGRESS]
 ```
 
 ## Success Criteria
@@ -97,7 +97,7 @@ Phase 1 (Tests) ──┬──▶ Phase 2 (Search) ✅
 - [x] Incremental updates persist: File changes detected and indexed
 - [x] Watch command works: Monitors and updates
 
-### Extended Goals (Optional) - DEFERRED
+### Phase 4 Goals (Required)
 - [ ] Context assembly complete: Related chunks returned
 - [ ] Language-specific detection: JSX, hooks, Python patterns
 

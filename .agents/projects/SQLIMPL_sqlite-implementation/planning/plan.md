@@ -15,13 +15,13 @@ Complete the SQLite implementation for maproom by:
 
 | Phase | Focus | Tickets | Complexity | Status |
 |-------|-------|---------|------------|--------|
-| 1 | Test Infrastructure | 5 | Medium | Core MVP |
-| 2 | Search Wiring | 4 | **Low** | Core MVP |
-| 3 | Incremental Updates | 4 | High | Core MVP |
-| 4 | Context Assembly | 4 | Medium | **Optional Enhancement** |
-| 5 | Watch Command | 2 | Low | Core MVP |
+| 1 | Test Infrastructure | 5 | Medium | ✅ Complete |
+| 2 | Search Wiring | 4 | **Low** | ✅ Complete |
+| 3 | Incremental Updates | 4 | High | ✅ Complete |
+| 4 | Context Assembly | 4 | Medium | **Required** |
+| 5 | Watch Command | 2 | Low | ✅ Complete |
 
-**Total: 19 tickets** (15 core MVP + 4 optional enhancement)
+**Total: 19 tickets** (all required)
 
 ## Phase 1: Test Infrastructure
 
@@ -159,11 +159,11 @@ Complete the SQLite implementation for maproom by:
 
 **Phase Gate:** Modify a file, run `upsert`, verify database updated correctly
 
-## Phase 4: Context Assembly (Optional Enhancement)
+## Phase 4: Context Assembly
 
 **Objective:** Make context expansion and caching work.
 
-**Status:** OPTIONAL - defer if timeline pressure. Core search works without this.
+**Status:** REQUIRED - completes the full feature set.
 
 ### Ticket 4001: Implement Context Cache
 - **Verify schema:** Confirm `context_cache` table exists
@@ -239,26 +239,23 @@ Complete the SQLite implementation for maproom by:
 ```
 Phase 1 (Tests) ──┬──▶ Phase 2 (Search)
                   ├──▶ Phase 3 (Incremental)
-                  └──▶ Phase 4 (Context) [Optional]
+                  └──▶ Phase 4 (Context)
 
 Phase 3 (Incremental) ──▶ Phase 5 (Watch)
 ```
 
 - Phase 1 must complete first (enables validation)
-- Phases 2, 3 can proceed in parallel after Phase 1
-- Phase 4 is optional and can be deferred
+- Phases 2, 3, 4 can proceed in parallel after Phase 1
 - Phase 5 depends on Phase 3
 
 ## Success Criteria
 
-### Minimum Viable Completion (Core MVP)
-- [ ] All tests compile: `cargo test -p crewchief-maproom --no-run`
-- [ ] All tests pass: `cargo test -p crewchief-maproom`
-- [ ] Search returns results: Non-empty, ranked
-- [ ] Incremental updates persist: File changes detected and indexed
-- [ ] Watch command works: Monitors and updates
-
-### Extended Goals (Optional)
+### Full Completion
+- [x] All tests compile: `cargo test -p crewchief-maproom --no-run`
+- [x] All tests pass: `cargo test -p crewchief-maproom`
+- [x] Search returns results: Non-empty, ranked
+- [x] Incremental updates persist: File changes detected and indexed
+- [x] Watch command works: Monitors and updates
 - [ ] Context assembly complete: Related chunks returned
 - [ ] Language-specific detection: JSX, hooks, Python patterns
 
@@ -273,16 +270,16 @@ Phase 3 (Incremental) ──▶ Phase 5 (Watch)
 |------|------------|
 | Test migration complex | Triage first, batch by category, delete obsolete tests |
 | sqlite-vec API issues | Already working in SqliteStore - just wire up |
-| Context assembly complex | Mark as optional, may need tree-sitter integration |
+| Context assembly complex | May need tree-sitter integration |
 | Watch depends on incremental | Complete Phase 3 fully before Phase 5 |
 
 ## Execution Recommendations
 
-1. **Phase 1:** Execute sequentially (1001 → 1005), triage in 1001
-2. **Phase 2:** Quick wins - mostly wiring existing code
-3. **Phase 3:** Core implementation work, take time to get right
-4. **Phase 4:** Defer if needed, not required for core functionality
-5. **Phase 5:** Only after Phase 3 is verified working
+1. **Phase 1:** Execute sequentially (1001 → 1005), triage in 1001 ✅ Complete
+2. **Phase 2:** Quick wins - mostly wiring existing code ✅ Complete
+3. **Phase 3:** Core implementation work, take time to get right ✅ Complete
+4. **Phase 4:** Context assembly - required for full feature set
+5. **Phase 5:** Only after Phase 3 is verified working ✅ Complete
 
 ## Audit Checklist (Before Each Phase)
 

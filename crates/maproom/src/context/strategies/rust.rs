@@ -7,8 +7,8 @@
 //! - Detects test modules using #[cfg(test)] and #[test] attributes
 //! - Includes macro definitions when referenced
 
-use anyhow::{Context as AnyhowContext, Result};
-use tracing::{debug, warn};
+use anyhow::Result;
+use tracing::debug;
 
 use crate::context::{
     assembler::ChunkMetadata,

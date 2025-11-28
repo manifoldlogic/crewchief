@@ -9,7 +9,7 @@
 //! These functions build on the core graph traversal in graph.rs but provide
 //! semantic meaning and specialized handling for each relationship type.
 
-use super::graph::{EdgeType, RelatedChunk};
+use super::graph::RelatedChunk;
 use crate::db::sqlite::graph::ImportDirection;
 use crate::db::SqliteStore;
 use anyhow::{Context as AnyhowContext, Result};

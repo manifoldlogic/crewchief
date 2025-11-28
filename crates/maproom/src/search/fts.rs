@@ -36,7 +36,7 @@
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use regex::Regex;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, instrument};
 
 /// Normalize query for exact match detection
 ///

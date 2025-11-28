@@ -7,8 +7,8 @@
 //! - Detects test files using test_*.py or *_test.py patterns
 //! - Includes docstrings and type hints
 
-use anyhow::{Context as AnyhowContext, Result};
-use tracing::{debug, warn};
+use anyhow::Result;
+use tracing::debug;
 
 use crate::context::{
     assembler::ChunkMetadata,

@@ -8,13 +8,12 @@
 //! - Applies React-specific budget allocation
 
 use anyhow::{Context as AnyhowContext, Result};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::context::{
     assembler::{BasicContextAssembler, ChunkMetadata, ContextAssembler},
     detectors::{ComponentDetector, HookDetector, JsxRelationshipDetector},
     file_loader::FileLoader,
-    relationships::find_routes,
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };

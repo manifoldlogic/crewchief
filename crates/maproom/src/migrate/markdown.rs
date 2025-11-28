@@ -187,7 +187,7 @@ impl MarkdownMigrator {
         let worktree_name = worktree_name.map(|s| s.to_string());
 
         self.store.run(move |conn| {
-            use rusqlite::params;
+            
 
             let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(ref worktree) = worktree_name {
                 (

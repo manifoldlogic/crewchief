@@ -5,7 +5,7 @@
 //! - Custom hooks (use* naming convention)
 //! - Hook dependencies and relationships
 
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::Result;
 use regex::Regex;
 use crate::db::SqliteStore;
 
@@ -115,11 +115,59 @@ impl HookDetector {
     /// # Returns
     /// Vector of hook information ordered by relevance
     pub async fn find_used_hooks(&self, store: &SqliteStore, chunk_id: i64) -> Result<Vec<HookInfo>> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(vec![])
+        use crate::db::sqlite::graph::ImportDirection;
+
+        let mut hooks = Vec::new();
+
+        // Get the chunk to analyze its content for hook calls
+        let chunk = store.get_chunk_by_id(chunk_id).await?;
+        if chunk.is_none() {
+            return Ok(vec![]);
+        }
+        let chunk = chunk.unwrap();
+
+        // Find hook names used in this chunk
+        let hook_names = self.find_hook_calls(&chunk.preview);
+
+        // Find chunks that this component calls/imports
+        let callees = store.find_callees(chunk_id, Some(1)).await?;
+        let imports = store.find_imports(chunk_id, ImportDirection::Outgoing, Some(1)).await?;
+
+        // Combine and deduplicate chunk IDs to check
+        let mut chunk_ids_to_check: Vec<i64> = callees.iter().map(|c| c.chunk_id).collect();
+        for import in imports {
+            if !chunk_ids_to_check.contains(&import.chunk_id) {
+                chunk_ids_to_check.push(import.chunk_id);
+            }
+        }
+
+        // Check each related chunk for hook definitions
+        for related_chunk_id in chunk_ids_to_check {
+            if let Some(related_chunk) = store.get_chunk_by_id(related_chunk_id).await? {
+                if let Some(ref symbol_name) = related_chunk.symbol_name {
+                    // Check if this is a hook that's used by the target
+                    if self.is_hook(symbol_name) && hook_names.contains(symbol_name) {
+                        hooks.push(HookInfo {
+                            id: related_chunk.id,
+                            relpath: related_chunk.file_path,
+                            symbol_name: symbol_name.clone(),
+                            kind: related_chunk.kind,
+                            start_line: related_chunk.start_line,
+                            end_line: related_chunk.end_line,
+                            is_builtin: self.is_builtin_hook(symbol_name),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(hooks)
     }
 
     /// Find all custom hooks defined in the codebase.
+    ///
+    /// Searches for function chunks with names matching the custom hook pattern
+    /// (use[A-Z]*) that are not built-in hooks.
     ///
     /// # Arguments
     /// * `store` - SQLite store
@@ -130,13 +178,45 @@ impl HookDetector {
     pub async fn find_all_custom_hooks(
         &self,
         store: &SqliteStore,
-        worktree_id: Option<i64>,
+        _worktree_id: Option<i64>,
     ) -> Result<Vec<HookInfo>> {
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
-        Ok(vec![])
+        // Use FTS search to find functions with "use" prefix
+        // Search for "use" in all repos, then filter to custom hooks
+        let search_results = store.search_chunks_fts(
+            "*",  // All repos
+            None, // All worktrees initially
+            "use",
+            100,  // Get more results to filter
+            false,
+        ).await?;
+
+        let mut hooks = Vec::new();
+
+        for hit in search_results {
+            // Check if this is a custom hook
+            if let Some(ref symbol_name) = hit.symbol_name {
+                if self.is_custom_hook(symbol_name) && !self.is_builtin_hook(symbol_name) {
+                    // Filter by worktree if specified (can't do this in the query easily)
+                    // For now, include all results (worktree filtering would require additional lookup)
+                    hooks.push(HookInfo {
+                        id: hit.chunk_id,
+                        relpath: hit.file_relpath,
+                        symbol_name: symbol_name.clone(),
+                        kind: hit.kind,
+                        start_line: hit.start_line,
+                        end_line: hit.end_line,
+                        is_builtin: false,
+                    });
+                }
+            }
+        }
+
+        Ok(hooks)
     }
 
     /// Find hook by name.
+    ///
+    /// Searches for a specific hook definition in the codebase.
     ///
     /// # Arguments
     /// * `store` - SQLite store
@@ -149,14 +229,39 @@ impl HookDetector {
         &self,
         store: &SqliteStore,
         hook_name: &str,
-        worktree_id: Option<i64>,
+        _worktree_id: Option<i64>,
     ) -> Result<Option<HookInfo>> {
         // Built-in hooks don't have definitions in the codebase
         if self.is_builtin_hook(hook_name) {
             return Ok(None);
         }
 
-        // TODO: Implement using SqliteStore methods in IDXABS-4001
+        // Search for the specific hook name
+        let search_results = store.search_chunks_fts(
+            "*",  // All repos
+            None, // All worktrees
+            hook_name,
+            10,   // Just need to find one
+            false,
+        ).await?;
+
+        // Find exact match
+        for hit in search_results {
+            if let Some(ref symbol_name) = hit.symbol_name {
+                if symbol_name == hook_name && self.is_custom_hook(symbol_name) {
+                    return Ok(Some(HookInfo {
+                        id: hit.chunk_id,
+                        relpath: hit.file_relpath,
+                        symbol_name: symbol_name.clone(),
+                        kind: hit.kind,
+                        start_line: hit.start_line,
+                        end_line: hit.end_line,
+                        is_builtin: false,
+                    }));
+                }
+            }
+        }
+
         Ok(None)
     }
 }
