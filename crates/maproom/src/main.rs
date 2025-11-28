@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -1146,7 +1146,13 @@ async fn main() -> anyhow::Result<()> {
 
             // Ensure repo and worktree exist
             let repo_id = store.get_or_create_repo(&repo, &watch_path_str).await?;
-            let worktree_id = store.get_or_create_worktree(repo_id, &worktree, &watch_path_str).await?;
+            let initial_worktree_id = store.get_or_create_worktree(repo_id, &worktree, &watch_path_str).await?;
+
+            // Wrap worktree_id and current_branch in thread-safe state for dynamic updates
+            // Uses std::sync::RwLock (not tokio::sync) to match existing codebase patterns
+            let worktree_id: Arc<RwLock<i64>> = Arc::new(RwLock::new(initial_worktree_id));
+            // current_branch will be used by UNIWATCH-3001 (Branch Switch Handler)
+            let _current_branch: Arc<RwLock<String>> = Arc::new(RwLock::new(worktree.clone()));
 
             // Create and start the file watcher
             use crewchief_maproom::incremental::{MultiWatcher, WatcherConfig};
@@ -1196,8 +1202,11 @@ async fn main() -> anyhow::Result<()> {
 
                         println!("📁 {} {}", event_type, event.path.display());
 
+                        // Read worktree_id from lock (copy value, drop lock, then use)
+                        let wt_id = *worktree_id.read().unwrap();
+
                         // Trigger incremental update for the worktree
-                        match incremental_update(&store, worktree_id, &watch_path).await {
+                        match incremental_update(&store, wt_id, &watch_path).await {
                             Ok(stats) => {
                                 if stats.files_processed > 0 {
                                     println!("   ✅ Processed {} files", stats.files_processed);
