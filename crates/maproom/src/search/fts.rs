@@ -138,7 +138,7 @@ impl FTSExecutor {
     pub async fn execute(
         store: &SqliteStore,
         fts_query: &str,
-        normalized_query: &str,
+        _normalized_query: &str,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
@@ -156,14 +156,21 @@ impl FTSExecutor {
             fts_query, limit, fetch_limit
         );
 
-        // TODO(IDXABS-2003): This is a placeholder implementation.
-        // The full FTS ranking logic with kind multipliers and exact match boosting
-        // needs to be implemented in SqliteStore's search_chunks_fts method.
-        // For now, we return empty results to allow compilation.
-        // See ticket IDXABS-4001 for search functionality updates.
+        // Delegate to SqliteStore's FTS search
+        let hits = store
+            .search_fts_by_id(repo_id, worktree_id, fts_query, fetch_limit)
+            .await
+            .map_err(|e| FTSError::Database(e.to_string()))?;
 
-        warn!("FTS search is not fully implemented for SqliteStore backend");
-        Ok(RankedResults::empty(SearchSource::FTS))
+        // Convert SearchHit to RankedResult
+        let results: Vec<RankedResult> = hits
+            .into_iter()
+            .enumerate()
+            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .collect();
+
+        debug!("FTS search returned {} results", results.len());
+        Ok(RankedResults::new(results, SearchSource::FTS))
     }
 }
 

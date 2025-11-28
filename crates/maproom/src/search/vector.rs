@@ -109,14 +109,21 @@ impl VectorExecutor {
             mode, limit, fetch_limit
         );
 
-        // TODO(IDXABS-2003): This is a placeholder implementation.
-        // Vector search using sqlite-vec needs to be integrated with the search pipeline.
-        // The SqliteStore has search_chunks_vector() but returns SearchHit, not RankedResult.
-        // This needs adapter logic to convert between types.
-        // See ticket IDXABS-4001 for search functionality updates.
+        // Delegate to SqliteStore's vector search
+        let hits = store
+            .search_vector_by_id(repo_id, worktree_id, query_embedding, fetch_limit)
+            .await
+            .map_err(|e| VectorError::Database(e.to_string()))?;
 
-        warn!("Vector search is not fully implemented for SqliteStore backend");
-        Ok(RankedResults::empty(SearchSource::Vector))
+        // Convert SearchHit to RankedResult
+        let results: Vec<RankedResult> = hits
+            .into_iter()
+            .enumerate()
+            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .collect();
+
+        debug!("Vector search returned {} results", results.len());
+        Ok(RankedResults::new(results, SearchSource::Vector))
     }
 
 }

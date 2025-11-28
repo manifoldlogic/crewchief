@@ -6,7 +6,7 @@
 
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
-use tracing::{debug, instrument, warn};
+use tracing::{debug, instrument};
 
 /// Graph importance executor.
 ///
@@ -73,13 +73,21 @@ impl GraphExecutor {
             limit
         );
 
-        // TODO(IDXABS-2003): This is a placeholder implementation.
-        // Graph-based importance scoring needs to be implemented using SqliteStore's
-        // chunk_edges table. The SQLite schema uses chunk_edges with type column.
-        // See ticket IDXABS-4001 for search functionality updates.
+        // Delegate to SqliteStore's graph importance calculation
+        let hits = store
+            .calculate_graph_importance(repo_id, worktree_id, _fetch_limit as usize)
+            .await
+            .map_err(|e| GraphError::Database(e.to_string()))?;
 
-        warn!("Graph search is not fully implemented for SqliteStore backend");
-        Ok(RankedResults::empty(SearchSource::Graph))
+        // Convert SearchHit to RankedResult
+        let results: Vec<RankedResult> = hits
+            .into_iter()
+            .enumerate()
+            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .collect();
+
+        debug!("Graph search returned {} results", results.len());
+        Ok(RankedResults::new(results, SearchSource::Graph))
     }
 
     /// Execute graph importance query for specific chunk IDs.
@@ -102,12 +110,21 @@ impl GraphExecutor {
             chunk_ids.len()
         );
 
-        // TODO(IDXABS-2003): This is a placeholder implementation.
-        // Chunk-specific graph scoring not yet implemented for SqliteStore.
-        // See ticket IDXABS-4001 for search functionality updates.
+        // Delegate to SqliteStore's graph importance calculation for specific chunks
+        let hits = store
+            .calculate_graph_importance_for_chunks(chunk_ids, repo_id, worktree_id)
+            .await
+            .map_err(|e| GraphError::Database(e.to_string()))?;
 
-        warn!("Graph search for specific chunks is not fully implemented for SqliteStore backend");
-        Ok(RankedResults::empty(SearchSource::Graph))
+        // Convert SearchHit to RankedResult
+        let results: Vec<RankedResult> = hits
+            .into_iter()
+            .enumerate()
+            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .collect();
+
+        debug!("Graph search for chunks returned {} results", results.len());
+        Ok(RankedResults::new(results, SearchSource::Graph))
     }
 }
 

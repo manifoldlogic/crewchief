@@ -85,6 +85,7 @@ pub struct ChunkRecord {
 /// Search result returned by vector/FTS search
 #[derive(Debug, Serialize)]
 pub struct SearchHit {
+    pub chunk_id: i64,
     pub score: f64,
     pub file_relpath: String,
     pub symbol_name: Option<String>,

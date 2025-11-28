@@ -22,7 +22,9 @@ fn create_search_hit(
     symbol_name: Option<&str>,
     start_line: i32,
 ) -> SearchHit {
+    static COUNTER: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1);
     SearchHit {
+        chunk_id: COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         score,
         file_relpath: file_relpath.to_string(),
         symbol_name: symbol_name.map(|s| s.to_string()),

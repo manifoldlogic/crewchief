@@ -668,6 +668,7 @@ impl SqliteStore {
             let sql = if worktree_id.is_some() {
                 r#"
                 SELECT
+                    c.id,
                     c.start_line,
                     c.end_line,
                     c.symbol_name,
@@ -687,6 +688,7 @@ impl SqliteStore {
             } else {
                 r#"
                 SELECT
+                    c.id,
                     c.start_line,
                     c.end_line,
                     c.symbol_name,
@@ -708,13 +710,14 @@ impl SqliteStore {
             let mut hits = Vec::new();
             if let Some(wid) = worktree_id {
                 let rows = stmt.query_map(params![fts_query, repo_id, wid, k], |row| {
-                    let score: f64 = row.get(5)?;
+                    let score: f64 = row.get(6)?;
                     Ok(SearchHit {
-                        start_line: row.get(0)?,
-                        end_line: row.get(1)?,
-                        symbol_name: row.get(2)?,
-                        kind: row.get(3)?,
-                        file_relpath: row.get(4)?,
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
                         score: -score, // FTS5 rank is negative, negate for positive score
                         base_score: None,
                         kind_mult: None,
@@ -726,14 +729,246 @@ impl SqliteStore {
                 }
             } else {
                 let rows = stmt.query_map(params![fts_query, repo_id, k], |row| {
-                    let score: f64 = row.get(5)?;
+                    let score: f64 = row.get(6)?;
                     Ok(SearchHit {
-                        start_line: row.get(0)?,
-                        end_line: row.get(1)?,
-                        symbol_name: row.get(2)?,
-                        kind: row.get(3)?,
-                        file_relpath: row.get(4)?,
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
                         score: -score, // FTS5 rank is negative, negate for positive score
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            }
+            Ok(hits)
+        }).await
+    }
+
+    /// FTS search by repo_id and worktree_id (for use by search executors)
+    pub async fn search_fts_by_id(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        query: &str,
+        k: i64,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        let query = query.to_string();
+        self.run(move |conn| {
+            // FTS5 query syntax: term1 term2 (implicit AND), term1 OR term2
+            // Prefix matching: term* (no quotes around term!)
+            let fts_query = query
+                .split_whitespace()
+                .filter(|t| !t.is_empty())
+                .map(|t| {
+                    // Sanitize: remove quotes and special FTS characters
+                    let clean = t
+                        .replace('"', "")
+                        .replace('\'', "")
+                        .replace('*', "")
+                        .replace('(', "")
+                        .replace(')', "");
+                    if clean.is_empty() {
+                        return String::new();
+                    }
+                    // FTS5 prefix syntax: term* (no quotes!)
+                    format!("{}*", clean)
+                })
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>()
+                .join(" OR ");
+
+            if fts_query.is_empty() {
+                return Ok(vec![]);
+            }
+
+            let sql = if worktree_id.is_some() {
+                r#"
+                SELECT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    fts_chunks.rank as score
+                FROM fts_chunks
+                JOIN chunks c ON c.id = fts_chunks.rowid
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                WHERE fts_chunks MATCH ?1
+                  AND f.repo_id = ?2
+                  AND cw.worktree_id = ?3
+                ORDER BY score
+                LIMIT ?4
+                "#
+            } else {
+                r#"
+                SELECT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    fts_chunks.rank as score
+                FROM fts_chunks
+                JOIN chunks c ON c.id = fts_chunks.rowid
+                JOIN files f ON f.id = c.file_id
+                WHERE fts_chunks MATCH ?1
+                  AND f.repo_id = ?2
+                ORDER BY score
+                LIMIT ?3
+                "#
+            };
+
+            let mut stmt = conn.prepare(sql)?;
+            let mut hits = Vec::new();
+
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(params![fts_query, repo_id, wid, k], |row| {
+                    let score: f64 = row.get(6)?;
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: -score, // FTS5 rank is negative, negate for positive score
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(params![fts_query, repo_id, k], |row| {
+                    let score: f64 = row.get(6)?;
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: -score, // FTS5 rank is negative, negate for positive score
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            }
+            Ok(hits)
+        }).await
+    }
+
+    /// Vector search by repo_id and worktree_id (for use by search executors)
+    pub async fn search_vector_by_id(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        query_embedding: &[f32],
+        k: i64,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        // Graceful degradation if sqlite-vec not available
+        if !self.has_vec_extension() {
+            return Ok(vec![]);
+        }
+
+        let embedding = query_embedding.to_vec();
+        let limit = k as usize;
+
+        self.run(move |conn| {
+            // Validate embedding dimension
+            let dimension = embedding.len();
+            let vec_table = match dimension {
+                768 => "vec_code_768",
+                1536 => "vec_code",
+                _ => return Ok(vec![]), // Unsupported dimension, return empty
+            };
+
+            let query_blob = embeddings::vec_to_blob(&embedding);
+
+            // Use repo_id directly in query
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, v.distance
+                    FROM {} v
+                    JOIN code_embeddings e ON e.id = v.rowid
+                    JOIN chunks c ON c.blob_sha = e.blob_sha
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    WHERE v.embedding MATCH ?1
+                      AND k = ?4
+                      AND f.repo_id = ?2
+                      AND cw.worktree_id = ?3
+                    ORDER BY v.distance ASC
+                    "#,
+                    vec_table
+                )
+            } else {
+                format!(
+                    r#"
+                    SELECT DISTINCT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, v.distance
+                    FROM {} v
+                    JOIN code_embeddings e ON e.id = v.rowid
+                    JOIN chunks c ON c.blob_sha = e.blob_sha
+                    JOIN files f ON f.id = c.file_id
+                    WHERE v.embedding MATCH ?1
+                      AND k = ?3
+                      AND f.repo_id = ?2
+                    ORDER BY v.distance ASC
+                    "#,
+                    vec_table
+                )
+            };
+
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
+
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(params![query_blob, repo_id, wid, limit as i64], |row| {
+                    let distance: f64 = row.get(6)?;
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: vector::distance_to_similarity(distance),
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(params![query_blob, repo_id, limit as i64], |row| {
+                    let distance: f64 = row.get(6)?;
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: vector::distance_to_similarity(distance),
                         base_score: None,
                         kind_mult: None,
                         exact_mult: None,
@@ -796,6 +1031,7 @@ impl SqliteStore {
             let mut hits = Vec::new();
             for vec_result in vec_results {
                 // Fetch chunk details with file relpath
+                let chunk_id = vec_result.chunk_id;
                 let hit_result = if let Some(wid) = worktree_id {
                     conn.query_row(
                         r#"
@@ -808,6 +1044,7 @@ impl SqliteStore {
                         params![vec_result.chunk_id, wid],
                         |row| {
                             Ok(SearchHit {
+                                chunk_id,
                                 start_line: row.get(0)?,
                                 end_line: row.get(1)?,
                                 symbol_name: row.get(2)?,
@@ -831,6 +1068,7 @@ impl SqliteStore {
                         params![vec_result.chunk_id],
                         |row| {
                             Ok(SearchHit {
+                                chunk_id,
                                 start_line: row.get(0)?,
                                 end_line: row.get(1)?,
                                 symbol_name: row.get(2)?,
@@ -920,6 +1158,7 @@ impl SqliteStore {
             let mut hits = Vec::new();
             for hybrid_result in hybrid_results {
                 // Fetch chunk details with file relpath
+                let chunk_id = hybrid_result.chunk_id;
                 let hit_result = if let Some(wid) = worktree_id {
                     conn.query_row(
                         r#"
@@ -932,6 +1171,7 @@ impl SqliteStore {
                         params![hybrid_result.chunk_id, wid],
                         |row| {
                             Ok(SearchHit {
+                                chunk_id,
                                 start_line: row.get(0)?,
                                 end_line: row.get(1)?,
                                 symbol_name: row.get(2)?,
@@ -955,6 +1195,7 @@ impl SqliteStore {
                         params![hybrid_result.chunk_id],
                         |row| {
                             Ok(SearchHit {
+                                chunk_id,
                                 start_line: row.get(0)?,
                                 end_line: row.get(1)?,
                                 symbol_name: row.get(2)?,
@@ -1378,6 +1619,50 @@ impl SqliteStore {
             )?;
 
             Ok(count as u64)
+        }).await
+    }
+
+    /// Look up a file ID by its relative path and worktree ID.
+    ///
+    /// # Arguments
+    /// * `relpath` - Relative path of the file
+    /// * `worktree_id` - Worktree ID
+    ///
+    /// # Returns
+    /// * `Ok(Some(file_id))` - File found
+    /// * `Ok(None)` - File not found
+    pub async fn get_file_id_by_relpath(&self, relpath: &str, worktree_id: i64) -> anyhow::Result<Option<i64>> {
+        let relpath = relpath.to_string();
+        self.run(move |conn| {
+            let result: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2",
+                    params![relpath, worktree_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok(result)
+        }).await
+    }
+
+    /// Delete a file record from the database.
+    ///
+    /// Note: This only deletes the file record. Use `delete_chunks_by_file` first
+    /// to delete associated chunks, edges, and embeddings.
+    ///
+    /// # Arguments
+    /// * `file_id` - Database ID of the file to delete
+    ///
+    /// # Returns
+    /// * `Ok(true)` - File was deleted
+    /// * `Ok(false)` - File was not found
+    pub async fn delete_file(&self, file_id: i64) -> anyhow::Result<bool> {
+        self.run(move |conn| {
+            let rows_deleted = conn.execute(
+                "DELETE FROM files WHERE id = ?1",
+                params![file_id],
+            )?;
+            Ok(rows_deleted > 0)
         }).await
     }
 
@@ -1859,6 +2144,448 @@ impl SqliteStore {
     ) -> anyhow::Result<Vec<graph::GraphResult>> {
         self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
             .await
+    }
+
+    /// Calculate graph importance scores for chunks in a repo/worktree
+    ///
+    /// Uses edge counts (callers, importers, tests) to calculate PageRank-like scores.
+    /// Weights: calls=0.3, imports=0.2, tests=0.1, logarithmic scaling.
+    pub async fn calculate_graph_importance(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        self.run(move |conn| {
+            // SQLite doesn't have FILTER, so use CASE for conditional counts
+            let sql = if worktree_id.is_some() {
+                r#"
+                WITH edge_counts AS (
+                    SELECT
+                        dst_chunk_id as chunk_id,
+                        SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                        SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                        SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                    FROM chunk_edges
+                    GROUP BY dst_chunk_id
+                )
+                SELECT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    COALESCE(
+                        (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                         ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                         ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                        0
+                    ) as graph_score
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                WHERE f.repo_id = ?1 AND cw.worktree_id = ?2
+                ORDER BY graph_score DESC
+                LIMIT ?3
+                "#
+            } else {
+                r#"
+                WITH edge_counts AS (
+                    SELECT
+                        dst_chunk_id as chunk_id,
+                        SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                        SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                        SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                    FROM chunk_edges
+                    GROUP BY dst_chunk_id
+                )
+                SELECT DISTINCT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    COALESCE(
+                        (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                         ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                         ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                        0
+                    ) as graph_score
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                WHERE f.repo_id = ?1
+                ORDER BY graph_score DESC
+                LIMIT ?2
+                "#
+            };
+
+            let mut stmt = conn.prepare(sql)?;
+            let mut hits = Vec::new();
+
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(params![repo_id, wid, limit as i64], |row| {
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: row.get(6)?,
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(params![repo_id, limit as i64], |row| {
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: row.get(6)?,
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            }
+            Ok(hits)
+        }).await
+    }
+
+    /// Calculate graph importance for specific chunk IDs
+    ///
+    /// Uses edge counts to calculate PageRank-like scores for the given chunks.
+    pub async fn calculate_graph_importance_for_chunks(
+        &self,
+        chunk_ids: &[i64],
+        repo_id: i64,
+        worktree_id: Option<i64>,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if chunk_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            // Build placeholders for IN clause
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    WITH edge_counts AS (
+                        SELECT
+                            dst_chunk_id as chunk_id,
+                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                        FROM chunk_edges
+                        WHERE dst_chunk_id IN ({})
+                        GROUP BY dst_chunk_id
+                    )
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        COALESCE(
+                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                            0
+                        ) as graph_score
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
+                    ORDER BY graph_score DESC
+                    "#,
+                    placeholders, placeholders
+                )
+            } else {
+                format!(
+                    r#"
+                    WITH edge_counts AS (
+                        SELECT
+                            dst_chunk_id as chunk_id,
+                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                        FROM chunk_edges
+                        WHERE dst_chunk_id IN ({})
+                        GROUP BY dst_chunk_id
+                    )
+                    SELECT DISTINCT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        COALESCE(
+                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                            0
+                        ) as graph_score
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ?
+                    ORDER BY graph_score DESC
+                    "#,
+                    placeholders, placeholders
+                )
+            };
+
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
+
+            // Build parameter list
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
+                .iter()
+                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+                .collect();
+
+            // Duplicate chunk_ids for the second IN clause
+            for id in &chunk_ids {
+                param_values.push(Box::new(*id));
+            }
+
+            // Add repo_id
+            param_values.push(Box::new(repo_id));
+
+            // Add worktree_id if present
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: row.get(6)?,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
+            }
+            Ok(hits)
+        }).await
+    }
+
+    /// Calculate signal scores (recency + churn) for chunks in a repo/worktree
+    ///
+    /// Combines recency_score and churn_score from chunks table with configurable weights.
+    pub async fn calculate_signal_scores(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        recency_weight: f32,
+        churn_weight: f32,
+        limit: usize,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        self.run(move |conn| {
+            let sql = if worktree_id.is_some() {
+                r#"
+                SELECT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    (c.recency_score * ?3 + c.churn_score * ?4) as combined_signal
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                WHERE f.repo_id = ?1 AND cw.worktree_id = ?2
+                ORDER BY combined_signal DESC
+                LIMIT ?5
+                "#
+            } else {
+                r#"
+                SELECT DISTINCT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    (c.recency_score * ?2 + c.churn_score * ?3) as combined_signal
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                WHERE f.repo_id = ?1
+                ORDER BY combined_signal DESC
+                LIMIT ?4
+                "#
+            };
+
+            let mut stmt = conn.prepare(sql)?;
+            let mut hits = Vec::new();
+
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(params![repo_id, wid, recency_weight, churn_weight, limit as i64], |row| {
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: row.get(6)?,
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(params![repo_id, recency_weight, churn_weight, limit as i64], |row| {
+                    Ok(SearchHit {
+                        chunk_id: row.get(0)?,
+                        start_line: row.get(1)?,
+                        end_line: row.get(2)?,
+                        symbol_name: row.get(3)?,
+                        kind: row.get(4)?,
+                        file_relpath: row.get(5)?,
+                        score: row.get(6)?,
+                        base_score: None,
+                        kind_mult: None,
+                        exact_mult: None,
+                    })
+                })?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            }
+            Ok(hits)
+        }).await
+    }
+
+    /// Calculate signal scores for specific chunk IDs
+    ///
+    /// Combines recency_score and churn_score for the given chunks.
+    pub async fn calculate_signal_scores_for_chunks(
+        &self,
+        chunk_ids: &[i64],
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        recency_weight: f32,
+        churn_weight: f32,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if chunk_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
+                    ORDER BY combined_signal DESC
+                    "#,
+                    placeholders
+                )
+            } else {
+                format!(
+                    r#"
+                    SELECT DISTINCT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    WHERE c.id IN ({}) AND f.repo_id = ?
+                    ORDER BY combined_signal DESC
+                    "#,
+                    placeholders
+                )
+            };
+
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
+
+            // Build parameters: recency_weight, churn_weight, chunk_ids..., repo_id, [worktree_id]
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            param_values.push(Box::new(recency_weight));
+            param_values.push(Box::new(churn_weight));
+            for id in &chunk_ids {
+                param_values.push(Box::new(*id));
+            }
+            param_values.push(Box::new(repo_id));
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: row.get(6)?,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
+            }
+            Ok(hits)
+        }).await
     }
 
     /// Count chunks where blob_sha is NOT in code_embeddings table

@@ -5,7 +5,7 @@
 
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
-use tracing::{debug, instrument, warn};
+use tracing::{debug, instrument};
 
 /// Signal weights for combining recency and churn.
 #[derive(Debug, Clone, Copy)]
@@ -83,13 +83,30 @@ impl SignalExecutor {
             weights.recency, weights.churn
         );
 
-        // TODO(IDXABS-2003): This is a placeholder implementation.
-        // Temporal signal scoring (recency/churn) needs to be implemented for SqliteStore.
-        // The chunks table has recency_score and churn_score columns in SQLite.
-        // See ticket IDXABS-4001 for search functionality updates.
+        // Get a reasonable limit for signal scores (signals don't have natural limit like search)
+        let limit = 1000;
 
-        warn!("Signal search is not fully implemented for SqliteStore backend");
-        Ok(RankedResults::empty(SearchSource::Signals))
+        // Delegate to SqliteStore's signal score calculation
+        let hits = store
+            .calculate_signal_scores(
+                repo_id,
+                worktree_id,
+                weights.recency,
+                weights.churn,
+                limit,
+            )
+            .await
+            .map_err(|e| SignalError::Database(e.to_string()))?;
+
+        // Convert SearchHit to RankedResult
+        let results: Vec<RankedResult> = hits
+            .into_iter()
+            .enumerate()
+            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .collect();
+
+        debug!("Signal search returned {} results", results.len());
+        Ok(RankedResults::new(results, SearchSource::Signals))
     }
 
     /// Execute signal query for specific chunk IDs.
@@ -113,12 +130,27 @@ impl SignalExecutor {
             chunk_ids.len()
         );
 
-        // TODO(IDXABS-2003): This is a placeholder implementation.
-        // Chunk-specific signal scoring not yet implemented for SqliteStore.
-        // See ticket IDXABS-4001 for search functionality updates.
+        // Delegate to SqliteStore's signal score calculation for specific chunks
+        let hits = store
+            .calculate_signal_scores_for_chunks(
+                chunk_ids,
+                repo_id,
+                worktree_id,
+                weights.recency,
+                weights.churn,
+            )
+            .await
+            .map_err(|e| SignalError::Database(e.to_string()))?;
 
-        warn!("Signal search for specific chunks is not fully implemented for SqliteStore backend");
-        Ok(RankedResults::empty(SearchSource::Signals))
+        // Convert SearchHit to RankedResult
+        let results: Vec<RankedResult> = hits
+            .into_iter()
+            .enumerate()
+            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .collect();
+
+        debug!("Signal search for chunks returned {} results", results.len());
+        Ok(RankedResults::new(results, SearchSource::Signals))
     }
 }
 
