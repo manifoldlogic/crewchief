@@ -8,283 +8,65 @@ CrewChief is a CLI tool combining:
 - **Git worktree management** - Create, list, and manage git worktrees
 - **Semantic code search (Maproom)** - Index and search code using SQLite and tree-sitter
 
+## Key Concepts
+
+**Two CLIs**: `crewchief` (TypeScript) for worktree/agent management, `crewchief-maproom` (Rust) for indexing/search/daemon.
+
+**"Worktree" overloading**: Git worktrees are filesystem checkouts. Maproom worktrees are database records tracking indexed branches (1:1 with branches, not git worktrees).
+
+**Release order**: CLI → maproom-mcp → vscode-maproom (CLI contains Rust binaries others depend on). See `release-config.json`.
+
+**Type sync**: TypeScript types in `packages/daemon-client/src/client.ts` must match Rust structs in `crates/maproom/src/daemon/types.rs`. Rust is source of truth.
+
+**Runtime deps**: Git required (file watching uses `git status`). sqlite-vec is statically linked (vector search degrades gracefully if missing).
+
 ## Quick Start
 
 ```bash
-# Install and build everything
-pnpm install
-pnpm build
-
-# Testing
-pnpm test
-pnpm test:watch
-
-# Code quality
-pnpm lint
-pnpm format
+pnpm install && pnpm build   # Install and build
+pnpm test                    # Run tests
+pnpm lint && pnpm format     # Code quality
 ```
 
-## Component-Specific Documentation
+## Component Documentation
 
-Each major component has its own CLAUDE.md or README with detailed development guidance:
+Each component has its own CLAUDE.md with detailed guidance:
 
-- **`/packages/cli/CLAUDE.md`** - TypeScript CLI development
-- **`/packages/daemon-client/README.md`** - Daemon client library for JSON-RPC communication
-- **`/packages/maproom-mcp/CLAUDE.md`** - MCP server and Docker setup
-- **`/crates/maproom/CLAUDE.md`** - Rust indexer implementation
-- **`.agents/CLAUDE.md`** - Project workflow and ticket system
-- **`.github/CLAUDE.md`** - CI/CD and GitHub Actions
-- **`.devcontainer/CLAUDE.md`** - Development container setup
+- **`/packages/cli/CLAUDE.md`** - TypeScript CLI
+- **`/packages/daemon-client/CLAUDE.md`** - Daemon client, type sync
+- **`/packages/maproom-mcp/CLAUDE.md`** - MCP server
+- **`/packages/vscode-maproom/CLAUDE.md`** - VSCode extension
+- **`/crates/maproom/CLAUDE.md`** - Rust indexer
+- **`.agents/CLAUDE.md`** - Project workflow and tickets
+- **`.github/CLAUDE.md`** - CI/CD workflows
 
-**When working in a specific component, read that component's CLAUDE.md or README first.**
-
-### Daemon Client (packages/daemon-client)
-
-TypeScript library for communicating with the `crewchief-maproom` daemon via JSON-RPC 2.0. Provides:
-
-- **20-50x performance improvement** over process spawning (225ms vs 160-400ms)
-- **Auto-restart** with exponential backoff and circuit breaker
-- **Connection pooling** with graceful degradation
-- **Type-safe** API with comprehensive error handling
-
-See [packages/daemon-client/README.md](packages/daemon-client/README.md) for complete API documentation, migration guide, and troubleshooting.
-
-## Maproom Semantic Search
-
-This codebase is indexed! Use maproom MCP tools for semantic search.
-
-### When to Use Maproom
-
-**Use `mcp__maproom__search`** for:
-- Finding code by concept: "authentication flow", "message handling"
-- Exploring architecture: "main classes", "entry points"
-- Understanding relationships: "what calls sendMessage"
-- Navigating unfamiliar code
-
-**Use `Grep/Glob`** for:
-- Exact text matches
-- Known filename patterns
-- Simple string searches
-
-### Quick Maproom Workflow
-
-1. **Check status**: `mcp__maproom__status({ repo: "crewchief" })`
-2. **Search**: `mcp__maproom__search({ repo: "crewchief", query: "agent spawn" })`
-3. **Get code**: `mcp__maproom__open({ relpath: "path", worktree: "main" })`
-4. **Get context**: `mcp__maproom__context({ chunk_id: "uuid" })`
-5. **Update**: `mcp__maproom__upsert({ repo, worktree, root, commit: "HEAD", paths: [...] })`
-
-**Tips**: Use concepts not keywords. If no results, check `status` first. Use `debug: true` to understand rankings.
-
-## Language Server MCP Tools
-
-Use `mcp__rust-language-server__*` for Rust (`crates/**/*.rs`) and `mcp__ts-language-server__*` for TypeScript (`packages/**/*.ts`).
-
-### Working Tools
-
-| Tool | Parameters | Example |
-|------|------------|---------|
-| `definition` | `{ symbolName }` | Find where `SqliteStore` or `DaemonClient` is defined |
-| `references` | `{ symbolName }` | Find all usages of a symbol across the codebase |
-| `diagnostics` | `{ filePath }` | Get compiler warnings/errors for a file |
-| `hover` | `{ filePath, line, column }` | Get type info (Rust only) |
-
-### Examples
-
-```
-# Find definitions
-mcp__rust-language-server__definition({ symbolName: "SqliteStore" })
-mcp__ts-language-server__definition({ symbolName: "DaemonConfig" })
-
-# Find all usages
-mcp__rust-language-server__references({ symbolName: "ContextBundle" })
-mcp__ts-language-server__references({ symbolName: "DaemonClient" })
-
-# Check for errors
-mcp__rust-language-server__diagnostics({ filePath: "crates/maproom/src/main.rs" })
-mcp__ts-language-server__diagnostics({ filePath: "packages/daemon-client/src/client.ts" })
-```
-
-Use simple symbol names (e.g., `DaemonClient` not `daemon_client::DaemonClient`). For text searches or non-code files, use `Grep/Glob` instead.
-
-## Documentation
-
-### `.agents/` - Work in Flight
-Project planning, active work tickets, and execution tracking. Agents write here.
-- Project planning documents
-- Active work tickets
-- Progress tracking
-- Implementation notes
-
-### `docs/` - Permanent Documentation
-Long-term codebase documentation. Read by both agents and humans.
-- Architecture documentation
-- How-to guides
-- API references
-- Technical specifications
-
-**Rule**: Agents document active work in `.agents/`, finalized knowledge goes in `docs/`.
-
-### Documentation vs Web Search Tools
-
-**Ref** — Use for official API/library/framework documentation lookup
-- `ref_search_documentation` — Search technical docs with full sentence queries (e.g., "Stripe API create subscription endpoint")
-- `ref_read_url` — Read a specific documentation URL
-
-**Exa** — Use for code examples, implementation patterns, and general web content
-- `get_code_context_exa` — Find code snippets and examples from GitHub, Stack Overflow, etc.
-- `web_search_exa` — General web search for current information
-- `crawling_exa` — Extract content from a specific URL
-
-### Quick Decision Guide
-
-| Need | Tool |
-|------|------|
-| API parameters, library syntax, official docs | Ref |
-| "How do I implement X" code examples | Exa (`get_code_context_exa`) |
-| Current info, news, general questions | Exa (`web_search_exa`) |
-| Read a non-docs URL | Exa (`crawling_exa`) |
-
-**Rule**: Ref for authoritative documentation. Exa for code examples and web content. Prefer both over built-in Web Search for better token efficiency.
-
-## Architecture
-
-### High-Level Structure
-
-```
-CrewChief/
-├── packages/
-│   ├── cli/           # TypeScript CLI (worktree management, agent orchestration)
-│   ├── daemon-client/ # TypeScript daemon client (JSON-RPC communication)
-│   └── maproom-mcp/   # MCP server (wraps Rust indexer)
-├── crates/
-│   └── maproom/       # Rust indexer (tree-sitter, embeddings, search)
-├── .agents/           # Project planning and work tickets
-├── .github/           # CI/CD workflows
-├── .devcontainer/     # Development container config
-└── docs/              # Permanent documentation
-```
-
-### Database
-
-Maproom uses SQLite for storage:
-- Default location: `~/.maproom/maproom.db`
-- Override with: `MAPROOM_DATABASE_URL="sqlite:///path/to/db"`
-- Zero-config setup: database auto-created on first use
-- Details: `crates/maproom/CLAUDE.md`
+**Read the component's CLAUDE.md before working in it.**
 
 ## Development Practices
 
-### TypeScript
-- ESM modules (import/export)
-- Vitest for testing
-- Trailing commas enforced (pre-commit)
-- Build to `dist/`
+**Database**: SQLite at `~/.maproom/maproom.db` (override: `MAPROOM_DATABASE_URL`).
 
-### Rust
-- Tokio async runtime
-- anyhow/thiserror for errors
-- Binaries in `packages/cli/bin/<platform>/`
-
-### New libraries and tools
-- When choosing a new library or tool, check if an alternative is already in the codebase, and whether it meets the project's needs, or if there is a reason to use the new library or tool.
-- Prefer latest stable versions compatible with the project's dependencies.
-- Be pragmatic rather than theoretical or ideological in choosing libraries and tools.
-- For major decisions about libraries and tools, call out top choices, and the reasoning behind them, during the planning phase. If the user does not provide a decision, move forward with your top choice based on your own analysis and pragmatism. 
+**New libraries**: Check if alternatives exist in codebase first. Be pragmatic. For major decisions, present top choices with reasoning during planning.
 
 ## Git Workflow
 
-**CRITICAL**: Always sync with origin before committing to avoid divergent branches.
+**CRITICAL**: Always sync with origin before committing.
 
-Before creating any commit:
 ```bash
 git fetch origin main
-git rebase origin/main  # Or git pull --rebase origin main
+git rebase origin/main  # Before any commit
 ```
 
-This prevents conflicts when external processes (like CI release workflows) push commits to origin between your local changes.
-
-**If rebase fails with conflicts**:
-1. Resolve conflicts manually, or
-2. Use `git merge origin/main` as an alternative (creates a merge commit)
+This prevents divergent branches when CI pushes between your changes.
 
 ## Safety Rules
 
-**CRITICAL**: File operations must stay within current worktree.
+**File operations must stay within current worktree.**
 
-**Verify before ANY file operation**:
-```bash
-git rev-parse --show-toplevel  # Get worktree root
-```
-
-**Never modify**:
-- System directories (`/usr/`, `/etc/`, `/System/`)
-- Home directory files outside worktree (`~/.bashrc`, `~/.gitconfig`)
+Never modify:
+- System directories (`/usr/`, `/etc//`)
+- Home files outside worktree (`~/.bashrc`, `~/.gitconfig`)
 - Other repositories or worktrees
 - `.git` directory
-- Paths outside current worktree
 
-**If external modification seems needed**: STOP, explain what/why, suggest alternatives, wait for approval.
-
-## Project Workflow
-
-CrewChief uses a structured ticket-based workflow for planning and execution. See [.agents/README.md](.agents/README.md) for full directory structure and conventions.
-
-### Slash Commands (`.claude/commands/`)
-
-- **`/create-project [description]`** - Create project planning documents (analysis, architecture, quality strategy, plan)
-- **`/create-project-tickets [PROJECT_SLUG]`** - Generate individual tickets from project plan
-- **`/review-tickets [PROJECT_SLUG]`** - Review created tickets for quality and completeness
-- **`/work-on-project [PROJECT_SLUG]`** - Execute all tickets for a project sequentially
-- **`/single-ticket [ticket-id]`** - Complete, verify, and commit a single ticket
-
-### Ticket Workflow Agents (`.claude/agents/ticket-workflow/`)
-
-Each ticket progresses through these agents:
-
-1. **ticket-creator** - Creates standardized work tickets from requirements
-2. **[implementation agent]** - Specialized agent completes the work (e.g., database-engineer, rust-indexer-engineer)
-3. **unit-test-runner** - Executes tests and reports results (no fixes)
-4. **verify-ticket** - Verifies all acceptance criteria are met
-5. **commit-ticket** - Creates Conventional Commit with proper formatting
-
-### Workflow Sequence
-
-```
-Planning Phase:
-  /create-project → analysis, architecture, quality-strategy, plan
-  /review-project → validate project quality
-  /create-project-tickets → individual ticket files
-  /review-tickets → validate ticket quality
-
-Execution Phase (per ticket):
-  Implementation → Tests → Verification → Commit
-
-  If tests fail: return to implementation
-  If verification fails: return to implementation
-  If verification passes: commit and move to next ticket
-```
-
-### Project Organization
-
-```
-.agents/projects/{SLUG}_{descriptive-name}/
-├── README.md           # Project overview
-├── planning/           # Strategic docs
-│   ├── analysis.md
-│   ├── architecture.md
-│   ├── plan.md
-│   └── quality-strategy.md
-└── tickets/            # Work tickets
-    ├── {SLUG}-1001_description.md
-    └── ...
-```
-
-**Active projects**: `.agents/projects/`
-**Completed projects**: `.agents/archive/projects/`
-
-See [.agents/README.md](.agents/README.md) for:
-- Project lifecycle details
-- Naming conventions
-- Agent capabilities
-- Archive process
+If external modification seems needed: STOP, explain, wait for approval.

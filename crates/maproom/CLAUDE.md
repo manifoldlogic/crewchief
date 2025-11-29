@@ -19,6 +19,32 @@ src/
 └── metrics/         # Prometheus metrics
 ```
 
+## TypeScript Synchronization
+
+Types in `src/daemon/types.rs` must stay in sync with TypeScript:
+
+| Rust (this crate) | TypeScript (daemon-client) |
+|-------------------|---------------------------|
+| `src/daemon/types.rs::SearchParams` | `src/client.ts::SearchParams` |
+| `src/daemon/types.rs::ContextParams` | `src/client.ts::ContextParams` |
+| `src/context/types.rs::ContextBundle` | `src/client.ts::RustContextBundle` |
+
+**Rust is the source of truth.** When modifying daemon RPC types:
+1. Update Rust struct first
+2. Update corresponding TypeScript interface in `packages/daemon-client/src/client.ts`
+
+## Daemon Mode
+
+`crewchief-maproom serve` runs as a long-lived daemon communicating via JSON-RPC over stdio. The daemon is spawned by the TypeScript daemon-client package (used by maproom-mcp and vscode-maproom).
+
+```bash
+# Start daemon manually (for debugging)
+cargo run --bin crewchief-maproom -- serve
+
+# Send JSON-RPC request (one per line)
+{"jsonrpc":"2.0","method":"ping","id":1}
+```
+
 ## Database
 
 Maproom uses SQLite for storage. By default, the database is created at:
