@@ -1,9 +1,9 @@
 # Ticket: GITPOLL-1901: Unit Tests for Parsing and Diffing
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,12 +29,16 @@ Reference: [quality-strategy.md](../planning/quality-strategy.md) - Unit Tests s
 
 ## Acceptance Criteria
 
-- [ ] Tests for all git status codes (M, A, D, R, ??, etc.)
-- [ ] Tests for state diff logic (new, modified, deleted, renamed)
-- [ ] Tests for path validation (absolute paths, `..` traversal rejected)
-- [ ] Tests for edge cases (empty output, paths with spaces, unicode)
-- [ ] Tests for quoted path parsing
-- [ ] All tests pass with `cargo test -p crewchief-maproom git_state`
+- [x] Tests for all git status codes (M, A, D, R, ??, etc.)
+- [x] Tests for state diff logic (new, modified, deleted, renamed)
+- [x] Tests for path validation (absolute paths, `..` traversal rejected)
+- [x] Tests for edge cases (empty output, paths with spaces, unicode)
+- [x] Tests for quoted path parsing
+- [x] All tests pass with `cargo test -p crewchief-maproom git_state`
+
+**Note:** Tests were implemented inline in GITPOLL-1001 (git_state.rs) and GITPOLL-1002 (git_poller.rs):
+- 28 git_state tests: parsing, diffing, path validation, quoted paths
+- 10 git_poller tests: config, repo validation, polling, shutdown
 
 ## Technical Requirements
 
