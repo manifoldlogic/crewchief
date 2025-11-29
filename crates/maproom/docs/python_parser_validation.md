@@ -492,7 +492,7 @@ Symbols with docstrings: 40/50 (80.0%)
 - **Architecture:** `/workspace/crates/maproom/src/indexer/parser.rs`
 - **Test Fixtures:** `/workspace/crates/maproom/tests/fixtures/python/`
 - **Benchmarks:** `/workspace/crates/maproom/benches/python_parser_bench.rs`
-- **Ticket:** `/workspace/.agents/work-tickets/LANG_PARSE-1008_python-production-validation.md`
+- **Ticket:** `/workspace/.crewchief/work-tickets/LANG_PARSE-1008_python-production-validation.md`
 
 ---
 

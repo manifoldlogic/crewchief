@@ -252,7 +252,7 @@ export async function runExperiment(config: TesterConfig): Promise<VariantMetric
 if (import.meta.url === `file://${process.argv[1]}`) {
   const config: TesterConfig = {
     variantsDir: join(process.cwd(), 'packages/maproom-mcp/test/tool-description-optimization/variants'),
-    testQueriesPath: join(process.cwd(), '.agents/projects/AGENTOPT_ai-agent-query-optimization/test-queries.json'),
+    testQueriesPath: join(process.cwd(), '.crewchief/archive/projects/AGENTOPT_ai-agent-query-optimization/test-queries.json'),
     simulationStrategy: 'rule-based',
     parallelism: 10,
     subset: process.argv.includes('--quick') ? 20 : undefined

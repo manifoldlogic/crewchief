@@ -24,7 +24,7 @@
 //! **Bug Fixed**: Previously, the watch command passed absolute paths to database
 //! lookup functions that expected relative paths. This caused existing files to be
 //! misclassified as NEW, resulting in "File not found" errors during re-indexing.
-//! See `.agents/projects/WATCHFIX_watch-change-detection-fix/planning/analysis.md`
+//! See `.crewchief/archive/projects/WATCHFIX_watch-change-detection-fix/planning/analysis.md`
 //! for detailed root cause analysis.
 //!
 //! # Security Considerations

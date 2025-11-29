@@ -750,7 +750,7 @@ async function executeHybridSearch(
   // - Daemon can run both searches efficiently and merge in-process
   // - Will reduce latency from ~200ms to ~20ms for hybrid search
   //
-  // See: .agents/projects/mapdaemon_maproom-daemon-architecture/
+  // See: .crewchief/archive/projects/mapdaemon_maproom-daemon-architecture/
 
   const result = await executeFtsSearch(client, query, repoId, worktreeId, k, filter, filters, debug)
 

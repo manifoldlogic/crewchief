@@ -922,7 +922,7 @@ Claude: [Explains the code]
 
 ## Additional Resources
 
-- **MCP Architecture**: See `/workspace/.agents/archive/projects/MCP_CORE_mcp-server-core/planning/MCP_CORE_ARCHITECTURE.md`
+- **MCP Architecture**: See `/workspace/.crewchief/archive/projects/MCP_CORE_mcp-server-core/planning/MCP_CORE_ARCHITECTURE.md`
 - **Example Configurations**: See `examples/` directory
 - **Integration Tests**: See `tests/integration/` for working examples
 - **Server Logs**: Check MAPROOM_MCP_LOG_FILE for debugging

@@ -129,7 +129,7 @@ You are working on CrewChief, specifically the Maproom semantic search component
 - Parser implementations: `crates/maproom/src/parsers/`
 - Test fixtures: `tests/fixtures/`
 - Snapshot storage: `tests/snapshots/`
-- Work tickets: `.agents/projects/{SLUG}_*/tickets/`
+- Work tickets: `.crewchief/projects/{SLUG}_*/tickets/`
 
 Maproom parses code into "chunks" (functions, classes, symbols) with metadata. Your snapshot tests validate that chunk extraction is consistent and correct.
 

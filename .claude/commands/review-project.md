@@ -6,10 +6,10 @@ argument-hint: [PROJECT_SLUG]
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS_*/`
-Planning documents: `.agents/projects/$ARGUMENTS_*/planning/`
-Tickets (if created): `.agents/projects/$ARGUMENTS_*/tickets/`
-Output: `.agents/projects/$ARGUMENTS_*/planning/project-review.md`
+Project folder: `.crewchief/projects/$ARGUMENTS_*/`
+Planning documents: `.crewchief/projects/$ARGUMENTS_*/planning/`
+Tickets (if created): `.crewchief/projects/$ARGUMENTS_*/tickets/`
+Output: `.crewchief/projects/$ARGUMENTS_*/planning/project-review.md`
 
 # Task
 
@@ -518,7 +518,7 @@ Evaluate project risks systematically:
 
 ## Review Output Structure
 
-Create comprehensive review in `.agents/projects/$ARGUMENTS-*/planning/project-review.md`:
+Create comprehensive review in `.crewchief/projects/$ARGUMENTS-*/planning/project-review.md`:
 
 ```markdown
 # Project Review: {PROJECT_NAME}
@@ -808,7 +808,7 @@ Tickets Created: {Yes - X tickets | No - Pre-ticket review}
 2. {Second priority action}
 3. {Third key action}
 
-Full review available at: .agents/projects/{SLUG}-*/planning/project-review.md
+Full review available at: .crewchief/projects/{SLUG}-*/planning/project-review.md
 
 🎯 Next step: Run `/update-reviewed-project {SLUG}` before creating tickets
 or proceed to `/create-project-tickets {SLUG}` if review passes

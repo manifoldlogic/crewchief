@@ -37,7 +37,7 @@ Each component has its own CLAUDE.md with detailed guidance:
 - **`/packages/maproom-mcp/CLAUDE.md`** - MCP server
 - **`/packages/vscode-maproom/CLAUDE.md`** - VSCode extension
 - **`/crates/maproom/CLAUDE.md`** - Rust indexer
-- **`.agents/CLAUDE.md`** - Project workflow and tickets
+- **`.crewchief/CLAUDE.md`** - Project workflow and tickets
 - **`.github/CLAUDE.md`** - CI/CD workflows
 
 **Read the component's CLAUDE.md before working in it.**

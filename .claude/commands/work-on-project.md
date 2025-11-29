@@ -6,9 +6,9 @@ argument-hint: [PROJECT_SLUG]
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS_*/`
-Plan: `.agents/projects/$ARGUMENTS_*/planning/plan.md`
-Tickets: `.agents/projects/$ARGUMENTS_*/tickets/`
+Project folder: `.crewchief/projects/$ARGUMENTS_*/`
+Plan: `.crewchief/projects/$ARGUMENTS_*/planning/plan.md`
+Tickets: `.crewchief/projects/$ARGUMENTS_*/tickets/`
 
 # Task
 

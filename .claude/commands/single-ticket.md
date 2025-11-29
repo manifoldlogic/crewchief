@@ -6,7 +6,7 @@ argument-hint: [TICKET_ID]
 # Context
 
 Ticket ID: $ARGUMENTS
-Location: `.agents/projects/{SLUG}_*/tickets/`
+Location: `.crewchief/projects/{SLUG}_*/tickets/`
 
 # Task
 
@@ -14,7 +14,7 @@ Execute complete ticket workflow: implementation → verification → commit
 
 ## Phase 1: Locate Ticket
 
-1. Search for ticket ID across all project folders in `.agents/projects/`
+1. Search for ticket ID across all project folders in `.crewchief/projects/`
 2. Identify project SLUG and full ticket path
 3. Read ticket file to understand:
    - Acceptance criteria

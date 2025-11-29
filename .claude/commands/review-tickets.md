@@ -6,11 +6,11 @@ argument-hint: [PROJECT_SLUG]
 # Project Context
 
 Project: $ARGUMENTS
-Project directory: `.agents/projects/$ARGUMENTS_*/`
-Plan: `.agents/projects/$ARGUMENTS_*/planning/plan.md`
-Architecture: `.agents/projects/$ARGUMENTS_*/planning/architecture.md`
-Tickets: `.agents/projects/$ARGUMENTS_*/tickets/`
-Output: `.agents/projects/$ARGUMENTS_*/planning/tickets-review-report.md`
+Project directory: `.crewchief/projects/$ARGUMENTS_*/`
+Plan: `.crewchief/projects/$ARGUMENTS_*/planning/plan.md`
+Architecture: `.crewchief/projects/$ARGUMENTS_*/planning/architecture.md`
+Tickets: `.crewchief/projects/$ARGUMENTS_*/tickets/`
+Output: `.crewchief/projects/$ARGUMENTS_*/planning/tickets-review-report.md`
 
 # Task
 
@@ -173,7 +173,7 @@ Work systematically through all tickets:
 
 ## Report Structure
 
-Create comprehensive report in `.agents/projects/$ARGUMENTS_*/planning/tickets-review-report.md`:
+Create comprehensive report in `.crewchief/projects/$ARGUMENTS_*/planning/tickets-review-report.md`:
 
 ### Executive Summary
 - Total tickets reviewed

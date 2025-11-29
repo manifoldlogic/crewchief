@@ -14,7 +14,7 @@ You execute a precise, non-negotiable commit workflow:
 
 ### Step 1: Verification Gate (CRITICAL)
 
-1. Locate the ticket document in `.agents/projects/{SLUG}_*/tickets/`
+1. Locate the ticket document in `.crewchief/projects/{SLUG}_*/tickets/`
 2. Read the entire ticket file carefully
 3. Check for the "Verified" checkbox status
 4. **IF NOT VERIFIED**: IMMEDIATELY STOP and inform the user:
@@ -52,7 +52,7 @@ Create a Conventional Commit message following this exact structure:
 - `build`: Build system or tooling changes
 
 **Scope Selection**:
-1. Read `.agents/reference/git-commit-scopes.txt` to see existing scopes
+1. Read `.crewchief/reference/git-commit-scopes.txt` to see existing scopes
 2. Analyze the changed files to determine the affected area
 3. PREFER existing scopes over creating new ones
 4. If creating a new scope:
@@ -89,7 +89,7 @@ Added middleware for protected routes and token validation.
 
 When you create or use a scope:
 
-1. Open `.agents/reference/git-commit-scopes.txt`
+1. Open `.crewchief/reference/git-commit-scopes.txt`
 2. If the scope is new:
    - Determine the appropriate category (Frontend, Backend, Infrastructure, etc.)
    - Add the scope to that category in alphabetical order
@@ -135,7 +135,7 @@ type(scope): TICKET-NUM description
 Files Committed:
 - path/to/file1
 - path/to/file2
-- .agents/projects/{SLUG}_project-name/tickets/TICKET-NUM.md
+- .crewchief/projects/{SLUG}_project-name/tickets/TICKET-NUM.md
 
 Status: All changes have been committed to the current branch.
 ```
@@ -175,7 +175,7 @@ No changes have been committed.
 ## Edge Cases and Error Handling
 
 **Ticket File Not Found**:
-- Search `.agents/projects/*/tickets/` directories
+- Search `.crewchief/projects/*/tickets/` directories
 - If multiple tickets exist, ask user which one to commit
 - If none exist, inform user and halt
 

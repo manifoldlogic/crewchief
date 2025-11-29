@@ -10,18 +10,18 @@ Additional context from current conversation as available
 
 # Task
 
-Create comprehensive project structure in `.agents/projects/` following analysis → design → planning workflow.
+Create comprehensive project structure in `.crewchief/projects/` following analysis → design → planning workflow.
 
 ## Project Setup
 
-1. **Evaluate scope:** Review .agents/reference/project-boundry-evaluation.md to determine if this should be multiple projects. If so, create each separately.
+1. **Evaluate scope:** Review .crewchief/reference/project-boundry-evaluation.md to determine if this should be multiple projects. If so, create each separately.
 
 2. **Generate identifiers:**
    - PROJECT_NAME: Descriptive, clear name
    - SLUG: Max 8 characters, unique, representative
-   - Refer to .agents/reference/project-naming-guidelines.md for naming conventions.
+   - Refer to .crewchief/reference/project-naming-guidelines.md for naming conventions.
 
-3. **Create structure:** `.agents/projects/{SLUG}_{project-name}/`
+3. **Create structure:** `.crewchief/projects/{SLUG}_{project-name}/`
    - `planning/` subdirectory for all planning documents
    - `tickets/` subdirectory for future tickets
    - `README.md` in project root
@@ -100,7 +100,7 @@ Provide summary when complete:
 📁 PROJECT CREATED: {SLUG}_{project-name}
 
 📂 Structure:
-.agents/projects/{SLUG}_{project-name}/
+.crewchief/projects/{SLUG}_{project-name}/
 ├── README.md
 ├── planning/
 │   ├── analysis.md

@@ -163,8 +163,8 @@ This is correct: if code hasn't changed, existing embeddings are still valid.
 ## References
 
 ### Project Documents
-- `.agents/projects/INCRSCAN_incremental-scan-completion/README.md` - Project overview
-- `.agents/projects/INCRSCAN_incremental-scan-completion/planning/` - Analysis, architecture, quality strategy
+- `.crewchief/projects/INCRSCAN_incremental-scan-completion/README.md` - Project overview
+- `.crewchief/projects/INCRSCAN_incremental-scan-completion/planning/` - Analysis, architecture, quality strategy
 
 ### Tickets
 - INCRSCAN-1001: Tree SHA check and skip logic ✅

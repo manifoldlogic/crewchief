@@ -1076,8 +1076,8 @@ if (result.passed) {
 
 - **To validate tasks**: See [Validation Guide](./validation-guide.md)
 - **To run benchmarks**: See [Benchmark Usage Guide](./benchmark-usage.md)
-- **For architecture details**: See [.agents/projects/TESTDES_grep-impossible-task-design/planning/architecture.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/architecture.md)
-- **For quality strategy**: See [.agents/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md)
+- **For architecture details**: See [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/architecture.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/architecture.md)
+- **For quality strategy**: See [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md)
 
 ## Contributing
 

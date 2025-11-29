@@ -445,7 +445,7 @@ When adding new tests or changing CI behavior:
 
 ## References
 
-- **SEMRANK Project**: `.agents/projects/SEMRANK_semantic-entry-point-ranking/`
+- **SEMRANK Project**: `.crewchief/projects/SEMRANK_semantic-entry-point-ranking/`
 - **Search Ranking Guide**: `packages/maproom-mcp/docs/search-ranking.md`
 - **Deployment Runbook**: `packages/maproom-mcp/docs/deployment/semantic-ranking-rollout.md`
 - **Architecture**: `docs/architecture/MAPROOM_ARCHITECTURE.md`

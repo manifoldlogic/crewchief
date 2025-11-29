@@ -7,7 +7,7 @@ argument-hint: [initiative idea, name, or description]
 
 ## Purpose
 
-Scaffold a new initiative folder in `.agents/initiatives/` based on user input. Initiatives are precursors to projects — the bridge between research and execution. They represent higher-order discovery work that may decompose into multiple projects.
+Scaffold a new initiative folder in `.crewchief/initiatives/` based on user input. Initiatives are precursors to projects — the bridge between research and execution. They represent higher-order discovery work that may decompose into multiple projects.
 
 ## Input
 
@@ -24,7 +24,7 @@ Interpret the input flexibly. Extract the core intent and scope.
 ## Preparation
 
 1. **Read boundary evaluation criteria:**
-   - Load `.agents/reference/initiative-boundary-evaluation.md`
+   - Load `.crewchief/reference/initiative-boundary-evaluation.md`
    - Apply the three core criteria to validate scope:
      - **Conceptual Stability**: Does this define a stable problem space, not a moving target?
      - **Domain Coherence**: Do all aspects live in a single conceptual domain?
@@ -38,14 +38,14 @@ Interpret the input flexibly. Extract the core intent and scope.
 3. **Generate identifiers:**
    - DATE: Today's date in `YYYY-MM-DD` format
    - NAME: Concise, descriptive name derived from input (use kebab-case)
-   - Folder: `.agents/initiatives/{DATE}_{NAME}/`
+   - Folder: `.crewchief/initiatives/{DATE}_{NAME}/`
 
 ## Folder Structure
 
 Create the following structure:
 
 ```
-.agents/initiatives/{DATE}_{NAME}/
+.crewchief/initiatives/{DATE}_{NAME}/
 ├── overview.md           # Vision, scope, and context
 ├── reference/            # Source materials (empty initially)
 ├── analysis/             # Discovery work
@@ -187,7 +187,7 @@ Created: {DATE}
 ## Context
 
 Initiative created: {DATE}
-Reference: .agents/initiatives/{DATE}_{NAME}/
+Reference: .crewchief/initiatives/{DATE}_{NAME}/
 
 ## Projects (in execution order)
 
@@ -256,7 +256,7 @@ Provide summary when complete:
 📁 INITIATIVE CREATED: {DATE}_{NAME}
 
 📂 Structure:
-.agents/initiatives/{DATE}_{NAME}/
+.crewchief/initiatives/{DATE}_{NAME}/
 ├── overview.md
 ├── reference/
 ├── analysis/
@@ -290,4 +290,4 @@ Provide summary when complete:
 - Initiatives are flexible containers for discovery work
 - Not all sections need to be complete immediately
 - The goal is to scaffold a structure that guides thinking
-- Reference `.agents/reference/initiative-boundary-evaluation.md` for detailed criteria
+- Reference `.crewchief/reference/initiative-boundary-evaluation.md` for detailed criteria

@@ -4,8 +4,8 @@ description: Review active projects and archive any that are complete
 
 # Context
 
-Active projects: `.agents/projects/`
-Archive destination: `.agents/archive/projects/`
+Active projects: `.crewchief/projects/`
+Archive destination: `.crewchief/archive/projects/`
 Permanent docs: `/docs/`
 
 # Task
@@ -14,7 +14,7 @@ Review all active projects and archive those that are complete, ensuring knowled
 
 ## Phase 1: Inventory Active Projects
 
-1. List all projects in `.agents/projects/`
+1. List all projects in `.crewchief/projects/`
 2. For each project, gather ticket files from `tickets/` directory
 
 ## Phase 2: Verify Completion (Source of Truth)
@@ -107,7 +107,7 @@ Before moving project folder, find and update references:
 For each complete project:
 
 ```bash
-mv .agents/projects/{PROJECT}/ .agents/archive/projects/
+mv .crewchief/projects/{PROJECT}/ .crewchief/archive/projects/
 ```
 
 **Post-move verification:**

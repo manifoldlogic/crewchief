@@ -162,7 +162,7 @@ All file modifications must be strictly confined to the current git worktree. Be
 - Benchmarks: `benchmarks/` (search/, indexing/, context/)
 - Baselines: `benchmarks/baselines/`
 - Performance targets: `docs/architecture/PERF_OPT_ARCHITECTURE.md` and `docs/past-plans/PERF_OPT_PLAN.md`
-- Work tickets: `.agents/projects/{SLUG}_*/tickets/`
+- Work tickets: `.crewchief/projects/{SLUG}_*/tickets/`
 
 ### Technology Stack
 - Rust benchmarks: Criterion.rs

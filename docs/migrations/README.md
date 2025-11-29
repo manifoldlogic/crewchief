@@ -99,11 +99,11 @@ If rollback is absolutely necessary:
 4. Coordinate with team before executing rollback
 
 **Planning Documentation**:
-- Project folder: [`.agents/projects/IDXSIZE_index-size-limits/`](/.agents/projects/IDXSIZE_index-size-limits/)
-- Technical analysis: [`.agents/projects/IDXSIZE_index-size-limits/planning/analysis.md`](/.agents/projects/IDXSIZE_index-size-limits/planning/analysis.md)
-- Architecture design: [`.agents/projects/IDXSIZE_index-size-limits/planning/architecture.md`](/.agents/projects/IDXSIZE_index-size-limits/planning/architecture.md)
-- Implementation plan: [`.agents/projects/IDXSIZE_index-size-limits/planning/plan.md`](/.agents/projects/IDXSIZE_index-size-limits/planning/plan.md)
-- Quality strategy: [`.agents/projects/IDXSIZE_index-size-limits/planning/quality-strategy.md`](/.agents/projects/IDXSIZE_index-size-limits/planning/quality-strategy.md)
+- Project folder: [`.crewchief/projects/IDXSIZE_index-size-limits/`](/.crewchief/projects/IDXSIZE_index-size-limits/)
+- Technical analysis: [`.crewchief/projects/IDXSIZE_index-size-limits/planning/analysis.md`](/.crewchief/projects/IDXSIZE_index-size-limits/planning/analysis.md)
+- Architecture design: [`.crewchief/projects/IDXSIZE_index-size-limits/planning/architecture.md`](/.crewchief/projects/IDXSIZE_index-size-limits/planning/architecture.md)
+- Implementation plan: [`.crewchief/projects/IDXSIZE_index-size-limits/planning/plan.md`](/.crewchief/projects/IDXSIZE_index-size-limits/planning/plan.md)
+- Quality strategy: [`.crewchief/projects/IDXSIZE_index-size-limits/planning/quality-strategy.md`](/.crewchief/projects/IDXSIZE_index-size-limits/planning/quality-strategy.md)
 
 **Testing**:
 - Phase 1: Automated test suite (IDXSIZE-2001) - 30/30 tests passed
@@ -177,4 +177,4 @@ Use this template for documenting future migrations:
 - PostgreSQL migration files: [`crates/maproom/migrations/`](/workspace/crates/maproom/migrations/)
 - Rollback scripts: [`crates/maproom/migrations/rollback/`](/workspace/crates/maproom/migrations/rollback/)
 - Database architecture: [`docs/architecture/DATABASE_ARCHITECTURE.md`](/workspace/docs/architecture/DATABASE_ARCHITECTURE.md)
-- Active projects: [`.agents/projects/`](/.agents/projects/)
+- Active projects: [`.crewchief/projects/`](/.crewchief/projects/)

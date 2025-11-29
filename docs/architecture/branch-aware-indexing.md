@@ -554,16 +554,16 @@ ALTER TABLE maproom.chunks DROP COLUMN IF EXISTS worktree_ids;
 ## Related Documentation
 
 ### Planning Documents
-- **Analysis**: `.agents/projects/BRANCHX_branch-aware-indexing/planning/analysis.md`
+- **Analysis**: `.crewchief/projects/BRANCHX_branch-aware-indexing/planning/analysis.md`
   - Problem analysis and requirements
   - User scenarios and pain points
-- **Architecture**: `.agents/projects/BRANCHX_branch-aware-indexing/planning/architecture.md`
+- **Architecture**: `.crewchief/projects/BRANCHX_branch-aware-indexing/planning/architecture.md`
   - Detailed technical design decisions
   - Algorithm implementations in Rust
-- **Quality Strategy**: `.agents/projects/BRANCHX_branch-aware-indexing/planning/quality-strategy.md`
+- **Quality Strategy**: `.crewchief/projects/BRANCHX_branch-aware-indexing/planning/quality-strategy.md`
   - Test strategy and coverage goals
   - Edge cases and error scenarios
-- **Implementation Plan**: `.agents/projects/BRANCHX_branch-aware-indexing/planning/plan.md`
+- **Implementation Plan**: `.crewchief/projects/BRANCHX_branch-aware-indexing/planning/plan.md`
   - 5-phase implementation roadmap
   - Ticket breakdown and dependencies
 

@@ -49,7 +49,7 @@ The test validates:
 
 - **Test Results**: `DKRHUB-2902_TEST_RESULTS.md` - Detailed test execution summary
 - **Test Script**: `test-production-docker-hub.sh` - Automated test implementation
-- **Ticket**: `.agents/work-tickets/DKRHUB-2902_test-production-config-image-pull.md`
+- **Ticket**: `.crewchief/work-tickets/DKRHUB-2902_test-production-config-image-pull.md`
 
 #### Exit Codes
 

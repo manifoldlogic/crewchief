@@ -188,4 +188,4 @@ If index creation times out:
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/current/)
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [Vector Search Configuration Guide](/workspace/crates/maproom/docs/VECTOR_SEARCH_CONFIGURATION.md)
-- [HYBRID_SEARCH Architecture](/workspace/.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md)
+- [HYBRID_SEARCH Architecture](/workspace/.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md)

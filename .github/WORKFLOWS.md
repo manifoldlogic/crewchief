@@ -1487,9 +1487,9 @@ gh api repos/:owner/:repo/actions/artifacts \
 ### Project Documentation
 
 - **CI/CD Troubleshooting**: [/workspace/.github/CLAUDE.md](/workspace/.github/CLAUDE.md)
-- **Architecture**: [/workspace/.agents/projects/CICDOPT_ci-cd-workflow-optimization/planning/architecture.md](/workspace/.agents/projects/CICDOPT_ci-cd-workflow-optimization/planning/architecture.md)
-- **Quality Strategy**: [/workspace/.agents/projects/CICDOPT_ci-cd-workflow-optimization/planning/quality-strategy.md](/workspace/.agents/projects/CICDOPT_ci-cd-workflow-optimization/planning/quality-strategy.md)
-- **Project Plan**: [/workspace/.agents/projects/CICDOPT_ci-cd-workflow-optimization/planning/plan.md](/workspace/.agents/projects/CICDOPT_ci-cd-workflow-optimization/planning/plan.md)
+- **Architecture**: [/workspace/.crewchief/archive/projects/CICDOPT_ci-cd-workflow-optimization/planning/architecture.md](/workspace/.crewchief/archive/projects/CICDOPT_ci-cd-workflow-optimization/planning/architecture.md)
+- **Quality Strategy**: [/workspace/.crewchief/archive/projects/CICDOPT_ci-cd-workflow-optimization/planning/quality-strategy.md](/workspace/.crewchief/archive/projects/CICDOPT_ci-cd-workflow-optimization/planning/quality-strategy.md)
+- **Project Plan**: [/workspace/.crewchief/archive/projects/CICDOPT_ci-cd-workflow-optimization/planning/plan.md](/workspace/.crewchief/archive/projects/CICDOPT_ci-cd-workflow-optimization/planning/plan.md)
 
 ### GitHub CLI
 

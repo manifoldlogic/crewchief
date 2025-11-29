@@ -51,8 +51,8 @@ END AS score
 **Type**: Single-term search (function name)
 
 **Results**:
-1. **heading_1** | `.agents/projects/WTSRCH_worktree-scoped-search/README.md` | score: 1.4
-2. **heading_2** | `.agents/projects/WTSRCH_worktree-scoped-search/planning/quality-strategy.md` | score: 1.2
+1. **heading_1** | `.crewchief/projects/WTSRCH_worktree-scoped-search/README.md` | score: 1.4
+2. **heading_2** | `.crewchief/projects/WTSRCH_worktree-scoped-search/planning/quality-strategy.md` | score: 1.2
 3. **func** | `crates/maproom/tests/relationship_test.rs` | score: 1.2
 
 **Issue**: Documentation heading ranked #1. First `func` result is a test, not implementation.
@@ -63,9 +63,9 @@ END AS score
 **Type**: Single-term search
 
 **Results**:
-1. **heading_1** | `.agents/archive/projects/TESTDES_grep-impossible-task-design/tickets/TESTDES-2901_tier1-suite-validation-tests.md` | score: 2.4
-2. **heading_2** | `.agents/archive/projects/COMPFIX_competition-agent-setup-validation/tickets/COMPFIX-1004_security-controls.md` | score: 2.0
-3. **heading_2** | `.agents/projects/OPNFIX_open-path-fix/tickets/OPNFIX-3002_security-test-suite.md` | score: 1.8
+1. **heading_1** | `.crewchief/archive/projects/TESTDES_grep-impossible-task-design/tickets/TESTDES-2901_tier1-suite-validation-tests.md` | score: 2.4
+2. **heading_2** | `.crewchief/archive/projects/COMPFIX_competition-agent-setup-validation/tickets/COMPFIX-1004_security-controls.md` | score: 2.0
+3. **heading_2** | `.crewchief/projects/OPNFIX_open-path-fix/tickets/OPNFIX-3002_security-test-suite.md` | score: 1.8
 
 **Issue**: Top 3 results are all markdown headings, no implementation code visible.
 
@@ -75,9 +75,9 @@ END AS score
 **Type**: Single-term search (function name)
 
 **Results**:
-1. **heading_1** | `.agents/archive/projects/MCPSTART_mcp-provider-startup-fix/tickets/MCPSTART-2001_explicit-env-parameter-spawn-calls.md` | score: 1.6
-2. **heading_1** | `.agents/projects/VSMAP_vscode-maproom-extension/tickets/VSMAP-1003_implement-binary-spawner.md` | score: 1.6
-3. **heading_3** | `.agents/projects/VSMAP_vscode-maproom-extension/planning/security-review.md` | score: 1.05
+1. **heading_1** | `.crewchief/archive/projects/MCPSTART_mcp-provider-startup-fix/tickets/MCPSTART-2001_explicit-env-parameter-spawn-calls.md` | score: 1.6
+2. **heading_1** | `.crewchief/projects/VSMAP_vscode-maproom-extension/tickets/VSMAP-1003_implement-binary-spawner.md` | score: 1.6
+3. **heading_3** | `.crewchief/projects/VSMAP_vscode-maproom-extension/planning/security-review.md` | score: 1.05
 
 **Issue**: All top results are markdown headings. No implementation code in top 10.
 
@@ -87,9 +87,9 @@ END AS score
 **Type**: Concept search (multi-word)
 
 **Results**:
-1. **heading_1** | `.agents/archive/projects/DBFALLBK_database-fallback/README.md` | score: 1.29
-2. **heading_2** | `.agents/archive/projects/INC_INDEX_incremental-indexing/tickets/INC_INDEX-1001_database-url-validation.md` | score: 1.03
-3. **heading_2** | `.agents/projects/VSMAP_vscode-maproom-extension/planning/architecture.md` | score: 0.74
+1. **heading_1** | `.crewchief/archive/projects/DBFALLBK_database-fallback/README.md` | score: 1.29
+2. **heading_2** | `.crewchief/archive/projects/INC_INDEX_incremental-indexing/tickets/INC_INDEX-1001_database-url-validation.md` | score: 1.03
+3. **heading_2** | `.crewchief/projects/VSMAP_vscode-maproom-extension/planning/architecture.md` | score: 0.74
 
 **Issue**: Concept search also returns documentation, not implementation.
 
@@ -99,9 +99,9 @@ END AS score
 **Type**: Concept search (multi-word)
 
 **Results**:
-1. **heading_2** | `.agents/archive/projects/INCRSCAN_incremental-scan-completion/PROJECT_COMPLETION_SUMMARY.md` | score: 1.15
-2. **heading_3** | `.agents/archive/projects/INCRSCAN_incremental-scan-completion/PROJECT_COMPLETION_SUMMARY.md` | score: 1.04
-3. **heading_2** | `.agents/projects/WTSRCH_worktree-scoped-search/planning/architecture.md` | score: 1.00
+1. **heading_2** | `.crewchief/archive/projects/INCRSCAN_incremental-scan-completion/PROJECT_COMPLETION_SUMMARY.md` | score: 1.15
+2. **heading_3** | `.crewchief/archive/projects/INCRSCAN_incremental-scan-completion/PROJECT_COMPLETION_SUMMARY.md` | score: 1.04
+3. **heading_2** | `.crewchief/projects/WTSRCH_worktree-scoped-search/planning/architecture.md` | score: 1.00
 
 **Issue**: Planning documents ranked highest for implementation concept.
 
@@ -112,8 +112,8 @@ END AS score
 
 **Results**:
 1. **heading_1** | `crates/maproom/docs/configuration_guide.md` | score: 4.6
-2. **heading_2** | `.agents/archive/projects/TESTDES_grep-impossible-task-design/tickets/TESTDES-4003_task-generator.md` | score: 3.4
-3. **heading_1** | `.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/tickets/HYBRID_SEARCH-6002_configuration-management.md` | score: 2.8
+2. **heading_2** | `.crewchief/archive/projects/TESTDES_grep-impossible-task-design/tickets/TESTDES-4003_task-generator.md` | score: 3.4
+3. **heading_1** | `.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/tickets/HYBRID_SEARCH-6002_configuration-management.md` | score: 2.8
 4. **heading_2** | `crates/maproom/docs/configuration_guide.md` | score: 2.8
 5. **module** | `crates/maproom/src/config/mod.rs` | score: 2.7
 
@@ -126,8 +126,8 @@ END AS score
 
 **Results**:
 1. **heading_2** | `crates/maproom/BRANCHX_CRITICAL_PATH_STATUS.md` | score: 8.2
-2. **heading_2** | `.agents/archive/projects/LOCAL_local-deployment/archive/tickets/LOCAL-2005_ollama-integration-tests.md` | score: 8.0
-3. **heading_2** | `.agents/archive/projects/CONTEXT_ASM_context-assembly-engine/tickets/CONTEXT_ASM-4002_testing-suite.md` | score: 7.4
+2. **heading_2** | `.crewchief/archive/projects/LOCAL_local-deployment/archive/tickets/LOCAL-2005_ollama-integration-tests.md` | score: 8.0
+3. **heading_2** | `.crewchief/archive/projects/CONTEXT_ASM_context-assembly-engine/tickets/CONTEXT_ASM-4002_testing-suite.md` | score: 7.4
 
 **Issue**: All headings. Extremely high scores for markdown chunks.
 
@@ -138,8 +138,8 @@ END AS score
 
 **Results**:
 1. **heading_2** | `.crewchief/claude-code-plugins/docs/hooks-reference.md` | score: 2.41
-2. **heading_2** | `.agents/archive/projects/MPEMBED_multi-provider-embeddings/MPEMBED_TICKET_INDEX.md` | score: 1.96
-3. **heading_1** | `.agents/archive/projects/CONTEXT_ASM_context-assembly-engine/tickets/CONTEXT_ASM-4001_mcp-tool-implementation.md` | score: 1.16
+2. **heading_2** | `.crewchief/archive/projects/MPEMBED_multi-provider-embeddings/MPEMBED_TICKET_INDEX.md` | score: 1.96
+3. **heading_1** | `.crewchief/archive/projects/CONTEXT_ASM_context-assembly-engine/tickets/CONTEXT_ASM-4001_mcp-tool-implementation.md` | score: 1.16
 
 **Issue**: Documentation and planning docs ranked highest.
 
@@ -149,9 +149,9 @@ END AS score
 **Type**: Single-term search
 
 **Results**:
-1. **heading_2** | `.agents/archive/sessions/INDEX_BY_PROJECT.md` | score: 5.6
-2. **heading_1** | `.agents/archive/sessions/INDEX_BY_PROJECT.md` | score: 4.8
-3. **heading_1** | `.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/tickets/HYBRID_SEARCH-2003_initial-search-integration.md` | score: 4.6
+1. **heading_2** | `.crewchief/archive/sessions/INDEX_BY_PROJECT.md` | score: 5.6
+2. **heading_1** | `.crewchief/archive/sessions/INDEX_BY_PROJECT.md` | score: 4.8
+3. **heading_1** | `.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/tickets/HYBRID_SEARCH-2003_initial-search-integration.md` | score: 4.6
 
 **Issue**: Meta-documents (indexes, READMEs) ranked highest, not search implementation code.
 
@@ -161,8 +161,8 @@ END AS score
 **Type**: Data structure search
 
 **Results**:
-1. **heading_2** | `.agents/archive/projects/PERF_OPT_performance-optimization/tickets/PERF_OPT-2001_index-optimization.md` | score: 3.8
-2. **heading_2** | `.agents/archive/projects/CONTEXT_ASM_context-assembly-engine/tickets/CONTEXT_ASM-3001_query-optimization.md` | score: 3.4
+1. **heading_2** | `.crewchief/archive/projects/PERF_OPT_performance-optimization/tickets/PERF_OPT-2001_index-optimization.md` | score: 3.8
+2. **heading_2** | `.crewchief/archive/projects/CONTEXT_ASM_context-assembly-engine/tickets/CONTEXT_ASM-3001_query-optimization.md` | score: 3.4
 3. **func** | `crates/maproom/tests/graph_test.rs` | score: 3.2
 
 **Issue**: Documentation ranked #1-2. First func is a test, not implementation.

@@ -443,10 +443,10 @@ docker rm ci-postgres-test
 
 Complete architecture and design rationale in project planning documents:
 
-- **Analysis**: `/workspace/.agents/projects/TESTISO_test-database-isolation/planning/analysis.md`
-- **Architecture**: `/workspace/.agents/projects/TESTISO_test-database-isolation/planning/architecture.md`
-- **Implementation Plan**: `/workspace/.agents/projects/TESTISO_test-database-isolation/planning/plan.md`
-- **Quality Strategy**: `/workspace/.agents/projects/TESTISO_test-database-isolation/planning/quality-strategy.md`
+- **Analysis**: `/workspace/.crewchief/projects/TESTISO_test-database-isolation/planning/analysis.md`
+- **Architecture**: `/workspace/.crewchief/projects/TESTISO_test-database-isolation/planning/architecture.md`
+- **Implementation Plan**: `/workspace/.crewchief/projects/TESTISO_test-database-isolation/planning/plan.md`
+- **Quality Strategy**: `/workspace/.crewchief/projects/TESTISO_test-database-isolation/planning/quality-strategy.md`
 
 ### Implementation Tickets
 

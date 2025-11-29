@@ -801,7 +801,7 @@ Performance tuning is an iterative process:
 Use this guide as a starting point, but always validate tuning decisions with your specific workload, data, and hardware configuration.
 
 For more information:
-- [PERF_OPT_PLAN.md](../../.agents/archive/projects/PERF_OPT_performance-optimization/planning/PERF_OPT_PLAN.md) - Performance optimization plan
-- [PERF_OPT_ARCHITECTURE.md](../../.agents/archive/projects/PERF_OPT_performance-optimization/planning/PERF_OPT_ARCHITECTURE.md) - Architecture decisions
+- [PERF_OPT_PLAN.md](../../.crewchief/archive/projects/PERF_OPT_performance-optimization/planning/PERF_OPT_PLAN.md) - Performance optimization plan
+- [PERF_OPT_ARCHITECTURE.md](../../.crewchief/archive/projects/PERF_OPT_performance-optimization/planning/PERF_OPT_ARCHITECTURE.md) - Architecture decisions
 - [Performance Tests](../tests/performance/) - Test suite documentation
 - [Benchmarks](../benches/) - Benchmark suite documentation

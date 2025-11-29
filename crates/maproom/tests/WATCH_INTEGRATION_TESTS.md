@@ -266,8 +266,8 @@ jobs:
 
 - **Implementation**: `/workspace/crates/maproom/src/incremental/processor.rs`
 - **Detector**: `/workspace/crates/maproom/src/incremental/detector.rs`
-- **Ticket**: `/workspace/.agents/projects/WATCHFIX_watch-change-detection-fix/tickets/WATCHFIX-1005_integration-testing.md`
-- **Planning**: `/workspace/.agents/projects/WATCHFIX_watch-change-detection-fix/planning/quality-strategy.md`
+- **Ticket**: `/workspace/.crewchief/projects/WATCHFIX_watch-change-detection-fix/tickets/WATCHFIX-1005_integration-testing.md`
+- **Planning**: `/workspace/.crewchief/projects/WATCHFIX_watch-change-detection-fix/planning/quality-strategy.md`
 
 ## Success Criteria
 

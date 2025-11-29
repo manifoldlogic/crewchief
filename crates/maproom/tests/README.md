@@ -251,8 +251,8 @@ When adding new tests:
 
 ## References
 
-- Ticket: `.agents/work-tickets/HYBRID_SEARCH-1901_test-embedding-infrastructure.md`
-- Architecture: `.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md`
+- Ticket: `.crewchief/work-tickets/HYBRID_SEARCH-1901_test-embedding-infrastructure.md`
+- Architecture: `.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md`
 - Implementation tickets:
   - HYBRID_SEARCH-1001: Embedding Service Setup
   - HYBRID_SEARCH-1002: Database Vector Preparation

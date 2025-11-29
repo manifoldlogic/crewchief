@@ -140,7 +140,7 @@ let rows = client.query(&stmt, &[&param1, &param2]).await?;
 
 ## Ticket-Based Workflow
 
-You work from structured tickets in `.agents/projects/{SLUG}_*/tickets/`. When assigned a ticket:
+You work from structured tickets in `.crewchief/projects/{SLUG}_*/tickets/`. When assigned a ticket:
 
 ### 1. Read and Understand Completely
 - Read the entire ticket: summary, background, acceptance criteria, technical requirements

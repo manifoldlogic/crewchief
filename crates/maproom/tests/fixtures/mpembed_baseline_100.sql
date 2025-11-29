@@ -64,17 +64,17 @@ SET session_replication_role = replica;
 276	1	1	1	crates/maproom/src/migrate/markdown.rs	rs	83aad8bf994e1a5d18fa11126076ec1652d9adf9fdf1e20e252c04f007dc9fb8	16475	2025-10-27 05:44:42.17653+00
 280	1	1	1	crates/maproom/src/db/pool.rs	rs	f94cc9ba38e298f479652ebb0950dd87144d7f8b23e07a78849c8ecc6d14283b	11597	2025-10-26 03:02:07.79924+00
 282	1	1	1	crates/maproom/src/main.rs	rs	dbc13855b2734fcd45ad34115cff12d181d450bdaf2bb3799a6ecf242bb399f5	17837	2025-10-26 03:02:07.802241+00
-311	1	1	1	.agents/specialized-agents/snapshot-test-engineer.md	md	4e72c148b6099a7926a986ef13f466c8b532460e8779c551d2ef88d7e7d52ea1	16695	2025-10-26 03:02:26.13268+00
-312	1	1	1	.agents/specialized-agents/integration-tester.md	md	2e7218236b890bcdd6d30dc9dfec41007f8111cbeca4c088a82a1bb96d85688a	10422	2025-10-26 03:17:03.81171+00
-325	1	1	1	.agents/work-tickets/archive/MAPROOM-1003_rebuild-docker-with-markdown-fix.md	md	0865816a5dca4bd435f5e7019c4351244b2883ef91064dcdc00f14713b19c1da	11276	2025-10-28 00:47:16.336552+00
-327	1	1	1	.agents/work-tickets/archive/LOCAL-1004_ollama-model-provisioning.md	md	3c352cf5527fdb2a8b42fd4950a5a4f9c36f603820550601fc68cf60aeba16ab	6395	2025-10-27 00:31:02.240564+00
-364	1	1	1	.agents/work-tickets/archive/HYBRID_SEARCH-2003_initial-search-integration.md	md	016429324bcedb89114eabeb94438a1acd23c15f10d53bae4419fd11b6577be7	8641	2025-10-26 03:17:03.822797+00
-372	1	1	1	.agents/work-tickets/archive/CONTEXT_ASM-2002_heuristics-implementation.md	md	7026790caae4972a8e43525337f3349d55a7087eb87d6aba6b50db1e7483f9d0	8569	2025-10-26 03:02:07.895947+00
-400	1	1	1	.agents/work-tickets/archive/LOCAL-1009_fix-database-schema-mismatch.md	md	1de19a224179764b28a104ba1081c317fc3e679d21702224fc6ee886f2772be7	11065	2025-10-27 22:24:03.392953+00
-410	1	1	1	.agents/work-tickets/archive/HYBRID_SEARCH-5002_ab-testing-framework.md	md	4c17ca2039b9ef12f0ced75a88eb6cfe008dab1ccedec66d5f3c722deaaa93a4	8986	2025-10-26 03:02:07.932623+00
-431	1	1	1	.agents/work-tickets/archive/MD_ENHANCE-2001_parent-tracking.md	md	8cee2e719e93f6befbac358f09cedd67b84bedf736e5ae65613068187355d597	6820	2025-10-26 03:17:03.835737+00
-441	1	1	1	.agents/work-tickets/archive/MAPROOM-1001_fix-markdown-enum-bug.md	md	91431b3da6fb0316d6ac6a4bdeb08e4a4e48b4c713a363d3b12b4c880c695b8e	8779	2025-10-27 23:16:27.472259+00
-455	1	1	1	.agents/work-tickets/LOCAL-4002_compare-ollama-openai-quality.md	md	2cffe627859ef8a66198567eac69bc426561151ecfb9975974dc6617c25f51c5	8026	2025-10-27 00:00:14.54257+00
+311	1	1	1	.crewchief/specialized-agents/snapshot-test-engineer.md	md	4e72c148b6099a7926a986ef13f466c8b532460e8779c551d2ef88d7e7d52ea1	16695	2025-10-26 03:02:26.13268+00
+312	1	1	1	.crewchief/specialized-agents/integration-tester.md	md	2e7218236b890bcdd6d30dc9dfec41007f8111cbeca4c088a82a1bb96d85688a	10422	2025-10-26 03:17:03.81171+00
+325	1	1	1	.crewchief/work-tickets/archive/MAPROOM-1003_rebuild-docker-with-markdown-fix.md	md	0865816a5dca4bd435f5e7019c4351244b2883ef91064dcdc00f14713b19c1da	11276	2025-10-28 00:47:16.336552+00
+327	1	1	1	.crewchief/work-tickets/archive/LOCAL-1004_ollama-model-provisioning.md	md	3c352cf5527fdb2a8b42fd4950a5a4f9c36f603820550601fc68cf60aeba16ab	6395	2025-10-27 00:31:02.240564+00
+364	1	1	1	.crewchief/work-tickets/archive/HYBRID_SEARCH-2003_initial-search-integration.md	md	016429324bcedb89114eabeb94438a1acd23c15f10d53bae4419fd11b6577be7	8641	2025-10-26 03:17:03.822797+00
+372	1	1	1	.crewchief/work-tickets/archive/CONTEXT_ASM-2002_heuristics-implementation.md	md	7026790caae4972a8e43525337f3349d55a7087eb87d6aba6b50db1e7483f9d0	8569	2025-10-26 03:02:07.895947+00
+400	1	1	1	.crewchief/work-tickets/archive/LOCAL-1009_fix-database-schema-mismatch.md	md	1de19a224179764b28a104ba1081c317fc3e679d21702224fc6ee886f2772be7	11065	2025-10-27 22:24:03.392953+00
+410	1	1	1	.crewchief/work-tickets/archive/HYBRID_SEARCH-5002_ab-testing-framework.md	md	4c17ca2039b9ef12f0ced75a88eb6cfe008dab1ccedec66d5f3c722deaaa93a4	8986	2025-10-26 03:02:07.932623+00
+431	1	1	1	.crewchief/work-tickets/archive/MD_ENHANCE-2001_parent-tracking.md	md	8cee2e719e93f6befbac358f09cedd67b84bedf736e5ae65613068187355d597	6820	2025-10-26 03:17:03.835737+00
+441	1	1	1	.crewchief/work-tickets/archive/MAPROOM-1001_fix-markdown-enum-bug.md	md	91431b3da6fb0316d6ac6a4bdeb08e4a4e48b4c713a363d3b12b4c880c695b8e	8779	2025-10-27 23:16:27.472259+00
+455	1	1	1	.crewchief/work-tickets/LOCAL-4002_compare-ollama-openai-quality.md	md	2cffe627859ef8a66198567eac69bc426561151ecfb9975974dc6617c25f51c5	8026	2025-10-27 00:00:14.54257+00
 476	1	1	1	docs/profiling/LOCAL-4008_performance-validation.md	md	d5c008e2b0baa39f619f5440e8818d8bf12b5927449ba595428e8a4ac45ed2a4	21917	2025-10-28 03:35:39.25911+00
 520	1	1	1	packages/cli/tests/merge.int.test.ts	ts	874f8d06b91eae65b61d0b189a802375a6d5f939385d1f4870d123777ecc5bae	845	2025-08-13 05:52:13.078891+00
 521	1	1	1	packages/cli/tests/worktrees.int.test.ts	ts	fb3875c9aac3b2b7ec2befe6a7edb8dfeee5625731af086cf9714fa216fa7b64	893	2025-08-13 05:52:13.079587+00
@@ -115,7 +115,7 @@ SET session_replication_role = replica;
 627	1	1	1	packages/maproom-mcp/src/utils/process.ts	ts	e095d6b6f08654fcae787bf48c921647d749045541418b216a1f6d76fa927e5b	10624	2025-10-24 17:52:25.074547+00
 629	1	1	1	packages/maproom-mcp/src/utils/git.ts	ts	d48f767fc4652a8f3b27a786c55673d81a579e4702b07ea1ee2bd6d27294528d	2597	2025-10-24 17:40:43.942423+00
 632	1	1	1	packages/maproom-mcp/src/index.ts	ts	1ae490a056a2deda2de2d836f67ce5691f7bcb06ea2079b4a7ef9acf182b03c9	46070	2025-10-27 05:53:01.069223+00
-665	1	1	1	.agents/archive/projects/LANG_PARSE_multi-language-support/planning/LANG_PARSE_ANALYSIS.md	md	b1aeaf66b611f6b86d9cc12c0a5a9aedf307940d7515278f74e73a81087e7028	6016	2025-10-26 03:17:03.859003+00
+665	1	1	1	.crewchief/archive/projects/LANG_PARSE_multi-language-support/planning/LANG_PARSE_ANALYSIS.md	md	b1aeaf66b611f6b86d9cc12c0a5a9aedf307940d7515278f74e73a81087e7028	6016	2025-10-26 03:17:03.859003+00
 1806	1	1	1	docs/architecture/DATABASE_ARCHITECTURE.md	md	38fc001874deea268f615d0b92f11da072b804f063478a772685fe1cdcb21c64	18482	2025-10-28 06:12:24.919218+00
 2010	1	1	1	test-embedding.ts	ts	e95e7dc678e01d0ff35e1078e6b0fb44deaa4c2adb30b140e4f9f9ce8e85838b	131	2025-10-28 06:54:43.650685+00
 \.

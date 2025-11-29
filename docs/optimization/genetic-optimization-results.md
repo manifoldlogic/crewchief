@@ -234,7 +234,7 @@ If first query returns <3 results, try variations:
 
 **Evidence**: -1.5% penalty for >30% alternative tool content. Winners averaged 15 tokens on alternatives vs 120 tokens in losers.
 
-**Source**: Analysis documented in `/workspace/.agents/projects/TOOLOPT_maproom-search-tool-optimization/planning/analysis.md` (lines 56-90)
+**Source**: Analysis documented in `/workspace/.crewchief/projects/TOOLOPT_maproom-search-tool-optimization/planning/analysis.md` (lines 56-90)
 
 ### Pattern 4: Imperative Language and Actionable Commands
 
@@ -675,7 +675,7 @@ When given a task to find code:
 ### Primary Source Data
 
 1. **Planning Analysis**
-   `/workspace/.agents/projects/TOOLOPT_maproom-search-tool-optimization/planning/analysis.md`
+   `/workspace/.crewchief/projects/TOOLOPT_maproom-search-tool-optimization/planning/analysis.md`
    Comprehensive analysis of genetic optimization findings and patterns
 
 2. **Generation Reports**
@@ -702,7 +702,7 @@ When given a task to find code:
 
 ### Related Documentation
 
-- **Project Planning**: `.agents/projects/TOOLOPT_maproom-search-tool-optimization/`
+- **Project Planning**: `.crewchief/projects/TOOLOPT_maproom-search-tool-optimization/`
 - **Tool Description Patterns**: `/workspace/docs/optimization/tool-description-patterns.md`
 - **MCP Tool Implementation**: `/workspace/packages/maproom-mcp/src/tools/search.ts`
 

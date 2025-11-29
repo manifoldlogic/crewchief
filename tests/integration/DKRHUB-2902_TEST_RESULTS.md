@@ -111,7 +111,7 @@ The script is fully automated and provides:
 
 **Ticket**: DKRHUB-1901: Test Workflow with Pre-Release Tag
 **Status**: Task completed, test plan created
-**Test Plan**: `.agents/work-tickets/DKRHUB-1901_TEST_PLAN.md`
+**Test Plan**: `.crewchief/work-tickets/DKRHUB-1901_TEST_PLAN.md`
 **Required Action**: Manual execution by user with GitHub push access
 
 #### Steps to Unblock DKRHUB-2902
@@ -119,7 +119,7 @@ The script is fully automated and provides:
 1. **Execute DKRHUB-1901 Test Plan**:
    ```bash
    # Read the test plan
-   cat .agents/work-tickets/DKRHUB-1901_TEST_PLAN.md
+   cat .crewchief/work-tickets/DKRHUB-1901_TEST_PLAN.md
 
    # Create and push test tag
    git tag -a v1.1.10-rc1 -m "Test release for workflow validation"

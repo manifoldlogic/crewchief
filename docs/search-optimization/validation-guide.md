@@ -994,7 +994,7 @@ validateNewTask()
 
 - **To design tasks**: See [Task Design Guide](./task-design-guide.md)
 - **To run benchmarks**: See [Benchmark Usage Guide](./benchmark-usage.md)
-- **For quality strategy details**: See [.agents/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md)
+- **For quality strategy details**: See [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md)
 
 ## Validation Checklist
 

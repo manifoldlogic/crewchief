@@ -106,7 +106,7 @@ check_dockerhub_availability() {
             echo "  This ticket is blocked by DKRHUB-1901: Images must be published to Docker Hub first"
             echo ""
             echo "  To resolve this blocker:"
-            echo "  1. Execute the test plan in: .agents/work-tickets/DKRHUB-1901_TEST_PLAN.md"
+            echo "  1. Execute the test plan in: .crewchief/work-tickets/DKRHUB-1901_TEST_PLAN.md"
             echo "  2. Create and push tag: git tag -a v1.1.10-rc1 -m 'Test release'"
             echo "  3. Monitor GitHub Actions workflow for image publication"
             echo "  4. Verify images appear on Docker Hub: https://hub.docker.com/r/crewchief/maproom-mcp"

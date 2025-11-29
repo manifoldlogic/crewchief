@@ -8,8 +8,8 @@
 -- the same coverage: partial index handles 95%+ of data, basic index handles 100%.
 --
 -- References:
--- - .agents/projects/IDXSIZE_index-size-limits/planning/architecture.md
--- - .agents/projects/IDXSIZE_index-size-limits/planning/analysis.md
+-- - .crewchief/projects/IDXSIZE_index-size-limits/planning/architecture.md
+-- - .crewchief/projects/IDXSIZE_index-size-limits/planning/analysis.md
 
 SET statement_timeout = '10min';
 

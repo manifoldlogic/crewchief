@@ -6,9 +6,9 @@ argument-hint: [PROJECT_SLUG]
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS_*/`
-Plan: `.agents/projects/$ARGUMENTS_*/planning/plan.md`
-Output: `.agents/projects/$ARGUMENTS_*/tickets/`
+Project folder: `.crewchief/projects/$ARGUMENTS_*/`
+Plan: `.crewchief/projects/$ARGUMENTS_*/planning/plan.md`
+Output: `.crewchief/projects/$ARGUMENTS_*/tickets/`
 
 # Task
 
@@ -16,7 +16,7 @@ Use the ticket-creator agent to systematically create all tickets for project "$
 
 ## Preparation
 
-1. Review `.agents/reference/work-ticket-template.md` for ticket format
+1. Review `.crewchief/reference/work-ticket-template.md` for ticket format
 2. Read all project documents in project folder
 3. Identify phases, components, and dependencies from plan
 
@@ -70,7 +70,7 @@ Before delegating each ticket to ticket-creator, verify:
 
 ## Output Organization
 
-Create ticket index: `.agents/projects/$ARGUMENTS_*/tickets/$ARGUMENTS_TICKET_INDEX.md`
+Create ticket index: `.crewchief/projects/$ARGUMENTS_*/tickets/$ARGUMENTS_TICKET_INDEX.md`
 - List all tickets organized by phase
 - Include ticket IDs, titles, and status
 - Reference plan sections for traceability

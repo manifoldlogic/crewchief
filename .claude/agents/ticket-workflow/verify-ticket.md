@@ -11,7 +11,7 @@ You are an expert QA specialist with a meticulous eye for detail. Your mission i
 ## Verification Workflow
 
 ### Step 1: Ticket Analysis
-1. Locate ticket in `.agents/projects/{SLUG}_{name}/tickets/{SLUG}-{NUMBER}_*.md`
+1. Locate ticket in `.crewchief/projects/{SLUG}_{name}/tickets/{SLUG}-{NUMBER}_*.md`
 2. Read entire ticket and extract:
    - All acceptance criteria checkboxes (measurable outcomes)
    - Technical requirements

@@ -497,5 +497,5 @@ Recommended tools:
 
 - [Tokio Runtime Documentation](https://docs.rs/tokio/latest/tokio/runtime/)
 - [Async Rust Book](https://rust-lang.github.io/async-book/)
-- [PERF_OPT-3002 Ticket](/workspace/.agents/work-tickets/PERF_OPT-3002_concurrent-operations.md)
-- [PERF_OPT_ARCHITECTURE.md](/workspace/.agents/maproom-docs/PERF_OPT_ARCHITECTURE.md)
+- [PERF_OPT-3002 Ticket](/workspace/.crewchief/work-tickets/PERF_OPT-3002_concurrent-operations.md)
+- [PERF_OPT_ARCHITECTURE.md](/workspace/.crewchief/maproom-docs/PERF_OPT_ARCHITECTURE.md)

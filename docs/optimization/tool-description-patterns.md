@@ -1090,7 +1090,7 @@ START
 
 **Key Documents**:
 1. `/workspace/docs/optimization/genetic-optimization-results.md` - Full experimental results and analysis
-2. `/workspace/.agents/projects/TOOLOPT_maproom-search-tool-optimization/planning/analysis.md` - Pattern analysis and implications
+2. `/workspace/.crewchief/projects/TOOLOPT_maproom-search-tool-optimization/planning/analysis.md` - Pattern analysis and implications
 3. `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/` - Raw experimental data
 
 ---
@@ -1158,7 +1158,7 @@ START
 ### Related Documentation
 
 - **Genetic Optimization Results**: `/workspace/docs/optimization/genetic-optimization-results.md`
-- **Project Planning**: `/workspace/.agents/projects/TOOLOPT_maproom-search-tool-optimization/`
+- **Project Planning**: `/workspace/.crewchief/projects/TOOLOPT_maproom-search-tool-optimization/`
 - **Experimental Data**: `/workspace/packages/cli/.crewchief/genetic-iterations/ultra-run-1763154816350/`
 
 ---

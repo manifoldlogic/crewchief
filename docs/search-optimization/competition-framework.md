@@ -314,7 +314,7 @@ To run larger competitions, these limits can be adjusted in code (requires recom
 3. **Sensitive Data Sanitization**: Database credentials redacted in logs
 4. **Fail-Fast Validation**: Stops immediately on setup errors (doesn't waste API credits)
 
-For details, see the project planning documentation in `.agents/projects/COMPFIX_competition-agent-setup-validation/planning/`.
+For details, see the project planning documentation in `.crewchief/projects/COMPFIX_competition-agent-setup-validation/planning/`.
 
 ## Prerequisites
 
@@ -1073,7 +1073,7 @@ pnpm search-optimization:validate-full
 - **[Task Design Guide](./task-design-guide.md)** - How to create quality tasks
 - **[Validation Guide](./validation-guide.md)** - How to validate tasks
 - **[Benchmark Usage](./benchmark-usage.md)** - How to run benchmarks
-- **[Project Archive](../../.agents/archive/projects/AGENTOPT_ai-agent-query-optimization/)** - Full project documentation
+- **[Project Archive](../../.crewchief/archive/projects/AGENTOPT_ai-agent-query-optimization/)** - Full project documentation
 
 ## Questions?
 

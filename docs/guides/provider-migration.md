@@ -23,7 +23,7 @@ Maproom uses dimension-specific database columns to store embeddings from differ
 
 **Why this matters**: You can switch providers without data loss, run multiple providers simultaneously for testing, and migrate gradually over time.
 
-For technical details, see [Column Selection Logic (MPEMBED-4001)](../../.agents/archive/projects/MPEMBED_multi-provider-embeddings/planning-multi-provider-embeddings/phase-4-unified-pipeline.md#mpembed-4001-column-selection-logic).
+For technical details, see [Column Selection Logic (MPEMBED-4001)](../../.crewchief/archive/projects/MPEMBED_multi-provider-embeddings/planning-multi-provider-embeddings/phase-4-unified-pipeline.md#mpembed-4001-column-selection-logic).
 
 ---
 
@@ -752,7 +752,7 @@ crewchief maproom search "query" --provider ollama > results-ollama.txt
 
 - **[Provider Setup Guides](../providers/README.md)** - Detailed setup for each provider
 - **[Provider Comparison](../providers/comparison.md)** - Feature and cost comparison
-- **[Column Selection Logic](../../.agents/archive/projects/MPEMBED_multi-provider-embeddings/planning-multi-provider-embeddings/phase-4-unified-pipeline.md#mpembed-4001-column-selection-logic)** - Technical details
+- **[Column Selection Logic](../../.crewchief/archive/projects/MPEMBED_multi-provider-embeddings/planning-multi-provider-embeddings/phase-4-unified-pipeline.md#mpembed-4001-column-selection-logic)** - Technical details
 - **[Search Implementation](../../crates/maproom/src/search/)** - Source code reference
 
 ### Tools and Scripts

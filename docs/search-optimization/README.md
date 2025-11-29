@@ -263,9 +263,9 @@ The grep-impossible framework provides:
 
 For deeper architectural and strategic context:
 
-- **Architecture**: [.agents/projects/TESTDES_grep-impossible-task-design/planning/architecture.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/architecture.md)
-- **Quality Strategy**: [.agents/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md)
-- **Implementation Plan**: [.agents/projects/TESTDES_grep-impossible-task-design/planning/plan.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/plan.md)
+- **Architecture**: [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/architecture.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/architecture.md)
+- **Quality Strategy**: [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/quality-strategy.md)
+- **Implementation Plan**: [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/plan.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/plan.md)
 
 ## Implementation Details
 

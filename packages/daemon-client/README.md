@@ -554,7 +554,7 @@ Examples:
 
 The daemon uses PostgreSQL connection pooling internally, sized based on database configuration.
 
-For detailed performance testing methodology, see [DAEMIGR-3901 Performance Testing](../../.agents/projects/DAEMIGR_daemon-client-migration/tickets/DAEMIGR-3901_performance-testing.md).
+For detailed performance testing methodology, see [DAEMIGR-3901 Performance Testing](../../.crewchief/projects/DAEMIGR_daemon-client-migration/tickets/DAEMIGR-3901_performance-testing.md).
 
 ## Security Considerations
 
@@ -834,7 +834,7 @@ Use this checklist before deploying to production:
 - [ ] Architecture documented (how components interact)
 - [ ] Security review completed (this checklist)
 
-For detailed security analysis, see [Security Review](../../.agents/projects/DAEMIGR_daemon-client-migration/planning/security-review.md).
+For detailed security analysis, see [Security Review](../../.crewchief/projects/DAEMIGR_daemon-client-migration/planning/security-review.md).
 
 ## Architecture
 
@@ -905,7 +905,7 @@ For detailed security analysis, see [Security Review](../../.agents/projects/DAE
 5. **Circuit Breaker**: Stops restart attempts after max failures (default: 5)
 6. **Graceful Shutdown**: Waits for in-flight requests, then terminates
 
-For detailed architecture documentation, see [DAEMIGR Architecture](../../.agents/projects/DAEMIGR_daemon-client-migration/planning/architecture.md).
+For detailed architecture documentation, see [DAEMIGR Architecture](../../.crewchief/projects/DAEMIGR_daemon-client-migration/planning/architecture.md).
 
 ## Troubleshooting
 
@@ -1118,9 +1118,9 @@ pnpm test tests/search-integration.test.ts
 
 ### Project Documentation
 
-- [Architecture Documentation](../../.agents/projects/DAEMIGR_daemon-client-migration/planning/architecture.md)
-- [Quality Strategy](../../.agents/projects/DAEMIGR_daemon-client-migration/planning/quality-strategy.md)
-- [Project Completion Report](../../.agents/projects/DAEMIGR_daemon-client-migration/PROJECT_COMPLETION.md)
+- [Architecture Documentation](../../.crewchief/projects/DAEMIGR_daemon-client-migration/planning/architecture.md)
+- [Quality Strategy](../../.crewchief/projects/DAEMIGR_daemon-client-migration/planning/quality-strategy.md)
+- [Project Completion Report](../../.crewchief/projects/DAEMIGR_daemon-client-migration/PROJECT_COMPLETION.md)
 
 ## License
 

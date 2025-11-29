@@ -6,10 +6,10 @@ argument-hint: [PROJECT_SLUG]
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS_*/`
-Review document: `.agents/projects/$ARGUMENTS_*/planning/project-review.md`
-Planning documents: `.agents/projects/$ARGUMENTS_*/planning/`
-Output: Updates to planning documents + `.agents/projects/$ARGUMENTS_*/planning/review-updates.md`
+Project folder: `.crewchief/projects/$ARGUMENTS_*/`
+Review document: `.crewchief/projects/$ARGUMENTS_*/planning/project-review.md`
+Planning documents: `.crewchief/projects/$ARGUMENTS_*/planning/`
+Output: Updates to planning documents + `.crewchief/projects/$ARGUMENTS_*/planning/review-updates.md`
 
 # Task
 
@@ -508,7 +508,7 @@ After completing updates, provide concise summary:
 
 📋 NEXT STEP: Run `/review-project {SLUG}` to verify all issues resolved
 
-Full update log: .agents/projects/{SLUG}-*/planning/review-updates.md
+Full update log: .crewchief/projects/{SLUG}-*/planning/review-updates.md
 ```
 
 Execute systematic updates to transform the project from "Needs Work" to "Ready for Execution".

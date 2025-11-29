@@ -60,7 +60,7 @@
 # References:
 # - Ticket: IDXSIZE-2001
 # - Migration: 0017_fix_index_size_limits.sql
-# - Architecture: .agents/projects/IDXSIZE_index-size-limits/planning/architecture.md
+# - Architecture: .crewchief/projects/IDXSIZE_index-size-limits/planning/architecture.md
 
 set -euo pipefail
 

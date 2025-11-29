@@ -669,10 +669,10 @@ Deployment considered successful if after 1 week:
 
 ## Appendix C: References
 
-- **SEMRANK Project Plan:** `.agents/projects/SEMRANK_semantic-entry-point-ranking/planning/plan.md`
+- **SEMRANK Project Plan:** `.crewchief/projects/SEMRANK_semantic-entry-point-ranking/planning/plan.md`
 - **Architecture Documentation:** `docs/architecture/MAPROOM_ARCHITECTURE.md`
 - **Search Ranking Guide:** `packages/maproom-mcp/docs/search-ranking.md`
-- **Quality Strategy:** `.agents/projects/SEMRANK_semantic-entry-point-ranking/planning/quality-strategy.md`
+- **Quality Strategy:** `.crewchief/projects/SEMRANK_semantic-entry-point-ranking/planning/quality-strategy.md`
 
 ---
 

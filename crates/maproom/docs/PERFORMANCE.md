@@ -741,10 +741,10 @@ search_benchmark/hybrid_latency
 
 ## References
 
-- [HYBRID_SEARCH_ARCHITECTURE.md](../../.agents/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md) - Architecture overview
-- [Ticket HYBRID_SEARCH-4001](../../.agents/work-tickets/HYBRID_SEARCH-4001_query-optimization.md) - Query optimization
-- [Ticket HYBRID_SEARCH-4002](../../.agents/work-tickets/HYBRID_SEARCH-4002_index-tuning.md) - Index configuration
-- [Ticket HYBRID_SEARCH-4003](../../.agents/work-tickets/HYBRID_SEARCH-4003_caching.md) - Caching strategy
+- [HYBRID_SEARCH_ARCHITECTURE.md](../../.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md) - Architecture overview
+- [Ticket HYBRID_SEARCH-4001](../../.crewchief/work-tickets/HYBRID_SEARCH-4001_query-optimization.md) - Query optimization
+- [Ticket HYBRID_SEARCH-4002](../../.crewchief/work-tickets/HYBRID_SEARCH-4002_index-tuning.md) - Index configuration
+- [Ticket HYBRID_SEARCH-4003](../../.crewchief/work-tickets/HYBRID_SEARCH-4003_caching.md) - Caching strategy
 - [pgvector Documentation](https://github.com/pgvector/pgvector) - Vector extension for PostgreSQL
 
 ---

@@ -6,9 +6,9 @@ argument-hint: [PROJECT_SLUG]
 # Project Context
 
 Project: $ARGUMENTS
-Project folder: `.agents/projects/$ARGUMENTS_*/`
-Planning documents: `.agents/projects/$ARGUMENTS_*/planning/`
-Tickets: `.agents/projects/$ARGUMENTS_*/tickets/`
+Project folder: `.crewchief/projects/$ARGUMENTS_*/`
+Planning documents: `.crewchief/projects/$ARGUMENTS_*/planning/`
+Tickets: `.crewchief/projects/$ARGUMENTS_*/tickets/`
 
 # Task
 
@@ -16,9 +16,9 @@ Commit planning documents to the repository for the $ARGUMENTS project. If "$ARG
 
 Use a commit messages similar to the following, as appropriate:
 
-- `docs(.agents): $ARGUMENTS planning documents`
-- `docs(.agents): $ARGUMENTS planning documents and tickets`
-- `docs(.agents): $ARGUMENTS tickets`
-- `docs(.agents): $ARGUMENTS planning document updates`
-- `docs(.agents): $ARGUMENTS ticket updates`
+- `docs(.crewchief): $ARGUMENTS planning documents`
+- `docs(.crewchief): $ARGUMENTS planning documents and tickets`
+- `docs(.crewchief): $ARGUMENTS tickets`
+- `docs(.crewchief): $ARGUMENTS planning document updates`
+- `docs(.crewchief): $ARGUMENTS ticket updates`
 - etc.

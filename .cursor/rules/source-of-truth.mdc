@@ -3,25 +3,25 @@ description: Single Source of Truth for AI Agent Specs & Docs
 alwaysApply: true
 ---
 All specifications, requirements, and documentation for AI agents
-must be maintained exclusively in the `.agents/` directory.
+must be maintained exclusively in the `.crewchief/` directory.
 
 requirements:
 
 - Any changes to AI agent behavior, architecture, interfaces, or workflows
-    MUST be documented in `.agents/` before or alongside code changes.
+    MUST be documented in `.crewchief/` before or alongside code changes.
 - No other directories may contain canonical copies of AI agent specs or docs.
     If related notes or drafts exist elsewhere, they must either:
-      1. Be moved into `.agents/`, or
-      2. Explicitly reference the corresponding document inside `.agents/`.
+      1. Be moved into `.crewchief/`, or
+      2. Explicitly reference the corresponding document inside `.crewchief/`.
 - Code comments, READMEs, and external docs may summarize, but not supersede,
-    the material in `.agents/`.
+    the material in `.crewchief/`.
 
 enforcement:
 
 - On PR review, reject or request changes if AI agent specs or docs are added
-    or modified outside `.agents/` without a corresponding update inside it.
+    or modified outside `.crewchief/` without a corresponding update inside it.
 - Automated checks may flag modified files for review if they appear to contain
-    AI agent specification or documentation outside `.agents/`.
+    AI agent specification or documentation outside `.crewchief/`.
 
 rationale: |
   Centralizing all AI agent specifications and documentation in one location

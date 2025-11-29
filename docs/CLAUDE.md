@@ -19,16 +19,16 @@ This directory contains finalized, authoritative documentation about the codebas
 
 ## What Does NOT Belong Here
 
-- Work-in-progress research (goes in `.agents/knowledge/`)
-- Project planning documents (go in `.agents/projects/`)
-- Active tickets or execution tracking (go in `.agents/`)
-- Temporary reports or analysis (go in `.agents/reports/`)
+- Work-in-progress research (goes in `.crewchief/knowledge/`)
+- Project planning documents (go in `.crewchief/projects/`)
+- Active tickets or execution tracking (go in `.crewchief/`)
+- Temporary reports or analysis (go in `.crewchief/reports/`)
 
 ## Key Rule
 
-> Agents document active work in `.agents/`, finalized knowledge goes in `docs/`.
+> Agents document active work in `.crewchief/`, finalized knowledge goes in `docs/`.
 
-When work completes in `.agents/`, synthesize useful knowledge here for long-term reference.
+When work completes in `.crewchief/`, synthesize useful knowledge here for long-term reference.
 
 ## Maintenance
 

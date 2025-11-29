@@ -1023,7 +1023,7 @@ Create `.crewchief/benchmark-config.json`:
 
 - **To design tasks**: See [Task Design Guide](./task-design-guide.md)
 - **To validate tasks**: See [Validation Guide](./validation-guide.md)
-- **For architecture details**: See [.agents/projects/TESTDES_grep-impossible-task-design/planning/architecture.md](../../.agents/projects/TESTDES_grep-impossible-task-design/planning/architecture.md)
+- **For architecture details**: See [.crewchief/projects/TESTDES_grep-impossible-task-design/planning/architecture.md](../../.crewchief/projects/TESTDES_grep-impossible-task-design/planning/architecture.md)
 - **For genetic optimization**: See `/packages/cli/src/search-optimization/genetic-iterator.ts`
 
 ## Summary

@@ -167,4 +167,4 @@ cargo clippy # Should pass
 See:
 - `crates/maproom/CLAUDE.md` - Rust indexer development guide
 - `docs/architecture/DATABASE_ARCHITECTURE.md` - Schema documentation
-- `.agents/projects/SCHMAFIX_*/planning/architecture.md` - Migration integration examples
+- `.crewchief/projects/SCHMAFIX_*/planning/architecture.md` - Migration integration examples

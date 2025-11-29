@@ -279,7 +279,7 @@ This document provides a comprehensive manual testing checklist for the VSCode M
 
 When critical issues are found during manual testing:
 
-1. **Create ticket**: `.agents/projects/VSMAP_vscode-maproom-extension/tickets/VSMAP-40XX_bug-description.md`
+1. **Create ticket**: `.crewchief/projects/VSMAP_vscode-maproom-extension/tickets/VSMAP-40XX_bug-description.md`
 2. **Include**:
    - Platform details (OS, version, architecture)
    - Reproduction steps (numbered, specific)
