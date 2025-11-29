@@ -1,0 +1,404 @@
+Migration 0017 Test Results
+===========================
+
+Test Information
+----------------
+Test Date: _______________
+Tester Name: _______________
+Test Environment: [ ] Development  [ ] Staging  [ ] Production Clone
+Database Source: _______________
+Test Duration: _______________
+
+
+Environment Details
+-------------------
+Production Database Host: _______________
+Production Database Size: _______________
+Test PostgreSQL Container: migration-test-pg
+Test PostgreSQL Port: 5433
+Backup File: _______________
+Backup Size: _______________
+Backup Timestamp: _______________
+
+
+Pre-Migration Baseline Measurements
+------------------------------------
+
+Chunk Count:
+  Total chunks: _______________
+  Small preview (<= 2000 bytes): _______________ (_______________%)
+  Medium preview (2001-5000 bytes): _______________ (_______________%)
+  Large preview (> 5000 bytes): _______________ (_______________%)
+
+Current Indexes:
+  idx_chunks_search_covering: [ ] Exists  Size: _______________
+  Other chunk indexes: _______________
+
+Storage Metrics:
+  chunks table size: _______________
+  Total index size: _______________
+  Total size (table + indexes): _______________
+
+Query Performance Baseline:
+  Query 1 (file search):
+    Execution time: _______________ms
+    Planning time: _______________ms
+    Index used: _______________
+    Buffers: _______________
+
+  Query 2 (aggregation):
+    Execution time: _______________ms
+    Planning time: _______________ms
+    Index used: _______________
+    Buffers: _______________
+
+  Query 3 (large preview):
+    Execution time: _______________ms
+    Planning time: _______________ms
+    Index used: _______________
+    Buffers: _______________
+
+  Query 4 (symbol search):
+    Execution time: _______________ms
+    Planning time: _______________ms
+    Index used: _______________
+    Buffers: _______________
+
+
+Migration Execution
+-------------------
+
+Migration File: /workspace/crates/maproom/migrations/0017_fix_index_size_limits.sql
+Migration Start Time: _______________
+Migration End Time: _______________
+Migration Duration: _______________seconds
+Migration Exit Code: _______________
+
+Errors During Migration:
+[ ] None
+[ ] Errors found (details below):
+_______________________________________________________________________________
+_______________________________________________________________________________
+
+Warnings During Migration:
+[ ] None
+[ ] Warnings found (details below):
+_______________________________________________________________________________
+_______________________________________________________________________________
+
+
+Post-Migration Index Verification
+----------------------------------
+
+New Indexes Created:
+  idx_chunks_search_small_preview:
+    [ ] Created successfully
+    Size: _______________
+    Comment: _______________
+    Row estimate: _______________
+
+  idx_chunks_search_basic:
+    [ ] Created successfully
+    Size: _______________
+    Comment: _______________
+    Row estimate: _______________
+
+Old Index Removed:
+  idx_chunks_search_covering:
+    [ ] Successfully dropped (should NOT exist)
+    [ ] Still exists (FAILURE - investigate)
+
+
+Data Integrity Verification
+----------------------------
+
+Chunk Count Verification:
+  Pre-migration count: _______________
+  Post-migration count: _______________
+  Match: [ ] Yes (PASS)  [ ] No (CRITICAL FAILURE)
+  Difference: _______________
+
+Large Preview Preservation:
+  Chunks with preview > 2000 bytes: _______________
+  Chunks with preview > 5000 bytes: _______________
+  [ ] All large preview chunks preserved
+  [ ] Data loss detected (details): _______________
+
+
+Storage Impact Measurement
+---------------------------
+
+Post-Migration Storage:
+  chunks table size: _______________
+  Total index size: _______________
+  Total size (table + indexes): _______________
+
+Storage Change:
+  Index size increase: _______________MB
+  Percentage increase: _______________%
+  Expected range: 25-40%
+  [ ] Within expected range
+  [ ] Outside expected range (investigate)
+
+Individual Index Sizes:
+  idx_chunks_search_small_preview: _______________
+  idx_chunks_search_basic: _______________
+  Other chunk indexes: _______________
+
+
+Critical Path Query Testing
+----------------------------
+
+Query 1 - File-Based Search (Most Common):
+  Execution time: _______________ms
+  Planning time: _______________ms
+  Index used: _______________
+  Buffers: _______________
+  Performance vs baseline: _______________ (±_______________%)
+  [ ] Good (<20ms)  [ ] Acceptable (20-50ms)  [ ] Slow (>50ms)
+
+Query 2 - Large Result Set / Aggregation:
+  Execution time: _______________ms
+  Planning time: _______________ms
+  Index used: _______________
+  Buffers: _______________
+  Performance vs baseline: _______________ (±_______________%)
+  [ ] Good (<20ms)  [ ] Acceptable (20-50ms)  [ ] Slow (>50ms)
+
+Query 3 - Large Preview Edge Case (CRITICAL):
+  Execution time: _______________ms
+  Planning time: _______________ms
+  Index used: _______________
+  Query succeeded: [ ] YES (PASS)  [ ] NO (CRITICAL FAILURE)
+  Performance vs baseline: _______________ (±_______________%)
+  [ ] Good (<30ms)  [ ] Acceptable (30-50ms)  [ ] Slow (>50ms)
+  Notes: _______________
+
+Query 4 - Symbol Name Search:
+  Execution time: _______________ms
+  Planning time: _______________ms
+  Index used: _______________
+  Buffers: _______________
+  Performance vs baseline: _______________ (±_______________%)
+
+
+Index Usage Statistics
+----------------------
+
+After running ANALYZE and test queries:
+
+  idx_chunks_search_small_preview:
+    Index scans: _______________
+    Tuples read: _______________
+    Tuples fetched: _______________
+    [ ] Index being used
+    [ ] Index not used (investigate)
+
+  idx_chunks_search_basic:
+    Index scans: _______________
+    Tuples read: _______________
+    Tuples fetched: _______________
+    [ ] Index being used
+    [ ] Index not used (investigate)
+
+Both indexes used by query planner: [ ] Yes  [ ] No (investigate)
+
+
+PostgreSQL Log Review
+---------------------
+
+Error Log Review:
+  [ ] No errors found
+  [ ] Errors found (count: _______________)
+  Error details:
+  _______________________________________________________________________________
+  _______________________________________________________________________________
+
+Warning Log Review:
+  [ ] No warnings found
+  [ ] Warnings found (count: _______________)
+  Warning details:
+  _______________________________________________________________________________
+  _______________________________________________________________________________
+
+Slow Query Log:
+  Queries > 100ms: _______________
+  Queries > 200ms: _______________
+  [ ] No concerning slow queries
+  [ ] Slow queries detected (details below):
+  _______________________________________________________________________________
+  _______________________________________________________________________________
+
+
+Success Criteria Evaluation
+----------------------------
+
+MUST PASS (Blocking for Production):
+
+  [ ] Migration completes without errors
+  [ ] Zero data loss (chunk count exact match)
+  [ ] Old index (idx_chunks_search_covering) dropped
+  [ ] New index (idx_chunks_search_small_preview) created
+  [ ] New index (idx_chunks_search_basic) created
+  [ ] Large preview chunks can be queried (no errors)
+  [ ] All critical path queries return correct results
+  [ ] Query performance within ±30% of baseline
+
+  MUST PASS Result: [ ] ALL PASSED  [ ] ONE OR MORE FAILED
+
+
+SHOULD PASS (Investigate if Failed):
+
+  [ ] Storage increase < 40%
+  [ ] Migration duration < 10 minutes (600 seconds)
+  [ ] No PostgreSQL errors in logs
+  [ ] Both new indexes show usage statistics
+  [ ] No warnings during migration
+
+  SHOULD PASS Result: [ ] ALL PASSED  [ ] ONE OR MORE FAILED
+
+
+NICE TO HAVE (Not Blocking):
+
+  [ ] Index-only scan rate > 90% for small previews
+  [ ] Query planning time < 5ms
+  [ ] Storage increase close to 31% estimate
+
+  NICE TO HAVE Result: [ ] ALL PASSED  [ ] ONE OR MORE FAILED
+
+
+Issues and Observations
+------------------------
+
+Issues Found:
+Priority: [ ] Critical  [ ] High  [ ] Medium  [ ] Low
+1. _______________________________________________________________________________
+   _______________________________________________________________________________
+
+2. _______________________________________________________________________________
+   _______________________________________________________________________________
+
+3. _______________________________________________________________________________
+   _______________________________________________________________________________
+
+
+Observations:
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+
+Performance Notes:
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+
+Follow-Up Actions Required
+---------------------------
+
+Action Items:
+Priority: [ ] Critical  [ ] High  [ ] Medium  [ ] Low
+1. _______________________________________________________________________________
+   Assigned to: _______________
+   Due date: _______________
+
+2. _______________________________________________________________________________
+   Assigned to: _______________
+   Due date: _______________
+
+3. _______________________________________________________________________________
+   Assigned to: _______________
+   Due date: _______________
+
+
+Recommendations
+---------------
+
+For Production Deployment:
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+Concerns or Risks:
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+Suggested Monitoring:
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+
+Final Test Result
+-----------------
+
+OVERALL TEST RESULT:
+[ ] PASS - Ready for production deployment
+[ ] CONDITIONAL PASS - Ready with noted caveats (see notes above)
+[ ] FAIL - NOT ready for production (see issues above)
+
+Reason (if conditional or fail):
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+Ready for Production Deployment: [ ] YES  [ ] NO
+
+If NO, blocking issues:
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+
+Approvals
+---------
+
+Test Executed By: _______________
+Signature: _______________
+Date: _______________
+
+Test Reviewed By: _______________
+Signature: _______________
+Date: _______________
+
+Production Deployment Approved By: _______________
+Signature: _______________
+Date: _______________
+
+
+Additional Notes
+----------------
+
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+___________________________________________________________________________________
+
+
+Attachments
+-----------
+
+[ ] Migration execution log
+[ ] PostgreSQL logs (errors/warnings)
+[ ] EXPLAIN ANALYZE output for all test queries
+[ ] Pre-migration database statistics
+[ ] Post-migration database statistics
+[ ] Backup verification results
+
+
+Test Completion
+---------------
+
+Test completed: _______________
+Results documented: _______________
+Results reviewed: _______________
+Test environment cleaned up: [ ] Yes  [ ] No
+Backup archived: [ ] Yes  [ ] No  [ ] Not needed
+
+
+---
+Document Version: 1.0
+Last Updated: 2025-11-09
+Template for: Migration 0017 (IDXSIZE-2003)

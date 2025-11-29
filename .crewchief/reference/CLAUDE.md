@@ -1,0 +1,1 @@
+This file contains reference for AI agents for templates and conventions. Agents should not create new files or folders in this directory. Agents may modify existing files in this directory, if istructed to do so.

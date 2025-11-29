@@ -1,0 +1,918 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-11-06",
+    "total_queries": 100,
+    "purpose": "Variant testing for AI agent query optimization",
+    "codebase_commit": "8bd270f85f6ed233cf5eafe04b42912256035d59",
+    "query_distribution": {
+      "natural_language": 40,
+      "simple": 30,
+      "complex": 20,
+      "edge_cases": 10
+    },
+    "methodology": "Queries selected based on crewchief codebase analysis (Rust indexer, TypeScript CLI, MCP server). Natural language queries test transformation patterns, simple queries test baseline performance, complex queries test multi-term handling, edge cases test boundary conditions."
+  },
+  "test_queries": [
+    {
+      "id": "NL-001",
+      "category": "natural_language",
+      "query": "How does the indexer work?",
+      "expected_terms": ["indexer", "index"],
+      "min_results": 3,
+      "gold_standard_files": ["crates/maproom/src/indexer", "CLAUDE.md"],
+      "notes": "Common natural language pattern - how does X work"
+    },
+    {
+      "id": "NL-002",
+      "category": "natural_language",
+      "query": "What handles error logging?",
+      "expected_terms": ["error", "logging", "log"],
+      "min_results": 3,
+      "gold_standard_files": ["error", "log"],
+      "notes": "What handles X pattern"
+    },
+    {
+      "id": "NL-003",
+      "category": "natural_language",
+      "query": "Where is the database connection defined?",
+      "expected_terms": ["database", "connection"],
+      "min_results": 3,
+      "gold_standard_files": ["database", "connection"],
+      "notes": "Where is X pattern"
+    },
+    {
+      "id": "NL-004",
+      "category": "natural_language",
+      "query": "How do I search code?",
+      "expected_terms": ["search", "code"],
+      "min_results": 3,
+      "gold_standard_files": ["search", "query"],
+      "notes": "How do I X pattern"
+    },
+    {
+      "id": "NL-005",
+      "category": "natural_language",
+      "query": "What creates embeddings?",
+      "expected_terms": ["embeddings", "embedding"],
+      "min_results": 3,
+      "gold_standard_files": ["embedding", "vector"],
+      "notes": "What creates/generates X"
+    },
+    {
+      "id": "NL-006",
+      "category": "natural_language",
+      "query": "How does authentication work?",
+      "expected_terms": ["authentication", "auth"],
+      "min_results": 2,
+      "gold_standard_files": ["auth"],
+      "notes": "Generic auth question"
+    },
+    {
+      "id": "NL-007",
+      "category": "natural_language",
+      "query": "Where are the CLI commands implemented?",
+      "expected_terms": ["cli", "command"],
+      "min_results": 3,
+      "gold_standard_files": ["packages/cli", "command"],
+      "notes": "Where are X implemented"
+    },
+    {
+      "id": "NL-008",
+      "category": "natural_language",
+      "query": "What processes the queries?",
+      "expected_terms": ["query", "process"],
+      "min_results": 3,
+      "gold_standard_files": ["query", "search"],
+      "notes": "What processes X"
+    },
+    {
+      "id": "NL-009",
+      "category": "natural_language",
+      "query": "How is the tree-sitter parsing done?",
+      "expected_terms": ["tree-sitter", "parsing", "parse"],
+      "min_results": 3,
+      "gold_standard_files": ["tree-sitter", "parser"],
+      "notes": "How is X done"
+    },
+    {
+      "id": "NL-010",
+      "category": "natural_language",
+      "query": "Where does the MCP server handle requests?",
+      "expected_terms": ["mcp", "server", "request"],
+      "min_results": 3,
+      "gold_standard_files": ["mcp", "server"],
+      "notes": "Where does X handle Y"
+    },
+    {
+      "id": "NL-011",
+      "category": "natural_language",
+      "query": "What manages the database schema?",
+      "expected_terms": ["database", "schema"],
+      "min_results": 3,
+      "gold_standard_files": ["schema", "database"],
+      "notes": "What manages X"
+    },
+    {
+      "id": "NL-012",
+      "category": "natural_language",
+      "query": "How do worktrees get indexed?",
+      "expected_terms": ["worktree", "index"],
+      "min_results": 3,
+      "gold_standard_files": ["worktree", "index"],
+      "notes": "How do X get Y"
+    },
+    {
+      "id": "NL-013",
+      "category": "natural_language",
+      "query": "Where is the hybrid search implemented?",
+      "expected_terms": ["hybrid", "search"],
+      "min_results": 3,
+      "gold_standard_files": ["hybrid", "search"],
+      "notes": "Where is X implemented"
+    },
+    {
+      "id": "NL-014",
+      "category": "natural_language",
+      "query": "What handles file watching?",
+      "expected_terms": ["watch", "file"],
+      "min_results": 3,
+      "gold_standard_files": ["watch", "file"],
+      "notes": "What handles X"
+    },
+    {
+      "id": "NL-015",
+      "category": "natural_language",
+      "query": "How does the vector search work?",
+      "expected_terms": ["vector", "search"],
+      "min_results": 3,
+      "gold_standard_files": ["vector", "search"],
+      "notes": "How does X work"
+    },
+    {
+      "id": "NL-016",
+      "category": "natural_language",
+      "query": "Where are the tests for the indexer?",
+      "expected_terms": ["test", "indexer"],
+      "min_results": 3,
+      "gold_standard_files": ["test", "indexer"],
+      "notes": "Where are tests for X"
+    },
+    {
+      "id": "NL-017",
+      "category": "natural_language",
+      "query": "What stores the chunk data?",
+      "expected_terms": ["chunk", "data", "store"],
+      "min_results": 3,
+      "gold_standard_files": ["chunk", "storage"],
+      "notes": "What stores X"
+    },
+    {
+      "id": "NL-018",
+      "category": "natural_language",
+      "query": "How is the full-text search done?",
+      "expected_terms": ["full-text", "search", "fts"],
+      "min_results": 3,
+      "gold_standard_files": ["fts", "search"],
+      "notes": "How is X done"
+    },
+    {
+      "id": "NL-019",
+      "category": "natural_language",
+      "query": "Where does the CLI connect to PostgreSQL?",
+      "expected_terms": ["cli", "postgresql", "postgres"],
+      "min_results": 3,
+      "gold_standard_files": ["cli", "postgres", "database"],
+      "notes": "Where does X connect to Y"
+    },
+    {
+      "id": "NL-020",
+      "category": "natural_language",
+      "query": "What generates the embeddings?",
+      "expected_terms": ["embedding", "generate"],
+      "min_results": 3,
+      "gold_standard_files": ["embedding", "vector"],
+      "notes": "What generates X"
+    },
+    {
+      "id": "NL-021",
+      "category": "natural_language",
+      "query": "How are symbols extracted from code?",
+      "expected_terms": ["symbol", "extract"],
+      "min_results": 3,
+      "gold_standard_files": ["symbol", "extract"],
+      "notes": "How are X extracted"
+    },
+    {
+      "id": "NL-022",
+      "category": "natural_language",
+      "query": "Where is the context assembly logic?",
+      "expected_terms": ["context", "assembly"],
+      "min_results": 3,
+      "gold_standard_files": ["context", "assembly"],
+      "notes": "Where is X logic"
+    },
+    {
+      "id": "NL-023",
+      "category": "natural_language",
+      "query": "What handles the git metadata?",
+      "expected_terms": ["git", "metadata"],
+      "min_results": 3,
+      "gold_standard_files": ["git", "metadata"],
+      "notes": "What handles X"
+    },
+    {
+      "id": "NL-024",
+      "category": "natural_language",
+      "query": "How does the CLI scan directories?",
+      "expected_terms": ["cli", "scan", "directory"],
+      "min_results": 3,
+      "gold_standard_files": ["cli", "scan"],
+      "notes": "How does X scan Y"
+    },
+    {
+      "id": "NL-025",
+      "category": "natural_language",
+      "query": "Where are the MCP tools defined?",
+      "expected_terms": ["mcp", "tool"],
+      "min_results": 3,
+      "gold_standard_files": ["mcp", "tool"],
+      "notes": "Where are X defined"
+    },
+    {
+      "id": "NL-026",
+      "category": "natural_language",
+      "query": "What manages the repository list?",
+      "expected_terms": ["repository", "repo", "manage"],
+      "min_results": 3,
+      "gold_standard_files": ["repository", "repo"],
+      "notes": "What manages X"
+    },
+    {
+      "id": "NL-027",
+      "category": "natural_language",
+      "query": "How is ranking calculated?",
+      "expected_terms": ["ranking", "rank", "score"],
+      "min_results": 3,
+      "gold_standard_files": ["rank", "score"],
+      "notes": "How is X calculated"
+    },
+    {
+      "id": "NL-028",
+      "category": "natural_language",
+      "query": "Where does the system handle TypeScript files?",
+      "expected_terms": ["typescript", "ts"],
+      "min_results": 3,
+      "gold_standard_files": ["typescript", ".ts"],
+      "notes": "Where does system handle X"
+    },
+    {
+      "id": "NL-029",
+      "category": "natural_language",
+      "query": "What implements the watch command?",
+      "expected_terms": ["watch", "command"],
+      "min_results": 3,
+      "gold_standard_files": ["watch"],
+      "notes": "What implements X"
+    },
+    {
+      "id": "NL-030",
+      "category": "natural_language",
+      "query": "How are Rust files parsed?",
+      "expected_terms": ["rust", "parse"],
+      "min_results": 3,
+      "gold_standard_files": ["rust", "parser"],
+      "notes": "How are X parsed"
+    },
+    {
+      "id": "NL-031",
+      "category": "natural_language",
+      "query": "Where is the Docker configuration?",
+      "expected_terms": ["docker", "config"],
+      "min_results": 3,
+      "gold_standard_files": ["docker", "Dockerfile"],
+      "notes": "Where is X configuration"
+    },
+    {
+      "id": "NL-032",
+      "category": "natural_language",
+      "query": "What stores the search results?",
+      "expected_terms": ["search", "result", "store"],
+      "min_results": 3,
+      "gold_standard_files": ["search", "result"],
+      "notes": "What stores X"
+    },
+    {
+      "id": "NL-033",
+      "category": "natural_language",
+      "query": "How does incremental indexing work?",
+      "expected_terms": ["incremental", "index"],
+      "min_results": 3,
+      "gold_standard_files": ["incremental", "index"],
+      "notes": "How does X work"
+    },
+    {
+      "id": "NL-034",
+      "category": "natural_language",
+      "query": "Where are the database migrations?",
+      "expected_terms": ["database", "migration"],
+      "min_results": 3,
+      "gold_standard_files": ["migration", "schema"],
+      "notes": "Where are X"
+    },
+    {
+      "id": "NL-035",
+      "category": "natural_language",
+      "query": "What handles the API endpoints?",
+      "expected_terms": ["api", "endpoint"],
+      "min_results": 3,
+      "gold_standard_files": ["api", "endpoint"],
+      "notes": "What handles X"
+    },
+    {
+      "id": "NL-036",
+      "category": "natural_language",
+      "query": "How is memory managed in the indexer?",
+      "expected_terms": ["memory", "indexer"],
+      "min_results": 3,
+      "gold_standard_files": ["memory", "indexer"],
+      "notes": "How is X managed"
+    },
+    {
+      "id": "NL-037",
+      "category": "natural_language",
+      "query": "Where does logging happen?",
+      "expected_terms": ["logging", "log"],
+      "min_results": 3,
+      "gold_standard_files": ["log"],
+      "notes": "Where does X happen"
+    },
+    {
+      "id": "NL-038",
+      "category": "natural_language",
+      "query": "What parses the configuration files?",
+      "expected_terms": ["config", "parse"],
+      "min_results": 3,
+      "gold_standard_files": ["config"],
+      "notes": "What parses X"
+    },
+    {
+      "id": "NL-039",
+      "category": "natural_language",
+      "query": "How are dependencies tracked?",
+      "expected_terms": ["dependency", "track"],
+      "min_results": 3,
+      "gold_standard_files": ["dependency"],
+      "notes": "How are X tracked"
+    },
+    {
+      "id": "NL-040",
+      "category": "natural_language",
+      "query": "Where is the CLI entry point?",
+      "expected_terms": ["cli", "entry", "main"],
+      "min_results": 3,
+      "gold_standard_files": ["cli", "main"],
+      "notes": "Where is X entry point"
+    },
+    {
+      "id": "SIMPLE-001",
+      "category": "simple",
+      "query": "error handling",
+      "expected_terms": ["error handling"],
+      "min_results": 5,
+      "gold_standard_files": ["error"],
+      "notes": "Already optimal 2-word query"
+    },
+    {
+      "id": "SIMPLE-002",
+      "category": "simple",
+      "query": "database connection",
+      "expected_terms": ["database connection"],
+      "min_results": 5,
+      "gold_standard_files": ["database"],
+      "notes": "Common 2-word technical term"
+    },
+    {
+      "id": "SIMPLE-003",
+      "category": "simple",
+      "query": "indexer",
+      "expected_terms": ["indexer"],
+      "min_results": 5,
+      "gold_standard_files": ["indexer"],
+      "notes": "Single word technical term"
+    },
+    {
+      "id": "SIMPLE-004",
+      "category": "simple",
+      "query": "tree-sitter",
+      "expected_terms": ["tree-sitter"],
+      "min_results": 3,
+      "gold_standard_files": ["tree-sitter"],
+      "notes": "Hyphenated technical term"
+    },
+    {
+      "id": "SIMPLE-005",
+      "category": "simple",
+      "query": "vector search",
+      "expected_terms": ["vector search"],
+      "min_results": 5,
+      "gold_standard_files": ["vector", "search"],
+      "notes": "2-word technical concept"
+    },
+    {
+      "id": "SIMPLE-006",
+      "category": "simple",
+      "query": "mcp server",
+      "expected_terms": ["mcp server"],
+      "min_results": 5,
+      "gold_standard_files": ["mcp"],
+      "notes": "Acronym + noun"
+    },
+    {
+      "id": "SIMPLE-007",
+      "category": "simple",
+      "query": "embedding",
+      "expected_terms": ["embedding"],
+      "min_results": 5,
+      "gold_standard_files": ["embedding"],
+      "notes": "Single technical term"
+    },
+    {
+      "id": "SIMPLE-008",
+      "category": "simple",
+      "query": "cli command",
+      "expected_terms": ["cli command"],
+      "min_results": 5,
+      "gold_standard_files": ["cli"],
+      "notes": "Simple 2-word"
+    },
+    {
+      "id": "SIMPLE-009",
+      "category": "simple",
+      "query": "worktree",
+      "expected_terms": ["worktree"],
+      "min_results": 5,
+      "gold_standard_files": ["worktree"],
+      "notes": "Git concept"
+    },
+    {
+      "id": "SIMPLE-010",
+      "category": "simple",
+      "query": "chunk storage",
+      "expected_terms": ["chunk storage"],
+      "min_results": 3,
+      "gold_standard_files": ["chunk"],
+      "notes": "2-word concept"
+    },
+    {
+      "id": "SIMPLE-011",
+      "category": "simple",
+      "query": "postgres",
+      "expected_terms": ["postgres"],
+      "min_results": 5,
+      "gold_standard_files": ["postgres"],
+      "notes": "Database name"
+    },
+    {
+      "id": "SIMPLE-012",
+      "category": "simple",
+      "query": "symbol extraction",
+      "expected_terms": ["symbol extraction"],
+      "min_results": 3,
+      "gold_standard_files": ["symbol"],
+      "notes": "2-word process"
+    },
+    {
+      "id": "SIMPLE-013",
+      "category": "simple",
+      "query": "context assembly",
+      "expected_terms": ["context assembly"],
+      "min_results": 3,
+      "gold_standard_files": ["context"],
+      "notes": "Feature name"
+    },
+    {
+      "id": "SIMPLE-014",
+      "category": "simple",
+      "query": "git metadata",
+      "expected_terms": ["git metadata"],
+      "min_results": 3,
+      "gold_standard_files": ["git"],
+      "notes": "2-word concept"
+    },
+    {
+      "id": "SIMPLE-015",
+      "category": "simple",
+      "query": "scan",
+      "expected_terms": ["scan"],
+      "min_results": 5,
+      "gold_standard_files": ["scan"],
+      "notes": "Single action verb"
+    },
+    {
+      "id": "SIMPLE-016",
+      "category": "simple",
+      "query": "full-text search",
+      "expected_terms": ["full-text search"],
+      "min_results": 3,
+      "gold_standard_files": ["fts"],
+      "notes": "3-word with hyphen"
+    },
+    {
+      "id": "SIMPLE-017",
+      "category": "simple",
+      "query": "ranking",
+      "expected_terms": ["ranking"],
+      "min_results": 3,
+      "gold_standard_files": ["rank"],
+      "notes": "Single concept"
+    },
+    {
+      "id": "SIMPLE-018",
+      "category": "simple",
+      "query": "typescript parser",
+      "expected_terms": ["typescript parser"],
+      "min_results": 3,
+      "gold_standard_files": ["typescript"],
+      "notes": "Language + component"
+    },
+    {
+      "id": "SIMPLE-019",
+      "category": "simple",
+      "query": "watch command",
+      "expected_terms": ["watch command"],
+      "min_results": 3,
+      "gold_standard_files": ["watch"],
+      "notes": "Command name"
+    },
+    {
+      "id": "SIMPLE-020",
+      "category": "simple",
+      "query": "rust parser",
+      "expected_terms": ["rust parser"],
+      "min_results": 3,
+      "gold_standard_files": ["rust"],
+      "notes": "Language + component"
+    },
+    {
+      "id": "SIMPLE-021",
+      "category": "simple",
+      "query": "docker",
+      "expected_terms": ["docker"],
+      "min_results": 5,
+      "gold_standard_files": ["docker"],
+      "notes": "Technology name"
+    },
+    {
+      "id": "SIMPLE-022",
+      "category": "simple",
+      "query": "search results",
+      "expected_terms": ["search results"],
+      "min_results": 5,
+      "gold_standard_files": ["search"],
+      "notes": "Common pair"
+    },
+    {
+      "id": "SIMPLE-023",
+      "category": "simple",
+      "query": "incremental indexing",
+      "expected_terms": ["incremental indexing"],
+      "min_results": 3,
+      "gold_standard_files": ["incremental"],
+      "notes": "Feature name"
+    },
+    {
+      "id": "SIMPLE-024",
+      "category": "simple",
+      "query": "migration",
+      "expected_terms": ["migration"],
+      "min_results": 3,
+      "gold_standard_files": ["migration"],
+      "notes": "Database concept"
+    },
+    {
+      "id": "SIMPLE-025",
+      "category": "simple",
+      "query": "api endpoint",
+      "expected_terms": ["api endpoint"],
+      "min_results": 3,
+      "gold_standard_files": ["api"],
+      "notes": "Common API term"
+    },
+    {
+      "id": "SIMPLE-026",
+      "category": "simple",
+      "query": "memory management",
+      "expected_terms": ["memory management"],
+      "min_results": 3,
+      "gold_standard_files": ["memory"],
+      "notes": "System concept"
+    },
+    {
+      "id": "SIMPLE-027",
+      "category": "simple",
+      "query": "logging",
+      "expected_terms": ["logging"],
+      "min_results": 5,
+      "gold_standard_files": ["log"],
+      "notes": "Single technical term"
+    },
+    {
+      "id": "SIMPLE-028",
+      "category": "simple",
+      "query": "configuration",
+      "expected_terms": ["configuration"],
+      "min_results": 5,
+      "gold_standard_files": ["config"],
+      "notes": "Single concept"
+    },
+    {
+      "id": "SIMPLE-029",
+      "category": "simple",
+      "query": "test suite",
+      "expected_terms": ["test suite"],
+      "min_results": 3,
+      "gold_standard_files": ["test"],
+      "notes": "Testing term"
+    },
+    {
+      "id": "SIMPLE-030",
+      "category": "simple",
+      "query": "main function",
+      "expected_terms": ["main function"],
+      "min_results": 5,
+      "gold_standard_files": ["main"],
+      "notes": "Code entry point"
+    },
+    {
+      "id": "COMPLEX-001",
+      "category": "complex",
+      "query": "hybrid search ranking algorithm",
+      "expected_terms": ["hybrid", "search", "ranking"],
+      "min_results": 2,
+      "gold_standard_files": ["hybrid", "search"],
+      "notes": "4-word specific search"
+    },
+    {
+      "id": "COMPLEX-002",
+      "category": "complex",
+      "query": "tree-sitter symbol extraction logic",
+      "expected_terms": ["tree-sitter", "symbol", "extraction"],
+      "min_results": 2,
+      "gold_standard_files": ["tree-sitter", "symbol"],
+      "notes": "Multi-word technical phrase"
+    },
+    {
+      "id": "COMPLEX-003",
+      "category": "complex",
+      "query": "postgres vector embedding storage",
+      "expected_terms": ["postgres", "vector", "embedding"],
+      "min_results": 2,
+      "gold_standard_files": ["postgres", "embedding"],
+      "notes": "4-word technical description"
+    },
+    {
+      "id": "COMPLEX-004",
+      "category": "complex",
+      "query": "incremental indexing file watcher",
+      "expected_terms": ["incremental", "index", "watch"],
+      "min_results": 2,
+      "gold_standard_files": ["incremental", "watch"],
+      "notes": "Feature + component"
+    },
+    {
+      "id": "COMPLEX-005",
+      "category": "complex",
+      "query": "mcp server context assembly",
+      "expected_terms": ["mcp", "context", "assembly"],
+      "min_results": 2,
+      "gold_standard_files": ["mcp", "context"],
+      "notes": "Server + feature"
+    },
+    {
+      "id": "COMPLEX-006",
+      "category": "complex",
+      "query": "cli scan worktree indexing",
+      "expected_terms": ["cli", "scan", "worktree"],
+      "min_results": 2,
+      "gold_standard_files": ["cli", "scan", "worktree"],
+      "notes": "Command + action + target"
+    },
+    {
+      "id": "COMPLEX-007",
+      "category": "complex",
+      "query": "database connection fallback logic",
+      "expected_terms": ["database", "connection", "fallback"],
+      "min_results": 2,
+      "gold_standard_files": ["database", "fallback"],
+      "notes": "Multi-word feature description"
+    },
+    {
+      "id": "COMPLEX-008",
+      "category": "complex",
+      "query": "full-text search query preprocessing",
+      "expected_terms": ["full-text", "search", "query"],
+      "min_results": 2,
+      "gold_standard_files": ["fts", "search"],
+      "notes": "4-word search feature"
+    },
+    {
+      "id": "COMPLEX-009",
+      "category": "complex",
+      "query": "rust tree-sitter parser integration",
+      "expected_terms": ["rust", "tree-sitter", "parser"],
+      "min_results": 2,
+      "gold_standard_files": ["rust", "tree-sitter"],
+      "notes": "Language + library + component"
+    },
+    {
+      "id": "COMPLEX-010",
+      "category": "complex",
+      "query": "typescript symbol extraction metadata",
+      "expected_terms": ["typescript", "symbol", "metadata"],
+      "min_results": 2,
+      "gold_standard_files": ["typescript", "symbol"],
+      "notes": "Language + feature + data"
+    },
+    {
+      "id": "COMPLEX-011",
+      "category": "complex",
+      "query": "git repository worktree management",
+      "expected_terms": ["git", "worktree", "management"],
+      "min_results": 2,
+      "gold_standard_files": ["git", "worktree"],
+      "notes": "Tool + feature + action"
+    },
+    {
+      "id": "COMPLEX-012",
+      "category": "complex",
+      "query": "embedding generation ollama provider",
+      "expected_terms": ["embedding", "ollama"],
+      "min_results": 2,
+      "gold_standard_files": ["embedding", "ollama"],
+      "notes": "Feature + provider"
+    },
+    {
+      "id": "COMPLEX-013",
+      "category": "complex",
+      "query": "chunk data storage postgres",
+      "expected_terms": ["chunk", "storage", "postgres"],
+      "min_results": 2,
+      "gold_standard_files": ["chunk", "postgres"],
+      "notes": "Data + action + technology"
+    },
+    {
+      "id": "COMPLEX-014",
+      "category": "complex",
+      "query": "docker compose postgres configuration",
+      "expected_terms": ["docker", "postgres", "config"],
+      "min_results": 2,
+      "gold_standard_files": ["docker", "postgres"],
+      "notes": "Tool + service + type"
+    },
+    {
+      "id": "COMPLEX-015",
+      "category": "complex",
+      "query": "mcp tool description schema",
+      "expected_terms": ["mcp", "tool", "schema"],
+      "min_results": 2,
+      "gold_standard_files": ["mcp", "tool"],
+      "notes": "Protocol + component + structure"
+    },
+    {
+      "id": "COMPLEX-016",
+      "category": "complex",
+      "query": "memory allocator metrics tracking",
+      "expected_terms": ["memory", "metrics"],
+      "min_results": 2,
+      "gold_standard_files": ["memory", "metrics"],
+      "notes": "Component + data + action"
+    },
+    {
+      "id": "COMPLEX-017",
+      "category": "complex",
+      "query": "api error handling middleware",
+      "expected_terms": ["api", "error", "middleware"],
+      "min_results": 2,
+      "gold_standard_files": ["api", "error"],
+      "notes": "Layer + feature + component"
+    },
+    {
+      "id": "COMPLEX-018",
+      "category": "complex",
+      "query": "search result ranking fusion",
+      "expected_terms": ["search", "ranking", "fusion"],
+      "min_results": 2,
+      "gold_standard_files": ["search", "ranking"],
+      "notes": "Feature + process + method"
+    },
+    {
+      "id": "COMPLEX-019",
+      "category": "complex",
+      "query": "database migration schema versioning",
+      "expected_terms": ["database", "migration", "schema"],
+      "min_results": 2,
+      "gold_standard_files": ["migration", "schema"],
+      "notes": "System + feature + method"
+    },
+    {
+      "id": "COMPLEX-020",
+      "category": "complex",
+      "query": "cli configuration file parsing",
+      "expected_terms": ["cli", "config", "parse"],
+      "min_results": 2,
+      "gold_standard_files": ["cli", "config"],
+      "notes": "Component + data + action"
+    },
+    {
+      "id": "EDGE-001",
+      "category": "edge_case",
+      "query": "processCheckout",
+      "expected_terms": ["checkout", "process"],
+      "min_results": 1,
+      "gold_standard_files": ["checkout"],
+      "notes": "camelCase identifier - should extract terms"
+    },
+    {
+      "id": "EDGE-002",
+      "category": "edge_case",
+      "query": "handle_error_log",
+      "expected_terms": ["handle", "error", "log"],
+      "min_results": 1,
+      "gold_standard_files": ["error"],
+      "notes": "snake_case identifier"
+    },
+    {
+      "id": "EDGE-003",
+      "category": "edge_case",
+      "query": "src/indexer/mod.rs",
+      "expected_terms": ["indexer"],
+      "min_results": 1,
+      "gold_standard_files": ["indexer"],
+      "notes": "File path - should extract file/dir names"
+    },
+    {
+      "id": "EDGE-004",
+      "category": "edge_case",
+      "query": "DatabaseConnection::new",
+      "expected_terms": ["database", "connection"],
+      "min_results": 1,
+      "gold_standard_files": ["database"],
+      "notes": "Qualified method name"
+    },
+    {
+      "id": "EDGE-005",
+      "category": "edge_case",
+      "query": "TODO:",
+      "expected_terms": ["todo"],
+      "min_results": 1,
+      "gold_standard_files": [],
+      "notes": "Marker with colon - literal search better"
+    },
+    {
+      "id": "EDGE-006",
+      "category": "edge_case",
+      "query": "fn main()",
+      "expected_terms": ["main"],
+      "min_results": 1,
+      "gold_standard_files": ["main"],
+      "notes": "Function signature"
+    },
+    {
+      "id": "EDGE-007",
+      "category": "edge_case",
+      "query": "Vec<String>",
+      "expected_terms": ["vec", "string"],
+      "min_results": 1,
+      "gold_standard_files": [],
+      "notes": "Type annotation - challenging"
+    },
+    {
+      "id": "EDGE-008",
+      "category": "edge_case",
+      "query": "@deprecated",
+      "expected_terms": ["deprecated"],
+      "min_results": 1,
+      "gold_standard_files": [],
+      "notes": "Decorator/annotation"
+    },
+    {
+      "id": "EDGE-009",
+      "category": "edge_case",
+      "query": "async fn",
+      "expected_terms": ["async"],
+      "min_results": 2,
+      "gold_standard_files": ["async"],
+      "notes": "Keyword + keyword"
+    },
+    {
+      "id": "EDGE-010",
+      "category": "edge_case",
+      "query": "impl Iterator",
+      "expected_terms": ["iterator", "impl"],
+      "min_results": 1,
+      "gold_standard_files": ["iterator"],
+      "notes": "Trait implementation"
+    }
+  ]
+}

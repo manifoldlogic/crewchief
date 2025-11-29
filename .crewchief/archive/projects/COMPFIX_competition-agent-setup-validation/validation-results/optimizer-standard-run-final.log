@@ -1,0 +1,29 @@
+Starting genetic optimization...
+
+
+Starting genetic iterations...
+Population: 5
+Max Iterations: 5
+Convergence Threshold: 1.0%
+✓ Registered optimization run: run-1762822167821
+
+============================================================
+GENERATION 1
+============================================================
+
+Running task: Find Worktree Creation Implementation
+🏁 Starting competition with pre-flight validation
+
+📋 Phase 1: Setup
+============================================================
+✅ Database connection verified
+Optimization failed: Error: ❌ Pre-flight validation failed: Base branch 'main' not indexed
+
+Fix: Run scan on base branch first
+$ crewchief-maproom scan --repo crewchief --worktree main --root /workspace
+
+This is a one-time setup step. Subsequent scans will be fast.
+    at runCompetition (/workspace/packages/cli/src/search-optimization/competition-runner.ts:135:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async runGeneticIterations (/workspace/packages/cli/src/search-optimization/genetic-iterator.ts:235:24)
+    at async main (/workspace/packages/cli/scripts/run-genetic-optimizer.ts:47:20)
