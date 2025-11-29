@@ -3,12 +3,33 @@
 //! These tests verify:
 //! - Ignore pattern matching
 //! - Event type conversions
-//! - Debouncing logic
-//! - Event coalescing
+//! - Watcher configuration
+//! - Git polling integration
 
 use crewchief_maproom::incremental::{FileEvent, FileWatcher, IgnorePatternMatcher, WatcherConfig};
 use std::path::PathBuf;
 use tempfile::TempDir;
+
+/// Helper to create a temporary git repository.
+fn create_temp_git_repo() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@test.com"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Test"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    dir
+}
 
 #[test]
 fn test_file_event_path_extraction() {
@@ -123,6 +144,10 @@ fn test_watcher_config_default() {
     let config = WatcherConfig::default();
     assert_eq!(config.debounce_ms, 500);
     assert_eq!(config.channel_capacity, 1000);
+    assert_eq!(config.poll_interval_ms, 3000);
+    assert!(config.include_untracked);
+    assert!(config.detect_renames);
+    assert_eq!(config.git_timeout_ms, 10000);
 }
 
 #[test]
@@ -130,28 +155,47 @@ fn test_watcher_config_custom() {
     let config = WatcherConfig {
         debounce_ms: 1000,
         channel_capacity: 500,
+        poll_interval_ms: 5000,
+        include_untracked: false,
+        detect_renames: false,
+        git_timeout_ms: 20000,
     };
     assert_eq!(config.debounce_ms, 1000);
     assert_eq!(config.channel_capacity, 500);
+    assert_eq!(config.poll_interval_ms, 5000);
+    assert!(!config.include_untracked);
+    assert!(!config.detect_renames);
+    assert_eq!(config.git_timeout_ms, 20000);
 }
 
 #[tokio::test]
 async fn test_file_watcher_creation() {
-    let temp_dir = TempDir::new().unwrap();
+    // FileWatcher now requires a git repository
+    let temp_dir = create_temp_git_repo();
     let config = WatcherConfig::default();
 
     let result = FileWatcher::new(temp_dir.path().to_path_buf(), config);
     assert!(result.is_ok());
 
-    let (watcher, _rx) = result.unwrap();
-    drop(watcher);
+    let (mut watcher, _rx) = result.unwrap();
+    watcher.stop().unwrap();
+}
+
+#[tokio::test]
+async fn test_file_watcher_rejects_non_git_dir() {
+    // Non-git directories should be rejected
+    let temp_dir = TempDir::new().unwrap();
+    let config = WatcherConfig::default();
+
+    let result = FileWatcher::new(temp_dir.path().to_path_buf(), config);
+    assert!(result.is_err());
 }
 
 #[tokio::test]
 async fn test_file_watcher_with_gitignore() {
     use std::io::Write;
 
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = create_temp_git_repo();
     let gitignore_path = temp_dir.path().join(".gitignore");
 
     let mut file = std::fs::File::create(&gitignore_path).unwrap();
@@ -161,16 +205,19 @@ async fn test_file_watcher_with_gitignore() {
     let config = WatcherConfig::default();
     let result = FileWatcher::new(temp_dir.path().to_path_buf(), config);
     assert!(result.is_ok());
+
+    let (mut watcher, _rx) = result.unwrap();
+    watcher.stop().unwrap();
 }
 
 #[tokio::test]
 async fn test_file_watcher_start_stop() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = create_temp_git_repo();
     let config = WatcherConfig::default();
 
     let (mut watcher, _rx) = FileWatcher::new(temp_dir.path().to_path_buf(), config).unwrap();
 
-    // Start watching
+    // watch() is now a no-op with git polling (polling starts on creation)
     let result = watcher.watch(temp_dir.path());
     assert!(result.is_ok());
 

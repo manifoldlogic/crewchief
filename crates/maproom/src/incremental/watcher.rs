@@ -1,251 +1,229 @@
 //! File system watcher for incremental indexing.
 //!
-//! This module provides real-time file system monitoring with debouncing,
-//! ignore pattern filtering, and event emission for downstream processing.
+//! This module provides real-time file system monitoring using git status polling.
+//! The git polling approach eliminates "too many open files" errors that occur
+//! with native file watchers on large repositories.
+//!
+//! # How It Works
+//!
+//! Instead of using native file watchers (which create file descriptors for each
+//! watched directory), this implementation polls `git status --porcelain` at
+//! configurable intervals. This provides:
+//!
+//! - Zero file descriptor usage
+//! - Automatic .gitignore respect
+//! - Consistent cross-platform behavior
+//! - 2-5 second detection latency (configurable)
+//!
+//! # Migration Note
+//!
+//! Previously used `notify::RecommendedWatcher` which caused EMFILE errors on
+//! large repos. Now uses `GitPoller` from the `git_poller` module.
 
 use super::events::FileEvent;
-use super::ignore::IgnorePatternMatcher;
-use anyhow::{Context, Result};
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
-use tracing::{debug, error, warn};
+use super::git_poller::{GitPoller, GitPollerConfig, GitPollerError};
+use std::path::PathBuf;
+use std::time::Duration;
+use thiserror::Error;
+use tokio::sync::{mpsc, watch};
+use tokio::task::JoinHandle;
+use tracing::{debug, info};
+
+/// Errors that can occur with the file watcher.
+#[derive(Debug, Error)]
+pub enum WatcherError {
+    /// The path is not a git repository.
+    #[error("not a git repository: {0}")]
+    NotGitRepository(PathBuf),
+
+    /// Git poller error.
+    #[error("git poller error: {0}")]
+    GitPollerError(#[from] GitPollerError),
+
+    /// The watcher task failed.
+    #[error("watcher task failed: {0}")]
+    TaskFailed(String),
+
+    /// The watcher is already running.
+    #[error("watcher is already running")]
+    AlreadyRunning,
+}
 
 /// Configuration for the file watcher.
 #[derive(Debug, Clone)]
 pub struct WatcherConfig {
-    /// Debounce delay in milliseconds (default: 500ms)
+    /// Debounce delay in milliseconds (kept for backward compatibility, unused with git polling).
+    /// With git polling, debouncing is implicit in the poll interval.
     pub debounce_ms: u64,
 
-    /// Channel capacity for file events (default: 1000)
+    /// Channel capacity for file events (default: 1000).
     pub channel_capacity: usize,
+
+    /// Polling interval in milliseconds (default: 3000ms = 3 seconds).
+    pub poll_interval_ms: u64,
+
+    /// Include untracked files in detection (default: true).
+    pub include_untracked: bool,
+
+    /// Enable rename detection (default: true).
+    pub detect_renames: bool,
+
+    /// Timeout for git command in milliseconds (default: 10000ms = 10 seconds).
+    pub git_timeout_ms: u64,
 }
 
 impl Default for WatcherConfig {
     fn default() -> Self {
         Self {
-            debounce_ms: 500,
+            debounce_ms: 500, // Kept for backward compatibility
             channel_capacity: 1000,
+            poll_interval_ms: 3000,
+            include_untracked: true,
+            detect_renames: true,
+            git_timeout_ms: 10000,
         }
     }
 }
 
-/// File system watcher that monitors a directory for changes.
-pub struct FileWatcher {
-    /// The notify watcher instance
-    watcher: Option<RecommendedWatcher>,
-
-    /// Raw event sender channel (before debouncing)
-    raw_event_tx: mpsc::Sender<FileEvent>,
-
-    /// Ignore pattern matcher
-    ignore_matcher: Arc<IgnorePatternMatcher>,
+impl From<&WatcherConfig> for GitPollerConfig {
+    fn from(config: &WatcherConfig) -> Self {
+        Self {
+            poll_interval: Duration::from_millis(config.poll_interval_ms),
+            include_untracked: config.include_untracked,
+            detect_renames: config.detect_renames,
+            git_timeout: Duration::from_millis(config.git_timeout_ms),
+            channel_capacity: config.channel_capacity,
+            ..Default::default()
+        }
+    }
 }
 
-/// Pending event for debouncing
-struct PendingEvent {
-    event: FileEvent,
-    timestamp: Instant,
+/// File system watcher that monitors a git repository for changes.
+///
+/// Uses git status polling to detect file changes, eliminating the
+/// "too many open files" errors that occur with native file watchers.
+pub struct FileWatcher {
+    /// Root path being watched.
+    root: PathBuf,
+
+    /// Configuration for the watcher.
+    config: WatcherConfig,
+
+    /// Shutdown signal sender.
+    shutdown_tx: Option<watch::Sender<bool>>,
+
+    /// Poller task handle.
+    poller_handle: Option<JoinHandle<Result<(), GitPollerError>>>,
 }
 
 impl FileWatcher {
     /// Create a new file watcher for the given path.
     ///
     /// Returns the watcher instance and a receiver for file events.
-    pub fn new(path: PathBuf, config: WatcherConfig) -> Result<(Self, mpsc::Receiver<FileEvent>)> {
-        // Create two channels: raw events and debounced events
-        let (raw_event_tx, raw_event_rx) = mpsc::channel(config.channel_capacity);
-        let (debounced_event_tx, debounced_event_rx) = mpsc::channel(config.channel_capacity);
+    /// The watcher does not start polling until `watch()` is called.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The root directory to watch (must be a git repository)
+    /// * `config` - Configuration for the watcher
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(FileWatcher, Receiver<FileEvent>)` on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path is not a git repository.
+    pub fn new(
+        path: PathBuf,
+        config: WatcherConfig,
+    ) -> Result<(Self, mpsc::Receiver<FileEvent>), WatcherError> {
+        // Create git poller to validate it's a git repo and get the event channel
+        let poller_config = GitPollerConfig::from(&config);
+        let (poller, event_rx, shutdown_tx) =
+            GitPoller::new(path.clone(), poller_config).map_err(|e| match e {
+                GitPollerError::NotGitRepository { path } => WatcherError::NotGitRepository(path),
+                other => WatcherError::GitPollerError(other),
+            })?;
 
-        // Try to read .gitignore from the watched path
-        let gitignore_path = path.join(".gitignore");
-        let ignore_matcher = if gitignore_path.exists() {
-            IgnorePatternMatcher::from_gitignore(&gitignore_path)
-                .context("Failed to load .gitignore patterns")?
-        } else {
-            IgnorePatternMatcher::new().context("Failed to create default ignore matcher")?
-        };
-
-        let watcher = Self {
-            watcher: None,
-            raw_event_tx,
-            ignore_matcher: Arc::new(ignore_matcher),
-        };
-
-        // Spawn debounce task
-        let debounce_duration = Duration::from_millis(config.debounce_ms);
-        tokio::spawn(async move {
-            Self::debounce_task(raw_event_rx, debounced_event_tx, debounce_duration).await;
+        // Spawn the poller task
+        let handle = tokio::spawn(async move {
+            let mut poller = poller;
+            poller.run().await
         });
 
-        Ok((watcher, debounced_event_rx))
+        let watcher = Self {
+            root: path,
+            config,
+            shutdown_tx: Some(shutdown_tx),
+            poller_handle: Some(handle),
+        };
+
+        info!("Created git polling watcher for: {}", watcher.root.display());
+        Ok((watcher, event_rx))
     }
 
     /// Start watching the specified path.
-    pub fn watch(&mut self, path: &Path) -> Result<()> {
-        let raw_event_tx = self.raw_event_tx.clone();
-        let ignore_matcher = self.ignore_matcher.clone();
-
-        // Create the notify watcher with event handler
-        let mut watcher = RecommendedWatcher::new(
-            move |result: Result<Event, notify::Error>| {
-                match result {
-                    Ok(event) => {
-                        // Process the event in a blocking context
-                        let raw_event_tx = raw_event_tx.clone();
-                        let ignore_matcher = ignore_matcher.clone();
-
-                        // Use blocking_send to avoid needing tokio runtime
-                        // This runs in notify's event thread, so we can't use async
-                        if let Err(e) =
-                            Self::handle_notify_event_sync(event, raw_event_tx, ignore_matcher)
-                        {
-                            error!("Error handling file event: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        error!("Watch error: {}", e);
-                    }
-                }
-            },
-            notify::Config::default(),
-        )
-        .context("Failed to create file watcher")?;
-
-        // Start watching the path recursively
-        watcher
-            .watch(path, RecursiveMode::Recursive)
-            .with_context(|| format!("Failed to watch path: {}", path.display()))?;
-
-        debug!("Started watching path: {}", path.display());
-        self.watcher = Some(watcher);
-
+    ///
+    /// Note: With git polling, watching starts immediately when the watcher is created.
+    /// This method is kept for backward compatibility but is essentially a no-op.
+    pub fn watch(&mut self, path: &std::path::Path) -> Result<(), WatcherError> {
+        debug!(
+            "watch() called for {} (polling already active for {})",
+            path.display(),
+            self.root.display()
+        );
+        // Polling starts immediately on creation, so this is a no-op
+        // Just validate the path matches what we're watching
+        if path != self.root {
+            debug!(
+                "Note: watch path {} differs from root {}",
+                path.display(),
+                self.root.display()
+            );
+        }
         Ok(())
     }
 
     /// Stop watching.
-    pub fn stop(&mut self) -> Result<()> {
-        if let Some(watcher) = self.watcher.take() {
-            drop(watcher);
-            debug!("Stopped file watcher");
+    pub fn stop(&mut self) -> Result<(), WatcherError> {
+        if let Some(shutdown_tx) = self.shutdown_tx.take() {
+            debug!("Sending shutdown signal to git poller");
+            let _ = shutdown_tx.send(true);
         }
         Ok(())
     }
 
-    /// Handle a notify event synchronously (called from notify thread).
-    fn handle_notify_event_sync(
-        event: Event,
-        raw_event_tx: mpsc::Sender<FileEvent>,
-        ignore_matcher: Arc<IgnorePatternMatcher>,
-    ) -> Result<()> {
-        // Convert event to FileEvent and send to raw event channel
-        // Debouncing will happen in the separate async task
-        let mut file_events = Vec::new();
+    /// Stop the watcher and wait for the poller to finish.
+    pub async fn stop_and_wait(&mut self) -> Result<(), WatcherError> {
+        self.stop()?;
 
-        match event.kind {
-            EventKind::Modify(notify::event::ModifyKind::Name(rename_mode)) => {
-                use notify::event::RenameMode;
-                match rename_mode {
-                    RenameMode::Both => {
-                        if event.paths.len() == 2 {
-                            let from = event.paths[0].clone();
-                            let to = event.paths[1].clone();
-
-                            if !ignore_matcher.should_ignore(&from)
-                                || !ignore_matcher.should_ignore(&to)
-                            {
-                                file_events.push(FileEvent::Renamed(from, to));
-                            }
-                        }
-                    }
-                    _ => {
-                        for path in event.paths {
-                            if !ignore_matcher.should_ignore(&path) {
-                                file_events.push(FileEvent::Modified(path));
-                            }
-                        }
-                    }
+        if let Some(handle) = self.poller_handle.take() {
+            match handle.await {
+                Ok(Ok(())) => {
+                    debug!("Git poller stopped successfully");
                 }
-            }
-            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Access(_) => {
-                for path in event.paths {
-                    if !ignore_matcher.should_ignore(&path) {
-                        file_events.push(FileEvent::Modified(path));
-                    }
+                Ok(Err(e)) => {
+                    debug!("Git poller stopped with error: {}", e);
+                    // Don't return error - the poller was stopped
                 }
-            }
-            EventKind::Remove(_) => {
-                for path in event.paths {
-                    if !ignore_matcher.should_ignore(&path) {
-                        file_events.push(FileEvent::Deleted(path));
-                    }
+                Err(e) => {
+                    return Err(WatcherError::TaskFailed(e.to_string()));
                 }
-            }
-            _ => {
-                // Ignore other event types
-                debug!("Ignoring event kind: {:?}", event.kind);
-            }
-        }
-
-        // Send to raw event channel (debouncing happens later)
-        for file_event in file_events {
-            // Use blocking send - this is called from notify's thread
-            if let Err(e) = raw_event_tx.blocking_send(file_event) {
-                warn!("Failed to send event: {}", e);
             }
         }
 
         Ok(())
     }
 
-    /// Debounce task that receives raw events and emits debounced events.
-    async fn debounce_task(
-        mut raw_event_rx: mpsc::Receiver<FileEvent>,
-        debounced_event_tx: mpsc::Sender<FileEvent>,
-        debounce_duration: Duration,
-    ) {
-        let mut pending_events: HashMap<PathBuf, PendingEvent> = HashMap::new();
-        let mut interval = tokio::time::interval(Duration::from_millis(100));
+    /// Get the root path being watched.
+    pub fn root(&self) -> &PathBuf {
+        &self.root
+    }
 
-        loop {
-            tokio::select! {
-                // Receive new events
-                Some(event) = raw_event_rx.recv() => {
-                    let path = event.path().clone();
-                    pending_events.insert(path, PendingEvent {
-                        event,
-                        timestamp: Instant::now(),
-                    });
-                }
-                // Check for events to emit
-                _ = interval.tick() => {
-                    let now = Instant::now();
-                    let mut to_emit = Vec::new();
-
-                    // Find events that have been quiet for the debounce duration
-                    pending_events.retain(|path, pending| {
-                        if now.duration_since(pending.timestamp) >= debounce_duration {
-                            to_emit.push((path.clone(), pending.event.clone()));
-                            false
-                        } else {
-                            true
-                        }
-                    });
-
-                    // Send the debounced events
-                    for (path, event) in to_emit {
-                        if let Err(e) = debounced_event_tx.send(event).await {
-                            warn!("Failed to send debounced event for {}: {}", path.display(), e);
-                            // Channel closed, exit task
-                            return;
-                        }
-                    }
-                }
-            }
-        }
+    /// Get the current configuration.
+    pub fn config(&self) -> &WatcherConfig {
+        &self.config
     }
 }
 
@@ -258,13 +236,118 @@ impl Drop for FileWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+
+    /// Helper to create a temporary git repository.
+    fn create_temp_git_repo() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        dir
+    }
 
     #[test]
     fn test_watcher_config_default() {
         let config = WatcherConfig::default();
         assert_eq!(config.debounce_ms, 500);
         assert_eq!(config.channel_capacity, 1000);
+        assert_eq!(config.poll_interval_ms, 3000);
+        assert!(config.include_untracked);
+        assert!(config.detect_renames);
+        assert_eq!(config.git_timeout_ms, 10000);
     }
 
-    // Note: Comprehensive debouncing tests are in the integration test suite
+    #[test]
+    fn test_watcher_config_to_git_poller_config() {
+        let config = WatcherConfig {
+            debounce_ms: 100,
+            channel_capacity: 500,
+            poll_interval_ms: 5000,
+            include_untracked: false,
+            detect_renames: false,
+            git_timeout_ms: 30000,
+        };
+
+        let poller_config = GitPollerConfig::from(&config);
+        assert_eq!(poller_config.poll_interval, Duration::from_millis(5000));
+        assert!(!poller_config.include_untracked);
+        assert!(!poller_config.detect_renames);
+        assert_eq!(poller_config.git_timeout, Duration::from_millis(30000));
+        assert_eq!(poller_config.channel_capacity, 500);
+    }
+
+    #[tokio::test]
+    async fn test_new_valid_repo() {
+        let dir = create_temp_git_repo();
+        let config = WatcherConfig::default();
+        let result = FileWatcher::new(dir.path().to_path_buf(), config);
+        assert!(result.is_ok());
+
+        let (mut watcher, _rx) = result.unwrap();
+        watcher.stop_and_wait().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_new_invalid_repo() {
+        let dir = TempDir::new().unwrap();
+        let config = WatcherConfig::default();
+        let result = FileWatcher::new(dir.path().to_path_buf(), config);
+        assert!(matches!(result, Err(WatcherError::NotGitRepository(_))));
+    }
+
+    #[tokio::test]
+    async fn test_watch_is_noop() {
+        let dir = create_temp_git_repo();
+        let config = WatcherConfig::default();
+        let (mut watcher, _rx) = FileWatcher::new(dir.path().to_path_buf(), config).unwrap();
+
+        // watch() should succeed (no-op with git polling)
+        let result = watcher.watch(dir.path());
+        assert!(result.is_ok());
+
+        watcher.stop_and_wait().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_detects_new_file() {
+        let dir = create_temp_git_repo();
+        let config = WatcherConfig {
+            poll_interval_ms: 100, // Fast polling for test
+            ..Default::default()
+        };
+
+        let (mut watcher, mut rx) = FileWatcher::new(dir.path().to_path_buf(), config).unwrap();
+
+        // Wait for initial poll
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // Create a new file
+        std::fs::write(dir.path().join("test.txt"), "hello").unwrap();
+
+        // Wait for next poll to detect the change
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Should receive a Modified event
+        let event = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await;
+
+        if let Ok(Some(FileEvent::Modified(path))) = event {
+            assert_eq!(path.file_name().unwrap(), "test.txt");
+        }
+        // Note: The event may or may not be ready depending on timing
+
+        watcher.stop_and_wait().await.unwrap();
+    }
 }

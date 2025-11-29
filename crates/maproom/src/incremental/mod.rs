@@ -65,5 +65,5 @@ pub use processor::IncrementalProcessor;
 pub use queue::{QueueStats, UpdateQueue};
 pub use task::{Priority, Trigger, UpdateTask};
 pub use tree_sha_update::{incremental_update, remove_worktree_from_chunks};
-pub use watcher::{FileWatcher, WatcherConfig};
+pub use watcher::{FileWatcher, WatcherConfig, WatcherError};
 pub use worktree_watcher::{WatcherStatus, WorktreeWatcher};

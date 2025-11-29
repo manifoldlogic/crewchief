@@ -1,9 +1,9 @@
 # Ticket: GITPOLL-2001: Integrate GitPoller into watcher.rs
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,11 +29,11 @@ Reference: [architecture.md](../planning/architecture.md) - WorktreeWatcher Inte
 
 ## Acceptance Criteria
 
-- [ ] `FileWatcher` uses `GitPoller` internally instead of `notify::RecommendedWatcher`
-- [ ] Public interface unchanged (`watch()`, `stop()` methods if present)
-- [ ] `WatcherConfig` updated with git polling configuration options
-- [ ] Existing `FileEvent` emission preserved (drop-in replacement)
-- [ ] Existing code compiles without modification (backward compatible)
+- [x] `FileWatcher` uses `GitPoller` internally instead of `notify::RecommendedWatcher`
+- [x] Public interface unchanged (`watch()`, `stop()` methods if present)
+- [x] `WatcherConfig` updated with git polling configuration options
+- [x] Existing `FileEvent` emission preserved (drop-in replacement)
+- [x] Existing code compiles without modification (backward compatible)
 
 ## Technical Requirements
 
