@@ -1,8 +1,8 @@
 # Ticket: GITPOLL-2901: Integration Tests with Temp Git Repos
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
 - [ ] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
@@ -29,14 +29,14 @@ Reference: [quality-strategy.md](../planning/quality-strategy.md) - Integration 
 
 ## Acceptance Criteria
 
-- [ ] `TempGitRepo` test helper implemented
-- [ ] Test: new file creation detected
-- [ ] Test: file modification detected
-- [ ] Test: file deletion detected
-- [ ] Test: file rename detected
-- [ ] Test: non-git directory returns error
-- [ ] Test: recovery from git lock
-- [ ] All tests pass with `cargo test -p crewchief-maproom --test git_poller_integration`
+- [x] `TempGitRepo` test helper implemented
+- [x] Test: new file creation detected
+- [x] Test: file modification detected
+- [x] Test: file deletion detected
+- [x] Test: file rename detected
+- [x] Test: non-git directory returns error
+- [x] Test: recovery from git lock (updated: git status works with lock, test verifies this)
+- [x] All tests pass with `cargo test -p crewchief-maproom --test git_poller_integration`
 
 ## Technical Requirements
 

@@ -817,10 +817,10 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
-                let store = db::connect().await?;
-                // SQLite auto-migrates on connection, but we still run migrate for consistency
-                store.migrate().await?;
-                println!("✅ SQLite database is up to date (auto-migrates on connection)");
+                // connect() auto-runs migrations, so this command just ensures
+                // the database exists and is fully migrated
+                let _store = db::connect().await?;
+                println!("✅ SQLite database is up to date");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking
@@ -1485,10 +1485,13 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::bail!("--worktree requires --repo to be specified");
             }
 
+            eprintln!("[DEBUG] status: connecting to database...");
             let store = db::connect().await?;
+            eprintln!("[DEBUG] status: connected, querying status...");
 
             match status::get_status(Arc::new(store), repo, worktree).await {
                 Ok(status_data) => {
+                    eprintln!("[DEBUG] status: query complete, formatting output...");
                     if json {
                         let output = status::format_json(&status_data)?;
                         println!("{}", output);

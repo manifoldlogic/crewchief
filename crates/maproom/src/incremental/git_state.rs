@@ -132,19 +132,25 @@ impl GitState {
     /// Compare this state with a newer state and return the differences as FileEvents.
     ///
     /// The comparison logic:
+    /// - Files with Deleted status → Deleted event (git shows file was deleted)
     /// - Files in `new` but not in `self` → Modified event (new file appeared)
-    /// - Files in `self` but not in `new` → Deleted event (file disappeared)
+    /// - Files in `self` but not in `new` → Deleted event (file disappeared from git status)
     /// - Files in both with different status → Modified event
     /// - Renamed files → Renamed event
     pub fn diff(&self, new: &GitState) -> Vec<FileEvent> {
         let mut events = Vec::new();
 
-        // Check for new/modified files and renames
+        // Check for new/modified/deleted files and renames
         for (path, new_status) in &new.files {
             match new_status {
                 FileStatus::Renamed { from } => {
                     // Emit rename event
                     events.push(FileEvent::Renamed(from.clone(), path.clone()));
+                }
+                FileStatus::Deleted => {
+                    // Git shows file as deleted - always emit Deleted event
+                    // This handles committed files that were removed from worktree
+                    events.push(FileEvent::Deleted(path.clone()));
                 }
                 _ => {
                     match self.files.get(path) {
@@ -548,6 +554,20 @@ mod tests {
         let mut old = GitState::default();
         old.insert(PathBuf::from("deleted.rs"), FileStatus::Clean);
         let new = GitState::default();
+
+        let events = old.diff(&new);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(&events[0], FileEvent::Deleted(p) if p == Path::new("deleted.rs")));
+    }
+
+    #[test]
+    fn test_diff_file_with_deleted_status() {
+        // When git status shows a file as deleted (e.g., ` D file.rs`),
+        // we should emit a Deleted event even if the file wasn't in the old state.
+        // This happens when a committed file is removed from the worktree.
+        let old = GitState::default();
+        let mut new = GitState::default();
+        new.insert(PathBuf::from("deleted.rs"), FileStatus::Deleted);
 
         let events = old.diff(&new);
         assert_eq!(events.len(), 1);

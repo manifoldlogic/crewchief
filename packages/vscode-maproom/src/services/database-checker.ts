@@ -6,9 +6,13 @@
  */
 
 import { existsSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import * as vscode from 'vscode'
 import { homedir } from 'node:os'
-import { resolve, isAbsolute } from 'node:path'
+import { resolve, isAbsolute, join } from 'node:path'
+
+const execFileAsync = promisify(execFile)
 
 /**
  * Database configuration with path information
@@ -89,4 +93,110 @@ export function getDatabaseUnavailableMessage(config: DatabaseConfig): string {
     `The index will be created at ~/.maproom/maproom.db by default.\n` +
     `Or change the database path in Settings > Maproom > Database`
   )
+}
+
+/**
+ * Status response from crewchief-maproom status command
+ */
+interface StatusResponse {
+  repos: Array<{
+    name: string
+    worktrees: Array<{
+      name: string
+      chunk_count: number
+      last_updated: string | null
+    }>
+  }>
+}
+
+/**
+ * Get platform identifier for binary path
+ */
+function getPlatform(): string {
+  const platform = process.platform
+  const arch = process.arch
+
+  if (platform === 'darwin') {
+    return arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64'
+  } else if (platform === 'win32') {
+    return 'win32-x64'
+  } else {
+    return arch === 'arm64' ? 'linux-arm64' : 'linux-x64'
+  }
+}
+
+/**
+ * Get binary extension for current platform
+ */
+function getBinaryExtension(): string {
+  return process.platform === 'win32' ? '.exe' : ''
+}
+
+/**
+ * Check if a specific repository is indexed in the database
+ *
+ * Runs `crewchief-maproom status --repo <repoName> --json` and checks
+ * if the repo exists with at least one worktree containing chunks.
+ *
+ * @param extensionRoot - Extension root directory (for finding binary)
+ * @param databaseUrl - Database URL
+ * @param repoName - Repository name to check (e.g., "owner/repo")
+ * @returns Promise resolving to true if repo is indexed with chunks, false otherwise
+ */
+export async function checkRepoIndexed(
+  extensionRoot: string,
+  databaseUrl: string,
+  repoName: string
+): Promise<boolean> {
+  const platform = getPlatform()
+  const binaryName = `crewchief-maproom${getBinaryExtension()}`
+  const binaryPath = join(extensionRoot, 'bin', platform, binaryName)
+
+  // Check if binary exists
+  if (!existsSync(binaryPath)) {
+    console.log(`[checkRepoIndexed] Binary not found at: ${binaryPath}`)
+    return false
+  }
+
+  console.log(`[checkRepoIndexed] Running: ${binaryPath} status --repo "${repoName}" --json`)
+  console.log(`[checkRepoIndexed] Database URL: ${databaseUrl}`)
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      binaryPath,
+      ['status', '--repo', repoName, '--json'],
+      {
+        env: {
+          ...process.env,
+          MAPROOM_DATABASE_URL: databaseUrl,
+        },
+        timeout: 30000, // 30 second timeout (migration may be slow first time)
+      }
+    )
+
+    // Log stderr for debugging (binary debug output goes here)
+    if (stderr) {
+      console.log(`[checkRepoIndexed] stderr: ${stderr}`)
+    }
+
+    console.log(`[checkRepoIndexed] Got response, parsing JSON...`)
+    const status: StatusResponse = JSON.parse(stdout)
+
+    // Check if the repo exists and has at least one worktree with chunks
+    const repo = status.repos.find((r) => r.name === repoName)
+    if (!repo) {
+      console.log(`[checkRepoIndexed] Repo "${repoName}" not found in status response`)
+      return false
+    }
+
+    // Check if any worktree has chunks indexed
+    const hasChunks = repo.worktrees.some((wt) => wt.chunk_count > 0)
+    console.log(`[checkRepoIndexed] Repo "${repoName}" hasChunks: ${hasChunks}`)
+    return hasChunks
+  } catch (error: unknown) {
+    // Binary execution failed, JSON parse failed, or repo not found
+    const message = error instanceof Error ? error.message : String(error)
+    console.log(`[checkRepoIndexed] Error: ${message}`)
+    return false
+  }
 }

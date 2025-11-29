@@ -42,7 +42,9 @@ import {
   resolveDatabaseConfig,
   checkDatabaseAvailable,
   getDatabaseUrl,
+  checkRepoIndexed,
 } from './services/database-checker'
+import { getRepoName } from './utils/git'
 import {
   ensureOllamaModel,
   showOllamaNotRunningError,
@@ -249,9 +251,9 @@ async function initializeServices(
     outputChannel?.appendLine(`Checking database at ${dbConfig.path || dbConfig.url}...`)
     const dbAvailable = await checkDatabaseAvailable(dbConfig)
 
-    if (!dbAvailable) {
-      // Database not found - run initial scan to create it (zero-config experience)
-      outputChannel?.appendLine('Database not found - running initial scan...')
+    // Helper to run initial scan
+    const runScan = async (reason: string) => {
+      outputChannel?.appendLine(`${reason} - running initial scan...`)
       statusBar?.setState('indexing', 'Starting initial scan...')
 
       // Create secrets manager for API key resolution
@@ -289,10 +291,40 @@ async function initializeServices(
         outputChannel?.appendLine(`Initial scan failed: ${error.message}`)
         statusBar?.setState('error', 'Scan failed')
         vscode.window.showErrorMessage(`Maproom: Initial scan failed. ${error.message}`)
+        throw error // Re-throw to exit initialization
+      }
+    }
+
+    if (!dbAvailable) {
+      // Database not found - run initial scan to create it (zero-config experience)
+      try {
+        await runScan('Database not found')
+      } catch {
         return
       }
     } else {
       outputChannel?.appendLine('Database found')
+
+      // Database exists, but check if THIS repo is indexed
+      const repoName = await getRepoName(workspaceRoot)
+      outputChannel?.appendLine(`Checking if repo "${repoName}" is indexed...`)
+
+      const repoIndexed = await checkRepoIndexed(
+        context.extensionPath,
+        getDatabaseUrl(dbConfig),
+        repoName
+      )
+
+      if (!repoIndexed) {
+        // Database exists but this workspace/repo is not indexed
+        try {
+          await runScan(`Repo "${repoName}" not indexed`)
+        } catch {
+          return
+        }
+      } else {
+        outputChannel?.appendLine(`Repo "${repoName}" is already indexed`)
+      }
     }
 
     // Step 3: Run startup reconciliation

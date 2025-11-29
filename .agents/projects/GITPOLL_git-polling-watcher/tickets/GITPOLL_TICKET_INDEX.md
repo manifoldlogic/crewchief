@@ -8,13 +8,14 @@ Replace the notify-based file watcher with git status polling to eliminate "too 
 
 | Ticket | Title | Status | Agent |
 |--------|-------|--------|-------|
-| [GITPOLL-1001](GITPOLL-1001_git-state-module.md) | Implement GitState module | Pending | rust-indexer-engineer |
-| [GITPOLL-1002](GITPOLL-1002_git-poller-module.md) | Implement GitPoller module | Pending | rust-indexer-engineer |
-| [GITPOLL-1901](GITPOLL-1901_unit-tests.md) | Unit tests for parsing and diffing | Pending | rust-indexer-engineer |
-| [GITPOLL-2001](GITPOLL-2001_watcher-integration.md) | Integrate GitPoller into watcher.rs | Pending | rust-indexer-engineer |
-| [GITPOLL-2002](GITPOLL-2002_worktree-watcher-integration.md) | Update WorktreeWatcher integration | Pending | rust-indexer-engineer |
-| [GITPOLL-2901](GITPOLL-2901_integration-tests.md) | Integration tests with temp git repos | Pending | rust-indexer-engineer |
-| [GITPOLL-3001](GITPOLL-3001_cleanup-and-docs.md) | Cleanup and documentation | Pending | rust-indexer-engineer |
+| [GITPOLL-1001](GITPOLL-1001_git-state-module.md) | Implement GitState module | Complete | rust-indexer-engineer |
+| [GITPOLL-1002](GITPOLL-1002_git-poller-module.md) | Implement GitPoller module | Complete | rust-indexer-engineer |
+| [GITPOLL-1901](GITPOLL-1901_unit-tests.md) | Unit tests for parsing and diffing | Complete | rust-indexer-engineer |
+| [GITPOLL-2001](GITPOLL-2001_watcher-integration.md) | Integrate GitPoller into watcher.rs | Complete | rust-indexer-engineer |
+| [GITPOLL-2002](GITPOLL-2002_worktree-watcher-integration.md) | Update WorktreeWatcher integration | Complete | rust-indexer-engineer |
+| [GITPOLL-2901](GITPOLL-2901_integration-tests.md) | Integration tests with temp git repos | Complete | rust-indexer-engineer |
+| [GITPOLL-3001](GITPOLL-3001_cleanup-and-docs.md) | Cleanup and documentation | Complete | rust-indexer-engineer |
+| [GITPOLL-3002](GITPOLL-3002_head-commit-detection.md) | HEAD commit detection | Pending | rust-indexer-engineer |
 
 ## Phases
 
@@ -39,6 +40,7 @@ Wire the new components into existing watcher infrastructure.
 Remove old implementation and finalize documentation.
 
 - **GITPOLL-3001**: Remove notify dependency, update documentation
+- **GITPOLL-3002**: HEAD commit detection (enhancement)
 
 ## Dependencies
 

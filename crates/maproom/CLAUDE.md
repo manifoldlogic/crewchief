@@ -269,6 +269,55 @@ store.find_imports(chunk_id, ImportDirection::Incoming, None).await?;
 
 Uses recursive CTEs with cycle detection. Default depth=3, hard max=10.
 
+## File Watching
+
+Maproom uses git-based polling for file change detection in the incremental indexer.
+
+### How It Works
+
+- Polls `git status --porcelain` at configurable intervals (default: 3 seconds)
+- Compares state between polls to detect changes
+- Emits FileEvent (Modified, Deleted, Renamed) for downstream processing
+- Automatically respects `.gitignore` patterns
+
+### Configuration
+
+```rust
+WatcherConfig {
+    poll_interval_ms: 3000,    // Polling interval in milliseconds
+    include_untracked: true,   // Watch untracked files (respects .gitignore)
+    detect_renames: true,      // Detect file renames via git
+    git_timeout_ms: 10000,     // Timeout for git command
+}
+```
+
+### Why Git Polling?
+
+The previous `notify`-based approach caused "too many open files" (EMFILE) errors on large repositories because it created file descriptors for every watched directory. Git polling:
+
+- Uses zero file descriptors for directory watching
+- Automatically respects `.gitignore`
+- Works consistently across platforms
+- Trades instant detection for 2-5s latency (acceptable for dev workflows)
+
+### Requirements
+
+- Git must be installed and in PATH
+- Must be run in a git repository
+- Returns error for non-git directories
+
+### Module Structure
+
+```
+src/incremental/
+├── mod.rs           # Module exports
+├── events.rs        # FileEvent and IndexingEvent types
+├── watcher.rs       # FileWatcher (uses git polling internally)
+├── git_state.rs     # GitState parsing and diffing
+├── git_poller.rs    # GitPoller async loop
+└── worktree_watcher.rs  # Multi-worktree coordination
+```
+
 ## Known Limitations
 
 - 1536-dim embeddings only (OpenAI/Vertex compatible)

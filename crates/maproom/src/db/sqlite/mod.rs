@@ -92,11 +92,19 @@ impl SqliteStore {
             }
         }
 
-        Ok(Self {
+        let store = Self {
             pool,
             vec_available: Arc::new(AtomicBool::new(false)),
             vec_checked: Arc::new(AtomicBool::new(false)),
-        })
+        };
+
+        // Auto-run migrations on connect to ensure schema is up to date
+        // This is idempotent - migrations track applied versions and skip duplicates
+        eprintln!("[DEBUG] SqliteStore::connect: running migrations...");
+        store.migrate().await.context("Failed to run database migrations")?;
+        eprintln!("[DEBUG] SqliteStore::connect: migrations complete");
+
+        Ok(store)
     }
 
     // Helper to run a blocking closure with a connection

@@ -124,7 +124,9 @@ impl From<GitStateError> for GitPollerError {
 /// Git-based file change poller.
 ///
 /// Monitors a git repository for file changes by periodically running
-/// `git status --porcelain` and comparing state between polls.
+/// `git status --porcelain` and comparing state between polls. Also tracks
+/// HEAD commit changes to detect files that are created/modified and committed
+/// within a single poll interval.
 pub struct GitPoller {
     /// Root directory of the git repository.
     root: PathBuf,
@@ -134,6 +136,10 @@ pub struct GitPoller {
 
     /// Previous git state for comparison.
     previous_state: GitState,
+
+    /// Previous HEAD commit for detecting commits between polls.
+    /// None if we haven't polled yet or if the repo has no commits.
+    previous_head: Option<String>,
 
     /// Channel sender for file events.
     event_tx: mpsc::Sender<FileEvent>,
@@ -174,6 +180,7 @@ impl GitPoller {
             root,
             config,
             previous_state: GitState::default(),
+            previous_head: None,
             event_tx,
             shutdown_rx,
         };
@@ -195,7 +202,9 @@ impl GitPoller {
                     match self.poll_with_retry().await {
                         Ok(events) => {
                             for event in events {
-                                if self.event_tx.send(event).await.is_err() {
+                                // Convert relative paths to absolute paths
+                                let absolute_event = self.make_event_absolute(event);
+                                if self.event_tx.send(absolute_event).await.is_err() {
                                     // Receiver dropped, stop polling
                                     return Err(GitPollerError::ChannelClosed);
                                 }
@@ -223,14 +232,10 @@ impl GitPoller {
 
     /// Execute a single poll cycle without retry logic.
     ///
-    /// This is useful for testing and one-off polling.
+    /// This is useful for testing and one-off polling. Includes HEAD tracking
+    /// to detect files changed in commits between polls.
     pub async fn poll_once(&mut self) -> Result<Vec<FileEvent>, GitPollerError> {
-        let output = self.run_git_status().await?;
-        let new_state = GitState::from_git_status(&output)?;
-
-        let events = self.previous_state.diff(&new_state);
-        self.previous_state = new_state;
-
+        let events = self.poll_once_inner().await?;
         debug!("poll_once: {} events detected", events.len());
         Ok(events)
     }
@@ -263,13 +268,117 @@ impl GitPoller {
 
     /// Inner poll logic without public exposure.
     async fn poll_once_inner(&mut self) -> Result<Vec<FileEvent>, GitPollerError> {
+        let mut events = Vec::new();
+
+        // Check for HEAD changes (commits that occurred between polls)
+        if let Ok(current_head) = self.get_head().await {
+            if let Some(ref prev_head) = self.previous_head {
+                if &current_head != prev_head {
+                    // HEAD changed - commits occurred between polls
+                    debug!(
+                        "HEAD changed from {} to {}",
+                        &prev_head[..8.min(prev_head.len())],
+                        &current_head[..8.min(current_head.len())]
+                    );
+                    match self.get_commit_changes(prev_head, &current_head).await {
+                        Ok(changed_files) => {
+                            for file in changed_files {
+                                events.push(FileEvent::Modified(file));
+                            }
+                        }
+                        Err(e) => {
+                            // Log but continue - old HEAD may not exist (force push, shallow clone)
+                            warn!("failed to get commit changes: {}", e);
+                        }
+                    }
+                }
+            }
+            self.previous_head = Some(current_head);
+        }
+        // If get_head fails (empty repo), just skip HEAD tracking
+
+        // Standard git status polling
         let output = self.run_git_status().await?;
         let new_state = GitState::from_git_status(&output)?;
 
-        let events = self.previous_state.diff(&new_state);
+        let status_events = self.previous_state.diff(&new_state);
         self.previous_state = new_state;
 
+        events.extend(status_events);
         Ok(events)
+    }
+
+    /// Get the current HEAD commit hash.
+    ///
+    /// Returns an error if the repository has no commits (empty repo).
+    async fn get_head(&self) -> Result<String, GitPollerError> {
+        let output = tokio::time::timeout(
+            self.config.git_timeout,
+            Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .current_dir(&self.root)
+                .output(),
+        )
+        .await
+        .map_err(|_| GitPollerError::GitTimeout {
+            timeout: self.config.git_timeout,
+        })?
+        .map_err(|e| GitPollerError::GitExecutionError {
+            stderr: e.to_string(),
+        })?;
+
+        if !output.status.success() {
+            // May fail on empty repo (no commits yet)
+            return Err(GitPollerError::GitExecutionError {
+                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            });
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    /// Get files changed between two commits.
+    ///
+    /// Returns relative paths of files that changed between the two commits.
+    /// If the diff fails (e.g., old commit doesn't exist after force push),
+    /// returns an empty vec rather than failing.
+    async fn get_commit_changes(
+        &self,
+        old: &str,
+        new: &str,
+    ) -> Result<Vec<PathBuf>, GitPollerError> {
+        let output = tokio::time::timeout(
+            self.config.git_timeout,
+            Command::new("git")
+                .args(["diff", "--name-only", &format!("{}..{}", old, new)])
+                .current_dir(&self.root)
+                .output(),
+        )
+        .await
+        .map_err(|_| GitPollerError::GitTimeout {
+            timeout: self.config.git_timeout,
+        })?
+        .map_err(|e| GitPollerError::GitExecutionError {
+            stderr: e.to_string(),
+        })?;
+
+        if !output.status.success() {
+            // Old commit may not exist (force push, shallow clone)
+            // Return empty to let the caller continue with status-only events
+            debug!(
+                "git diff failed (old commit may not exist): {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Ok(vec![]);
+        }
+
+        let files = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter(|line| !line.is_empty())
+            .map(|line| PathBuf::from(line.trim()))
+            .collect();
+
+        Ok(files)
     }
 
     /// Execute git status command with timeout.
@@ -279,6 +388,12 @@ impl GitPoller {
 
         if self.config.detect_renames {
             cmd.arg("-M");
+        }
+
+        // Use -u to show individual untracked files instead of just directory names
+        // This ensures nested files are reported with full paths
+        if self.config.include_untracked {
+            cmd.arg("-u");
         }
 
         cmd.current_dir(&self.root);
@@ -325,6 +440,20 @@ impl GitPoller {
     pub fn stats(&self) -> GitPollerStats {
         GitPollerStats {
             tracked_files: self.previous_state.len(),
+        }
+    }
+
+    /// Convert relative paths in a FileEvent to absolute paths.
+    ///
+    /// Git status returns relative paths from the repository root.
+    /// Consumers expect absolute paths, so we need to join with self.root.
+    fn make_event_absolute(&self, event: FileEvent) -> FileEvent {
+        match event {
+            FileEvent::Modified(path) => FileEvent::Modified(self.root.join(path)),
+            FileEvent::Deleted(path) => FileEvent::Deleted(self.root.join(path)),
+            FileEvent::Renamed(old, new) => {
+                FileEvent::Renamed(self.root.join(old), self.root.join(new))
+            }
         }
     }
 }
@@ -534,5 +663,272 @@ mod tests {
         };
         let poller_err: GitPollerError = git_state_err.into();
         assert!(matches!(poller_err, GitPollerError::ParseError { .. }));
+    }
+
+    // ===== HEAD commit detection tests =====
+
+    #[tokio::test]
+    async fn test_detects_file_created_and_committed_within_poll_interval() {
+        let dir = create_temp_git_repo();
+
+        // Create initial commit so repo has a HEAD
+        let initial_file = dir.path().join("initial.txt");
+        std::fs::write(&initial_file, "initial").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "initial.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "initial commit"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Create poller and do initial poll to capture baseline HEAD
+        let config = GitPollerConfig::default();
+        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let _ = poller.poll_once().await.unwrap();
+
+        // Simulate "create and commit within poll interval" scenario:
+        // Create a new file, add it, and commit - all before next poll
+        let new_file = dir.path().join("new_file.txt");
+        std::fs::write(&new_file, "new content").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "new_file.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "add new file"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Now poll - should detect the new file through HEAD tracking
+        let events = poller.poll_once().await.unwrap();
+
+        // Should have exactly one Modified event for the new file
+        assert!(
+            !events.is_empty(),
+            "Expected events for committed file, got none"
+        );
+
+        let has_new_file_event = events.iter().any(|e| match e {
+            FileEvent::Modified(path) => path.file_name().unwrap() == "new_file.txt",
+            _ => false,
+        });
+        assert!(
+            has_new_file_event,
+            "Expected Modified event for new_file.txt, got: {:?}",
+            events
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detects_file_modified_and_committed_within_poll_interval() {
+        let dir = create_temp_git_repo();
+
+        // Create and commit initial file
+        let file_path = dir.path().join("test.txt");
+        std::fs::write(&file_path, "initial").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "test.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "initial commit"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Initial poll to capture baseline
+        let config = GitPollerConfig::default();
+        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let _ = poller.poll_once().await.unwrap();
+
+        // Modify, stage, and commit - all before next poll
+        std::fs::write(&file_path, "modified content").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "test.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "modify file"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Poll should detect the modification through HEAD tracking
+        let events = poller.poll_once().await.unwrap();
+
+        let has_test_file_event = events.iter().any(|e| match e {
+            FileEvent::Modified(path) => path.file_name().unwrap() == "test.txt",
+            _ => false,
+        });
+        assert!(
+            has_test_file_event,
+            "Expected Modified event for test.txt, got: {:?}",
+            events
+        );
+    }
+
+    #[tokio::test]
+    async fn test_multiple_commits_within_poll_interval() {
+        let dir = create_temp_git_repo();
+
+        // Create initial commit
+        let initial = dir.path().join("initial.txt");
+        std::fs::write(&initial, "initial").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "initial.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Initial poll
+        let config = GitPollerConfig::default();
+        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let _ = poller.poll_once().await.unwrap();
+
+        // Multiple commits before next poll
+        std::fs::write(dir.path().join("file1.txt"), "content1").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "file1.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "add file1"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        std::fs::write(dir.path().join("file2.txt"), "content2").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "file2.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "add file2"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Poll should detect both files
+        let events = poller.poll_once().await.unwrap();
+
+        let file_names: Vec<String> = events
+            .iter()
+            .filter_map(|e| match e {
+                FileEvent::Modified(path) => path.file_name().map(|n| n.to_string_lossy().to_string()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            file_names.contains(&"file1.txt".to_string()),
+            "Expected file1.txt in events: {:?}",
+            file_names
+        );
+        assert!(
+            file_names.contains(&"file2.txt".to_string()),
+            "Expected file2.txt in events: {:?}",
+            file_names
+        );
+    }
+
+    #[tokio::test]
+    async fn test_empty_repo_no_head_tracking() {
+        let dir = create_temp_git_repo();
+
+        // Repo has no commits, so no HEAD
+        let config = GitPollerConfig::default();
+        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+
+        // Should not crash on empty repo
+        let events = poller.poll_once().await.unwrap();
+        assert!(events.is_empty());
+
+        // Still shouldn't crash on subsequent poll
+        let events = poller.poll_once().await.unwrap();
+        assert!(events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_first_poll_records_head_no_diff() {
+        let dir = create_temp_git_repo();
+
+        // Create initial commit
+        std::fs::write(dir.path().join("initial.txt"), "content").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "initial.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // First poll should not emit events for the existing commit
+        // (we only track changes, not initial state)
+        let config = GitPollerConfig::default();
+        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+
+        let events = poller.poll_once().await.unwrap();
+        // No events because nothing changed and we just recorded the HEAD
+        assert!(events.is_empty(), "Expected no events on first poll, got: {:?}", events);
+
+        // Verify previous_head was recorded
+        assert!(poller.previous_head.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_head_unchanged_no_extra_events() {
+        let dir = create_temp_git_repo();
+
+        // Create initial commit
+        std::fs::write(dir.path().join("initial.txt"), "content").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "initial.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let config = GitPollerConfig::default();
+        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+
+        // First poll
+        let _ = poller.poll_once().await.unwrap();
+
+        // Create untracked file (no commit)
+        std::fs::write(dir.path().join("untracked.txt"), "untracked").unwrap();
+
+        // Second poll - HEAD hasn't changed, should only get status-based events
+        let events = poller.poll_once().await.unwrap();
+
+        // Should have exactly one event for the untracked file
+        assert_eq!(events.len(), 1, "Expected 1 event, got: {:?}", events);
+        match &events[0] {
+            FileEvent::Modified(path) => {
+                assert_eq!(path.file_name().unwrap(), "untracked.txt");
+            }
+            _ => panic!("Expected Modified event for untracked.txt"),
+        }
     }
 }
