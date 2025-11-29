@@ -1,4 +1,12 @@
 {
+  "extraKnownMarketplaces": {
+    "crewchief": {
+      "source": {
+        "source": "directory",
+        "path": ".crewchief/claude-code-plugins/.claude-plugin"
+      }
+    }
+  },
   "enabledPlugins": {
     "workstream@crewchief": true
   }
