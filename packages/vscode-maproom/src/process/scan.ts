@@ -217,8 +217,8 @@ async function spawnScanProcess(
       }
     }
 
-    // Spawn scan process
-    const args = ['scan', '--path', workspaceRoot]
+    // Spawn scan process with --json flag for structured output
+    const args = ['scan', '--path', workspaceRoot, '--json']
     log(outputChannel, `Spawning: ${binaryPath} ${args.join(' ')}`)
 
     const child = spawn(binaryPath, args, {

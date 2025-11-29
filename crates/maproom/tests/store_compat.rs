@@ -67,14 +67,15 @@ async fn run_store_tests(store: Arc<dyn VectorStore>, name: &str) -> Result<()> 
         worktree_id,
     };
 
-    let chunk_id = store.insert_chunk(&chunk).await?;
+    let _chunk_id = store.insert_chunk(&chunk).await?;
 
-    // 4. Insert Embeddings
+    // 4. Insert Embeddings using blob_sha-based API
     // 1536 dim random vector
     let mut rng = rand::thread_rng();
     let embedding: Vec<f32> = (0..1536).map(|_| rng.gen()).collect();
+    // Use the content-based upsert_embedding() API with blob_sha
     store
-        .upsert_embeddings(chunk_id, Some(&embedding), None, 1536)
+        .upsert_embedding("test_blob_sha", &embedding, "test-provider")
         .await?;
 
     // 5. Search (FTS)

@@ -14,6 +14,8 @@ pub enum OutputMode {
     Minimal,
     /// Detailed, verbose output
     Verbose,
+    /// JSON output for programmatic consumption (VSCode extension)
+    Json,
 }
 
 /// Tracks and displays progress for indexing operations
@@ -22,7 +24,7 @@ pub enum OutputMode {
 /// Uses atomic counters for file/chunk counts and throttling to
 /// prevent output flooding.
 pub struct ProgressTracker {
-    _mode: OutputMode,
+    mode: OutputMode,
     is_tty: bool,
     start_time: Instant,
     total_files: Mutex<Option<usize>>,
@@ -50,7 +52,7 @@ impl ProgressTracker {
         let is_tty = atty::is(atty::Stream::Stdout);
 
         Self {
-            _mode: mode,
+            mode,
             is_tty,
             start_time: Instant::now(),
             total_files: Mutex::new(None),
@@ -126,6 +128,7 @@ impl ProgressTracker {
     /// Print current progress
     ///
     /// Format depends on TTY status and output mode:
+    /// - Json: Outputs NDJSON progress events
     /// - TTY: Overwrites line with \r
     /// - Non-TTY: Prints new line every 10% progress
     pub fn print_progress(&self) {
@@ -134,6 +137,24 @@ impl ProgressTracker {
 
         let total_files = self.total_files.lock().ok().and_then(|t| *t);
         let total_chunks = self.total_chunks.lock().ok().and_then(|t| *t);
+
+        // JSON mode: emit progress event
+        if self.mode == OutputMode::Json {
+            if let Some(total) = total_files {
+                let elapsed = self.start_time.elapsed().as_millis() as u64;
+                let percent = if total > 0 {
+                    (files_processed as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                // Emit JSON progress event
+                println!(
+                    r#"{{"type":"progress","files":{},"complete":{},"percent":{:.1},"elapsed":{}}}"#,
+                    total, files_processed, percent, elapsed
+                );
+            }
+            return;
+        }
 
         if self.is_tty {
             // TTY mode: overwrite line
@@ -191,8 +212,21 @@ impl ProgressTracker {
     /// Print final timing summary
     ///
     /// Prints completion message with total elapsed time.
+    /// In JSON mode, emits a complete event.
     pub fn finish(&self) {
         let elapsed = self.start_time.elapsed();
+        let total_files = self.total_files.lock().ok().and_then(|t| *t).unwrap_or(0);
+
+        // JSON mode: emit complete event
+        if self.mode == OutputMode::Json {
+            let duration_ms = elapsed.as_millis() as u64;
+            let timestamp = chrono::Utc::now().to_rfc3339();
+            println!(
+                r#"{{"type":"complete","files":{},"duration":{},"elapsed":{},"timestamp":"{}"}}"#,
+                total_files, duration_ms, duration_ms, timestamp
+            );
+            return;
+        }
 
         if self.is_tty {
             // Clear the progress line
@@ -263,6 +297,25 @@ impl ProgressTracker {
     pub fn chunks_processed(&self) -> usize {
         self.processed_chunks.load(Ordering::Relaxed)
     }
+
+    /// Check if the tracker is in JSON output mode
+    ///
+    /// Returns true if the tracker was created with OutputMode::Json,
+    /// which is used by the VSCode extension for programmatic consumption.
+    ///
+    /// # Example
+    /// ```
+    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    ///
+    /// let json_tracker = ProgressTracker::new(OutputMode::Json);
+    /// assert!(json_tracker.is_json_mode());
+    ///
+    /// let normal_tracker = ProgressTracker::new(OutputMode::Minimal);
+    /// assert!(!normal_tracker.is_json_mode());
+    /// ```
+    pub fn is_json_mode(&self) -> bool {
+        self.mode == OutputMode::Json
+    }
 }
 
 #[cfg(test)]
@@ -274,7 +327,7 @@ mod tests {
     #[test]
     fn test_new_creates_tracker() {
         let tracker = ProgressTracker::new(OutputMode::Minimal);
-        assert_eq!(tracker._mode, OutputMode::Minimal);
+        assert_eq!(tracker.mode, OutputMode::Minimal);
         assert_eq!(tracker.processed_files.load(Ordering::Relaxed), 0);
         assert_eq!(tracker.processed_chunks.load(Ordering::Relaxed), 0);
     }
@@ -381,13 +434,13 @@ mod tests {
     #[test]
     fn test_output_mode_minimal() {
         let tracker = ProgressTracker::new(OutputMode::Minimal);
-        assert_eq!(tracker._mode, OutputMode::Minimal);
+        assert_eq!(tracker.mode, OutputMode::Minimal);
     }
 
     #[test]
     fn test_output_mode_verbose() {
         let tracker = ProgressTracker::new(OutputMode::Verbose);
-        assert_eq!(tracker._mode, OutputMode::Verbose);
+        assert_eq!(tracker.mode, OutputMode::Verbose);
     }
 
     #[test]

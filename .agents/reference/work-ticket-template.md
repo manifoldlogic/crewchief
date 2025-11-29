@@ -2,6 +2,8 @@
 // Ticket numbers are prefaced with their phase number
 // e.g., phase 2 starts with SLUG-2001_ticket-name.md
 
+// Tickets should be created by the ticket-creator agent.
+
 # Ticket: [TICKET-ID]: [Title]
 
 ## Status

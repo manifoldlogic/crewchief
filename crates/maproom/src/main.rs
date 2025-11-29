@@ -308,6 +308,9 @@ enum Commands {
         /// Show detailed output (currently same as default, reserved for future enhancements)
         #[arg(long)]
         verbose: bool,
+        /// Output progress as JSON events (for programmatic consumption by VSCode extension)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Upsert a set of files at a given commit
@@ -926,6 +929,7 @@ async fn main() -> anyhow::Result<()> {
             embedding_batch_size,
             provider,
             verbose,
+            json,
         } => {
 
             // Get git defaults if not provided
@@ -943,19 +947,25 @@ async fn main() -> anyhow::Result<()> {
                 repo, worktree, commit, force, generate_embeddings
             );
 
-            // Log scan mode for user awareness
+            // Log scan mode for user awareness (suppress human output in JSON mode)
             if force {
                 tracing::info!("🔄 Force flag enabled - performing full repository scan");
-                println!("🔄 Full scan mode (--force flag enabled)");
+                if !json {
+                    println!("🔄 Full scan mode (--force flag enabled)");
+                }
             } else {
                 tracing::info!(
                     "⚡ Incremental mode - only scanning changed files (use --force for full scan)"
                 );
-                println!("⚡ Incremental scan mode (use --force for full scan)");
+                if !json {
+                    println!("⚡ Incremental scan mode (use --force for full scan)");
+                }
             }
 
             // Create progress tracker
-            let mode = if verbose {
+            let mode = if json {
+                OutputMode::Json
+            } else if verbose {
                 OutputMode::Verbose
             } else {
                 OutputMode::Minimal
@@ -1029,7 +1039,12 @@ async fn main() -> anyhow::Result<()> {
                         // Get last indexed tree SHA
                         match store.get_last_indexed_tree(wt_id).await {
                             Ok(last_sha) if last_sha == *current_sha && !force => {
-                                println!("✓ No changes detected (tree SHA match), skipping scan");
+                                if json {
+                                    // In JSON mode, emit complete event with 0 files
+                                    println!(r#"{{"type":"complete","files":0,"duration":0,"elapsed":0,"timestamp":"{}"}}"#, chrono::Utc::now().to_rfc3339());
+                                } else {
+                                    println!("✓ No changes detected (tree SHA match), skipping scan");
+                                }
                                 tracing::info!(
                                     "Scan skipped: tree {} already indexed",
                                     current_sha
@@ -1072,7 +1087,7 @@ async fn main() -> anyhow::Result<()> {
             if generate_embeddings {
                 match auto_generate_embeddings(embedding_batch_size, provider).await {
                     Ok(stats) => {
-                        if stats.total_chunks > 0 {
+                        if stats.total_chunks > 0 && !json {
                             println!("\n📊 Embedding Generation Summary:");
                             println!("   {}", stats.summary());
                         }
@@ -1080,8 +1095,13 @@ async fn main() -> anyhow::Result<()> {
                     Err(e) => {
                         // Don't fail the entire scan if embeddings fail
                         tracing::warn!("Embedding generation failed: {}", e);
-                        println!("\n⚠️  Warning: Embedding generation failed: {}", e);
-                        println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
+                        if json {
+                            // In JSON mode, emit error event
+                            println!(r#"{{"type":"error","message":"Embedding generation failed: {}","error_type":"embedding"}}"#, e);
+                        } else {
+                            println!("\n⚠️  Warning: Embedding generation failed: {}", e);
+                            println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
+                        }
                     }
                 }
             }

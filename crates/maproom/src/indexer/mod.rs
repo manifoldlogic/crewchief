@@ -259,13 +259,17 @@ pub async fn scan_worktree(
     let mut language_counts: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
-    println!(
-        "🔍 Scanning worktree: {} @ {}",
-        worktree,
-        &commit[..8.min(commit.len())]
-    );
-    println!("   Repository: {}", repo);
-    println!("   Path: {}", root_abs.display());
+    // Suppress human-readable output in JSON mode (for VSCode extension)
+    let json_mode = progress.as_ref().map(|p| p.is_json_mode()).unwrap_or(false);
+    if !json_mode {
+        println!(
+            "🔍 Scanning worktree: {} @ {}",
+            worktree,
+            &commit[..8.min(commit.len())]
+        );
+        println!("   Repository: {}", repo);
+        println!("   Path: {}", root_abs.display());
+    }
 
     let mut walk = WalkBuilder::new(&root_abs);
     walk.hidden(false)
@@ -439,42 +443,46 @@ pub async fn scan_worktree(
     if let Some(p) = &progress {
         p.finish();
     } else {
-        // If no progress tracker, show timing manually
-        let elapsed = start_time.elapsed();
-        println!("\n✅ Completed in {:.1}s", elapsed.as_secs_f64());
+        // If no progress tracker, show timing manually (not in JSON mode)
+        if !json_mode {
+            let elapsed = start_time.elapsed();
+            println!("\n✅ Completed in {:.1}s", elapsed.as_secs_f64());
+        }
     }
 
-    // Print summary
-    println!("\n✅ Scan completed successfully!");
-    println!("   Files processed: {}", files_processed);
-    if files_skipped > 0 {
-        println!("   Files skipped: {}", files_skipped);
-    }
-    println!("   Total chunks: {}", total_chunks);
-    println!("   Total size: {:.2} MB", total_bytes as f64 / 1_048_576.0);
+    // Print summary (suppress in JSON mode)
+    if !json_mode {
+        println!("\n✅ Scan completed successfully!");
+        println!("   Files processed: {}", files_processed);
+        if files_skipped > 0 {
+            println!("   Files skipped: {}", files_skipped);
+        }
+        println!("   Total chunks: {}", total_chunks);
+        println!("   Total size: {:.2} MB", total_bytes as f64 / 1_048_576.0);
 
-    if !language_counts.is_empty() {
-        println!("\n   Languages indexed:");
-        let mut langs: Vec<_> = language_counts.iter().collect();
-        langs.sort_by(|a, b| b.1.cmp(a.1));
-        for (lang, count) in langs {
-            println!(
-                "     {} {}: {}",
-                match lang.as_str() {
-                    "ts" | "tsx" => "📘",
-                    "js" | "jsx" => "📙",
-                    "rs" => "🦀",
-                    "py" => "🐍",
-                    "go" => "🔷",
-                    "md" => "📝",
-                    "json" => "📋",
-                    "yaml" | "yml" => "📄",
-                    "toml" => "⚙️",
-                    _ => "📄",
-                },
-                lang,
-                count
-            );
+        if !language_counts.is_empty() {
+            println!("\n   Languages indexed:");
+            let mut langs: Vec<_> = language_counts.iter().collect();
+            langs.sort_by(|a, b| b.1.cmp(a.1));
+            for (lang, count) in langs {
+                println!(
+                    "     {} {}: {}",
+                    match lang.as_str() {
+                        "ts" | "tsx" => "📘",
+                        "js" | "jsx" => "📙",
+                        "rs" => "🦀",
+                        "py" => "🐍",
+                        "go" => "🔷",
+                        "md" => "📝",
+                        "json" => "📋",
+                        "yaml" | "yml" => "📄",
+                        "toml" => "⚙️",
+                        _ => "📄",
+                    },
+                    lang,
+                    count
+                );
+            }
         }
     }
 

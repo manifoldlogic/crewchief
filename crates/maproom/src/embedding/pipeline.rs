@@ -197,23 +197,6 @@ impl EmbeddingPipeline {
         Ok(count as usize)
     }
 
-    /// Populate code_embeddings cache with newly generated embedding.
-    ///
-    /// This enables embedding reuse across worktrees when chunks have the same blob_sha.
-    /// Uses ON CONFLICT DO NOTHING to handle concurrent inserts safely.
-    async fn populate_embedding_cache(
-        &self,
-        store: &SqliteStore,
-        blob_sha: &str,
-        code_embedding: &[f32],
-    ) -> Result<()> {
-        store
-            .upsert_embedding(blob_sha, code_embedding, "text-embedding-3-small")
-            .await
-            .context("Failed to populate code_embeddings cache")?;
-
-        Ok(())
-    }
 
     /// Run the embedding generation pipeline.
     pub async fn run(&self, store: &SqliteStore) -> Result<PipelineStats> {
@@ -422,17 +405,10 @@ impl EmbeddingPipeline {
         // Write to database if not dry run
         if !self.config.dry_run {
             for (i, chunk) in batch.iter().enumerate() {
-                self.update_chunk_embeddings(
-                    store,
-                    chunk.id,
-                    &code_embeddings[i],
-                    &text_embeddings[i],
-                )
-                .await?;
-
-                // Populate code_embeddings cache for deduplication
+                // Store embedding using blob_sha for deduplication
                 if let Some(blob_sha) = &chunk.blob_sha {
-                    self.populate_embedding_cache(store, blob_sha, &code_embeddings[i])
+                    store
+                        .upsert_embedding(blob_sha, &code_embeddings[i], &self.provider_name)
                         .await?;
                 }
             }
@@ -506,47 +482,6 @@ impl EmbeddingPipeline {
         Ok(())
     }
 
-    /// Update chunk embeddings in database.
-    async fn update_chunk_embeddings(
-        &self,
-        store: &SqliteStore,
-        chunk_id: i64,
-        code_embedding: &[f32],
-        text_embedding: &[f32],
-    ) -> Result<()> {
-        debug!(
-            "Updating embeddings for chunk {} (code_dim={}, text_dim={}, provider={}, dimension={})",
-            chunk_id,
-            code_embedding.len(),
-            text_embedding.len(),
-            self.provider_name,
-            self.dimension
-        );
-
-        store
-            .upsert_embeddings(
-                chunk_id,
-                Some(code_embedding),
-                Some(text_embedding),
-                self.dimension,
-            )
-            .await
-            .map_err(|e| {
-                error!(
-                    "Failed to update embeddings for chunk {}: Provider={}, Expected dimension={}, Code dim={}, Text dim={}, Error: {:?}",
-                    chunk_id,
-                    self.provider_name,
-                    self.dimension,
-                    code_embedding.len(),
-                    text_embedding.len(),
-                    e
-                );
-                e
-            })
-            .context("Failed to update chunk embeddings")?;
-
-        Ok(())
-    }
 
     /// Process only chunks missing embeddings for this dimension (incremental mode).
     ///

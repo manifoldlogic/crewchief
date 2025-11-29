@@ -332,65 +332,7 @@ mod sqlite_contract_tests {
     }
 
     // === Embedding Tests (VECSTORE-1000) ===
-    // Note: Embedding upsert uses blob_sha-based deduplication, which may have
-    // different behavior than chunk_id-based storage. These tests verify the
-    // trait method works without erroring, but actual embedding storage depends
-    // on the blob_sha existing in code_embeddings table.
-
-    #[tokio::test]
-    async fn test_embedding_upsert_1536_exists() {
-        let store = setup_store().await;
-        let (_, _, _, _, chunk_id) = setup_test_data(&store).await;
-
-        let embedding = vec![0.1f32; 1536];
-
-        // upsert_embeddings may fail if there's no matching blob_sha in code_embeddings
-        // The trait method should not panic, just return error if conditions aren't met
-        let result = store
-            .upsert_embeddings(chunk_id, Some(&embedding), None, 1536)
-            .await;
-
-        // Either succeeds or returns error - should not panic
-        assert!(
-            result.is_ok() || result.is_err(),
-            "1536-dim embedding upsert should not panic"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_embedding_upsert_768_exists() {
-        let store = setup_store().await;
-        let (_, _, _, _, chunk_id) = setup_test_data(&store).await;
-
-        let embedding = vec![0.1f32; 768];
-
-        // Same note as above - may fail due to blob_sha requirement
-        let result = store
-            .upsert_embeddings(chunk_id, Some(&embedding), None, 768)
-            .await;
-
-        // Either succeeds or returns error - should not panic
-        assert!(
-            result.is_ok() || result.is_err(),
-            "768-dim embedding upsert should not panic"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_batch_embedding_upsert() {
-        let store = setup_store().await;
-        let (_, _, _, _, chunk_id) = setup_test_data(&store).await;
-
-        let embedding = vec![0.1f32; 1536];
-        let embeddings = vec![(chunk_id, Some(embedding), None)];
-
-        // batch_upsert_embeddings should work
-        let result = store.batch_upsert_embeddings(&embeddings, 1536).await;
-
-        // Either succeeds or returns error - should not panic
-        assert!(
-            result.is_ok() || result.is_err(),
-            "batch embedding upsert should not panic"
-        );
-    }
+    // Note: Embedding storage uses blob_sha-based deduplication via upsert_embedding()
+    // which stores embeddings in code_embeddings table and syncs to vec_code virtual tables.
+    // Tests for the correct API (upsert_embedding singular) are in sqlite_integration.rs.
 }
