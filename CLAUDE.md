@@ -135,9 +135,6 @@ Long-term codebase documentation. Read by both agents and humans.
 - `get_code_context_exa` — Find code snippets and examples from GitHub, Stack Overflow, etc.
 - `web_search_exa` — General web search for current information
 - `crawling_exa` — Extract content from a specific URL
-- `company_research_exa` — Research companies
-- `linkedin_search_exa` — Search LinkedIn profiles/companies
-- `deep_researcher_start` / `deep_researcher_check` — Complex multi-source research
 
 ### Quick Decision Guide
 
