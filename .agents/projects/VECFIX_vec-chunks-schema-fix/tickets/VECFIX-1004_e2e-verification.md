@@ -1,9 +1,9 @@
 # Ticket: VECFIX-1004: E2E Verification
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,11 +29,11 @@ This implements the "E2E Verification" section from `VECFIX_PLAN.md` (Phase 2, V
 
 ## Acceptance Criteria
 
-- [ ] E2E script (`./scripts/test_sqlite_e2e.sh`) passes without errors
-- [ ] Embedding generation completes without "no such table: vec_chunks" errors
-- [ ] VSCode extension can successfully scan a workspace
-- [ ] Embeddings are stored in `code_embeddings` table (not vec_chunks)
-- [ ] No references to `vec_chunks` remain in `mod.rs`, `schema.rs`, or `pipeline.rs`
+- [x] E2E script (`./scripts/test_sqlite_e2e.sh`) passes without errors
+- [x] Embedding generation completes without "no such table: vec_chunks" errors
+- [x] VSCode extension can successfully scan a workspace
+- [x] Embeddings are stored in `code_embeddings` table (not vec_chunks)
+- [x] No references to `vec_chunks` remain in `mod.rs`, `schema.rs`, or `pipeline.rs`
 
 ## Technical Requirements
 
