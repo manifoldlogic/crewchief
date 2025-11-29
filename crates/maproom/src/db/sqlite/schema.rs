@@ -92,17 +92,9 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // Create Vector Table using vec0
-    // We assume sqlite-vec is loaded.
-    // Embedding is 1536 dimensions (float32)
-    conn.execute(
-        "CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
-            chunk_id INTEGER PRIMARY KEY,
-            code_embedding float[1536],
-            text_embedding float[1536]
-        )",
-        [],
-    )?;
+    // Note: Vector embeddings are now stored in code_embeddings table (deduped by blob_sha)
+    // and synced to vec_code virtual table by the embeddings.rs module.
+    // The legacy vec_chunks table was removed in migration 6.
 
     // Create FTS5 Table for code search
     // We use 'trigram' tokenizer if available, else standard

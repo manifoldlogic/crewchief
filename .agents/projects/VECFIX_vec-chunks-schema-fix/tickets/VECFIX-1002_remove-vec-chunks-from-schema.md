@@ -1,9 +1,9 @@
 # Ticket: VECFIX-1002: Remove vec_chunks from schema.rs
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,10 +28,10 @@ This ticket is part of Phase 1 of the VECFIX project and follows VECFIX-1001, wh
 This implements the cleanup work described in the [VECFIX plan.md](../planning/plan.md#vecfix-1002-remove-vec_chunks-from-schemars) Phase 1.
 
 ## Acceptance Criteria
-- [ ] No references to `vec_chunks` in `schema.rs`
-- [ ] Code compiles without errors
-- [ ] Comments updated to reflect removal of vec_chunks
-- [ ] init_schema() function remains valid (even though deprecated)
+- [x] No references to `vec_chunks` in `schema.rs`
+- [x] Code compiles without errors
+- [x] Comments updated to reflect removal of vec_chunks
+- [x] init_schema() function remains valid (even though deprecated)
 
 ## Technical Requirements
 - Remove the `CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks` statement (lines 99-105)
