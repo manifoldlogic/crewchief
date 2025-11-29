@@ -1,9 +1,9 @@
 # Ticket: GITPOLL-1002: Implement GitPoller Module
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,13 +29,13 @@ Reference: [architecture.md](../planning/architecture.md) - GitPoller Component 
 
 ## Acceptance Criteria
 
-- [ ] `GitPollerConfig` struct with configurable poll interval, timeout, retry settings
-- [ ] `GitPoller` struct that runs polling loop using tokio
-- [ ] `poll_once()` method executes single poll cycle (for testing)
-- [ ] `run()` async method runs continuous polling loop
-- [ ] `shutdown()` triggers graceful termination
-- [ ] Proper error handling with retry logic for transient failures
-- [ ] Validates git repository on creation (returns error for non-git dirs)
+- [x] `GitPollerConfig` struct with configurable poll interval, timeout, retry settings
+- [x] `GitPoller` struct that runs polling loop using tokio
+- [x] `poll_once()` method executes single poll cycle (for testing)
+- [x] `run()` async method runs continuous polling loop
+- [x] `shutdown()` triggers graceful termination (via watch channel)
+- [x] Proper error handling with retry logic for transient failures
+- [x] Validates git repository on creation (returns error for non-git dirs)
 
 ## Technical Requirements
 
