@@ -1,9 +1,9 @@
 # Ticket: VECFIX-1003: Run test suite and fix failures
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,10 +30,10 @@ This ticket implements the testing verification described in:
 - `quality-strategy.md` Section 1: Existing Test Suite
 
 ## Acceptance Criteria
-- [ ] All tests in `cargo test -p crewchief-maproom` pass
-- [ ] No tests reference `vec_chunks` table
-- [ ] No clippy warnings from `cargo clippy -p crewchief-maproom`
-- [ ] Test output shows all 8 key embedding tests passing (listed below)
+- [x] All tests in `cargo test -p crewchief-maproom` pass
+- [x] No tests reference `vec_chunks` table
+- [x] No clippy warnings from `cargo clippy -p crewchief-maproom`
+- [x] Test output shows all 8 key embedding tests passing (listed below)
 
 ## Technical Requirements
 
