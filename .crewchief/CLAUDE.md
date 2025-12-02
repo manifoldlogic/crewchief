@@ -1,6 +1,6 @@
-# CLAUDE.md - .agents Directory
+# CLAUDE.md - .crewchief Directory
 
-Working with agent workspace at `/.agents`.
+Working with the crewchief workspace at `.crewchief/`.
 
 ## Directory Structure
 
@@ -8,8 +8,6 @@ Working with agent workspace at `/.agents`.
 .crewchief/
 ├── projects/          # Active projects (planning + tickets)
 ├── archive/           # Completed projects
-├── agents/            # Agent definitions
-├── reference/         # Templates and conventions (read-only)
 ├── reports/           # Point-in-time analysis outputs (dated)
 ├── research/          # Exploratory technical research
 └── scratchpad/        # Temporary working space
@@ -35,13 +33,18 @@ projects/{SLUG}_{name}/
 - **Tickets**: `{SLUG}-{NUMBER}_{description}.md` (e.g., `DKRHUB-1001_setup.md`)
 - **Planning docs**: Standard names (`analysis.md`, `architecture.md`, `plan.md`, `quality-strategy.md`)
 
-## Slash Commands
+## Workstream Commands
 
-- `/create-project [description]` - Create planning docs
-- `/create-project-tickets [PROJECT_SLUG]` - Generate tickets
-- `/review-tickets [PROJECT_SLUG]` - Review quality
-- `/work-on-project [PROJECT_SLUG]` - Execute all tickets
-- `/single-ticket [ticket-id]` - Complete one ticket
+Use the workstream plugin for project management:
+
+- `/workstream:project-create [description]` - Create project with planning docs
+- `/workstream:project-review [SLUG]` - Review project (and tickets if they exist)
+- `/workstream:project-update [SLUG]` - Update project based on review findings
+- `/workstream:project-tickets [SLUG]` - Generate tickets from plan
+- `/workstream:project-work [SLUG]` - Execute all tickets for a project
+- `/workstream:ticket [TICKET_ID]` - Complete a single ticket
+- `/workstream:status [SLUG]` - Check project/ticket status
+- `/workstream:archive [SLUG]` - Archive completed projects
 
 ## Ticket Workflow
 
@@ -52,11 +55,6 @@ projects/{SLUG}_{name}/
 
 ## Key Locations
 
-- **agents/** - Agent definitions (see `agents/README.md`)
-- **reference/** - Templates and conventions
-  - `work-ticket-template.md`
-  - `project-naming-guidelines.md`
-  - `git-commit-scopes.txt`
 - **research/** - Exploratory technical research (pre-project)
 - **reports/** - Dated analysis outputs
 - **scratchpad/** - Temporary notes and experiments

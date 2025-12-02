@@ -1,6 +1,6 @@
-# .agents Directory
+# .crewchief Directory
 
-This directory contains AI agent-focused documentation, project planning, work tickets, and execution tracking for the CrewChief project.
+This directory contains project planning, work tickets, and execution tracking for the CrewChief project.
 
 ## Directory Structure
 
@@ -8,8 +8,6 @@ This directory contains AI agent-focused documentation, project planning, work t
 .crewchief/
 ├── projects/          # Active projects (planning + tickets)
 ├── archive/           # Completed projects
-├── agents/            # Agent definitions
-├── reference/         # Templates and conventions (read-only)
 ├── reports/           # Point-in-time analysis outputs (dated)
 ├── research/          # Exploratory technical research
 └── scratchpad/        # Temporary working space
@@ -17,25 +15,32 @@ This directory contains AI agent-focused documentation, project planning, work t
 
 ## Quick Navigation
 
-### 🚀 Active Work
+### Active Work
 - **[Projects](./projects/README.md)** - Current projects and their tickets
-- **[Agents](./agents/README.md)** - Available agents and their capabilities
 
-### 📖 Process & Reference
-- **[Reference](./reference/)** - Development process and conventions
-  - [Spec-Driven Development](./reference/spec-driven-development.md)
-  - [Work Ticket Template](./reference/work-ticket-template.md)
-  - [Git Commit Scopes](./reference/git-commit-scopes.txt)
-
-### 🔬 Research & Reports
+### Research & Reports
 - **[Research](./research/)** - Exploratory technical research (pre-project)
 - **[Reports](./reports/)** - Point-in-time analysis outputs (dated)
 
-### 📦 Archive
+### Archive
 - **[Archive](./archive/README.md)** - Completed projects
 
-### 🗒️ Temporary
+### Temporary
 - **[Scratchpad](./scratchpad/)** - Temporary notes and experiments
+
+## Workstream Plugin
+
+Project management is handled by the workstream plugin. Key commands:
+
+```bash
+/workstream:project-create [description]   # Create project
+/workstream:project-review [SLUG]          # Review project and tickets
+/workstream:project-update [SLUG]          # Fix review findings
+/workstream:project-tickets [SLUG]         # Generate tickets
+/workstream:project-work [SLUG]            # Execute all tickets
+/workstream:ticket [TICKET_ID]             # Complete single ticket
+/workstream:status [SLUG]                  # Check status
+```
 
 ## For AI Agents
 
@@ -52,15 +57,6 @@ cat .crewchief/projects/DKRHUB_docker-hub-publishing/README.md
 cat .crewchief/projects/DKRHUB_docker-hub-publishing/planning/*.md
 ```
 
-### Agent Capabilities
-```bash
-# List all available agents
-ls -1 .crewchief/agents/
-
-# Read agent definition
-cat .crewchief/agents/database-engineer.md
-```
-
 ### Project Lifecycle
 
 1. **Planning Phase**: Create planning docs in `projects/{PROJECT}/planning/`
@@ -70,11 +66,15 @@ cat .crewchief/agents/database-engineer.md
    - `quality-strategy.md` - Testing approach
    - `security-review.md` - Security considerations
 
-2. **Execution Phase**: Work on tickets in `projects/{PROJECT}/tickets/`
+2. **Review Phase**: Review and update based on findings
+   - `/workstream:project-review` identifies issues
+   - `/workstream:project-update` fixes issues
+
+3. **Execution Phase**: Work on tickets in `projects/{PROJECT}/tickets/`
    - Track progress with checkboxes in ticket files
    - Update ticket status as work progresses
 
-3. **Archive Phase**: When project complete and knowledge synthesized to `/docs`:
+4. **Archive Phase**: When project complete and knowledge synthesized to `/docs`:
    - Move entire project folder to `archive/projects/{PROJECT}/`
 
 ## Conventions
@@ -84,12 +84,11 @@ cat .crewchief/agents/database-engineer.md
 - **SLUG**: UPPERCASE, short (4-8 chars), matches ticket prefix
 - **Description**: lowercase-with-dashes, clear and specific
 - Examples: `DKRHUB_docker-hub-publishing/`, `LOCAL_local-deployment/`
-- See [Project Naming Guidelines](./reference/project-naming-guidelines.md) for details
 
 ### File Naming
 - Use lowercase-with-dashes: `analysis.md`, `quality-strategy.md`
 - Ticket files: `{SLUG}-{NUMBER}_{description}.md` (e.g., `DKRHUB-001_setup.md`)
-- Index files: `{SLUG}_TICKET_INDEX.md` or `README.md`
+- Index files: `README.md`
 
 ### Project Organization
 ```
@@ -101,11 +100,9 @@ projects/{SLUG}_{descriptive-name}/
 │   ├── plan.md
 │   ├── quality-strategy.md
 │   └── security-review.md
-├── tickets/                   # Active work tickets
-│   ├── {SLUG}-001.md
-│   └── ...
-└── archive/                   # Completed tickets (optional)
-    └── tickets/
+└── tickets/                   # Active work tickets
+    ├── {SLUG}-1001.md
+    └── ...
 ```
 
 ## Maintenance
@@ -113,26 +110,20 @@ projects/{SLUG}_{descriptive-name}/
 ### When to Archive a Project
 
 Archive when ALL of the following are true:
-1. ✅ All tickets are complete (checkboxes marked)
-2. ✅ Knowledge has been synthesized into `/docs`
-3. ✅ No future work planned for this project area
+1. All tickets are complete (checkboxes marked)
+2. Knowledge has been synthesized into `/docs`
+3. No future work planned for this project area
 
 **How to archive:**
 ```bash
-mv .crewchief/projects/{PROJECT} .crewchief/archive/projects/
+/workstream:archive [SLUG]
 ```
 
 ### Adding New Projects
 
-1. Choose a project slug and name following [naming guidelines](./reference/project-naming-guidelines.md)
-
-2. Create project structure:
+Use the workstream plugin:
 ```bash
-mkdir -p .crewchief/projects/{SLUG}_{descriptive-name}/{planning,tickets}
+/workstream:project-create [description]
 ```
 
-3. Create planning documents in `planning/`:
-   - Start with `analysis.md` and `architecture.md`
-   - Generate tickets from `plan.md`
-
-4. Update this README and `projects/README.md`
+This will scaffold the project structure and create initial planning documents.
