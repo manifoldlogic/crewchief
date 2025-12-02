@@ -53,3 +53,4 @@ volumes:
   crewchief-cursor-extensions:
   crewchief-claude-config:
   crewchief-claude-history:
+  crewchief-gh-config:

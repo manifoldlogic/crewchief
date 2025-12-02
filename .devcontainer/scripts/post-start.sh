@@ -3,6 +3,14 @@ set -e
 
 echo "🔄 Running post-start setup..."
 
+# Sync .gitconfig from host if it's newer (avoids "Device or resource busy" on macOS)
+if [ -f "/home/vscode/.gitconfig-host" ]; then
+    if [ ! -f "/home/vscode/.gitconfig" ] || [ "/home/vscode/.gitconfig-host" -nt "/home/vscode/.gitconfig" ]; then
+        cp /home/vscode/.gitconfig-host /home/vscode/.gitconfig
+        echo "✓ Updated .gitconfig from host"
+    fi
+fi
+
 # Detect and export the host path for /workspace (needed for Docker-in-Docker volume mounts)
 WORKSPACE_HOST_PATH=$(docker inspect $(hostname) --format '{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo "/workspace")
 export WORKSPACE_HOST_PATH
@@ -23,6 +31,11 @@ fi
 if [ -S /var/run/docker.sock ]; then
     sudo chown root:docker /var/run/docker.sock 2>/dev/null || true
     echo "✓ Fixed Docker socket permissions"
+fi
+
+# Fix gh CLI config permissions (Docker volumes are created as root)
+if [ -d "/home/vscode/.config/gh" ]; then
+    sudo chown -R vscode:vscode /home/vscode/.config/gh 2>/dev/null || true
 fi
 
 # Ensure maproom-postgres is ready (optional - may not be running)

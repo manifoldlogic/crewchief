@@ -93,6 +93,25 @@ until pg_isready -h postgres -p 5432 -U postgres; do
 done
 print_success "PostgreSQL is ready"
 
+# Fix ownership of volume-mounted directories (Docker creates them as root)
+print_step "Fixing volume permissions..."
+sudo chown -R vscode:vscode /home/vscode/.config/gh 2>/dev/null || true
+print_success "Volume permissions fixed"
+
+# Copy host .gitconfig to writable location (avoids "Device or resource busy" on macOS)
+print_step "Setting up Git configuration..."
+if [ -f "/home/vscode/.gitconfig-host" ]; then
+    # Only copy if container .gitconfig doesn't exist or is older than host version
+    if [ ! -f "/home/vscode/.gitconfig" ] || [ "/home/vscode/.gitconfig-host" -nt "/home/vscode/.gitconfig" ]; then
+        cp /home/vscode/.gitconfig-host /home/vscode/.gitconfig
+        print_success "Copied host .gitconfig to container"
+    else
+        print_success "Container .gitconfig is up to date"
+    fi
+else
+    print_step "No host .gitconfig found, creating default..."
+fi
+
 # Set up git configuration
 print_step "Configuring Git..."
 git config --global --add safe.directory /workspace

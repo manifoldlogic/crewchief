@@ -163,6 +163,31 @@ crewchief-maproom db
 
 3. Use `.dockerignore` to exclude unnecessary files
 
+## Git Configuration Issues
+
+### Error: "could not write config file ~/.gitconfig: Device or resource busy"
+
+This occurs on macOS because Docker's `fakeowner` filesystem doesn't support atomic writes that Git uses.
+
+**Solution**: The devcontainer is configured to:
+1. Mount your host `.gitconfig` to `/home/vscode/.gitconfig-host` (read-only)
+2. Copy it to `/home/vscode/.gitconfig` (writable) on container start
+
+If you encounter this error, rebuild your container:
+```bash
+# From VS Code/Cursor
+F1 → "Dev Containers: Rebuild Container"
+```
+
+### GitHub CLI Authentication Lost After Rebuild
+
+The `~/.config/gh` directory is persisted via a Docker volume (`crewchief-gh-config`). Your `gh auth login` should persist across rebuilds.
+
+If you need to re-authenticate:
+```bash
+gh auth login
+```
+
 ## Getting Help
 
 1. Check container logs:
