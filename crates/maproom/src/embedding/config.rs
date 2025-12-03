@@ -262,16 +262,26 @@ impl EmbeddingConfig {
             });
         }
 
-        // Validate Ollama-specific model requirements
-        if self.provider == Provider::Ollama && self.model == "nomic-embed-text" {
-            if self.dimension != 768 {
-                return Err(ConfigError::InvalidValue {
-                    field: "dimension".to_string(),
-                    reason: format!(
-                        "Ollama provider with nomic-embed-text requires dimension=768, got {}",
+        // Validate Ollama-specific model/dimension combinations (warnings only)
+        if self.provider == Provider::Ollama {
+            match self.model.as_str() {
+                "nomic-embed-text" if self.dimension != 768 => {
+                    tracing::warn!(
+                        "nomic-embed-text typically uses 768 dimensions, got {}. \
+                         Ensure your Ollama model is configured correctly.",
                         self.dimension
-                    ),
-                });
+                    );
+                }
+                "mxbai-embed-large" if self.dimension != 1024 => {
+                    tracing::warn!(
+                        "mxbai-embed-large typically uses 1024 dimensions, got {}. \
+                         Ensure your Ollama model is configured correctly.",
+                        self.dimension
+                    );
+                }
+                _ => {
+                    // Other models: no specific validation, trust user configuration
+                }
             }
         }
 
@@ -690,7 +700,7 @@ mod tests {
 
     #[test]
     fn test_ollama_nomic_embed_text_wrong_dimension() {
-        // nomic-embed-text with wrong dimension should fail
+        // nomic-embed-text with wrong dimension should now pass with warning (not error)
         let config = EmbeddingConfig {
             provider: Provider::Ollama,
             model: "nomic-embed-text".to_string(),
@@ -699,16 +709,36 @@ mod tests {
             ..Default::default()
         };
         let result = config.validate();
-        assert!(result.is_err());
+        // Should pass validation (warnings logged, but no error)
+        assert!(result.is_ok());
+    }
 
-        if let Err(ConfigError::InvalidValue { field, reason }) = result {
-            assert_eq!(field, "dimension");
-            assert!(reason.contains("nomic-embed-text"));
-            assert!(reason.contains("768"));
-            assert!(reason.contains("512"));
-        } else {
-            panic!("Expected InvalidValue error");
-        }
+    #[test]
+    fn test_ollama_mxbai_embed_large_dimension_1024() {
+        // mxbai-embed-large with correct dimension should pass
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "mxbai-embed-large".to_string(),
+            dimension: 1024,
+            api_key: None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_ollama_mxbai_embed_large_wrong_dimension() {
+        // mxbai-embed-large with wrong dimension should pass with warning (not error)
+        let config = EmbeddingConfig {
+            provider: Provider::Ollama,
+            model: "mxbai-embed-large".to_string(),
+            dimension: 768,
+            api_key: None,
+            ..Default::default()
+        };
+        let result = config.validate();
+        // Should pass validation (warnings logged, but no error)
+        assert!(result.is_ok());
     }
 
     #[test]

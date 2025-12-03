@@ -130,6 +130,7 @@ fn bench_batch_sizes(c: &mut Criterion) {
         let p = OllamaProvider::new_with_config(
             OllamaProvider::DEFAULT_ENDPOINT.to_string(),
             OllamaProvider::DEFAULT_MODEL.to_string(),
+            768,
             config,
         )
         .ok()?;
@@ -191,6 +192,7 @@ fn bench_concurrency_levels(c: &mut Criterion) {
             let p = OllamaProvider::new_with_config(
                 OllamaProvider::DEFAULT_ENDPOINT.to_string(),
                 OllamaProvider::DEFAULT_MODEL.to_string(),
+                768,
                 config,
             )
             .ok()?;
@@ -260,6 +262,7 @@ fn bench_combined(c: &mut Criterion) {
             let p = OllamaProvider::new_with_config(
                 OllamaProvider::DEFAULT_ENDPOINT.to_string(),
                 OllamaProvider::DEFAULT_MODEL.to_string(),
+                768,
                 config,
             )
             .ok()?;

@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Create provider and cache separately, then compose into service
-    let provider = OllamaProvider::new_with_config(endpoint, model, parallel_config)?;
+    let provider = OllamaProvider::new_with_config(endpoint, model, 768, parallel_config)?;
     let cache = EmbeddingCache::new(cache_config)?;
     let service = EmbeddingService::new(Box::new(provider), Arc::new(cache));
 

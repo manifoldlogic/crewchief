@@ -543,10 +543,6 @@ async fn auto_generate_embeddings(
     if let Some(ref provider_name) = provider {
         tracing::info!("Using provider from CLI flag: {}", provider_name);
         std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", provider_name);
-    } else {
-        let env_provider =
-            std::env::var("MAPROOM_EMBEDDING_PROVIDER").unwrap_or_else(|_| "not set".to_string());
-        tracing::info!("Using provider from environment: {}", env_provider);
     }
 
     // Try to create embedding service from environment

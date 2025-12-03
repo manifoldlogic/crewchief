@@ -1,13 +1,14 @@
 //! Ollama embedding provider implementation.
 //!
 //! This module provides integration with Ollama for local embedding generation.
-//! Ollama runs locally at `http://localhost:11434` with the nomic-embed-text model,
-//! which produces 768-dimensional embeddings.
+//! Ollama runs locally at `http://localhost:11434` with configurable models supporting
+//! different embedding dimensions (768 for nomic-embed-text, 1024 for mxbai-embed-large).
 //!
 //! # Features
 //!
 //! - Zero-config local embeddings (no API keys required)
-//! - 768-dimensional vectors (nomic-embed-text model)
+//! - Configurable embedding dimensions (768, 1024, or custom)
+//! - Multiple model support (nomic-embed-text, mxbai-embed-large, etc.)
 //! - Concurrent batch processing with semaphore limiting
 //! - Retry logic for transient failures
 //! - Configurable endpoint and model
@@ -20,20 +21,29 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Create provider with default settings
+//!     // Create provider with nomic-embed-text (768 dimensions)
 //!     let provider = OllamaProvider::new(
 //!         "http://localhost:11434/api/embed".to_string(),
-//!         "nomic-embed-text".to_string()
+//!         "nomic-embed-text".to_string(),
+//!         768
 //!     )?;
 //!
 //!     // Generate single embedding
 //!     let embedding = provider.embed("Hello, world!".to_string()).await?;
 //!     assert_eq!(embedding.len(), 768);
 //!
+//!     // Create provider with mxbai-embed-large (1024 dimensions)
+//!     let provider_1024 = OllamaProvider::new(
+//!         "http://localhost:11434/api/embed".to_string(),
+//!         "mxbai-embed-large".to_string(),
+//!         1024
+//!     )?;
+//!
 //!     // Generate batch with concurrent requests
 //!     let texts = vec!["First".to_string(), "Second".to_string()];
-//!     let embeddings = provider.embed_batch(texts).await?;
+//!     let embeddings = provider_1024.embed_batch(texts).await?;
 //!     assert_eq!(embeddings.len(), 2);
+//!     assert_eq!(embeddings[0].len(), 1024);
 //!
 //!     Ok(())
 //! }
@@ -69,13 +79,14 @@ struct OllamaResponse {
 /// Ollama embedding provider for local embeddings.
 ///
 /// This provider integrates with Ollama running locally to generate embeddings
-/// using the nomic-embed-text model (768 dimensions). It uses Ollama's batch API
+/// using configurable models with different dimensions. It uses Ollama's batch API
 /// to send multiple texts in a single HTTP request for improved performance.
 ///
 /// # Configuration
 ///
 /// - **Endpoint**: Default `http://localhost:11434/api/embed`
 /// - **Model**: Default `nomic-embed-text`
+/// - **Dimension**: Configurable (768 for nomic-embed-text, 1024 for mxbai-embed-large)
 /// - **Timeout**: 60 seconds per request
 ///
 /// # Thread Safety
@@ -87,8 +98,10 @@ pub struct OllamaProvider {
     client: Client,
     /// Ollama API endpoint URL
     endpoint: String,
-    /// Model name (e.g., "nomic-embed-text")
+    /// Model name (e.g., "nomic-embed-text", "mxbai-embed-large")
     model: String,
+    /// Embedding dimension (768 for nomic-embed-text, 1024 for mxbai-embed-large)
+    dimension: usize,
     /// Parallel processing configuration
     parallel_config: ParallelConfig,
     /// Semaphore to limit concurrent requests
@@ -105,12 +118,13 @@ impl OllamaProvider {
     /// Request timeout in seconds (increased for larger batches).
     const REQUEST_TIMEOUT_SECS: u64 = 60;
 
-    /// Create a new OllamaProvider with specified endpoint and model.
+    /// Create a new OllamaProvider with specified endpoint, model, and dimension.
     ///
     /// # Arguments
     ///
     /// * `endpoint` - Ollama API endpoint URL (e.g., "http://localhost:11434/api/embed")
-    /// * `model` - Model name (e.g., "nomic-embed-text")
+    /// * `model` - Model name (e.g., "nomic-embed-text", "mxbai-embed-large")
+    /// * `dimension` - Embedding dimension (768 for nomic-embed-text, 1024 for mxbai-embed-large)
     ///
     /// # Returns
     ///
@@ -122,14 +136,23 @@ impl OllamaProvider {
     /// ```no_run
     /// use crewchief_maproom::embedding::ollama::OllamaProvider;
     ///
+    /// // nomic-embed-text (768 dimensions)
     /// let provider = OllamaProvider::new(
     ///     "http://localhost:11434/api/embed".to_string(),
-    ///     "nomic-embed-text".to_string()
+    ///     "nomic-embed-text".to_string(),
+    ///     768
+    /// )?;
+    ///
+    /// // mxbai-embed-large (1024 dimensions)
+    /// let provider = OllamaProvider::new(
+    ///     "http://localhost:11434/api/embed".to_string(),
+    ///     "mxbai-embed-large".to_string(),
+    ///     1024
     /// )?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn new(endpoint: String, model: String) -> Result<Self, EmbeddingError> {
-        Self::new_with_config(endpoint, model, ParallelConfig::default())
+    pub fn new(endpoint: String, model: String, dimension: usize) -> Result<Self, EmbeddingError> {
+        Self::new_with_config(endpoint, model, dimension, ParallelConfig::default())
     }
 
     /// Create a new OllamaProvider with explicit parallel processing configuration.
@@ -137,7 +160,8 @@ impl OllamaProvider {
     /// # Arguments
     ///
     /// * `endpoint` - Ollama API endpoint URL (e.g., "http://localhost:11434/api/embed")
-    /// * `model` - Model name (e.g., "nomic-embed-text")
+    /// * `model` - Model name (e.g., "nomic-embed-text", "mxbai-embed-large")
+    /// * `dimension` - Embedding dimension (768 for nomic-embed-text, 1024 for mxbai-embed-large)
     /// * `config` - Parallel processing configuration
     ///
     /// # Returns
@@ -159,6 +183,7 @@ impl OllamaProvider {
     /// let provider = OllamaProvider::new_with_config(
     ///     "http://localhost:11434/api/embed".to_string(),
     ///     "nomic-embed-text".to_string(),
+    ///     768,
     ///     config
     /// )?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -166,6 +191,7 @@ impl OllamaProvider {
     pub fn new_with_config(
         endpoint: String,
         model: String,
+        dimension: usize,
         config: ParallelConfig,
     ) -> Result<Self, EmbeddingError> {
         let client = Client::builder()
@@ -178,6 +204,7 @@ impl OllamaProvider {
             client,
             endpoint,
             model,
+            dimension,
             parallel_config: config,
             semaphore,
         })
@@ -185,7 +212,8 @@ impl OllamaProvider {
 
     /// Create a new OllamaProvider with default settings.
     ///
-    /// Uses default endpoint (`http://localhost:11434/api/embed`) and model (`nomic-embed-text`).
+    /// Uses default endpoint (`http://localhost:11434/api/embed`), model (`nomic-embed-text`),
+    /// and dimension (768).
     ///
     /// # Examples
     ///
@@ -199,6 +227,7 @@ impl OllamaProvider {
         Self::new(
             Self::DEFAULT_ENDPOINT.to_string(),
             Self::DEFAULT_MODEL.to_string(),
+            768, // nomic-embed-text default dimension
         )
     }
 
@@ -341,78 +370,210 @@ impl OllamaProvider {
 
         let batch_size = texts.len();
 
-        let response = self
-            .client
-            .post(&self.endpoint)
-            .json(&OllamaRequest {
-                model: self.model.clone(),
-                input: texts,
-            })
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to send batch of {} texts: {}", batch_size, e);
-                EmbeddingError::Network(e)
-            })?;
+        // Sanitize texts to work around Ollama GGML tokenization bugs
+        // See: https://github.com/ollama/ollama/issues/9499
+        // Certain characters cause token count explosions that crash the attention layer
+        //
+        // Also truncate to ~6000 chars to stay within nomic-embed-text's 2048 token limit
+        // (assuming ~3 chars/token average for code, with safety margin)
+        const MAX_CHARS: usize = 6000;
 
-        let status = response.status();
-        if !status.is_success() {
+        let sanitized_texts: Vec<String> = texts
+            .into_iter()
+            .map(|t| {
+                let sanitized = t
+                    .replace('|', " ") // Markdown table pipes
+                    .replace('[', "(") // Brackets (checkboxes, links)
+                    .replace(']', ")")
+                    .replace('→', "->") // Unicode arrows
+                    .replace('←', "<-")
+                    .replace('↔', "<->")
+                    // Box-drawing characters (directory trees)
+                    .replace('├', "+")
+                    .replace('└', "+")
+                    .replace('│', " ")
+                    .replace('─', "-")
+                    .replace('┌', "+")
+                    .replace('┐', "+")
+                    .replace('┘', "+")
+                    .replace('┤', "+")
+                    .replace('┬', "+")
+                    .replace('┴', "+")
+                    .replace('┼', "+");
+
+                // Truncate if too long (find char boundary)
+                if sanitized.len() > MAX_CHARS {
+                    sanitized
+                        .char_indices()
+                        .take_while(|(i, _)| *i < MAX_CHARS)
+                        .map(|(_, c)| c)
+                        .collect()
+                } else {
+                    sanitized
+                }
+            })
+            .collect();
+
+        // Debug: log first text preview and any remaining non-ASCII
+        if !sanitized_texts.is_empty() {
+            let first = &sanitized_texts[0];
+            let non_ascii: Vec<char> = first.chars().filter(|c| !c.is_ascii()).collect();
+            if !non_ascii.is_empty() {
+                tracing::debug!(
+                    "Batch has {} non-ASCII chars after sanitization: {:?}",
+                    non_ascii.len(),
+                    non_ascii.iter().take(10).collect::<Vec<_>>()
+                );
+            }
+            tracing::debug!(
+                "First text preview ({} chars): {:?}",
+                first.len(),
+                first.chars().take(80).collect::<String>()
+            );
+        }
+
+        // Build request body once
+        let request_body = OllamaRequest {
+            model: self.model.clone(),
+            input: sanitized_texts,
+        };
+
+        // Retry configuration for transient server errors
+        const MAX_RETRIES: u32 = 3;
+        const INITIAL_BACKOFF_MS: u64 = 500;
+
+        let mut last_error: Option<EmbeddingError> = None;
+
+        for attempt in 0..=MAX_RETRIES {
+            if attempt > 0 {
+                let backoff_ms = INITIAL_BACKOFF_MS * (1 << (attempt - 1)); // Exponential backoff
+                tracing::warn!(
+                    "Retry {}/{} for batch of {} texts after {}ms backoff",
+                    attempt,
+                    MAX_RETRIES,
+                    batch_size,
+                    backoff_ms
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+            }
+
+            let response = match self
+                .client
+                .post(&self.endpoint)
+                .json(&request_body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to send batch of {} texts (attempt {}): {}",
+                        batch_size,
+                        attempt + 1,
+                        e
+                    );
+                    last_error = Some(EmbeddingError::Network(e));
+                    continue;
+                }
+            };
+
+            let status = response.status();
+            if status.is_success() {
+                // Parse successful response
+                let body: OllamaResponse = match response.json().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                            "Failed to parse batch response for {} texts: {}",
+                            batch_size, e
+                        ))));
+                    }
+                };
+
+                // Validate response has expected number of embeddings
+                if body.embeddings.len() != batch_size {
+                    return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                        "Batch size mismatch: sent {} texts but got {} embeddings",
+                        batch_size,
+                        body.embeddings.len()
+                    ))));
+                }
+
+                let expected_dim = self.dimension();
+
+                // Validate all embeddings have correct dimension
+                for (i, embedding) in body.embeddings.iter().enumerate() {
+                    if embedding.len() != expected_dim {
+                        return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                            "Dimension mismatch in batch at index {}: expected {} dimensions but got {}",
+                            i,
+                            expected_dim,
+                            embedding.len()
+                        ))));
+                    }
+                }
+
+                return Ok(body.embeddings);
+            }
+
+            // Handle error responses
             let error_msg = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
 
-            return Err(EmbeddingError::Api(match status.as_u16() {
-                429 => ApiError::RateLimit {
-                    retry_after_ms: 1000,
-                },
-                500..=599 => ApiError::ServerError {
-                    status: status.as_u16(),
-                    message: format!("Batch of {} texts failed: {}", batch_size, error_msg),
-                },
-                401 => ApiError::Authentication(error_msg),
-                400 => ApiError::BadRequest(format!(
-                    "Batch of {} texts rejected: {}",
-                    batch_size, error_msg
-                )),
-                _ => ApiError::InvalidResponse(format!(
-                    "HTTP {} for batch of {} texts: {}",
-                    status, batch_size, error_msg
-                )),
-            }));
-        }
-
-        let body: OllamaResponse = response.json().await.map_err(|e| {
-            EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                "Failed to parse batch response for {} texts: {}",
-                batch_size, e
-            )))
-        })?;
-
-        // Validate response has expected number of embeddings
-        if body.embeddings.len() != batch_size {
-            return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                "Batch size mismatch: sent {} texts but got {} embeddings",
-                batch_size,
-                body.embeddings.len()
-            ))));
-        }
-
-        let expected_dim = self.dimension();
-
-        // Validate all embeddings have correct dimension
-        for (i, embedding) in body.embeddings.iter().enumerate() {
-            if embedding.len() != expected_dim {
-                return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                    "Dimension mismatch in batch at index {}: expected {} dimensions but got {}",
-                    i,
-                    expected_dim,
-                    embedding.len()
-                ))));
+            match status.as_u16() {
+                // Retry on 5xx server errors (transient)
+                500..=599 => {
+                    tracing::warn!(
+                        "Server error {} for batch of {} texts: {} (attempt {}/{})",
+                        status.as_u16(),
+                        batch_size,
+                        error_msg,
+                        attempt + 1,
+                        MAX_RETRIES + 1
+                    );
+                    last_error = Some(EmbeddingError::Api(ApiError::ServerError {
+                        status: status.as_u16(),
+                        message: format!("Batch of {} texts failed: {}", batch_size, error_msg),
+                    }));
+                    continue; // Retry
+                }
+                // Don't retry on client errors
+                429 => {
+                    return Err(EmbeddingError::Api(ApiError::RateLimit {
+                        retry_after_ms: 1000,
+                    }));
+                }
+                401 => {
+                    return Err(EmbeddingError::Api(ApiError::Authentication(error_msg)));
+                }
+                400 => {
+                    return Err(EmbeddingError::Api(ApiError::BadRequest(format!(
+                        "Batch of {} texts rejected: {}",
+                        batch_size, error_msg
+                    ))));
+                }
+                _ => {
+                    return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                        "HTTP {} for batch of {} texts: {}",
+                        status, batch_size, error_msg
+                    ))));
+                }
             }
         }
 
-        Ok(body.embeddings)
+        // All retries exhausted
+        Err(last_error.unwrap_or_else(|| {
+            EmbeddingError::Api(ApiError::ServerError {
+                status: 500,
+                message: format!(
+                    "Batch of {} texts failed after {} retries",
+                    batch_size,
+                    MAX_RETRIES + 1
+                ),
+            })
+        }))
     }
 }
 
@@ -491,13 +652,14 @@ impl EmbeddingProvider for OllamaProvider {
 
     /// Get the embedding dimension for this provider.
     ///
-    /// Ollama's nomic-embed-text model produces 768-dimensional embeddings.
+    /// Returns the configured dimension for this provider instance.
+    /// Common values: 768 (nomic-embed-text), 1024 (mxbai-embed-large).
     ///
     /// # Returns
     ///
-    /// Always returns 768.
+    /// The configured dimension for this provider.
     fn dimension(&self) -> usize {
-        768 // nomic-embed-text fixed dimension
+        self.dimension
     }
 
     /// Get the provider name identifier.
@@ -519,6 +681,7 @@ mod tests {
         let provider = OllamaProvider::new(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
         );
         assert!(provider.is_ok());
 
@@ -678,6 +841,7 @@ mod tests {
         let provider = OllamaProvider::new_with_config(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
             config.clone(),
         )
         .unwrap();
@@ -708,6 +872,7 @@ mod tests {
         let provider = OllamaProvider::new_with_config(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
             config,
         )
         .unwrap();
@@ -732,6 +897,7 @@ mod tests {
         let provider = OllamaProvider::new_with_config(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
             config,
         )
         .unwrap();
@@ -756,6 +922,7 @@ mod tests {
         let provider = OllamaProvider::new_with_config(
             OllamaProvider::DEFAULT_ENDPOINT.to_string(),
             OllamaProvider::DEFAULT_MODEL.to_string(),
+            768,
             config,
         )
         .unwrap();
@@ -787,6 +954,7 @@ mod tests {
         let provider = OllamaProvider::new_with_config(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
             config,
         )
         .unwrap();
@@ -797,5 +965,81 @@ mod tests {
         let texts: Vec<String> = (0..100).map(|i| format!("text_{}", i)).collect();
         assert!(texts.len() > provider.parallel_config.sub_batch_size);
         assert!(!provider.parallel_config.enabled);
+    }
+
+    // Unit tests for dimension configuration (DIM1024-2001)
+
+    #[test]
+    fn test_ollama_accepts_dimension_1024() {
+        // Test that OllamaProvider accepts dimension=1024 for mxbai-embed-large
+        let provider = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "mxbai-embed-large".to_string(),
+            1024,
+        );
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        assert_eq!(provider.dimension(), 1024);
+        assert_eq!(provider.provider_name(), "ollama");
+    }
+
+    #[test]
+    fn test_dimension_returns_configured_value() {
+        // Test that dimension() returns the configured value, not hardcoded 768
+        let provider_768 = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            768,
+        )
+        .unwrap();
+        assert_eq!(provider_768.dimension(), 768);
+
+        let provider_1024 = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "mxbai-embed-large".to_string(),
+            1024,
+        )
+        .unwrap();
+        assert_eq!(provider_1024.dimension(), 1024);
+
+        // Test arbitrary dimension values
+        let provider_512 = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "custom-model".to_string(),
+            512,
+        )
+        .unwrap();
+        assert_eq!(provider_512.dimension(), 512);
+    }
+
+    #[test]
+    fn test_backward_compatibility_dimension_768() {
+        // Ensure existing configurations with dimension=768 still work
+        let provider = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            768,
+        );
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        assert_eq!(provider.dimension(), 768);
+    }
+
+    #[test]
+    fn test_new_with_config_accepts_dimension() {
+        // Test that new_with_config properly stores dimension
+        let config = ParallelConfig::default();
+        let provider = OllamaProvider::new_with_config(
+            "http://localhost:11434/api/embed".to_string(),
+            "mxbai-embed-large".to_string(),
+            1024,
+            config,
+        );
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        assert_eq!(provider.dimension(), 1024);
     }
 }

@@ -72,6 +72,7 @@ async fn test_batch_preserves_order() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -124,6 +125,7 @@ async fn test_parallel_preserves_order_large_batch() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -186,6 +188,7 @@ async fn test_parallel_produces_same_embeddings() {
     let provider_batch = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config_batch,
     )
     .expect("Failed to create provider");
@@ -204,6 +207,7 @@ async fn test_parallel_produces_same_embeddings() {
     let provider_parallel = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config_parallel,
     )
     .expect("Failed to create provider");
@@ -250,6 +254,7 @@ async fn test_all_embeddings_correct_dimension() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -333,6 +338,7 @@ async fn test_empty_batch_parallel_returns_empty() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -431,6 +437,7 @@ async fn test_disabled_parallel_uses_single_batch() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -466,6 +473,7 @@ async fn test_parallel_mode_switches_at_threshold() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -511,6 +519,7 @@ async fn test_single_text_batch() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -537,6 +546,7 @@ async fn test_exact_sub_batch_boundary() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");
@@ -563,6 +573,7 @@ async fn test_uneven_sub_batch_split() {
     let provider = OllamaProvider::new_with_config(
         OllamaProvider::DEFAULT_ENDPOINT.to_string(),
         OllamaProvider::DEFAULT_MODEL.to_string(),
+        768,
         config,
     )
     .expect("Failed to create provider");

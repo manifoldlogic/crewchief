@@ -194,27 +194,35 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
     match provider_name.as_str() {
         "ollama" => {
             // Use detected endpoint if available, else check env var, else default to localhost
+            let env_endpoint = env::var("MAPROOM_EMBEDDING_API_ENDPOINT").ok();
+            tracing::debug!(
+                "Ollama endpoint sources - detected: {:?}, env var: {:?}",
+                detected_endpoint,
+                env_endpoint
+            );
             let endpoint = detected_endpoint
                 .map(|base| format!("{}/api/embed", base))
-                .or_else(|| env::var("MAPROOM_EMBEDDING_API_ENDPOINT").ok())
+                .or_else(|| env_endpoint)
                 .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string());
             let model = env::var("MAPROOM_EMBEDDING_MODEL")
                 .unwrap_or_else(|_| "nomic-embed-text".to_string());
 
-            // Load parallel configuration from environment
+            // Load configuration from environment (including dimension)
             let config = EmbeddingConfig::from_env()?;
+            let dimension = config.dimension;
             let parallel_config = config.parallel;
 
             tracing::info!(
-                "Using provider: ollama (model: {}, endpoint: {}, parallel: enabled={}, sub_batch={}, concurrency={})",
+                "Using provider: ollama (model: {}, dimension: {}, endpoint: {}, parallel: enabled={}, sub_batch={}, concurrency={})",
                 model,
+                dimension,
                 endpoint,
                 parallel_config.enabled,
                 parallel_config.sub_batch_size,
                 parallel_config.max_concurrency
             );
 
-            let provider = OllamaProvider::new_with_config(endpoint, model, parallel_config)?;
+            let provider = OllamaProvider::new_with_config(endpoint, model, dimension, parallel_config)?;
             Ok(Box::new(provider))
         }
         "openai" => {
@@ -648,6 +656,7 @@ mod tests {
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
         env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
         env::set_var("EMBEDDING_API_ENDPOINT", "http://localhost:11434/api/embed");
+        env::set_var("MAPROOM_EMBEDDING_DIMENSION", "768");
 
         let result = create_provider_from_env().await;
 
@@ -655,6 +664,7 @@ mod tests {
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
         env::remove_var("MAPROOM_EMBEDDING_MODEL");
         env::remove_var("EMBEDDING_API_ENDPOINT");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
 
         assert!(
             result.is_ok(),

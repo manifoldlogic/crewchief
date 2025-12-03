@@ -54,6 +54,7 @@ async fn test_ollama_provider_implements_trait() {
         OllamaProvider::new(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
         )
         .expect("Failed to create Ollama provider"),
     );
@@ -148,6 +149,7 @@ async fn test_trait_contract_dimension_matches_output() {
         OllamaProvider::new(
             format!("{}/api/embed", mock_server.uri()),
             "nomic-embed-text".to_string(),
+            768,
         )
         .expect("Failed to create provider"),
     );
@@ -192,6 +194,7 @@ async fn test_trait_contract_batch_length_matches_input() {
         OllamaProvider::new(
             format!("{}/api/embed", mock_server.uri()),
             "nomic-embed-text".to_string(),
+            768,
         )
         .expect("Failed to create provider"),
     );
@@ -238,6 +241,7 @@ async fn test_trait_contract_dimension_is_consistent() {
     let provider = OllamaProvider::new(
         "http://localhost:11434/api/embed".to_string(),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Failed to create provider");
 
@@ -283,6 +287,7 @@ async fn test_factory_auto_detects_ollama() {
         format!("{}/api/embed", mock_server.uri()),
     );
     std::env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
+    std::env::set_var("MAPROOM_EMBEDDING_DIMENSION", "768");
 
     let provider = create_provider_from_env()
         .await
@@ -303,6 +308,7 @@ async fn test_factory_auto_detects_ollama() {
     std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     std::env::remove_var("EMBEDDING_API_ENDPOINT");
     std::env::remove_var("MAPROOM_EMBEDDING_MODEL");
+    std::env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
 }
 
 /// Factory test: Explicit config overrides auto-detection.
@@ -445,6 +451,7 @@ async fn test_providers_interchangeable_via_trait_object() {
         OllamaProvider::new(
             "http://localhost:11434/api/embed".to_string(),
             "nomic-embed-text".to_string(),
+            768,
         )
         .expect("Create Ollama provider"),
     );
@@ -484,6 +491,7 @@ async fn test_error_handling_provider_unavailable() {
     let provider = OllamaProvider::new(
         "http://localhost:99999/api/embed".to_string(),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -520,6 +528,7 @@ async fn test_error_handling_authentication_error() {
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -562,6 +571,7 @@ async fn test_error_handling_server_error_retryable() {
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -604,6 +614,7 @@ async fn test_error_handling_rate_limit() {
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -642,6 +653,7 @@ async fn test_error_handling_empty_embeddings_response() {
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -685,6 +697,7 @@ async fn test_error_handling_dimension_mismatch() {
     let provider = OllamaProvider::new(
         format!("{}/api/embed", mock_server.uri()),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -749,6 +762,7 @@ fn test_providers_can_be_stored_in_arc() {
     let provider = OllamaProvider::new(
         "http://localhost:11434/api/embed".to_string(),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create provider");
 
@@ -772,6 +786,7 @@ async fn integration_test_ollama_real() {
     let provider = OllamaProvider::new(
         "http://localhost:11434/api/embed".to_string(),
         "nomic-embed-text".to_string(),
+        768,
     )
     .expect("Create Ollama provider");
 

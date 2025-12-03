@@ -75,6 +75,7 @@ async fn skip_if_ollama_unavailable() -> Option<EmbeddingService> {
             .api_endpoint
             .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
         config.model,
+        768,
     ) {
         Ok(provider) => match EmbeddingCache::new(config.cache) {
             Ok(cache) => Some(EmbeddingService::new(Box::new(provider), Arc::new(cache))),
@@ -235,6 +236,7 @@ async fn test_invalid_model_error() {
             .api_endpoint
             .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
         config.model,
+        768,
     );
     assert!(
         provider_result.is_ok(),
@@ -280,6 +282,7 @@ async fn test_unreachable_endpoint_error() {
             .api_endpoint
             .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string()),
         config.model,
+        768,
     );
     assert!(provider_result.is_ok(), "Provider creation should succeed");
 
