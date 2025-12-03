@@ -118,6 +118,46 @@ impl OllamaProvider {
     /// Request timeout in seconds (increased for larger batches).
     const REQUEST_TIMEOUT_SECS: u64 = 60;
 
+    /// Sanitize text for nomic-embed-text model to work around GGML tokenization bugs.
+    ///
+    /// This function replaces characters that cause token count explosions in nomic-embed-text's
+    /// GGML tokenizer. These replacements prevent attention layer crashes but degrade embedding
+    /// quality by mangling content. Only apply this to nomic-embed-text model.
+    ///
+    /// See: https://github.com/ollama/ollama/issues/9499
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text to sanitize
+    ///
+    /// # Returns
+    ///
+    /// Sanitized text with problematic characters replaced
+    #[allow(clippy::manual_string_replace)]
+    fn sanitize_for_nomic(text: &str) -> String {
+        // Replace characters that cause nomic-embed-text tokenization crashes
+        // Note: We use individual replace() calls instead of replace(['x', 'y'], "z")
+        // because we need different replacements for different characters (e.g., '[' -> '(' and ']' -> ')')
+        text.replace('|', " ") // Markdown table pipes
+            .replace('[', "(") // Opening bracket
+            .replace(']', ")") // Closing bracket
+            .replace('→', "->") // Unicode arrows
+            .replace('←', "<-")
+            .replace('↔', "<->")
+            // Box-drawing characters (directory trees)
+            .replace('├', "+")
+            .replace('└', "+")
+            .replace('│', " ")
+            .replace('─', "-")
+            .replace('┌', "+")
+            .replace('┐', "+")
+            .replace('┘', "+")
+            .replace('┤', "+")
+            .replace('┬', "+")
+            .replace('┴', "+")
+            .replace('┼', "+")
+    }
+
     /// Create a new OllamaProvider with specified endpoint, model, and dimension.
     ///
     /// # Arguments
@@ -370,57 +410,57 @@ impl OllamaProvider {
 
         let batch_size = texts.len();
 
-        // Sanitize texts to work around Ollama GGML tokenization bugs
-        // See: https://github.com/ollama/ollama/issues/9499
-        // Certain characters cause token count explosions that crash the attention layer
-        //
-        // Also truncate to ~6000 chars to stay within nomic-embed-text's 2048 token limit
+        // Truncate to ~6000 chars to stay within nomic-embed-text's 2048 token limit
         // (assuming ~3 chars/token average for code, with safety margin)
         const MAX_CHARS: usize = 6000;
 
-        let sanitized_texts: Vec<String> = texts
-            .into_iter()
-            .map(|t| {
-                let sanitized = t
-                    .replace('|', " ") // Markdown table pipes
-                    .replace('[', "(") // Brackets (checkboxes, links)
-                    .replace(']', ")")
-                    .replace('→', "->") // Unicode arrows
-                    .replace('←', "<-")
-                    .replace('↔', "<->")
-                    // Box-drawing characters (directory trees)
-                    .replace('├', "+")
-                    .replace('└', "+")
-                    .replace('│', " ")
-                    .replace('─', "-")
-                    .replace('┌', "+")
-                    .replace('┐', "+")
-                    .replace('┘', "+")
-                    .replace('┤', "+")
-                    .replace('┬', "+")
-                    .replace('┴', "+")
-                    .replace('┼', "+");
+        // Conditionally sanitize based on model
+        // nomic-embed-text: Apply sanitization workaround for GGML tokenization bugs
+        // mxbai-embed-large and others: Use raw text for better quality embeddings
+        let processed_texts: Vec<String> = if self.model == "nomic-embed-text" {
+            // Apply sanitization for nomic-embed-text
+            texts
+                .into_iter()
+                .map(|t| {
+                    let sanitized = Self::sanitize_for_nomic(&t);
 
-                // Truncate if too long (find char boundary)
-                if sanitized.len() > MAX_CHARS {
-                    sanitized
-                        .char_indices()
-                        .take_while(|(i, _)| *i < MAX_CHARS)
-                        .map(|(_, c)| c)
-                        .collect()
-                } else {
-                    sanitized
-                }
-            })
-            .collect();
+                    // Truncate if too long (find char boundary)
+                    if sanitized.len() > MAX_CHARS {
+                        sanitized
+                            .char_indices()
+                            .take_while(|(i, _)| *i < MAX_CHARS)
+                            .map(|(_, c)| c)
+                            .collect()
+                    } else {
+                        sanitized
+                    }
+                })
+                .collect()
+        } else {
+            // Use raw text for mxbai-embed-large and other models
+            texts
+                .into_iter()
+                .map(|t| {
+                    // Still truncate to stay within token limits
+                    if t.len() > MAX_CHARS {
+                        t.char_indices()
+                            .take_while(|(i, _)| *i < MAX_CHARS)
+                            .map(|(_, c)| c)
+                            .collect()
+                    } else {
+                        t
+                    }
+                })
+                .collect()
+        };
 
         // Debug: log first text preview and any remaining non-ASCII
-        if !sanitized_texts.is_empty() {
-            let first = &sanitized_texts[0];
+        if !processed_texts.is_empty() {
+            let first = &processed_texts[0];
             let non_ascii: Vec<char> = first.chars().filter(|c| !c.is_ascii()).collect();
             if !non_ascii.is_empty() {
                 tracing::debug!(
-                    "Batch has {} non-ASCII chars after sanitization: {:?}",
+                    "Batch has {} non-ASCII chars after processing: {:?}",
                     non_ascii.len(),
                     non_ascii.iter().take(10).collect::<Vec<_>>()
                 );
@@ -435,7 +475,7 @@ impl OllamaProvider {
         // Build request body once
         let request_body = OllamaRequest {
             model: self.model.clone(),
-            input: sanitized_texts,
+            input: processed_texts,
         };
 
         // Retry configuration for transient server errors
@@ -1041,5 +1081,153 @@ mod tests {
 
         let provider = provider.unwrap();
         assert_eq!(provider.dimension(), 1024);
+    }
+
+    // Unit tests for conditional sanitization (DIM1024-2002)
+
+    #[test]
+    fn test_sanitize_for_nomic_replaces_pipes() {
+        let input = "function | table | data";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        assert_eq!(output, "function   table   data");
+        assert!(!output.contains('|'));
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_replaces_brackets() {
+        let input = "[x] checkbox [link](url)";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        assert_eq!(output, "(x) checkbox (link)(url)");
+        assert!(!output.contains('['));
+        assert!(!output.contains(']'));
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_replaces_unicode_arrows() {
+        let input = "a → b ← c ↔ d";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        assert_eq!(output, "a -> b <- c <-> d");
+        assert!(!output.contains('→'));
+        assert!(!output.contains('←'));
+        assert!(!output.contains('↔'));
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_replaces_box_drawing() {
+        let input = "├── file\n└── dir\n│   ├── nested";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        assert!(!output.contains('├'));
+        assert!(!output.contains('└'));
+        assert!(!output.contains('│'));
+        assert!(!output.contains('─'));
+        assert!(output.contains('+'));
+        assert!(output.contains('-'));
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_all_problematic_chars() {
+        let input = "| [ ] → ← ↔ ├ └ │ ─ ┌ ┐ ┘ ┤ ┬ ┴ ┼";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+
+        // Verify all problematic characters are replaced
+        let problematic_chars = ['|', '[', ']', '→', '←', '↔', '├', '└', '│', '─',
+                                 '┌', '┐', '┘', '┤', '┬', '┴', '┼'];
+        for ch in &problematic_chars {
+            assert!(!output.contains(*ch), "Output still contains: {}", ch);
+        }
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_preserves_normal_text() {
+        let input = "function calculateTotal(a, b) { return a + b; }";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        // Parentheses in function calls should stay (only brackets are replaced)
+        assert_eq!(output, input);
+    }
+
+    #[tokio::test]
+    async fn test_conditional_sanitization_nomic_embed_text() {
+        // Create provider with nomic-embed-text model
+        let provider = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            768,
+        )
+        .unwrap();
+
+        // Test that model name is set correctly
+        assert_eq!(provider.model, "nomic-embed-text");
+
+        // Verify sanitize_for_nomic works as expected
+        let test_text = "| table | [link] → symbol";
+        let sanitized = OllamaProvider::sanitize_for_nomic(test_text);
+        assert!(!sanitized.contains('|'));
+        assert!(!sanitized.contains('['));
+        assert!(!sanitized.contains('→'));
+    }
+
+    #[tokio::test]
+    async fn test_conditional_sanitization_mxbai_embed_large() {
+        // Create provider with mxbai-embed-large model
+        let provider = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "mxbai-embed-large".to_string(),
+            1024,
+        )
+        .unwrap();
+
+        // Test that model name is set correctly
+        assert_eq!(provider.model, "mxbai-embed-large");
+
+        // For mxbai-embed-large, raw text should be preserved
+        // (We can't test the actual embed_batch_raw without Ollama running,
+        // but we verify the model is set correctly for conditional logic)
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_idempotent() {
+        // Sanitizing twice should produce same result
+        let input = "| [x] → ├ test";
+        let once = OllamaProvider::sanitize_for_nomic(input);
+        let twice = OllamaProvider::sanitize_for_nomic(&once);
+        assert_eq!(once, twice);
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_empty_string() {
+        let input = "";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        assert_eq!(output, "");
+    }
+
+    #[test]
+    fn test_sanitize_for_nomic_unicode_preserved() {
+        // Non-problematic Unicode should be preserved
+        let input = "Hello 世界 مرحبا שלום";
+        let output = OllamaProvider::sanitize_for_nomic(input);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn test_model_comparison_exact_match() {
+        // Verify exact string match for model name
+        let nomic_provider = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "nomic-embed-text".to_string(),
+            768,
+        )
+        .unwrap();
+        assert_eq!(nomic_provider.model, "nomic-embed-text");
+
+        let mxbai_provider = OllamaProvider::new(
+            "http://localhost:11434/api/embed".to_string(),
+            "mxbai-embed-large".to_string(),
+            1024,
+        )
+        .unwrap();
+        assert_eq!(mxbai_provider.model, "mxbai-embed-large");
+
+        // Verify they are different
+        assert_ne!(nomic_provider.model, mxbai_provider.model);
     }
 }
