@@ -12,6 +12,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     libssl-dev \
     libpq-dev \
     postgresql-client \
+    sqlite3 \
     redis-tools \
     jq \
     ripgrep \
