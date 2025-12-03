@@ -1,9 +1,9 @@
 # Ticket: [OLLDIM-1003]: Integration Test in Factory
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,14 +28,14 @@ This test validates the complete zero-config workflow: no environment variables 
 Reference: Phase 1 Deliverable 4 from plan.md
 
 ## Acceptance Criteria
-- [ ] Test `test_zero_config_infers_dimension_mxbai` exists in factory.rs
-- [ ] Test is marked with `#[tokio::test]` and `#[serial]`
-- [ ] Test cleans up all environment variables (provider, model, dimension, endpoint)
-- [ ] Test sets minimal Ollama configuration (provider=ollama, model=mxbai-embed-large)
-- [ ] Test calls `create_provider_from_env().await` successfully
-- [ ] Test verifies provider name is "ollama"
-- [ ] Test verifies dimension is 1024 (correctly inferred)
-- [ ] Test passes when run with `cargo test -p crewchief-maproom`
+- [x] Test `test_zero_config_infers_dimension_mxbai` exists in factory.rs
+- [x] Test is marked with `#[tokio::test]` and `#[serial]`
+- [x] Test cleans up all environment variables (provider, model, dimension, endpoint)
+- [x] Test sets minimal Ollama configuration (provider=ollama, model=mxbai-embed-large)
+- [x] Test calls `create_provider_from_env().await` successfully
+- [x] Test verifies provider name is "ollama"
+- [x] Test verifies dimension is 1024 (correctly inferred)
+- [x] Test passes when run with `cargo test -p crewchief-maproom`
 
 ## Technical Requirements
 - Location: `crates/maproom/src/embedding/factory.rs` in existing `#[cfg(test)] mod tests` block

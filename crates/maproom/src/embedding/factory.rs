@@ -1136,4 +1136,29 @@ mod tests {
         env::remove_var("MAPROOM_EMBEDDING_MODEL");
         env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_zero_config_infers_dimension_mxbai() {
+        // Clean environment
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+
+        // Set up minimal config for Ollama
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "mxbai-embed-large");
+
+        let result = create_provider_from_env().await;
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+
+        assert!(result.is_ok(), "Provider creation should succeed");
+        let provider = result.unwrap();
+        assert_eq!(provider.provider_name(), "ollama");
+        assert_eq!(provider.dimension(), 1024); // Correctly inferred
+    }
 }
