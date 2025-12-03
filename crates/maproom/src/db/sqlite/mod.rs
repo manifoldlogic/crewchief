@@ -208,7 +208,7 @@ impl SqliteStore {
                 "INSERT OR IGNORE INTO commits(repo_id, sha, committed_at) VALUES (?1, ?2, ?3)",
                 params![repo_id, sha, committed_at],
             )?;
-            
+
             if let Some(ca) = committed_at {
                 conn.execute(
                     "UPDATE commits SET committed_at = ?3 WHERE repo_id = ?1 AND sha = ?2 AND committed_at IS NULL",
@@ -340,7 +340,7 @@ impl SqliteStore {
                     file.last_modified
                 ],
             )?;
-            
+
             let id: i64 = conn.query_row(
                 "SELECT id FROM files WHERE commit_id = ?1 AND relpath = ?2 AND content_hash = ?3",
                 params![file.commit_id, file.relpath, file.content_hash],

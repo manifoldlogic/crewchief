@@ -207,7 +207,7 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                 .or_else(|| env_endpoint)
                 .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string());
             let model = env::var("MAPROOM_EMBEDDING_MODEL")
-                .unwrap_or_else(|_| "nomic-embed-text".to_string());
+                .unwrap_or_else(|_| "mxbai-embed-large".to_string());
 
             // Load configuration from environment (including dimension)
             let config = EmbeddingConfig::from_env()?;

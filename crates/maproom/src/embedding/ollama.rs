@@ -113,7 +113,7 @@ impl OllamaProvider {
     pub const DEFAULT_ENDPOINT: &'static str = "http://localhost:11434/api/embed";
 
     /// Default model for embeddings.
-    pub const DEFAULT_MODEL: &'static str = "nomic-embed-text";
+    pub const DEFAULT_MODEL: &'static str = "mxbai-embed-large";
 
     /// Request timeout in seconds (increased for larger batches).
     const REQUEST_TIMEOUT_SECS: u64 = 60;
@@ -267,7 +267,7 @@ impl OllamaProvider {
         Self::new(
             Self::DEFAULT_ENDPOINT.to_string(),
             Self::DEFAULT_MODEL.to_string(),
-            768, // nomic-embed-text default dimension
+            1024, // mxbai-embed-large default dimension
         )
     }
 
