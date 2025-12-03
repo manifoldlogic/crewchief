@@ -1,9 +1,9 @@
 # Ticket: [OLLDIM-1002]: Inference Logic in from_env()
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -31,16 +31,16 @@ With the helper function from OLLDIM-1001 in place, this ticket integrates it in
 Reference: Phase 1 Deliverable 2 from plan.md
 
 ## Acceptance Criteria
-- [ ] Model defaulting occurs before inference for zero-config case
-- [ ] Inference only runs for Ollama provider (Provider::Ollama check)
-- [ ] Inference skipped if MAPROOM_EMBEDDING_DIMENSION environment variable is set
-- [ ] Correct dimension inferred for known models (768 for nomic, 1024 for mxbai)
-- [ ] Warning logged for unknown models with actionable guidance
-- [ ] Debug log on successful inference showing model and dimension
-- [ ] Debug log on model defaulting
-- [ ] Explicit dimension override works (overrides inference)
-- [ ] Code comments explain OpenAI-centric defaults and precedence
-- [ ] All 6 integration unit tests pass
+- [x] Model defaulting occurs before inference for zero-config case
+- [x] Inference only runs for Ollama provider (Provider::Ollama check)
+- [x] Inference skipped if MAPROOM_EMBEDDING_DIMENSION environment variable is set
+- [x] Correct dimension inferred for known models (768 for nomic, 1024 for mxbai)
+- [x] Warning logged for unknown models with actionable guidance
+- [x] Debug log on successful inference showing model and dimension
+- [x] Debug log on model defaulting
+- [x] Explicit dimension override works (overrides inference)
+- [x] Code comments explain OpenAI-centric defaults and precedence
+- [x] All 6 integration unit tests pass
 
 ## Technical Requirements
 - Location: `crates/maproom/src/embedding/config.rs` lines ~115-124 (after model loading, before dimension loading)

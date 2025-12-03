@@ -115,9 +115,43 @@ impl EmbeddingConfig {
             config.model = model;
         }
 
-        // Load dimension
-        if let Ok(dim) = env::var("MAPROOM_EMBEDDING_DIMENSION") {
-            config.dimension = dim.parse().map_err(|_| ConfigError::InvalidValue {
+        // NEW: Default to Ollama model if provider is Ollama and model is still OpenAI default
+        // This ensures inference sees the correct model in zero-config scenarios
+        // Note: Config defaults are OpenAI-centric (dimension: 1536, model: "text-embedding-3-small")
+        // but factory defaults to Ollama with mxbai-embed-large when auto-detecting
+        if config.provider == Provider::Ollama && config.model == "text-embedding-3-small" {
+            config.model = "mxbai-embed-large".to_string();
+            tracing::debug!("Defaulting to mxbai-embed-large for Ollama provider");
+        }
+
+        // Track whether dimension was explicitly set (clearer than checking is_err() later)
+        let explicit_dimension = env::var("MAPROOM_EMBEDDING_DIMENSION").ok();
+
+        // NEW: Infer dimension for Ollama if not explicitly configured
+        // This fixes the bug where zero-config setups use wrong default dimension
+        // Precedence: explicit > inferred > default
+        if explicit_dimension.is_none() && config.provider == Provider::Ollama {
+            if let Some(inferred_dim) = infer_ollama_dimension(&config.model) {
+                tracing::debug!(
+                    "Inferred dimension {} for Ollama model '{}'",
+                    inferred_dim,
+                    config.model
+                );
+                config.dimension = inferred_dim;
+            } else {
+                tracing::warn!(
+                    "Unknown Ollama model '{}'. Cannot infer embedding dimension. \
+                     Please set MAPROOM_EMBEDDING_DIMENSION explicitly for custom models. \
+                     Defaulting to {} dimensions - this may cause errors if incorrect.",
+                    config.model,
+                    config.dimension
+                );
+            }
+        }
+
+        // Apply explicit dimension if provided (overrides inference)
+        if let Some(dim_str) = explicit_dimension {
+            config.dimension = dim_str.parse().map_err(|_| ConfigError::InvalidValue {
                 field: "EMBEDDING_DIMENSION".to_string(),
                 reason: "Must be a positive integer".to_string(),
             })?;
@@ -502,7 +536,6 @@ impl RetryConfig {
 ///
 /// - `Some(dimension)` for known models
 /// - `None` for unknown models (caller should warn and use default)
-#[allow(dead_code)] // Used by from_env() in OLLDIM-1002
 fn infer_ollama_dimension(model: &str) -> Option<usize> {
     if model.starts_with("nomic-embed-text") {
         Some(768)
@@ -516,6 +549,7 @@ fn infer_ollama_dimension(model: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_provider_parsing() {
@@ -893,6 +927,113 @@ mod tests {
     fn test_infer_ollama_dimension_unknown_model() {
         assert_eq!(infer_ollama_dimension("custom-model"), None);
         assert_eq!(infer_ollama_dimension("unknown"), None);
+    }
+
+    // Integration tests for dimension inference in from_env()
+
+    #[test]
+    #[serial]
+    fn test_from_env_infers_dimension_mxbai() {
+        // Test that mxbai-embed-large model infers 1024 dimensions
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "mxbai-embed-large");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(config.dimension, 1024);
+        assert_eq!(config.model, "mxbai-embed-large");
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_infers_dimension_nomic() {
+        // Test that nomic-embed-text model infers 768 dimensions
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(config.dimension, 768);
+        assert_eq!(config.model, "nomic-embed-text");
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_explicit_dimension_overrides_inference() {
+        // Test that explicit dimension overrides inference
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "mxbai-embed-large");
+        env::set_var("MAPROOM_EMBEDDING_DIMENSION", "2048");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(config.dimension, 2048); // Explicit wins over inferred 1024
+        assert_eq!(config.model, "mxbai-embed-large");
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_unknown_model_keeps_default() {
+        // Test that unknown Ollama model uses default dimension (1536)
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "custom-unknown-model");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(config.dimension, 1536); // Default dimension kept
+        assert_eq!(config.model, "custom-unknown-model");
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_inference_only_for_ollama() {
+        // Test that inference doesn't affect non-Ollama providers
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "mxbai-embed-large");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(config.dimension, 1536); // Default OpenAI dimension, not inferred
+        assert_eq!(config.model, "mxbai-embed-large");
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_zero_config_ollama() {
+        // Test true zero-config: no env vars set, provider is Ollama (from default)
+        // Actually, default provider is OpenAI, so we need to set provider to Ollama
+        // This tests the model defaulting + inference flow
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config = EmbeddingConfig::from_env().unwrap();
+        assert_eq!(config.provider, Provider::Ollama);
+        assert_eq!(config.model, "mxbai-embed-large"); // Defaulted from OpenAI default
+        assert_eq!(config.dimension, 1024); // Inferred from defaulted model
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     }
 }
 
