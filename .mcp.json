@@ -1,14 +1,14 @@
 {
   "mcpServers": {
     "maproom": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "@crewchief/maproom-mcp@latest"
+        "/workspace/packages/maproom-mcp/bin/cli.cjs"
       ],
       "env": {
         "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/maproom.db",
-        "MAPROOM_EMBEDDING_PROVIDER": "ollama"
+        "MAPROOM_EMBEDDING_PROVIDER": "ollama",
+        "CREWCHIEF_MAPROOM_BIN": "/workspace/target/release/crewchief-maproom"
       }
     },
     "exa": {

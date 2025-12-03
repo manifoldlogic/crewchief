@@ -102,6 +102,39 @@ impl Default for ExpandConfig {
     }
 }
 
+/// Parameters for the status JSON-RPC method.
+#[derive(Debug, Deserialize, Default)]
+pub struct StatusParams {
+    /// Optional repo name filter
+    pub repo: Option<String>,
+}
+
+/// Worktree statistics in status response.
+#[derive(Debug, Serialize)]
+pub struct WorktreeStatus {
+    pub name: String,
+    pub path: String,
+    pub file_count: i64,
+    pub chunk_count: i64,
+}
+
+/// Repository statistics in status response.
+#[derive(Debug, Serialize)]
+pub struct RepoStatus {
+    pub name: String,
+    pub worktrees: Vec<WorktreeStatus>,
+}
+
+/// Response for the status JSON-RPC method.
+/// Sync with: packages/daemon-client/src/client.ts StatusResult
+#[derive(Debug, Serialize)]
+pub struct StatusResult {
+    pub repos: Vec<RepoStatus>,
+    pub total_repos: usize,
+    pub total_files: i64,
+    pub total_chunks: i64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: String,

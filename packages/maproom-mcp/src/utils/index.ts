@@ -2,7 +2,7 @@
  * Utility functions for the Maproom MCP server
  */
 
-export { Cache, explainCache } from './cache'
+export { Cache } from './cache'
 export {
   execGit,
   isCommitCheckedOut,

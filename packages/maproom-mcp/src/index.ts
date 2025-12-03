@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import { LRUCache } from 'lru-cache'
 import { getCurrentBranch } from './utils/git.js'
 import { resolveDatabaseConfig } from './utils/resolve-database.js'
+import { getDaemonClient } from './daemon.js'
 
 // IMPORTANT: Never write logs to stdout; MCP JSON-RPC must be the only stdout output.
 // Route pino logs to stderr to avoid corrupting the protocol stream.
@@ -257,39 +258,6 @@ DEBUG: Set debug=true to see score breakdowns`,
     }
   },
   {
-    name: 'scan',
-    description: 'Scan and index an entire repository or worktree with automatic embedding generation - USE FOR: initial indexing of a new repository, re-indexing after major changes, or when you need to ensure all files are indexed. This is a comprehensive operation that discovers and indexes all supported files in the specified path. FASTER THAN: calling upsert on individual files. USE WHEN: setting up a new codebase for search, or when search results seem incomplete.\n\nMULTI-PROVIDER SUPPORT: Automatically detects and uses available embedding provider (Ollama, OpenAI, or Google Vertex AI). Provider selection is cached for session performance.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        repo: { type: 'string', description: 'Repository name (e.g., "crewchief"). Will auto-detect from git remote if not provided.' },
-        worktree: { type: 'string', description: 'Worktree name (e.g., "main", "feature-branch"). Will auto-detect from current git branch if not provided.' },
-        path: { type: 'string', description: 'Path to scan (absolute or relative). Defaults to current directory if not provided.' },
-        commit: { type: 'string', description: 'Git commit hash (use "HEAD" for current). Defaults to HEAD if not provided.' },
-        concurrency: { type: 'integer', minimum: 1, maximum: 16, default: 4, description: 'Number of concurrent file processing workers (default: 4)' },
-        parallel: { type: 'boolean', default: false, description: 'Enable parallel batch processing for better performance with large codebases' },
-        languages: { type: 'array', items: { type: 'string' }, description: 'Optional: limit to specific languages (e.g., ["typescript", "rust"])' },
-        exclude: { type: 'array', items: { type: 'string' }, description: 'Optional: glob patterns to exclude (e.g., ["node_modules/**", "*.test.ts"])' }
-      },
-      required: []
-    }
-  },
-  {
-    name: 'upsert',
-    description: 'Index/update specific files in maproom with automatic embedding generation - USE WHEN: files have changed and need reindexing. FOR FULL REPO: use "scan" instead. Only use upsert for targeted updates of a few specific files. Spawns the Rust indexer.\n\nMULTI-PROVIDER SUPPORT: Automatically detects and uses available embedding provider (Ollama, OpenAI, or Google Vertex AI). Provider selection is cached for session performance.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        paths: { type: 'array', items: { type: 'string' }, description: 'Array of file paths to index' },
-        commit: { type: 'string', description: 'Git commit hash (use HEAD for current)' },
-        repo: { type: 'string', description: 'Repository name (e.g., "crewchief")' },
-        worktree: { type: 'string', description: 'Worktree name to index' },
-        root: { type: 'string', description: 'Root directory path of the repository' }
-      },
-      required: ['paths', 'commit', 'repo', 'worktree', 'root']
-    }
-  },
-  {
     name: 'context',
     description: 'Retrieve contextually relevant code sections around a given chunk. Assembles a ContextBundle with the target chunk plus related context (imports, callers, tests, etc.) within a token budget. USE AFTER: getting chunk_id from search results. BEST FOR: understanding code in context, gathering related functionality.',
     inputSchema: {
@@ -319,20 +287,6 @@ DEBUG: Set debug=true to see score breakdowns`,
       required: ['chunk_id']
     }
   },
-  {
-    name: 'explain',
-    description: 'Generate a detailed symbol card for a code chunk. Provides markdown-formatted explanation with metadata, relationships, code preview, and usage examples. USE AFTER: getting chunk_id from search results. EXPERIMENTAL: Must be enabled in configuration. Uses intelligent caching for performance.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        chunk_id: {
-          anyOf: [{ type: 'string' }, { type: 'integer' }],
-          description: 'Chunk ID to explain (from search results). Can be string or number.'
-        }
-      },
-      required: ['chunk_id']
-    }
-  }
 ]
 
 async function getPg(): Promise<Client> {
@@ -360,23 +314,75 @@ async function getAvailableRepos(client: Client): Promise<string[]> {
 async function handleStatus(params: any): Promise<any> {
   const { repo } = params
 
-  // Check database type - return degraded response for SQLite
+  // Check database type
   const dbConfig = resolveDatabaseConfig()
   if (dbConfig.type === 'sqlite') {
-    log.info({ sqlitePath: dbConfig.path }, 'SQLite mode: returning degraded status response')
-    return {
-      repos: [],
-      totalRepos: 0,
-      totalFiles: 0,
-      totalChunks: 0,
-      hint: 'SQLite mode: detailed statistics not available. Use search tool for indexed content.',
-      backendType: 'sqlite',
-      sqlitePath: dbConfig.path,
-      searchTips: [
-        'Use simple terms: "auth" instead of "authentication_handler"',
-        'Search concepts: "message bus" or "event handling"',
-        'Filter by type: use filter:"code" or filter:"docs"',
-      ],
+    log.info({ sqlitePath: dbConfig.path }, 'SQLite mode: querying status via daemon')
+
+    try {
+      const daemon = getDaemonClient()
+      const statusResult = await daemon.status({ repo })
+
+      // Calculate totals from daemon response
+      const totalFiles = statusResult.total_files
+      const totalChunks = statusResult.total_chunks
+
+      // Format repos for MCP response (convert snake_case to camelCase)
+      const repos = statusResult.repos.map(r => ({
+        name: r.name,
+        worktrees: r.worktrees.map(wt => ({
+          name: wt.name,
+          path: wt.path,
+          fileCount: wt.file_count,
+          chunkCount: wt.chunk_count,
+        }))
+      }))
+
+      let hint = ''
+      let nextStep: string | undefined
+
+      if (repos.length === 0) {
+        hint = 'No repositories indexed yet.\n\nTo get started:\n1. Run `crewchief-maproom scan` to index a repository\n2. Then use search to find your code'
+        nextStep = 'Run crewchief-maproom scan to index your first repository'
+      } else if (totalFiles === 0) {
+        hint = 'Repository found but no files indexed.\n\nTo fix:\n1. Run `crewchief-maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+        nextStep = 'Run crewchief-maproom scan to index files'
+      } else {
+        hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
+      }
+
+      return {
+        repos,
+        totalRepos: repos.length,
+        totalFiles,
+        totalChunks,
+        hint,
+        nextStep,
+        backendType: 'sqlite',
+        sqlitePath: dbConfig.path,
+        searchTips: [
+          'Use simple terms: "auth" instead of "authentication_handler"',
+          'Search concepts: "message bus" or "event handling"',
+          'Filter by type: use filter:"code" or filter:"docs"',
+        ],
+      }
+    } catch (error) {
+      log.error({ error }, 'Failed to get status from daemon')
+      // Fallback to empty response on error
+      return {
+        repos: [],
+        totalRepos: 0,
+        totalFiles: 0,
+        totalChunks: 0,
+        hint: `Failed to query status: ${error instanceof Error ? error.message : String(error)}`,
+        backendType: 'sqlite',
+        sqlitePath: dbConfig.path,
+        searchTips: [
+          'Use simple terms: "auth" instead of "authentication_handler"',
+          'Search concepts: "message bus" or "event handling"',
+          'Filter by type: use filter:"code" or filter:"docs"',
+        ],
+      }
     }
   }
 
@@ -455,11 +461,11 @@ async function handleStatus(params: any): Promise<any> {
     let nextStep: string | undefined
 
     if (Object.keys(repos).length === 0) {
-      hint = '⚠️ No repositories indexed yet.\n\nTo get started:\n1. Use the scan tool to index a repository\n2. Then use search to find your code'
-      nextStep = 'Run scan tool to index your first repository'
+      hint = '⚠️ No repositories indexed yet.\n\nTo get started:\n1. Run `crewchief-maproom scan` to index a repository\n2. Then use search to find your code'
+      nextStep = 'Run crewchief-maproom scan to index your first repository'
     } else if (totalFiles === 0) {
-      hint = '⚠️ Repository found but no files indexed.\n\nTo fix:\n1. Run scan tool to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
-      nextStep = 'Run scan tool to index files'
+      hint = '⚠️ Repository found but no files indexed.\n\nTo fix:\n1. Run `crewchief-maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+      nextStep = 'Run crewchief-maproom scan to index files'
     } else {
       hint = `✓ Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
     }
@@ -837,15 +843,15 @@ export async function handleSearch(params: any): Promise<any> {
         ? 'Did you mean repo:"crewchief"?'
         : availableRepos.length > 0
           ? `Available repos: ${availableRepos.join(', ')}`
-          : 'No repos indexed yet. Use upsert tool to index files.'
+          : 'No repos indexed yet. Run `crewchief-maproom scan` to index files.'
 
       return {
         hits: [],
         error: 'Repository not found',
-        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. Run scan tool to index this repository\n3. Then search again`,
+        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. Run \`crewchief-maproom scan\` to index this repository\n3. Then search again`,
         availableRepos,
         suggestion,
-        nextStep: 'Use the scan tool to index this repository before searching'
+        nextStep: 'Run `crewchief-maproom scan` to index this repository before searching'
       }
     }
     const repoId = repoRows[0].id
@@ -860,7 +866,7 @@ export async function handleSearch(params: any): Promise<any> {
     if (resolutionMetadata.fallback && resolutionMetadata.detected_branch) {
       hint = `Current branch '${resolutionMetadata.detected_branch}' is not indexed.\n\n` +
         `To search your current code:\n` +
-        `1. Run: mcp__maproom__scan({repo: "${repo}", worktree: "${resolutionMetadata.detected_branch}"})\n\n` +
+        `1. Run: crewchief-maproom scan --repo "${repo}" --worktree "${resolutionMetadata.detected_branch}"\n\n` +
         `Searching '${resolutionMetadata.worktree}' worktree instead.`
     } else if (resolutionMetadata.mode === 'all' && resolutionMetadata.fallback) {
       hint = `Failed to detect current branch (not in git repository or detached HEAD).\n\n` +
@@ -1053,8 +1059,8 @@ export async function handleSearch(params: any): Promise<any> {
       // Build comprehensive hint - preserve fallback hint if present, otherwise use standard hint
       if (!hint) {
         result.hint = worktreeInfo
-          ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - use scan tool to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
-          : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Use scan tool to index it first`
+          ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - run \`crewchief-maproom scan\` to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
+          : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Run \`crewchief-maproom scan\` to index it first`
       }
       
       if (suggestions.length > 0) {
@@ -1149,167 +1155,6 @@ async function handleOpen(params: any): Promise<any> {
   try {
     const { handleOpenTool } = await import('./tools/open.js')
     const result = await handleOpenTool(params, client)
-    return result
-  } finally {
-    await client.end().catch(() => {})
-  }
-}
-
-async function handleScan(params: any): Promise<any> {
-  const { spawn } = await import('node:child_process')
-
-  try {
-    // Detect provider before scanning
-    const { getProviderConfig } = await import('./utils/provider-detection.js')
-    let providerConfig
-    try {
-      providerConfig = await getProviderConfig()
-      log.info({ provider: providerConfig.provider, dimension: providerConfig.dimension }, 'Scanning with provider')
-    } catch (error: any) {
-      if (error.message && error.message.includes('No embedding provider available')) {
-        return {
-          success: false,
-          error: 'Cannot scan with embeddings: No provider available.\n' + error.message,
-          hint: 'Configure an embedding provider to enable semantic search. See error message for setup instructions.'
-        }
-      }
-      throw error
-    }
-
-    // Build command arguments
-    const args: string[] = ['scan']
-
-    if (params.repo) args.push('--repo', params.repo)
-    if (params.worktree) args.push('--worktree', params.worktree)
-    if (params.path) args.push('--path', params.path)
-    if (params.commit) args.push('--commit', params.commit)
-    if (params.concurrency) args.push('--concurrency', String(params.concurrency))
-    if (params.parallel) args.push('--parallel')
-    if (params.languages && Array.isArray(params.languages)) {
-      params.languages.forEach((lang: string) => args.push('--languages', lang))
-    }
-    if (params.exclude && Array.isArray(params.exclude)) {
-      params.exclude.forEach((pattern: string) => args.push('--exclude', pattern))
-    }
-
-    // Add provider flag
-    args.push('--provider', providerConfig.provider)
-
-    log.info({ args }, 'spawning crewchief-maproom scan')
-
-    // Spawn the Rust binary
-    const { findMaproomBinary } = await import('./utils/process.js')
-    const binaryPath = await findMaproomBinary()
-
-    if (!binaryPath) {
-      throw new Error('Could not find crewchief-maproom binary')
-    }
-
-    const proc = spawn(binaryPath, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env }
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    proc.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
-    })
-
-    proc.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-      log.info({ line: chunk.toString().trim() }, 'scan output')
-    })
-
-    const exitCode = await new Promise<number>((resolve) => {
-      proc.on('exit', (code: number | null) => resolve(code ?? 1))
-    })
-
-    if (exitCode !== 0) {
-      log.error({ exitCode, stderr }, 'scan command failed')
-      return {
-        success: false,
-        error: `Scan command failed with exit code ${exitCode}`,
-        stderr: stderr.trim(),
-        hint: 'Check that the path is a valid git repository and that you have the necessary permissions'
-      }
-    }
-
-    // Parse output for statistics
-    const lines = stderr.split('\n')
-    const stats: any = {
-      filesProcessed: 0,
-      chunksCreated: 0,
-      duration: null
-    }
-
-    for (const line of lines) {
-      const filesMatch = line.match(/Processed (\d+) files/)
-      if (filesMatch) stats.filesProcessed = parseInt(filesMatch[1], 10)
-
-      const chunksMatch = line.match(/Created (\d+) chunks/)
-      if (chunksMatch) stats.chunksCreated = parseInt(chunksMatch[1], 10)
-
-      const durationMatch = line.match(/Completed in ([\d.]+)s/)
-      if (durationMatch) stats.duration = durationMatch[1] + 's'
-    }
-
-    log.info({ stats }, 'scan completed')
-
-    return {
-      success: true,
-      message: 'Repository scan completed successfully',
-      stats,
-      repo: params.repo || 'auto-detected',
-      worktree: params.worktree || 'auto-detected',
-      path: params.path || 'current directory',
-      provider: providerConfig.provider,
-      dimension: providerConfig.dimension,
-      hint: 'Use the status tool to verify indexing results, then search to find your code'
-    }
-  } catch (error: any) {
-    log.error({ error: error.message }, 'scan error')
-    return {
-      success: false,
-      error: error.message,
-      hint: 'Ensure crewchief-maproom binary is available and the path is a valid git repository'
-    }
-  }
-}
-
-async function handleUpsert(params: any): Promise<any> {
-  try {
-    const { handleUpsertTool, formatUpsertError } = await import('./tools/upsert.js')
-    const result = await handleUpsertTool(params)
-    return result
-  } catch (error) {
-    const { formatUpsertError } = await import('./tools/upsert.js')
-    throw formatUpsertError(error)
-  }
-}
-
-async function handleExplain(params: any): Promise<any> {
-  // Check if explain tool is enabled via environment variable
-  const explainEnabled = process.env.MAPROOM_EXPLAIN_ENABLED === 'true'
-
-  // Check database type
-  const dbConfig = resolveDatabaseConfig()
-  if (dbConfig.type === 'sqlite') {
-    // Explain tool is not yet supported in SQLite mode
-    // It requires complex queries that haven't been ported to the daemon
-    return {
-      error: 'NOT_SUPPORTED',
-      message: 'Explain tool is not yet supported in SQLite mode. Use the context tool instead for related code.',
-      hint: 'The explain tool requires PostgreSQL. Use context tool with chunk_id for similar functionality.',
-    }
-  }
-
-  // PostgreSQL mode
-  const client = await getPg()
-  try {
-    const { handleExplainTool } = await import('./tools/explain.js')
-    const result = await handleExplainTool(params, client, { enabled: explainEnabled })
     return result
   } finally {
     await client.end().catch(() => {})
@@ -1423,17 +1268,6 @@ async function handleMessage(msg: JsonRpcRequest) {
           respond(msg.id ?? null, errorResponse)
           log.error({ id: msg.id, tool: name, error }, 'tool error')
         }
-      } else if (name === 'upsert') {
-        try {
-          const res = await handleUpsert(args)
-          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
-          log.info({ id: msg.id, tool: name }, 'sent tool result')
-        } catch (error) {
-          const { formatUpsertError } = await import('./tools/upsert.js')
-          const errorResponse = formatUpsertError(error)
-          respond(msg.id ?? null, errorResponse)
-          log.error({ id: msg.id, tool: name, error }, 'tool error')
-        }
       } else if (name === 'context') {
         try {
           const res = await handleContext(args)
@@ -1442,26 +1276,6 @@ async function handleMessage(msg: JsonRpcRequest) {
         } catch (error) {
           const { formatContextError } = await import('./tools/context.js')
           const errorResponse = formatContextError(error)
-          respond(msg.id ?? null, errorResponse)
-          log.error({ id: msg.id, tool: name, error }, 'tool error')
-        }
-      } else if (name === 'scan') {
-        try {
-          const res = await handleScan(args)
-          respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
-          log.info({ id: msg.id, tool: name }, 'sent tool result')
-        } catch (error: any) {
-          respond(msg.id ?? null, undefined, new Error(error.message || 'Scan failed'))
-          log.error({ id: msg.id, tool: name, error }, 'tool error')
-        }
-      } else if (name === 'explain') {
-        try {
-          const res = await handleExplain(args)
-          respond(msg.id ?? null, { content: [{ type: 'text', text: res }] })
-          log.info({ id: msg.id, tool: name }, 'sent tool result')
-        } catch (error) {
-          const { formatExplainError } = await import('./tools/explain.js')
-          const errorResponse = formatExplainError(error)
           respond(msg.id ?? null, errorResponse)
           log.error({ id: msg.id, tool: name, error }, 'tool error')
         }
@@ -1477,14 +1291,6 @@ async function handleMessage(msg: JsonRpcRequest) {
     case 'open':
       respond(msg.id, await handleOpen(msg.params))
       log.info({ id: msg.id }, 'sent open result')
-      return
-    case 'scan':
-      respond(msg.id, await handleScan(msg.params))
-      log.info({ id: msg.id }, 'sent scan result')
-      return
-    case 'upsert':
-      respond(msg.id, await handleUpsert(msg.params))
-      log.info({ id: msg.id }, 'sent upsert result')
       return
     default:
       respond(msg.id, undefined, new Error(`unknown method: ${msg.method}`))

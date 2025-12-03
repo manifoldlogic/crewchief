@@ -10,7 +10,10 @@ use crewchief_maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, Expa
 use crewchief_maproom::db::{connect, SearchHit, SqliteStore};
 use crewchief_maproom::embedding::EmbeddingService;
 
-use self::types::{ContextParams, JsonRpcRequest, JsonRpcResponse, SearchParams};
+use self::types::{
+    ContextParams, JsonRpcRequest, JsonRpcResponse, RepoStatus, SearchParams, StatusParams,
+    StatusResult, WorktreeStatus,
+};
 
 /// Deduplicate search hits by identity (file_relpath, symbol_name, start_line).
 fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit> {
@@ -169,6 +172,29 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                         id,
                         -32000,
                         "Context assembly failed".to_string(),
+                        Some(serde_json::json!(e.to_string())),
+                    )
+                }
+            }
+        }
+        "status" => {
+            let params: StatusParams = match serde_json::from_value(
+                request.params.clone().unwrap_or(serde_json::Value::Null),
+            ) {
+                Ok(p) => p,
+                Err(_) => StatusParams::default(),
+            };
+
+            match execute_status(state, params).await {
+                Ok(result) => {
+                    JsonRpcResponse::success(id, serde_json::to_value(result).unwrap())
+                }
+                Err(e) => {
+                    error!("Status query failed: {}", e);
+                    JsonRpcResponse::error(
+                        id,
+                        -32000,
+                        "Status query failed".to_string(),
                         Some(serde_json::json!(e.to_string())),
                     )
                 }
@@ -362,4 +388,79 @@ async fn execute_context(
 
     // Serialize the bundle to JSON
     serde_json::to_value(bundle).context("Failed to serialize context bundle")
+}
+
+/// Execute a status request.
+///
+/// Queries the database for repository and worktree statistics.
+async fn execute_status(state: Arc<DaemonState>, params: StatusParams) -> Result<StatusResult> {
+    // Get all repos
+    let all_repos = state
+        .store
+        .list_repos()
+        .await
+        .context("Failed to list repos")?;
+
+    // Filter by repo name if specified
+    let repos_to_query: Vec<_> = if let Some(ref repo_filter) = params.repo {
+        all_repos
+            .into_iter()
+            .filter(|r| r.name == *repo_filter || r.name.ends_with(&format!("/{}", repo_filter)))
+            .collect()
+    } else {
+        all_repos
+    };
+
+    let mut repo_statuses = Vec::new();
+    let mut total_files: i64 = 0;
+    let mut total_chunks: i64 = 0;
+
+    for repo in &repos_to_query {
+        // Get worktrees for this repo
+        let worktrees = state
+            .store
+            .list_worktrees(repo.id)
+            .await
+            .context("Failed to list worktrees")?;
+
+        let mut worktree_statuses = Vec::new();
+
+        for wt in worktrees {
+            // Get chunk count for this worktree
+            let chunk_count = state
+                .store
+                .get_worktree_chunk_count(wt.id)
+                .await
+                .unwrap_or(0);
+
+            // Get file count (we need to add this method or use a raw query)
+            let file_count = state
+                .store
+                .get_worktree_file_count(wt.id)
+                .await
+                .unwrap_or(0);
+
+            total_files += file_count;
+            total_chunks += chunk_count;
+
+            worktree_statuses.push(WorktreeStatus {
+                name: wt.name,
+                path: wt.abs_path,
+                file_count,
+                chunk_count,
+            });
+        }
+
+        repo_statuses.push(RepoStatus {
+            name: repo.name.clone(),
+            worktrees: worktree_statuses,
+        });
+    }
+
+    Ok(StatusResult {
+        total_repos: repo_statuses.len(),
+        repos: repo_statuses,
+        total_files,
+        total_chunks,
+    })
 }

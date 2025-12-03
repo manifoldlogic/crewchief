@@ -239,7 +239,7 @@ export function formatContextError(error: unknown): any {
                 error.code === 'CHUNK_NOT_FOUND'
                   ? 'Use the search tool to find valid chunks and get their chunk_id values.'
                   : error.code === 'FILE_NOT_FOUND'
-                    ? 'Try re-indexing with the upsert tool if files have been moved or deleted.'
+                    ? 'Try re-indexing with `crewchief-maproom scan` if files have been moved or deleted.'
                     : error.code === 'INVALID_PARAMS'
                       ? 'Check chunk_id format (must be positive integer) and budget_tokens range (1000-20000).'
                       : 'Check your parameters and try again.',

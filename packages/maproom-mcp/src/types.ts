@@ -104,25 +104,6 @@ export interface UpsertToolConfig {
 }
 
 /**
- * Parameters for the Explain tool
- */
-export interface ExplainParams {
-  /** Chunk ID to explain (from search results) */
-  chunk_id: number
-}
-
-/**
- * Configuration options for the Explain tool
- */
-export interface ExplainToolConfig {
-  /** Whether the tool is enabled (default: false - experimental) */
-  enabled?: boolean
-
-  /** Cache TTL in milliseconds (default: 5 minutes) */
-  cacheTtlMs?: number
-}
-
-/**
  * Parameters for the Search tool
  */
 export interface SearchParams {

@@ -6,6 +6,8 @@
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 
+use super::resolve_repo_id;
+
 /// Result from FTS5 search
 #[derive(Debug, Clone)]
 pub struct FtsResult {
@@ -97,15 +99,8 @@ pub fn search_fts(
         return Ok(vec![]);
     }
 
-    // Resolve repo_id
-    let repo_id: i64 = conn
-        .query_row(
-            "SELECT id FROM repos WHERE name = ?1",
-            params![repo],
-            |row| row.get(0),
-        )
-        .optional()?
-        .ok_or_else(|| anyhow::anyhow!("Repository not found: {}", repo))?;
+    // Resolve repo_id with fuzzy matching
+    let repo_id = resolve_repo_id(conn, repo)?;
 
     // Resolve worktree_id if specified
     let worktree_id: Option<i64> = if let Some(w) = worktree {

@@ -157,16 +157,3 @@ export class Cache<T = any> {
     }
   }
 }
-
-/**
- * Global cache instance for explain tool
- * Default TTL: 5 minutes
- */
-export const explainCache = new Cache<string>(5 * 60 * 1000)
-
-/**
- * Periodic cleanup interval (every 1 minute)
- */
-setInterval(() => {
-  explainCache.cleanup()
-}, 60 * 1000)

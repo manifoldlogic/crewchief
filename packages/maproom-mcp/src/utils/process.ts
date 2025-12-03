@@ -293,8 +293,8 @@ export async function spawnProcess(
 /**
  * Try spawning a process with multiple candidate binaries
  *
- * Used by upsert tool for one-time file indexing operations. Spawning is the appropriate
- * pattern for one-time operations where spawn overhead (~100-200ms) is negligible.
+ * Spawning is the appropriate pattern for one-time operations where spawn
+ * overhead (~100-200ms) is negligible.
  *
  * For repeated operations (like search), use DaemonClient instead:
  * @see packages/maproom-mcp/src/daemon.ts - Singleton daemon pattern for repeated operations

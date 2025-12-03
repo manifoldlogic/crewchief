@@ -39,6 +39,10 @@ export type {
   ContextParams,
   RustContextItem,
   RustContextBundle,
+  StatusParams,
+  StatusResult,
+  RepoStatus,
+  WorktreeStatus,
 } from './client.js'
 
 // Configuration and types

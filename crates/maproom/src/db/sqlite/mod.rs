@@ -139,6 +139,52 @@ fn verify_vec_extension(conn: &Connection) -> bool {
         .is_ok()
 }
 
+/// Resolve a repo name to its ID with fuzzy matching.
+///
+/// Supports:
+/// - Exact match: "manifoldlogic/crewchief" -> matches "manifoldlogic/crewchief"
+/// - Suffix match: "crewchief" -> matches "manifoldlogic/crewchief"
+///
+/// Returns the repo ID if found, or an error if not found or ambiguous.
+pub fn resolve_repo_id(conn: &Connection, repo: &str) -> anyhow::Result<i64> {
+    // Try exact match first
+    let exact_match: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM repos WHERE name = ?1",
+            params![repo],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if let Some(id) = exact_match {
+        return Ok(id);
+    }
+
+    // Try suffix match (e.g., "crewchief" matches "owner/crewchief")
+    // Use LIKE with escaped pattern for suffix matching
+    let pattern = format!("%/{}", repo);
+    let suffix_matches: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, name FROM repos WHERE name LIKE ?1")?;
+        let rows = stmt.query_map(params![pattern], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    match suffix_matches.len() {
+        0 => anyhow::bail!("Repository not found: {}", repo),
+        1 => Ok(suffix_matches[0].0),
+        _ => {
+            let names: Vec<&str> = suffix_matches.iter().map(|(_, n)| n.as_str()).collect();
+            anyhow::bail!(
+                "Ambiguous repository name '{}'. Matches: {}",
+                repo,
+                names.join(", ")
+            )
+        }
+    }
+}
+
 // Database operations - these were previously in VectorStore trait
 impl SqliteStore {
     pub async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
@@ -311,6 +357,18 @@ impl SqliteStore {
             // SQLite: count chunks via chunk_worktrees junction table
             let count: i64 = conn.query_row(
                 "SELECT COUNT(DISTINCT chunk_id) FROM chunk_worktrees WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    pub async fn get_worktree_file_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
                 params![worktree_id],
                 |row| row.get(0),
             )?;
@@ -511,12 +569,8 @@ impl SqliteStore {
         let worktree = worktree.map(|s| s.to_string());
         let query = query.to_string();
         self.run(move |conn| {
-            // Resolve repo/worktree ids
-            let repo_id: i64 = conn.query_row(
-                "SELECT id FROM repos WHERE name = ?1",
-                params![repo],
-                |row| row.get(0),
-            )?;
+            // Resolve repo/worktree ids with fuzzy matching
+            let repo_id = resolve_repo_id(conn, &repo)?;
 
             let worktree_id: Option<i64> = if let Some(w) = worktree {
                 conn.query_row(
@@ -895,12 +949,8 @@ impl SqliteStore {
         let limit = k as usize;
 
         self.run(move |conn| {
-            // Resolve repo/worktree ids
-            let repo_id: i64 = conn.query_row(
-                "SELECT id FROM repos WHERE name = ?1",
-                params![repo],
-                |row| row.get(0),
-            )?;
+            // Resolve repo/worktree ids with fuzzy matching
+            let repo_id = resolve_repo_id(conn, &repo)?;
 
             let worktree_id: Option<i64> = if let Some(ref w) = worktree {
                 conn.query_row(
@@ -1012,12 +1062,8 @@ impl SqliteStore {
         let limit = k as usize;
 
         self.run(move |conn| {
-            // Resolve repo/worktree ids
-            let repo_id: i64 = conn.query_row(
-                "SELECT id FROM repos WHERE name = ?1",
-                params![repo],
-                |row| row.get(0),
-            )?;
+            // Resolve repo/worktree ids with fuzzy matching
+            let repo_id = resolve_repo_id(conn, &repo)?;
 
             let worktree_id: Option<i64> = if let Some(ref w) = worktree {
                 conn.query_row(

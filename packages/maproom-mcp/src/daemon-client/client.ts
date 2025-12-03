@@ -95,6 +95,49 @@ export interface RustContextBundle {
 }
 
 /**
+ * Parameters for status request
+ *
+ * Sync with: crates/maproom/src/daemon/types.rs StatusParams
+ */
+export interface StatusParams {
+  repo?: string
+}
+
+/**
+ * Worktree statistics in status response
+ *
+ * Sync with: crates/maproom/src/daemon/types.rs WorktreeStatus
+ */
+export interface WorktreeStatus {
+  name: string
+  path: string
+  file_count: number
+  chunk_count: number
+}
+
+/**
+ * Repository statistics in status response
+ *
+ * Sync with: crates/maproom/src/daemon/types.rs RepoStatus
+ */
+export interface RepoStatus {
+  name: string
+  worktrees: WorktreeStatus[]
+}
+
+/**
+ * Status result from daemon
+ *
+ * Sync with: crates/maproom/src/daemon/types.rs StatusResult
+ */
+export interface StatusResult {
+  repos: RepoStatus[]
+  total_repos: number
+  total_files: number
+  total_chunks: number
+}
+
+/**
  * Daemon client for communicating with crewchief-maproom daemon
  */
 export class DaemonClient {
@@ -141,6 +184,15 @@ export class DaemonClient {
       budget_tokens: params.budget_tokens ?? 6000,
     }
     return await this.sendRequest<RustContextBundle>('context', contextParams)
+  }
+
+  /**
+   * Send status request to daemon
+   *
+   * Retrieves repository and worktree statistics from the database.
+   */
+  async status(params: StatusParams = {}): Promise<StatusResult> {
+    return await this.sendRequest<StatusResult>('status', params)
   }
 
   /**
