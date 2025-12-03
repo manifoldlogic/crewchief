@@ -486,6 +486,33 @@ impl RetryConfig {
     }
 }
 
+/// Infer embedding dimension from known Ollama model names.
+///
+/// Uses prefix matching to handle model tags (e.g., "mxbai-embed-large:latest").
+/// Returns the expected dimension for well-known models, or None for unknown models.
+/// This enables zero-config workflows where dimension is automatically determined
+/// from the model name without requiring explicit MAPROOM_EMBEDDING_DIMENSION.
+///
+/// # Supported Models
+///
+/// - `nomic-embed-text*`: 768 dimensions (matches tags like "nomic-embed-text:latest")
+/// - `mxbai-embed-large*`: 1024 dimensions (matches tags like "mxbai-embed-large:v1")
+///
+/// # Returns
+///
+/// - `Some(dimension)` for known models
+/// - `None` for unknown models (caller should warn and use default)
+#[allow(dead_code)] // Used by from_env() in OLLDIM-1002
+fn infer_ollama_dimension(model: &str) -> Option<usize> {
+    if model.starts_with("nomic-embed-text") {
+        Some(768)
+    } else if model.starts_with("mxbai-embed-large") {
+        Some(1024)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,6 +871,28 @@ mod tests {
             config.api_endpoint_url(),
             "http://localhost:8080/embeddings"
         );
+    }
+
+    #[test]
+    fn test_infer_ollama_dimension_known_models() {
+        assert_eq!(infer_ollama_dimension("nomic-embed-text"), Some(768));
+        assert_eq!(infer_ollama_dimension("mxbai-embed-large"), Some(1024));
+    }
+
+    #[test]
+    fn test_infer_ollama_dimension_with_tags() {
+        assert_eq!(infer_ollama_dimension("nomic-embed-text:latest"), Some(768));
+        assert_eq!(
+            infer_ollama_dimension("mxbai-embed-large:latest"),
+            Some(1024)
+        );
+        assert_eq!(infer_ollama_dimension("mxbai-embed-large:v1"), Some(1024));
+    }
+
+    #[test]
+    fn test_infer_ollama_dimension_unknown_model() {
+        assert_eq!(infer_ollama_dimension("custom-model"), None);
+        assert_eq!(infer_ollama_dimension("unknown"), None);
     }
 }
 
