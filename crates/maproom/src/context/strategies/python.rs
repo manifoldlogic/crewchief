@@ -187,11 +187,14 @@ impl PythonAssemblyStrategy {
         }
 
         // Find classes that this class extends (Outgoing direction = superclasses)
-        let parent_classes = self.store.find_extensions(
-            chunk_id,
-            ImportDirection::Outgoing,
-            Some(1), // Only direct parents
-        ).await?;
+        let parent_classes = self
+            .store
+            .find_extensions(
+                chunk_id,
+                ImportDirection::Outgoing,
+                Some(1), // Only direct parents
+            )
+            .await?;
 
         let mut added_count = 0;
         for parent in parent_classes {

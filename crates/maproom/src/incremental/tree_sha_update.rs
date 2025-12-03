@@ -128,50 +128,53 @@ pub async fn remove_worktree_from_chunks(
 ) -> Result<i64> {
     let relpath = relpath.to_string();
 
-    store.run(move |conn| {
-        // 1. Find chunks in this file that have the worktree
-        let chunk_ids: Vec<i64> = {
-            let mut stmt = conn.prepare(
-                "SELECT c.id FROM chunks c
+    store
+        .run(move |conn| {
+            // 1. Find chunks in this file that have the worktree
+            let chunk_ids: Vec<i64> = {
+                let mut stmt = conn.prepare(
+                    "SELECT c.id FROM chunks c
                  JOIN files f ON c.file_id = f.id
                  JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                 WHERE f.relpath = ?1 AND cw.worktree_id = ?2"
+                 WHERE f.relpath = ?1 AND cw.worktree_id = ?2",
+                )?;
+                let rows =
+                    stmt.query_map(rusqlite::params![relpath, worktree_id], |row| row.get(0))?;
+                rows.filter_map(|r| r.ok()).collect()
+            };
+
+            if chunk_ids.is_empty() {
+                return Ok(0);
+            }
+
+            // 2. Remove worktree entries for these chunks
+            let placeholders: String = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let sql = format!(
+                "DELETE FROM chunk_worktrees WHERE chunk_id IN ({}) AND worktree_id = ?",
+                placeholders
+            );
+
+            let mut params: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
+                .iter()
+                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+                .collect();
+            params.push(Box::new(worktree_id));
+
+            // Use execute with proper parameter handling
+            let affected = conn.execute(
+                &sql,
+                rusqlite::params_from_iter(chunk_ids.iter().chain(std::iter::once(&worktree_id))),
             )?;
-            let rows = stmt.query_map(rusqlite::params![relpath, worktree_id], |row| row.get(0))?;
-            rows.filter_map(|r| r.ok()).collect()
-        };
 
-        if chunk_ids.is_empty() {
-            return Ok(0);
-        }
-
-        // 2. Remove worktree entries for these chunks
-        let placeholders: String = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let sql = format!(
-            "DELETE FROM chunk_worktrees WHERE chunk_id IN ({}) AND worktree_id = ?",
-            placeholders
-        );
-
-        let mut params: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
-            .iter()
-            .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
-            .collect();
-        params.push(Box::new(worktree_id));
-
-        // Use execute with proper parameter handling
-        let affected = conn.execute(
-            &sql,
-            rusqlite::params_from_iter(chunk_ids.iter().chain(std::iter::once(&worktree_id)))
-        )?;
-
-        // 3. Clean up orphaned chunks (chunks with no worktrees)
-        conn.execute(
+            // 3. Clean up orphaned chunks (chunks with no worktrees)
+            conn.execute(
             "DELETE FROM chunks WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
             []
         )?;
 
-        Ok(affected as i64)
-    }).await
+            Ok(affected as i64)
+        })
+        .await
 }
 
 /// Perform incremental update based on git tree SHA comparison.
@@ -240,8 +243,14 @@ pub async fn incremental_update(
 
     // 2. Get last indexed tree SHA from database
     // Returns "init" if no previous state exists
-    let last_indexed = get_last_indexed_tree(store, worktree_id).await
-        .with_context(|| format!("Failed to get last indexed tree for worktree {}", worktree_id))?;
+    let last_indexed = get_last_indexed_tree(store, worktree_id)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to get last indexed tree for worktree {}",
+                worktree_id
+            )
+        })?;
 
     // 3. If tree SHAs match, skip processing (quick path)
     if last_indexed != "init" && last_indexed == current_tree_sha {
@@ -270,8 +279,12 @@ pub async fn incremental_update(
     // 4. Find changed files via git diff-tree
     let changes = if last_indexed != "init" {
         // git_diff_tree(old_tree, new_tree, repo_path)
-        git_diff_tree(&last_indexed, &current_tree_sha, repo_path)
-            .with_context(|| format!("Failed to get diff-tree between {} and {}", last_indexed, current_tree_sha))?
+        git_diff_tree(&last_indexed, &current_tree_sha, repo_path).with_context(|| {
+            format!(
+                "Failed to get diff-tree between {} and {}",
+                last_indexed, current_tree_sha
+            )
+        })?
     } else {
         // No previous state - treat as full re-index
         // This case should be rare as first index is done by `scan` command

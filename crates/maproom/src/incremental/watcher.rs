@@ -159,7 +159,10 @@ impl FileWatcher {
             poller_handle: Some(handle),
         };
 
-        info!("Created git polling watcher for: {}", watcher.root.display());
+        info!(
+            "Created git polling watcher for: {}",
+            watcher.root.display()
+        );
         Ok((watcher, event_rx))
     }
 

@@ -173,9 +173,10 @@ impl GitState {
         // Check for deleted files (in old state but not in new)
         for (path, old_status) in &self.files {
             // Skip if this was the source of a rename
-            let is_rename_source = new.files.values().any(|s| {
-                matches!(s, FileStatus::Renamed { from } if from == path)
-            });
+            let is_rename_source = new
+                .files
+                .values()
+                .any(|s| matches!(s, FileStatus::Renamed { from } if from == path));
 
             if is_rename_source {
                 continue;
@@ -243,7 +244,10 @@ fn validate_path(path: &Path) -> Result<PathBuf, GitStateError> {
 }
 
 /// Parse a single status line from git status output.
-fn parse_status_line(status_chars: &str, path_part: &str) -> Result<(PathBuf, FileStatus), GitStateError> {
+fn parse_status_line(
+    status_chars: &str,
+    path_part: &str,
+) -> Result<(PathBuf, FileStatus), GitStateError> {
     let chars: Vec<char> = status_chars.chars().collect();
     if chars.len() != 2 {
         return Err(GitStateError::ParseError {
@@ -408,21 +412,30 @@ mod tests {
     fn test_parse_modified_staged() {
         let output = "M  src/main.rs\n";
         let state = GitState::from_git_status(output).unwrap();
-        assert_eq!(state.get(Path::new("src/main.rs")), Some(&FileStatus::Modified));
+        assert_eq!(
+            state.get(Path::new("src/main.rs")),
+            Some(&FileStatus::Modified)
+        );
     }
 
     #[test]
     fn test_parse_modified_unstaged() {
         let output = " M src/main.rs\n";
         let state = GitState::from_git_status(output).unwrap();
-        assert_eq!(state.get(Path::new("src/main.rs")), Some(&FileStatus::Modified));
+        assert_eq!(
+            state.get(Path::new("src/main.rs")),
+            Some(&FileStatus::Modified)
+        );
     }
 
     #[test]
     fn test_parse_modified_both() {
         let output = "MM src/main.rs\n";
         let state = GitState::from_git_status(output).unwrap();
-        assert_eq!(state.get(Path::new("src/main.rs")), Some(&FileStatus::Modified));
+        assert_eq!(
+            state.get(Path::new("src/main.rs")),
+            Some(&FileStatus::Modified)
+        );
     }
 
     #[test]
@@ -443,14 +456,20 @@ mod tests {
     fn test_parse_deleted_staged() {
         let output = "D  deleted.rs\n";
         let state = GitState::from_git_status(output).unwrap();
-        assert_eq!(state.get(Path::new("deleted.rs")), Some(&FileStatus::Deleted));
+        assert_eq!(
+            state.get(Path::new("deleted.rs")),
+            Some(&FileStatus::Deleted)
+        );
     }
 
     #[test]
     fn test_parse_deleted_unstaged() {
         let output = " D deleted.rs\n";
         let state = GitState::from_git_status(output).unwrap();
-        assert_eq!(state.get(Path::new("deleted.rs")), Some(&FileStatus::Deleted));
+        assert_eq!(
+            state.get(Path::new("deleted.rs")),
+            Some(&FileStatus::Deleted)
+        );
     }
 
     #[test]
@@ -459,7 +478,9 @@ mod tests {
         let state = GitState::from_git_status(output).unwrap();
         assert_eq!(
             state.get(Path::new("new.rs")),
-            Some(&FileStatus::Renamed { from: PathBuf::from("old.rs") })
+            Some(&FileStatus::Renamed {
+                from: PathBuf::from("old.rs")
+            })
         );
     }
 
@@ -475,9 +496,15 @@ mod tests {
         let output = "M  modified.rs\n?? untracked.rs\n D deleted.rs\n";
         let state = GitState::from_git_status(output).unwrap();
         assert_eq!(state.len(), 3);
-        assert_eq!(state.get(Path::new("modified.rs")), Some(&FileStatus::Modified));
+        assert_eq!(
+            state.get(Path::new("modified.rs")),
+            Some(&FileStatus::Modified)
+        );
         assert_eq!(state.get(Path::new("untracked.rs")), Some(&FileStatus::New));
-        assert_eq!(state.get(Path::new("deleted.rs")), Some(&FileStatus::Deleted));
+        assert_eq!(
+            state.get(Path::new("deleted.rs")),
+            Some(&FileStatus::Deleted)
+        );
     }
 
     #[test]
@@ -591,7 +618,12 @@ mod tests {
         let mut old = GitState::default();
         old.insert(PathBuf::from("old.rs"), FileStatus::Clean);
         let mut new = GitState::default();
-        new.insert(PathBuf::from("new.rs"), FileStatus::Renamed { from: PathBuf::from("old.rs") });
+        new.insert(
+            PathBuf::from("new.rs"),
+            FileStatus::Renamed {
+                from: PathBuf::from("old.rs"),
+            },
+        );
 
         let events = old.diff(&new);
         // Should emit rename event

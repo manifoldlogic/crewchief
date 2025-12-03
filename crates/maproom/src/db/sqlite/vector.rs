@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
-use rusqlite::{Connection, params};
 use super::embeddings::vec_to_blob;
+use anyhow::{bail, Result};
+use rusqlite::{params, Connection};
 
 /// Supported embedding dimensions
 const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1024, 1536];
@@ -24,7 +24,7 @@ fn get_vec_table_name(dimension: usize) -> Result<&'static str> {
 pub struct VectorResult {
     pub chunk_id: i64,
     pub distance: f64,
-    pub similarity: f64,  // Normalized 0-1
+    pub similarity: f64, // Normalized 0-1
 }
 
 /// Convert L2 distance to similarity score (0-1, higher = better)
@@ -149,14 +149,20 @@ mod tests {
     fn test_distance_to_similarity_identical() {
         // Distance 0 = identical vectors
         let sim = distance_to_similarity(0.0);
-        assert!((sim - 1.0).abs() < 1e-6, "Identical vectors should have similarity 1.0");
+        assert!(
+            (sim - 1.0).abs() < 1e-6,
+            "Identical vectors should have similarity 1.0"
+        );
     }
 
     #[test]
     fn test_distance_to_similarity_different() {
         // Distance 1.0
         let sim = distance_to_similarity(1.0);
-        assert!((sim - 0.5).abs() < 1e-6, "Distance 1.0 should have similarity 0.5");
+        assert!(
+            (sim - 0.5).abs() < 1e-6,
+            "Distance 1.0 should have similarity 0.5"
+        );
     }
 
     #[test]
@@ -174,7 +180,10 @@ mod tests {
         let sim2 = distance_to_similarity(1.0);
         let sim3 = distance_to_similarity(2.0);
 
-        assert!(sim1 > sim2, "Smaller distance should have higher similarity");
+        assert!(
+            sim1 > sim2,
+            "Smaller distance should have higher similarity"
+        );
         assert!(sim2 > sim3, "Similarity should decrease monotonically");
     }
 
@@ -183,8 +192,16 @@ mod tests {
         // All similarities should be in range (0, 1]
         for dist in [0.0, 0.1, 1.0, 5.0, 100.0] {
             let sim = distance_to_similarity(dist);
-            assert!(sim > 0.0, "Similarity should be positive for distance {}", dist);
-            assert!(sim <= 1.0, "Similarity should be <= 1.0 for distance {}", dist);
+            assert!(
+                sim > 0.0,
+                "Similarity should be positive for distance {}",
+                dist
+            );
+            assert!(
+                sim <= 1.0,
+                "Similarity should be <= 1.0 for distance {}",
+                dist
+            );
         }
     }
 }

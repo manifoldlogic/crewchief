@@ -110,16 +110,15 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // Triggers to keep FTS updated? 
+    // Triggers to keep FTS updated?
     // Actually, for FTS5 external content tables, we need to manage updates manually or use triggers.
     // Manual updates are often safer/more controlled in application logic.
     // But triggers are standard for FTS5 content tables.
     // Let's rely on application logic to update FTS for now (to match Postgres architecture where we update tsvector column).
-    // Wait, Postgres uses a generated column or explicit update. 
+    // Wait, Postgres uses a generated column or explicit update.
     // SQLite FTS5 content= option means it reads from the table, but we still need to INSERT into the fts table to rebuild index
     // 'rebuild' command is needed. Or we use triggers.
     // Let's stick to manual inserts for now in `insert_chunk`.
 
     Ok(())
 }
-

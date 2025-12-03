@@ -113,25 +113,30 @@ impl EdgeUpdater {
 
         // 1. Delete old edges for chunks in this file
         // This clears any stale edges before re-computation
-        self.store.run(move |conn| {
-            // Delete edges where src or dst is a chunk from this file
-            conn.execute(
-                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+        self.store
+            .run(move |conn| {
+                // Delete edges where src or dst is a chunk from this file
+                conn.execute(
+                    "DELETE FROM chunk_edges WHERE src_chunk_id IN (
                      SELECT id FROM chunks WHERE file_id = ?1
                  ) OR dst_chunk_id IN (
                      SELECT id FROM chunks WHERE file_id = ?1
                  )",
-                rusqlite::params![file_id],
-            )?;
-            Ok(())
-        }).await?;
+                    rusqlite::params![file_id],
+                )?;
+                Ok(())
+            })
+            .await?;
 
         // 2. TODO: In the future, compute new edges based on chunk content
         // This requires tree-sitter analysis of imports, calls, extends relationships
         // For now, edges are cleared but not recomputed - this is acceptable for MVP
         // Edge computation can be added incrementally without breaking the system
 
-        debug!(file_id = file_id, "Edges cleared for file (computation pending future ticket)");
+        debug!(
+            file_id = file_id,
+            "Edges cleared for file (computation pending future ticket)"
+        );
 
         Ok(())
     }
@@ -146,19 +151,26 @@ impl EdgeUpdater {
     /// # Returns
     /// Number of edges deleted
     pub async fn delete_edges_for_file(&self, file_id: i64) -> Result<u64> {
-        let count = self.store.run(move |conn| {
-            let deleted = conn.execute(
-                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+        let count = self
+            .store
+            .run(move |conn| {
+                let deleted = conn.execute(
+                    "DELETE FROM chunk_edges WHERE src_chunk_id IN (
                      SELECT id FROM chunks WHERE file_id = ?1
                  ) OR dst_chunk_id IN (
                      SELECT id FROM chunks WHERE file_id = ?1
                  )",
-                rusqlite::params![file_id],
-            )?;
-            Ok(deleted as u64)
-        }).await?;
+                    rusqlite::params![file_id],
+                )?;
+                Ok(deleted as u64)
+            })
+            .await?;
 
-        debug!(file_id = file_id, edges_deleted = count, "Deleted edges for file");
+        debug!(
+            file_id = file_id,
+            edges_deleted = count,
+            "Deleted edges for file"
+        );
         Ok(count)
     }
 }

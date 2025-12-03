@@ -45,12 +45,10 @@
 //! - nomic-embed-text model pulled
 //! - Tests marked `#[ignore]` - run manually when Ollama available
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
 use crewchief_maproom::embedding::config::ParallelConfig;
 use crewchief_maproom::embedding::ollama::OllamaProvider;
 use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Generate realistic test texts for benchmarking
@@ -123,7 +121,7 @@ fn bench_batch_sizes(c: &mut Criterion) {
     // Create provider with parallel disabled (batch-only mode)
     let provider = match rt.block_on(async {
         let config = ParallelConfig {
-            enabled: false, // Batch only, no parallelism
+            enabled: false,       // Batch only, no parallelism
             sub_batch_size: 1000, // Large enough to fit entire batch
             max_concurrency: 1,
         };
@@ -203,7 +201,10 @@ fn bench_concurrency_levels(c: &mut Criterion) {
         }) {
             Some(p) => p,
             None => {
-                eprintln!("Skipping concurrency level {}: Ollama not available", concurrency);
+                eprintln!(
+                    "Skipping concurrency level {}: Ollama not available",
+                    concurrency
+                );
                 continue;
             }
         };
@@ -278,13 +279,17 @@ fn bench_combined(c: &mut Criterion) {
             }
         };
 
-        group.bench_with_input(BenchmarkId::new("config", &config_name), &texts, |b, texts| {
-            b.to_async(&rt).iter(|| async {
-                let p = provider.clone();
-                let embeddings = p.embed_batch(black_box(texts.clone())).await.unwrap();
-                black_box(embeddings)
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("config", &config_name),
+            &texts,
+            |b, texts| {
+                b.to_async(&rt).iter(|| async {
+                    let p = provider.clone();
+                    let embeddings = p.embed_batch(black_box(texts.clone())).await.unwrap();
+                    black_box(embeddings)
+                });
+            },
+        );
     }
 
     group.finish();

@@ -197,7 +197,6 @@ impl EmbeddingPipeline {
         Ok(count as usize)
     }
 
-
     /// Run the embedding generation pipeline.
     pub async fn run(&self, store: &SqliteStore) -> Result<PipelineStats> {
         self.run_with_progress(store, None).await
@@ -481,7 +480,6 @@ impl EmbeddingPipeline {
 
         Ok(())
     }
-
 
     /// Process only chunks missing embeddings for this dimension (incremental mode).
     ///

@@ -68,10 +68,7 @@ impl GraphExecutor {
         // Over-fetch by 2x for fusion (graph signals are less selective than FTS/vector)
         let _fetch_limit = (limit * 2) as i64;
 
-        debug!(
-            "Executing graph importance query (limit: {})",
-            limit
-        );
+        debug!("Executing graph importance query (limit: {})", limit);
 
         // Delegate to SqliteStore's graph importance calculation
         let hits = store

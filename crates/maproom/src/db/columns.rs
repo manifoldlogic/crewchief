@@ -209,7 +209,10 @@ mod tests {
 
         // Error message should mention providers
         assert!(
-            err_msg.contains("Ollama") || err_msg.contains("Google") || err_msg.contains("OpenAI") || err_msg.contains("mxbai")
+            err_msg.contains("Ollama")
+                || err_msg.contains("Google")
+                || err_msg.contains("OpenAI")
+                || err_msg.contains("mxbai")
         );
     }
 }

@@ -125,7 +125,6 @@ impl VectorExecutor {
         debug!("Vector search returned {} results", results.len());
         Ok(RankedResults::new(results, SearchSource::Vector))
     }
-
 }
 
 /// Errors that can occur during vector search execution.

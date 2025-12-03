@@ -9,7 +9,7 @@
 //! with cycle detection to handle circular dependencies.
 
 use anyhow::Result;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 /// Default maximum depth for graph traversal
 pub const DEFAULT_MAX_DEPTH: usize = 3;
@@ -469,10 +469,14 @@ mod tests {
     #[test]
     fn test_depth_clamping() {
         // Test that depth is properly limited
-        let clamped = Some(100_usize).unwrap_or(DEFAULT_MAX_DEPTH).min(HARD_MAX_DEPTH);
+        let clamped = Some(100_usize)
+            .unwrap_or(DEFAULT_MAX_DEPTH)
+            .min(HARD_MAX_DEPTH);
         assert_eq!(clamped, HARD_MAX_DEPTH);
 
-        let default = None::<usize>.unwrap_or(DEFAULT_MAX_DEPTH).min(HARD_MAX_DEPTH);
+        let default = None::<usize>
+            .unwrap_or(DEFAULT_MAX_DEPTH)
+            .min(HARD_MAX_DEPTH);
         assert_eq!(default, DEFAULT_MAX_DEPTH);
     }
 }

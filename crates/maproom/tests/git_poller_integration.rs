@@ -5,8 +5,8 @@
 
 mod helpers;
 
-use crewchief_maproom::incremental::git_poller::{GitPoller, GitPollerConfig, GitPollerError};
 use crewchief_maproom::incremental::events::FileEvent;
+use crewchief_maproom::incremental::git_poller::{GitPoller, GitPollerConfig, GitPollerError};
 use helpers::temp_git_repo::TempGitRepo;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -242,7 +242,10 @@ async fn test_poller_ignores_gitignored_files() {
         FileEvent::Modified(p) | FileEvent::Deleted(p) => p.ends_with("ignored.rs"),
         FileEvent::Renamed(_, p) => p.ends_with("ignored.rs"),
     });
-    assert!(!has_ignored, "Should not receive events for gitignored files");
+    assert!(
+        !has_ignored,
+        "Should not receive events for gitignored files"
+    );
 }
 
 #[tokio::test]

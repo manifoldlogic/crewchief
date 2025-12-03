@@ -228,19 +228,22 @@ impl ContextCache {
         let cache_key = format!("{}:{}", key.chunk_id, key.options_hash);
         let cache_key_clone = cache_key.clone();
 
-        let result = self.store.run(move |conn| {
-            // Query for non-expired entry
-            let bundle_json: Option<String> = conn
-                .query_row(
-                    "SELECT bundle_json FROM context_cache
+        let result = self
+            .store
+            .run(move |conn| {
+                // Query for non-expired entry
+                let bundle_json: Option<String> = conn
+                    .query_row(
+                        "SELECT bundle_json FROM context_cache
                      WHERE cache_key = ?1 AND expires_at > datetime('now')",
-                    params![cache_key],
-                    |row| row.get(0),
-                )
-                .optional()?;
+                        params![cache_key],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
 
-            Ok(bundle_json)
-        }).await?;
+                Ok(bundle_json)
+            })
+            .await?;
 
         match result {
             Some(json) => {
@@ -317,17 +320,23 @@ impl ContextCache {
 
         // Delete all entries with cache_key starting with "chunk_id:"
         let prefix = format!("{}:", chunk_id);
-        let count = self.store.run(move |conn| {
-            let deleted = conn.execute(
-                "DELETE FROM context_cache WHERE cache_key LIKE ?1 || '%'",
-                params![prefix],
-            )?;
-            Ok(deleted as u64)
-        }).await?;
+        let count = self
+            .store
+            .run(move |conn| {
+                let deleted = conn.execute(
+                    "DELETE FROM context_cache WHERE cache_key LIKE ?1 || '%'",
+                    params![prefix],
+                )?;
+                Ok(deleted as u64)
+            })
+            .await?;
 
         if count > 0 {
             self.stats.invalidations.fetch_add(count, Ordering::Relaxed);
-            debug!("Invalidated {} cache entries for chunk_id={}", count, chunk_id);
+            debug!(
+                "Invalidated {} cache entries for chunk_id={}",
+                count, chunk_id
+            );
         }
         Ok(count)
     }
@@ -343,21 +352,28 @@ impl ContextCache {
         // Build a list of prefixes to match
         let prefixes: Vec<String> = chunk_ids.iter().map(|id| format!("{}:", id)).collect();
 
-        let count = self.store.run(move |conn| {
-            let mut total_deleted = 0u64;
-            for prefix in prefixes {
-                let deleted = conn.execute(
-                    "DELETE FROM context_cache WHERE cache_key LIKE ?1 || '%'",
-                    params![prefix],
-                )?;
-                total_deleted += deleted as u64;
-            }
-            Ok(total_deleted)
-        }).await?;
+        let count = self
+            .store
+            .run(move |conn| {
+                let mut total_deleted = 0u64;
+                for prefix in prefixes {
+                    let deleted = conn.execute(
+                        "DELETE FROM context_cache WHERE cache_key LIKE ?1 || '%'",
+                        params![prefix],
+                    )?;
+                    total_deleted += deleted as u64;
+                }
+                Ok(total_deleted)
+            })
+            .await?;
 
         if count > 0 {
             self.stats.invalidations.fetch_add(count, Ordering::Relaxed);
-            debug!("Invalidated {} cache entries for {} chunks", count, chunk_ids.len());
+            debug!(
+                "Invalidated {} cache entries for {} chunks",
+                count,
+                chunk_ids.len()
+            );
         }
         Ok(count)
     }
@@ -366,10 +382,13 @@ impl ContextCache {
     ///
     /// Useful for manual cache clearing or testing.
     pub async fn clear(&self) -> Result<u64> {
-        let count = self.store.run(|conn| {
-            let deleted = conn.execute("DELETE FROM context_cache", [])?;
-            Ok(deleted as u64)
-        }).await?;
+        let count = self
+            .store
+            .run(|conn| {
+                let deleted = conn.execute("DELETE FROM context_cache", [])?;
+                Ok(deleted as u64)
+            })
+            .await?;
 
         self.stats.reset();
         debug!("Cleared {} cache entries", count);
@@ -384,13 +403,16 @@ impl ContextCache {
             return Ok(0);
         }
 
-        let count = self.store.run(|conn| {
-            let deleted = conn.execute(
-                "DELETE FROM context_cache WHERE expires_at < datetime('now')",
-                [],
-            )?;
-            Ok(deleted as u64)
-        }).await?;
+        let count = self
+            .store
+            .run(|conn| {
+                let deleted = conn.execute(
+                    "DELETE FROM context_cache WHERE expires_at < datetime('now')",
+                    [],
+                )?;
+                Ok(deleted as u64)
+            })
+            .await?;
 
         if count > 0 {
             self.stats.ttl_evictions.fetch_add(count, Ordering::Relaxed);
@@ -410,35 +432,35 @@ impl ContextCache {
         let max_entries = self.config.max_entries;
         let evict_batch_size = self.config.evict_batch_size;
 
-        let count = self.store.run(move |conn| {
-            // Check current entry count
-            let current_count: i32 = conn.query_row(
-                "SELECT COUNT(*) FROM context_cache",
-                [],
-                |row| row.get(0),
-            )?;
+        let count = self
+            .store
+            .run(move |conn| {
+                // Check current entry count
+                let current_count: i32 =
+                    conn.query_row("SELECT COUNT(*) FROM context_cache", [], |row| row.get(0))?;
 
-            if current_count <= max_entries {
-                return Ok(0u64);
-            }
+                if current_count <= max_entries {
+                    return Ok(0u64);
+                }
 
-            // Delete oldest entries by accessed_at (LRU)
-            let to_evict = std::cmp::min(
-                evict_batch_size,
-                current_count - max_entries + evict_batch_size, // Evict enough to make room
-            );
+                // Delete oldest entries by accessed_at (LRU)
+                let to_evict = std::cmp::min(
+                    evict_batch_size,
+                    current_count - max_entries + evict_batch_size, // Evict enough to make room
+                );
 
-            let deleted = conn.execute(
-                "DELETE FROM context_cache WHERE cache_key IN (
+                let deleted = conn.execute(
+                    "DELETE FROM context_cache WHERE cache_key IN (
                     SELECT cache_key FROM context_cache
                     ORDER BY accessed_at ASC
                     LIMIT ?1
                 )",
-                params![to_evict],
-            )?;
+                    params![to_evict],
+                )?;
 
-            Ok(deleted as u64)
-        }).await?;
+                Ok(deleted as u64)
+            })
+            .await?;
 
         if count > 0 {
             self.stats.lru_evictions.fetch_add(count, Ordering::Relaxed);
@@ -607,7 +629,9 @@ mod tests {
         // Each test gets a unique name to avoid interference
         let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
         let db_name = format!("file:memdb_cache_test_{}?mode=memory&cache=shared", counter);
-        let store = crate::db::SqliteStore::connect(&db_name).await.expect("Failed to create test store");
+        let store = crate::db::SqliteStore::connect(&db_name)
+            .await
+            .expect("Failed to create test store");
         store.migrate().await.expect("Failed to run migrations");
         Arc::new(store)
     }

@@ -22,7 +22,10 @@ static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// Uses file:memdb?mode=memory&cache=shared for proper pooled connection support
 async fn setup_test_store() -> SqliteStore {
     let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let db_name = format!("file:memdb_cleanup_detect_{}?mode=memory&cache=shared", counter);
+    let db_name = format!(
+        "file:memdb_cleanup_detect_{}?mode=memory&cache=shared",
+        counter
+    );
     let store = SqliteStore::connect(&db_name).await.unwrap();
     store.migrate().await.unwrap();
     store
@@ -163,8 +166,20 @@ async fn test_mixed_worktrees() -> Result<()> {
     insert_test_data(&store, &format!("valid-{}", uuid), valid_path, 10).await?;
 
     // Create two stale worktrees with unique names
-    insert_test_data(&store, &format!("stale1-{}", uuid), "/tmp/stale_worktree_1_xyz", 5).await?;
-    insert_test_data(&store, &format!("stale2-{}", uuid), "/tmp/stale_worktree_2_xyz", 8).await?;
+    insert_test_data(
+        &store,
+        &format!("stale1-{}", uuid),
+        "/tmp/stale_worktree_1_xyz",
+        5,
+    )
+    .await?;
+    insert_test_data(
+        &store,
+        &format!("stale2-{}", uuid),
+        "/tmp/stale_worktree_2_xyz",
+        8,
+    )
+    .await?;
 
     // Run detection
     let detector = StaleWorktreeDetector::new(&store);

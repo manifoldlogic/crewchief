@@ -293,7 +293,10 @@ impl OllamaProvider {
     /// 3. Track original index for each sub-batch
     /// 4. Sort results by index after all tasks complete
     /// 5. Flatten vectors in correct order
-    async fn embed_batch_parallel(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+    async fn embed_batch_parallel(
+        &self,
+        texts: Vec<String>,
+    ) -> Result<Vec<Vector>, EmbeddingError> {
         let total_texts = texts.len();
         let sub_batch_size = self.parallel_config.sub_batch_size;
 
@@ -349,10 +352,7 @@ impl OllamaProvider {
         let mut results: Vec<(usize, Result<Vec<Vector>, EmbeddingError>)> = Vec::new();
         for handle in handles {
             let (idx, result) = handle.await.map_err(|e| {
-                EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                    "Task join error: {}",
-                    e
-                )))
+                EmbeddingError::Api(ApiError::InvalidResponse(format!("Task join error: {}", e)))
             })?;
             results.push((idx, result));
         }
@@ -1130,8 +1130,9 @@ mod tests {
         let output = OllamaProvider::sanitize_for_nomic(input);
 
         // Verify all problematic characters are replaced
-        let problematic_chars = ['|', '[', ']', '→', '←', '↔', '├', '└', '│', '─',
-                                 '┌', '┐', '┘', '┤', '┬', '┴', '┼'];
+        let problematic_chars = [
+            '|', '[', ']', '→', '←', '↔', '├', '└', '│', '─', '┌', '┐', '┘', '┤', '┬', '┴', '┼',
+        ];
         for ch in &problematic_chars {
             assert!(!output.contains(*ch), "Output still contains: {}", ch);
         }

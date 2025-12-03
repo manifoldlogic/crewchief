@@ -244,7 +244,9 @@ pub struct ExperimentManager {
 
 impl ExperimentManager {
     pub fn new() -> Self {
-        Self { _phantom: std::marker::PhantomData }
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Create a new experiment

@@ -88,13 +88,7 @@ impl SignalExecutor {
 
         // Delegate to SqliteStore's signal score calculation
         let hits = store
-            .calculate_signal_scores(
-                repo_id,
-                worktree_id,
-                weights.recency,
-                weights.churn,
-                limit,
-            )
+            .calculate_signal_scores(repo_id, worktree_id, weights.recency, weights.churn, limit)
             .await
             .map_err(|e| SignalError::Database(e.to_string()))?;
 
@@ -149,7 +143,10 @@ impl SignalExecutor {
             .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
             .collect();
 
-        debug!("Signal search for chunks returned {} results", results.len());
+        debug!(
+            "Signal search for chunks returned {} results",
+            results.len()
+        );
         Ok(RankedResults::new(results, SearchSource::Signals))
     }
 }

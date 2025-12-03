@@ -7,8 +7,8 @@
 
 #[cfg(feature = "sqlite")]
 mod fixture {
-    use crewchief_maproom::db::{ChunkRecord, FileRecord, VectorStore};
     use crewchief_maproom::db::sqlite::SqliteStore;
+    use crewchief_maproom::db::{ChunkRecord, FileRecord, VectorStore};
     use std::path::Path;
 
     #[tokio::test]
@@ -58,7 +58,10 @@ mod fixture {
             size_bytes: 500,
             last_modified: None,
         };
-        let file_id = store.upsert_file(&file_record).await.expect("Failed to create file");
+        let file_id = store
+            .upsert_file(&file_record)
+            .await
+            .expect("Failed to create file");
 
         // Create test chunks with various types
         let chunks = vec![
@@ -114,7 +117,10 @@ mod fixture {
 
         // Insert chunks
         for chunk in chunks {
-            store.insert_chunk(&chunk).await.expect("Failed to insert chunk");
+            store
+                .insert_chunk(&chunk)
+                .await
+                .expect("Failed to insert chunk");
         }
 
         println!("Created test fixture at {}", fixture_path);

@@ -69,7 +69,11 @@ pub async fn run() -> Result<()> {
     info!("Daemon mode starting...");
 
     // Initialize SqliteStore
-    let store = Arc::new(connect().await.context("Failed to initialize database store")?);
+    let store = Arc::new(
+        connect()
+            .await
+            .context("Failed to initialize database store")?,
+    );
     info!("Database backend: SQLite");
 
     // Initialize Embedding Service
@@ -205,15 +209,17 @@ async fn execute_search(
     let raw_hits: Vec<SearchHit> = match mode {
         "fts" => {
             // FTS mode: Full-text search only (no embeddings required)
-            state.store.search_chunks_fts(
-                &params.repo,
-                params.worktree.as_deref(),
-                &params.query,
-                fetch_k,
-                false, // debug
-            )
-            .await
-            .context("FTS search execution failed")?
+            state
+                .store
+                .search_chunks_fts(
+                    &params.repo,
+                    params.worktree.as_deref(),
+                    &params.query,
+                    fetch_k,
+                    false, // debug
+                )
+                .await
+                .context("FTS search execution failed")?
         }
         "vector" => {
             // Vector mode: Semantic search using embeddings
@@ -223,52 +229,55 @@ async fn execute_search(
                 .await
                 .context("Failed to generate query embedding")?;
 
-            state.store.search_chunks_vector(
-                &params.repo,
-                params.worktree.as_deref(),
-                &query_embedding,
-                fetch_k,
-                false, // debug
-            )
-            .await
-            .context("Vector search execution failed")?
+            state
+                .store
+                .search_chunks_vector(
+                    &params.repo,
+                    params.worktree.as_deref(),
+                    &query_embedding,
+                    fetch_k,
+                    false, // debug
+                )
+                .await
+                .context("Vector search execution failed")?
         }
         "hybrid" => {
             // Hybrid mode: Try to get embedding for hybrid search
             // Falls back gracefully if embedding service unavailable
-            let query_embedding_result = state
-                .embedding_service
-                .embed_text(&params.query)
-                .await;
+            let query_embedding_result = state.embedding_service.embed_text(&params.query).await;
 
             match query_embedding_result {
                 Ok(query_embedding) => {
                     // Embeddings available, use hybrid search
-                    state.store.search_chunks_hybrid(
-                        &params.repo,
-                        params.worktree.as_deref(),
-                        &params.query,
-                        &query_embedding,
-                        fetch_k,
-                        false, // debug
-                    )
-                    .await
-                    .unwrap_or_else(|_| {
-                        // Hybrid failed, will fall back to FTS below
-                        Vec::new()
-                    })
+                    state
+                        .store
+                        .search_chunks_hybrid(
+                            &params.repo,
+                            params.worktree.as_deref(),
+                            &params.query,
+                            &query_embedding,
+                            fetch_k,
+                            false, // debug
+                        )
+                        .await
+                        .unwrap_or_else(|_| {
+                            // Hybrid failed, will fall back to FTS below
+                            Vec::new()
+                        })
                 }
                 Err(_) => {
                     // No embeddings available, use FTS directly
-                    state.store.search_chunks_fts(
-                        &params.repo,
-                        params.worktree.as_deref(),
-                        &params.query,
-                        fetch_k,
-                        false, // debug
-                    )
-                    .await
-                    .context("FTS search execution failed")?
+                    state
+                        .store
+                        .search_chunks_fts(
+                            &params.repo,
+                            params.worktree.as_deref(),
+                            &params.query,
+                            fetch_k,
+                            false, // debug
+                        )
+                        .await
+                        .context("FTS search execution failed")?
                 }
             }
         }

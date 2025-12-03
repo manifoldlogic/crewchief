@@ -35,8 +35,8 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 use crate::db::SqliteStore;
-use std::sync::Arc;
 use crate::indexer::SymbolChunk;
+use std::sync::Arc;
 
 use super::detector::ChangeType;
 use super::edge_updater::EdgeUpdater;
@@ -282,7 +282,10 @@ impl IncrementalProcessor {
             last_modified: Some(chrono::Utc::now()),
         };
 
-        let file_id = self.store.upsert_file(&file_record).await
+        let file_id = self
+            .store
+            .upsert_file(&file_record)
+            .await
             .with_context(|| format!("Failed to upsert file record: {}", path.display()))?;
 
         // 2. Parse file to extract chunks
@@ -330,7 +333,10 @@ impl IncrementalProcessor {
                 worktree_id: self.worktree_id,
             };
 
-            let chunk_id = self.store.insert_chunk(&chunk_record).await
+            let chunk_id = self
+                .store
+                .insert_chunk(&chunk_record)
+                .await
                 .with_context(|| format!("Failed to insert chunk for file: {}", path.display()))?;
             chunk_ids.push(chunk_id);
         }
@@ -338,7 +344,9 @@ impl IncrementalProcessor {
         // 4. Update edges for new chunks (delegate to EdgeUpdater)
         // Note: EdgeUpdater.update_edges takes file_id, not chunk_ids
         // Edge computation is done by file for consistency
-        self.edge_updater.update_edges(file_id).await
+        self.edge_updater
+            .update_edges(file_id)
+            .await
             .with_context(|| format!("Failed to update edges for file: {}", path.display()))?;
 
         debug!(
@@ -417,7 +425,10 @@ impl IncrementalProcessor {
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
         // 1. Look up existing file by relpath
-        let file_id = self.store.get_file_id_by_relpath(relpath_str, self.worktree_id).await
+        let file_id = self
+            .store
+            .get_file_id_by_relpath(relpath_str, self.worktree_id)
+            .await
             .with_context(|| format!("Failed to look up file: {}", path.display()))?;
 
         let file_id = match file_id {
@@ -430,7 +441,10 @@ impl IncrementalProcessor {
         };
 
         // 2. Delete old chunks (this also cleans up edges and embeddings)
-        let chunks_deleted = self.store.delete_chunks_by_file(file_id).await
+        let chunks_deleted = self
+            .store
+            .delete_chunks_by_file(file_id)
+            .await
             .with_context(|| format!("Failed to delete old chunks for file: {}", path.display()))?;
 
         debug!(path = %path.display(), chunks_deleted = chunks_deleted, "Deleted old chunks");
@@ -480,14 +494,19 @@ impl IncrementalProcessor {
                 worktree_id: self.worktree_id,
             };
 
-            let chunk_id = self.store.insert_chunk(&chunk_record).await
+            let chunk_id = self
+                .store
+                .insert_chunk(&chunk_record)
+                .await
                 .with_context(|| format!("Failed to insert chunk for file: {}", path.display()))?;
             chunk_ids.push(chunk_id);
         }
 
         // 5. Update edges for new chunks
         // Note: EdgeUpdater.update_edges takes file_id, not chunk_ids
-        self.edge_updater.update_edges(file_id).await
+        self.edge_updater
+            .update_edges(file_id)
+            .await
             .with_context(|| format!("Failed to update edges for file: {}", path.display()))?;
 
         debug!(
@@ -529,7 +548,10 @@ impl IncrementalProcessor {
             .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path: {}", relpath.display()))?;
 
         // 1. Look up file by relpath
-        let file_id = self.store.get_file_id_by_relpath(relpath_str, self.worktree_id).await
+        let file_id = self
+            .store
+            .get_file_id_by_relpath(relpath_str, self.worktree_id)
+            .await
             .with_context(|| format!("Failed to look up file: {}", path.display()))?;
 
         let file_id = match file_id {
@@ -542,11 +564,16 @@ impl IncrementalProcessor {
         };
 
         // 2. Delete chunks (this also cleans up edges and embeddings via CASCADE)
-        let chunks_deleted = self.store.delete_chunks_by_file(file_id).await
+        let chunks_deleted = self
+            .store
+            .delete_chunks_by_file(file_id)
+            .await
             .with_context(|| format!("Failed to delete chunks for file: {}", path.display()))?;
 
         // 3. Delete file record
-        self.store.delete_file(file_id).await
+        self.store
+            .delete_file(file_id)
+            .await
             .with_context(|| format!("Failed to delete file record: {}", path.display()))?;
 
         debug!(

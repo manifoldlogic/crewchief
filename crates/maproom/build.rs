@@ -5,10 +5,11 @@ fn main() {
         cc::Build::new()
             .file("vendor/sqlite-vec/sqlite-vec.c")
             .compile("sqlite_vec");
-        
+
         println!("cargo:rustc-link-lib=static=sqlite_vec");
     } else {
-        println!("cargo:warning=sqlite-vec source not found in vendor/sqlite-vec. Skipping compilation.");
+        println!(
+            "cargo:warning=sqlite-vec source not found in vendor/sqlite-vec. Skipping compilation."
+        );
     }
 }
-

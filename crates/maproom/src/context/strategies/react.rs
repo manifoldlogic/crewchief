@@ -204,7 +204,10 @@ impl ReactAssemblyStrategy {
         }
 
         // Find hooks used by this component
-        let hooks = self.hook_detector.find_used_hooks(&self.store, chunk_id).await?;
+        let hooks = self
+            .hook_detector
+            .find_used_hooks(&self.store, chunk_id)
+            .await?;
 
         let mut added_count = 0;
         for hook in hooks {
@@ -231,11 +234,14 @@ impl ReactAssemblyStrategy {
                     docstring: None,
                 };
 
-                if let Ok(item) = self.create_context_item(
-                    metadata,
-                    "hook",
-                    &format!("Custom hook: {} provides reusable logic", hook.symbol_name),
-                ).await {
+                if let Ok(item) = self
+                    .create_context_item(
+                        metadata,
+                        "hook",
+                        &format!("Custom hook: {} provides reusable logic", hook.symbol_name),
+                    )
+                    .await
+                {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding hook {}: {} tokens", hook.symbol_name, item.tokens);
                         bundle.add_item(item);
@@ -263,11 +269,10 @@ impl ReactAssemblyStrategy {
         }
 
         // Find parent components that render this component
-        let parents = self.jsx_detector.find_parent_components(
-            &self.store,
-            chunk_id,
-            symbol_name,
-        ).await?;
+        let parents = self
+            .jsx_detector
+            .find_parent_components(&self.store, chunk_id, symbol_name)
+            .await?;
 
         let mut added_count = 0;
         for parent in parents {
@@ -290,11 +295,14 @@ impl ReactAssemblyStrategy {
                 };
 
                 let parent_name = parent.symbol_name.as_deref().unwrap_or("ParentComponent");
-                if let Ok(item) = self.create_context_item(
-                    metadata,
-                    "jsx_parent",
-                    &format!("JSX parent: {} renders this component", parent_name),
-                ).await {
+                if let Ok(item) = self
+                    .create_context_item(
+                        metadata,
+                        "jsx_parent",
+                        &format!("JSX parent: {} renders this component", parent_name),
+                    )
+                    .await
+                {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding JSX parent {}: {} tokens", parent_name, item.tokens);
                         bundle.add_item(item);
@@ -321,7 +329,10 @@ impl ReactAssemblyStrategy {
         }
 
         // Find child components rendered by this component
-        let children = self.jsx_detector.find_child_components(&self.store, chunk_id).await?;
+        let children = self
+            .jsx_detector
+            .find_child_components(&self.store, chunk_id)
+            .await?;
 
         let mut added_count = 0;
         for child in children {
@@ -344,11 +355,14 @@ impl ReactAssemblyStrategy {
                 };
 
                 let child_name = child.symbol_name.as_deref().unwrap_or("ChildComponent");
-                if let Ok(item) = self.create_context_item(
-                    metadata,
-                    "jsx_child",
-                    &format!("JSX child: {} is rendered by this component", child_name),
-                ).await {
+                if let Ok(item) = self
+                    .create_context_item(
+                        metadata,
+                        "jsx_child",
+                        &format!("JSX child: {} is rendered by this component", child_name),
+                    )
+                    .await
+                {
                     if !bundle.would_exceed_budget(item.tokens, budget) {
                         debug!("Adding JSX child {}: {} tokens", child_name, item.tokens);
                         bundle.add_item(item);

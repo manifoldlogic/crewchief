@@ -116,7 +116,9 @@ impl From<GitStateError> for GitPollerError {
                 line: path.display().to_string(),
                 reason,
             },
-            GitStateError::ParseError { line, reason } => GitPollerError::ParseError { line, reason },
+            GitStateError::ParseError { line, reason } => {
+                GitPollerError::ParseError { line, reason }
+            }
         }
     }
 }
@@ -516,14 +518,18 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let config = GitPollerConfig::default();
         let result = GitPoller::new(dir.path().to_path_buf(), config);
-        assert!(matches!(result, Err(GitPollerError::NotGitRepository { .. })));
+        assert!(matches!(
+            result,
+            Err(GitPollerError::NotGitRepository { .. })
+        ));
     }
 
     #[tokio::test]
     async fn test_poll_once_empty_repo() {
         let dir = create_temp_git_repo();
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
 
         let events = poller.poll_once().await.unwrap();
         // Empty repo should have no dirty files
@@ -536,7 +542,8 @@ mod tests {
 
         // Initial poll to capture baseline
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
         let _ = poller.poll_once().await.unwrap();
 
         // Create a new file
@@ -573,7 +580,8 @@ mod tests {
 
         // Initial poll
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
         let _ = poller.poll_once().await.unwrap();
 
         // Modify the file
@@ -600,7 +608,8 @@ mod tests {
 
         // Initial poll captures the untracked file
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
         let _ = poller.poll_once().await.unwrap();
 
         // Delete the file
@@ -625,7 +634,8 @@ mod tests {
             ..Default::default()
         };
 
-        let (mut poller, _rx, shutdown_tx) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, shutdown_tx) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
 
         // Spawn the poller
         let handle = tokio::spawn(async move { poller.run().await });
@@ -687,7 +697,8 @@ mod tests {
 
         // Create poller and do initial poll to capture baseline HEAD
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
         let _ = poller.poll_once().await.unwrap();
 
         // Simulate "create and commit within poll interval" scenario:
@@ -745,7 +756,8 @@ mod tests {
 
         // Initial poll to capture baseline
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
         let _ = poller.poll_once().await.unwrap();
 
         // Modify, stage, and commit - all before next poll
@@ -795,7 +807,8 @@ mod tests {
 
         // Initial poll
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
         let _ = poller.poll_once().await.unwrap();
 
         // Multiple commits before next poll
@@ -829,7 +842,9 @@ mod tests {
         let file_names: Vec<String> = events
             .iter()
             .filter_map(|e| match e {
-                FileEvent::Modified(path) => path.file_name().map(|n| n.to_string_lossy().to_string()),
+                FileEvent::Modified(path) => {
+                    path.file_name().map(|n| n.to_string_lossy().to_string())
+                }
                 _ => None,
             })
             .collect();
@@ -852,7 +867,8 @@ mod tests {
 
         // Repo has no commits, so no HEAD
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
 
         // Should not crash on empty repo
         let events = poller.poll_once().await.unwrap();
@@ -883,11 +899,16 @@ mod tests {
         // First poll should not emit events for the existing commit
         // (we only track changes, not initial state)
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
 
         let events = poller.poll_once().await.unwrap();
         // No events because nothing changed and we just recorded the HEAD
-        assert!(events.is_empty(), "Expected no events on first poll, got: {:?}", events);
+        assert!(
+            events.is_empty(),
+            "Expected no events on first poll, got: {:?}",
+            events
+        );
 
         // Verify previous_head was recorded
         assert!(poller.previous_head.is_some());
@@ -911,7 +932,8 @@ mod tests {
             .unwrap();
 
         let config = GitPollerConfig::default();
-        let (mut poller, _rx, _shutdown) = GitPoller::new(dir.path().to_path_buf(), config).unwrap();
+        let (mut poller, _rx, _shutdown) =
+            GitPoller::new(dir.path().to_path_buf(), config).unwrap();
 
         // First poll
         let _ = poller.poll_once().await.unwrap();

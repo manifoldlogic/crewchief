@@ -5,9 +5,9 @@
 //! - Child components rendered by a target component
 //! - Props passed between components
 
+use crate::db::SqliteStore;
 use anyhow::Result;
 use regex::Regex;
-use crate::db::SqliteStore;
 
 /// JSX component usage information.
 #[derive(Debug, Clone)]
@@ -104,7 +104,9 @@ impl JsxRelationshipDetector {
         }
 
         // Also check imports - chunks that import this component
-        let importers = store.find_imports(target_chunk_id, ImportDirection::Incoming, Some(1)).await?;
+        let importers = store
+            .find_imports(target_chunk_id, ImportDirection::Incoming, Some(1))
+            .await?;
 
         for importer in importers {
             if let Some(chunk) = store.get_chunk_by_id(importer.chunk_id).await? {
@@ -183,7 +185,9 @@ impl JsxRelationshipDetector {
         }
 
         // Also check imports - chunks that this component imports
-        let imports = store.find_imports(target_chunk_id, ImportDirection::Outgoing, Some(1)).await?;
+        let imports = store
+            .find_imports(target_chunk_id, ImportDirection::Outgoing, Some(1))
+            .await?;
 
         for import in imports {
             if let Some(chunk) = store.get_chunk_by_id(import.chunk_id).await? {

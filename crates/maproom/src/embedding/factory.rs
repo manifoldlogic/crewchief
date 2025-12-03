@@ -177,7 +177,9 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                     ("ollama".to_string(), Some(endpoint))
                 }
                 None => {
-                    tracing::warn!("Ollama not detected and no MAPROOM_EMBEDDING_PROVIDER configured");
+                    tracing::warn!(
+                        "Ollama not detected and no MAPROOM_EMBEDDING_PROVIDER configured"
+                    );
                     return Err(EmbeddingError::Config(ConfigError::MissingConfig(
                         "No embedding provider configured. Options:\n\
                          1. Install and start Ollama (https://ollama.ai) for zero-config local embeddings\n\
@@ -222,7 +224,8 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                 parallel_config.max_concurrency
             );
 
-            let provider = OllamaProvider::new_with_config(endpoint, model, dimension, parallel_config)?;
+            let provider =
+                OllamaProvider::new_with_config(endpoint, model, dimension, parallel_config)?;
             Ok(Box::new(provider))
         }
         "openai" => {
@@ -608,7 +611,10 @@ mod tests {
     fn test_extract_base_url_no_suffix() {
         // No recognized suffix - returns None
         assert_eq!(extract_base_url("http://localhost:11434/custom"), None);
-        assert_eq!(extract_base_url("http://localhost:11434/api/generate"), None);
+        assert_eq!(
+            extract_base_url("http://localhost:11434/api/generate"),
+            None
+        );
         assert_eq!(extract_base_url("http://localhost:11434"), None);
         // Partial match shouldn't work
         assert_eq!(extract_base_url("http://localhost:11434/api/embe"), None);

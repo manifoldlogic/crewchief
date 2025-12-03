@@ -1,7 +1,7 @@
+use crate::db::SqliteStore;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::db::SqliteStore;
 use tracing::{error, info, warn};
 
 use crate::indexer::parser;
@@ -149,30 +149,35 @@ impl MarkdownMigrator {
         let backup_table = format!("chunks_backup_{}", timestamp);
         let backup_table_clone = backup_table.clone();
 
-        self.store.run(move |conn| {
-            // Create backup table with same schema as chunks
-            conn.execute(
-                &format!(
-                    "CREATE TABLE {} AS
+        self.store
+            .run(move |conn| {
+                // Create backup table with same schema as chunks
+                conn.execute(
+                    &format!(
+                        "CREATE TABLE {} AS
                      SELECT * FROM chunks
                      WHERE file_id IN (
                          SELECT id FROM files WHERE language IN ('md', 'mdx')
                      )",
-                    backup_table_clone
-                ),
-                [],
-            )
-            .context("Failed to create backup table")?;
+                        backup_table_clone
+                    ),
+                    [],
+                )
+                .context("Failed to create backup table")?;
 
-            // Add index on file_id for faster rollback
-            conn.execute(
-                &format!("CREATE INDEX idx_{}_file_id ON {} (file_id)", backup_table_clone, backup_table_clone),
-                [],
-            )
-            .context("Failed to create backup index")?;
+                // Add index on file_id for faster rollback
+                conn.execute(
+                    &format!(
+                        "CREATE INDEX idx_{}_file_id ON {} (file_id)",
+                        backup_table_clone, backup_table_clone
+                    ),
+                    [],
+                )
+                .context("Failed to create backup index")?;
 
-            Ok(())
-        }).await?;
+                Ok(())
+            })
+            .await?;
 
         Ok(backup_table)
     }
@@ -186,12 +191,12 @@ impl MarkdownMigrator {
         let repo_name = repo_name.to_string();
         let worktree_name = worktree_name.map(|s| s.to_string());
 
-        self.store.run(move |conn| {
-            
-
-            let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(ref worktree) = worktree_name {
-                (
-                    "SELECT f.id, f.relpath,
+        self.store
+            .run(move |conn| {
+                let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) =
+                    if let Some(ref worktree) = worktree_name {
+                        (
+                            "SELECT f.id, f.relpath,
                             COALESCE(
                                 (SELECT content FROM file_contents WHERE file_id = f.id LIMIT 1),
                                 ''
@@ -200,12 +205,13 @@ impl MarkdownMigrator {
                      JOIN repos r ON f.repo_id = r.id
                      JOIN worktrees w ON f.worktree_id = w.id
                      WHERE r.name = ?1 AND w.name = ?2 AND f.language IN ('md', 'mdx')
-                     ORDER BY f.relpath".to_string(),
-                    vec![Box::new(repo_name.clone()), Box::new(worktree.clone())]
-                )
-            } else {
-                (
-                    "SELECT f.id, f.relpath,
+                     ORDER BY f.relpath"
+                                .to_string(),
+                            vec![Box::new(repo_name.clone()), Box::new(worktree.clone())],
+                        )
+                    } else {
+                        (
+                            "SELECT f.id, f.relpath,
                             COALESCE(
                                 (SELECT content FROM file_contents WHERE file_id = f.id LIMIT 1),
                                 ''
@@ -213,37 +219,40 @@ impl MarkdownMigrator {
                      FROM files f
                      JOIN repos r ON f.repo_id = r.id
                      WHERE r.name = ?1 AND f.language IN ('md', 'mdx')
-                     ORDER BY f.relpath".to_string(),
-                    vec![Box::new(repo_name.clone())]
-                )
-            };
+                     ORDER BY f.relpath"
+                                .to_string(),
+                            vec![Box::new(repo_name.clone())],
+                        )
+                    };
 
-            let mut stmt = conn.prepare(&query)?;
-            let params_slice: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+                let mut stmt = conn.prepare(&query)?;
+                let params_slice: Vec<&dyn rusqlite::ToSql> =
+                    params_vec.iter().map(|b| b.as_ref()).collect();
 
-            let rows = stmt.query_map(params_slice.as_slice(), |row| {
-                Ok(MarkdownFile {
-                    id: row.get(0)?,
-                    relpath: row.get(1)?,
-                    content: row.get(2)?,
-                })
-            })?;
+                let rows = stmt.query_map(params_slice.as_slice(), |row| {
+                    Ok(MarkdownFile {
+                        id: row.get(0)?,
+                        relpath: row.get(1)?,
+                        content: row.get(2)?,
+                    })
+                })?;
 
-            let mut files = Vec::new();
-            for row_result in rows {
-                let file = row_result?;
+                let mut files = Vec::new();
+                for row_result in rows {
+                    let file = row_result?;
 
-                // If content is empty, skip the file
-                if file.content.is_empty() {
-                    warn!("File {} has no content in database, skipping", file.relpath);
-                    continue;
+                    // If content is empty, skip the file
+                    if file.content.is_empty() {
+                        warn!("File {} has no content in database, skipping", file.relpath);
+                        continue;
+                    }
+
+                    files.push(file);
                 }
 
-                files.push(file);
-            }
-
-            Ok(files)
-        }).await
+                Ok(files)
+            })
+            .await
     }
 
     /// Migrate a single file
@@ -346,68 +355,78 @@ impl MarkdownMigrator {
         let backup_table = backup_table.to_string();
         let store = self.store.clone();
 
-        store.run(move |conn| {
-            use rusqlite::params;
+        store
+            .run(move |conn| {
+                use rusqlite::params;
 
-            // Verify backup table exists
-            let exists: bool = conn.query_row(
-                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
-                params![&backup_table],
-                |row| row.get(0),
-            )?;
+                // Verify backup table exists
+                let exists: bool = conn.query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                    params![&backup_table],
+                    |row| row.get(0),
+                )?;
 
-            if !exists {
-                anyhow::bail!("Backup table {} does not exist", backup_table);
-            }
+                if !exists {
+                    anyhow::bail!("Backup table {} does not exist", backup_table);
+                }
 
-            // Start transaction
-            let tx = conn.transaction()?;
+                // Start transaction
+                let tx = conn.transaction()?;
 
-            // Get file IDs from backup
-            let file_ids: Vec<i64> = {
-                let mut stmt = tx.prepare(&format!("SELECT DISTINCT file_id FROM {}", backup_table))?;
-                let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
-                rows.collect::<Result<Vec<_>, _>>()?
-            };
+                // Get file IDs from backup
+                let file_ids: Vec<i64> = {
+                    let mut stmt =
+                        tx.prepare(&format!("SELECT DISTINCT file_id FROM {}", backup_table))?;
+                    let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+                    rows.collect::<Result<Vec<_>, _>>()?
+                };
 
-            info!("Restoring {} files from backup", file_ids.len());
+                info!("Restoring {} files from backup", file_ids.len());
 
-            // Delete current chunks for these files
-            let placeholders = file_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-            let delete_query = format!("DELETE FROM chunks WHERE file_id IN ({})", placeholders);
-            let file_id_params: Vec<&dyn rusqlite::ToSql> = file_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
-            tx.execute(&delete_query, file_id_params.as_slice())?;
+                // Delete current chunks for these files
+                let placeholders = file_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                let delete_query =
+                    format!("DELETE FROM chunks WHERE file_id IN ({})", placeholders);
+                let file_id_params: Vec<&dyn rusqlite::ToSql> = file_ids
+                    .iter()
+                    .map(|id| id as &dyn rusqlite::ToSql)
+                    .collect();
+                tx.execute(&delete_query, file_id_params.as_slice())?;
 
-            // Restore from backup
-            tx.execute(
-                &format!("INSERT INTO chunks SELECT * FROM {}", backup_table),
-                [],
-            )?;
+                // Restore from backup
+                tx.execute(
+                    &format!("INSERT INTO chunks SELECT * FROM {}", backup_table),
+                    [],
+                )?;
 
-            // Commit transaction
-            tx.commit()?;
+                // Commit transaction
+                tx.commit()?;
 
-            info!("Rollback complete");
+                info!("Rollback complete");
 
-            Ok(())
-        }).await
+                Ok(())
+            })
+            .await
     }
 
     /// List available backup tables
     pub async fn list_backups(&self) -> Result<Vec<String>> {
-        self.store.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT name FROM sqlite_master
+        self.store
+            .run(move |conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT name FROM sqlite_master
                  WHERE type='table'
                  AND name LIKE 'chunks_backup_%'
-                 ORDER BY name DESC"
-            )?;
+                 ORDER BY name DESC",
+                )?;
 
-            let backups = stmt.query_map([], |row| row.get(0))?
-                .collect::<Result<Vec<_>, _>>()?;
+                let backups = stmt
+                    .query_map([], |row| row.get(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
 
-            Ok(backups)
-        }).await
+                Ok(backups)
+            })
+            .await
     }
 
     /// Delete a backup table
@@ -415,13 +434,12 @@ impl MarkdownMigrator {
         info!("Deleting backup table: {}", backup_table);
 
         let backup_table = backup_table.to_string();
-        self.store.run(move |conn| {
-            conn.execute(
-                &format!("DROP TABLE IF EXISTS {}", backup_table),
-                [],
-            )?;
-            Ok(())
-        }).await?;
+        self.store
+            .run(move |conn| {
+                conn.execute(&format!("DROP TABLE IF EXISTS {}", backup_table), [])?;
+                Ok(())
+            })
+            .await?;
 
         info!("Backup table deleted");
 
@@ -460,69 +478,74 @@ impl MarkdownMigrator {
 }
 
 /// Verify migration integrity
-pub async fn verify_migration(store: &SqliteStore, repo_name: &str) -> Result<HashMap<String, usize>> {
+pub async fn verify_migration(
+    store: &SqliteStore,
+    repo_name: &str,
+) -> Result<HashMap<String, usize>> {
     let repo_name = repo_name.to_string();
 
-    store.run(move |conn| {
-        use rusqlite::params;
+    store
+        .run(move |conn| {
+            use rusqlite::params;
 
-        let mut results = HashMap::new();
+            let mut results = HashMap::new();
 
-        // Count markdown files
-        let file_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM files f
+            // Count markdown files
+            let file_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM files f
              JOIN repos r ON f.repo_id = r.id
              WHERE r.name = ?1 AND f.language IN ('md', 'mdx')",
-            params![&repo_name],
-            |row| row.get(0),
-        )?;
-        results.insert("markdown_files".to_string(), file_count as usize);
+                params![&repo_name],
+                |row| row.get(0),
+            )?;
+            results.insert("markdown_files".to_string(), file_count as usize);
 
-        // Count chunks
-        let chunk_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM chunks c
+            // Count chunks
+            let chunk_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunks c
              JOIN files f ON c.file_id = f.id
              JOIN repos r ON f.repo_id = r.id
              WHERE r.name = ?1 AND f.language IN ('md', 'mdx')",
-            params![&repo_name],
-            |row| row.get(0),
-        )?;
-        results.insert("total_chunks".to_string(), chunk_count as usize);
+                params![&repo_name],
+                |row| row.get(0),
+            )?;
+            results.insert("total_chunks".to_string(), chunk_count as usize);
 
-        // Count chunks with parent_path (from metadata)
-        // In SQLite, we need to parse JSON differently
-        let parent_path_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM chunks c
+            // Count chunks with parent_path (from metadata)
+            // In SQLite, we need to parse JSON differently
+            let parent_path_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunks c
              JOIN files f ON c.file_id = f.id
              JOIN repos r ON f.repo_id = r.id
              WHERE r.name = ?1 AND f.language IN ('md', 'mdx')
                AND c.metadata IS NOT NULL
                AND json_extract(c.metadata, '$.parent_path') IS NOT NULL",
-            params![&repo_name],
-            |row| row.get(0),
-        )?;
-        results.insert(
-            "chunks_with_parent_path".to_string(),
-            parent_path_count as usize,
-        );
+                params![&repo_name],
+                |row| row.get(0),
+            )?;
+            results.insert(
+                "chunks_with_parent_path".to_string(),
+                parent_path_count as usize,
+            );
 
-        // Count code blocks with language metadata
-        let code_block_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM chunks c
+            // Count code blocks with language metadata
+            let code_block_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunks c
              JOIN files f ON c.file_id = f.id
              JOIN repos r ON f.repo_id = r.id
              WHERE r.name = ?1 AND f.language IN ('md', 'mdx')
                AND c.kind = 'code_block'
                AND c.metadata IS NOT NULL
                AND json_extract(c.metadata, '$.language') IS NOT NULL",
-            params![&repo_name],
-            |row| row.get(0),
-        )?;
-        results.insert(
-            "code_blocks_with_language".to_string(),
-            code_block_count as usize,
-        );
+                params![&repo_name],
+                |row| row.get(0),
+            )?;
+            results.insert(
+                "code_blocks_with_language".to_string(),
+                code_block_count as usize,
+            );
 
-        Ok(results)
-    }).await
+            Ok(results)
+        })
+        .await
 }

@@ -87,7 +87,7 @@ async fn run_store_tests(store: Arc<dyn VectorStore>, name: &str) -> Result<()> 
 
     // 6. Vector Search (TODO: Add vector search to trait/impl, currently only FTS in interface?)
     // Wait, `search_chunks_fts` is in the trait. Vector search logic is inside `search` usually?
-    // The trait has `search_chunks_fts`. 
+    // The trait has `search_chunks_fts`.
     // We need to ensure we have vector search exposed.
     // Ah, the ticket SQLVEC-2003 implemented `search_chunks_fts`? No, that was FTS.
     // Where is vector search?
@@ -98,12 +98,12 @@ async fn run_store_tests(store: Arc<dyn VectorStore>, name: &str) -> Result<()> 
     // There is no vector search method exposed in the trait currently!
     // The original `queries.rs` likely had it but I might have missed copying it to the trait?
     // Let's check `queries.rs` content again or `mod.rs` content.
-    
+
     // OK, looking at `mod.rs` I wrote:
     // async fn search_chunks_fts(...)
     // It seems I missed `search_chunks_vector` or similar.
     // This is a gap. I should add it to the trait.
-    
+
     println!("✅ {} tests passed", name);
     Ok(())
 }
@@ -113,10 +113,10 @@ async fn test_sqlite_store() -> Result<()> {
     let temp_file = NamedTempFile::new()?;
     let path = temp_file.path().to_str().unwrap();
     let url = format!("sqlite://{}", path);
-    
+
     let store = SqliteStore::connect(&url).await?;
     store.migrate().await?; // Create schema
-    
+
     run_store_tests(Arc::new(store), "SQLite").await
 }
 
@@ -124,4 +124,3 @@ async fn test_sqlite_store() -> Result<()> {
 // async fn test_postgres_store() -> Result<()> {
 //     // Requires running postgres
 // }
-

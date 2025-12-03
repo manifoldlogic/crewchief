@@ -113,7 +113,7 @@ pub struct ChunkFull {
     pub start_line: i32,
     pub end_line: i32,
     pub preview: String,
-    pub file_path: String,    // Denormalized from file table
+    pub file_path: String, // Denormalized from file table
 }
 
 /// Lightweight chunk reference for lists/navigation
@@ -132,7 +132,7 @@ pub struct ChunkSummary {
 pub struct ChunkContext {
     pub chunk: ChunkFull,
     pub file_path: String,
-    pub surrounding_chunks: Vec<ChunkSummary>,  // Chunks before/after by line number
+    pub surrounding_chunks: Vec<ChunkSummary>, // Chunks before/after by line number
 }
 
 /// Repository metadata

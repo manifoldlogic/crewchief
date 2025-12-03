@@ -48,9 +48,10 @@ impl DefaultAssemblyStrategy {
     /// Retrieve chunk metadata from the database by ID.
     pub async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
         let store = Arc::clone(&self.store);
-        let metadata = store.run(move |conn| {
-            let row = conn.query_row(
-                "SELECT
+        let metadata = store
+            .run(move |conn| {
+                let row = conn.query_row(
+                    "SELECT
                     c.id,
                     f.relpath,
                     w.abs_path as worktree_path,
@@ -64,30 +65,32 @@ impl DefaultAssemblyStrategy {
                 JOIN files f ON f.id = c.file_id
                 LEFT JOIN worktrees w ON w.id = f.worktree_id
                 WHERE c.id = ?1",
-                rusqlite::params![chunk_id],
-                |row| {
-                    let worktree_path: Option<String> = row.get(2)?;
-                    Ok(ChunkMetadata {
-                        id: row.get(0)?,
-                        file_relpath: row.get(1)?,
-                        worktree_path: worktree_path.unwrap_or_else(|| {
-                            warn!(
-                                "Chunk {} has no worktree_path, using empty string",
-                                chunk_id
-                            );
-                            String::new()
-                        }),
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        start_line: row.get(5)?,
-                        end_line: row.get(6)?,
-                        signature: row.get(7)?,
-                        docstring: row.get(8)?,
-                    })
-                }
-            )?;
-            Ok(row)
-        }).await.context("Failed to query chunk metadata")?;
+                    rusqlite::params![chunk_id],
+                    |row| {
+                        let worktree_path: Option<String> = row.get(2)?;
+                        Ok(ChunkMetadata {
+                            id: row.get(0)?,
+                            file_relpath: row.get(1)?,
+                            worktree_path: worktree_path.unwrap_or_else(|| {
+                                warn!(
+                                    "Chunk {} has no worktree_path, using empty string",
+                                    chunk_id
+                                );
+                                String::new()
+                            }),
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            start_line: row.get(5)?,
+                            end_line: row.get(6)?,
+                            signature: row.get(7)?,
+                            docstring: row.get(8)?,
+                        })
+                    },
+                )?;
+                Ok(row)
+            })
+            .await
+            .context("Failed to query chunk metadata")?;
 
         Ok(metadata)
     }

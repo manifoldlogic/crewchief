@@ -136,10 +136,7 @@ fn test_chunk_identity_different_symbols() {
     let id1 = ChunkIdentity::from_result(&chunk1);
     let id2 = ChunkIdentity::from_result(&chunk2);
 
-    assert_ne!(
-        id1, id2,
-        "Different symbols should have different identity"
-    );
+    assert_ne!(id1, id2, "Different symbols should have different identity");
 }
 
 #[test]
@@ -167,14 +164,17 @@ fn test_deduplicate_removes_duplicates_across_worktrees() {
     let chunks = vec![
         create_chunk_result(1, "src/auth.rs", Some("validate"), 10, 0.9),
         create_chunk_result(2, "src/auth.rs", Some("validate"), 10, 0.8), // duplicate, lower score
-        create_chunk_result(3, "src/utils.rs", Some("helper"), 20, 0.7), // unique
+        create_chunk_result(3, "src/utils.rs", Some("helper"), 20, 0.7),  // unique
     ];
 
     let config = DeduplicationConfig::default();
     let deduped = deduplicate(chunks, &config);
 
     assert_eq!(deduped.len(), 2, "Should have 2 unique results");
-    assert_eq!(deduped[0].chunk_id, 1, "Should keep highest-scoring duplicate");
+    assert_eq!(
+        deduped[0].chunk_id, 1,
+        "Should keep highest-scoring duplicate"
+    );
 }
 
 #[test]
@@ -190,7 +190,10 @@ fn test_deduplicate_keeps_highest_score() {
     let deduped = deduplicate(chunks, &config);
 
     assert_eq!(deduped.len(), 1);
-    assert_eq!(deduped[0].chunk_id, 2, "Should select chunk with highest score");
+    assert_eq!(
+        deduped[0].chunk_id, 2,
+        "Should select chunk with highest score"
+    );
     assert!((deduped[0].score - 0.95).abs() < 0.001);
 }
 
@@ -246,7 +249,10 @@ fn test_search_hit_dedup_multi_worktree() {
     let deduped = deduplicate_search_hits(hits, 10);
 
     assert_eq!(deduped.len(), 2, "Should dedupe to 2 unique results");
-    assert!((deduped[0].score - 0.95).abs() < 0.001, "Should keep highest score");
+    assert!(
+        (deduped[0].score - 0.95).abs() < 0.001,
+        "Should keep highest score"
+    );
 }
 
 #[test]
@@ -262,7 +268,10 @@ fn test_search_hit_dedup_respects_limit() {
     let deduped = deduplicate_search_hits(hits, 3);
 
     assert_eq!(deduped.len(), 3, "Should respect limit");
-    assert!((deduped[0].score - 0.9).abs() < 0.001, "Should have highest scores");
+    assert!(
+        (deduped[0].score - 0.9).abs() < 0.001,
+        "Should have highest scores"
+    );
 }
 
 #[test]
@@ -295,9 +304,27 @@ fn test_realistic_multi_worktree_scenario() {
     // - Feature branches have slightly different scores due to different activity
     let chunks = vec![
         // validate() in all 3 worktrees
-        create_chunk_result(101, "src/auth/validate.rs", Some("validate_token"), 15, 0.92),
-        create_chunk_result(201, "src/auth/validate.rs", Some("validate_token"), 15, 0.88),
-        create_chunk_result(301, "src/auth/validate.rs", Some("validate_token"), 15, 0.85),
+        create_chunk_result(
+            101,
+            "src/auth/validate.rs",
+            Some("validate_token"),
+            15,
+            0.92,
+        ),
+        create_chunk_result(
+            201,
+            "src/auth/validate.rs",
+            Some("validate_token"),
+            15,
+            0.88,
+        ),
+        create_chunk_result(
+            301,
+            "src/auth/validate.rs",
+            Some("validate_token"),
+            15,
+            0.85,
+        ),
         // authenticate() only in main and feature-auth
         create_chunk_result(102, "src/auth/login.rs", Some("authenticate"), 30, 0.78),
         create_chunk_result(202, "src/auth/login.rs", Some("authenticate"), 30, 0.82),
@@ -317,12 +344,17 @@ fn test_realistic_multi_worktree_scenario() {
     // Verify highest scores were kept
     let validate = deduped.iter().find(|c| c.relpath == "src/auth/validate.rs");
     assert!(validate.is_some());
-    assert_eq!(validate.unwrap().chunk_id, 101, "Should keep main's validate");
+    assert_eq!(
+        validate.unwrap().chunk_id,
+        101,
+        "Should keep main's validate"
+    );
 
     let authenticate = deduped.iter().find(|c| c.relpath == "src/auth/login.rs");
     assert!(authenticate.is_some());
     assert_eq!(
-        authenticate.unwrap().chunk_id, 202,
+        authenticate.unwrap().chunk_id,
+        202,
         "Should keep feature-auth's authenticate (higher score)"
     );
 }

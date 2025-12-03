@@ -652,7 +652,8 @@ async fn test_retry_exhaustion_with_failing_restart() {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Try marking as failed - this may fail if watcher was removed
-        let _ = multi_watcher.mark_watcher_failed(&worktree_id, format!("Recurring failure {}", attempt));
+        let _ = multi_watcher
+            .mark_watcher_failed(&worktree_id, format!("Recurring failure {}", attempt));
 
         // Attempt restart
         multi_watcher.check_and_restart_failed_watchers().await;

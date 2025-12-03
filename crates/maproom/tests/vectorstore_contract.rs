@@ -99,12 +99,18 @@ mod sqlite_contract_tests {
             .unwrap();
 
         // Should find existing worktree
-        let found = store.get_worktree_by_name(repo_id, "develop").await.unwrap();
+        let found = store
+            .get_worktree_by_name(repo_id, "develop")
+            .await
+            .unwrap();
         assert!(found.is_some());
         assert_eq!(found.unwrap().name, "develop");
 
         // Should return None for non-existent
-        let not_found = store.get_worktree_by_name(repo_id, "feature").await.unwrap();
+        let not_found = store
+            .get_worktree_by_name(repo_id, "feature")
+            .await
+            .unwrap();
         assert!(not_found.is_none());
     }
 

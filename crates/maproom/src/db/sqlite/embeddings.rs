@@ -3,9 +3,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 /// Convert f32 slice to little-endian bytes for SQLite BLOB storage
 pub fn vec_to_blob(vec: &[f32]) -> Vec<u8> {
-    vec.iter()
-        .flat_map(|f| f.to_le_bytes())
-        .collect()
+    vec.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
 /// Convert bytes back to f32 slice
@@ -77,12 +75,13 @@ pub fn upsert_embedding(
     .context("Failed to upsert embedding")?;
 
     // Get the rowid for the inserted/updated embedding
-    let rowid: i64 = conn.query_row(
-        "SELECT id FROM code_embeddings WHERE blob_sha = ?1",
-        params![blob_sha],
-        |row| row.get(0),
-    )
-    .context("Failed to retrieve embedding id")?;
+    let rowid: i64 = conn
+        .query_row(
+            "SELECT id FROM code_embeddings WHERE blob_sha = ?1",
+            params![blob_sha],
+            |row| row.get(0),
+        )
+        .context("Failed to retrieve embedding id")?;
 
     Ok(rowid)
 }
@@ -125,9 +124,7 @@ pub fn upsert_embeddings_batch(
                embedding_dim = excluded.embedding_dim",
         )?;
 
-        let mut get_id_stmt = tx.prepare(
-            "SELECT id FROM code_embeddings WHERE blob_sha = ?1"
-        )?;
+        let mut get_id_stmt = tx.prepare("SELECT id FROM code_embeddings WHERE blob_sha = ?1")?;
 
         for record in embeddings {
             let blob = vec_to_blob(&record.embedding);
@@ -141,7 +138,8 @@ pub fn upsert_embeddings_batch(
             ])?;
 
             // Get the rowid for syncing
-            let embedding_id: i64 = get_id_stmt.query_row(params![record.blob_sha], |row| row.get(0))?;
+            let embedding_id: i64 =
+                get_id_stmt.query_row(params![record.blob_sha], |row| row.get(0))?;
 
             result.push((embedding_id, record.embedding.clone()));
         }
@@ -206,7 +204,10 @@ pub fn sync_embedding_to_vec(
     let blob = vec_to_blob(embedding);
 
     // Insert with explicit rowid to match code_embeddings.id
-    let insert_sql = format!("INSERT INTO {}(rowid, embedding) VALUES (?1, ?2)", vec_table);
+    let insert_sql = format!(
+        "INSERT INTO {}(rowid, embedding) VALUES (?1, ?2)",
+        vec_table
+    );
     conn.execute(&insert_sql, params![embedding_id, blob])
         .with_context(|| format!("Failed to insert into {}", vec_table))?;
 
@@ -306,7 +307,7 @@ mod tests {
         // Register extension globally
         unsafe {
             rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
-                crate::db::sqlite::sqlite3_vec_init as *const ()
+                crate::db::sqlite::sqlite3_vec_init as *const (),
             )));
         }
 
@@ -317,7 +318,8 @@ mod tests {
             r#"
             PRAGMA foreign_keys = ON;
             "#,
-        ).expect("Failed to enable foreign keys");
+        )
+        .expect("Failed to enable foreign keys");
 
         // Create schema
         conn.execute_batch(
@@ -345,7 +347,8 @@ mod tests {
                 embedding float[768]
             );
             "#,
-        ).expect("Failed to create schema");
+        )
+        .expect("Failed to create schema");
 
         conn
     }
@@ -401,8 +404,7 @@ mod tests {
         assert!(embedding_id > 0);
 
         // Sync to vec_code
-        sync_embedding_to_vec(&conn, embedding_id, &embedding)
-            .expect("Failed to sync to vec_code");
+        sync_embedding_to_vec(&conn, embedding_id, &embedding).expect("Failed to sync to vec_code");
 
         // Verify the embedding exists in vec_code with matching rowid
         let vec_code_rowid: i64 = conn
@@ -413,7 +415,10 @@ mod tests {
             )
             .expect("Failed to query vec_code rowid");
 
-        assert_eq!(vec_code_rowid, embedding_id, "Rowid in vec_code should match embedding_id");
+        assert_eq!(
+            vec_code_rowid, embedding_id,
+            "Rowid in vec_code should match embedding_id"
+        );
 
         // Verify the embedding data is correct
         let vec_code_blob: Vec<u8> = conn
@@ -451,7 +456,10 @@ mod tests {
         let updated_id = upsert_embedding(&conn, "test_blob", &embedding2, "model-v2")
             .expect("Failed to update embedding");
 
-        assert_eq!(embedding_id, updated_id, "ID should remain the same on update");
+        assert_eq!(
+            embedding_id, updated_id,
+            "ID should remain the same on update"
+        );
 
         // Sync updated embedding (should replace old one)
         sync_embedding_to_vec(&conn, updated_id, &embedding2)
@@ -507,8 +515,8 @@ mod tests {
         assert_eq!(count_before, 0);
 
         // Sync all embeddings
-        let synced_count = sync_all_embeddings_to_vec(&conn)
-            .expect("Failed to sync all embeddings");
+        let synced_count =
+            sync_all_embeddings_to_vec(&conn).expect("Failed to sync all embeddings");
 
         assert_eq!(synced_count, 3, "Should have synced 3 embeddings");
 
@@ -535,11 +543,13 @@ mod tests {
             )
             .unwrap_or(false);
 
-        assert!(exists, "vec_code should have entry with rowid matching code_embeddings.id");
+        assert!(
+            exists,
+            "vec_code should have entry with rowid matching code_embeddings.id"
+        );
 
         // Run sync again - should sync 0 (idempotent)
-        let synced_again = sync_all_embeddings_to_vec(&conn)
-            .expect("Failed to sync again");
+        let synced_again = sync_all_embeddings_to_vec(&conn).expect("Failed to sync again");
         assert_eq!(synced_again, 0, "Second sync should find nothing to sync");
     }
 
@@ -559,7 +569,8 @@ mod tests {
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             "#,
-        ).expect("Failed to create schema");
+        )
+        .expect("Failed to create schema");
 
         let embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
 
@@ -569,11 +580,17 @@ mod tests {
 
         // Sync should fail because vec_code doesn't exist
         let result = sync_embedding_to_vec(&conn, embedding_id, &embedding);
-        assert!(result.is_err(), "Sync should fail when vec_code table doesn't exist");
+        assert!(
+            result.is_err(),
+            "Sync should fail when vec_code table doesn't exist"
+        );
 
         // sync_all should also fail
         let result = sync_all_embeddings_to_vec(&conn);
-        assert!(result.is_err(), "Sync all should fail when vec_code table doesn't exist");
+        assert!(
+            result.is_err(),
+            "Sync all should fail when vec_code table doesn't exist"
+        );
     }
 
     #[test]
@@ -635,7 +652,10 @@ mod tests {
             )
             .expect("Failed to query vec_code_768 rowid");
 
-        assert_eq!(vec_code_rowid, embedding_id, "Rowid in vec_code_768 should match embedding_id");
+        assert_eq!(
+            vec_code_rowid, embedding_id,
+            "Rowid in vec_code_768 should match embedding_id"
+        );
 
         // Verify the embedding data is correct
         let vec_code_blob: Vec<u8> = conn
@@ -696,8 +716,9 @@ mod tests {
         let embedding: Vec<f32> = (0..1024).map(|i| i as f32 / 1024.0).collect();
 
         // Insert embedding
-        let embedding_id = upsert_embedding(&conn, "test_1024_sync", &embedding, "mxbai-embed-large")
-            .expect("Failed to upsert 1024-dim embedding");
+        let embedding_id =
+            upsert_embedding(&conn, "test_1024_sync", &embedding, "mxbai-embed-large")
+                .expect("Failed to upsert 1024-dim embedding");
 
         // Sync to vec_code_1024
         sync_embedding_to_vec(&conn, embedding_id, &embedding)
@@ -712,7 +733,10 @@ mod tests {
             )
             .expect("Failed to query vec_code_1024 rowid");
 
-        assert_eq!(vec_code_rowid, embedding_id, "Rowid in vec_code_1024 should match embedding_id");
+        assert_eq!(
+            vec_code_rowid, embedding_id,
+            "Rowid in vec_code_1024 should match embedding_id"
+        );
 
         // Verify the embedding data is correct
         let vec_code_blob: Vec<u8> = conn
@@ -744,8 +768,13 @@ mod tests {
             .expect("Failed to upsert 768-dim");
         let id_1024 = upsert_embedding(&conn, "blob_1024", &embedding_1024, "mxbai-embed-large")
             .expect("Failed to upsert 1024-dim");
-        let id_1536 = upsert_embedding(&conn, "blob_1536", &embedding_1536, "text-embedding-3-small")
-            .expect("Failed to upsert 1536-dim");
+        let id_1536 = upsert_embedding(
+            &conn,
+            "blob_1536",
+            &embedding_1536,
+            "text-embedding-3-small",
+        )
+        .expect("Failed to upsert 1536-dim");
 
         // Verify all exist with correct dimensions
         let dim_768: i32 = conn
@@ -798,10 +827,20 @@ mod tests {
             .expect("Failed to upsert 1024-dim a");
         upsert_embedding(&conn, "blob_1024_b", &embedding_1024_b, "mxbai-embed-large")
             .expect("Failed to upsert 1024-dim b");
-        upsert_embedding(&conn, "blob_1536_a", &embedding_1536_a, "text-embedding-3-small")
-            .expect("Failed to upsert 1536-dim a");
-        upsert_embedding(&conn, "blob_1536_b", &embedding_1536_b, "text-embedding-3-small")
-            .expect("Failed to upsert 1536-dim b");
+        upsert_embedding(
+            &conn,
+            "blob_1536_a",
+            &embedding_1536_a,
+            "text-embedding-3-small",
+        )
+        .expect("Failed to upsert 1536-dim a");
+        upsert_embedding(
+            &conn,
+            "blob_1536_b",
+            &embedding_1536_b,
+            "text-embedding-3-small",
+        )
+        .expect("Failed to upsert 1536-dim b");
 
         // Verify vec tables are empty
         let count_768_before: i64 = conn
@@ -819,10 +858,13 @@ mod tests {
         assert_eq!(count_1536_before, 0);
 
         // Sync all embeddings
-        let synced_count = sync_all_embeddings_to_vec(&conn)
-            .expect("Failed to sync all embeddings");
+        let synced_count =
+            sync_all_embeddings_to_vec(&conn).expect("Failed to sync all embeddings");
 
-        assert_eq!(synced_count, 6, "Should have synced 6 embeddings (2 of each dimension)");
+        assert_eq!(
+            synced_count, 6,
+            "Should have synced 6 embeddings (2 of each dimension)"
+        );
 
         // Verify correct counts in each table
         let count_768_after: i64 = conn
@@ -836,12 +878,14 @@ mod tests {
             .expect("Failed to count vec_code");
 
         assert_eq!(count_768_after, 2, "vec_code_768 should have 2 embeddings");
-        assert_eq!(count_1024_after, 2, "vec_code_1024 should have 2 embeddings");
+        assert_eq!(
+            count_1024_after, 2,
+            "vec_code_1024 should have 2 embeddings"
+        );
         assert_eq!(count_1536_after, 2, "vec_code should have 2 embeddings");
 
         // Run sync again - should sync 0 (idempotent)
-        let synced_again = sync_all_embeddings_to_vec(&conn)
-            .expect("Failed to sync again");
+        let synced_again = sync_all_embeddings_to_vec(&conn).expect("Failed to sync again");
         assert_eq!(synced_again, 0, "Second sync should find nothing to sync");
     }
 
@@ -856,7 +900,13 @@ mod tests {
         assert!(result.is_err(), "Should reject unsupported dimension");
 
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("512"), "Error should mention the dimension");
-        assert!(err_msg.contains("768") && err_msg.contains("1024") && err_msg.contains("1536"), "Error should list supported dimensions");
+        assert!(
+            err_msg.contains("512"),
+            "Error should mention the dimension"
+        );
+        assert!(
+            err_msg.contains("768") && err_msg.contains("1024") && err_msg.contains("1536"),
+            "Error should list supported dimensions"
+        );
     }
 }

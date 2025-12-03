@@ -181,15 +181,16 @@ pub struct ABTestLogger {
 impl ABTestLogger {
     /// Create a new logger with default settings (batch_size=100, flush every 10s)
     pub fn new() -> Self {
-        Self { _phantom: std::marker::PhantomData }
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Create with custom batch size and flush interval
-    pub fn with_config(
-        _batch_size: usize,
-        _flush_interval_secs: u64,
-    ) -> Self {
-        Self { _phantom: std::marker::PhantomData }
+    pub fn with_config(_batch_size: usize, _flush_interval_secs: u64) -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Log shadow mode results

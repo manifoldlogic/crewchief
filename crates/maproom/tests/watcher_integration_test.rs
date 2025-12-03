@@ -230,7 +230,10 @@ async fn test_ignore_patterns_respected() {
         if e.path().to_string_lossy().contains(".gitignore") {
             // Drain any more events then check for ignored files
             tokio::time::sleep(Duration::from_millis(300)).await;
-            timeout(Duration::from_millis(100), rx.recv()).await.ok().flatten()
+            timeout(Duration::from_millis(100), rx.recv())
+                .await
+                .ok()
+                .flatten()
         } else {
             event
         }
@@ -239,7 +242,13 @@ async fn test_ignore_patterns_respected() {
     };
 
     assert!(
-        relevant_event.is_none() || !relevant_event.as_ref().unwrap().path().to_string_lossy().contains("debug.log"),
+        relevant_event.is_none()
+            || !relevant_event
+                .as_ref()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .contains("debug.log"),
         "Should not receive events for ignored files, but got: {:?}",
         relevant_event
     );

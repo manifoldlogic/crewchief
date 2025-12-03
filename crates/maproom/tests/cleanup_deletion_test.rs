@@ -21,7 +21,10 @@ static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// Uses file:memdb?mode=memory&cache=shared for proper pooled connection support
 async fn setup_test_store() -> SqliteStore {
     let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let db_name = format!("file:memdb_cleanup_delete_{}?mode=memory&cache=shared", counter);
+    let db_name = format!(
+        "file:memdb_cleanup_delete_{}?mode=memory&cache=shared",
+        counter
+    );
     let store = SqliteStore::connect(&db_name).await.unwrap();
     store.migrate().await.unwrap();
     store
@@ -36,7 +39,12 @@ async fn create_test_repo(store: &SqliteStore, name: &str) -> i64 {
 }
 
 /// Test helper: Create a test worktree
-async fn create_test_worktree(store: &SqliteStore, repo_id: i64, name: &str, abs_path: &str) -> i64 {
+async fn create_test_worktree(
+    store: &SqliteStore,
+    repo_id: i64,
+    name: &str,
+    abs_path: &str,
+) -> i64 {
     store
         .get_or_create_worktree(repo_id, name, abs_path)
         .await
@@ -520,8 +528,10 @@ async fn test_deletes_only_stale_worktrees() -> Result<()> {
     let valid_id = create_test_worktree(&store, repo_id, "valid", valid_path).await;
 
     // Create 2 stale worktrees (with non-existent paths)
-    let stale1_id = create_test_worktree(&store, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
-    let stale2_id = create_test_worktree(&store, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
+    let stale1_id =
+        create_test_worktree(&store, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
+    let stale2_id =
+        create_test_worktree(&store, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
 
     // Create chunks: valid worktree has 2 chunks, stale worktrees have 1 each
     let valid_chunk1_id = create_test_chunk(&store, repo_id, &[valid_id], "valid1.rs").await;
@@ -621,8 +631,10 @@ async fn test_transaction_atomicity() -> Result<()> {
 
     // Setup: Create repo and 2 stale worktrees with chunks
     let repo_id = create_test_repo(&store, "test_transaction_atomicity").await;
-    let stale1_id = create_test_worktree(&store, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
-    let stale2_id = create_test_worktree(&store, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
+    let stale1_id =
+        create_test_worktree(&store, repo_id, "stale1", "/tmp/nonexistent/stale1").await;
+    let stale2_id =
+        create_test_worktree(&store, repo_id, "stale2", "/tmp/nonexistent/stale2").await;
 
     // Create chunks for both worktrees
     let chunk1_id = create_test_chunk(&store, repo_id, &[stale1_id], "stale1.rs").await;
@@ -694,7 +706,8 @@ async fn test_concurrent_cleanup_safety() -> Result<()> {
             &format!("/tmp/concurrent{}", i),
         )
         .await;
-        let chunk_id = create_test_chunk(&store, repo_id, &[wt_id], &format!("concurrent{}.rs", i)).await;
+        let chunk_id =
+            create_test_chunk(&store, repo_id, &[wt_id], &format!("concurrent{}.rs", i)).await;
         worktree_ids.push(wt_id);
         chunk_ids.push(chunk_id);
     }

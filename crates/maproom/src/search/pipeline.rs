@@ -411,7 +411,10 @@ impl SearchPipeline {
         // This should query the chunks and files tables to get the needed fields.
         // See ticket IDXABS-4001 for search functionality updates.
 
-        debug!("fetch_chunk_details called for {} chunk IDs (not yet implemented)", chunk_ids.len());
+        debug!(
+            "fetch_chunk_details called for {} chunk IDs (not yet implemented)",
+            chunk_ids.len()
+        );
         Ok(HashMap::new())
     }
 

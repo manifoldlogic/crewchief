@@ -43,7 +43,11 @@ fn deduplicate_search_hits(hits: Vec<db::SearchHit>, limit: usize) -> Vec<db::Se
     // Group by identity key
     let mut groups: HashMap<(String, Option<String>, i32), Vec<db::SearchHit>> = HashMap::new();
     for hit in hits {
-        let key = (hit.file_relpath.clone(), hit.symbol_name.clone(), hit.start_line);
+        let key = (
+            hit.file_relpath.clone(),
+            hit.symbol_name.clone(),
+            hit.start_line,
+        );
         groups.entry(key).or_default().push(hit);
     }
 
@@ -51,13 +55,21 @@ fn deduplicate_search_hits(hits: Vec<db::SearchHit>, limit: usize) -> Vec<db::Se
     let mut deduped: Vec<db::SearchHit> = groups
         .into_values()
         .map(|mut group| {
-            group.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            group.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             group.remove(0)
         })
         .collect();
 
     // Re-sort by score descending
-    deduped.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    deduped.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Apply limit
     deduped.into_iter().take(limit).collect()
@@ -157,10 +169,16 @@ async fn handle_branch_switch(
 
     // 4. Get/create worktree record
     let watch_path_str = watch_path.to_string_lossy().to_string();
-    let new_wt_id = match store.get_or_create_worktree(repo_id, &effective_branch, &watch_path_str).await {
+    let new_wt_id = match store
+        .get_or_create_worktree(repo_id, &effective_branch, &watch_path_str)
+        .await
+    {
         Ok(id) => id,
         Err(e) => {
-            tracing::warn!("Failed to get/create worktree: {}. Continuing with old worktree_id.", e);
+            tracing::warn!(
+                "Failed to get/create worktree: {}. Continuing with old worktree_id.",
+                e
+            );
             return Ok(()); // Continue with old worktree_id
         }
     };
@@ -622,16 +640,22 @@ fn parse_throttle(throttle: &str) -> anyhow::Result<u64> {
     let throttle = throttle.trim();
 
     if let Some(ms_str) = throttle.strip_suffix("ms") {
-        ms_str.parse::<u64>()
+        ms_str
+            .parse::<u64>()
             .with_context(|| format!("Invalid throttle value: {}", throttle))
     } else if let Some(s_str) = throttle.strip_suffix("s") {
-        let secs: u64 = s_str.parse()
+        let secs: u64 = s_str
+            .parse()
             .with_context(|| format!("Invalid throttle value: {}", throttle))?;
         Ok(secs * 1000)
     } else {
         // Default to treating as seconds if no suffix
-        let secs: u64 = throttle.parse()
-            .with_context(|| format!("Invalid throttle value: {}. Use format like '2s' or '500ms'", throttle))?;
+        let secs: u64 = throttle.parse().with_context(|| {
+            format!(
+                "Invalid throttle value: {}. Use format like '2s' or '500ms'",
+                throttle
+            )
+        })?;
         Ok(secs * 1000)
     }
 }
@@ -679,11 +703,7 @@ fn format_context_bundle(bundle: &ContextBundle, chunk_id: i64, budget: usize) -
         let _ = writeln!(
             output,
             "{} {}: {}:{}-{}",
-            emoji,
-            role_upper,
-            item.relpath,
-            item.range.start,
-            item.range.end
+            emoji, role_upper, item.relpath, item.range.start, item.range.end
         );
 
         // For primary chunks, show a content preview
@@ -800,7 +820,6 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
 
     Ok((repo_name, branch_name, commit_hash))
 }
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -927,7 +946,6 @@ async fn main() -> anyhow::Result<()> {
             verbose,
             json,
         } => {
-
             // Get git defaults if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
 
@@ -940,7 +958,11 @@ async fn main() -> anyhow::Result<()> {
 
             tracing::info!(
                 "Scanning repo: {}, worktree: {}, commit: {}, force: {}, generate_embeddings: {}",
-                repo, worktree, commit, force, generate_embeddings
+                repo,
+                worktree,
+                commit,
+                force,
+                generate_embeddings
             );
 
             // Log scan mode for user awareness (suppress human output in JSON mode)
@@ -1000,11 +1022,9 @@ async fn main() -> anyhow::Result<()> {
                 // Get repo and worktree IDs using store methods
                 // Note: Using get_or_create functions ensures worktrees are created if they don't exist
                 let root_abs = path.canonicalize().context("invalid root path")?;
-                let repo_id = match store.get_or_create_repo(
-                    &repo,
-                    root_abs.to_string_lossy().as_ref(),
-                )
-                .await
+                let repo_id = match store
+                    .get_or_create_repo(&repo, root_abs.to_string_lossy().as_ref())
+                    .await
                 {
                     Ok(id) => Some(id),
                     Err(e) => {
@@ -1014,12 +1034,13 @@ async fn main() -> anyhow::Result<()> {
                 };
 
                 if let Some(repo_id) = repo_id {
-                    let worktree_id = match store.get_or_create_worktree(
-                        repo_id,
-                        &worktree,
-                        root_abs.to_string_lossy().as_ref(),
-                    )
-                    .await
+                    let worktree_id = match store
+                        .get_or_create_worktree(
+                            repo_id,
+                            &worktree,
+                            root_abs.to_string_lossy().as_ref(),
+                        )
+                        .await
                     {
                         Ok(id) => Some(id),
                         Err(e) => {
@@ -1037,9 +1058,14 @@ async fn main() -> anyhow::Result<()> {
                             Ok(last_sha) if last_sha == *current_sha && !force => {
                                 if json {
                                     // In JSON mode, emit complete event with 0 files
-                                    println!(r#"{{"type":"complete","files":0,"duration":0,"elapsed":0,"timestamp":"{}"}}"#, chrono::Utc::now().to_rfc3339());
+                                    println!(
+                                        r#"{{"type":"complete","files":0,"duration":0,"elapsed":0,"timestamp":"{}"}}"#,
+                                        chrono::Utc::now().to_rfc3339()
+                                    );
                                 } else {
-                                    println!("✓ No changes detected (tree SHA match), skipping scan");
+                                    println!(
+                                        "✓ No changes detected (tree SHA match), skipping scan"
+                                    );
                                 }
                                 tracing::info!(
                                     "Scan skipped: tree {} already indexed",
@@ -1093,7 +1119,10 @@ async fn main() -> anyhow::Result<()> {
                         tracing::warn!("Embedding generation failed: {}", e);
                         if json {
                             // In JSON mode, emit error event
-                            println!(r#"{{"type":"error","message":"Embedding generation failed: {}","error_type":"embedding"}}"#, e);
+                            println!(
+                                r#"{{"type":"error","message":"Embedding generation failed: {}","error_type":"embedding"}}"#,
+                                e
+                            );
                         } else {
                             println!("\n⚠️  Warning: Embedding generation failed: {}", e);
                             println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
@@ -1132,20 +1161,15 @@ async fn main() -> anyhow::Result<()> {
                 let root_abs = match path.canonicalize() {
                     Ok(p) => p,
                     Err(e) => {
-                        tracing::warn!(
-                            "Could not canonicalize path for state update: {}",
-                            e
-                        );
+                        tracing::warn!("Could not canonicalize path for state update: {}", e);
                         path.clone()
                     }
                 };
 
                 // Get repo ID
-                let repo_id = match store.get_or_create_repo(
-                    &repo,
-                    root_abs.to_string_lossy().as_ref(),
-                )
-                .await
+                let repo_id = match store
+                    .get_or_create_repo(&repo, root_abs.to_string_lossy().as_ref())
+                    .await
                 {
                     Ok(id) => Some(id),
                     Err(e) => {
@@ -1156,31 +1180,26 @@ async fn main() -> anyhow::Result<()> {
 
                 if let Some(repo_id) = repo_id {
                     // Get worktree ID
-                    let worktree_id = match store.get_or_create_worktree(
-                        repo_id,
-                        &worktree,
-                        root_abs.to_string_lossy().as_ref(),
-                    )
-                    .await
+                    let worktree_id = match store
+                        .get_or_create_worktree(
+                            repo_id,
+                            &worktree,
+                            root_abs.to_string_lossy().as_ref(),
+                        )
+                        .await
                     {
                         Ok(id) => Some(id),
                         Err(e) => {
-                            tracing::warn!(
-                                "Could not get worktree ID for state update: {}",
-                                e
-                            );
+                            tracing::warn!("Could not get worktree ID for state update: {}", e);
                             None
                         }
                     };
 
                     if let Some(wt_id) = worktree_id {
                         // Update index state with current tree SHA and stats
-                        match store.update_index_state(
-                            wt_id,
-                            current_tree_sha,
-                            &scan_stats,
-                        )
-                        .await
+                        match store
+                            .update_index_state(wt_id, current_tree_sha, &scan_stats)
+                            .await
                         {
                             Ok(_) => {
                                 tracing::info!(
@@ -1190,7 +1209,9 @@ async fn main() -> anyhow::Result<()> {
                             }
                             Err(e) => {
                                 tracing::warn!("Failed to update index state: {}", e);
-                                tracing::warn!("Scan completed successfully, but next scan may be slower");
+                                tracing::warn!(
+                                    "Scan completed successfully, but next scan may be slower"
+                                );
                                 // Don't fail the scan - state update is advisory only
                             }
                         }
@@ -1271,13 +1292,16 @@ async fn main() -> anyhow::Result<()> {
             let store = Arc::new(db::connect().await?);
 
             // Canonicalize path for the watcher
-            let watch_path = path.canonicalize()
+            let watch_path = path
+                .canonicalize()
                 .with_context(|| format!("Failed to canonicalize path: {}", path.display()))?;
             let watch_path_str = watch_path.to_string_lossy().to_string();
 
             // Ensure repo and worktree exist
             let repo_id = store.get_or_create_repo(&repo, &watch_path_str).await?;
-            let initial_worktree_id = store.get_or_create_worktree(repo_id, &worktree, &watch_path_str).await?;
+            let initial_worktree_id = store
+                .get_or_create_worktree(repo_id, &worktree, &watch_path_str)
+                .await?;
 
             // Wrap worktree_id and current_branch in thread-safe state for dynamic updates
             // Uses std::sync::RwLock (not tokio::sync) to match existing codebase patterns
@@ -1300,10 +1324,9 @@ async fn main() -> anyhow::Result<()> {
             let (mut multi_watcher, mut event_rx) = MultiWatcher::new(config);
 
             // Add the worktree to watch
-            multi_watcher.add_worktree(
-                worktree.clone(),
-                watch_path.clone(),
-            ).await?;
+            multi_watcher
+                .add_worktree(worktree.clone(), watch_path.clone())
+                .await?;
 
             // Set up HEAD file watcher to detect branch switches
             use crewchief_maproom::indexer::setup_head_watcher;
@@ -1391,7 +1414,8 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let hits = store.search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug)
+            let hits = store
+                .search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug)
                 .await?;
 
             // Apply deduplication if enabled
@@ -1436,18 +1460,24 @@ async fn main() -> anyhow::Result<()> {
             );
 
             // Execute vector search
-            let search_hits = match store.search_chunks_vector(
-                &repo,
-                worktree.as_deref(),
-                &query_embedding,
-                k as i64,
-                false,
-            ).await {
+            let search_hits = match store
+                .search_chunks_vector(
+                    &repo,
+                    worktree.as_deref(),
+                    &query_embedding,
+                    k as i64,
+                    false,
+                )
+                .await
+            {
                 Ok(hits) => hits,
                 Err(e) => {
                     // Check for SQLite-specific errors (no vector support)
                     let err_str = e.to_string();
-                    if err_str.contains("sqlite-vec") || err_str.contains("vector") || err_str.contains("not available") {
+                    if err_str.contains("sqlite-vec")
+                        || err_str.contains("vector")
+                        || err_str.contains("not available")
+                    {
                         eprintln!("Vector search unavailable: {}", e);
                         eprintln!("Tip: Use 'search' command for full-text search instead");
                         std::process::exit(1);
@@ -1692,9 +1722,7 @@ async fn main() -> anyhow::Result<()> {
             json,
         } => {
             // Connect to database
-            let store = db::connect()
-                .await
-                .context("Database connection failed")?;
+            let store = db::connect().await.context("Database connection failed")?;
 
             // Create assembler (uses DefaultAssemblyStrategy which has working get_chunk_metadata)
             let assembler = DefaultAssemblyStrategy::new(Arc::new(store));
@@ -1823,13 +1851,17 @@ mod tests {
     #[test]
     fn test_context_command_parsing_with_expands() {
         let cli = Cli::parse_from(&[
-            "maproom", "context",
-            "--chunk-id", "99999",
-            "--budget", "4000",
+            "maproom",
+            "context",
+            "--chunk-id",
+            "99999",
+            "--budget",
+            "4000",
             "--callers",
             "--callees",
             "--tests",
-            "--max-depth", "5",
+            "--max-depth",
+            "5",
         ]);
         if let Commands::Context {
             chunk_id,
@@ -1860,15 +1892,19 @@ mod tests {
     #[test]
     fn test_context_command_parsing_all_flags() {
         let cli = Cli::parse_from(&[
-            "maproom", "context",
-            "--chunk-id", "42",
-            "--budget", "8000",
+            "maproom",
+            "context",
+            "--chunk-id",
+            "42",
+            "--budget",
+            "8000",
             "--callers",
             "--callees",
             "--tests",
             "--docs",
             "--config",
-            "--max-depth", "3",
+            "--max-depth",
+            "3",
             "--json",
         ]);
         if let Commands::Context {

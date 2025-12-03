@@ -83,11 +83,7 @@ impl TestEnv {
             if !stderr.contains("Error") && !stderr.contains("error:") {
                 return Ok(output);
             }
-            anyhow::bail!(
-                "Command {:?} failed: {}",
-                args,
-                stderr
-            );
+            anyhow::bail!("Command {:?} failed: {}", args, stderr);
         }
 
         Ok(output)
@@ -119,7 +115,11 @@ impl TestEnv {
     /// Start watch command with stdout and stderr capture for debugging.
     fn start_watch_with_debug(
         &self,
-    ) -> Result<(Child, mpsc::Receiver<BranchSwitchEvent>, mpsc::Receiver<String>)> {
+    ) -> Result<(
+        Child,
+        mpsc::Receiver<BranchSwitchEvent>,
+        mpsc::Receiver<String>,
+    )> {
         let mut child = Command::new(&self.binary_path)
             .args([
                 "watch",
@@ -311,7 +311,10 @@ fn test_rapid_branch_switches_debounced() -> Result<()> {
     let _ = child.kill();
     let _ = child.wait();
 
-    println!("✓ Rapid branch switches: {} events for 3 switches (debouncing working)", events.len());
+    println!(
+        "✓ Rapid branch switches: {} events for 3 switches (debouncing working)",
+        events.len()
+    );
     Ok(())
 }
 

@@ -35,9 +35,10 @@ use anyhow::{Context as AnyhowContext, Result};
 pub async fn find_test_files(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
     // SQLite doesn't have test_links table, so we query chunk_edges directly
     // Look for edges where type='test_of' and dst_chunk_id = chunk_id
-    store.run(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT
+    store
+        .run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT DISTINCT
               c.id,
               f.relpath,
               c.symbol_name,
@@ -51,30 +52,32 @@ pub async fn find_test_files(store: &SqliteStore, chunk_id: i64) -> Result<Vec<R
             JOIN chunks c ON c.id = e.src_chunk_id
             JOIN files f ON f.id = c.file_id
             WHERE e.dst_chunk_id = ?1 AND e.type = 'test_of'
-            ORDER BY relevance DESC"
-        )?;
+            ORDER BY relevance DESC",
+            )?;
 
-        let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
-            Ok(RelatedChunk {
-                id: row.get(0)?,
-                relpath: row.get(1)?,
-                symbol_name: row.get(2)?,
-                kind: row.get(3)?,
-                start_line: row.get(4)?,
-                end_line: row.get(5)?,
-                preview: row.get(6)?,
-                depth: row.get(7)?,
-                relevance: row.get(8)?,
-            })
-        })?;
+            let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
+                Ok(RelatedChunk {
+                    id: row.get(0)?,
+                    relpath: row.get(1)?,
+                    symbol_name: row.get(2)?,
+                    kind: row.get(3)?,
+                    start_line: row.get(4)?,
+                    end_line: row.get(5)?,
+                    preview: row.get(6)?,
+                    depth: row.get(7)?,
+                    relevance: row.get(8)?,
+                })
+            })?;
 
-        let mut tests = Vec::new();
-        for test_result in rows {
-            tests.push(test_result?);
-        }
+            let mut tests = Vec::new();
+            for test_result in rows {
+                tests.push(test_result?);
+            }
 
-        Ok(tests)
-    }).await.context("Failed to find test files")
+            Ok(tests)
+        })
+        .await
+        .context("Failed to find test files")
 }
 
 /// Find callers of the given chunk (what calls this function/method).
@@ -102,7 +105,9 @@ pub async fn find_callers(
     max_depth: i32,
 ) -> Result<Vec<RelatedChunk>> {
     // Use SqliteStore's find_callers method
-    let graph_results = store.find_callers(chunk_id, Some(max_depth as usize)).await?;
+    let graph_results = store
+        .find_callers(chunk_id, Some(max_depth as usize))
+        .await?;
 
     // Convert GraphResult to RelatedChunk
     let mut related_chunks = Vec::new();
@@ -152,7 +157,9 @@ pub async fn find_callees(
     max_depth: i32,
 ) -> Result<Vec<RelatedChunk>> {
     // Use SqliteStore's find_callees method
-    let graph_results = store.find_callees(chunk_id, Some(max_depth as usize)).await?;
+    let graph_results = store
+        .find_callees(chunk_id, Some(max_depth as usize))
+        .await?;
 
     // Convert GraphResult to RelatedChunk
     let mut related_chunks = Vec::new();
@@ -197,7 +204,9 @@ pub async fn find_callees(
 /// ```
 pub async fn find_imports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
     // Use SqliteStore's find_imports method (outgoing imports)
-    let graph_results = store.find_imports(chunk_id, ImportDirection::Outgoing, Some(1)).await?;
+    let graph_results = store
+        .find_imports(chunk_id, ImportDirection::Outgoing, Some(1))
+        .await?;
 
     // Convert GraphResult to RelatedChunk
     let mut related_chunks = Vec::new();
@@ -242,9 +251,10 @@ pub async fn find_imports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<Rela
 pub async fn find_exports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
     // SQLite doesn't have a specific exports edge type in graph module
     // Query chunk_edges directly for 'exports' edges
-    store.run(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT
+    store
+        .run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT DISTINCT
               c.id,
               f.relpath,
               c.symbol_name,
@@ -255,30 +265,32 @@ pub async fn find_exports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<Rela
             FROM chunk_edges e
             JOIN chunks c ON c.id = e.src_chunk_id
             JOIN files f ON f.id = c.file_id
-            WHERE e.dst_chunk_id = ?1 AND e.type = 'exports'"
-        )?;
+            WHERE e.dst_chunk_id = ?1 AND e.type = 'exports'",
+            )?;
 
-        let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
-            Ok(RelatedChunk {
-                id: row.get(0)?,
-                relpath: row.get(1)?,
-                symbol_name: row.get(2)?,
-                kind: row.get(3)?,
-                start_line: row.get(4)?,
-                end_line: row.get(5)?,
-                preview: row.get(6)?,
-                depth: 1,
-                relevance: 1.0,
-            })
-        })?;
+            let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
+                Ok(RelatedChunk {
+                    id: row.get(0)?,
+                    relpath: row.get(1)?,
+                    symbol_name: row.get(2)?,
+                    kind: row.get(3)?,
+                    start_line: row.get(4)?,
+                    end_line: row.get(5)?,
+                    preview: row.get(6)?,
+                    depth: 1,
+                    relevance: 1.0,
+                })
+            })?;
 
-        let mut exports = Vec::new();
-        for export_result in rows {
-            exports.push(export_result?);
-        }
+            let mut exports = Vec::new();
+            for export_result in rows {
+                exports.push(export_result?);
+            }
 
-        Ok(exports)
-    }).await.context("Failed to find exports")
+            Ok(exports)
+        })
+        .await
+        .context("Failed to find exports")
 }
 
 /// Find route definitions that use the given component chunk.
@@ -302,9 +314,10 @@ pub async fn find_exports(store: &SqliteStore, chunk_id: i64) -> Result<Vec<Rela
 /// ```
 pub async fn find_routes(store: &SqliteStore, chunk_id: i64) -> Result<Vec<RelatedChunk>> {
     // Query chunk_edges directly for 'route_of' edges
-    store.run(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT
+    store
+        .run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT DISTINCT
               c.id,
               f.relpath,
               c.symbol_name,
@@ -315,30 +328,32 @@ pub async fn find_routes(store: &SqliteStore, chunk_id: i64) -> Result<Vec<Relat
             FROM chunk_edges e
             JOIN chunks c ON c.id = e.src_chunk_id
             JOIN files f ON f.id = c.file_id
-            WHERE e.dst_chunk_id = ?1 AND e.type = 'route_of'"
-        )?;
+            WHERE e.dst_chunk_id = ?1 AND e.type = 'route_of'",
+            )?;
 
-        let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
-            Ok(RelatedChunk {
-                id: row.get(0)?,
-                relpath: row.get(1)?,
-                symbol_name: row.get(2)?,
-                kind: row.get(3)?,
-                start_line: row.get(4)?,
-                end_line: row.get(5)?,
-                preview: row.get(6)?,
-                depth: 1,
-                relevance: 1.0,
-            })
-        })?;
+            let rows = stmt.query_map(rusqlite::params![chunk_id], |row| {
+                Ok(RelatedChunk {
+                    id: row.get(0)?,
+                    relpath: row.get(1)?,
+                    symbol_name: row.get(2)?,
+                    kind: row.get(3)?,
+                    start_line: row.get(4)?,
+                    end_line: row.get(5)?,
+                    preview: row.get(6)?,
+                    depth: 1,
+                    relevance: 1.0,
+                })
+            })?;
 
-        let mut routes = Vec::new();
-        for route_result in rows {
-            routes.push(route_result?);
-        }
+            let mut routes = Vec::new();
+            for route_result in rows {
+                routes.push(route_result?);
+            }
 
-        Ok(routes)
-    }).await.context("Failed to find routes")
+            Ok(routes)
+        })
+        .await
+        .context("Failed to find routes")
 }
 
 /// Find all relationship types for a chunk (comprehensive).

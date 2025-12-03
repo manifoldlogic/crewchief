@@ -4,7 +4,7 @@
 //! FTS5 ranks are normalized to 0-1 scale for Reciprocal Rank Fusion with vector search.
 
 use anyhow::Result;
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 
 /// Result from FTS5 search
 #[derive(Debug, Clone)]
@@ -50,7 +50,7 @@ pub fn build_fts_query(query: &str) -> String {
                 .replace('*', "")
                 .replace('(', "")
                 .replace(')', "")
-                .replace('-', " ")  // Treat hyphen as space
+                .replace('-', " ") // Treat hyphen as space
                 .replace(':', " "); // Treat colon as space
             clean.trim().to_string()
         })
@@ -62,8 +62,9 @@ pub fn build_fts_query(query: &str) -> String {
     }
 
     // Build OR query with prefix matching
-    words.iter()
-        .flat_map(|w| w.split_whitespace())  // Handle any embedded spaces from replacement
+    words
+        .iter()
+        .flat_map(|w| w.split_whitespace()) // Handle any embedded spaces from replacement
         .filter(|w| !w.is_empty())
         .map(|w| format!("{}*", w))
         .collect::<Vec<_>>()
@@ -97,11 +98,14 @@ pub fn search_fts(
     }
 
     // Resolve repo_id
-    let repo_id: i64 = conn.query_row(
-        "SELECT id FROM repos WHERE name = ?1",
-        params![repo],
-        |row| row.get(0),
-    ).optional()?.ok_or_else(|| anyhow::anyhow!("Repository not found: {}", repo))?;
+    let repo_id: i64 = conn
+        .query_row(
+            "SELECT id FROM repos WHERE name = ?1",
+            params![repo],
+            |row| row.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| anyhow::anyhow!("Repository not found: {}", repo))?;
 
     // Resolve worktree_id if specified
     let worktree_id: Option<i64> = if let Some(w) = worktree {
@@ -109,7 +113,8 @@ pub fn search_fts(
             "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
             params![repo_id, w],
             |row| row.get(0),
-        ).optional()?
+        )
+        .optional()?
     } else {
         None
     };
@@ -192,21 +197,30 @@ mod tests {
     fn test_normalize_fts_rank_best_match() {
         // FTS5 rank of 0 (best possible) should normalize to 1.0
         let normalized = normalize_fts_rank(0.0);
-        assert!((normalized - 1.0).abs() < 1e-6, "Rank 0 should normalize to 1.0");
+        assert!(
+            (normalized - 1.0).abs() < 1e-6,
+            "Rank 0 should normalize to 1.0"
+        );
     }
 
     #[test]
     fn test_normalize_fts_rank_negative() {
         // FTS5 rank of -1.0 should normalize to 0.5
         let normalized = normalize_fts_rank(-1.0);
-        assert!((normalized - 0.5).abs() < 1e-6, "Rank -1.0 should normalize to 0.5");
+        assert!(
+            (normalized - 0.5).abs() < 1e-6,
+            "Rank -1.0 should normalize to 0.5"
+        );
     }
 
     #[test]
     fn test_normalize_fts_rank_large_negative() {
         // Large negative rank should give low normalized score
         let normalized = normalize_fts_rank(-10.0);
-        assert!(normalized < 0.1, "Large negative rank should give low score");
+        assert!(
+            normalized < 0.1,
+            "Large negative rank should give low score"
+        );
         assert!(normalized > 0.0, "Normalized rank should be positive");
     }
 
@@ -226,8 +240,12 @@ mod tests {
         // All normalized ranks should be in (0, 1]
         for rank in [0.0, -0.5, -1.0, -5.0, -100.0] {
             let normalized = normalize_fts_rank(rank);
-            assert!(normalized > 0.0 && normalized <= 1.0,
-                "Normalized rank should be in (0, 1], got {} for rank {}", normalized, rank);
+            assert!(
+                normalized > 0.0 && normalized <= 1.0,
+                "Normalized rank should be in (0, 1], got {} for rank {}",
+                normalized,
+                rank
+            );
         }
     }
 

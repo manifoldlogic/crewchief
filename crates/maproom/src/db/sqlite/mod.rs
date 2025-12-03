@@ -1,16 +1,16 @@
-pub mod schema;
-pub mod migrations;
 pub mod embeddings;
-pub mod vector;
 pub mod fts;
-pub mod hybrid;
 pub mod graph;
+pub mod hybrid;
+pub mod migrations;
+pub mod schema;
+pub mod vector;
 
 use anyhow::Context;
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
@@ -50,8 +50,10 @@ impl SqliteStore {
             let db_path = std::path::Path::new(path);
             if let Some(parent) = db_path.parent() {
                 if !parent.exists() {
-                    std::fs::create_dir_all(parent)
-                        .context(format!("Failed to create database directory: {}", parent.display()))?;
+                    std::fs::create_dir_all(parent).context(format!(
+                        "Failed to create database directory: {}",
+                        parent.display()
+                    ))?;
                     tracing::info!("Created database directory: {}", parent.display());
                 }
             }
@@ -59,22 +61,23 @@ impl SqliteStore {
 
         // Register extension globally for all new connections
         unsafe {
-            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite3_vec_init as *const (),
+            )));
         }
 
-        let manager = r2d2_sqlite::SqliteConnectionManager::file(path)
-            .with_init(|conn| {
-                // Enable WAL mode for concurrency
-                conn.execute_batch(
-                    r#"
+        let manager = r2d2_sqlite::SqliteConnectionManager::file(path).with_init(|conn| {
+            // Enable WAL mode for concurrency
+            conn.execute_batch(
+                r#"
                     PRAGMA journal_mode = WAL;
                     PRAGMA synchronous = NORMAL;
                     PRAGMA foreign_keys = ON;
                     PRAGMA busy_timeout = 5000;
                     "#,
-                )?;
-                Ok(())
-            });
+            )?;
+            Ok(())
+        });
 
         let pool = r2d2::Pool::builder()
             .max_size(10) // Configurable?
@@ -101,7 +104,10 @@ impl SqliteStore {
         // Auto-run migrations on connect to ensure schema is up to date
         // This is idempotent - migrations track applied versions and skip duplicates
         eprintln!("[DEBUG] SqliteStore::connect: running migrations...");
-        store.migrate().await.context("Failed to run database migrations")?;
+        store
+            .migrate()
+            .await
+            .context("Failed to run database migrations")?;
         eprintln!("[DEBUG] SqliteStore::connect: migrations complete");
 
         Ok(store)
@@ -143,7 +149,7 @@ impl SqliteStore {
                 "INSERT OR IGNORE INTO repos(name, root_path) VALUES (?1, ?2)",
                 params![name, root_path],
             )?;
-            
+
             // If we ignored the insert, we might want to update the root_path
             // Postgres does ON CONFLICT DO UPDATE
             conn.execute(
@@ -157,7 +163,8 @@ impl SqliteStore {
                 |row| row.get(0),
             )?;
             Ok(id)
-        }).await
+        })
+        .await
     }
 
     pub async fn get_or_create_worktree(
@@ -173,7 +180,7 @@ impl SqliteStore {
                 "INSERT OR IGNORE INTO worktrees(repo_id, name, abs_path) VALUES (?1, ?2, ?3)",
                 params![repo_id, name, abs_path],
             )?;
-            
+
             conn.execute(
                 "UPDATE worktrees SET abs_path = ?3 WHERE repo_id = ?1 AND name = ?2",
                 params![repo_id, name, abs_path],
@@ -185,7 +192,8 @@ impl SqliteStore {
                 |row| row.get(0),
             )?;
             Ok(id)
-        }).await
+        })
+        .await
     }
 
     pub async fn get_or_create_commit(
@@ -217,23 +225,35 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
+    pub async fn get_repo_by_name(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<Option<crate::db::RepoInfo>> {
         let name = name.to_string();
         self.run(move |conn| {
-            let result = conn.query_row(
-                "SELECT id, name, root_path FROM repos WHERE name = ?1",
-                params![name],
-                |row| Ok(crate::db::RepoInfo {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    root_path: row.get(2)?,
-                }),
-            ).optional()?;
+            let result = conn
+                .query_row(
+                    "SELECT id, name, root_path FROM repos WHERE name = ?1",
+                    params![name],
+                    |row| {
+                        Ok(crate::db::RepoInfo {
+                            id: row.get(0)?,
+                            name: row.get(1)?,
+                            root_path: row.get(2)?,
+                        })
+                    },
+                )
+                .optional()?;
             Ok(result)
-        }).await
+        })
+        .await
     }
 
-    pub async fn get_worktree_by_name(&self, repo_id: i64, name: &str) -> anyhow::Result<Option<crate::db::WorktreeInfo>> {
+    pub async fn get_worktree_by_name(
+        &self,
+        repo_id: i64,
+        name: &str,
+    ) -> anyhow::Result<Option<crate::db::WorktreeInfo>> {
         let name = name.to_string();
         self.run(move |conn| {
             let result = conn.query_row(
@@ -253,19 +273,24 @@ impl SqliteStore {
     pub async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, name, root_path FROM repos ORDER BY name")?;
-            let repos = stmt.query_map([], |row| {
-                Ok(crate::db::RepoInfo {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    root_path: row.get(2)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
+            let repos = stmt
+                .query_map([], |row| {
+                    Ok(crate::db::RepoInfo {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        root_path: row.get(2)?,
+                    })
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
             Ok(repos)
-        }).await
+        })
+        .await
     }
 
-    pub async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
+    pub async fn list_worktrees(
+        &self,
+        repo_id: i64,
+    ) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees WHERE repo_id = ?1 ORDER BY name")?;
             let worktrees = stmt.query_map(params![repo_id], |row| {
@@ -290,7 +315,8 @@ impl SqliteStore {
                 |row| row.get(0),
             )?;
             Ok(count)
-        }).await
+        })
+        .await
     }
 
     pub async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
@@ -497,7 +523,8 @@ impl SqliteStore {
                     "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
                     params![repo_id, w],
                     |row| row.get(0),
-                ).optional()?
+                )
+                .optional()?
             } else {
                 None
             };
@@ -524,12 +551,12 @@ impl SqliteStore {
                 })
                 .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()
-                .join(" OR ");  // Use OR for broader matching
+                .join(" OR "); // Use OR for broader matching
 
             // SQL query with ranking
             // SQLite FTS5 rank is built-in function 'bm25' or 'rank'
             // We join with chunks and files
-            
+
             let sql = if worktree_id.is_some() {
                 r#"
                 SELECT
@@ -613,7 +640,8 @@ impl SqliteStore {
                 }
             }
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     /// FTS search by repo_id and worktree_id (for use by search executors)
@@ -736,7 +764,8 @@ impl SqliteStore {
                 }
             }
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     /// Vector search by repo_id and worktree_id (for use by search executors)
@@ -878,19 +907,15 @@ impl SqliteStore {
                     "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
                     params![repo_id, w],
                     |row| row.get(0),
-                ).optional()?
+                )
+                .optional()?
             } else {
                 None
             };
 
             // Get vector search results (chunk_id, distance, similarity)
-            let vec_results = vector::search_vector(
-                conn,
-                &repo,
-                worktree.as_deref(),
-                &embedding,
-                limit,
-            )?;
+            let vec_results =
+                vector::search_vector(conn, &repo, worktree.as_deref(), &embedding, limit)?;
 
             // Convert VectorResult to SearchHit by fetching chunk metadata
             let mut hits = Vec::new();
@@ -916,12 +941,17 @@ impl SqliteStore {
                                 kind: row.get(3)?,
                                 file_relpath: row.get(4)?,
                                 score: vec_result.similarity,
-                                base_score: if debug { Some(vec_result.similarity) } else { None },
+                                base_score: if debug {
+                                    Some(vec_result.similarity)
+                                } else {
+                                    None
+                                },
                                 kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
                                 exact_mult: None,
                             })
-                        }
-                    ).optional()?
+                        },
+                    )
+                    .optional()?
                 } else {
                     conn.query_row(
                         r#"
@@ -940,12 +970,17 @@ impl SqliteStore {
                                 kind: row.get(3)?,
                                 file_relpath: row.get(4)?,
                                 score: vec_result.similarity,
-                                base_score: if debug { Some(vec_result.similarity) } else { None },
+                                base_score: if debug {
+                                    Some(vec_result.similarity)
+                                } else {
+                                    None
+                                },
                                 kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
                                 exact_mult: None,
                             })
-                        }
-                    ).optional()?
+                        },
+                    )
+                    .optional()?
                 };
 
                 if let Some(hit) = hit_result {
@@ -954,7 +989,8 @@ impl SqliteStore {
             }
 
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     pub async fn search_chunks_hybrid(
@@ -988,36 +1024,26 @@ impl SqliteStore {
                     "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
                     params![repo_id, w],
                     |row| row.get(0),
-                ).optional()?
+                )
+                .optional()?
             } else {
                 None
             };
 
             // Run FTS and vector search in sequence (no async in blocking closure)
-            let fts_results = fts::search_fts(
-                conn,
-                &repo,
-                worktree.as_deref(),
-                &query,
-                limit * 3,
-            )?;
+            let fts_results = fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit * 3)?;
 
             // Vector search with graceful fallback
             let vec_results = if has_vec {
-                vector::search_vector(
-                    conn,
-                    &repo,
-                    worktree.as_deref(),
-                    &embedding,
-                    limit * 3,
-                )?
+                vector::search_vector(conn, &repo, worktree.as_deref(), &embedding, limit * 3)?
             } else {
                 vec![]
             };
 
             // Combine using RRF
             let weights = hybrid::HybridWeights::default();
-            let hybrid_results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
+            let hybrid_results =
+                hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
 
             // Convert HybridResult to SearchHit by fetching chunk metadata
             let mut hits = Vec::new();
@@ -1043,12 +1069,17 @@ impl SqliteStore {
                                 kind: row.get(3)?,
                                 file_relpath: row.get(4)?,
                                 score: hybrid_result.score,
-                                base_score: if debug { Some(hybrid_result.score) } else { None },
+                                base_score: if debug {
+                                    Some(hybrid_result.score)
+                                } else {
+                                    None
+                                },
                                 kind_mult: None, // RRF score already incorporates semantic ranking
                                 exact_mult: None,
                             })
-                        }
-                    ).optional()?
+                        },
+                    )
+                    .optional()?
                 } else {
                     conn.query_row(
                         r#"
@@ -1067,12 +1098,17 @@ impl SqliteStore {
                                 kind: row.get(3)?,
                                 file_relpath: row.get(4)?,
                                 score: hybrid_result.score,
-                                base_score: if debug { Some(hybrid_result.score) } else { None },
+                                base_score: if debug {
+                                    Some(hybrid_result.score)
+                                } else {
+                                    None
+                                },
                                 kind_mult: None, // RRF score already incorporates semantic ranking
                                 exact_mult: None,
                             })
-                        }
-                    ).optional()?
+                        },
+                    )
+                    .optional()?
                 };
 
                 if let Some(hit) = hit_result {
@@ -1081,7 +1117,8 @@ impl SqliteStore {
             }
 
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     pub async fn find_chunk_by_symbol(
@@ -1128,59 +1165,75 @@ impl SqliteStore {
 
             let id: Option<i64> = if let Some(path) = relpath_ref {
                 if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| row.get(0)).optional()?
+                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| {
+                        row.get(0)
+                    })
+                    .optional()?
                 } else {
-                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0)).optional()?
+                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
+                        .optional()?
                 }
             } else {
                 if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0)).optional()?
+                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
+                        .optional()?
                 } else {
-                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0)).optional()?
+                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
+                        .optional()?
                 }
             };
 
             Ok(id)
-        }).await
+        })
+        .await
     }
 
-    pub async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+    pub async fn get_chunk_by_id(
+        &self,
+        chunk_id: i64,
+    ) -> anyhow::Result<Option<crate::db::ChunkFull>> {
         self.run(move |conn| {
-            let result = conn.query_row(
-                "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+            let result = conn
+                .query_row(
+                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
                         c.docstring, c.start_line, c.end_line, c.preview, f.relpath
                  FROM chunks c
                  JOIN files f ON f.id = c.file_id
                  WHERE c.id = ?1",
-                params![chunk_id],
-                |row| {
-                    Ok(crate::db::ChunkFull {
-                        id: row.get(0)?,
-                        file_id: row.get(1)?,
-                        blob_sha: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        signature: row.get(5)?,
-                        docstring: row.get(6)?,
-                        start_line: row.get(7)?,
-                        end_line: row.get(8)?,
-                        preview: row.get(9)?,
-                        file_path: row.get(10)?,
-                    })
-                }
-            ).optional()?;
+                    params![chunk_id],
+                    |row| {
+                        Ok(crate::db::ChunkFull {
+                            id: row.get(0)?,
+                            file_id: row.get(1)?,
+                            blob_sha: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            signature: row.get(5)?,
+                            docstring: row.get(6)?,
+                            start_line: row.get(7)?,
+                            end_line: row.get(8)?,
+                            preview: row.get(9)?,
+                            file_path: row.get(10)?,
+                        })
+                    },
+                )
+                .optional()?;
             Ok(result)
-        }).await
+        })
+        .await
     }
 
-    pub async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+    pub async fn get_file_chunks(
+        &self,
+        file_id: i64,
+    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
                  FROM chunks c
                  JOIN files f ON f.id = c.file_id
                  WHERE c.file_id = ?1
-                 ORDER BY c.start_line ASC"
+                 ORDER BY c.start_line ASC",
             )?;
 
             let rows = stmt.query_map(params![file_id], |row| {
@@ -1199,35 +1252,42 @@ impl SqliteStore {
                 chunks.push(chunk_result?);
             }
             Ok(chunks)
-        }).await
+        })
+        .await
     }
 
-    pub async fn get_chunk_context(&self, chunk_id: i64, surrounding: usize) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+    pub async fn get_chunk_context(
+        &self,
+        chunk_id: i64,
+        surrounding: usize,
+    ) -> anyhow::Result<Option<crate::db::ChunkContext>> {
         self.run(move |conn| {
             // First, get the target chunk
-            let chunk = conn.query_row(
-                "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+            let chunk = conn
+                .query_row(
+                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
                         c.docstring, c.start_line, c.end_line, c.preview, f.relpath
                  FROM chunks c
                  JOIN files f ON f.id = c.file_id
                  WHERE c.id = ?1",
-                params![chunk_id],
-                |row| {
-                    Ok(crate::db::ChunkFull {
-                        id: row.get(0)?,
-                        file_id: row.get(1)?,
-                        blob_sha: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        signature: row.get(5)?,
-                        docstring: row.get(6)?,
-                        start_line: row.get(7)?,
-                        end_line: row.get(8)?,
-                        preview: row.get(9)?,
-                        file_path: row.get(10)?,
-                    })
-                }
-            ).optional()?;
+                    params![chunk_id],
+                    |row| {
+                        Ok(crate::db::ChunkFull {
+                            id: row.get(0)?,
+                            file_id: row.get(1)?,
+                            blob_sha: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            signature: row.get(5)?,
+                            docstring: row.get(6)?,
+                            start_line: row.get(7)?,
+                            end_line: row.get(8)?,
+                            preview: row.get(9)?,
+                            file_path: row.get(10)?,
+                        })
+                    },
+                )
+                .optional()?;
 
             let chunk = match chunk {
                 Some(c) => c,
@@ -1241,11 +1301,16 @@ impl SqliteStore {
                  JOIN files f ON f.id = c.file_id
                  WHERE c.file_id = ?1 AND c.id != ?2
                  ORDER BY ABS(c.start_line - ?3)
-                 LIMIT ?4"
+                 LIMIT ?4",
             )?;
 
             let rows = stmt.query_map(
-                params![chunk.file_id, chunk_id, chunk.start_line, (surrounding as i64 * 2)],
+                params![
+                    chunk.file_id,
+                    chunk_id,
+                    chunk.start_line,
+                    (surrounding as i64 * 2)
+                ],
                 |row| {
                     Ok(crate::db::ChunkSummary {
                         id: row.get(0)?,
@@ -1255,7 +1320,7 @@ impl SqliteStore {
                         end_line: row.get(4)?,
                         file_path: row.get(5)?,
                     })
-                }
+                },
             )?;
 
             let mut surrounding_chunks = Vec::new();
@@ -1268,7 +1333,8 @@ impl SqliteStore {
                 chunk,
                 surrounding_chunks,
             }))
-        }).await
+        })
+        .await
     }
 
     pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
@@ -1284,7 +1350,8 @@ impl SqliteStore {
                 Err(rusqlite::Error::QueryReturnedNoRows) => Ok("init".to_string()),
                 Err(e) => Err(e.into()),
             }
-        }).await
+        })
+        .await
     }
 
     pub async fn update_index_state(
@@ -1314,17 +1381,19 @@ impl SqliteStore {
     pub async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT w.id, w.repo_id, w.name, w.abs_path FROM worktrees w ORDER BY w.id"
+                "SELECT w.id, w.repo_id, w.name, w.abs_path FROM worktrees w ORDER BY w.id",
             )?;
 
-            let worktrees: Vec<_> = stmt.query_map([], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                ))
-            })?.collect::<Result<Vec<_>, _>>()?;
+            let worktrees: Vec<_> = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
 
             let mut stale = Vec::new();
             for (id, repo_id, name, abs_path) in worktrees {
@@ -1332,13 +1401,15 @@ impl SqliteStore {
                 let exists = path.exists() && path.is_dir();
 
                 // Count chunks for this worktree via files
-                let chunk_count: i64 = conn.query_row(
-                    "SELECT COUNT(*) FROM chunks c
+                let chunk_count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM chunks c
                      JOIN files f ON c.file_id = f.id
                      WHERE f.worktree_id = ?1",
-                    params![id],
-                    |row| row.get(0),
-                ).unwrap_or(0);
+                        params![id],
+                        |row| row.get(0),
+                    )
+                    .unwrap_or(0);
 
                 if !exists {
                     stale.push(crate::db::StaleWorktree {
@@ -1352,38 +1423,48 @@ impl SqliteStore {
                 }
             }
             Ok(stale)
-        }).await
+        })
+        .await
     }
 
-    pub async fn delete_worktree_data(&self, worktree_id: i64) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
+    pub async fn delete_worktree_data(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
         self.run(move |conn| {
             // Get count of chunks that will be deleted
-            let chunks_deleted: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM chunks c
+            let chunks_deleted: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM chunks c
                  JOIN files f ON c.file_id = f.id
                  WHERE f.worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            ).unwrap_or(0);
+                    params![worktree_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
 
             // Get count of files that will be deleted
-            let files_deleted: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            ).unwrap_or(0);
+            let files_deleted: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
+                    params![worktree_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
 
             // Delete code_embeddings for chunks in this worktree
-            let embeddings_deleted: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM code_embeddings ce
+            let embeddings_deleted: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM code_embeddings ce
                  WHERE ce.blob_sha IN (
                      SELECT c.blob_sha FROM chunks c
                      JOIN files f ON c.file_id = f.id
                      WHERE f.worktree_id = ?1
                  )",
-                params![worktree_id],
-                |row| row.get(0),
-            ).unwrap_or(0);
+                    params![worktree_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
 
             conn.execute(
                 "DELETE FROM code_embeddings WHERE blob_sha IN (
@@ -1439,17 +1520,20 @@ impl SqliteStore {
                 files_deleted: files_deleted as u64,
                 embeddings_deleted: embeddings_deleted as u64,
             })
-        }).await
+        })
+        .await
     }
 
     pub async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
         self.run(move |conn| {
             // Get count of chunks to delete
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
-                params![file_id],
-                |row| row.get(0),
-            ).unwrap_or(0);
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
+                    params![file_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
 
             // Delete embeddings for chunks in this file
             conn.execute(
@@ -1478,13 +1562,11 @@ impl SqliteStore {
             )?;
 
             // Delete chunks
-            conn.execute(
-                "DELETE FROM chunks WHERE file_id = ?1",
-                params![file_id],
-            )?;
+            conn.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])?;
 
             Ok(count as u64)
-        }).await
+        })
+        .await
     }
 
     /// Look up a file ID by its relative path and worktree ID.
@@ -1496,7 +1578,11 @@ impl SqliteStore {
     /// # Returns
     /// * `Ok(Some(file_id))` - File found
     /// * `Ok(None)` - File not found
-    pub async fn get_file_id_by_relpath(&self, relpath: &str, worktree_id: i64) -> anyhow::Result<Option<i64>> {
+    pub async fn get_file_id_by_relpath(
+        &self,
+        relpath: &str,
+        worktree_id: i64,
+    ) -> anyhow::Result<Option<i64>> {
         let relpath = relpath.to_string();
         self.run(move |conn| {
             let result: Option<i64> = conn
@@ -1507,7 +1593,8 @@ impl SqliteStore {
                 )
                 .optional()?;
             Ok(result)
-        }).await
+        })
+        .await
     }
 
     /// Delete a file record from the database.
@@ -1523,15 +1610,16 @@ impl SqliteStore {
     /// * `Ok(false)` - File was not found
     pub async fn delete_file(&self, file_id: i64) -> anyhow::Result<bool> {
         self.run(move |conn| {
-            let rows_deleted = conn.execute(
-                "DELETE FROM files WHERE id = ?1",
-                params![file_id],
-            )?;
+            let rows_deleted = conn.execute("DELETE FROM files WHERE id = ?1", params![file_id])?;
             Ok(rows_deleted > 0)
-        }).await
+        })
+        .await
     }
 
-    pub async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+    pub async fn get_chunks_by_blob_sha(
+        &self,
+        blob_sha: &str,
+    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
         let blob_sha = blob_sha.to_string();
         self.run(move |conn| {
             let mut stmt = conn.prepare(
@@ -1539,7 +1627,7 @@ impl SqliteStore {
                  FROM chunks c
                  JOIN files f ON c.file_id = f.id
                  WHERE c.blob_sha = ?1
-                 ORDER BY c.start_line"
+                 ORDER BY c.start_line",
             )?;
 
             let rows = stmt.query_map(params![blob_sha], |row| {
@@ -1558,20 +1646,24 @@ impl SqliteStore {
                 chunks.push(chunk_result?);
             }
             Ok(chunks)
-        }).await
+        })
+        .await
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);
             runner.migrate()
-        }).await?;
+        })
+        .await?;
 
         // Check extension availability after migration
         self.run(|conn| {
             let available = verify_vec_extension(conn);
             Ok(available)
-        }).await.map(|available| {
+        })
+        .await
+        .map(|available| {
             self.vec_available.store(available, Ordering::Relaxed);
             self.vec_checked.store(true, Ordering::Relaxed);
             if !available {
@@ -1584,11 +1676,13 @@ impl SqliteStore {
 
     pub async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
         self.run(move |conn| {
-            let exists: bool = conn.query_row(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
-                [],
-                |_| Ok(true)
-            ).unwrap_or(false);
+            let exists: bool = conn
+                .query_row(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+                    [],
+                    |_| Ok(true),
+                )
+                .unwrap_or(false);
 
             if !exists {
                 return Ok(HashSet::new());
@@ -1596,39 +1690,47 @@ impl SqliteStore {
 
             let mut stmt = conn.prepare("SELECT version FROM schema_migrations")?;
             let rows = stmt.query_map([], |row| row.get(0))?;
-            
+
             let mut versions = HashSet::new();
             for version in rows {
                 versions.insert(version?);
             }
             Ok(versions)
-        }).await
+        })
+        .await
     }
 
     // Additional SQLite-specific methods
 
     /// Add chunk to additional worktree
-    pub async fn add_chunk_to_worktree(&self, chunk_id: i64, worktree_id: i64) -> anyhow::Result<()> {
+    pub async fn add_chunk_to_worktree(
+        &self,
+        chunk_id: i64,
+        worktree_id: i64,
+    ) -> anyhow::Result<()> {
         self.run(move |conn| {
             conn.execute(
                 "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
                 params![chunk_id, worktree_id],
             )?;
             Ok(())
-        }).await
+        })
+        .await
     }
 
     /// Get all worktrees containing this chunk
     pub async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>> {
         self.run(move |conn| {
-            let mut stmt = conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
+            let mut stmt =
+                conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
             let rows = stmt.query_map(params![chunk_id], |row| row.get(0))?;
             let mut ids = Vec::new();
             for id in rows {
                 ids.push(id?);
             }
             Ok(ids)
-        }).await
+        })
+        .await
     }
 
     /// Store or update embedding by content hash
@@ -1642,9 +1744,11 @@ impl SqliteStore {
         let embedding_vec = embedding.to_vec();
         let model_version = model_version.to_string();
 
-        let embedding_id = self.run(move |conn| {
-            embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
-        }).await?;
+        let embedding_id = self
+            .run(move |conn| {
+                embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
+            })
+            .await?;
 
         // Sync to vec_code table
         self.sync_embedding_to_vec(embedding_id, embedding).await?;
@@ -1659,9 +1763,9 @@ impl SqliteStore {
     ) -> anyhow::Result<()> {
         let embeddings_vec = embeddings_vec.to_vec();
 
-        let id_embedding_pairs = self.run(move |conn| {
-            embeddings::upsert_embeddings_batch(conn, &embeddings_vec)
-        }).await?;
+        let id_embedding_pairs = self
+            .run(move |conn| embeddings::upsert_embeddings_batch(conn, &embeddings_vec))
+            .await?;
 
         // Sync all embeddings to vec_code
         if self.has_vec_extension() {
@@ -1677,33 +1781,34 @@ impl SqliteStore {
     pub async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
         let blob_sha = blob_sha.to_string();
 
-        self.run(move |conn| {
-            embeddings::has_embedding(conn, &blob_sha)
-        }).await
+        self.run(move |conn| embeddings::has_embedding(conn, &blob_sha))
+            .await
     }
 
     /// Get embedding by blob_sha
     pub async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
         let blob_sha = blob_sha.to_string();
 
-        self.run(move |conn| {
-            embeddings::get_embedding(conn, &blob_sha)
-        }).await
+        self.run(move |conn| embeddings::get_embedding(conn, &blob_sha))
+            .await
     }
 
     /// Sync embedding to vec_code table (skips if extension not available)
     ///
     /// This method syncs a single embedding from code_embeddings to the vec_code virtual table.
     /// The rowid in vec_code matches the embedding_id to enable joining search results.
-    pub async fn sync_embedding_to_vec(&self, embedding_id: i64, embedding: &[f32]) -> anyhow::Result<()> {
+    pub async fn sync_embedding_to_vec(
+        &self,
+        embedding_id: i64,
+        embedding: &[f32],
+    ) -> anyhow::Result<()> {
         if !self.has_vec_extension() {
-            return Ok(());  // Skip silently if extension not available
+            return Ok(()); // Skip silently if extension not available
         }
 
         let embedding = embedding.to_vec();
-        self.run(move |conn| {
-            embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding)
-        }).await
+        self.run(move |conn| embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding))
+            .await
     }
 
     /// Sync all embeddings to vec_code table
@@ -1712,12 +1817,11 @@ impl SqliteStore {
     /// entry in vec_code and syncs them. Returns the number of embeddings synced.
     pub async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
         if !self.has_vec_extension() {
-            return Ok(0);  // Skip if extension not available
+            return Ok(0); // Skip if extension not available
         }
 
-        self.run(move |conn| {
-            embeddings::sync_all_embeddings_to_vec(conn)
-        }).await
+        self.run(move |conn| embeddings::sync_all_embeddings_to_vec(conn))
+            .await
     }
 
     /// Search for similar chunks by embedding (SQLite-specific)
@@ -1740,7 +1844,8 @@ impl SqliteStore {
 
         self.run(move |conn| {
             vector::search_vector(conn, &repo, worktree.as_deref(), &query_embedding, limit)
-        }).await
+        })
+        .await
     }
 
     /// Search for chunks using FTS5 full-text search (SQLite-specific)
@@ -1758,9 +1863,8 @@ impl SqliteStore {
         let worktree = worktree.map(|s| s.to_string());
         let query = query.to_string();
 
-        self.run(move |conn| {
-            fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit)
-        }).await
+        self.run(move |conn| fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit))
+            .await
     }
 
     /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
@@ -1817,9 +1921,8 @@ impl SqliteStore {
         let chunk_ids = chunk_ids.to_vec();
 
         self.run(move |conn| {
-            let placeholders: Vec<String> = (1..=chunk_ids.len())
-                .map(|i| format!("?{}", i))
-                .collect();
+            let placeholders: Vec<String> =
+                (1..=chunk_ids.len()).map(|i| format!("?{}", i)).collect();
             let sql = format!(
                 "SELECT id, kind, symbol_name, recency_score FROM chunks WHERE id IN ({})",
                 placeholders.join(", ")
@@ -1836,11 +1939,14 @@ impl SqliteStore {
                 let kind: String = row.get(1)?;
                 let symbol_name: Option<String> = row.get(2)?;
                 let recency_score: f64 = row.get(3)?;
-                Ok((id, hybrid::ChunkMetadata {
-                    kind,
-                    symbol_name,
-                    recency_score,
-                }))
+                Ok((
+                    id,
+                    hybrid::ChunkMetadata {
+                        kind,
+                        symbol_name,
+                        recency_score,
+                    },
+                ))
             })?;
 
             let mut map = std::collections::HashMap::new();
@@ -1849,7 +1955,8 @@ impl SqliteStore {
                 map.insert(id, metadata);
             }
             Ok(map)
-        }).await
+        })
+        .await
     }
 
     /// Hybrid search with semantic ranking applied
@@ -2129,7 +2236,8 @@ impl SqliteStore {
                 }
             }
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     /// Calculate graph importance for specific chunk IDs
@@ -2243,7 +2351,8 @@ impl SqliteStore {
                 param_values.push(Box::new(wid));
             }
 
-            let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
 
             let rows = stmt.query_map(params_refs.as_slice(), |row| {
                 Ok(SearchHit {
@@ -2263,7 +2372,8 @@ impl SqliteStore {
                 hits.push(row?);
             }
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     /// Calculate signal scores (recency + churn) for chunks in a repo/worktree
@@ -2317,44 +2427,51 @@ impl SqliteStore {
             let mut hits = Vec::new();
 
             if let Some(wid) = worktree_id {
-                let rows = stmt.query_map(params![repo_id, wid, recency_weight, churn_weight, limit as i64], |row| {
-                    Ok(SearchHit {
-                        chunk_id: row.get(0)?,
-                        start_line: row.get(1)?,
-                        end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        file_relpath: row.get(5)?,
-                        score: row.get(6)?,
-                        base_score: None,
-                        kind_mult: None,
-                        exact_mult: None,
-                    })
-                })?;
+                let rows = stmt.query_map(
+                    params![repo_id, wid, recency_weight, churn_weight, limit as i64],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                        })
+                    },
+                )?;
                 for row in rows {
                     hits.push(row?);
                 }
             } else {
-                let rows = stmt.query_map(params![repo_id, recency_weight, churn_weight, limit as i64], |row| {
-                    Ok(SearchHit {
-                        chunk_id: row.get(0)?,
-                        start_line: row.get(1)?,
-                        end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        file_relpath: row.get(5)?,
-                        score: row.get(6)?,
-                        base_score: None,
-                        kind_mult: None,
-                        exact_mult: None,
-                    })
-                })?;
+                let rows = stmt.query_map(
+                    params![repo_id, recency_weight, churn_weight, limit as i64],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                        })
+                    },
+                )?;
                 for row in rows {
                     hits.push(row?);
                 }
             }
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     /// Calculate signal scores for specific chunk IDs
@@ -2430,7 +2547,8 @@ impl SqliteStore {
                 param_values.push(Box::new(wid));
             }
 
-            let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
 
             let rows = stmt.query_map(params_refs.as_slice(), |row| {
                 Ok(SearchHit {
@@ -2450,7 +2568,8 @@ impl SqliteStore {
                 hits.push(row?);
             }
             Ok(hits)
-        }).await
+        })
+        .await
     }
 
     /// Count chunks where blob_sha is NOT in code_embeddings table
@@ -2553,7 +2672,9 @@ mod tests {
         // Each test gets a unique name to avoid interference
         let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
         let db_name = format!("file:memdb_test_{}?mode=memory&cache=shared", counter);
-        let store = SqliteStore::connect(&db_name).await.expect("Failed to create test store");
+        let store = SqliteStore::connect(&db_name)
+            .await
+            .expect("Failed to create test store");
         store.migrate().await.expect("Failed to run migrations");
         store
     }
@@ -2563,14 +2684,26 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create a test repo
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
 
         // Create two worktrees
-        let worktree1_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let worktree2_id = store.get_or_create_worktree(repo_id, "feature", "/test/path/feature").await.unwrap();
+        let worktree1_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let worktree2_id = store
+            .get_or_create_worktree(repo_id, "feature", "/test/path/feature")
+            .await
+            .unwrap();
 
         // Create a commit
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create a file for worktree1
         let file = FileRecord {
@@ -2610,7 +2743,10 @@ mod tests {
         assert_eq!(worktrees[0], worktree1_id);
 
         // Add chunk to worktree2
-        store.add_chunk_to_worktree(chunk_id, worktree2_id).await.unwrap();
+        store
+            .add_chunk_to_worktree(chunk_id, worktree2_id)
+            .await
+            .unwrap();
 
         // Verify chunk is now associated with both worktrees
         let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
@@ -2619,7 +2755,10 @@ mod tests {
         assert!(worktrees.contains(&worktree2_id));
 
         // Try adding same worktree again (should be idempotent)
-        store.add_chunk_to_worktree(chunk_id, worktree2_id).await.unwrap();
+        store
+            .add_chunk_to_worktree(chunk_id, worktree2_id)
+            .await
+            .unwrap();
         let worktrees = store.get_chunk_worktrees(chunk_id).await.unwrap();
         assert_eq!(worktrees.len(), 2); // Still only 2, not 3
     }
@@ -2710,9 +2849,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test data
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         let file = FileRecord {
             repo_id,
@@ -2782,40 +2930,58 @@ mod tests {
         let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
 
         // Upsert embeddings (should auto-sync to vec_code)
-        let id1 = store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
-        let id2 = store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
+        let id1 = store
+            .upsert_embedding("blob1", &embedding1, "model-v1")
+            .await
+            .unwrap();
+        let id2 = store
+            .upsert_embedding("blob2", &embedding2, "model-v1")
+            .await
+            .unwrap();
 
         assert_ne!(id1, id2);
 
         // Verify embeddings are in vec_code
-        let count_synced = store.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM vec_code WHERE rowid IN (?1, ?2)",
-                params![id1, id2],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        }).await.unwrap();
+        let count_synced = store
+            .run(move |conn| {
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM vec_code WHERE rowid IN (?1, ?2)",
+                    params![id1, id2],
+                    |row| row.get(0),
+                )?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(count_synced, 2, "Both embeddings should be synced to vec_code");
+        assert_eq!(
+            count_synced, 2,
+            "Both embeddings should be synced to vec_code"
+        );
 
         // Test update
         let embedding1_updated: Vec<f32> = (0..1536).map(|i| (i as f32 + 10.0) / 1536.0).collect();
-        let id1_updated = store.upsert_embedding("blob1", &embedding1_updated, "model-v2").await.unwrap();
+        let id1_updated = store
+            .upsert_embedding("blob1", &embedding1_updated, "model-v2")
+            .await
+            .unwrap();
 
         assert_eq!(id1, id1_updated, "ID should remain the same on update");
 
         // Verify still only 2 entries in vec_code
-        let count_after_update = store.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM vec_code",
-                [],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        }).await.unwrap();
+        let count_after_update = store
+            .run(move |conn| {
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(count_after_update, 2, "Update should not create duplicate vec_code entries");
+        assert_eq!(
+            count_after_update, 2,
+            "Update should not create duplicate vec_code entries"
+        );
     }
 
     #[tokio::test]
@@ -2827,19 +2993,25 @@ mod tests {
         let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
 
         // Insert directly into code_embeddings without syncing
-        let id1 = store.run(move |conn| {
-            embeddings::upsert_embedding(conn, "batch1", &embedding1, "model-v1")
-        }).await.unwrap();
+        let id1 = store
+            .run(move |conn| embeddings::upsert_embedding(conn, "batch1", &embedding1, "model-v1"))
+            .await
+            .unwrap();
 
-        let id2 = store.run(move |conn| {
-            embeddings::upsert_embedding(conn, "batch2", &embedding2, "model-v1")
-        }).await.unwrap();
+        let id2 = store
+            .run(move |conn| embeddings::upsert_embedding(conn, "batch2", &embedding2, "model-v1"))
+            .await
+            .unwrap();
 
         // Verify vec_code is empty
-        let count_before = store.run(|conn| {
-            let count: i64 = conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
-            Ok(count)
-        }).await.unwrap();
+        let count_before = store
+            .run(|conn| {
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
 
         assert_eq!(count_before, 0, "vec_code should be empty before sync");
 
@@ -2848,31 +3020,48 @@ mod tests {
         assert_eq!(synced_count, 2, "Should have synced 2 embeddings");
 
         // Verify vec_code now has both
-        let count_after = store.run(|conn| {
-            let count: i64 = conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
-            Ok(count)
-        }).await.unwrap();
+        let count_after = store
+            .run(|conn| {
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM vec_code", [], |row| row.get(0))?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(count_after, 2, "vec_code should have 2 embeddings after sync");
+        assert_eq!(
+            count_after, 2,
+            "vec_code should have 2 embeddings after sync"
+        );
 
         // Verify rowid mapping
-        let rowids_match = store.run(move |conn| {
-            let match1: bool = conn.query_row(
-                "SELECT 1 FROM vec_code WHERE rowid = ?1",
-                params![id1],
-                |_| Ok(true),
-            ).unwrap_or(false);
+        let rowids_match = store
+            .run(move |conn| {
+                let match1: bool = conn
+                    .query_row(
+                        "SELECT 1 FROM vec_code WHERE rowid = ?1",
+                        params![id1],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false);
 
-            let match2: bool = conn.query_row(
-                "SELECT 1 FROM vec_code WHERE rowid = ?1",
-                params![id2],
-                |_| Ok(true),
-            ).unwrap_or(false);
+                let match2: bool = conn
+                    .query_row(
+                        "SELECT 1 FROM vec_code WHERE rowid = ?1",
+                        params![id2],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false);
 
-            Ok(match1 && match2)
-        }).await.unwrap();
+                Ok(match1 && match2)
+            })
+            .await
+            .unwrap();
 
-        assert!(rowids_match, "Rowids in vec_code should match code_embeddings IDs");
+        assert!(
+            rowids_match,
+            "Rowids in vec_code should match code_embeddings IDs"
+        );
 
         // Sync again - should be idempotent
         let synced_again = store.sync_all_embeddings_to_vec().await.unwrap();
@@ -2884,10 +3073,22 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree1_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let worktree2_id = store.get_or_create_worktree(repo_id, "feature", "/test/path/feature").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree1_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let worktree2_id = store
+            .get_or_create_worktree(repo_id, "feature", "/test/path/feature")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create files
         let file1 = FileRecord {
@@ -2956,14 +3157,23 @@ mod tests {
         let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 0.1) / 1536.0).collect(); // Slightly different
 
         // Insert embeddings for both chunks
-        store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
-        store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
+        store
+            .upsert_embedding("blob1", &embedding1, "model-v1")
+            .await
+            .unwrap();
+        store
+            .upsert_embedding("blob2", &embedding2, "model-v1")
+            .await
+            .unwrap();
 
         // Query with a vector similar to embedding1
         let query_embedding: Vec<f32> = (0..1536).map(|i| (i as f32 + 0.05) / 1536.0).collect();
 
         // Search across all worktrees
-        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+        let results = store
+            .search_vector("test-repo", None, &query_embedding, 10)
+            .await
+            .unwrap();
 
         assert!(!results.is_empty(), "Should find at least one result");
         assert!(results.len() <= 2, "Should find at most 2 results");
@@ -2978,29 +3188,64 @@ mod tests {
 
         // Verify similarity scores are in range (0, 1]
         for result in &results {
-            assert!(result.similarity > 0.0 && result.similarity <= 1.0,
-                "Similarity should be in range (0, 1], got {}", result.similarity);
+            assert!(
+                result.similarity > 0.0 && result.similarity <= 1.0,
+                "Similarity should be in range (0, 1], got {}",
+                result.similarity
+            );
         }
 
         // Search with worktree filter (only worktree1)
-        let results_wt1 = store.search_vector("test-repo", Some("main"), &query_embedding, 10).await.unwrap();
+        let results_wt1 = store
+            .search_vector("test-repo", Some("main"), &query_embedding, 10)
+            .await
+            .unwrap();
 
-        assert_eq!(results_wt1.len(), 1, "Should find exactly 1 result in main worktree");
-        assert_eq!(results_wt1[0].chunk_id, chunk1_id, "Should find chunk1 in main worktree");
+        assert_eq!(
+            results_wt1.len(),
+            1,
+            "Should find exactly 1 result in main worktree"
+        );
+        assert_eq!(
+            results_wt1[0].chunk_id, chunk1_id,
+            "Should find chunk1 in main worktree"
+        );
 
         // Search with different worktree filter (only worktree2)
-        let results_wt2 = store.search_vector("test-repo", Some("feature"), &query_embedding, 10).await.unwrap();
+        let results_wt2 = store
+            .search_vector("test-repo", Some("feature"), &query_embedding, 10)
+            .await
+            .unwrap();
 
-        assert_eq!(results_wt2.len(), 1, "Should find exactly 1 result in feature worktree");
-        assert_eq!(results_wt2[0].chunk_id, chunk2_id, "Should find chunk2 in feature worktree");
+        assert_eq!(
+            results_wt2.len(),
+            1,
+            "Should find exactly 1 result in feature worktree"
+        );
+        assert_eq!(
+            results_wt2[0].chunk_id, chunk2_id,
+            "Should find chunk2 in feature worktree"
+        );
 
         // Search with non-existent repo (should return empty)
-        let results_no_repo = store.search_vector("non-existent", None, &query_embedding, 10).await.unwrap();
-        assert!(results_no_repo.is_empty(), "Should return empty for non-existent repo");
+        let results_no_repo = store
+            .search_vector("non-existent", None, &query_embedding, 10)
+            .await
+            .unwrap();
+        assert!(
+            results_no_repo.is_empty(),
+            "Should return empty for non-existent repo"
+        );
 
         // Search with non-existent worktree (should return empty)
-        let results_no_wt = store.search_vector("test-repo", Some("non-existent"), &query_embedding, 10).await.unwrap();
-        assert!(results_no_wt.is_empty(), "Should return empty for non-existent worktree");
+        let results_no_wt = store
+            .search_vector("test-repo", Some("non-existent"), &query_embedding, 10)
+            .await
+            .unwrap();
+        assert!(
+            results_no_wt.is_empty(),
+            "Should return empty for non-existent worktree"
+        );
     }
 
     #[tokio::test]
@@ -3008,9 +3253,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test data but no embeddings
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         let file = FileRecord {
             repo_id,
@@ -3044,9 +3298,15 @@ mod tests {
 
         // Search without any embeddings indexed
         let query_embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
-        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+        let results = store
+            .search_vector("test-repo", None, &query_embedding, 10)
+            .await
+            .unwrap();
 
-        assert!(results.is_empty(), "Should return empty when no embeddings indexed");
+        assert!(
+            results.is_empty(),
+            "Should return empty when no embeddings indexed"
+        );
     }
 
     #[tokio::test]
@@ -3054,16 +3314,27 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo
-        store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
 
         // Query with wrong dimension
         let query_embedding: Vec<f32> = vec![1.0, 2.0, 3.0]; // Only 3 dimensions instead of 1536
 
-        let result = store.search_vector("test-repo", None, &query_embedding, 10).await;
+        let result = store
+            .search_vector("test-repo", None, &query_embedding, 10)
+            .await;
 
-        assert!(result.is_err(), "Should return error for wrong embedding dimension");
+        assert!(
+            result.is_err(),
+            "Should return error for wrong embedding dimension"
+        );
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Unsupported embedding dimension"), "Error should mention unsupported dimension");
+        assert!(
+            error_msg.contains("Unsupported embedding dimension"),
+            "Error should mention unsupported dimension"
+        );
     }
 
     #[tokio::test]
@@ -3071,7 +3342,10 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo
-        store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
+        store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
 
         // Manually disable vec extension availability (simulating missing extension)
         store.vec_available.store(false, Ordering::Relaxed);
@@ -3079,12 +3353,21 @@ mod tests {
 
         // Query should return empty results, not error
         let query_embedding: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
-        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+        let results = store
+            .search_vector("test-repo", None, &query_embedding, 10)
+            .await
+            .unwrap();
 
-        assert!(results.is_empty(), "Should return empty results when extension not available");
+        assert!(
+            results.is_empty(),
+            "Should return empty results when extension not available"
+        );
 
         // has_vec_extension should return false
-        assert!(!store.has_vec_extension(), "has_vec_extension should return false");
+        assert!(
+            !store.has_vec_extension(),
+            "has_vec_extension should return false"
+        );
     }
 
     #[tokio::test]
@@ -3092,9 +3375,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file
         let file = FileRecord {
@@ -3135,12 +3427,18 @@ mod tests {
             store.insert_chunk(&chunk).await.unwrap();
 
             let embedding: Vec<f32> = vec![val; 1536];
-            store.upsert_embedding(&format!("blob{}", i), &embedding, "model-v1").await.unwrap();
+            store
+                .upsert_embedding(&format!("blob{}", i), &embedding, "model-v1")
+                .await
+                .unwrap();
         }
 
         // Query with [0.5, 0.5, 0.5, ...]
         let query_embedding: Vec<f32> = vec![0.5f32; 1536];
-        let results = store.search_vector("test-repo", None, &query_embedding, 10).await.unwrap();
+        let results = store
+            .search_vector("test-repo", None, &query_embedding, 10)
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 3, "Should find all 3 chunks");
 
@@ -3156,10 +3454,17 @@ mod tests {
         }
 
         // First result should have similarity close to 1.0 (identical vector)
-        assert!(results[0].similarity > 0.9, "First result should have high similarity, got {}", results[0].similarity);
+        assert!(
+            results[0].similarity > 0.9,
+            "First result should have high similarity, got {}",
+            results[0].similarity
+        );
 
         // Last result should have lower similarity
-        assert!(results[2].similarity < results[0].similarity, "Last result should have lower similarity");
+        assert!(
+            results[2].similarity < results[0].similarity,
+            "Last result should have lower similarity"
+        );
     }
 
     #[tokio::test]
@@ -3167,9 +3472,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file
         let file = FileRecord {
@@ -3222,33 +3536,61 @@ mod tests {
         store.insert_chunk(&chunk2).await.unwrap();
 
         // Search for "authentication"
-        let results = store.search_fts("test-repo", None, "authentication", 10).await.unwrap();
+        let results = store
+            .search_fts("test-repo", None, "authentication", 10)
+            .await
+            .unwrap();
 
-        assert!(!results.is_empty(), "Should find results for 'authentication'");
-        assert!(results.len() >= 1, "Should find at least 1 chunk with 'authentication'");
+        assert!(
+            !results.is_empty(),
+            "Should find results for 'authentication'"
+        );
+        assert!(
+            results.len() >= 1,
+            "Should find at least 1 chunk with 'authentication'"
+        );
 
         // Verify results have normalized rank in valid range
         for result in &results {
-            assert!(result.normalized_rank > 0.0 && result.normalized_rank <= 1.0,
-                "Normalized rank should be in (0, 1], got {}", result.normalized_rank);
+            assert!(
+                result.normalized_rank > 0.0 && result.normalized_rank <= 1.0,
+                "Normalized rank should be in (0, 1], got {}",
+                result.normalized_rank
+            );
         }
 
         // Verify position is 0-indexed
         for (i, result) in results.iter().enumerate() {
-            assert_eq!(result.position, i, "Position should be 0-indexed, expected {}, got {}", i, result.position);
+            assert_eq!(
+                result.position, i,
+                "Position should be 0-indexed, expected {}, got {}",
+                i, result.position
+            );
         }
 
         // Search for "token" - should find validate_token
-        let results_token = store.search_fts("test-repo", None, "token", 10).await.unwrap();
+        let results_token = store
+            .search_fts("test-repo", None, "token", 10)
+            .await
+            .unwrap();
         assert!(!results_token.is_empty(), "Should find results for 'token'");
 
         // Search with empty query should return empty
         let results_empty = store.search_fts("test-repo", None, "", 10).await.unwrap();
-        assert!(results_empty.is_empty(), "Empty query should return empty results");
+        assert!(
+            results_empty.is_empty(),
+            "Empty query should return empty results"
+        );
 
         // Search for non-existent term should return empty
-        let results_none = store.search_fts("test-repo", None, "xyznonexistent", 10).await.unwrap();
-        assert!(results_none.is_empty(), "Non-existent term should return empty results");
+        let results_none = store
+            .search_fts("test-repo", None, "xyznonexistent", 10)
+            .await
+            .unwrap();
+        assert!(
+            results_none.is_empty(),
+            "Non-existent term should return empty results"
+        );
     }
 
     #[tokio::test]
@@ -3256,10 +3598,22 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo with two worktrees
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree1_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let worktree2_id = store.get_or_create_worktree(repo_id, "feature", "/test/path/feature").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree1_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let worktree2_id = store
+            .get_or_create_worktree(repo_id, "feature", "/test/path/feature")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create files in each worktree
         let file1 = FileRecord {
@@ -3325,16 +3679,37 @@ mod tests {
         store.insert_chunk(&chunk2).await.unwrap();
 
         // Search across all worktrees for "handler"
-        let results_all = store.search_fts("test-repo", None, "handler", 10).await.unwrap();
-        assert_eq!(results_all.len(), 2, "Should find 2 handlers across all worktrees");
+        let results_all = store
+            .search_fts("test-repo", None, "handler", 10)
+            .await
+            .unwrap();
+        assert_eq!(
+            results_all.len(),
+            2,
+            "Should find 2 handlers across all worktrees"
+        );
 
         // Search only in main worktree
-        let results_main = store.search_fts("test-repo", Some("main"), "handler", 10).await.unwrap();
-        assert_eq!(results_main.len(), 1, "Should find 1 handler in main worktree");
+        let results_main = store
+            .search_fts("test-repo", Some("main"), "handler", 10)
+            .await
+            .unwrap();
+        assert_eq!(
+            results_main.len(),
+            1,
+            "Should find 1 handler in main worktree"
+        );
 
         // Search only in feature worktree
-        let results_feature = store.search_fts("test-repo", Some("feature"), "handler", 10).await.unwrap();
-        assert_eq!(results_feature.len(), 1, "Should find 1 handler in feature worktree");
+        let results_feature = store
+            .search_fts("test-repo", Some("feature"), "handler", 10)
+            .await
+            .unwrap();
+        assert_eq!(
+            results_feature.len(),
+            1,
+            "Should find 1 handler in feature worktree"
+        );
     }
 
     #[tokio::test]
@@ -3342,9 +3717,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file
         let file = FileRecord {
@@ -3423,27 +3807,42 @@ mod tests {
         let embedding2: Vec<f32> = vec![0.9f32; 1536]; // Different from query
         let embedding3: Vec<f32> = vec![0.51f32; 1536]; // Similar to query
 
-        store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
-        store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
-        store.upsert_embedding("blob3", &embedding3, "model-v1").await.unwrap();
+        store
+            .upsert_embedding("blob1", &embedding1, "model-v1")
+            .await
+            .unwrap();
+        store
+            .upsert_embedding("blob2", &embedding2, "model-v1")
+            .await
+            .unwrap();
+        store
+            .upsert_embedding("blob3", &embedding3, "model-v1")
+            .await
+            .unwrap();
 
         // Perform hybrid search for "authentication"
         let weights = hybrid::HybridWeights::default();
-        let results = store.search_hybrid(
-            "test-repo",
-            None,
-            "authentication",
-            &query_embedding,
-            10,
-            weights,
-        ).await.unwrap();
+        let results = store
+            .search_hybrid(
+                "test-repo",
+                None,
+                "authentication",
+                &query_embedding,
+                10,
+                weights,
+            )
+            .await
+            .unwrap();
 
         // Should find results from both sources
         assert!(!results.is_empty(), "Hybrid search should return results");
 
         // Chunk 1 should be ranked highly (appears in both FTS and vector)
         let chunk1_result = results.iter().find(|r| r.source == "both");
-        assert!(chunk1_result.is_some(), "Should have at least one result from both sources");
+        assert!(
+            chunk1_result.is_some(),
+            "Should have at least one result from both sources"
+        );
 
         // Results should be sorted by score (descending)
         for i in 1..results.len() {
@@ -3464,9 +3863,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file and chunk with FTS content but NO embedding
         let file = FileRecord {
@@ -3502,18 +3910,20 @@ mod tests {
         // Perform hybrid search - should fall back to FTS since no embeddings
         let query_embedding: Vec<f32> = vec![0.5f32; 1536];
         let weights = hybrid::HybridWeights::default();
-        let results = store.search_hybrid(
-            "test-repo",
-            None,
-            "test",
-            &query_embedding,
-            10,
-            weights,
-        ).await.unwrap();
+        let results = store
+            .search_hybrid("test-repo", None, "test", &query_embedding, 10, weights)
+            .await
+            .unwrap();
 
         // Should find FTS results even without vector results
-        assert!(!results.is_empty(), "Should find FTS results when no embeddings");
-        assert!(results.iter().all(|r| r.source == "fts"), "All results should be FTS-only");
+        assert!(
+            !results.is_empty(),
+            "Should find FTS results when no embeddings"
+        );
+        assert!(
+            results.iter().all(|r| r.source == "fts"),
+            "All results should be FTS-only"
+        );
     }
 
     #[tokio::test]
@@ -3521,9 +3931,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file
         let file = FileRecord {
@@ -3576,27 +3995,40 @@ mod tests {
         let chunk2_id = store.insert_chunk(&chunk2).await.unwrap();
 
         // Get metadata for both chunks
-        let metadata = store.get_chunks_metadata(&[chunk1_id, chunk2_id]).await.unwrap();
+        let metadata = store
+            .get_chunks_metadata(&[chunk1_id, chunk2_id])
+            .await
+            .unwrap();
 
         assert_eq!(metadata.len(), 2, "Should get metadata for both chunks");
 
-        let meta1 = metadata.get(&chunk1_id).expect("Should have chunk1 metadata");
+        let meta1 = metadata
+            .get(&chunk1_id)
+            .expect("Should have chunk1 metadata");
         assert_eq!(meta1.kind, "function");
         assert_eq!(meta1.symbol_name, Some("my_function".to_string()));
         assert!((meta1.recency_score - 0.9).abs() < 1e-6);
 
-        let meta2 = metadata.get(&chunk2_id).expect("Should have chunk2 metadata");
+        let meta2 = metadata
+            .get(&chunk2_id)
+            .expect("Should have chunk2 metadata");
         assert_eq!(meta2.kind, "variable");
         assert_eq!(meta2.symbol_name, Some("my_variable".to_string()));
         assert!((meta2.recency_score - 0.5).abs() < 1e-6);
 
         // Test empty input
         let empty_metadata = store.get_chunks_metadata(&[]).await.unwrap();
-        assert!(empty_metadata.is_empty(), "Empty input should return empty map");
+        assert!(
+            empty_metadata.is_empty(),
+            "Empty input should return empty map"
+        );
 
         // Test non-existent chunk ID
         let missing_metadata = store.get_chunks_metadata(&[99999]).await.unwrap();
-        assert!(missing_metadata.is_empty(), "Non-existent ID should return empty map");
+        assert!(
+            missing_metadata.is_empty(),
+            "Non-existent ID should return empty map"
+        );
     }
 
     #[tokio::test]
@@ -3604,9 +4036,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file
         let file = FileRecord {
@@ -3685,22 +4126,34 @@ mod tests {
         let embedding2: Vec<f32> = vec![0.5f32; 1536];
         let embedding3: Vec<f32> = vec![0.5f32; 1536];
 
-        store.upsert_embedding("blob1", &embedding1, "model-v1").await.unwrap();
-        store.upsert_embedding("blob2", &embedding2, "model-v1").await.unwrap();
-        store.upsert_embedding("blob3", &embedding3, "model-v1").await.unwrap();
+        store
+            .upsert_embedding("blob1", &embedding1, "model-v1")
+            .await
+            .unwrap();
+        store
+            .upsert_embedding("blob2", &embedding2, "model-v1")
+            .await
+            .unwrap();
+        store
+            .upsert_embedding("blob3", &embedding3, "model-v1")
+            .await
+            .unwrap();
 
         // Perform ranked hybrid search for "validate"
         let weights = hybrid::HybridWeights::default();
         let ranking = hybrid::SemanticRanking::default();
-        let results = store.search_hybrid_ranked(
-            "test-repo",
-            None,
-            "validate",
-            &query_embedding,
-            10,
-            weights,
-            ranking,
-        ).await.unwrap();
+        let results = store
+            .search_hybrid_ranked(
+                "test-repo",
+                None,
+                "validate",
+                &query_embedding,
+                10,
+                weights,
+                ranking,
+            )
+            .await
+            .unwrap();
 
         // Should find results
         assert!(!results.is_empty(), "Should find results");
@@ -3738,9 +4191,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Create test repo and worktree
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
 
         // Create file
         let file = FileRecord {
@@ -3777,34 +4239,49 @@ mod tests {
         // Create embedding
         let query_embedding: Vec<f32> = vec![0.5f32; 1536];
         let embedding: Vec<f32> = vec![0.5f32; 1536];
-        store.upsert_embedding("blob1", &embedding, "model-v1").await.unwrap();
+        store
+            .upsert_embedding("blob1", &embedding, "model-v1")
+            .await
+            .unwrap();
 
         // Compare results with identity ranking vs default ranking
         let weights = hybrid::HybridWeights::default();
 
-        let results_identity = store.search_hybrid_ranked(
-            "test-repo",
-            None,
-            "test",
-            &query_embedding,
-            10,
-            weights.clone(),
-            hybrid::SemanticRanking::identity(),
-        ).await.unwrap();
+        let results_identity = store
+            .search_hybrid_ranked(
+                "test-repo",
+                None,
+                "test",
+                &query_embedding,
+                10,
+                weights.clone(),
+                hybrid::SemanticRanking::identity(),
+            )
+            .await
+            .unwrap();
 
-        let results_default = store.search_hybrid_ranked(
-            "test-repo",
-            None,
-            "test",
-            &query_embedding,
-            10,
-            weights,
-            hybrid::SemanticRanking::default(),
-        ).await.unwrap();
+        let results_default = store
+            .search_hybrid_ranked(
+                "test-repo",
+                None,
+                "test",
+                &query_embedding,
+                10,
+                weights,
+                hybrid::SemanticRanking::default(),
+            )
+            .await
+            .unwrap();
 
         // Both should return results
-        assert!(!results_identity.is_empty(), "Identity ranking should find results");
-        assert!(!results_default.is_empty(), "Default ranking should find results");
+        assert!(
+            !results_identity.is_empty(),
+            "Identity ranking should find results"
+        );
+        assert!(
+            !results_default.is_empty(),
+            "Default ranking should find results"
+        );
 
         // Default ranking should boost the score (function=1.2, exact match=1.5, recency=1.1)
         // Identity ranking should keep original score
@@ -3819,7 +4296,13 @@ mod tests {
     // ========================================================================
 
     /// Helper to create a simple chunk for graph testing
-    async fn create_test_chunk(store: &SqliteStore, file_id: i64, worktree_id: i64, name: &str, line_start: i32) -> i64 {
+    async fn create_test_chunk(
+        store: &SqliteStore,
+        file_id: i64,
+        worktree_id: i64,
+        name: &str,
+        line_start: i32,
+    ) -> i64 {
         let chunk = ChunkRecord {
             file_id,
             worktree_id,
@@ -3844,9 +4327,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -3879,9 +4371,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -3914,9 +4415,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -3941,8 +4451,14 @@ mod tests {
         let callers = store.find_callers(c, Some(3)).await.unwrap();
 
         assert_eq!(callers.len(), 2, "Should find 2 callers (transitive)");
-        assert!(callers.iter().any(|r| r.chunk_id == b && r.depth == 1), "B should be at depth 1");
-        assert!(callers.iter().any(|r| r.chunk_id == a && r.depth == 2), "A should be at depth 2");
+        assert!(
+            callers.iter().any(|r| r.chunk_id == b && r.depth == 1),
+            "B should be at depth 1"
+        );
+        assert!(
+            callers.iter().any(|r| r.chunk_id == a && r.depth == 2),
+            "A should be at depth 2"
+        );
     }
 
     #[tokio::test]
@@ -3950,9 +4466,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -3978,8 +4503,13 @@ mod tests {
         let callers = store.find_callers(a, Some(10)).await.unwrap();
 
         // Each chunk should appear at most once
-        let unique_chunks: std::collections::HashSet<i64> = callers.iter().map(|r| r.chunk_id).collect();
-        assert_eq!(unique_chunks.len(), callers.len(), "Should have no duplicate chunks");
+        let unique_chunks: std::collections::HashSet<i64> =
+            callers.iter().map(|r| r.chunk_id).collect();
+        assert_eq!(
+            unique_chunks.len(),
+            callers.len(),
+            "Should have no duplicate chunks"
+        );
     }
 
     #[tokio::test]
@@ -3987,9 +4517,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -4015,7 +4554,10 @@ mod tests {
 
         assert_eq!(callers.len(), 1, "Should find only 1 caller at depth 1");
         assert_eq!(callers[0].chunk_id, b);
-        assert!(!callers.iter().any(|r| r.chunk_id == a), "A should not be found at depth 1");
+        assert!(
+            !callers.iter().any(|r| r.chunk_id == a),
+            "A should not be found at depth 1"
+        );
     }
 
     #[tokio::test]
@@ -4023,9 +4565,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -4053,9 +4604,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -4075,12 +4635,18 @@ mod tests {
         store.insert_chunk_edge(a, b, "imports").await.unwrap();
 
         // Find what A imports (outgoing)
-        let imports_out = store.find_imports(a, graph::ImportDirection::Outgoing, Some(1)).await.unwrap();
+        let imports_out = store
+            .find_imports(a, graph::ImportDirection::Outgoing, Some(1))
+            .await
+            .unwrap();
         assert_eq!(imports_out.len(), 1, "A should import 1 module");
         assert_eq!(imports_out[0].chunk_id, b);
 
         // Find what imports B (incoming)
-        let imports_in = store.find_imports(b, graph::ImportDirection::Incoming, Some(1)).await.unwrap();
+        let imports_in = store
+            .find_imports(b, graph::ImportDirection::Incoming, Some(1))
+            .await
+            .unwrap();
         assert_eq!(imports_in.len(), 1, "B should be imported by 1 module");
         assert_eq!(imports_in[0].chunk_id, a);
     }
@@ -4090,9 +4656,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -4114,11 +4689,18 @@ mod tests {
         store.insert_chunk_edge(a, c, "imports").await.unwrap();
 
         // Get all outgoing edges from A
-        let edges = store.get_direct_edges(a, graph::ImportDirection::Outgoing).await.unwrap();
+        let edges = store
+            .get_direct_edges(a, graph::ImportDirection::Outgoing)
+            .await
+            .unwrap();
 
         assert_eq!(edges.len(), 2, "A should have 2 outgoing edges");
-        assert!(edges.iter().any(|e| e.chunk_id == b && e.edge_type == "calls"));
-        assert!(edges.iter().any(|e| e.chunk_id == c && e.edge_type == "imports"));
+        assert!(edges
+            .iter()
+            .any(|e| e.chunk_id == b && e.edge_type == "calls"));
+        assert!(edges
+            .iter()
+            .any(|e| e.chunk_id == c && e.edge_type == "imports"));
     }
 
     #[tokio::test]
@@ -4126,9 +4708,18 @@ mod tests {
         let store = setup_test_store().await;
 
         // Setup
-        let repo_id = store.get_or_create_repo("test-repo", "/test/path").await.unwrap();
-        let worktree_id = store.get_or_create_worktree(repo_id, "main", "/test/path").await.unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "abc123", None).await.unwrap();
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -4144,11 +4735,21 @@ mod tests {
         // Create chain of 20 nodes
         let mut chunks = Vec::new();
         for i in 0..20 {
-            let chunk = create_test_chunk(&store, file_id, worktree_id, &format!("func_{}", i), (i * 15) as i32).await;
+            let chunk = create_test_chunk(
+                &store,
+                file_id,
+                worktree_id,
+                &format!("func_{}", i),
+                (i * 15) as i32,
+            )
+            .await;
             chunks.push(chunk);
         }
         for i in 0..19 {
-            store.insert_chunk_edge(chunks[i], chunks[i + 1], "calls").await.unwrap();
+            store
+                .insert_chunk_edge(chunks[i], chunks[i + 1], "calls")
+                .await
+                .unwrap();
         }
 
         let start = std::time::Instant::now();
@@ -4156,14 +4757,25 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Should complete quickly
-        assert!(elapsed.as_millis() < 1000, "Graph traversal took {:?}", elapsed);
+        assert!(
+            elapsed.as_millis() < 1000,
+            "Graph traversal took {:?}",
+            elapsed
+        );
 
         // Should find up to 10 callers (limited by depth)
-        assert_eq!(callers.len(), 10, "Should find 10 callers (limited by depth)");
+        assert_eq!(
+            callers.len(),
+            10,
+            "Should find 10 callers (limited by depth)"
+        );
 
         // Verify results are ordered by depth
         for i in 1..callers.len() {
-            assert!(callers[i - 1].depth <= callers[i].depth, "Results should be ordered by depth");
+            assert!(
+                callers[i - 1].depth <= callers[i].depth,
+                "Results should be ordered by depth"
+            );
         }
     }
 }

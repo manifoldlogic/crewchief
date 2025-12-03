@@ -13,8 +13,8 @@ use tracing::debug;
 ///
 /// Returns `~/.maproom/maproom.db` on all platforms.
 pub fn get_default_sqlite_path() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     Ok(home.join(".maproom").join("maproom.db"))
 }
 
@@ -24,12 +24,14 @@ pub fn get_default_sqlite_path() -> Result<PathBuf> {
 /// Returns the original string if no expansion is needed.
 fn expand_tilde(path: &str) -> Result<String> {
     if path.starts_with("~/") {
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine home directory for tilde expansion"))?;
+        let home = dirs::home_dir().ok_or_else(|| {
+            anyhow::anyhow!("Could not determine home directory for tilde expansion")
+        })?;
         Ok(format!("{}{}", home.display(), &path[1..]))
     } else if path == "~" {
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine home directory for tilde expansion"))?;
+        let home = dirs::home_dir().ok_or_else(|| {
+            anyhow::anyhow!("Could not determine home directory for tilde expansion")
+        })?;
         Ok(home.display().to_string())
     } else {
         Ok(path.to_string())
@@ -71,9 +73,15 @@ pub fn get_database_url() -> Result<String> {
     let url = format!("sqlite://{}", sqlite_path.display());
 
     if sqlite_path.exists() {
-        debug!("Found existing SQLite database at {}", sqlite_path.display());
+        debug!(
+            "Found existing SQLite database at {}",
+            sqlite_path.display()
+        );
     } else {
-        debug!("SQLite database will be created at {}", sqlite_path.display());
+        debug!(
+            "SQLite database will be created at {}",
+            sqlite_path.display()
+        );
     }
 
     Ok(url)
@@ -88,10 +96,7 @@ mod tests {
     #[serial]
     fn test_explicit_database_url_takes_precedence() {
         // Setup: Set env var
-        env::set_var(
-            "MAPROOM_DATABASE_URL",
-            "sqlite:///custom/path/maproom.db",
-        );
+        env::set_var("MAPROOM_DATABASE_URL", "sqlite:///custom/path/maproom.db");
 
         let url = get_database_url().unwrap();
 
@@ -109,27 +114,40 @@ mod tests {
         let url = get_database_url().unwrap();
 
         // Should be SQLite URL with home directory
-        assert!(url.starts_with("sqlite://"), "Expected sqlite:// URL, got: {}", url);
-        assert!(url.contains(".maproom/maproom.db"), "Expected .maproom/maproom.db path, got: {}", url);
+        assert!(
+            url.starts_with("sqlite://"),
+            "Expected sqlite:// URL, got: {}",
+            url
+        );
+        assert!(
+            url.contains(".maproom/maproom.db"),
+            "Expected .maproom/maproom.db path, got: {}",
+            url
+        );
     }
 
     #[test]
     #[serial]
     fn test_tilde_expansion_in_database_url() {
         // Setup: Set env var with tilde
-        env::set_var(
-            "MAPROOM_DATABASE_URL",
-            "sqlite://~/.maproom/maproom.db",
-        );
+        env::set_var("MAPROOM_DATABASE_URL", "sqlite://~/.maproom/maproom.db");
 
         let url = get_database_url().unwrap();
 
         // Should NOT contain tilde after expansion
         assert!(!url.contains("~"), "Tilde should be expanded, got: {}", url);
         // Should contain .maproom/maproom.db
-        assert!(url.contains(".maproom/maproom.db"), "Expected .maproom/maproom.db path, got: {}", url);
+        assert!(
+            url.contains(".maproom/maproom.db"),
+            "Expected .maproom/maproom.db path, got: {}",
+            url
+        );
         // Should start with sqlite://
-        assert!(url.starts_with("sqlite://"), "Expected sqlite:// URL, got: {}", url);
+        assert!(
+            url.starts_with("sqlite://"),
+            "Expected sqlite:// URL, got: {}",
+            url
+        );
 
         // Cleanup
         env::remove_var("MAPROOM_DATABASE_URL");
@@ -140,7 +158,10 @@ mod tests {
         // Test tilde at start with slash
         let expanded = expand_tilde("~/test/path").unwrap();
         assert!(!expanded.contains("~"), "Tilde should be expanded");
-        assert!(expanded.ends_with("/test/path"), "Path suffix should be preserved");
+        assert!(
+            expanded.ends_with("/test/path"),
+            "Path suffix should be preserved"
+        );
 
         // Test no tilde
         let no_tilde = expand_tilde("/absolute/path").unwrap();

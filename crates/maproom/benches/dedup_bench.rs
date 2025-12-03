@@ -20,10 +20,10 @@
 //! cargo bench --bench dedup_bench -- deduplicate
 //! ```
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use crewchief_maproom::search::dedup::{deduplicate, DeduplicationConfig};
 use crewchief_maproom::search::executor_types::SearchSource;
 use crewchief_maproom::search::results::ChunkSearchResult;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::HashMap;
 
 /// Generate test results with a mix of duplicates.
@@ -40,7 +40,11 @@ fn generate_test_results(count: usize, unique_count: usize) -> Vec<ChunkSearchRe
             ChunkSearchResult {
                 chunk_id: i as i64,
                 file_id: (identity_idx % 100) as i64,
-                relpath: format!("src/module_{}/file_{}.rs", identity_idx / 10, identity_idx % 10),
+                relpath: format!(
+                    "src/module_{}/file_{}.rs",
+                    identity_idx / 10,
+                    identity_idx % 10
+                ),
                 symbol_name: Some(format!("function_{}", identity_idx)),
                 kind: "function".to_string(),
                 start_line: 10,
@@ -93,9 +97,13 @@ fn bench_deduplicate_unique(c: &mut Criterion) {
     for count in [100, 1000, 10000] {
         let results = generate_unique_results(count);
 
-        group.bench_with_input(BenchmarkId::new("all_unique", count), &results, |b, results| {
-            b.iter(|| deduplicate(black_box(results.clone()), black_box(&config)));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("all_unique", count),
+            &results,
+            |b, results| {
+                b.iter(|| deduplicate(black_box(results.clone()), black_box(&config)));
+            },
+        );
     }
 
     group.finish();
@@ -134,9 +142,13 @@ fn bench_deduplicate_disabled(c: &mut Criterion) {
     for count in [100, 1000, 10000] {
         let results = generate_test_results(count, count / 2);
 
-        group.bench_with_input(BenchmarkId::new("disabled", count), &results, |b, results| {
-            b.iter(|| deduplicate(black_box(results.clone()), black_box(&config)));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("disabled", count),
+            &results,
+            |b, results| {
+                b.iter(|| deduplicate(black_box(results.clone()), black_box(&config)));
+            },
+        );
     }
 
     group.finish();

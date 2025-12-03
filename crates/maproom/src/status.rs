@@ -81,7 +81,9 @@ pub async fn get_status(
     // Sort repos by name for consistent output
     repo_statuses.sort_by(|a, b| a.name.cmp(&b.name));
 
-    Ok(StatusResponse { repos: repo_statuses })
+    Ok(StatusResponse {
+        repos: repo_statuses,
+    })
 }
 
 /// Format status as human-readable text
@@ -136,5 +138,6 @@ fn format_number(n: i64) -> String {
 
 /// Format status as JSON
 pub fn format_json(status: &StatusResponse) -> Result<String> {
-    serde_json::to_string_pretty(status).map_err(|e| anyhow::anyhow!("Failed to serialize status to JSON: {}", e))
+    serde_json::to_string_pretty(status)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize status to JSON: {}", e))
 }

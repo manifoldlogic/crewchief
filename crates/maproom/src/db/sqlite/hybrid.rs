@@ -42,17 +42,26 @@ impl Default for HybridWeights {
 impl HybridWeights {
     /// Create weights with custom values
     pub fn new(fts_weight: f64, vector_weight: f64) -> Self {
-        Self { fts_weight, vector_weight }
+        Self {
+            fts_weight,
+            vector_weight,
+        }
     }
 
     /// Equal weights for FTS and vector (0.5 each)
     pub fn equal() -> Self {
-        Self { fts_weight: 0.5, vector_weight: 0.5 }
+        Self {
+            fts_weight: 0.5,
+            vector_weight: 0.5,
+        }
     }
 
     /// FTS-heavy weights (0.7 FTS, 0.3 vector)
     pub fn fts_heavy() -> Self {
-        Self { fts_weight: 0.7, vector_weight: 0.3 }
+        Self {
+            fts_weight: 0.7,
+            vector_weight: 0.3,
+        }
     }
 
     /// Vector-heavy weights (0.3 FTS, 0.7 vector) - default
@@ -234,11 +243,7 @@ pub fn apply_semantic_ranking(
 ///
 /// Items appearing in both lists get contributions from both sources,
 /// naturally boosting results that match both keyword and semantic criteria.
-pub fn rrf_score(
-    fts_rank: Option<usize>,
-    vec_rank: Option<usize>,
-    weights: &HybridWeights,
-) -> f64 {
+pub fn rrf_score(fts_rank: Option<usize>, vec_rank: Option<usize>, weights: &HybridWeights) -> f64 {
     let fts_contribution = fts_rank
         .map(|r| weights.fts_weight / (RRF_K + r as f64))
         .unwrap_or(0.0);
@@ -282,10 +287,7 @@ pub fn combine_results(
         .collect();
 
     // Get all unique chunk_ids from both sources
-    let all_chunk_ids: HashSet<i64> = fts_ranks.keys()
-        .chain(vec_ranks.keys())
-        .copied()
-        .collect();
+    let all_chunk_ids: HashSet<i64> = fts_ranks.keys().chain(vec_ranks.keys()).copied().collect();
 
     // Calculate RRF scores for all chunks
     let mut hits: Vec<HybridResult> = all_chunk_ids
@@ -310,7 +312,11 @@ pub fn combine_results(
         .collect();
 
     // Sort by score (descending) - higher RRF score is better
-    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Take top N results
     hits.truncate(limit);
@@ -330,7 +336,11 @@ mod tests {
         let score = rrf_score(Some(0), Some(0), &weights);
 
         // Expected: 0.3/60 + 0.7/60 = 1.0/60 ≈ 0.0167
-        assert!((score - 1.0/60.0).abs() < 1e-6, "Score at rank 0 in both: {}", score);
+        assert!(
+            (score - 1.0 / 60.0).abs() < 1e-6,
+            "Score at rank 0 in both: {}",
+            score
+        );
     }
 
     #[test]
@@ -341,7 +351,11 @@ mod tests {
         let score = rrf_score(Some(0), None, &weights);
 
         // Expected: 0.3/60 = 0.005
-        assert!((score - 0.3/60.0).abs() < 1e-6, "Score at rank 0 FTS only: {}", score);
+        assert!(
+            (score - 0.3 / 60.0).abs() < 1e-6,
+            "Score at rank 0 FTS only: {}",
+            score
+        );
     }
 
     #[test]
@@ -352,7 +366,11 @@ mod tests {
         let score = rrf_score(None, Some(0), &weights);
 
         // Expected: 0.7/60 ≈ 0.0117
-        assert!((score - 0.7/60.0).abs() < 1e-6, "Score at rank 0 vector only: {}", score);
+        assert!(
+            (score - 0.7 / 60.0).abs() < 1e-6,
+            "Score at rank 0 vector only: {}",
+            score
+        );
     }
 
     #[test]
@@ -362,7 +380,10 @@ mod tests {
         // Item in neither list (shouldn't happen in practice)
         let score = rrf_score(None, None, &weights);
 
-        assert!((score - 0.0).abs() < 1e-6, "Score with no ranks should be 0");
+        assert!(
+            (score - 0.0).abs() < 1e-6,
+            "Score with no ranks should be 0"
+        );
     }
 
     #[test]
@@ -375,7 +396,10 @@ mod tests {
         let score_10 = rrf_score(Some(10), Some(10), &weights);
 
         assert!(score_0 > score_1, "Rank 0 should score higher than rank 1");
-        assert!(score_1 > score_10, "Rank 1 should score higher than rank 10");
+        assert!(
+            score_1 > score_10,
+            "Rank 1 should score higher than rank 10"
+        );
     }
 
     #[test]
@@ -387,20 +411,44 @@ mod tests {
         let fts_only_rank_0 = rrf_score(Some(0), None, &weights);
         let vec_only_rank_0 = rrf_score(None, Some(0), &weights);
 
-        assert!(both_rank_5 > fts_only_rank_0, "Both at rank 5 should beat FTS-only at rank 0");
-        assert!(both_rank_5 > vec_only_rank_0, "Both at rank 5 should beat vector-only at rank 0");
+        assert!(
+            both_rank_5 > fts_only_rank_0,
+            "Both at rank 5 should beat FTS-only at rank 0"
+        );
+        assert!(
+            both_rank_5 > vec_only_rank_0,
+            "Both at rank 5 should beat vector-only at rank 0"
+        );
     }
 
     #[test]
     fn test_combine_results_basic() {
         let fts_results = vec![
-            FtsResult { chunk_id: 1, rank: -1.0, normalized_rank: 0.5, position: 0 },
-            FtsResult { chunk_id: 2, rank: -0.5, normalized_rank: 0.67, position: 1 },
+            FtsResult {
+                chunk_id: 1,
+                rank: -1.0,
+                normalized_rank: 0.5,
+                position: 0,
+            },
+            FtsResult {
+                chunk_id: 2,
+                rank: -0.5,
+                normalized_rank: 0.67,
+                position: 1,
+            },
         ];
 
         let vec_results = vec![
-            VectorResult { chunk_id: 2, distance: 0.1, similarity: 0.91 },
-            VectorResult { chunk_id: 3, distance: 0.2, similarity: 0.83 },
+            VectorResult {
+                chunk_id: 2,
+                distance: 0.1,
+                similarity: 0.91,
+            },
+            VectorResult {
+                chunk_id: 3,
+                distance: 0.2,
+                similarity: 0.83,
+            },
         ];
 
         let weights = HybridWeights::default();
@@ -409,7 +457,10 @@ mod tests {
         assert_eq!(results.len(), 3, "Should have 3 unique chunks");
 
         // Chunk 2 should be first (appears in both lists)
-        assert_eq!(results[0].chunk_id, 2, "Chunk 2 should be ranked first (in both lists)");
+        assert_eq!(
+            results[0].chunk_id, 2,
+            "Chunk 2 should be ranked first (in both lists)"
+        );
         assert_eq!(results[0].source, "both");
         assert!(results[0].fts_rank.is_some());
         assert!(results[0].vector_rank.is_some());
@@ -422,7 +473,7 @@ mod tests {
                 chunk_id: i,
                 rank: -(i as f64),
                 normalized_rank: 0.5,
-                position: i as usize
+                position: i as usize,
             })
             .collect();
 
@@ -430,7 +481,7 @@ mod tests {
             .map(|i| VectorResult {
                 chunk_id: i,
                 distance: i as f64 * 0.1,
-                similarity: 0.9
+                similarity: 0.9,
             })
             .collect();
 
@@ -445,22 +496,44 @@ mod tests {
         let fts_results: Vec<FtsResult> = vec![];
 
         let vec_results = vec![
-            VectorResult { chunk_id: 1, distance: 0.1, similarity: 0.91 },
-            VectorResult { chunk_id: 2, distance: 0.2, similarity: 0.83 },
+            VectorResult {
+                chunk_id: 1,
+                distance: 0.1,
+                similarity: 0.91,
+            },
+            VectorResult {
+                chunk_id: 2,
+                distance: 0.2,
+                similarity: 0.83,
+            },
         ];
 
         let weights = HybridWeights::default();
         let results = combine_results(&fts_results, &vec_results, &weights, 10);
 
-        assert_eq!(results.len(), 2, "Should return vector results when FTS is empty");
+        assert_eq!(
+            results.len(),
+            2,
+            "Should return vector results when FTS is empty"
+        );
         assert!(results.iter().all(|r| r.source == "vector"));
     }
 
     #[test]
     fn test_combine_results_empty_vector() {
         let fts_results = vec![
-            FtsResult { chunk_id: 1, rank: -1.0, normalized_rank: 0.5, position: 0 },
-            FtsResult { chunk_id: 2, rank: -0.5, normalized_rank: 0.67, position: 1 },
+            FtsResult {
+                chunk_id: 1,
+                rank: -1.0,
+                normalized_rank: 0.5,
+                position: 0,
+            },
+            FtsResult {
+                chunk_id: 2,
+                rank: -0.5,
+                normalized_rank: 0.67,
+                position: 1,
+            },
         ];
 
         let vec_results: Vec<VectorResult> = vec![];
@@ -468,7 +541,11 @@ mod tests {
         let weights = HybridWeights::default();
         let results = combine_results(&fts_results, &vec_results, &weights, 10);
 
-        assert_eq!(results.len(), 2, "Should return FTS results when vector is empty");
+        assert_eq!(
+            results.len(),
+            2,
+            "Should return FTS results when vector is empty"
+        );
         assert!(results.iter().all(|r| r.source == "fts"));
     }
 
@@ -480,21 +557,51 @@ mod tests {
         let weights = HybridWeights::default();
         let results = combine_results(&fts_results, &vec_results, &weights, 10);
 
-        assert!(results.is_empty(), "Should return empty when both sources are empty");
+        assert!(
+            results.is_empty(),
+            "Should return empty when both sources are empty"
+        );
     }
 
     #[test]
     fn test_combine_results_sorted_by_score() {
         let fts_results = vec![
-            FtsResult { chunk_id: 1, rank: -1.0, normalized_rank: 0.5, position: 0 },
-            FtsResult { chunk_id: 2, rank: -0.5, normalized_rank: 0.67, position: 1 },
-            FtsResult { chunk_id: 3, rank: -0.3, normalized_rank: 0.77, position: 2 },
+            FtsResult {
+                chunk_id: 1,
+                rank: -1.0,
+                normalized_rank: 0.5,
+                position: 0,
+            },
+            FtsResult {
+                chunk_id: 2,
+                rank: -0.5,
+                normalized_rank: 0.67,
+                position: 1,
+            },
+            FtsResult {
+                chunk_id: 3,
+                rank: -0.3,
+                normalized_rank: 0.77,
+                position: 2,
+            },
         ];
 
         let vec_results = vec![
-            VectorResult { chunk_id: 3, distance: 0.1, similarity: 0.91 },
-            VectorResult { chunk_id: 2, distance: 0.2, similarity: 0.83 },
-            VectorResult { chunk_id: 4, distance: 0.3, similarity: 0.77 },
+            VectorResult {
+                chunk_id: 3,
+                distance: 0.1,
+                similarity: 0.91,
+            },
+            VectorResult {
+                chunk_id: 2,
+                distance: 0.2,
+                similarity: 0.83,
+            },
+            VectorResult {
+                chunk_id: 4,
+                distance: 0.3,
+                similarity: 0.77,
+            },
         ];
 
         let weights = HybridWeights::default();
@@ -516,7 +623,10 @@ mod tests {
         let fts_only = rrf_score(Some(0), None, &weights);
         let vec_only = rrf_score(None, Some(0), &weights);
 
-        assert!((fts_only - vec_only).abs() < 1e-6, "Equal weights should give same contribution");
+        assert!(
+            (fts_only - vec_only).abs() < 1e-6,
+            "Equal weights should give same contribution"
+        );
     }
 
     #[test]
@@ -526,7 +636,10 @@ mod tests {
         let fts_only = rrf_score(Some(0), None, &weights);
         let vec_only = rrf_score(None, Some(0), &weights);
 
-        assert!(fts_only > vec_only, "FTS-heavy weights should favor FTS results");
+        assert!(
+            fts_only > vec_only,
+            "FTS-heavy weights should favor FTS results"
+        );
     }
 
     #[test]
@@ -536,7 +649,10 @@ mod tests {
         let fts_only = rrf_score(Some(0), None, &weights);
         let vec_only = rrf_score(None, Some(0), &weights);
 
-        assert!(vec_only > fts_only, "Vector-heavy weights should favor vector results");
+        assert!(
+            vec_only > fts_only,
+            "Vector-heavy weights should favor vector results"
+        );
     }
 
     // ========================================================================
@@ -603,9 +719,21 @@ mod tests {
         // Function should have highest score (1.0 * 1.2 = 1.2)
         // Variable should be middle (1.0 * 0.8 = 0.8)
         // Import should be lowest (1.0 * 0.7 = 0.7)
-        assert!((results[0].score - 1.2).abs() < 1e-6, "Function score: {}", results[0].score);
-        assert!((results[1].score - 0.8).abs() < 1e-6, "Variable score: {}", results[1].score);
-        assert!((results[2].score - 0.7).abs() < 1e-6, "Import score: {}", results[2].score);
+        assert!(
+            (results[0].score - 1.2).abs() < 1e-6,
+            "Function score: {}",
+            results[0].score
+        );
+        assert!(
+            (results[1].score - 0.8).abs() < 1e-6,
+            "Variable score: {}",
+            results[1].score
+        );
+        assert!(
+            (results[2].score - 0.7).abs() < 1e-6,
+            "Import score: {}",
+            results[2].score
+        );
 
         // Should be sorted by score descending
         assert_eq!(results[0].kind, "function");
@@ -626,8 +754,16 @@ mod tests {
 
         // First hit should get exact match boost (1.0 * 1.2 * 1.5 = 1.8)
         // Second hit should only get kind multiplier (1.0 * 1.2 = 1.2)
-        assert!((results[0].score - 1.8).abs() < 1e-6, "Match score: {}", results[0].score);
-        assert!((results[1].score - 1.2).abs() < 1e-6, "No match score: {}", results[1].score);
+        assert!(
+            (results[0].score - 1.8).abs() < 1e-6,
+            "Match score: {}",
+            results[0].score
+        );
+        assert!(
+            (results[1].score - 1.2).abs() < 1e-6,
+            "No match score: {}",
+            results[1].score
+        );
 
         // Verify sorting
         assert_eq!(results[0].symbol_name, Some("validateUser".to_string()));
@@ -649,7 +785,10 @@ mod tests {
 
         // getUserName normalized is "get_user_name" which contains "user_name"
         // So it should get the boost
-        assert!(results[0].score > results[1].score, "Camel case match should boost score");
+        assert!(
+            results[0].score > results[1].score,
+            "Camel case match should boost score"
+        );
     }
 
     #[test]
@@ -666,7 +805,10 @@ mod tests {
         apply_semantic_ranking(&mut results, "user", &ranking);
 
         // Should match since "validate_user_credentials" contains "user"
-        assert!(results[0].score > results[1].score, "Partial name match should boost score");
+        assert!(
+            results[0].score > results[1].score,
+            "Partial name match should boost score"
+        );
     }
 
     #[test]
@@ -674,16 +816,24 @@ mod tests {
         let ranking = SemanticRanking::default();
 
         let mut results = vec![
-            create_test_hit(1, 1.0, "enum", None, 1.0),  // Most recent
-            create_test_hit(2, 1.0, "enum", None, 0.0),  // Not recent
+            create_test_hit(1, 1.0, "enum", None, 1.0), // Most recent
+            create_test_hit(2, 1.0, "enum", None, 0.0), // Not recent
         ];
 
         apply_semantic_ranking(&mut results, "query", &ranking);
 
         // First hit: 1.0 * 1.0 * (1.0 + 1.0 * 0.1) = 1.0 * 1.1 = 1.1
         // Second hit: 1.0 * 1.0 * (1.0 + 0.0 * 0.1) = 1.0 * 1.0 = 1.0
-        assert!((results[0].score - 1.1).abs() < 1e-6, "Recent score: {}", results[0].score);
-        assert!((results[1].score - 1.0).abs() < 1e-6, "Old score: {}", results[1].score);
+        assert!(
+            (results[0].score - 1.1).abs() < 1e-6,
+            "Recent score: {}",
+            results[0].score
+        );
+        assert!(
+            (results[1].score - 1.0).abs() < 1e-6,
+            "Old score: {}",
+            results[1].score
+        );
     }
 
     #[test]
@@ -699,8 +849,16 @@ mod tests {
 
         // First hit: function (1.2) * exact match (1.5) * recency (1.1) = 1.98
         // Second hit: variable (0.8) * no match (1.0) * no recency (1.0) = 0.8
-        assert!((results[0].score - 1.98).abs() < 1e-6, "Combined score: {}", results[0].score);
-        assert!((results[1].score - 0.8).abs() < 1e-6, "Base score: {}", results[1].score);
+        assert!(
+            (results[0].score - 1.98).abs() < 1e-6,
+            "Combined score: {}",
+            results[0].score
+        );
+        assert!(
+            (results[1].score - 0.8).abs() < 1e-6,
+            "Base score: {}",
+            results[1].score
+        );
     }
 
     #[test]
@@ -709,7 +867,7 @@ mod tests {
 
         // Start with variable ranked higher than function
         let mut results = vec![
-            create_test_hit(1, 2.0, "variable", None, 0.0),  // Higher base score
+            create_test_hit(1, 2.0, "variable", None, 0.0), // Higher base score
             create_test_hit(2, 1.0, "function", Some("targetFunction"), 0.0),
         ];
 
@@ -727,14 +885,16 @@ mod tests {
     fn test_apply_semantic_ranking_unknown_kind() {
         let ranking = SemanticRanking::default();
 
-        let mut results = vec![
-            create_test_hit(1, 1.0, "unknown_kind", None, 0.0),
-        ];
+        let mut results = vec![create_test_hit(1, 1.0, "unknown_kind", None, 0.0)];
 
         apply_semantic_ranking(&mut results, "query", &ranking);
 
         // Unknown kind should use default multiplier of 1.0
-        assert!((results[0].score - 1.0).abs() < 1e-6, "Unknown kind score: {}", results[0].score);
+        assert!(
+            (results[0].score - 1.0).abs() < 1e-6,
+            "Unknown kind score: {}",
+            results[0].score
+        );
     }
 
     #[test]
@@ -751,14 +911,16 @@ mod tests {
     fn test_apply_semantic_ranking_no_symbol_name() {
         let ranking = SemanticRanking::default();
 
-        let mut results = vec![
-            create_test_hit(1, 1.0, "function", None, 0.0),
-        ];
+        let mut results = vec![create_test_hit(1, 1.0, "function", None, 0.0)];
 
         apply_semantic_ranking(&mut results, "validate", &ranking);
 
         // Should only apply kind multiplier, no exact match boost
-        assert!((results[0].score - 1.2).abs() < 1e-6, "No symbol score: {}", results[0].score);
+        assert!(
+            (results[0].score - 1.2).abs() < 1e-6,
+            "No symbol score: {}",
+            results[0].score
+        );
     }
 
     #[test]
@@ -768,13 +930,15 @@ mod tests {
 
         let ranking = SemanticRanking::new(kind_multipliers, 3.0, 0.5);
 
-        let mut results = vec![
-            create_test_hit(1, 1.0, "custom", Some("matchThis"), 1.0),
-        ];
+        let mut results = vec![create_test_hit(1, 1.0, "custom", Some("matchThis"), 1.0)];
 
         apply_semantic_ranking(&mut results, "match", &ranking);
 
         // custom (2.0) * exact match (3.0) * recency (1.0 + 1.0 * 0.5 = 1.5) = 9.0
-        assert!((results[0].score - 9.0).abs() < 1e-6, "Custom ranking score: {}", results[0].score);
+        assert!(
+            (results[0].score - 9.0).abs() < 1e-6,
+            "Custom ranking score: {}",
+            results[0].score
+        );
     }
 }

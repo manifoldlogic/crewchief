@@ -5,10 +5,10 @@
 //!
 //! IDXCLEAN-1001: Foundational component for cleanup system.
 
+use crate::db::SqliteStore;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use crate::db::SqliteStore;
 use tracing::{debug, warn};
 
 /// Errors specific to cleanup operations
@@ -142,19 +142,23 @@ impl<'a> StaleWorktreeDetector<'a> {
 
     /// Query all worktrees from the database
     async fn query_all_worktrees(&self) -> Result<Vec<Worktree>> {
-        self.store.run(move |conn| {
-            let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees ORDER BY id")?;
-            let worktrees = stmt.query_map([], |row| {
-                Ok(Worktree {
-                    id: row.get(0)?,
-                    repo_id: row.get(1)?,
-                    name: row.get(2)?,
-                    abs_path: row.get(3)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-            Ok(worktrees)
-        }).await
+        self.store
+            .run(move |conn| {
+                let mut stmt =
+                    conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees ORDER BY id")?;
+                let worktrees = stmt
+                    .query_map([], |row| {
+                        Ok(Worktree {
+                            id: row.get(0)?,
+                            repo_id: row.get(1)?,
+                            name: row.get(2)?,
+                            abs_path: row.get(3)?,
+                        })
+                    })?
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(worktrees)
+            })
+            .await
     }
 
     /// Validate a single worktree and return its status
@@ -307,52 +311,54 @@ impl<'a> WorktreeCleaner<'a> {
         }
 
         let store = self.store.clone();
-        store.run(move |conn| {
-            let tx = conn.transaction()?;
+        store
+            .run(move |conn| {
+                let tx = conn.transaction()?;
 
-            let mut deleted_ids = Vec::new();
-            let mut chunks_cleaned = 0i64;
-            let mut failed_deletions = Vec::new();
+                let mut deleted_ids = Vec::new();
+                let mut chunks_cleaned = 0i64;
+                let mut failed_deletions = Vec::new();
 
-            // Process each worktree deletion within the same transaction
-            for wt in &stale {
-                match Self::delete_worktree_tx(&tx, wt.id) {
-                    Ok(cleaned) => {
-                        deleted_ids.push(wt.id);
-                        chunks_cleaned += cleaned;
-                        tracing::info!(
-                            worktree_id = wt.id,
-                            name = %wt.name,
-                            abs_path = %wt.abs_path,
-                            chunks_cleaned = cleaned,
-                            "Deleted stale worktree"
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            worktree_id = wt.id,
-                            name = %wt.name,
-                            error = %e,
-                            "Failed to delete stale worktree"
-                        );
-                        failed_deletions.push((wt.id, e.to_string()));
+                // Process each worktree deletion within the same transaction
+                for wt in &stale {
+                    match Self::delete_worktree_tx(&tx, wt.id) {
+                        Ok(cleaned) => {
+                            deleted_ids.push(wt.id);
+                            chunks_cleaned += cleaned;
+                            tracing::info!(
+                                worktree_id = wt.id,
+                                name = %wt.name,
+                                abs_path = %wt.abs_path,
+                                chunks_cleaned = cleaned,
+                                "Deleted stale worktree"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                worktree_id = wt.id,
+                                name = %wt.name,
+                                error = %e,
+                                "Failed to delete stale worktree"
+                            );
+                            failed_deletions.push((wt.id, e.to_string()));
+                        }
                     }
                 }
-            }
 
-            // Commit all deletions at once
-            tx.commit()
-                .context("Failed to commit cleanup transaction")?;
+                // Commit all deletions at once
+                tx.commit()
+                    .context("Failed to commit cleanup transaction")?;
 
-            Ok(CleanupReport {
-                total_stale: stale.len(),
-                deleted_count: deleted_ids.len(),
-                chunks_cleaned,
-                failed_count: failed_deletions.len(),
-                deleted_ids,
-                failed_deletions,
+                Ok(CleanupReport {
+                    total_stale: stale.len(),
+                    deleted_count: deleted_ids.len(),
+                    chunks_cleaned,
+                    failed_count: failed_deletions.len(),
+                    deleted_ids,
+                    failed_deletions,
+                })
             })
-        }).await
+            .await
     }
 
     /// Delete a single worktree within a transaction
@@ -370,10 +376,7 @@ impl<'a> WorktreeCleaner<'a> {
     ///
     /// # Returns
     /// Number of chunks garbage collected (had no remaining worktree associations)
-    fn delete_worktree_tx(
-        tx: &rusqlite::Transaction<'_>,
-        worktree_id: i64,
-    ) -> Result<i64> {
+    fn delete_worktree_tx(tx: &rusqlite::Transaction<'_>, worktree_id: i64) -> Result<i64> {
         use rusqlite::params;
 
         // Step 1: Remove entries from chunk_worktrees junction table
@@ -381,31 +384,34 @@ impl<'a> WorktreeCleaner<'a> {
             "DELETE FROM chunk_worktrees WHERE worktree_id = ?1",
             params![worktree_id],
         )
-        .with_context(|| format!("Failed to remove worktree {} from chunk_worktrees", worktree_id))?;
-
-        // Step 2: Garbage collection - delete chunks with no remaining worktree associations
-        // These are chunks that belonged ONLY to the deleted worktree
-        let deleted = tx.execute(
-            r#"
-            DELETE FROM chunks
-            WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)
-            "#,
-            params![],
-        )
         .with_context(|| {
             format!(
-                "Failed to garbage collect chunks for worktree {}",
+                "Failed to remove worktree {} from chunk_worktrees",
                 worktree_id
             )
         })?;
 
+        // Step 2: Garbage collection - delete chunks with no remaining worktree associations
+        // These are chunks that belonged ONLY to the deleted worktree
+        let deleted = tx
+            .execute(
+                r#"
+            DELETE FROM chunks
+            WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)
+            "#,
+                params![],
+            )
+            .with_context(|| {
+                format!(
+                    "Failed to garbage collect chunks for worktree {}",
+                    worktree_id
+                )
+            })?;
+
         // Step 3: Delete worktree record
         // This also cascades to worktree_index_state via ON DELETE CASCADE
-        tx.execute(
-            "DELETE FROM worktrees WHERE id = ?1",
-            params![worktree_id],
-        )
-        .with_context(|| format!("Failed to delete worktree record {}", worktree_id))?;
+        tx.execute("DELETE FROM worktrees WHERE id = ?1", params![worktree_id])
+            .with_context(|| format!("Failed to delete worktree record {}", worktree_id))?;
 
         Ok(deleted as i64)
     }

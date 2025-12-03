@@ -37,7 +37,9 @@ fn test_config() -> EmbeddingConfig {
 
 /// Create a test embedding service from config (helper to bridge old/new API).
 /// This just uses from_env() since tests rely on environment configuration.
-async fn test_service_from_config(_config: EmbeddingConfig) -> Result<EmbeddingService, Box<dyn std::error::Error>> {
+async fn test_service_from_config(
+    _config: EmbeddingConfig,
+) -> Result<EmbeddingService, Box<dyn std::error::Error>> {
     // For tests, we use from_env() which auto-configures the provider and cache
     Ok(EmbeddingService::from_env().await?)
 }

@@ -137,11 +137,14 @@ impl RustAssemblyStrategy {
         }
 
         // Find trait implementations (Incoming = what implements this trait/type)
-        let implementations = self.store.find_extensions(
-            chunk_id,
-            ImportDirection::Incoming,
-            Some(1), // Only direct implementations
-        ).await?;
+        let implementations = self
+            .store
+            .find_extensions(
+                chunk_id,
+                ImportDirection::Incoming,
+                Some(1), // Only direct implementations
+            )
+            .await?;
 
         let mut added_count = 0;
         for impl_result in implementations {

@@ -7,9 +7,9 @@
 //! - Relevance decay (0.7 per hop)
 //! - Multiple relationship types filtering
 
-use anyhow::Result;
-use crate::db::SqliteStore;
 use crate::db::sqlite::graph::{GraphResult, ImportDirection};
+use crate::db::SqliteStore;
+use anyhow::Result;
 
 /// Relevance decay factor per hop in graph traversal
 const RELEVANCE_DECAY: f64 = 0.7;
@@ -133,7 +133,11 @@ async fn graph_results_to_related_chunks(
     }
 
     // Sort by relevance (highest first)
-    related_chunks.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
+    related_chunks.sort_by(|a, b| {
+        b.relevance
+            .partial_cmp(&a.relevance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     Ok(related_chunks)
 }
@@ -177,7 +181,9 @@ pub async fn find_related_chunks(
         types.iter().any(|t| matches!(t, EdgeType::Calls))
     });
     let query_imports = edge_types.as_ref().map_or(true, |types| {
-        types.iter().any(|t| matches!(t, EdgeType::Imports | EdgeType::Exports))
+        types
+            .iter()
+            .any(|t| matches!(t, EdgeType::Imports | EdgeType::Exports))
     });
 
     // Query callers (who calls this chunk)
@@ -194,8 +200,12 @@ pub async fn find_related_chunks(
 
     // Query imports (incoming and outgoing)
     if query_imports {
-        let incoming_imports = store.find_imports(chunk_id, ImportDirection::Incoming, depth).await?;
-        let outgoing_imports = store.find_imports(chunk_id, ImportDirection::Outgoing, depth).await?;
+        let incoming_imports = store
+            .find_imports(chunk_id, ImportDirection::Incoming, depth)
+            .await?;
+        let outgoing_imports = store
+            .find_imports(chunk_id, ImportDirection::Outgoing, depth)
+            .await?;
         all_results.extend(incoming_imports);
         all_results.extend(outgoing_imports);
     }
@@ -244,7 +254,9 @@ pub async fn find_related_chunks_directional(
             all_results.extend(callees);
         }
         if query_imports {
-            let imports = store.find_imports(chunk_id, ImportDirection::Outgoing, depth).await?;
+            let imports = store
+                .find_imports(chunk_id, ImportDirection::Outgoing, depth)
+                .await?;
             all_results.extend(imports);
         }
     } else {
@@ -261,7 +273,9 @@ pub async fn find_related_chunks_directional(
             all_results.extend(callers);
         }
         if query_imports {
-            let imports = store.find_imports(chunk_id, ImportDirection::Incoming, depth).await?;
+            let imports = store
+                .find_imports(chunk_id, ImportDirection::Incoming, depth)
+                .await?;
             all_results.extend(imports);
         }
     }
@@ -302,27 +316,36 @@ pub async fn load_relationships_parallel(
     let (callers_result, callees_result, tests_result) = tokio::join!(
         async {
             match store.find_callers(chunk_id, depth).await {
-                Ok(results) => graph_results_to_related_chunks(store, results, None).await.unwrap_or_default(),
+                Ok(results) => graph_results_to_related_chunks(store, results, None)
+                    .await
+                    .unwrap_or_default(),
                 Err(_) => Vec::new(),
             }
         },
         async {
             match store.find_callees(chunk_id, depth).await {
-                Ok(results) => graph_results_to_related_chunks(store, results, None).await.unwrap_or_default(),
+                Ok(results) => graph_results_to_related_chunks(store, results, None)
+                    .await
+                    .unwrap_or_default(),
                 Err(_) => Vec::new(),
             }
         },
         async {
             // Find test relationships - tests that target this chunk
             // Using imports with test_of edge type filter
-            match store.find_imports(chunk_id, ImportDirection::Incoming, depth).await {
+            match store
+                .find_imports(chunk_id, ImportDirection::Incoming, depth)
+                .await
+            {
                 Ok(results) => {
                     // Filter for test_of edge type
                     let test_results: Vec<_> = results
                         .into_iter()
                         .filter(|r| r.edge_type == "test_of")
                         .collect();
-                    graph_results_to_related_chunks(store, test_results, None).await.unwrap_or_default()
+                    graph_results_to_related_chunks(store, test_results, None)
+                        .await
+                        .unwrap_or_default()
                 }
                 Err(_) => Vec::new(),
             }
@@ -406,7 +429,9 @@ mod tests {
     async fn setup_test_store() -> SqliteStore {
         let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
         let db_name = format!("file:memdb_graph_test_{}?mode=memory&cache=shared", counter);
-        let store = SqliteStore::connect(&db_name).await.expect("Failed to create test store");
+        let store = SqliteStore::connect(&db_name)
+            .await
+            .expect("Failed to create test store");
         store.migrate().await.expect("Failed to run migrations");
         store
     }
@@ -425,11 +450,15 @@ mod tests {
         let store = setup_test_store().await;
 
         // Forward direction with non-existent chunk
-        let forward = find_related_chunks_directional(&store, 99999, 3, None, true).await.unwrap();
+        let forward = find_related_chunks_directional(&store, 99999, 3, None, true)
+            .await
+            .unwrap();
         assert!(forward.is_empty());
 
         // Backward direction with non-existent chunk
-        let backward = find_related_chunks_directional(&store, 99999, 3, None, false).await.unwrap();
+        let backward = find_related_chunks_directional(&store, 99999, 3, None, false)
+            .await
+            .unwrap();
         assert!(backward.is_empty());
     }
 
@@ -449,12 +478,9 @@ mod tests {
         let store = setup_test_store().await;
 
         // Filter for only Calls edge type
-        let results = find_related_chunks(
-            &store,
-            99999,
-            3,
-            Some(vec![EdgeType::Calls]),
-        ).await.unwrap();
+        let results = find_related_chunks(&store, 99999, 3, Some(vec![EdgeType::Calls]))
+            .await
+            .unwrap();
         assert!(results.is_empty());
     }
 }

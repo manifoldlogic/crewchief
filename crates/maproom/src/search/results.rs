@@ -483,13 +483,19 @@ mod tests {
     #[test]
     fn test_search_options_deduplicate_default() {
         let options = SearchOptions::new(1, None, 10);
-        assert!(options.deduplicate, "Deduplication should be enabled by default");
+        assert!(
+            options.deduplicate,
+            "Deduplication should be enabled by default"
+        );
     }
 
     #[test]
     fn test_search_options_without_dedup() {
         let options = SearchOptions::new(1, None, 10).without_dedup();
-        assert!(!options.deduplicate, "without_dedup should disable deduplication");
+        assert!(
+            !options.deduplicate,
+            "without_dedup should disable deduplication"
+        );
     }
 
     #[test]
@@ -497,9 +503,15 @@ mod tests {
         let options = SearchOptions::new(1, None, 10)
             .without_dedup()
             .with_deduplicate(true);
-        assert!(options.deduplicate, "with_deduplicate(true) should enable deduplication");
+        assert!(
+            options.deduplicate,
+            "with_deduplicate(true) should enable deduplication"
+        );
 
         let options = SearchOptions::new(1, None, 10).with_deduplicate(false);
-        assert!(!options.deduplicate, "with_deduplicate(false) should disable deduplication");
+        assert!(
+            !options.deduplicate,
+            "with_deduplicate(false) should disable deduplication"
+        );
     }
 }

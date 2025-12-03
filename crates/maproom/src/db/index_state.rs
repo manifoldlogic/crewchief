@@ -31,8 +31,8 @@
 //! # }
 //! ```
 
-use anyhow::Result;
 use crate::db::SqliteStore;
+use anyhow::Result;
 
 /// Metrics for tracking indexing progress and costs.
 ///
@@ -79,17 +79,21 @@ pub struct UpdateStats {
 /// # }
 /// ```
 pub async fn get_last_indexed_tree(store: &SqliteStore, worktree_id: i64) -> Result<String> {
-    store.run(move |conn| {
-        use rusqlite::{params, OptionalExtension};
+    store
+        .run(move |conn| {
+            use rusqlite::{params, OptionalExtension};
 
-        let result: Option<String> = conn.query_row(
-            "SELECT last_tree_sha FROM worktree_index_state WHERE worktree_id = ?1",
-            params![worktree_id],
-            |row| row.get(0),
-        ).optional()?;
+            let result: Option<String> = conn
+                .query_row(
+                    "SELECT last_tree_sha FROM worktree_index_state WHERE worktree_id = ?1",
+                    params![worktree_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
 
-        Ok(result.unwrap_or_else(|| "init".to_string()))
-    }).await
+            Ok(result.unwrap_or_else(|| "init".to_string()))
+        })
+        .await
 }
 
 /// Updates the index state for a worktree, inserting new or updating existing records.
@@ -138,11 +142,12 @@ pub async fn update_index_state(
     let chunks_processed = stats.chunks_processed;
     let embeddings_generated = stats.embeddings_generated;
 
-    store.run(move |conn| {
-        use rusqlite::params;
+    store
+        .run(move |conn| {
+            use rusqlite::params;
 
-        conn.execute(
-            r#"
+            conn.execute(
+                r#"
             INSERT INTO worktree_index_state
               (worktree_id, last_tree_sha, last_indexed, chunks_processed, embeddings_generated)
             VALUES (?1, ?2, datetime('now'), ?3, ?4)
@@ -153,16 +158,17 @@ pub async fn update_index_state(
               chunks_processed = excluded.chunks_processed,
               embeddings_generated = excluded.embeddings_generated
             "#,
-            params![
-                worktree_id,
-                tree_sha,
-                chunks_processed,
-                embeddings_generated,
-            ],
-        )?;
+                params![
+                    worktree_id,
+                    tree_sha,
+                    chunks_processed,
+                    embeddings_generated,
+                ],
+            )?;
 
-        Ok(())
-    }).await
+            Ok(())
+        })
+        .await
 }
 
 #[cfg(test)]

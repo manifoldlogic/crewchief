@@ -19,7 +19,10 @@ static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// Uses file:memdb?mode=memory&cache=shared for proper pooled connection support
 async fn setup_test_store() -> SqliteStore {
     let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let db_name = format!("file:memdb_cleanup_cli_{}?mode=memory&cache=shared", counter);
+    let db_name = format!(
+        "file:memdb_cleanup_cli_{}?mode=memory&cache=shared",
+        counter
+    );
     let store = SqliteStore::connect(&db_name).await.unwrap();
     store.migrate().await.unwrap();
     store
@@ -34,7 +37,12 @@ async fn create_test_repo(store: &SqliteStore, name: &str) -> i64 {
 }
 
 /// Test helper: Create a test worktree
-async fn create_test_worktree(store: &SqliteStore, repo_id: i64, name: &str, abs_path: &str) -> i64 {
+async fn create_test_worktree(
+    store: &SqliteStore,
+    repo_id: i64,
+    name: &str,
+    abs_path: &str,
+) -> i64 {
     store
         .get_or_create_worktree(repo_id, name, abs_path)
         .await
@@ -42,7 +50,12 @@ async fn create_test_worktree(store: &SqliteStore, repo_id: i64, name: &str, abs
 }
 
 /// Test helper: Create a test chunk associated with a worktree
-async fn create_test_chunk(store: &SqliteStore, repo_id: i64, worktree_id: i64, relpath: &str) -> i64 {
+async fn create_test_chunk(
+    store: &SqliteStore,
+    repo_id: i64,
+    worktree_id: i64,
+    relpath: &str,
+) -> i64 {
     // Create commit
     let commit_sha = format!("commit_{}", relpath.replace('/', "_"));
     let commit_id = store
@@ -300,10 +313,20 @@ async fn test_full_cleanup_workflow() -> Result<()> {
     let valid_path = temp_dir.path().to_str().unwrap();
 
     let valid_id = create_test_worktree(&store, repo_id, "valid-main", valid_path).await;
-    let stale1_id =
-        create_test_worktree(&store, repo_id, "stale-feature1", "/tmp/nonexistent/feature1").await;
-    let stale2_id =
-        create_test_worktree(&store, repo_id, "stale-feature2", "/tmp/nonexistent/feature2").await;
+    let stale1_id = create_test_worktree(
+        &store,
+        repo_id,
+        "stale-feature1",
+        "/tmp/nonexistent/feature1",
+    )
+    .await;
+    let stale2_id = create_test_worktree(
+        &store,
+        repo_id,
+        "stale-feature2",
+        "/tmp/nonexistent/feature2",
+    )
+    .await;
 
     // Create chunks for stale worktrees
     create_test_chunk(&store, repo_id, stale1_id, "feature1.rs").await;

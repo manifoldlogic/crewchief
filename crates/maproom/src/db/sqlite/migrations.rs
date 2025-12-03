@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 
 /// Represents a database migration
 struct Migration {
@@ -26,12 +26,11 @@ impl<'a> MigrationRunner<'a> {
         // First ensure schema_migrations table exists
         self.ensure_migration_table()?;
 
-        let version: Option<i32> = self.conn
-            .query_row(
-                "SELECT MAX(version) FROM schema_migrations",
-                [],
-                |row| row.get(0)
-            )
+        let version: Option<i32> = self
+            .conn
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
             .optional()
             .context("Failed to query current schema version")?
             .flatten(); // Flatten Option<Option<i32>> to Option<i32>
@@ -70,8 +69,12 @@ impl<'a> MigrationRunner<'a> {
 
         // Apply each pending migration in a transaction
         for migration in pending {
-            self.apply_migration(migration)
-                .with_context(|| format!("Failed to apply migration {}: {}", migration.version, migration.name))?;
+            self.apply_migration(migration).with_context(|| {
+                format!(
+                    "Failed to apply migration {}: {}",
+                    migration.version, migration.name
+                )
+            })?;
         }
 
         Ok(())
@@ -79,21 +82,24 @@ impl<'a> MigrationRunner<'a> {
 
     /// Ensure the schema_migrations table exists
     fn ensure_migration_table(&mut self) -> Result<()> {
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS schema_migrations (
+        self.conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS schema_migrations (
                 version INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TEXT NOT NULL DEFAULT (datetime('now'))
             )",
-            [],
-        ).context("Failed to create schema_migrations table")?;
+                [],
+            )
+            .context("Failed to create schema_migrations table")?;
         Ok(())
     }
 
     /// Apply a single migration in a transaction
     fn apply_migration(&mut self, migration: &Migration) -> Result<()> {
         // Check if already applied (idempotency check)
-        let exists: bool = self.conn
+        let exists: bool = self
+            .conn
             .query_row(
                 "SELECT 1 FROM schema_migrations WHERE version = ?1",
                 params![migration.version],
@@ -107,18 +113,25 @@ impl<'a> MigrationRunner<'a> {
         }
 
         // Apply migration in a transaction
-        let tx = self.conn.transaction()
+        let tx = self
+            .conn
+            .transaction()
             .context("Failed to begin transaction for migration")?;
 
         // Execute the migration SQL
-        tx.execute_batch(migration.up)
-            .with_context(|| format!("Failed to execute migration SQL for version {}", migration.version))?;
+        tx.execute_batch(migration.up).with_context(|| {
+            format!(
+                "Failed to execute migration SQL for version {}",
+                migration.version
+            )
+        })?;
 
         // Record the migration
         tx.execute(
             "INSERT INTO schema_migrations (version, name) VALUES (?1, ?2)",
             params![migration.version, migration.name],
-        ).context("Failed to record migration in schema_migrations table")?;
+        )
+        .context("Failed to record migration in schema_migrations table")?;
 
         // Commit the transaction
         tx.commit()
@@ -414,7 +427,7 @@ mod tests {
         // Register extension globally for all new connections
         unsafe {
             rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
-                crate::db::sqlite::sqlite3_vec_init as *const ()
+                crate::db::sqlite::sqlite3_vec_init as *const (),
             )));
         }
 
@@ -425,7 +438,8 @@ mod tests {
             r#"
             PRAGMA foreign_keys = ON;
             "#,
-        ).expect("Failed to enable foreign keys");
+        )
+        .expect("Failed to enable foreign keys");
 
         conn
     }
@@ -474,7 +488,10 @@ mod tests {
                 |_| Ok(true),
             )
             .unwrap_or(false);
-        assert!(junction_exists, "chunk_worktrees junction table should exist");
+        assert!(
+            junction_exists,
+            "chunk_worktrees junction table should exist"
+        );
 
         // Verify code_embeddings table exists
         let embeddings_exists: bool = conn
@@ -505,11 +522,9 @@ mod tests {
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM schema_migrations",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(migration_count, 10, "Expected 10 migrations to be recorded");
     }
@@ -605,9 +620,18 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(junction_schema.contains("chunk_id"), "chunk_worktrees should have chunk_id column");
-        assert!(junction_schema.contains("worktree_id"), "chunk_worktrees should have worktree_id column");
-        assert!(junction_schema.contains("PRIMARY KEY"), "chunk_worktrees should have composite primary key");
+        assert!(
+            junction_schema.contains("chunk_id"),
+            "chunk_worktrees should have chunk_id column"
+        );
+        assert!(
+            junction_schema.contains("worktree_id"),
+            "chunk_worktrees should have worktree_id column"
+        );
+        assert!(
+            junction_schema.contains("PRIMARY KEY"),
+            "chunk_worktrees should have composite primary key"
+        );
 
         // Verify index exists on chunk_worktrees
         let index_exists: bool = conn
@@ -617,7 +641,10 @@ mod tests {
                 |_| Ok(true),
             )
             .unwrap_or(false);
-        assert!(index_exists, "Index idx_chunk_worktrees_worktree should exist");
+        assert!(
+            index_exists,
+            "Index idx_chunk_worktrees_worktree should exist"
+        );
 
         // Verify code_embeddings table has correct schema
         let embeddings_schema: String = conn
@@ -627,10 +654,22 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(embeddings_schema.contains("blob_sha"), "code_embeddings should have blob_sha column");
-        assert!(embeddings_schema.contains("UNIQUE"), "code_embeddings should have UNIQUE constraint on blob_sha");
-        assert!(embeddings_schema.contains("embedding BLOB"), "code_embeddings should have embedding BLOB column");
-        assert!(embeddings_schema.contains("embedding_dim"), "code_embeddings should have embedding_dim column");
+        assert!(
+            embeddings_schema.contains("blob_sha"),
+            "code_embeddings should have blob_sha column"
+        );
+        assert!(
+            embeddings_schema.contains("UNIQUE"),
+            "code_embeddings should have UNIQUE constraint on blob_sha"
+        );
+        assert!(
+            embeddings_schema.contains("embedding BLOB"),
+            "code_embeddings should have embedding BLOB column"
+        );
+        assert!(
+            embeddings_schema.contains("embedding_dim"),
+            "code_embeddings should have embedding_dim column"
+        );
 
         // Verify index exists on code_embeddings
         let blob_index_exists: bool = conn
@@ -660,6 +699,9 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(!chunks_schema.contains("worktree_ids"), "worktree_ids column should be dropped from chunks table");
+        assert!(
+            !chunks_schema.contains("worktree_ids"),
+            "worktree_ids column should be dropped from chunks table"
+        );
     }
 }

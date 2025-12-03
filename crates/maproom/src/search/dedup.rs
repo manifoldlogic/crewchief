@@ -217,7 +217,10 @@ mod tests {
         let config = DeduplicationConfig::default();
 
         let deduplicated = deduplicate(results, &config);
-        assert!(deduplicated.is_empty(), "Empty input should return empty output");
+        assert!(
+            deduplicated.is_empty(),
+            "Empty input should return empty output"
+        );
     }
 
     #[test]
@@ -253,8 +256,20 @@ mod tests {
     #[test]
     fn test_deduplicate_mixed() {
         let mut results = make_duplicates(3, "src/auth.rs", "validate", 10);
-        results.push(make_chunk_result(10, "src/other.rs", Some("helper"), 5, 0.6));
-        results.push(make_chunk_result(11, "src/other.rs", Some("helper"), 5, 0.5));
+        results.push(make_chunk_result(
+            10,
+            "src/other.rs",
+            Some("helper"),
+            5,
+            0.6,
+        ));
+        results.push(make_chunk_result(
+            11,
+            "src/other.rs",
+            Some("helper"),
+            5,
+            0.5,
+        ));
 
         let config = DeduplicationConfig::default();
 

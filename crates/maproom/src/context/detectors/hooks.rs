@@ -5,9 +5,9 @@
 //! - Custom hooks (use* naming convention)
 //! - Hook dependencies and relationships
 
+use crate::db::SqliteStore;
 use anyhow::Result;
 use regex::Regex;
-use crate::db::SqliteStore;
 
 /// Built-in React hooks.
 pub const BUILT_IN_HOOKS: &[&str] = &[
@@ -114,7 +114,11 @@ impl HookDetector {
     ///
     /// # Returns
     /// Vector of hook information ordered by relevance
-    pub async fn find_used_hooks(&self, store: &SqliteStore, chunk_id: i64) -> Result<Vec<HookInfo>> {
+    pub async fn find_used_hooks(
+        &self,
+        store: &SqliteStore,
+        chunk_id: i64,
+    ) -> Result<Vec<HookInfo>> {
         use crate::db::sqlite::graph::ImportDirection;
 
         let mut hooks = Vec::new();
@@ -131,7 +135,9 @@ impl HookDetector {
 
         // Find chunks that this component calls/imports
         let callees = store.find_callees(chunk_id, Some(1)).await?;
-        let imports = store.find_imports(chunk_id, ImportDirection::Outgoing, Some(1)).await?;
+        let imports = store
+            .find_imports(chunk_id, ImportDirection::Outgoing, Some(1))
+            .await?;
 
         // Combine and deduplicate chunk IDs to check
         let mut chunk_ids_to_check: Vec<i64> = callees.iter().map(|c| c.chunk_id).collect();
@@ -182,13 +188,14 @@ impl HookDetector {
     ) -> Result<Vec<HookInfo>> {
         // Use FTS search to find functions with "use" prefix
         // Search for "use" in all repos, then filter to custom hooks
-        let search_results = store.search_chunks_fts(
-            "*",  // All repos
-            None, // All worktrees initially
-            "use",
-            100,  // Get more results to filter
-            false,
-        ).await?;
+        let search_results = store
+            .search_chunks_fts(
+                "*",  // All repos
+                None, // All worktrees initially
+                "use", 100, // Get more results to filter
+                false,
+            )
+            .await?;
 
         let mut hooks = Vec::new();
 
@@ -237,13 +244,14 @@ impl HookDetector {
         }
 
         // Search for the specific hook name
-        let search_results = store.search_chunks_fts(
-            "*",  // All repos
-            None, // All worktrees
-            hook_name,
-            10,   // Just need to find one
-            false,
-        ).await?;
+        let search_results = store
+            .search_chunks_fts(
+                "*",  // All repos
+                None, // All worktrees
+                hook_name, 10, // Just need to find one
+                false,
+            )
+            .await?;
 
         // Find exact match
         for hit in search_results {
