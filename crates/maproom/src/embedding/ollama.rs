@@ -85,7 +85,7 @@ struct OllamaResponse {
 /// # Configuration
 ///
 /// - **Endpoint**: Default `http://localhost:11434/api/embed`
-/// - **Model**: Default `nomic-embed-text`
+/// - **Model**: Default `mxbai-embed-large`
 /// - **Dimension**: Configurable (768 for nomic-embed-text, 1024 for mxbai-embed-large)
 /// - **Timeout**: 60 seconds per request
 ///
@@ -252,8 +252,8 @@ impl OllamaProvider {
 
     /// Create a new OllamaProvider with default settings.
     ///
-    /// Uses default endpoint (`http://localhost:11434/api/embed`), model (`nomic-embed-text`),
-    /// and dimension (768).
+    /// Uses default endpoint (`http://localhost:11434/api/embed`), model (`mxbai-embed-large`),
+    /// and dimension (1024).
     ///
     /// # Examples
     ///
@@ -738,6 +738,8 @@ mod tests {
         let provider = provider.unwrap();
         assert_eq!(provider.endpoint, OllamaProvider::DEFAULT_ENDPOINT);
         assert_eq!(provider.model, OllamaProvider::DEFAULT_MODEL);
+        assert_eq!(provider.model, "mxbai-embed-large");
+        assert_eq!(provider.dimension(), 1024);
     }
 
     #[test]
@@ -824,8 +826,8 @@ mod tests {
         let embeddings = provider.embed_batch(texts).await.unwrap();
 
         assert_eq!(embeddings.len(), 2);
-        assert_eq!(embeddings[0].len(), 768);
-        assert_eq!(embeddings[1].len(), 768);
+        assert_eq!(embeddings[0].len(), 1024);
+        assert_eq!(embeddings[1].len(), 1024);
     }
 
     #[tokio::test]
@@ -834,7 +836,7 @@ mod tests {
         let provider = OllamaProvider::default_config().unwrap();
         let embedding = provider.embed("test".to_string()).await.unwrap();
 
-        assert_eq!(embedding.len(), 768);
+        assert_eq!(embedding.len(), 1024);
     }
 
     // Unit tests for parallel processing (EMBPERF-2001)
@@ -962,7 +964,7 @@ mod tests {
         let provider = OllamaProvider::new_with_config(
             OllamaProvider::DEFAULT_ENDPOINT.to_string(),
             OllamaProvider::DEFAULT_MODEL.to_string(),
-            768,
+            1024,
             config,
         )
         .unwrap();
@@ -976,7 +978,7 @@ mod tests {
 
         // Verify each embedding has correct dimension
         for embedding in &embeddings {
-            assert_eq!(embedding.len(), 768);
+            assert_eq!(embedding.len(), 1024);
         }
 
         // To truly verify order, we'd need to re-embed individually and compare

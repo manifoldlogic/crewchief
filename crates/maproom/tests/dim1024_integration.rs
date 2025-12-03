@@ -352,7 +352,9 @@ async fn test_mixed_dimensions_coexist() {
     );
 
     // Search with 1024-dim query (should only match 1024-dim embeddings)
-    let query_1024: Vec<f32> = (0..1024).map(|i| (((i + 3) % 100) as f32) / 100.0).collect();
+    let query_1024: Vec<f32> = (0..1024)
+        .map(|i| (((i + 3) % 100) as f32) / 100.0)
+        .collect();
 
     let hybrid_result = store
         .search_hybrid(

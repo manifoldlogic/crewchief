@@ -1121,4 +1121,19 @@ mod tests {
         let err_msg = invalid_provider_error.to_string();
         assert!(err_msg.contains("MAPROOM_EMBEDDING_PROVIDER"));
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_backward_compat_nomic_embed_text() {
+        // Verify that explicit nomic-embed-text configuration still works after default change
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
+        env::set_var("MAPROOM_EMBEDDING_DIMENSION", "768");
+
+        let provider = create_provider_from_env().await.unwrap();
+        assert_eq!(provider.provider_name(), "ollama");
+        assert_eq!(provider.dimension(), 768);
+
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+    }
 }

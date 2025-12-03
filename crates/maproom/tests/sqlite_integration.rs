@@ -204,8 +204,13 @@ mod integration_tests {
         );
         store.insert_chunk(&chunk_main).await.unwrap();
 
-        let file_feature =
-            create_file_record(repo_id, wt_feature, commit_id, "src/utils.rs", "hash_feature");
+        let file_feature = create_file_record(
+            repo_id,
+            wt_feature,
+            commit_id,
+            "src/utils.rs",
+            "hash_feature",
+        );
         let file_id_feature = store.upsert_file(&file_feature).await.unwrap();
 
         let chunk_feature = create_chunk_record(
@@ -289,7 +294,13 @@ mod integration_tests {
 
         // Search in branch-a should find it
         let results_a = store
-            .search_chunks_fts("isolation-test", Some("branch-a"), "unique_function", 10, false)
+            .search_chunks_fts(
+                "isolation-test",
+                Some("branch-a"),
+                "unique_function",
+                10,
+                false,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -300,7 +311,13 @@ mod integration_tests {
 
         // Search in branch-b should NOT find it
         let results_b = store
-            .search_chunks_fts("isolation-test", Some("branch-b"), "unique_function", 10, false)
+            .search_chunks_fts(
+                "isolation-test",
+                Some("branch-b"),
+                "unique_function",
+                10,
+                false,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -376,7 +393,11 @@ mod integration_tests {
             .search_chunks_fts("dedup-test", None, "helper", 10, false)
             .await
             .unwrap();
-        assert_eq!(results.len(), 2, "Should find both chunks with same content");
+        assert_eq!(
+            results.len(),
+            2,
+            "Should find both chunks with same content"
+        );
     }
 
     #[tokio::test]
@@ -564,10 +585,7 @@ mod integration_tests {
         store.migrate().await.unwrap();
 
         // WAL mode should be enabled - check by verifying WAL file exists after writes
-        let _repo_id = store
-            .get_or_create_repo("wal-test", "/test")
-            .await
-            .unwrap();
+        let _repo_id = store.get_or_create_repo("wal-test", "/test").await.unwrap();
 
         let _wal_path = temp_dir.path().join("wal_test.db-wal");
         // WAL file may or may not exist depending on checkpoint status
@@ -641,8 +659,13 @@ mod integration_tests {
             .await
             .unwrap();
 
-        let file =
-            create_file_record(repo_id, worktree_id, commit_id, "searchable.rs", "hash_search");
+        let file = create_file_record(
+            repo_id,
+            worktree_id,
+            commit_id,
+            "searchable.rs",
+            "hash_search",
+        );
         let file_id = store.upsert_file(&file).await.unwrap();
 
         // Insert 50 chunks
@@ -782,7 +805,10 @@ mod integration_tests {
 
         // Either empty results or error is acceptable for nonexistent repo
         match result {
-            Ok(results) => assert!(results.is_empty(), "Should return empty for nonexistent repo"),
+            Ok(results) => assert!(
+                results.is_empty(),
+                "Should return empty for nonexistent repo"
+            ),
             Err(_) => {} // Error is acceptable for nonexistent repo
         }
     }
