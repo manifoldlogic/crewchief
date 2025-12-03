@@ -5,7 +5,11 @@
       "args": [
         "-y",
         "@crewchief/maproom-mcp@latest"
-      ]
+      ],
+      "env": {
+        "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/maproom.db",
+        "MAPROOM_EMBEDDING_PROVIDER": "ollama"
+      }
     },
     "exa": {
       "type": "http",
