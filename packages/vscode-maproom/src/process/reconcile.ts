@@ -240,7 +240,15 @@ interface UpsertConfig {
 }
 
 /**
+ * Maximum number of files to process in a single upsert batch.
+ * This prevents E2BIG errors from exceeding command line argument limits.
+ */
+const UPSERT_BATCH_SIZE = 100
+
+/**
  * Run the upsert CLI command to index changed files
+ *
+ * Batches files to avoid E2BIG errors when there are many changed files.
  *
  * @param files - Array of file paths to index
  * @param config - Upsert configuration
@@ -251,6 +259,21 @@ async function runUpsert(files: string[], config: UpsertConfig): Promise<void> {
   const binaryName = `crewchief-maproom${getBinaryExtension()}`
   const binaryPath = path.join(config.extensionRoot, 'bin', platform, binaryName)
 
+  // Process files in batches to avoid E2BIG errors
+  for (let i = 0; i < files.length; i += UPSERT_BATCH_SIZE) {
+    const batch = files.slice(i, i + UPSERT_BATCH_SIZE)
+    await runUpsertBatch(binaryPath, batch, config)
+  }
+}
+
+/**
+ * Run a single batch of files through upsert
+ */
+async function runUpsertBatch(
+  binaryPath: string,
+  files: string[],
+  config: UpsertConfig
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(
       binaryPath,
