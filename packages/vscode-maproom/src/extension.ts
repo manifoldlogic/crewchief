@@ -295,10 +295,14 @@ async function initializeServices(
       }
     }
 
+    // Track whether we just ran a scan (skip reconciliation if so)
+    let justRanScan = false
+
     if (!dbAvailable) {
       // Database not found - run initial scan to create it (zero-config experience)
       try {
         await runScan('Database not found')
+        justRanScan = true
       } catch {
         return
       }
@@ -319,6 +323,7 @@ async function initializeServices(
         // Database exists but this workspace/repo is not indexed
         try {
           await runScan(`Repo "${repoName}" not indexed`)
+          justRanScan = true
         } catch {
           return
         }
@@ -327,27 +332,31 @@ async function initializeServices(
       }
     }
 
-    // Step 3: Run startup reconciliation
-    statusBar?.setState('reconciling')
-    outputChannel?.appendLine('Running startup reconciliation...')
-
-    const reconcileResult = await reconcileChanges(context, {
-      extensionRoot: context.extensionPath,
-      databaseUrl: getDatabaseUrl(dbConfig),
-      onProgress: (msg) => {
-        outputChannel?.appendLine(`Reconcile: ${msg}`)
-        statusBar?.setState('reconciling', msg)
-      },
-    })
-
-    if (reconcileResult.performed) {
-      outputChannel?.appendLine(
-        `Reconciliation complete: ${reconcileResult.filesReconciled} files indexed`
-      )
-    } else if (reconcileResult.error) {
-      outputChannel?.appendLine(`Reconciliation skipped: ${reconcileResult.error}`)
+    // Step 3: Run startup reconciliation (skip if we just ran a scan)
+    if (justRanScan) {
+      outputChannel?.appendLine('Skipping reconciliation: initial scan just completed')
     } else {
-      outputChannel?.appendLine('Reconciliation skipped: no changes since last run')
+      statusBar?.setState('reconciling')
+      outputChannel?.appendLine('Running startup reconciliation...')
+
+      const reconcileResult = await reconcileChanges(context, {
+        extensionRoot: context.extensionPath,
+        databaseUrl: getDatabaseUrl(dbConfig),
+        onProgress: (msg) => {
+          outputChannel?.appendLine(`Reconcile: ${msg}`)
+          statusBar?.setState('reconciling', msg)
+        },
+      })
+
+      if (reconcileResult.performed) {
+        outputChannel?.appendLine(
+          `Reconciliation complete: ${reconcileResult.filesReconciled} files indexed`
+        )
+      } else if (reconcileResult.error) {
+        outputChannel?.appendLine(`Reconciliation skipped: ${reconcileResult.error}`)
+      } else {
+        outputChannel?.appendLine('Reconciliation skipped: no changes since last run')
+      }
     }
 
     // Step 4: Create and start process orchestrator
