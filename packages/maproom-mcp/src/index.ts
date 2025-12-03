@@ -779,33 +779,54 @@ export async function handleSearch(params: any): Promise<any> {
     debug = false
   } = params
 
+  // For FTS/vector modes using daemon, check if we're in SQLite mode
+  // and skip PostgreSQL connection entirely
+  const dbConfig = resolveDatabaseConfig()
+
+  // Use new Rust-based search tool for FTS mode (daemon-based, no PostgreSQL needed)
+  if (mode === 'fts' || mode === 'vector') {
+    const { handleSearchTool } = await import('./tools/search.js')
+    // Pass null for client - daemon handles database connection
+    const result = await handleSearchTool(
+      { query, repo, worktree, limit: k, mode, debug },
+      null as any // Client not used by daemon-based search
+    )
+    // Transform SearchBundle to old format for backward compatibility
+    return {
+      hits: result.hits,
+      error: result.error,
+      hint: result.hint,
+      suggestion: result.suggestion,
+    }
+  }
+
+  // Hybrid mode still uses PostgreSQL (legacy path)
+  if (dbConfig.type === 'sqlite') {
+    // SQLite doesn't support hybrid mode yet - fall back to FTS via daemon
+    log.warn('Hybrid mode not supported in SQLite mode, falling back to FTS')
+    const { handleSearchTool } = await import('./tools/search.js')
+    const result = await handleSearchTool(
+      { query, repo, worktree, limit: k, mode: 'fts', debug },
+      null as any
+    )
+    return {
+      hits: result.hits,
+      error: result.error,
+      hint: result.hint,
+      suggestion: result.suggestion,
+    }
+  }
+
+  // Legacy PostgreSQL path for hybrid mode only
   const client = await getPg()
   try {
-    // Use new Rust-based search tool for FTS mode
-    if (mode === 'fts') {
-      const { handleSearchTool } = await import('./tools/search.js')
-      const result = await handleSearchTool(
-        { query, repo, worktree, limit: k, mode, debug },
-        client
-      )
-      // Transform SearchBundle to old format for backward compatibility
-      return {
-        hits: result.hits,
-        error: result.error,
-        hint: result.hint,
-        suggestion: result.suggestion,
-      }
-    }
-
-    // Fall back to TypeScript SQL implementation for vector/hybrid modes
-    // TODO: These modes will be migrated to Rust in Phase 2
-    // Validate mode parameter
-    if (!['fts', 'vector', 'hybrid'].includes(mode)) {
+    // At this point, mode must be 'hybrid' (fts/vector handled above)
+    if (mode !== 'hybrid') {
       return {
         hits: [],
         error: 'Invalid search mode',
-        hint: `Mode must be one of: "fts", "vector", "hybrid". Got: "${mode}"\n\nMode selection guide:\n- "fts": Full-text search for exact keywords\n- "vector": Semantic similarity search\n- "hybrid": Combined approach (recommended)`,
-        suggestion: 'Use mode:"hybrid" for best results'
+        hint: `Mode must be one of: "fts", "vector", "hybrid". Got: "${mode}"`,
+        suggestion: 'Use mode:"fts" for keyword search or mode:"vector" for semantic search'
       }
     }
 
@@ -1070,6 +1091,60 @@ export async function handleSearch(params: any): Promise<any> {
 }
 
 async function handleOpen(params: any): Promise<any> {
+  // Check database type
+  const dbConfig = resolveDatabaseConfig()
+  if (dbConfig.type === 'sqlite') {
+    // SQLite mode: read file directly from filesystem
+    // In SQLite mode, we don't have worktree abs_path mappings in the database,
+    // so we read from the current working directory or use relpath as-is
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+
+    try {
+      const { relpath, range } = params
+
+      // Try to read from current working directory
+      const cwd = process.cwd()
+      const fullPath = path.resolve(cwd, relpath)
+
+      // Security: ensure path is within cwd
+      if (!fullPath.startsWith(cwd)) {
+        return {
+          error: 'INVALID_PATH',
+          message: 'Path traversal not allowed',
+        }
+      }
+
+      let content = await fs.readFile(fullPath, 'utf8')
+
+      // Apply line range if specified
+      if (range && range.start && range.end) {
+        const lines = content.split('\n')
+        const startIdx = Math.max(0, range.start - 1)
+        const endIdx = Math.min(lines.length, range.end)
+        content = lines.slice(startIdx, endIdx).join('\n')
+      }
+
+      return {
+        content,
+        relpath,
+        ...(range && { range }),
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return {
+          error: 'FILE_NOT_FOUND',
+          message: `File not found: ${params.relpath}`,
+        }
+      }
+      return {
+        error: 'OPEN_FAILED',
+        message: error.message || 'Failed to open file',
+      }
+    }
+  }
+
+  // PostgreSQL mode (legacy)
   const client = await getPg()
   try {
     const { handleOpenTool } = await import('./tools/open.js')
@@ -1218,6 +1293,19 @@ async function handleExplain(params: any): Promise<any> {
   // Check if explain tool is enabled via environment variable
   const explainEnabled = process.env.MAPROOM_EXPLAIN_ENABLED === 'true'
 
+  // Check database type
+  const dbConfig = resolveDatabaseConfig()
+  if (dbConfig.type === 'sqlite') {
+    // Explain tool is not yet supported in SQLite mode
+    // It requires complex queries that haven't been ported to the daemon
+    return {
+      error: 'NOT_SUPPORTED',
+      message: 'Explain tool is not yet supported in SQLite mode. Use the context tool instead for related code.',
+      hint: 'The explain tool requires PostgreSQL. Use context tool with chunk_id for similar functionality.',
+    }
+  }
+
+  // PostgreSQL mode
   const client = await getPg()
   try {
     const { handleExplainTool } = await import('./tools/explain.js')

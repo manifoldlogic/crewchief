@@ -34,10 +34,14 @@ else
     iptables -A OUTPUT -d "$HOST_GATEWAY" -p udp --dport 53 -j ACCEPT
     iptables -A OUTPUT -d "$HOST_GATEWAY" -p tcp --dport 53 -j ACCEPT
     
-    # Block all other traffic to the host
+    # Block all other traffic to the host gateway
     iptables -A OUTPUT -d "$HOST_GATEWAY" -j REJECT --reject-with icmp-host-prohibited
-    
-    # Also block common host-local addresses
+
+    # Allow Docker Desktop's host.docker.internal (192.168.65.0/24) for Ollama and other host services
+    # This is Docker Desktop's internal network for container-to-host communication on macOS/Windows
+    iptables -A OUTPUT -d 192.168.65.0/24 -j ACCEPT
+
+    # Block other common host-local addresses
     iptables -A OUTPUT -d 192.168.0.0/16 -j REJECT --reject-with icmp-host-prohibited
     iptables -A OUTPUT -d 10.0.0.0/8 -j REJECT --reject-with icmp-host-prohibited
     
