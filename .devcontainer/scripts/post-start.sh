@@ -38,14 +38,6 @@ if [ -d "/home/vscode/.config/gh" ]; then
     sudo chown -R vscode:vscode /home/vscode/.config/gh 2>/dev/null || true
 fi
 
-# Ensure maproom-postgres is ready (optional - may not be running)
-# This is external to devcontainer, so we don't block if it's not available
-if pg_isready -h maproom-postgres -p 5432 -U maproom -d maproom 2>/dev/null; then
-    echo "✓ maproom-postgres is available"
-else
-    echo "⚠️  maproom-postgres not available (start with: cd packages/maproom-mcp && docker compose up -d)"
-fi
-
 # Update dependencies if package.json has changed
 if [ -f /workspace/.devcontainer/.last-package-json-hash ]; then
     CURRENT_HASH=$(sha256sum package.json | cut -d' ' -f1)

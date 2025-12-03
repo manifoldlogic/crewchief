@@ -28,24 +28,9 @@ echo ""
 echo -e "${YELLOW}Current Directory:${NC} $(pwd)"
 echo ""
 
-# Show service status
-echo -e "${YELLOW}Service Status:${NC}"
-if pg_isready -h postgres -p 5432 -U postgres &>/dev/null; then
-    echo -e "  PostgreSQL: ${GREEN}✓ Running${NC}"
-else
-    echo -e "  PostgreSQL: ❌ Not running"
-fi
-
-if [ -f "/usr/local/bin/crewchief-maproom" ]; then
-    echo -e "  Maproom:    ${GREEN}✓ Installed${NC}"
-else
-    echo -e "  Maproom:    ⚠️  Not installed"
-fi
-
-echo ""
 echo -e "${YELLOW}Quick Commands:${NC}"
 echo "  ${GREEN}ccdev${NC}      - Run CrewChief CLI in dev mode"
-echo "  ${GREEN}maproom${NC}    - Run Maproom commands"
+echo "  ${GREEN}crewchief${NC}  - Run CrewChief CLI (globally installed)"
 echo "  ${GREEN}claude${NC}     - Run Claude Code in dangerous mode"
 echo "  ${GREEN}pnpm test${NC}  - Run tests"
 echo ""

@@ -33,25 +33,14 @@ Working with the development container at `/.devcontainer`.
 
 - **Languages**: Node.js 20, Rust, Python, Go
 - **Features**: Git, GitHub CLI, Docker-in-Docker
-- **Database**: PostgreSQL via maproom-mcp network
+- **Database**: SQLite (default at `~/.maproom/maproom.db`)
 - **Tools**: bash, tmux, ripgrep, fd
-
-## Database Access
-
-Database runs via `.devcontainer/docker-compose.yml` (devcontainer) or `packages/vscode-maproom/config/docker-compose.yml` (extension).
-
-Connection from devcontainer:
-- **Host**: `maproom-postgres` (via network) or `localhost:5432`
-- **Database**: `maproom`
-- **User/Password**: `maproom/maproom`
-- **Connection**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
 
 ## Lifecycle Scripts
 
 - **post-create.sh** - Runs once on first build
   - Install pnpm, dependencies
-  - Build TypeScript and Rust
-  - Copy binaries
+  - Install CrewChief CLI globally
 - **post-start.sh** - Runs on container start
 - **post-attach.sh** - Runs when editor attaches
 
@@ -70,7 +59,6 @@ docker compose -f .devcontainer/docker-compose.yml up --build
 
 ```bash
 NODE_ENV=development
-MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
 CLAUDE_DANGEROUS_MODE=true
 ```
 
@@ -80,6 +68,5 @@ See `docker-compose.yml` for full list.
 
 See `TROUBLESHOOTING.md` for:
 - Build failures
-- Database connection issues
 - Port conflicts
 - Volume permissions

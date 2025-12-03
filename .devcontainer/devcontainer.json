@@ -96,15 +96,7 @@
   },
 
   // Port forwarding
-  "forwardPorts": [
-    5432     // PostgreSQL
-  ],
-  "portsAttributes": {
-    "5432": {
-      "label": "PostgreSQL",
-      "onAutoForward": "silent"
-    }
-  },
+  "forwardPorts": [],
 
   // Environment variables 
   // localEnv values copied from host environment

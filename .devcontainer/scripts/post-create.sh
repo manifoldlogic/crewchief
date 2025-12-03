@@ -71,14 +71,6 @@ print_step "Installing Node.js dependencies..."
 pnpm install
 print_success "Node.js dependencies installed"
 
-# Initialize database
-print_step "Waiting for PostgreSQL to be ready..."
-until pg_isready -h postgres -p 5432 -U postgres; do
-    echo "Waiting for PostgreSQL..."
-    sleep 2
-done
-print_success "PostgreSQL is ready"
-
 # Fix ownership of volume-mounted directories (Docker creates them as root)
 print_step "Fixing volume permissions..."
 sudo chown -R vscode:vscode /home/vscode/.config/gh 2>/dev/null || true
@@ -122,8 +114,6 @@ if [ ! -f .env ]; then
     cp .env.example .env 2>/dev/null || cat > .env << EOF
 # CrewChief Environment Variables
 NODE_ENV=development
-PG_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom
 EOF
     print_success ".env file created"
 fi
@@ -195,10 +185,6 @@ echo "Quick start commands:"
 echo "  claude     - Run Claude Code in dangerous mode"
 echo "  crewchief  - Run the CrewChief CLI (globally installed)"
 echo "  ccdev      - Run the CrewChief CLI in development mode"
-echo "  maproom    - Run Maproom commands"
-echo ""
-echo "Services available:"
-echo "  PostgreSQL: postgres:5432"
 echo ""
 echo "⚠️  Claude Code dangerous mode is ENABLED"
 echo "   - Network access is restricted via iptables"

@@ -24,7 +24,6 @@ services:
     working_dir: /workspace
     environment:
       - NODE_ENV=development
-      # - MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
       # Claude Code environment
       - CLAUDE_CONFIG_DIR=/home/vscode/.claude
       - CLAUDE_DANGEROUS_MODE=true
@@ -32,22 +31,13 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      # - MAPROOM_EMBEDDING_PROVIDER=${MAPROOM_EMBEDDING_PROVIDER:-}
-      # TEMPORARY UNTIL WE INCLUDE IT AUTOMATICALLY IN THE CLI
-      # - CREWCHIEF_MAPROOM_BIN=/workspace/packages/cli/bin/crewchief-maproom
-      # Docker-in-Docker workspace path (needed for maproom-mcp container volume mount)
-      - WORKSPACE_HOST_PATH=${WORKSPACE_HOST_PATH:-}
     command: sleep infinity
     networks:
       - crewchief-network
-      - maproom-network
 
 networks:
   crewchief-network:
     driver: bridge
-  maproom-network:
-    external: true
-    name: maproom-mcp_maproom-network
 
 volumes:
   crewchief-cargo-cache:

@@ -27,7 +27,6 @@ case $- in
     # Helpful aliases for the CrewChief project.
     alias cc='node /workspace/packages/cli/dist/cli/index.js'
     alias ccdev='tsx /workspace/packages/cli/src/cli/index.ts'
-    alias maproom='crewchief-maproom'
     alias ll='ls -la'
     alias gs='git status'
     alias gd='git diff'
