@@ -31,6 +31,14 @@ impl ColumnSet {
         text_embedding: "text_embedding_ollama",
     };
 
+    /// Column set for 1024-dimensional embeddings (mxbai-embed-large).
+    ///
+    /// These use dedicated `*_mxbai` columns for the 1024-dimensional mxbai-embed-large model.
+    pub const MXBAI: Self = Self {
+        code_embedding: "code_embedding_mxbai",
+        text_embedding: "text_embedding_mxbai",
+    };
+
     /// Column set for 1536-dimensional embeddings (OpenAI).
     ///
     /// These are the original embedding columns, maintained for backward compatibility
@@ -60,6 +68,8 @@ impl ColumnSet {
 ///
 /// - `768` - Maps to `code_embedding_ollama` and `text_embedding_ollama`
 ///   - Used by: Ollama providers (e.g., nomic-embed-text), Google Gemini
+/// - `1024` - Maps to `code_embedding_mxbai` and `text_embedding_mxbai`
+///   - Used by: mxbai-embed-large
 /// - `1536` - Maps to `code_embedding` and `text_embedding`
 ///   - Used by: OpenAI text-embedding-3-small, text-embedding-ada-002
 ///
@@ -78,6 +88,11 @@ impl ColumnSet {
 /// assert_eq!(cols.code_embedding, "code_embedding_ollama");
 /// assert_eq!(cols.text_embedding, "text_embedding_ollama");
 ///
+/// // Select columns for mxbai embeddings
+/// let cols = select_columns_for_dimension(1024)?;
+/// assert_eq!(cols.code_embedding, "code_embedding_mxbai");
+/// assert_eq!(cols.text_embedding, "text_embedding_mxbai");
+///
 /// // Select columns for OpenAI embeddings
 /// let cols = select_columns_for_dimension(1536)?;
 /// assert_eq!(cols.code_embedding, "code_embedding");
@@ -91,9 +106,10 @@ impl ColumnSet {
 pub fn select_columns_for_dimension(dimension: usize) -> anyhow::Result<ColumnSet> {
     match dimension {
         768 => Ok(ColumnSet::OLLAMA),
+        1024 => Ok(ColumnSet::MXBAI),
         1536 => Ok(ColumnSet::OPENAI),
         _ => Err(anyhow::anyhow!(
-            "Unsupported embedding dimension: {}. Supported dimensions: 768 (Ollama/Google), 1536 (OpenAI)",
+            "Unsupported embedding dimension: {}. Supported dimensions: 768 (Ollama/Google), 1024 (mxbai-embed-large), 1536 (OpenAI)",
             dimension
         )),
     }
@@ -120,6 +136,14 @@ mod tests {
     }
 
     #[test]
+    fn test_1024_dimension_selects_mxbai_columns() {
+        let cols = select_columns_for_dimension(1024).unwrap();
+        assert_eq!(cols, ColumnSet::MXBAI);
+        assert_eq!(cols.code_embedding, "code_embedding_mxbai");
+        assert_eq!(cols.text_embedding, "text_embedding_mxbai");
+    }
+
+    #[test]
     fn test_unsupported_dimension_returns_error() {
         let result = select_columns_for_dimension(384);
         assert!(result.is_err());
@@ -127,6 +151,7 @@ mod tests {
         assert!(err_msg.contains("Unsupported"));
         assert!(err_msg.contains("384"));
         assert!(err_msg.contains("768"));
+        assert!(err_msg.contains("1024"));
         assert!(err_msg.contains("1536"));
     }
 
@@ -145,13 +170,15 @@ mod tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("3072"));
-        assert!(msg.contains("768") && msg.contains("1536"));
+        assert!(msg.contains("768") && msg.contains("1024") && msg.contains("1536"));
     }
 
     #[test]
     fn test_column_set_constants() {
         assert_eq!(ColumnSet::OLLAMA.code_embedding, "code_embedding_ollama");
         assert_eq!(ColumnSet::OLLAMA.text_embedding, "text_embedding_ollama");
+        assert_eq!(ColumnSet::MXBAI.code_embedding, "code_embedding_mxbai");
+        assert_eq!(ColumnSet::MXBAI.text_embedding, "text_embedding_mxbai");
         assert_eq!(ColumnSet::OPENAI.code_embedding, "code_embedding");
         assert_eq!(ColumnSet::OPENAI.text_embedding, "text_embedding");
     }
@@ -177,11 +204,12 @@ mod tests {
 
         // Error message should list supported dimensions
         assert!(err_msg.contains("768"));
+        assert!(err_msg.contains("1024"));
         assert!(err_msg.contains("1536"));
 
         // Error message should mention providers
         assert!(
-            err_msg.contains("Ollama") || err_msg.contains("Google") || err_msg.contains("OpenAI")
+            err_msg.contains("Ollama") || err_msg.contains("Google") || err_msg.contains("OpenAI") || err_msg.contains("mxbai")
         );
     }
 }

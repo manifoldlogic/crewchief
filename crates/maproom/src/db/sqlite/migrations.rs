@@ -387,6 +387,21 @@ DROP INDEX IF EXISTS idx_context_cache_expires;
 DROP TABLE IF EXISTS context_cache;
                 "#,
             },
+            Migration {
+                version: 10,
+                name: "add_vec_code_1024",
+                up: r#"
+-- Create vector index table for 1024-dimensional embeddings
+-- Supports mxbai-embed-large (1024-dim) alongside existing 768-dim and 1536-dim
+CREATE VIRTUAL TABLE vec_code_1024 USING vec0(
+    embedding float[1024]
+);
+                "#,
+                down: r#"
+-- Rollback: drop the 1024-dim virtual table
+DROP TABLE IF EXISTS vec_code_1024;
+                "#,
+            },
         ]
     }
 }
@@ -427,8 +442,8 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version (9)
-        assert_eq!(runner.current_version().unwrap(), 9);
+        // Should now be at latest version (10)
+        assert_eq!(runner.current_version().unwrap(), 10);
         assert!(!runner.needs_migration().unwrap());
 
         // Verify core tables exist (excluding virtual tables and dropped tables)
@@ -486,7 +501,7 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 9);
+        assert_eq!(version_after_second, 10);
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
@@ -496,7 +511,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(migration_count, 9, "Expected 9 migrations to be recorded");
+        assert_eq!(migration_count, 10, "Expected 10 migrations to be recorded");
     }
 
     #[test]

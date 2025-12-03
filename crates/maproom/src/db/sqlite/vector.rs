@@ -3,12 +3,13 @@ use rusqlite::{Connection, params};
 use super::embeddings::vec_to_blob;
 
 /// Supported embedding dimensions
-const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1536];
+const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1024, 1536];
 
 /// Get the appropriate vec table name for a given dimension
 fn get_vec_table_name(dimension: usize) -> Result<&'static str> {
     match dimension {
         768 => Ok("vec_code_768"),
+        1024 => Ok("vec_code_1024"),
         1536 => Ok("vec_code"),
         _ => bail!(
             "Unsupported embedding dimension: {}. Supported dimensions: {:?}",
