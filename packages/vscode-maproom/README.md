@@ -1,298 +1,162 @@
 # Maproom Semantic Search
 
-> Semantic code search powered by Maproom - index and search your codebase by meaning, not just text.
+Search your code by meaning, not just text. Find functions by what they do, not what they're called.
 
-Maproom brings AI-powered semantic search to Visual Studio Code. Index your workspace once, then search by concept instead of keywords. Find code by what it does, not just what it's called.
+## Before You Install
+
+**Start Ollama first** for the smoothest experience:
+
+```bash
+# Install Ollama from https://ollama.ai/download, then:
+ollama pull mxbai-embed-large
+ollama serve
+```
+
+This downloads the embedding model (~670MB) upfront so the extension activates quickly.
 
 ## Quick Start
 
-Get started in minutes with zero configuration:
+1. **Ensure Ollama is running** (see above)
+2. **Install the extension** from marketplace
+3. **Open a git repository** in VSCode
+4. **Wait for indexing** - watch the status bar for progress
 
-1. **Install the extension** from marketplace
-2. **Create an index** using the CLI:
-   ```bash
-   crewchief-maproom scan /path/to/your/repo
-   ```
-3. **Search!** Use "Maproom: Search" command (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+The extension auto-indexes your workspace and starts watching for changes. No manual CLI commands needed.
 
-That's it! The extension auto-detects `~/.maproom/maproom.db` - no Docker required.
+## What Happens on First Run
 
-## Features
+1. Extension detects Ollama on `localhost:11434`
+2. Creates database at `~/.maproom/maproom.db`
+3. Scans and indexes your codebase (progress shown in status bar)
+4. Starts watching for file changes
 
-- **Semantic Search** - Find code by meaning using AI embeddings, not just text matching
-- **Zero-Config SQLite** - Works immediately with existing `~/.maproom/maproom.db`
-- **Real-Time Indexing** - File watching keeps your index fresh as you code
-- **Provider Choice** - Use Ollama (local, free), OpenAI, or Google Gemini for embeddings
-- **Crash Recovery** - Automatic restart with exponential backoff if processes crash
-- **Secure Credentials** - API keys stored safely in VSCode SecretStorage
-- **Status Tracking** - Real-time status bar showing indexed files and database status
-
-## System Requirements
-
-| Requirement | Minimum | Recommended |
-|------------|---------|-------------|
-| VSCode | 1.85.0+ | Latest stable |
-| RAM | 2GB | 4GB |
-| Free Disk Space | 500MB | 2GB |
-
-**No Docker required!** Just install the extension and create an index.
+**Large codebases**: Initial scan can take several minutes for repositories with thousands of files. Subsequent updates are incremental and fast.
 
 ## Platform Support
 
-| Platform | Architecture | Status | Notes |
-|----------|--------------|--------|-------|
-| Linux | x64 | Supported | Full support |
-| Linux | arm64 | Supported | Full support |
-| macOS | arm64 (M1+) | Supported | Full support |
-| macOS | x64 (Intel) | Supported | Full support |
-| Windows | x64 | Experimental | File watching may be slower |
+| Platform | Status |
+|----------|--------|
+| macOS (Apple Silicon) | Full support |
+| macOS (Intel) | Full support |
+| Linux (x64) | Full support |
+| Linux (arm64) | Full support |
+| Windows (x64) | Limited support |
 
-**Windows users**: Experimental support. Please report any issues you encounter.
+**Windows users**: Experimental support only. Process shutdown and file watching may not work reliably. Please report issues you encounter.
 
-## Installation
+## DevContainer / Remote Development
 
-### From VSIX
+The extension auto-detects Ollama on `host.docker.internal:11434` for Docker Desktop users (Mac/Windows).
 
-1. Download the latest `.vsix` file from releases
-2. Open VSCode
-3. Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
-4. Run: `Extensions: Install from VSIX...`
-5. Select the downloaded file
-6. Reload VSCode when prompted
+**Linux Docker users**: You'll need to configure the endpoint manually:
 
-**Or via command line**:
-```bash
-code --install-extension vscode-maproom-0.3.3.vsix
-```
-
-### From Source (Development)
-
-```bash
-git clone https://github.com/danielbushman/crewchief.git
-cd crewchief/packages/vscode-maproom
-pnpm install
-pnpm compile
-code --extensionDevelopmentPath=$(pwd)
-```
-
-## Settings Reference
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `maproom.database.sqlitePath` | Custom SQLite path (empty = `~/.maproom/maproom.db`) | `""` |
-
-## Commands
-
-Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and run:
-
-| Command | Description | When to Use |
-|---------|-------------|-------------|
-| `Maproom: Setup` | Re-run setup wizard | Change embedding provider or update API key |
-| `Maproom: Show Output` | Open Maproom output channel | View detailed logs, debug issues |
-| `Maproom: Restart Watchers` | Restart file watching processes | If file watching stops or seems stuck |
-| `Maproom: Show Status` | Show current Maproom status | Check database status and connection |
-
-## Status Bar
-
-The Maproom status bar item shows current state:
-
-- **Starting...** - Services initializing
-- **Indexing: 1,234 files** - Scan in progress
-- **Watching: 5,678 files** - Active and ready
-- **Error** - Click to view details in output channel
-
-The tooltip shows additional information:
-- Database path
-- Last indexed timestamp
+1. Open Settings (`Cmd+,` / `Ctrl+,`)
+2. Search for "maproom ollama"
+3. Set `maproom.ollama.endpoint` to your host's IP (e.g., `http://172.17.0.1:11434`)
 
 ## Embedding Providers
 
-### Ollama (Recommended for Privacy)
+### Ollama (Default)
 
-**Pros**: Free, private, runs locally, no API keys
-**Cons**: Requires 4GB RAM, slower on first run (model download)
+Free, private, runs locally. Recommended for most users.
 
-**Setup**:
-1. Install Ollama: https://ollama.ai/download
-2. Run: `ollama pull mxbai-embed-large`
-3. Keep Ollama running while using the extension
-
-The setup wizard auto-detects if Ollama is running on port 11434.
+**Requirements**:
+- Ollama installed and running
+- ~4GB RAM for embedding model
+- ~670MB disk space for `mxbai-embed-large` model
 
 ### OpenAI
 
-**Pros**: Fast, accurate, reliable
-**Cons**: Requires API key, costs money per request
+Fast cloud-based embeddings. Requires API key and costs per request.
 
-**Setup**:
-1. Get API key: https://platform.openai.com/api-keys
-2. Enter key when prompted (stored securely)
-3. Uses `text-embedding-ada-002` model
+1. Run `Maproom: Setup` from Command Palette
+2. Select OpenAI
+3. Enter your API key from https://platform.openai.com/api-keys
 
-### Google Gemini
+### Google Vertex AI
 
-**Pros**: Fast, competitive pricing
-**Cons**: Requires API key and Google Cloud setup
+Cloud-based alternative. Requires API key and Google Cloud setup.
 
-**Setup**:
-1. Enable Vertex AI API: https://console.cloud.google.com/
-2. Get API key: https://cloud.google.com/vertex-ai/docs/authentication
-3. Enter key when prompted (stored securely)
+1. Run `Maproom: Setup` from Command Palette
+2. Select Google
+3. Enter your API key
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `Maproom: Setup` | Change embedding provider or API keys |
+| `Maproom: Show Output` | View detailed logs |
+| `Maproom: Show Status` | Check database and process status |
+| `Maproom: Restart Watchers` | Restart file monitoring |
+
+## Status Bar
+
+The status bar shows current state:
+
+- **Starting...** - Services initializing
+- **Indexing: N files** - Initial scan in progress
+- **Watching: N files** - Ready and monitoring changes
+- **Error** - Click to view details
+
+## Settings
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `maproom.database.sqlitePath` | Custom database path | `~/.maproom/maproom.db` |
+| `maproom.ollama.endpoint` | Ollama API URL | `http://127.0.0.1:11434` |
 
 ## Troubleshooting
 
-### "SQLite database not found"
+### "Ollama is not running"
 
-**Error**: `SQLite database not found at: /Users/you/.maproom/maproom.db`
-
-**Cause**: No index has been created yet.
-
-**Solution**: Create an index using the CLI:
 ```bash
-crewchief-maproom scan /path/to/your/repo
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Start Ollama
+ollama serve
 ```
 
-### Custom SQLite Path Not Working
+### "Binary not found" or "Permission denied"
 
-**Cause**: Path may contain unsupported characters or doesn't exist.
+The extension should auto-fix permissions, but if needed:
 
-**Solutions**:
-1. Ensure the path exists and is readable
-2. Use absolute paths (not relative)
-3. Tilde (`~`) is supported for home directory
-4. Check the Output channel for detailed error messages
-
-### Binary Permission Denied (Linux/macOS)
-
-**Error**: `EACCES: permission denied`
-
-**Solution**:
 ```bash
 chmod +x ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/bin/*/crewchief-maproom
 ```
 
-### Ollama Not Detected
+### Extension seems stuck on "Starting..."
 
-**Solutions**:
-1. Verify Ollama is running: `ollama list`
-2. Check Ollama API: `curl http://localhost:11434`
-3. Or choose OpenAI/Google instead
+1. Open Output panel: `Maproom: Show Output`
+2. Look for error messages
+3. Check if Ollama is running and the model is pulled
+4. Try `Maproom: Restart Watchers`
 
-### Process Keeps Crashing
+### Slow initial indexing
 
-**Solutions**:
-1. Check output channel: `Maproom: Show Output`
-2. Try restarting: `Maproom: Restart Watchers`
-3. Check system resources (RAM, disk space)
+Normal for large codebases. The status bar shows progress. Subsequent file changes are indexed incrementally and much faster.
 
-### Slow Performance
+## Requirements
 
-**Solutions**:
-1. Large repos (>10k files) can take 5-10 minutes initially
-2. Subsequent updates are incremental (much faster)
+- **Git**: Required (workspace must be a git repository)
+- **VSCode**: 1.85.0+
+- **RAM**: 2GB minimum, 4GB recommended
+- **Disk**: 500MB for extension + database
 
 ## Known Limitations
 
-- **Windows Support**: Experimental. File watching may be slower or miss some events.
-- **Large Repositories**: Initial scan of >10,000 files can take 5-10 minutes.
-- **Memory Usage**: Embedding requires 2-4GB RAM for large codebases.
-- **Binary Files**: Only text files are indexed.
-- **Network Required**: OpenAI and Google providers require active internet.
-- **Ollama Model**: Must download ~669MB model on first use (one-time).
-
-## Architecture
-
-Maproom uses a multi-process architecture:
-
-```
-VSCode Extension (Node.js)
-  ├── Database Checker → SQLite file detection
-  ├── Process Orchestrator → File watchers
-  │   ├── Initial scanner - One-time full scan
-  │   └── File watcher - Real-time change detection
-  └── Setup Wizard → Provider selection and credentials
-```
-
-**Key components**:
-- **Database Checker**: SQLite configuration and availability
-- **Setup Wizard**: Provider selection and credential management
-- **Status Bar**: Real-time status and file count
-- **Crash Recovery**: Exponential backoff restart (5 attempts)
-
-## Development
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm 8+
-- VSCode 1.85+
-
-### Setup
-
-```bash
-# Install dependencies
-pnpm install
-
-# Compile TypeScript
-pnpm compile
-
-# Run tests
-pnpm test
-
-# Run tests with coverage
-pnpm test:coverage
-
-# Watch mode
-pnpm test:watch
-```
-
-### Package Extension
-
-```bash
-# Install vsce
-npm install -g @vscode/vsce
-
-# Package extension
-pnpm vsce:package
-
-# Output: vscode-maproom-0.3.3.vsix
-```
-
-## Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Write tests for new functionality
-4. Ensure tests pass: `pnpm test`
-5. Submit a pull request
-
-**Development guidelines**:
-- Maintain >70% test coverage
-- Follow TypeScript strict mode
-- Use ESM modules (import/export)
-- Add JSDoc comments for public APIs
-- Update CHANGELOG.md
-
-## License
-
-MIT License - see LICENSE file for details
+- Windows support is experimental
+- Only git repositories are supported
+- Binary files are not indexed
+- Initial scan of very large repos (>10k files) takes time
+- OpenAI/Google providers require internet connection
 
 ## Support
 
-- **Bug Reports**: https://github.com/danielbushman/crewchief/issues
-- **Feature Requests**: https://github.com/danielbushman/crewchief/issues
-- **Documentation**: https://github.com/danielbushman/crewchief/tree/main/packages/vscode-maproom
+- **Issues**: https://github.com/danielbushman/crewchief/issues
+- **Documentation**: https://github.com/danielbushman/crewchief
 
-## Acknowledgements
+## License
 
-Built with:
-- [VSCode Extension API](https://code.visualstudio.com/api)
-- [SQLite](https://www.sqlite.org/) for zero-config storage
-- [Ollama](https://ollama.ai/) for local embeddings
-- [Maproom](https://github.com/danielbushman/crewchief) semantic search engine
-
----
-
-**Status**: Beta (v0.3.3) - Actively developed, feedback welcome!
+MIT License
