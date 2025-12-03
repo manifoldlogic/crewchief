@@ -71,20 +71,6 @@ print_step "Installing Node.js dependencies..."
 pnpm install
 print_success "Node.js dependencies installed"
 
-# Build Maproom binary if Rust is available
-if command -v cargo &> /dev/null; then
-    print_step "Building Maproom binary..."
-    cd crates/maproom
-    cargo build --release
-    # Copy to expected location
-    sudo cp target/release/crewchief-maproom /usr/local/bin/
-    sudo chmod +x /usr/local/bin/crewchief-maproom
-    cd ../..
-    print_success "Maproom binary built and installed"
-else
-    print_error "Rust not found, skipping Maproom build"
-fi
-
 # Initialize database
 print_step "Waiting for PostgreSQL to be ready..."
 until pg_isready -h postgres -p 5432 -U postgres; do

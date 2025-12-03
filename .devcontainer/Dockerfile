@@ -30,8 +30,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm globally (Claude Code will be installed later if needed)
-RUN npm install -g pnpm@latest
+# Install pnpm and vtsls (TypeScript language server for MCP) globally
+RUN npm install -g pnpm@latest @vtsls/language-server
 
 # Rust will be installed by devcontainer features
 # Skip manual Rust installation to speed up builds

@@ -9,6 +9,9 @@ services:
       - NET_RAW
       - SYS_ADMIN
     privileged: true  # Required for iptables manipulation
+    # Enable host.docker.internal resolution on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ..:/workspace:cached
       - /var/run/docker.sock:/var/run/docker.sock
