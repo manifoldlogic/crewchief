@@ -1,9 +1,9 @@
 # Ticket: [MXBAI-1002]: Update TypeScript Default Model Constants
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (test updates in MXBAI-1005)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,11 +25,11 @@ This ticket implements Decisions 5 and 6 from architecture.md. The VSCode extens
 Reference: plan.md Phase 1, Deliverable 2 "Update TypeScript Constants"
 
 ## Acceptance Criteria
-- [ ] DEFAULT_EMBEDDING_MODEL in model-manager.ts changed from 'nomic-embed-text' to 'mxbai-embed-large'
-- [ ] Provider detection model check in provider-detection.ts changed to validate 'mxbai-embed-large'
-- [ ] Warning message in provider-detection.ts updated to suggest `ollama pull mxbai-embed-large`
-- [ ] All changes compile without TypeScript errors
-- [ ] No other code changes needed
+- [x] DEFAULT_EMBEDDING_MODEL in model-manager.ts changed from 'nomic-embed-text' to 'mxbai-embed-large'
+- [x] Provider detection model check in provider-detection.ts changed to validate 'mxbai-embed-large'
+- [x] Warning message in provider-detection.ts updated to suggest `ollama pull mxbai-embed-large`
+- [x] All changes compile without TypeScript errors
+- [x] No other code changes needed
 
 ## Technical Requirements
 - Modify `packages/vscode-maproom/src/ollama/model-manager.ts` line 16:

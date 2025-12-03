@@ -85,8 +85,8 @@ export interface PullProgress {
  * const dockerClient = new OllamaClient('http://host.docker.internal:11434')
  *
  * if (await client.isRunning()) {
- *   if (!await client.hasModel('nomic-embed-text')) {
- *     await client.pullModel('nomic-embed-text', (progress) => {
+ *   if (!await client.hasModel('mxbai-embed-large')) {
+ *     await client.pullModel('mxbai-embed-large', (progress) => {
  *       console.log(progress.status)
  *     })
  *   }
@@ -162,7 +162,7 @@ export class OllamaClient {
    * Queries the /api/tags endpoint to get the list of installed models,
    * then checks if the requested model (with or without :latest tag) is present.
    *
-   * @param name - Model name to check (e.g., 'nomic-embed-text' or 'nomic-embed-text:latest')
+   * @param name - Model name to check (e.g., 'mxbai-embed-large' or 'mxbai-embed-large:latest')
    * @returns Promise resolving to true if model exists, false otherwise
    * @throws OllamaApiError if the API request fails
    */
@@ -200,7 +200,7 @@ export class OllamaClient {
    * Streams the download progress through the onProgress callback.
    * The callback receives status updates as NDJSON events are received.
    *
-   * @param name - Model name to pull (e.g., 'nomic-embed-text')
+   * @param name - Model name to pull (e.g., 'mxbai-embed-large')
    * @param onProgress - Optional callback for progress updates
    * @throws InvalidModelNameError if model name doesn't match security pattern
    * @throws OllamaApiError if the pull request fails

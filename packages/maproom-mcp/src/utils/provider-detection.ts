@@ -91,7 +91,7 @@ export function getOllamaEndpoint(): string | null {
 }
 
 /**
- * Check if Ollama is running and has the nomic-embed-text model
+ * Check if Ollama is running and has the mxbai-embed-large model
  *
  * Checks multiple endpoints in priority order:
  * 1. localhost:11434 (native development)
@@ -120,16 +120,16 @@ export async function isOllamaAvailable(): Promise<boolean> {
 
       if (response.ok) {
         const data = await response.json()
-        // Verify nomic-embed-text model is available
+        // Verify mxbai-embed-large model is available
         const models = data.models || []
         const hasEmbedModel = models.some(
-          (m: any) => m.name.includes('nomic-embed-text')
+          (m: any) => m.name.includes('mxbai-embed-large')
         )
 
         if (!hasEmbedModel) {
           console.warn(
-            `⚠ Ollama is running at ${endpoint} but nomic-embed-text model not found. ` +
-            'Run: ollama pull nomic-embed-text'
+            `⚠ Ollama is running at ${endpoint} but mxbai-embed-large model not found. ` +
+            'Run: ollama pull mxbai-embed-large'
           )
           return false
         }

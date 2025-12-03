@@ -13,7 +13,7 @@ import { OllamaClient, OllamaApiError, createOllamaClientWithFallback } from './
 import { OllamaNotRunningError, ModelPullError, ModelCheckError } from './errors'
 
 /** Default embedding model used by the extension */
-export const DEFAULT_EMBEDDING_MODEL = 'nomic-embed-text'
+export const DEFAULT_EMBEDDING_MODEL = 'mxbai-embed-large'
 
 /** URL for Ollama installation */
 export const OLLAMA_INSTALL_URL = 'https://ollama.ai'
@@ -46,7 +46,7 @@ export interface EnsureModelOptions {
  * 2. Checks if the model exists
  * 3. If not, downloads the model with progress notification
  *
- * @param modelName - Name of the model to ensure (default: nomic-embed-text)
+ * @param modelName - Name of the model to ensure (default: mxbai-embed-large)
  * @param options - Configuration options
  * @throws OllamaNotRunningError if Ollama service is not accessible
  * @throws ModelCheckError if model existence cannot be verified
@@ -55,7 +55,7 @@ export interface EnsureModelOptions {
  * @example
  * ```typescript
  * try {
- *   await ensureOllamaModel('nomic-embed-text')
+ *   await ensureOllamaModel('mxbai-embed-large')
  * } catch (error) {
  *   if (error instanceof OllamaNotRunningError) {
  *     // Show "Install Ollama" button
