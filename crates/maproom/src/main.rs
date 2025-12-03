@@ -371,6 +371,9 @@ enum Commands {
         path: Option<PathBuf>,
         #[arg(long, default_value = "2s")]
         throttle: String,
+        /// Output as JSON events only (suppress human-readable messages)
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
 
     /// Full-text search against indexed chunks
@@ -548,14 +551,18 @@ enum DbCommand {
 ///
 /// * `batch_size` - Number of chunks to process per batch
 /// * `provider` - Optional provider name (overrides MAPROOM_EMBEDDING_PROVIDER env var)
+/// * `json_mode` - If true, suppress human-readable output
 async fn auto_generate_embeddings(
     batch_size: usize,
     provider: Option<String>,
+    json_mode: bool,
 ) -> anyhow::Result<crewchief_maproom::embedding::PipelineStats> {
     use crewchief_maproom::embedding::{EmbeddingPipeline, EmbeddingService, PipelineConfig};
 
     tracing::info!("Starting auto-embedding generation");
-    println!("\n🔄 Generating embeddings for new chunks...");
+    if !json_mode {
+        println!("\n🔄 Generating embeddings for new chunks...");
+    }
 
     // Set provider in environment if specified via CLI (overrides env var)
     if let Some(ref provider_name) = provider {
@@ -603,16 +610,23 @@ async fn auto_generate_embeddings(
     let chunk_count = store.get_chunks_needing_embeddings_count().await?;
 
     if chunk_count == 0 {
-        println!("   ✓ All chunks already have embeddings");
+        if !json_mode {
+            println!("   ✓ All chunks already have embeddings");
+        }
         return Ok(crewchief_maproom::embedding::PipelineStats::default());
     }
 
-    println!("   Found {} chunks needing embeddings", chunk_count);
+    if !json_mode {
+        println!("   Found {} chunks needing embeddings", chunk_count);
+    }
 
-    // Create progress tracker
-    let progress = crewchief_maproom::progress::ProgressTracker::new(
-        crewchief_maproom::progress::OutputMode::Minimal,
-    );
+    // Create progress tracker with appropriate output mode
+    let output_mode = if json_mode {
+        crewchief_maproom::progress::OutputMode::Json
+    } else {
+        crewchief_maproom::progress::OutputMode::Minimal
+    };
+    let progress = crewchief_maproom::progress::ProgressTracker::new(output_mode);
     progress.set_totals(0, Some(chunk_count as usize));
 
     // Run pipeline with progress callback
@@ -745,7 +759,7 @@ fn format_context_bundle(bundle: &ContextBundle, chunk_id: i64, budget: usize) -
 
 /// Extract git information from a repository path
 fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
-    // Get the repository name from remote origin
+    // Get the repository name from remote origin in owner/repo format
     let repo_name = Command::new("git")
         .args(&[
             "-C",
@@ -764,13 +778,12 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
             }
         })
         .and_then(|url| {
-            // Extract repo name from URL (e.g., git@github.com:user/repo.git or https://github.com/user/repo)
+            // Extract owner/repo from URL
+            // Handles both HTTPS (https://github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
             let url = url.trim();
-            if let Some(repo_part) = url.rsplit('/').next() {
-                Some(repo_part.trim_end_matches(".git").to_string())
-            } else {
-                None
-            }
+            // Match owner/repo pattern at the end of the URL
+            let re = regex::Regex::new(r"[:/]([^/]+/[^/]+?)(?:\.git)?$").ok()?;
+            re.captures(url).map(|cap| cap[1].to_string())
         })
         .unwrap_or_else(|| {
             // Fallback: use the current directory name
@@ -1107,7 +1120,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Auto-generate embeddings after scan if enabled
             if generate_embeddings {
-                match auto_generate_embeddings(embedding_batch_size, provider).await {
+                match auto_generate_embeddings(embedding_batch_size, provider, json).await {
                     Ok(stats) => {
                         if stats.total_chunks > 0 && !json {
                             println!("\n📊 Embedding Generation Summary:");
@@ -1237,7 +1250,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Auto-generate embeddings after upsert if enabled
             if generate_embeddings {
-                match auto_generate_embeddings(embedding_batch_size, provider).await {
+                match auto_generate_embeddings(embedding_batch_size, provider, false).await {
                     Ok(stats) => {
                         if stats.total_chunks > 0 {
                             println!("\n📊 Embedding Generation Summary:");
@@ -1259,6 +1272,7 @@ async fn main() -> anyhow::Result<()> {
             worktree,
             path,
             throttle,
+            json,
         } => {
             // Default path to current directory if not provided
             let path = path.unwrap_or_else(|| PathBuf::from("."));
@@ -1335,12 +1349,14 @@ async fn main() -> anyhow::Result<()> {
             // Store watcher handle to prevent premature drop (watcher stops if dropped)
             let _head_watcher = setup_head_watcher(&git_head, head_tx)?;
 
-            println!("👀 Watching {} for changes...", watch_path.display());
-            println!("   Repository: {}", repo);
-            println!("   Worktree: {}", worktree);
-            println!("   Throttle: {}", throttle);
-            println!();
-            println!("Press Ctrl+C to stop.");
+            if !json {
+                println!("👀 Watching {} for changes...", watch_path.display());
+                println!("   Repository: {}", repo);
+                println!("   Worktree: {}", worktree);
+                println!("   Throttle: {}", throttle);
+                println!();
+                println!("Press Ctrl+C to stop.");
+            }
 
             // Handle events
             use crewchief_maproom::incremental::incremental_update;
@@ -1350,7 +1366,9 @@ async fn main() -> anyhow::Result<()> {
                 tokio::select! {
                     // Handle shutdown signal
                     _ = signal::ctrl_c() => {
-                        println!("\n🛑 Shutting down watch...");
+                        if !json {
+                            println!("\n🛑 Shutting down watch...");
+                        }
                         multi_watcher.shutdown().await?;
                         break;
                     }
@@ -1364,7 +1382,17 @@ async fn main() -> anyhow::Result<()> {
                             EventType::Renamed => "renamed",
                         };
 
-                        println!("📁 {} {}", event_type, event.path.display());
+                        if json {
+                            // Emit JSON event
+                            println!(
+                                r#"{{"type":"file_event","event":"{}","path":"{}","timestamp":"{}"}}"#,
+                                event_type,
+                                event.path.display(),
+                                chrono::Utc::now().to_rfc3339()
+                            );
+                        } else {
+                            println!("📁 {} {}", event_type, event.path.display());
+                        }
 
                         // Read worktree_id from lock (copy value, drop lock, then use)
                         let wt_id = *worktree_id.read().unwrap();
@@ -1373,12 +1401,28 @@ async fn main() -> anyhow::Result<()> {
                         match incremental_update(&store, wt_id, &watch_path).await {
                             Ok(stats) => {
                                 if stats.files_processed > 0 {
-                                    println!("   ✅ Processed {} files", stats.files_processed);
+                                    if json {
+                                        println!(
+                                            r#"{{"type":"update_complete","files_processed":{},"timestamp":"{}"}}"#,
+                                            stats.files_processed,
+                                            chrono::Utc::now().to_rfc3339()
+                                        );
+                                    } else {
+                                        println!("   ✅ Processed {} files", stats.files_processed);
+                                    }
                                 }
                             }
                             Err(e) => {
                                 tracing::warn!("Incremental update failed: {}", e);
-                                println!("   ⚠️  Update failed: {}", e);
+                                if json {
+                                    println!(
+                                        r#"{{"type":"update_error","error":"{}","timestamp":"{}"}}"#,
+                                        e,
+                                        chrono::Utc::now().to_rfc3339()
+                                    );
+                                } else {
+                                    println!("   ⚠️  Update failed: {}", e);
+                                }
                             }
                         }
                     }
@@ -1400,7 +1444,9 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            println!("Watch complete.");
+            if !json {
+                println!("Watch complete.");
+            }
         }
 
         Commands::Search {
