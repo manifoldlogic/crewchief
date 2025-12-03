@@ -1,9 +1,65 @@
 # Ticket: [MXBAI-2001]: Documentation Audit and Categorization
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (audit/analysis ticket)
+- [x] **Verified** - by the verify-ticket agent
+
+## Audit Results
+
+### Summary
+- **Total files with nomic-embed-text references**: 150
+- **Active docs (must update)**: 33 files
+- **Preserved docs (.crewchief/)**: 117 files
+  - Archive: 81 files
+  - DIM1024 project: 11 files
+  - MXBAI project: 24 files (intentional)
+
+### MUST UPDATE (33 files)
+**Core Documentation:**
+- /workspace/README.md
+- /workspace/crates/maproom/CLAUDE.md
+- /workspace/crates/maproom/README.md
+- /workspace/docs/providers/ollama-setup.md
+- /workspace/docs/providers/README.md
+- /workspace/docs/providers/comparison.md
+- /workspace/packages/vscode-maproom/README.md
+- /workspace/packages/cli/README.md
+
+**Architecture & Guides:**
+- /workspace/docs/architecture/MAPROOM_ARCHITECTURE.md
+- /workspace/docs/architecture/daemon.md
+- /workspace/docs/architecture/overview.md
+- /workspace/docs/architecture/sequences.md
+- /workspace/docs/guides/performance-tuning.md
+- /workspace/docs/guides/provider-migration.md
+- /workspace/docs/configuration/embedding-optimization.md
+- /workspace/config/QUICKSTART.md
+
+**Troubleshooting:**
+- /workspace/docs/troubleshooting/README.md
+- /workspace/docs/troubleshooting/common-errors.md
+- /workspace/docs/troubleshooting/debugging.md
+- /workspace/packages/vscode-maproom/docs/TROUBLESHOOTING.md
+
+**Performance/Historical (review needed):**
+- /workspace/docs/performance/*.md (4 files)
+- /workspace/docs/profiling/*.md (1 file)
+- /workspace/docs/arm64-compatibility-report.md
+- /workspace/benchmarks/multi_provider_performance.md
+
+**Agent/Test Files (review needed):**
+- /workspace/.agent/reference/agent-bench/search-team/multi-provider-embeddings.md
+- /workspace/.claude/agent-bench/search-team/multi-provider-embeddings.md
+- /workspace/tests/manual/mpembed_*.md (2 files)
+- /workspace/packages/cli/scripts/README-scan-estimation.md
+- /workspace/crates/maproom/docs/development/integration-testing.md
+
+### PRESERVE (117 files)
+**Rule: Do NOT update these files**
+- `.crewchief/archive/**/*.md` (81 files) - Historical project records
+- `.crewchief/projects/DIM1024_*/**/*.md` (11 files) - Related project context
+- `.crewchief/projects/MXBAI_*/**/*.md` (24 files) - This project's planning docs
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
