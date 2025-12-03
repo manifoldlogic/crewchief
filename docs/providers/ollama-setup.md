@@ -240,6 +240,40 @@ ollama pull mxbai-embed-large
 export OLLAMA_MODEL=mxbai-embed-large
 ```
 
+#### Using mxbai-embed-large (1024 dimensions)
+
+For higher quality embeddings, you can use the `mxbai-embed-large` model which provides 1024-dimensional embeddings:
+
+```bash
+# Install the model (669 MB download)
+ollama pull mxbai-embed-large
+
+# Configure Maproom to use it
+export MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
+export MAPROOM_EMBEDDING_DIMENSION=1024
+
+# Verify configuration
+echo $MAPROOM_EMBEDDING_MODEL
+# Expected: mxbai-embed-large
+```
+
+**Storage tradeoffs:**
+- 1024-dim embeddings: 4,096 bytes per embedding (33% larger than 768-dim)
+- For a 100K chunk codebase: ~390 MB vs ~293 MB (768-dim)
+- Storage increase is offset by improved search quality
+
+**Performance characteristics:**
+- Throughput: ~6,780 tokens/sec (vs ~8,000+ for nomic-embed-text)
+- Model size: 669 MB (vs 274 MB for nomic-embed-text)
+- Slightly slower embedding generation due to larger model
+- Search performance: ~33% more compute for vector similarity (1024 vs 768 dimensions)
+
+**When to use mxbai-embed-large:**
+- Maximum search quality is critical
+- You have sufficient disk space (669 MB model + 33% larger embeddings)
+- You can accept ~15% slower embedding generation
+- You're indexing a large codebase where search quality matters more than speed
+
 ---
 
 ## Step 4: Configure Maproom

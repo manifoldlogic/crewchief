@@ -344,10 +344,69 @@ src/incremental/
 └── worktree_watcher.rs  # Multi-worktree coordination
 ```
 
+## Supported Embedding Dimensions
+
+Maproom supports multiple embedding dimensions through dimension-specific vector tables:
+
+| Dimension | Table Name | Providers | Models |
+|-----------|-----------|-----------|--------|
+| 768 | `vec_code_768` | Ollama | nomic-embed-text |
+| 1024 | `vec_code_1024` | Ollama | mxbai-embed-large |
+| 1536 | `vec_code` | OpenAI, Google | text-embedding-3-small, textembedding-gecko |
+
+**Configuration:**
+```bash
+# For 1024-dim (mxbai-embed-large)
+export MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
+export MAPROOM_EMBEDDING_DIMENSION=1024
+
+# For 768-dim (nomic-embed-text, default)
+export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+export MAPROOM_EMBEDDING_DIMENSION=768
+```
+
+**Adding new dimensions:**
+
+To add support for a new embedding dimension (e.g., 512 or 2048), follow this pattern:
+
+1. **Add migration** - Create new migration in `src/db/sqlite/migrations.rs`:
+   ```rust
+   Migration {
+       version: N,
+       name: "add_vec_code_DIMENSION",
+       up: r#"
+       CREATE VIRTUAL TABLE vec_code_DIMENSION USING vec0(
+           embedding float[DIMENSION]
+       );
+       "#,
+       down: "DROP TABLE IF EXISTS vec_code_DIMENSION;",
+   }
+   ```
+
+2. **Update vector.rs** - Add dimension to `SUPPORTED_DIMENSIONS` and `get_vec_table_name()`:
+   ```rust
+   const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1024, 1536, DIMENSION];
+
+   fn get_vec_table_name(dimension: usize) -> Result<&'static str> {
+       match dimension {
+           DIMENSION => Ok("vec_code_DIMENSION"),
+           // ... existing cases
+       }
+   }
+   ```
+
+3. **Update embeddings.rs** - Add case to `sync_to_vec_table()` dimension routing:
+   ```rust
+   match dimension {
+       DIMENSION => sync_to_vec_table_impl(conn, "vec_code_DIMENSION", blob_sha, embedding)?,
+       // ... existing cases
+   }
+   ```
+
+**Why multiple tables?** sqlite-vec virtual tables have fixed dimensions at table creation time. Supporting multiple dimensions requires separate tables, which provides automatic dimension isolation during vector search.
+
 ## Known Limitations
 
-- 1536-dim embeddings only (OpenAI/Vertex compatible)
-- 768-dim (Ollama nomic-embed-text) requires config change (deferred)
 - Single-user only (no multi-process concurrent writes)
 - No database encryption
 - sqlite-vec extension must be compiled in (statically linked)
