@@ -1,6 +1,6 @@
 {
   "name": "@crewchief/maproom-mcp",
-  "version": "3.3.9",
+  "version": "3.3.10",
   "type": "module",
   "description": "MCP server for semantic code search with PostgreSQL and pgvector",
   "main": "dist/index.js",
