@@ -22,8 +22,8 @@ sequenceDiagram
     end
 
     DC->>DM: JSON-RPC search request
-    DM->>OL: POST /api/embed<br/>{model: "nomic-embed-text", input: [query]}
-    OL-->>DM: {embeddings: [[768 floats]]}
+    DM->>OL: POST /api/embed<br/>{model: "mxbai-embed-large", input: [query]}
+    OL-->>DM: {embeddings: [[1024 floats]]}
 
     par Parallel Search
         DM->>DB: FTS5 query (keyword match)
@@ -155,7 +155,7 @@ sequenceDiagram
         alt Ollama detected
             OL-->>DM: 200 OK
             DM->>DM: Auto-select Ollama
-            Note over DM: nomic-embed-text (768-dim)
+            Note over DM: mxbai-embed-large (1024-dim)
         else Timeout/error
             DM-->>DM: Error with guidance:<br/>"Start Ollama: ollama serve"
         end
@@ -164,9 +164,9 @@ sequenceDiagram
     DM->>OL: Check model availability<br/>GET /api/tags
 
     alt Model available
-        OL-->>DM: {models: ["nomic-embed-text", ...]}
+        OL-->>DM: {models: ["mxbai-embed-large", ...]}
     else Model missing
-        DM-->>DM: Warning: Run "ollama pull nomic-embed-text"
+        DM-->>DM: Warning: Run "ollama pull mxbai-embed-large"
     end
 ```
 

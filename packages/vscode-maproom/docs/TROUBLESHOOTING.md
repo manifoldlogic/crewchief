@@ -351,10 +351,10 @@ ls -la ~/.vscode/extensions/crewchief.vscode-maproom-*/bin/
 5. **Download embedding model**
    ```bash
    # Pull required model (if not already installed)
-   ollama pull nomic-embed-text
+   ollama pull mxbai-embed-large
 
    # Verify model is available
-   ollama list | grep nomic-embed-text
+   ollama list | grep mxbai-embed-large
    ```
 
 6. **Check firewall settings**

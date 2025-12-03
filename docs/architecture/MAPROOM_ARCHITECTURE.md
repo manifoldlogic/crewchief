@@ -838,7 +838,7 @@ AI Assistant (Claude/Cursor)
 
 2. **ollama** (ollama/ollama:latest)
    - Port: `127.0.0.1:11434:11434`
-   - Auto-pulls `nomic-embed-text` model
+   - Auto-pulls `mxbai-embed-large` model
    - Volume: `ollama-models`
 
 3. **maproom-mcp** (manifoldlogic/crewchief_maproom-mcp:latest)
@@ -1217,7 +1217,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | node dist/index.js
 - **Language**: Rust (core), TypeScript (MCP wrapper)
 - **Database**: PostgreSQL 16 + pgvector extension
 - **Parsing**: tree-sitter (TypeScript, Rust, Python, Markdown, JSON)
-- **Embeddings**: Ollama (nomic-embed-text), Google Vertex AI (textembedding-gecko), OpenAI (text-embedding-3-small)
+- **Embeddings**: Ollama (mxbai-embed-large), Google Vertex AI (textembedding-gecko), OpenAI (text-embedding-3-small)
 - **Vector Index**: ivfflat algorithm (pgvector)
 - **Protocol**: Model Context Protocol (MCP) v2024-11-05
 

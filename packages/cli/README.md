@@ -180,8 +180,8 @@ brew install ollama
 # Set provider
 export MAPROOM_EMBEDDING_PROVIDER=ollama
 
-# Optional: specify model (default: nomic-embed-text)
-export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+# Optional: specify model (default: mxbai-embed-large)
+export MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
 
 # Index your codebase
 crewchief maproom scan
@@ -532,12 +532,12 @@ This will check for:
 2. Verify model is pulled:
 
    ```bash
-   ollama list | grep nomic-embed-text
+   ollama list | grep mxbai-embed-large
    ```
 
 3. If model missing, pull it manually:
    ```bash
-   ollama pull nomic-embed-text
+   ollama pull mxbai-embed-large
    ```
 
 #### Binary Compatibility Issues

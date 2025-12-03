@@ -25,7 +25,7 @@ graph TB
     end
 
     subgraph "Embeddings"
-        OL[Ollama<br/>localhost:11434<br/>nomic-embed-text]
+        OL[Ollama<br/>localhost:11434<br/>mxbai-embed-large]
     end
 
     CC -->|spawns| MCP
@@ -44,7 +44,7 @@ graph TB
 | **Daemon Client** | TypeScript | Type-safe JSON-RPC communication, lifecycle management |
 | **Rust Daemon** | Rust + Tokio | Code parsing, embedding generation, search execution |
 | **SQLite** | sqlite-vec + FTS5 | Vector storage, full-text search, chunk metadata |
-| **Ollama** | Local LLM server | 768-dimensional embedding generation |
+| **Ollama** | Local LLM server | 1024-dimensional embedding generation |
 
 ## Data Flow
 
@@ -52,7 +52,7 @@ graph TB
 
 ```mermaid
 graph LR
-    Q[Query] --> E[Ollama Embed<br/>768-dim]
+    Q[Query] --> E[Ollama Embed<br/>1024-dim]
     E --> FTS[FTS5 Search<br/>Keyword Match]
     E --> VEC[sqlite-vec Search<br/>Cosine Similarity]
     FTS --> RRF[RRF Fusion<br/>k=60]
@@ -138,7 +138,7 @@ repos              # Indexed repositories
 ### Embedding Provider Detection
 
 1. Check for Ollama at `localhost:11434` (2-second timeout)
-2. Use Ollama with `nomic-embed-text` model (768-dim)
+2. Use Ollama with `mxbai-embed-large` model (1024-dim)
 3. Fail with guidance if Ollama not available
 
 ## Performance Characteristics
@@ -176,7 +176,7 @@ Environment variables:
 
 # Ollama (default - auto-detected)
 MAPROOM_EMBEDDING_PROVIDER=ollama
-MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
 MAPROOM_EMBEDDING_API_ENDPOINT=http://localhost:11434/api/embed
 
 # Debug logging

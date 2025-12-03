@@ -136,12 +136,12 @@ From baseline testing on CPU-only system (conservative lower bound):
 1. **Verify Ollama is running:**
    ```bash
    ollama list
-   # Should show nomic-embed-text or your configured model
+   # Should show mxbai-embed-large or your configured model
    ```
 
 2. **Check model is loaded:**
    ```bash
-   ollama run nomic-embed-text "test"
+   ollama run mxbai-embed-large "test"
    # Should return embedding quickly
    ```
 
@@ -199,7 +199,7 @@ From baseline testing on CPU-only system (conservative lower bound):
 
 1. **Verify Ollama is responsive:**
    ```bash
-   curl http://localhost:11434/api/embed -d '{"model":"nomic-embed-text","input":["test"]}'
+   curl http://localhost:11434/api/embed -d '{"model":"mxbai-embed-large","input":["test"]}'
    # Should return JSON response quickly
    ```
 

@@ -98,7 +98,7 @@ curl http://localhost:11434/api/tags
 
 # Test embedding generation
 curl http://localhost:11434/api/embed \
-  -d '{"model":"nomic-embed-text","input":["hello world"]}'
+  -d '{"model":"mxbai-embed-large","input":["hello world"]}'
 
 # Check available models
 ollama list

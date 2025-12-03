@@ -30,22 +30,22 @@ curl http://localhost:11434/api/tags
 # 3. Check if model is available
 ollama list
 
-# Expected output should show nomic-embed-text
+# Expected output should show mxbai-embed-large
 ```
 
 ### Error: Model not found
 
 **Symptoms:**
-- `model 'nomic-embed-text' not found`
+- `model 'mxbai-embed-large' not found`
 - Scan completes but no embeddings generated
 
 **Solution:**
 ```bash
 # Pull the embedding model
-ollama pull nomic-embed-text
+ollama pull mxbai-embed-large
 
 # Verify it's available
-ollama list | grep nomic
+ollama list | grep mxbai
 ```
 
 ### Error: Ollama timeout
@@ -62,7 +62,7 @@ ollama list | grep nomic
 **Solutions:**
 ```bash
 # Warm up the model first
-curl http://localhost:11434/api/embed -d '{"model":"nomic-embed-text","input":["test"]}'
+curl http://localhost:11434/api/embed -d '{"model":"mxbai-embed-large","input":["test"]}'
 
 # Check GPU memory usage
 nvidia-smi  # If using GPU

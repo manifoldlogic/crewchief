@@ -28,9 +28,9 @@ If not: `ollama serve`
 
 ### 2. Is the model available?
 ```bash
-ollama list | grep nomic
+ollama list | grep mxbai
 ```
-If not: `ollama pull nomic-embed-text`
+If not: `ollama pull mxbai-embed-large`
 
 ### 3. Does the database exist?
 ```bash
@@ -51,7 +51,7 @@ RUST_LOG=debug crewchief-maproom serve
 | Problem | Quick Fix |
 |---------|-----------|
 | Search returns nothing | Run `scan` first |
-| Ollama errors | `ollama serve && ollama pull nomic-embed-text` |
+| Ollama errors | `ollama serve && ollama pull mxbai-embed-large` |
 | Database locked | Wait or `pkill -f crewchief-maproom` |
 | Stale results | `scan` to re-index |
 | Daemon won't start | Check `RUST_LOG=debug` output |

@@ -208,7 +208,7 @@ RUST_LOG=info  # debug, trace for more detail
 
 # Embedding provider
 MAPROOM_EMBEDDING_PROVIDER=ollama
-MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
 ```
 
 ### Daemon Client Config
