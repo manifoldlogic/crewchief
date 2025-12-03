@@ -101,13 +101,13 @@ describe.sequential('OllamaClient', () => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({
           models: [
-            { name: 'nomic-embed-text:latest' },
+            { name: 'mxbai-embed-large:latest' },
             { name: 'llama2:latest' },
           ],
         }))
       })
 
-      const result = await client.hasModel('nomic-embed-text')
+      const result = await client.hasModel('mxbai-embed-large')
       expect(result).toBe(true)
     })
 
@@ -115,11 +115,11 @@ describe.sequential('OllamaClient', () => {
       await createMockServer((_req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({
-          models: [{ name: 'nomic-embed-text:latest' }],
+          models: [{ name: 'mxbai-embed-large:latest' }],
         }))
       })
 
-      const result = await client.hasModel('nomic-embed-text:latest')
+      const result = await client.hasModel('mxbai-embed-large:latest')
       expect(result).toBe(true)
     })
 
@@ -127,12 +127,12 @@ describe.sequential('OllamaClient', () => {
       await createMockServer((_req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({
-          models: [{ name: 'nomic-embed-text:latest' }],
+          models: [{ name: 'mxbai-embed-large:latest' }],
         }))
       })
 
       // Request without :latest should match model with :latest
-      const result = await client.hasModel('nomic-embed-text')
+      const result = await client.hasModel('mxbai-embed-large')
       expect(result).toBe(true)
     })
 
@@ -144,7 +144,7 @@ describe.sequential('OllamaClient', () => {
         }))
       })
 
-      const result = await client.hasModel('nomic-embed-text')
+      const result = await client.hasModel('mxbai-embed-large')
       expect(result).toBe(false)
     })
 
@@ -154,7 +154,7 @@ describe.sequential('OllamaClient', () => {
         res.end(JSON.stringify({ models: [] }))
       })
 
-      const result = await client.hasModel('nomic-embed-text')
+      const result = await client.hasModel('mxbai-embed-large')
       expect(result).toBe(false)
     })
 
@@ -164,7 +164,7 @@ describe.sequential('OllamaClient', () => {
         res.end(JSON.stringify({}))
       })
 
-      const result = await client.hasModel('nomic-embed-text')
+      const result = await client.hasModel('mxbai-embed-large')
       expect(result).toBe(false)
     })
 
@@ -199,7 +199,7 @@ describe.sequential('OllamaClient', () => {
       })
 
       const progressUpdates: string[] = []
-      await client.pullModel('nomic-embed-text', (progress) => {
+      await client.pullModel('mxbai-embed-large', (progress) => {
         progressUpdates.push(progress.status)
       })
 
@@ -221,7 +221,7 @@ describe.sequential('OllamaClient', () => {
       })
 
       // Should not throw
-      await expect(client.pullModel('nomic-embed-text')).resolves.toBeUndefined()
+      await expect(client.pullModel('mxbai-embed-large')).resolves.toBeUndefined()
     })
 
     it('should throw InvalidModelNameError for invalid model names', async () => {
@@ -246,7 +246,7 @@ describe.sequential('OllamaClient', () => {
       })
 
       // Valid model names
-      await expect(client.pullModel('nomic-embed-text')).resolves.toBeUndefined()
+      await expect(client.pullModel('mxbai-embed-large')).resolves.toBeUndefined()
       await expect(client.pullModel('llama2:latest')).resolves.toBeUndefined()
       await expect(client.pullModel('codellama:7b-code')).resolves.toBeUndefined()
       await expect(client.pullModel('model_name.v1')).resolves.toBeUndefined()
@@ -286,7 +286,7 @@ describe.sequential('OllamaClient', () => {
       })
 
       const progressUpdates: string[] = []
-      await client.pullModel('nomic-embed-text', (progress) => {
+      await client.pullModel('mxbai-embed-large', (progress) => {
         progressUpdates.push(progress.status)
       })
 
@@ -313,7 +313,7 @@ describe.sequential('OllamaClient', () => {
       })
 
       let capturedProgress: { completed?: number; total?: number } = {}
-      await client.pullModel('nomic-embed-text', (progress) => {
+      await client.pullModel('mxbai-embed-large', (progress) => {
         capturedProgress = progress
       })
 
@@ -333,7 +333,7 @@ describe.sequential('OllamaClient', () => {
       })
 
       const progressUpdates: string[] = []
-      await client.pullModel('nomic-embed-text', (progress) => {
+      await client.pullModel('mxbai-embed-large', (progress) => {
         progressUpdates.push(progress.status)
       })
 
@@ -344,7 +344,7 @@ describe.sequential('OllamaClient', () => {
 
   describe('isValidModelName', () => {
     it('should validate correct model names', () => {
-      expect(OllamaClient.isValidModelName('nomic-embed-text')).toBe(true)
+      expect(OllamaClient.isValidModelName('mxbai-embed-large')).toBe(true)
       expect(OllamaClient.isValidModelName('llama2')).toBe(true)
       expect(OllamaClient.isValidModelName('llama2:latest')).toBe(true)
       expect(OllamaClient.isValidModelName('llama2:7b')).toBe(true)

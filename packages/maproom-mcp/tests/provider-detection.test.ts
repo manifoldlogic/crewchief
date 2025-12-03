@@ -127,7 +127,7 @@ describe('Provider Detection', () => {
         ok: true,
         json: async () => ({
           models: [
-            { name: 'nomic-embed-text:latest' },
+            { name: 'mxbai-embed-large:latest' },
             { name: 'llama2:latest' },
           ],
         }),
@@ -154,7 +154,7 @@ describe('Provider Detection', () => {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              models: [{ name: 'nomic-embed-text:latest' }],
+              models: [{ name: 'mxbai-embed-large:latest' }],
             }),
           })
         }
@@ -216,12 +216,12 @@ describe('Provider Detection', () => {
   })
 
   describe('Ollama Detection', () => {
-    it('should return true when Ollama is running with nomic-embed-text', async () => {
+    it('should return true when Ollama is running with mxbai-embed-large', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
           models: [
-            { name: 'nomic-embed-text:latest' },
+            { name: 'mxbai-embed-large:latest' },
             { name: 'llama2:latest' },
           ],
         }),
@@ -249,7 +249,7 @@ describe('Provider Detection', () => {
 
       expect(available).toBe(false)
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('nomic-embed-text model not found')
+        expect.stringContaining('mxbai-embed-large model not found')
       )
 
       consoleWarnSpy.mockRestore()
@@ -380,7 +380,7 @@ describe('Provider Detection', () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          models: [{ name: 'nomic-embed-text:latest' }],
+          models: [{ name: 'mxbai-embed-large:latest' }],
         }),
       })
 
@@ -409,7 +409,7 @@ describe('Provider Detection', () => {
       const fetchSpy = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          models: [{ name: 'nomic-embed-text:latest' }],
+          models: [{ name: 'mxbai-embed-large:latest' }],
         }),
       })
       global.fetch = fetchSpy
@@ -449,7 +449,7 @@ describe('Provider Detection', () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          models: [{ name: 'nomic-embed-text:latest' }],
+          models: [{ name: 'mxbai-embed-large:latest' }],
         }),
       })
       process.env.OPENAI_API_KEY = 'sk-test123'
@@ -496,7 +496,7 @@ describe('Provider Detection', () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          models: [{ name: 'nomic-embed-text:latest' }],
+          models: [{ name: 'mxbai-embed-large:latest' }],
         }),
       })
 

@@ -57,7 +57,7 @@ describe('Scan Tool - Provider Integration', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        models: [{ name: 'nomic-embed-text:latest' }],
+        models: [{ name: 'mxbai-embed-large:latest' }],
       }),
     })
 

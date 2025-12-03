@@ -88,7 +88,7 @@ describe.sequential('Model Manager', () => {
         if (req.url === '/api/tags') {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({
-            models: [{ name: 'nomic-embed-text:latest' }],
+            models: [{ name: 'mxbai-embed-large:latest' }],
           }))
         } else {
           res.writeHead(404)
@@ -98,7 +98,7 @@ describe.sequential('Model Manager', () => {
 
       // Should not throw and not call pull
       await expect(
-        ensureOllamaModel('nomic-embed-text', { skipNotification: true })
+        ensureOllamaModel('mxbai-embed-large', { skipNotification: true })
       ).resolves.toBeUndefined()
     })
 
@@ -121,7 +121,7 @@ describe.sequential('Model Manager', () => {
         }
       })
 
-      await ensureOllamaModel('nomic-embed-text', {
+      await ensureOllamaModel('mxbai-embed-large', {
         skipNotification: true,
         onProgress: (msg) => progressUpdates.push(msg),
       })
@@ -154,7 +154,7 @@ describe.sequential('Model Manager', () => {
       })
 
       await expect(
-        ensureOllamaModel('nomic-embed-text', { skipNotification: true })
+        ensureOllamaModel('mxbai-embed-large', { skipNotification: true })
       ).rejects.toThrow(ModelCheckError)
     })
 
@@ -173,7 +173,7 @@ describe.sequential('Model Manager', () => {
       })
 
       await expect(
-        ensureOllamaModel('nomic-embed-text', { skipNotification: true })
+        ensureOllamaModel('mxbai-embed-large', { skipNotification: true })
       ).rejects.toThrow(ModelPullError)
     })
 
@@ -250,7 +250,7 @@ describe.sequential('Model Manager', () => {
         if (req.url === '/api/tags') {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({
-            models: [{ name: 'nomic-embed-text:latest' }],
+            models: [{ name: 'mxbai-embed-large:latest' }],
           }))
         } else {
           res.writeHead(404)
@@ -258,7 +258,7 @@ describe.sequential('Model Manager', () => {
         }
       })
 
-      const result = await checkModelAvailability('nomic-embed-text')
+      const result = await checkModelAvailability('mxbai-embed-large')
 
       expect(result.exists).toBe(true)
       expect(result.error).toBeUndefined()
@@ -277,7 +277,7 @@ describe.sequential('Model Manager', () => {
         }
       })
 
-      const result = await checkModelAvailability('nomic-embed-text')
+      const result = await checkModelAvailability('mxbai-embed-large')
 
       expect(result.exists).toBe(false)
       expect(result.error).toBeUndefined()
@@ -355,8 +355,8 @@ describe.sequential('Model Manager', () => {
   })
 
   describe('constants', () => {
-    it('DEFAULT_EMBEDDING_MODEL should be nomic-embed-text', () => {
-      expect(DEFAULT_EMBEDDING_MODEL).toBe('nomic-embed-text')
+    it('DEFAULT_EMBEDDING_MODEL should be mxbai-embed-large', () => {
+      expect(DEFAULT_EMBEDDING_MODEL).toBe('mxbai-embed-large')
     })
 
     it('OLLAMA_INSTALL_URL should be https://ollama.ai', () => {
