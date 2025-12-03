@@ -236,7 +236,7 @@ MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
 
 # Embedding provider: ollama, openai, or google
 MAPROOM_EMBEDDING_PROVIDER=ollama
-MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
 
 # Logging
 RUST_LOG=info              # info, debug, trace
@@ -350,17 +350,16 @@ Maproom supports multiple embedding dimensions through dimension-specific vector
 
 | Dimension | Table Name | Providers | Models |
 |-----------|-----------|-----------|--------|
-| 768 | `vec_code_768` | Ollama | nomic-embed-text |
-| 1024 | `vec_code_1024` | Ollama | mxbai-embed-large |
+| 768 | `vec_code_768` | Ollama | nomic-embed-text (legacy) |
+| 1024 | `vec_code_1024` | Ollama | mxbai-embed-large (default) |
 | 1536 | `vec_code` | OpenAI, Google | text-embedding-3-small, textembedding-gecko |
 
 **Configuration:**
 ```bash
-# For 1024-dim (mxbai-embed-large)
-export MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
-export MAPROOM_EMBEDDING_DIMENSION=1024
+# For 1024-dim (mxbai-embed-large, default)
+# No configuration needed - this is the default!
 
-# For 768-dim (nomic-embed-text, default)
+# For 768-dim (nomic-embed-text, legacy)
 export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 export MAPROOM_EMBEDDING_DIMENSION=768
 ```

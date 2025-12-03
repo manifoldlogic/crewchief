@@ -8,7 +8,7 @@ This guide walks you through setting up Ollama for Maproom's semantic code searc
 
 ### What is Ollama?
 
-[Ollama](https://ollama.ai) is an open-source tool that lets you run large language models and embedding models locally on your own hardware. For Maproom, we use Ollama's `nomic-embed-text` model to generate 768-dimensional vector embeddings for semantic code search.
+[Ollama](https://ollama.ai) is an open-source tool that lets you run large language models and embedding models locally on your own hardware. For Maproom, we use Ollama's `mxbai-embed-large` model to generate 1024-dimensional vector embeddings for semantic code search.
 
 ### When to Use Ollama
 
@@ -191,18 +191,18 @@ curl http://localhost:11434/api/tags
 
 ## Step 3: Download Embedding Model
 
-Ollama supports multiple embedding models. For Maproom, we recommend `nomic-embed-text` for its excellent quality-to-performance ratio.
+Ollama supports multiple embedding models. For Maproom, we recommend `mxbai-embed-large` for its excellent quality and stability (no special character issues).
 
 ### Pull the Model
 
 ```bash
-ollama pull nomic-embed-text
+ollama pull mxbai-embed-large
 ```
 
 **Expected output:**
 ```
 pulling manifest
-pulling 970aa74c0a90... 100% ▕████████████████████████████████████████▏ 274 MB
+pulling 468836162de7... 100% ▕████████████████████████████████████████▏ 669 MB
 pulling 8ab4849b038c... 100% ▕████████████████████████████████████████▏  11 KB
 pulling b838b869f904... 100% ▕████████████████████████████████████████▏  6.9 KB
 verifying sha256 digest
@@ -210,7 +210,7 @@ writing manifest
 success
 ```
 
-**Download time**: 1-5 minutes depending on internet speed (model is ~274MB)
+**Download time**: 2-10 minutes depending on internet speed (model is ~669MB)
 
 ### Verify Model Installation
 
@@ -220,8 +220,8 @@ ollama list
 
 **Expected output:**
 ```
-NAME                    ID              SIZE      MODIFIED
-nomic-embed-text:latest 970aa74c0a90    274 MB    2 minutes ago
+NAME                     ID              SIZE      MODIFIED
+mxbai-embed-large:latest 468836162de7    669 MB    2 minutes ago
 ```
 
 ### Alternative Embedding Models
@@ -230,49 +230,50 @@ Ollama supports multiple embedding models with different tradeoffs:
 
 | Model | Dimensions | Size | Speed | Quality |
 |-------|-----------|------|-------|---------|
-| `nomic-embed-text` | 768 | 274 MB | Fast | High (recommended) |
-| `mxbai-embed-large` | 1024 | 669 MB | Medium | Very High |
+| `mxbai-embed-large` | 1024 | 669 MB | Medium | Very High (default) |
+| `nomic-embed-text` | 768 | 274 MB | Fast | High |
 | `all-minilm` | 384 | 45 MB | Very Fast | Good |
 
 **To use a different model:**
 ```bash
-ollama pull mxbai-embed-large
-export OLLAMA_MODEL=mxbai-embed-large
+ollama pull nomic-embed-text
+export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+export MAPROOM_EMBEDDING_DIMENSION=768
 ```
 
-#### Using mxbai-embed-large (1024 dimensions)
+#### Using nomic-embed-text (768 dimensions) - Legacy
 
-For higher quality embeddings, you can use the `mxbai-embed-large` model which provides 1024-dimensional embeddings:
+If you prefer the smaller, faster model or need backward compatibility:
 
 ```bash
-# Install the model (669 MB download)
-ollama pull mxbai-embed-large
+# Install the model (274 MB download)
+ollama pull nomic-embed-text
 
 # Configure Maproom to use it
-export MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
-export MAPROOM_EMBEDDING_DIMENSION=1024
+export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+export MAPROOM_EMBEDDING_DIMENSION=768
 
 # Verify configuration
 echo $MAPROOM_EMBEDDING_MODEL
-# Expected: mxbai-embed-large
+# Expected: nomic-embed-text
 ```
 
 **Storage tradeoffs:**
-- 1024-dim embeddings: 4,096 bytes per embedding (33% larger than 768-dim)
-- For a 100K chunk codebase: ~390 MB vs ~293 MB (768-dim)
-- Storage increase is offset by improved search quality
+- 768-dim embeddings: 3,072 bytes per embedding (25% smaller than 1024-dim)
+- For a 100K chunk codebase: ~293 MB vs ~390 MB (1024-dim)
+- Smaller model download (274 MB vs 669 MB)
 
 **Performance characteristics:**
-- Throughput: ~6,780 tokens/sec (vs ~8,000+ for nomic-embed-text)
-- Model size: 669 MB (vs 274 MB for nomic-embed-text)
-- Slightly slower embedding generation due to larger model
-- Search performance: ~33% more compute for vector similarity (1024 vs 768 dimensions)
+- Throughput: ~8,000+ tokens/sec (vs ~6,780 for mxbai-embed-large)
+- Model size: 274 MB (vs 669 MB for mxbai-embed-large)
+- Faster embedding generation due to smaller model
+- Note: May have issues with special characters (requires sanitization)
 
-**When to use mxbai-embed-large:**
-- Maximum search quality is critical
-- You have sufficient disk space (669 MB model + 33% larger embeddings)
-- You can accept ~15% slower embedding generation
-- You're indexing a large codebase where search quality matters more than speed
+**When to use nomic-embed-text:**
+- Faster embedding generation is priority
+- You have limited disk space
+- You're working with a smaller codebase
+- You already have 768-dim embeddings and don't want to re-index
 
 ---
 
@@ -325,8 +326,8 @@ crewchief maproom scan --generate-embeddings --dry-run
 
 **Expected output:**
 ```
-✓ Using embedding provider: ollama (768 dimensions)
-✓ Model: nomic-embed-text
+✓ Using embedding provider: ollama (1024 dimensions)
+✓ Model: mxbai-embed-large
 ✓ Scanning repository...
 ✓ Would index 1,234 code chunks
 ✓ Dry run complete - no changes made
@@ -341,13 +342,13 @@ crewchief maproom scan --generate-embeddings
 
 **Expected output:**
 ```
-✓ Using embedding provider: ollama (768 dimensions)
-✓ Model: nomic-embed-text
+✓ Using embedding provider: ollama (1024 dimensions)
+✓ Model: mxbai-embed-large
 ✓ Scanning repository...
 ✓ Found 1,234 code chunks
 ✓ Generating embeddings... (this may take a few minutes)
   [████████████████████████████████████████] 1234/1234
-✓ Generated embeddings for 1,234 chunks in 3m 42s
+✓ Generated embeddings for 1,234 chunks in 4m 15s
 ✓ Index updated successfully
 ```
 
@@ -413,11 +414,11 @@ Error: Failed to connect to Ollama at http://localhost:11434
 
 ---
 
-### "Model nomic-embed-text not found"
+### "Model mxbai-embed-large not found"
 
 **Symptoms:**
 ```
-Error: model 'nomic-embed-text' not found
+Error: model 'mxbai-embed-large' not found
 ```
 
 **Cause:** Model hasn't been downloaded
@@ -425,7 +426,7 @@ Error: model 'nomic-embed-text' not found
 **Solution:**
 ```bash
 # Pull the model
-ollama pull nomic-embed-text
+ollama pull mxbai-embed-large
 
 # Verify it's downloaded
 ollama list
@@ -579,8 +580,8 @@ nvcc --version
 ```
 
 **GPU memory usage:**
-- `nomic-embed-text`: ~500MB VRAM
-- `mxbai-embed-large`: ~1.5GB VRAM
+- `mxbai-embed-large`: ~1.5GB VRAM (default)
+- `nomic-embed-text`: ~500MB VRAM (legacy)
 
 **If GPU is not detected:**
 
@@ -639,11 +640,12 @@ Use alternative embedding models:
 # List available models
 ollama list
 
-# Pull alternative model
-ollama pull mxbai-embed-large
+# Pull alternative model (e.g., for legacy compatibility)
+ollama pull nomic-embed-text
 
 # Configure Maproom to use it
-export OLLAMA_MODEL=mxbai-embed-large
+export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+export MAPROOM_EMBEDDING_DIMENSION=768
 crewchief maproom scan --generate-embeddings
 ```
 
@@ -651,8 +653,8 @@ crewchief maproom scan --generate-embeddings
 
 | Model | Dimensions | Quality | Speed | Use Case |
 |-------|-----------|---------|-------|----------|
-| `nomic-embed-text` | 768 | ⭐⭐⭐⭐ | Fast | Balanced (default) |
-| `mxbai-embed-large` | 1024 | ⭐⭐⭐⭐⭐ | Slower | Maximum quality |
+| `mxbai-embed-large` | 1024 | ⭐⭐⭐⭐⭐ | Medium | Maximum quality (default) |
+| `nomic-embed-text` | 768 | ⭐⭐⭐⭐ | Fast | Balanced (legacy) |
 | `all-minilm` | 384 | ⭐⭐⭐ | Very Fast | Speed priority |
 
 ---
@@ -786,7 +788,7 @@ If you're migrating from Google Vertex AI or OpenAI to Ollama:
 1. **Different embedding dimensions**:
    - OpenAI (text-embedding-3-small): 1536D
    - Google Vertex AI: 768D
-   - Ollama (nomic-embed-text): 768D
+   - Ollama (mxbai-embed-large): 1024D
 
    You'll need to **re-generate all embeddings** - they're not compatible.
 
@@ -826,7 +828,7 @@ If you're migrating from Google Vertex AI or OpenAI to Ollama:
 | Feature | Ollama | OpenAI |
 |---------|--------|--------|
 | **Cost** | ✅ Free | ~$0.00003 / 1K chars |
-| **Dimensions** | 768 | 1536 |
+| **Dimensions** | 1024 | 1536 |
 | **Privacy** | ✅ Local only | Cloud (encrypted) |
 | **Setup** | Easy (5 min) | Easy (5 min) |
 | **Speed** | Fast (GPU) | Fast |
@@ -848,13 +850,13 @@ ollama serve                           # macOS/Windows
 sudo systemctl start ollama            # Linux
 
 # Model management
-ollama pull nomic-embed-text          # Download model
+ollama pull mxbai-embed-large         # Download default model
 ollama list                           # List installed models
-ollama show nomic-embed-text          # Model details
+ollama show mxbai-embed-large         # Model details
 
-# Configuration
-export MAPROOM_EMBEDDING_PROVIDER=ollama      # Set provider
-export OLLAMA_MODEL=nomic-embed-text  # Set model
+# Configuration (optional - mxbai-embed-large is default)
+export MAPROOM_EMBEDDING_PROVIDER=ollama           # Set provider
+export MAPROOM_EMBEDDING_MODEL=mxbai-embed-large   # Set model (default)
 
 # Indexing
 crewchief maproom scan --generate-embeddings         # Full index
@@ -873,7 +875,7 @@ crewchief maproom search "query"      # Test search
 
 - **[Ollama Official Docs](https://ollama.ai/docs)** - Complete Ollama documentation
 - **[Ollama GitHub](https://github.com/ollama/ollama)** - Source code and issue tracker
-- **[Nomic Embed Model Card](https://huggingface.co/nomic-ai/nomic-embed-text-v1)** - Model details and benchmarks
+- **[mxbai-embed-large Model Card](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1)** - Model details and benchmarks
 
 ### Maproom Documentation
 

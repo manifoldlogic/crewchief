@@ -114,7 +114,7 @@ The tooltip shows additional information:
 
 **Setup**:
 1. Install Ollama: https://ollama.ai/download
-2. Run: `ollama pull nomic-embed-text`
+2. Run: `ollama pull mxbai-embed-large`
 3. Keep Ollama running while using the extension
 
 The setup wizard auto-detects if Ollama is running on port 11434.
@@ -198,7 +198,7 @@ chmod +x ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/bin/*/crewchief-map
 - **Memory Usage**: Embedding requires 2-4GB RAM for large codebases.
 - **Binary Files**: Only text files are indexed.
 - **Network Required**: OpenAI and Google providers require active internet.
-- **Ollama Model**: Must download ~500MB model on first use (one-time).
+- **Ollama Model**: Must download ~669MB model on first use (one-time).
 
 ## Architecture
 

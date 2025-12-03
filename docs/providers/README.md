@@ -119,7 +119,7 @@ crewchief maproom scan --dry-run
 # Should show:
 # ✓ Using embedding provider: google (768 dimensions)
 # OR
-# ✓ Using embedding provider: ollama (384 dimensions)
+# ✓ Using embedding provider: ollama (1024 dimensions)
 # OR
 # ✓ Using embedding provider: openai (1536 dimensions)
 ```
@@ -152,7 +152,7 @@ You can switch between providers at any time. See the **[Provider Migration Guid
 
 ### Ollama
 
-- **Model selection**: Choose from multiple embedding models (e.g., `nomic-embed-text`, `mxbai-embed-large`)
+- **Model selection**: Default is `mxbai-embed-large` (1024-dim); legacy `nomic-embed-text` (768-dim) also supported
 - **GPU acceleration**: Leverage local GPU for faster embedding generation
 - **Customizable**: Fine-tune models for domain-specific embeddings
 

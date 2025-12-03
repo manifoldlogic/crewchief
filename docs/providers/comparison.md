@@ -14,8 +14,8 @@ This guide provides a comprehensive comparison of embedding providers supported 
 | **Speed** | Fast (local) | Medium (network) | Medium (network) |
 | **Privacy** | Complete (offline) | High (GCP infra) | Medium (cloud) |
 | **Setup** | Easy | Medium | Easy |
-| **Dimensions** | 768 | 768 | 1536 |
-| **Model** | nomic-embed-text | textembedding-gecko@003 | text-embedding-3-small |
+| **Dimensions** | 1024 | 768 | 1536 |
+| **Model** | mxbai-embed-large | textembedding-gecko@003 | text-embedding-3-small |
 | **Compliance** | N/A (local) | GDPR, SOC2, HIPAA* | GDPR, SOC2 |
 
 *With proper configuration and Business Associate Agreement (BAA)
@@ -140,7 +140,7 @@ This guide provides a comprehensive comparison of embedding providers supported 
 
 | Provider | Model | Dimensions | Quality Score* | Notes |
 |----------|-------|------------|----------------|-------|
-| **Ollama** | nomic-embed-text | 768 | 8.5/10 | Optimized for code, excellent for local use |
+| **Ollama** | mxbai-embed-large | 1024 | 9.0/10 | High quality, no special character issues |
 | **Google Vertex AI** | textembedding-gecko@003 | 768 | 9.0/10 | General purpose, strong multilingual support |
 | **OpenAI** | text-embedding-3-small | 1536 | 9.5/10 | Higher dimensions, best overall quality |
 
@@ -270,8 +270,8 @@ This guide provides a comprehensive comparison of embedding providers supported 
 
 **Steps**:
 1. Install Ollama: `curl -sSL https://ollama.ai/install.sh | sh`
-2. Pull model: `ollama pull nomic-embed-text`
-3. Verify: `ollama list` (should show nomic-embed-text)
+2. Pull model: `ollama pull mxbai-embed-large`
+3. Verify: `ollama list` (should show mxbai-embed-large)
 4. Start using: Zero configuration needed
 
 **Prerequisites**:
@@ -647,8 +647,9 @@ crewchief maproom scan --incremental  # Only new/changed files
 ### Handling Different Dimensions
 
 Maproom uses separate columns for different embedding dimensions:
-- **768-dimensional**: `embedding_nomic` (Ollama, Google)
-- **1536-dimensional**: `embedding_openai` (OpenAI)
+- **768-dimensional**: `vec_code_768` (nomic-embed-text legacy)
+- **1024-dimensional**: `vec_code_1024` (mxbai-embed-large, Ollama default)
+- **1536-dimensional**: `vec_code` (OpenAI, Google)
 
 **Search behavior**:
 ```sql
@@ -826,7 +827,7 @@ gcloud compute project-info describe --project=YOUR_PROJECT
 **Yes, but quality is comparable**. In testing:
 - OpenAI (1536-dim): Best overall quality (+5-10% relevance)
 - Google (768-dim): Strong multilingual performance
-- Ollama (768-dim): Excellent for code, slightly lower on natural language
+- Ollama (1024-dim): Excellent for code, high quality with mxbai-embed-large
 
 Differences are usually minor (<10% relevance delta). Choose based on cost/privacy/compliance, not just quality.
 

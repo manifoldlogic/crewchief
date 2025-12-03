@@ -135,13 +135,14 @@ File Discovery → Tree-sitter Parsing → Chunk Extraction → Embedding → Da
 
 Maproom supports **three embedding providers** with automatic detection and failover:
 
-| Provider | Dimension | Column | Use Case |
+| Provider | Dimension | Table | Use Case |
 |----------|-----------|--------|----------|
-| **Ollama** | 768 | `code_embedding_ollama` / `text_embedding_ollama` | Zero-config local deployment |
-| **Google Vertex AI** | 768 | `code_embedding_ollama` / `text_embedding_ollama` (shared) | Production, enterprise |
-| **OpenAI** | 1536 | `code_embedding` / `text_embedding` | High-quality embeddings |
+| **Ollama** (mxbai-embed-large) | 1024 | `vec_code_1024` | Zero-config local deployment (default) |
+| **Ollama** (nomic-embed-text) | 768 | `vec_code_768` | Legacy support |
+| **Google Vertex AI** | 768 | `vec_code_768` | Production, enterprise |
+| **OpenAI** | 1536 | `vec_code` | High-quality embeddings |
 
-**Key Design Decision**: Ollama and Google Vertex AI **share the same 768-dimensional columns** to avoid schema proliferation and enable seamless provider switching.
+**Key Design Decision**: Maproom uses **dimension-specific vector tables** (`vec_code_768`, `vec_code_1024`, `vec_code`) to support multiple embedding dimensions seamlessly.
 
 ### Provider Selection Logic
 
@@ -163,7 +164,7 @@ Maproom supports **three embedding providers** with automatic detection and fail
 - **Purpose**: Semantic understanding of code functionality
 - **Input**: Source code text (function bodies, class definitions)
 - **Normalization**: Remove comments, normalize whitespace
-- **Model**: `nomic-embed-text` (Ollama), `textembedding-gecko@003` (Google), `text-embedding-3-small` (OpenAI)
+- **Model**: `mxbai-embed-large` (Ollama default), `nomic-embed-text` (Ollama legacy), `textembedding-gecko@003` (Google), `text-embedding-3-small` (OpenAI)
 
 #### Text Embeddings
 - **Purpose**: Natural language search in documentation

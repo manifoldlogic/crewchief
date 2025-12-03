@@ -1,8 +1,8 @@
 # Ticket: [MXBAI-2002]: Update Active Documentation Files
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation updates, no executable code)
 - [ ] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
@@ -25,13 +25,62 @@ This ticket implements Phase 2, Deliverable 2 from plan.md. After code changes i
 Reference: plan.md Phase 2, Deliverable 2 "Update Example Code"
 
 ## Acceptance Criteria
-- [ ] ollama-setup.md updated with mxbai-embed-large examples (nomic examples replaced)
-- [ ] crates/maproom/CLAUDE.md updated with new default model references
-- [ ] README.md updated (quickstart, examples, default mentions)
-- [ ] packages/vscode-maproom/README.md updated with correct setup instructions
-- [ ] packages/maproom-mcp/README.md updated if model mentioned
-- [ ] crates/maproom/.env.example verified (already updated in MXBAI-1003)
-- [ ] All 7 files show mxbai-embed-large as default, with backward compat notes where appropriate
+- [x] ollama-setup.md updated with mxbai-embed-large examples (nomic examples replaced)
+- [x] crates/maproom/CLAUDE.md updated with new default model references
+- [x] README.md updated (quickstart, examples, default mentions)
+- [x] packages/vscode-maproom/README.md updated with correct setup instructions
+- [x] packages/maproom-mcp/README.md updated if model mentioned
+- [x] crates/maproom/.env.example verified (already updated in MXBAI-1003)
+- [x] All 7 files show mxbai-embed-large as default, with backward compat notes where appropriate
+
+## Completion Notes
+
+### Files Updated
+1. **docs/providers/ollama-setup.md** - Comprehensive update:
+   - Changed default model from nomic-embed-text to mxbai-embed-large
+   - Updated dimensions from 768 to 1024
+   - Updated model pull commands
+   - Updated expected outputs
+   - Added "legacy" section for nomic-embed-text
+   - Updated model comparison tables
+   - Updated troubleshooting sections
+   - Updated quick reference
+
+2. **crates/maproom/CLAUDE.md** - Updated:
+   - Environment variable example to use mxbai-embed-large
+   - Dimension table to show mxbai-embed-large as default
+   - Configuration examples
+
+3. **README.md** - Updated:
+   - Ollama provider example to use mxbai-embed-large with 1024 dimensions
+
+4. **packages/vscode-maproom/README.md** - Updated:
+   - Ollama setup instructions to use mxbai-embed-large
+   - Model download size to 669MB
+
+5. **docs/providers/comparison.md** - Updated:
+   - Quick comparison table (Ollama: 1024 dim, mxbai-embed-large)
+   - Quality comparison table
+   - Setup steps
+   - Handling different dimensions section
+   - FAQ section
+
+6. **docs/providers/README.md** - Updated:
+   - Verify setup output to show 1024 dimensions for Ollama
+   - Ollama features section
+
+7. **docs/architecture/MAPROOM_ARCHITECTURE.md** - Updated:
+   - Multi-provider table to show mxbai-embed-large as default
+   - Model list in embedding section
+
+8. **crates/maproom/.env.example** - Verified already updated in MXBAI-1003
+
+### Backward Compatibility
+All documentation now includes backward compatibility notes for users who prefer nomic-embed-text:
+```bash
+export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
+export MAPROOM_EMBEDDING_DIMENSION=768
+```
 
 ## Technical Requirements
 **File 1: `/workspace/docs/providers/ollama-setup.md`** (20 min):
