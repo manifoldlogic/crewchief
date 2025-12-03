@@ -332,7 +332,7 @@ pub async fn incremental_update(
         let tree_sha = current_tree_sha.clone();
         move |conn| {
             conn.execute(
-                "INSERT OR REPLACE INTO worktree_index_state (worktree_id, last_tree_sha, last_updated)
+                "INSERT OR REPLACE INTO index_state (worktree_id, tree_sha, last_indexed)
                  VALUES (?1, ?2, datetime('now'))",
                 rusqlite::params![worktree_id, tree_sha],
             )?;

@@ -85,7 +85,7 @@ pub async fn get_last_indexed_tree(store: &SqliteStore, worktree_id: i64) -> Res
 
             let result: Option<String> = conn
                 .query_row(
-                    "SELECT last_tree_sha FROM worktree_index_state WHERE worktree_id = ?1",
+                    "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
                     params![worktree_id],
                     |row| row.get(0),
                 )
@@ -148,12 +148,12 @@ pub async fn update_index_state(
 
             conn.execute(
                 r#"
-            INSERT INTO worktree_index_state
-              (worktree_id, last_tree_sha, last_indexed, chunks_processed, embeddings_generated)
+            INSERT INTO index_state
+              (worktree_id, tree_sha, last_indexed, chunks_processed, embeddings_generated)
             VALUES (?1, ?2, datetime('now'), ?3, ?4)
             ON CONFLICT (worktree_id) DO UPDATE
             SET
-              last_tree_sha = excluded.last_tree_sha,
+              tree_sha = excluded.tree_sha,
               last_indexed = datetime('now'),
               chunks_processed = excluded.chunks_processed,
               embeddings_generated = excluded.embeddings_generated
