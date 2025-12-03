@@ -1,9 +1,9 @@
 # Ticket: [MXBAI-1003]: Update Configuration Examples
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (configuration example file, not executable code)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,10 +25,10 @@ This ticket implements part of Decision 7 from architecture.md. The .env.example
 Reference: plan.md Phase 1, Deliverable 3 "Update Configuration Examples"
 
 ## Acceptance Criteria
-- [ ] MAPROOM_EMBEDDING_MODEL example value changed from nomic-embed-text to mxbai-embed-large
-- [ ] MAPROOM_EMBEDDING_DIMENSION example value changed from 768 to 1024
-- [ ] Comment added explaining backward compatibility
-- [ ] File remains valid .env format
+- [x] MAPROOM_EMBEDDING_MODEL example value changed from nomic-embed-text to mxbai-embed-large
+- [x] MAPROOM_EMBEDDING_DIMENSION example value changed from 768 to 1024
+- [x] Comment added explaining backward compatibility
+- [x] File remains valid .env format
 
 ## Technical Requirements
 - Modify `crates/maproom/.env.example` line 38:
