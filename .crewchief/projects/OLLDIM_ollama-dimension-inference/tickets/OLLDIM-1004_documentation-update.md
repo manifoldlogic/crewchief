@@ -1,9 +1,9 @@
 # Ticket: [OLLDIM-1004]: Documentation Update
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -31,13 +31,13 @@ This documentation will help users understand the zero-config workflow and troub
 Reference: Phase 1 Post-Implementation from plan.md lines 418-448
 
 ## Acceptance Criteria
-- [ ] New section "Embedding Dimension Configuration" added to CLAUDE.md
-- [ ] Documents all supported models with their dimensions
-- [ ] Explains explicit override mechanism with example
-- [ ] Includes "After Upgrading" section for existing users
-- [ ] Shows zero-config example workflow
-- [ ] Clear, concise language suitable for both users and developers
-- [ ] Markdown formatting is correct and renders properly
+- [x] New section "Embedding Dimension Configuration" added to CLAUDE.md
+- [x] Documents all supported models with their dimensions
+- [x] Explains explicit override mechanism with example
+- [x] Includes "After Upgrading" section for existing users
+- [x] Shows zero-config example workflow
+- [x] Clear, concise language suitable for both users and developers
+- [x] Markdown formatting is correct and renders properly
 
 ## Technical Requirements
 - File: `crates/maproom/CLAUDE.md`

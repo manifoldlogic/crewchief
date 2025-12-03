@@ -404,6 +404,34 @@ To add support for a new embedding dimension (e.g., 512 or 2048), follow this pa
 
 **Why multiple tables?** sqlite-vec virtual tables have fixed dimensions at table creation time. Supporting multiple dimensions requires separate tables, which provides automatic dimension isolation during vector search.
 
+## Embedding Dimension Configuration
+
+Maproom automatically infers embedding dimensions for known Ollama models:
+- `mxbai-embed-large*`: 1024 dimensions (default, matches tags like `:latest`)
+- `nomic-embed-text*`: 768 dimensions (matches tags like `:latest`)
+
+To override automatic inference or configure custom models:
+```bash
+export MAPROOM_EMBEDDING_DIMENSION=512
+```
+
+Explicit configuration always takes precedence over inference.
+
+## After Upgrading to Dimension Inference
+
+If you previously experienced dimension mismatch errors:
+1. The fix is automatic - no configuration changes needed
+2. Existing embeddings are dimension-tagged and remain valid
+3. New embeddings will use correct inferred dimensions
+4. No regeneration required
+
+Zero-config workflows now work correctly:
+```bash
+# No environment variables needed for Ollama with standard models
+crewchief-maproom generate-embeddings --repo myrepo
+# Automatically uses mxbai-embed-large at 1024 dimensions
+```
+
 ## Known Limitations
 
 - Single-user only (no multi-process concurrent writes)
