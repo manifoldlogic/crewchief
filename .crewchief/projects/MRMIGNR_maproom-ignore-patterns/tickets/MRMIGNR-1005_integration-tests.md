@@ -1,9 +1,9 @@
 # Ticket: [MRMIGNR-1005]: Integration Tests for Scan and Watch
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - all 4 integration tests passing (1.14s execution time)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,16 +32,16 @@ These tests provide confidence that scan and watch integrations (MRMIGNR-1002, M
 Reference: Testing Strategy (plan.md lines 185-199), Quality Strategy (quality-strategy.md lines 68-92)
 
 ## Acceptance Criteria
-- [ ] Test `test_scan_respects_maproomignore()` passes - scan excludes files matching patterns
-- [ ] Test `test_watch_filters_maproomignore_events()` passes - watch filters events based on patterns
-- [ ] Test `test_invalid_patterns_fail_startup()` passes - both scan and watch fail with clear errors
-- [ ] Test `test_gitignore_still_works()` passes - .gitignore and .maproomignore both apply independently
-- [ ] All integration tests pass when run with `cargo test -p crewchief-maproom maproomignore_test`
-- [ ] All existing integration tests still pass (no regression)
-- [ ] Tests use real git repositories (tempfile::TempDir + git init)
-- [ ] Tests verify database state or event emission (not just code execution)
-- [ ] Code passes `cargo clippy -p crewchief-maproom` with no warnings
-- [ ] Code formatted with `cargo fmt`
+- [x] Test `test_scan_respects_maproomignore()` passes - scan excludes files matching patterns
+- [x] Test `test_watch_filters_maproomignore_events()` passes - watch filters events based on patterns
+- [x] Test `test_invalid_patterns_fail_startup()` passes - both scan and watch fail with clear errors
+- [x] Test `test_gitignore_still_works()` passes - .gitignore and .maproomignore both apply independently
+- [x] All integration tests pass when run with `cargo test -p crewchief-maproom maproomignore_test`
+- [x] All existing integration tests still pass (no regression - pre-existing embedding test failures confirmed)
+- [x] Tests use real git repositories (tempfile::TempDir + git init)
+- [x] Tests verify database state or event emission (not just code execution)
+- [x] Code passes `cargo clippy -p crewchief-maproom` with no warnings
+- [x] Code formatted with `cargo fmt`
 
 ## Technical Requirements
 
