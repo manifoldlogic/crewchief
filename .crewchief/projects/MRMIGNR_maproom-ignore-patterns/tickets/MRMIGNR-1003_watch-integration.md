@@ -1,9 +1,9 @@
 # Ticket: [MRMIGNR-1003]: Watch Integration with .maproomignore
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,16 +28,16 @@ Pattern loading happens once at watcher startup. If .maproomignore changes durin
 Reference: Phase 1 - Watch Integration (plan.md lines 129-137), Architecture Component 3 (architecture.md lines 129-171)
 
 ## Acceptance Criteria
-- [ ] `IgnorePatternMatcher::from_repository()` loaded once at start of `event_conversion_task()`
-- [ ] Filter added inside `while let Some(file_event) = file_event_rx.recv().await` loop
-- [ ] FileEvents matching .maproomignore patterns are skipped (not converted to IndexingEvent)
-- [ ] Non-ignored events still processed normally (no regression)
-- [ ] Invalid patterns in `.maproomignore` cause watcher startup to fail with clear error message
-- [ ] Debug logging added for filtered events (e.g., "Ignoring event for maproomignore path: ...")
-- [ ] Manual test passes: modify file matching pattern, verify no indexing occurs
-- [ ] All existing watcher tests pass (no regression)
-- [ ] Code passes `cargo clippy -p crewchief-maproom` with no warnings
-- [ ] Code formatted with `cargo fmt`
+- [x] `IgnorePatternMatcher::from_repository()` loaded once at start of `event_conversion_task()`
+- [x] Filter added inside `while let Some(file_event) = file_event_rx.recv().await` loop
+- [x] FileEvents matching .maproomignore patterns are skipped (not converted to IndexingEvent)
+- [x] Non-ignored events still processed normally (no regression)
+- [x] Invalid patterns in `.maproomignore` cause watcher startup to fail with clear error message
+- [x] Debug logging added for filtered events (e.g., "Ignoring event for maproomignore path: ...")
+- [x] Manual test passes: modify file matching pattern, verify no indexing occurs
+- [x] All existing watcher tests pass (no regression)
+- [x] Code passes `cargo clippy -p crewchief-maproom` with no warnings
+- [x] Code formatted with `cargo fmt`
 
 ## Technical Requirements
 

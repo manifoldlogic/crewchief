@@ -4,12 +4,13 @@
 //! with a worktree identifier, enabling multi-worktree indexing scenarios.
 
 use super::events::{FileEvent, IndexingEvent, WorktreeId};
+use super::ignore::IgnorePatternMatcher;
 use super::watcher::{FileWatcher, WatcherConfig};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 /// Health status of a worktree watcher.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,8 +61,15 @@ impl WorktreeWatcher {
 
         // Spawn task to convert FileEvents to IndexingEvents
         let worktree_id_clone = worktree_id.clone();
+        let repo_root = path.clone();
         tokio::spawn(async move {
-            Self::event_conversion_task(worktree_id_clone, file_event_rx, indexing_event_tx).await;
+            Self::event_conversion_task(
+                worktree_id_clone,
+                file_event_rx,
+                indexing_event_tx,
+                repo_root,
+            )
+            .await;
         });
 
         let watcher = Self {
@@ -140,8 +148,28 @@ impl WorktreeWatcher {
         worktree_id: WorktreeId,
         mut file_event_rx: mpsc::Receiver<FileEvent>,
         indexing_event_tx: mpsc::Sender<IndexingEvent>,
+        repo_root: PathBuf,
     ) {
+        // Load ignore patterns once at start
+        let ignore_matcher = match IgnorePatternMatcher::from_repository(&repo_root) {
+            Ok(matcher) => matcher,
+            Err(e) => {
+                error!(
+                    "Failed to load ignore patterns, watcher cannot start: {}",
+                    e
+                );
+                return; // Fail-fast
+            }
+        };
+
         while let Some(file_event) = file_event_rx.recv().await {
+            // Filter events based on .maproomignore patterns
+            let path = file_event.path();
+            if ignore_matcher.should_ignore(path) {
+                debug!("Ignoring event for maproomignore path: {}", path.display());
+                continue;
+            }
+
             let timestamp = SystemTime::now();
             let indexing_event =
                 IndexingEvent::from_file_event(worktree_id.clone(), file_event, timestamp);
