@@ -328,18 +328,20 @@ pub async fn incremental_update(
 
     // 6. Update index state with new tree SHA
     // This is done after successful processing
-    store.run({
-        let tree_sha = current_tree_sha.clone();
-        move |conn| {
-            conn.execute(
-                "INSERT OR REPLACE INTO index_state (worktree_id, tree_sha, last_indexed)
+    store
+        .run({
+            let tree_sha = current_tree_sha.clone();
+            move |conn| {
+                conn.execute(
+                    "INSERT OR REPLACE INTO index_state (worktree_id, tree_sha, last_indexed)
                  VALUES (?1, ?2, datetime('now'))",
-                rusqlite::params![worktree_id, tree_sha],
-            )?;
-            Ok(())
-        }
-    }).await
-    .with_context(|| format!("Failed to update index state for worktree {}", worktree_id))?;
+                    rusqlite::params![worktree_id, tree_sha],
+                )?;
+                Ok(())
+            }
+        })
+        .await
+        .with_context(|| format!("Failed to update index state for worktree {}", worktree_id))?;
 
     info!(
         worktree_id = worktree_id,

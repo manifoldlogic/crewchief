@@ -1,9 +1,9 @@
 # Ticket: [MRMIGNR-1001]: Pattern Loading Infrastructure
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,16 +28,16 @@ This is the foundation upon which scan and watch integrations will be built in s
 Reference: Phase 1 - Foundation (plan.md lines 117-121)
 
 ## Acceptance Criteria
-- [ ] Function `load_ignore_patterns(root: &Path) -> Result<Vec<String>>` implemented in `crates/maproom/src/incremental/ignore.rs`
-- [ ] Function reads `.maproomignore` file from repository root (if exists)
-- [ ] Function parses patterns correctly: skips blank lines, skips comments (lines starting with #), returns pattern strings
-- [ ] Function gracefully handles missing `.maproomignore` (returns only default patterns, no error)
-- [ ] Function returns error if `.maproomignore` exists but contains invalid glob patterns
-- [ ] Constructor `IgnorePatternMatcher::from_repository(root: &Path) -> Result<Self>` implemented
-- [ ] Constructor calls `load_ignore_patterns()` and builds matcher with combined patterns
-- [ ] All existing tests in `incremental/ignore.rs` still pass (no regression)
-- [ ] Code passes `cargo clippy -p crewchief-maproom` with no warnings
-- [ ] Code formatted with `cargo fmt`
+- [x] Function `load_ignore_patterns(root: &Path) -> Result<Vec<String>>` implemented in `crates/maproom/src/incremental/ignore.rs`
+- [x] Function reads `.maproomignore` file from repository root (if exists)
+- [x] Function parses patterns correctly: skips blank lines, skips comments (lines starting with #), returns pattern strings
+- [x] Function gracefully handles missing `.maproomignore` (returns only default patterns, no error)
+- [x] Function returns error if `.maproomignore` exists but contains invalid glob patterns
+- [x] Constructor `IgnorePatternMatcher::from_repository(root: &Path) -> Result<Self>` implemented
+- [x] Constructor calls `load_ignore_patterns()` and builds matcher with combined patterns
+- [x] All existing tests in `incremental/ignore.rs` still pass (no regression)
+- [x] Code passes `cargo clippy -p crewchief-maproom` with no warnings
+- [x] Code formatted with `cargo fmt`
 
 ## Technical Requirements
 

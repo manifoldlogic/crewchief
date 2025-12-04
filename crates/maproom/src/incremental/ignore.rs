@@ -23,6 +23,45 @@ const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
     "**/Thumbs.db",
 ];
 
+/// Load ignore patterns from .maproomignore file in repository root.
+///
+/// Reads `.maproomignore` from the repository root and combines patterns with defaults.
+/// Returns only default patterns if the file doesn't exist (not an error).
+/// Fails if the file exists but contains invalid glob patterns.
+///
+/// # Arguments
+/// * `root` - Repository root path where .maproomignore should be located
+///
+/// # Returns
+/// * `Ok(Vec<String>)` - Combined default and user patterns
+/// * `Err` - If file I/O fails or patterns are invalid
+pub fn load_ignore_patterns(root: &Path) -> Result<Vec<String>> {
+    let mut patterns = DEFAULT_IGNORE_PATTERNS
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let maproomignore_path = root.join(".maproomignore");
+    if maproomignore_path.exists() {
+        let content = std::fs::read_to_string(&maproomignore_path).with_context(|| {
+            format!("Failed to read .maproomignore at {:?}", maproomignore_path)
+        })?;
+
+        for line in content.lines() {
+            let line = line.trim();
+            // Skip empty lines and comments (lines starting with #)
+            if !line.is_empty() && !line.starts_with('#') {
+                // Validate glob pattern before adding
+                Glob::new(line)
+                    .with_context(|| format!("Invalid glob pattern in .maproomignore: {}", line))?;
+                patterns.push(line.to_string());
+            }
+        }
+    }
+
+    Ok(patterns)
+}
+
 /// Manages ignore patterns for filtering file system events.
 pub struct IgnorePatternMatcher {
     glob_set: GlobSet,
@@ -74,6 +113,22 @@ impl IgnorePatternMatcher {
             }
         }
 
+        Self::with_patterns(patterns)
+    }
+
+    /// Create a matcher by reading .maproomignore from repository root.
+    ///
+    /// Loads ignore patterns from `.maproomignore` in the repository root and combines
+    /// them with default patterns. Returns matcher with only defaults if file doesn't exist.
+    ///
+    /// # Arguments
+    /// * `root` - Repository root path where .maproomignore should be located
+    ///
+    /// # Returns
+    /// * `Ok(IgnorePatternMatcher)` - Matcher configured with loaded patterns
+    /// * `Err` - If pattern loading fails or patterns are invalid
+    pub fn from_repository(root: &Path) -> Result<Self> {
+        let patterns = load_ignore_patterns(root)?;
         Self::with_patterns(patterns)
     }
 

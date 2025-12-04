@@ -186,9 +186,7 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
             };
 
             match execute_status(state, params).await {
-                Ok(result) => {
-                    JsonRpcResponse::success(id, serde_json::to_value(result).unwrap())
-                }
+                Ok(result) => JsonRpcResponse::success(id, serde_json::to_value(result).unwrap()),
                 Err(e) => {
                     error!("Status query failed: {}", e);
                     JsonRpcResponse::error(
