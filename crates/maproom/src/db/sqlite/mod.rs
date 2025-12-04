@@ -1615,6 +1615,101 @@ impl SqliteStore {
         .await
     }
 
+    /// Get all chunks for a worktree with their file paths.
+    ///
+    /// Returns chunk ID and file relative path for all chunks in the specified worktree.
+    /// Used by clean-ignored command to identify chunks matching ignore patterns.
+    ///
+    /// # Arguments
+    /// * `worktree_id` - Worktree ID
+    ///
+    /// # Returns
+    /// * `Ok(Vec<(chunk_id, file_relpath)>)` - List of chunks with their file paths
+    pub async fn get_chunks_for_worktree(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i64, String)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, f.relpath
+                 FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE f.worktree_id = ?1",
+            )?;
+
+            let chunks = stmt
+                .query_map(params![worktree_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(chunks)
+        })
+        .await
+    }
+
+    /// Delete chunks by their IDs.
+    ///
+    /// Deletes specified chunks and cleans up related data (edges, embeddings, junction table).
+    /// Used by clean-ignored command to remove chunks matching ignore patterns.
+    ///
+    /// # Arguments
+    /// * `_worktree_id` - Worktree ID (reserved for future validation/context)
+    /// * `chunk_ids` - List of chunk IDs to delete
+    ///
+    /// # Returns
+    /// * `Ok(usize)` - Number of chunks deleted
+    pub async fn delete_chunks_by_ids(
+        &self,
+        _worktree_id: i64,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<usize> {
+        if chunk_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            // Create placeholders for SQL IN clause
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            // Delete embeddings for these chunks
+            let embeddings_query = format!(
+                "DELETE FROM code_embeddings WHERE blob_sha IN (
+                     SELECT blob_sha FROM chunks WHERE id IN ({})
+                 )",
+                placeholders
+            );
+            let mut stmt = conn.prepare(&embeddings_query)?;
+            stmt.execute(rusqlite::params_from_iter(chunk_ids.iter()))?;
+
+            // Delete chunk_worktrees junction entries
+            let junction_query = format!(
+                "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
+                placeholders
+            );
+            let mut stmt = conn.prepare(&junction_query)?;
+            stmt.execute(rusqlite::params_from_iter(chunk_ids.iter()))?;
+
+            // Delete chunk_edges
+            let edges_query = format!(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
+                placeholders, placeholders
+            );
+            let mut stmt = conn.prepare(&edges_query)?;
+            let mut params: Vec<i64> = Vec::new();
+            params.extend_from_slice(&chunk_ids);
+            params.extend_from_slice(&chunk_ids);
+            stmt.execute(rusqlite::params_from_iter(params.iter()))?;
+
+            // Delete chunks themselves and get count
+            let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
+            let mut stmt = conn.prepare(&chunks_query)?;
+            let rows_affected = stmt.execute(rusqlite::params_from_iter(chunk_ids.iter()))?;
+
+            Ok(rows_affected)
+        })
+        .await
+    }
+
     /// Look up a file ID by its relative path and worktree ID.
     ///
     /// # Arguments
@@ -4823,5 +4918,225 @@ mod tests {
                 "Results should be ordered by depth"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_delete_chunks_by_ids() {
+        let store = setup_test_store().await;
+
+        // Setup: Create test data
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
+
+        // Create file
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash123".to_string(),
+            size_bytes: 1000,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create multiple chunks
+        let chunk1 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("func1".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "test chunk 1".to_string(),
+            ts_doc_text: "test function 1".to_string(),
+            recency_score: 1.0,
+            churn_score: 0.2,
+            metadata: None,
+        };
+        let chunk1_id = store.insert_chunk(&chunk1).await.unwrap();
+
+        let chunk2 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("func2".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 11,
+            end_line: 20,
+            preview: "test chunk 2".to_string(),
+            ts_doc_text: "test function 2".to_string(),
+            recency_score: 1.0,
+            churn_score: 0.2,
+            metadata: None,
+        };
+        let chunk2_id = store.insert_chunk(&chunk2).await.unwrap();
+
+        let chunk3 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob3".to_string(),
+            symbol_name: Some("func3".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 21,
+            end_line: 30,
+            preview: "test chunk 3".to_string(),
+            ts_doc_text: "test function 3".to_string(),
+            recency_score: 1.0,
+            churn_score: 0.2,
+            metadata: None,
+        };
+        let chunk3_id = store.insert_chunk(&chunk3).await.unwrap();
+
+        // Create edges between chunks
+        store
+            .insert_chunk_edge(chunk1_id, chunk2_id, "calls")
+            .await
+            .unwrap();
+        store
+            .insert_chunk_edge(chunk2_id, chunk3_id, "calls")
+            .await
+            .unwrap();
+
+        // Create embeddings for chunks
+        let embedding1: Vec<f32> = (0..1536).map(|i| i as f32 / 1536.0).collect();
+        let embedding2: Vec<f32> = (0..1536).map(|i| (i as f32 + 1.0) / 1536.0).collect();
+        store
+            .upsert_embedding("blob1", &embedding1, "model-v1")
+            .await
+            .unwrap();
+        store
+            .upsert_embedding("blob2", &embedding2, "model-v1")
+            .await
+            .unwrap();
+
+        // Verify all chunks exist
+        let chunk_exists = |id: i64| {
+            store.run(move |conn| {
+                let exists: bool = conn
+                    .query_row(
+                        "SELECT EXISTS(SELECT 1 FROM chunks WHERE id = ?1)",
+                        params![id],
+                        |row| row.get(0),
+                    )
+                    .unwrap_or(false);
+                Ok(exists)
+            })
+        };
+
+        assert!(chunk_exists(chunk1_id).await.unwrap());
+        assert!(chunk_exists(chunk2_id).await.unwrap());
+        assert!(chunk_exists(chunk3_id).await.unwrap());
+
+        // Verify edges exist
+        let edges_count = store
+            .run(|conn| {
+                let count: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM chunk_edges", [], |row| row.get(0))
+                    .unwrap();
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(edges_count, 2);
+
+        // Delete chunks 1 and 2
+        let deleted_count = store
+            .delete_chunks_by_ids(worktree_id, &[chunk1_id, chunk2_id])
+            .await
+            .unwrap();
+        assert_eq!(deleted_count, 2, "Should have deleted 2 chunks");
+
+        // Verify chunks 1 and 2 are deleted, chunk 3 remains
+        assert!(!chunk_exists(chunk1_id).await.unwrap());
+        assert!(!chunk_exists(chunk2_id).await.unwrap());
+        assert!(chunk_exists(chunk3_id).await.unwrap());
+
+        // Verify edges involving deleted chunks are removed
+        let edges_after = store
+            .run(|conn| {
+                let count: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM chunk_edges", [], |row| row.get(0))
+                    .unwrap();
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(edges_after, 0, "All edges should be deleted");
+
+        // Verify embeddings for deleted chunks are removed
+        let embeddings_count = store
+            .run(|conn| {
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM code_embeddings WHERE blob_sha IN ('blob1', 'blob2')",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            embeddings_count, 0,
+            "Embeddings for deleted chunks should be removed"
+        );
+
+        // Verify junction table entries are removed
+        let junction_count = store
+            .run(move |conn| {
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM chunk_worktrees WHERE chunk_id IN (?1, ?2)",
+                        params![chunk1_id, chunk2_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            junction_count, 0,
+            "Junction table entries should be removed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_chunks_by_ids_empty() {
+        let store = setup_test_store().await;
+
+        // Setup: Create test worktree
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+
+        // Delete with empty list should return 0
+        let deleted_count = store.delete_chunks_by_ids(worktree_id, &[]).await.unwrap();
+        assert_eq!(deleted_count, 0, "Deleting empty list should return 0");
     }
 }

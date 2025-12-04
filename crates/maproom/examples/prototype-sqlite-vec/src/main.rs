@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result, ffi};
+use rusqlite::{ffi, Connection, Result};
 use std::os::raw::c_int;
 
 // Declare the C extension init function
@@ -12,10 +12,12 @@ extern "C" {
 
 fn main() -> Result<()> {
     println!("Opening in-memory database...");
-    
+
     // Register the extension globally before opening connection
     unsafe {
-        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite3_vec_init as *const (),
+        )));
     }
 
     let conn = Connection::open_in_memory()?;
@@ -30,12 +32,12 @@ fn main() -> Result<()> {
     println!("Inserting a 1536-dimensional vector...");
     // Create a 1536-dim vector
     let vector = vec![0.1f32; 1536];
-    
+
     // sqlite-vec expects binary blob or JSON? documentation says float array literal or blob
     // Let's try direct parameter binding if rusqlite supports it, otherwise we might need to format it
     // sqlite-vec supports raw binary blobs for float arrays.
     // 1536 * 4 bytes = 6144 bytes.
-    
+
     // We need to convert Vec<f32> to Vec<u8> (little endian)
     let mut blob = Vec::with_capacity(1536 * 4);
     for val in &vector {
@@ -50,9 +52,9 @@ fn main() -> Result<()> {
     println!("Querying for nearest neighbor...");
     // Query
     let mut stmt = conn.prepare(
-        "SELECT rowid, distance FROM vec_test WHERE e MATCH ? ORDER BY distance LIMIT 1"
+        "SELECT rowid, distance FROM vec_test WHERE e MATCH ? ORDER BY distance LIMIT 1",
     )?;
-    
+
     let rows = stmt.query_map([&blob as &dyn rusqlite::ToSql], |row| {
         let id: i64 = row.get(0)?;
         let distance: f64 = row.get(1)?;
@@ -70,4 +72,3 @@ fn main() -> Result<()> {
     println!("✅ Verification successful: sqlite-vec works with 1536 dimensions!");
     Ok(())
 }
-

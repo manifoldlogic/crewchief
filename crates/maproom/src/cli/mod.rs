@@ -4,5 +4,6 @@
 //! for managing various aspects of the Maproom system.
 
 pub mod cache;
+pub mod clean_ignored;
 
 pub use cache::CacheCommand;

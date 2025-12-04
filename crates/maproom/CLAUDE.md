@@ -108,6 +108,43 @@ cargo run --bin crewchief-maproom -- db cleanup-stale --verbose
 - `1` - Error (database connection failed)
 - `2` - No stale worktrees found
 
+## Clean Ignored Chunks
+
+Delete indexed chunks matching patterns in `.maproomignore`:
+
+```bash
+# Preview what will be deleted (dry-run mode)
+cargo run --bin crewchief-maproom -- clean-ignored --repo myrepo --worktree main --dry-run
+
+# Actually delete matching chunks
+cargo run --bin crewchief-maproom -- clean-ignored --repo myrepo --worktree main
+```
+
+**Use cases:**
+- After adding new patterns to `.maproomignore`, clean up already-indexed chunks
+- Remove noise from search results without a full rescan
+- Faster than rescanning (surgical removal vs full re-indexing)
+
+**Example workflow:**
+```bash
+# 1. Add patterns to .maproomignore
+echo "test/**" >> .maproomignore
+echo "*.log" >> .maproomignore
+
+# 2. Preview what will be deleted
+cargo run --bin crewchief-maproom -- clean-ignored --repo myrepo --worktree main --dry-run
+
+# 3. Delete matching chunks
+cargo run --bin crewchief-maproom -- clean-ignored --repo myrepo --worktree main
+
+# 4. Verify with search (previously indexed test files should be gone)
+cargo run --bin crewchief-maproom -- search --query "test" --repo myrepo
+```
+
+**Exit codes:**
+- `0` - Success
+- `1` - Error (repo/worktree not found, database error, or invalid patterns)
+
 ## Quick Start
 
 ```bash

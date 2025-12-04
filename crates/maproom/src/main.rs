@@ -478,6 +478,29 @@ enum Commands {
 
     /// Start the Maproom daemon (JSON-RPC over Stdio)
     Serve,
+
+    /// Delete indexed chunks matching patterns in .maproomignore
+    ///
+    /// Removes chunks from the database where their file path matches any pattern
+    /// in the .maproomignore file at the repository root. This is useful for cleaning
+    /// up stale entries after adding new ignore patterns.
+    ///
+    /// Examples:
+    ///   maproom clean-ignored --repo myproject --worktree main
+    ///   maproom clean-ignored --repo myproject --worktree main --dry-run
+    CleanIgnored {
+        /// Repository name
+        #[arg(long, required = true)]
+        repo: String,
+
+        /// Worktree name
+        #[arg(long, required = true)]
+        worktree: String,
+
+        /// Dry run - show what would be deleted without deleting
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1756,6 +1779,16 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Serve => {
             daemon::run().await?;
+        }
+
+        Commands::CleanIgnored {
+            repo,
+            worktree,
+            dry_run,
+        } => {
+            use crewchief_maproom::cli::clean_ignored;
+            let store = db::connect().await?;
+            clean_ignored::clean_ignored(&store, &repo, &worktree, dry_run).await?;
         }
 
         Commands::Context {
