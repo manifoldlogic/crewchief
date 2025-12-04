@@ -155,6 +155,21 @@ impl Default for IgnorePatternMatcher {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    // Test data constants
+    const BASIC_PATTERNS: &str = "test/**\n*.tmp\nbuild/\n";
+    const WITH_COMMENTS: &str =
+        "# Skip test fixtures\ntest-fixtures/**\n\n# Build outputs\nbuild/\n";
+    const INVALID_PATTERN: &str = "[invalid\n*.tmp\n";
+
+    /// Helper function to create a test repository with .maproomignore
+    fn create_test_repo_with_maproomignore(patterns: &str) -> TempDir {
+        let dir = TempDir::new().unwrap();
+        let ignore_file = dir.path().join(".maproomignore");
+        std::fs::write(&ignore_file, patterns).unwrap();
+        dir
+    }
 
     #[test]
     fn test_default_patterns() {
@@ -215,5 +230,183 @@ mod tests {
 
         // Normal files not ignored
         assert!(!matcher.should_ignore(&PathBuf::from("src/main.rs")));
+    }
+
+    // ========== Pattern Loading Tests ==========
+
+    #[test]
+    fn test_load_ignore_patterns_missing_file() {
+        // Setup: temp dir without .maproomignore
+        let dir = TempDir::new().unwrap();
+
+        // Action: call load_ignore_patterns()
+        let patterns = load_ignore_patterns(dir.path()).unwrap();
+
+        // Assert: returns Ok with only default patterns
+        assert_eq!(patterns.len(), DEFAULT_IGNORE_PATTERNS.len());
+        for default_pattern in DEFAULT_IGNORE_PATTERNS {
+            assert!(
+                patterns.contains(&default_pattern.to_string()),
+                "Missing default pattern: {}",
+                default_pattern
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_ignore_patterns_with_comments() {
+        // Setup: .maproomignore with comment lines
+        let dir = create_test_repo_with_maproomignore(WITH_COMMENTS);
+
+        // Action: call load_ignore_patterns()
+        let patterns = load_ignore_patterns(dir.path()).unwrap();
+
+        // Assert: comments skipped, patterns loaded
+        assert!(patterns.contains(&"test-fixtures/**".to_string()));
+        assert!(patterns.contains(&"build/".to_string()));
+
+        // Verify comments were not added
+        for pattern in &patterns {
+            assert!(
+                !pattern.starts_with('#'),
+                "Comment line was not skipped: {}",
+                pattern
+            );
+        }
+
+        // Verify default patterns still present
+        assert!(patterns.contains(&"*.log".to_string()));
+    }
+
+    #[test]
+    fn test_load_ignore_patterns_empty_file() {
+        // Setup: empty .maproomignore
+        let dir = create_test_repo_with_maproomignore("");
+
+        // Action: call load_ignore_patterns()
+        let patterns = load_ignore_patterns(dir.path()).unwrap();
+
+        // Assert: returns Ok with only default patterns
+        assert_eq!(patterns.len(), DEFAULT_IGNORE_PATTERNS.len());
+        for default_pattern in DEFAULT_IGNORE_PATTERNS {
+            assert!(
+                patterns.contains(&default_pattern.to_string()),
+                "Missing default pattern: {}",
+                default_pattern
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_ignore_patterns_invalid_glob() {
+        // Setup: .maproomignore with "[invalid" pattern
+        let dir = create_test_repo_with_maproomignore(INVALID_PATTERN);
+
+        // Action: call load_ignore_patterns()
+        let result = load_ignore_patterns(dir.path());
+
+        // Assert: returns Err (fail-fast on invalid patterns)
+        assert!(result.is_err(), "Expected error for invalid glob pattern");
+        if let Err(e) = result {
+            let err_msg = format!("{}", e);
+            assert!(
+                err_msg.contains("Invalid glob pattern") || err_msg.contains("[invalid"),
+                "Error message should mention invalid pattern: {}",
+                err_msg
+            );
+        }
+    }
+
+    // ========== Matcher Construction Tests ==========
+
+    #[test]
+    fn test_from_repository_reads_maproomignore() {
+        // Setup: .maproomignore with "test/**"
+        let dir = create_test_repo_with_maproomignore("test/**\n");
+
+        // Action: IgnorePatternMatcher::from_repository()
+        let matcher = IgnorePatternMatcher::from_repository(dir.path()).unwrap();
+
+        // Assert: matcher created successfully, patterns loaded
+        assert!(matcher.should_ignore(&PathBuf::from("test/file.rs")));
+        assert!(matcher.should_ignore(&PathBuf::from("test/nested/file.rs")));
+        assert!(!matcher.should_ignore(&PathBuf::from("src/test.rs")));
+    }
+
+    #[test]
+    fn test_from_repository_combines_with_defaults() {
+        // Setup: .maproomignore with custom pattern
+        let dir = create_test_repo_with_maproomignore("custom-dir/**\n");
+
+        // Action: from_repository()
+        let matcher = IgnorePatternMatcher::from_repository(dir.path()).unwrap();
+
+        // Assert: both default patterns AND custom patterns present
+        // Custom pattern works
+        assert!(matcher.should_ignore(&PathBuf::from("custom-dir/file.rs")));
+
+        // Default patterns still work
+        assert!(matcher.should_ignore(&PathBuf::from("node_modules/pkg/index.js")));
+        assert!(matcher.should_ignore(&PathBuf::from("test.log")));
+        assert!(matcher.should_ignore(&PathBuf::from(".git/config")));
+
+        // Non-ignored files
+        assert!(!matcher.should_ignore(&PathBuf::from("src/main.rs")));
+    }
+
+    #[test]
+    fn test_from_repository_fails_on_invalid() {
+        // Setup: .maproomignore with invalid pattern
+        let dir = create_test_repo_with_maproomignore(INVALID_PATTERN);
+
+        // Action: from_repository()
+        let result = IgnorePatternMatcher::from_repository(dir.path());
+
+        // Assert: returns Err with clear message
+        assert!(result.is_err(), "Expected error for invalid glob pattern");
+        if let Err(e) = result {
+            let err_msg = format!("{}", e);
+            assert!(
+                err_msg.contains("Invalid glob pattern") || err_msg.contains("[invalid"),
+                "Error message should mention invalid pattern: {}",
+                err_msg
+            );
+        }
+    }
+
+    // ========== Matching Behavior Tests ==========
+
+    #[test]
+    fn test_should_ignore_matches_pattern() {
+        // Setup: matcher with "*.tmp" pattern
+        let patterns = vec!["*.tmp".to_string()];
+        let matcher = IgnorePatternMatcher::with_patterns(patterns).unwrap();
+
+        // Action: should_ignore("file.tmp")
+        // Assert: returns true
+        assert!(matcher.should_ignore(&PathBuf::from("file.tmp")));
+        assert!(matcher.should_ignore(&PathBuf::from("data.tmp")));
+
+        // Action: should_ignore("file.rs")
+        // Assert: returns false
+        assert!(!matcher.should_ignore(&PathBuf::from("file.rs")));
+        assert!(!matcher.should_ignore(&PathBuf::from("README.md")));
+    }
+
+    #[test]
+    fn test_should_ignore_relative_paths() {
+        // Setup: matcher with "test/**" pattern
+        let patterns = vec!["test/**".to_string()];
+        let matcher = IgnorePatternMatcher::with_patterns(patterns).unwrap();
+
+        // Action: should_ignore("test/file.rs")
+        // Assert: returns true
+        assert!(matcher.should_ignore(&PathBuf::from("test/file.rs")));
+        assert!(matcher.should_ignore(&PathBuf::from("test/nested/deep/file.rs")));
+
+        // Action: should_ignore("src/test/file.rs")
+        // Assert: returns false (pattern is relative to root)
+        assert!(!matcher.should_ignore(&PathBuf::from("src/test/file.rs")));
+        assert!(!matcher.should_ignore(&PathBuf::from("src/test.rs")));
     }
 }

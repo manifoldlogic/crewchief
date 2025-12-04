@@ -1,9 +1,9 @@
 # Ticket: [MRMIGNR-1004]: Unit Tests for Ignore Patterns
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -33,19 +33,19 @@ These tests provide confidence that the foundation is solid before integration t
 Reference: Testing Strategy (plan.md lines 172-183), Quality Strategy (quality-strategy.md lines 34-49)
 
 ## Acceptance Criteria
-- [ ] Test `test_load_ignore_patterns_missing_file()` passes - gracefully returns defaults when .maproomignore missing
-- [ ] Test `test_load_ignore_patterns_with_comments()` passes - skips lines starting with `#`
-- [ ] Test `test_load_ignore_patterns_empty_file()` passes - handles empty .maproomignore (returns defaults)
-- [ ] Test `test_load_ignore_patterns_invalid_glob()` passes - returns Err for invalid glob patterns
-- [ ] Test `test_from_repository_reads_maproomignore()` passes - constructor loads patterns from file
-- [ ] Test `test_from_repository_combines_with_defaults()` passes - merges .maproomignore with default patterns
-- [ ] Test `test_from_repository_fails_on_invalid()` passes - constructor fails fast on invalid patterns
-- [ ] Test `test_should_ignore_matches_pattern()` passes - basic glob matching works
-- [ ] Test `test_should_ignore_relative_paths()` passes - paths relative to repo root
-- [ ] All new tests pass when run with `cargo test -p crewchief-maproom incremental::ignore`
-- [ ] All existing tests in module still pass (no regression)
-- [ ] Code passes `cargo clippy -p crewchief-maproom` with no warnings
-- [ ] Code formatted with `cargo fmt`
+- [x] Test `test_load_ignore_patterns_missing_file()` passes - gracefully returns defaults when .maproomignore missing
+- [x] Test `test_load_ignore_patterns_with_comments()` passes - skips lines starting with `#`
+- [x] Test `test_load_ignore_patterns_empty_file()` passes - handles empty .maproomignore (returns defaults)
+- [x] Test `test_load_ignore_patterns_invalid_glob()` passes - returns Err for invalid glob patterns
+- [x] Test `test_from_repository_reads_maproomignore()` passes - constructor loads patterns from file
+- [x] Test `test_from_repository_combines_with_defaults()` passes - merges .maproomignore with default patterns
+- [x] Test `test_from_repository_fails_on_invalid()` passes - constructor fails fast on invalid patterns
+- [x] Test `test_should_ignore_matches_pattern()` passes - basic glob matching works
+- [x] Test `test_should_ignore_relative_paths()` passes - paths relative to repo root
+- [x] All new tests pass when run with `cargo test -p crewchief-maproom incremental::ignore`
+- [x] All existing tests in module still pass (no regression)
+- [x] Code passes `cargo clippy -p crewchief-maproom` with no warnings
+- [x] Code formatted with `cargo fmt`
 
 ## Technical Requirements
 
