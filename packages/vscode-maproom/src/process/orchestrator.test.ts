@@ -222,6 +222,7 @@ describe('ProcessOrchestrator', () => {
         '/test/workspace',
         '--throttle',
         '3s',
+        '--json',
       ])
     })
 

@@ -164,6 +164,7 @@ export class ProcessOrchestrator extends EventEmitter {
           this.config.workspaceRoot,
           '--throttle',
           '3s',
+          '--json',
         ],
         env
       )
