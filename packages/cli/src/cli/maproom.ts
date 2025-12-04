@@ -160,4 +160,15 @@ export function registerMaproomCommands(program: Command) {
     .allowUnknownOption(true)
     .argument('[args...]')
     .action((args) => runMaproomForward(['generate-embeddings', ...(args || [])]))
+
+  maproom
+    .command('clean-ignored')
+    .description('Delete indexed chunks matching patterns in .maproomignore')
+    .allowUnknownOption(true)
+    .argument('[args...]')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ crewchief maproom clean-ignored --repo myrepo --worktree main --dry-run\n  $ crewchief maproom clean-ignored --repo myrepo --worktree main',
+    )
+    .action((args) => runMaproomForward(['clean-ignored', ...(args || [])]))
 }
