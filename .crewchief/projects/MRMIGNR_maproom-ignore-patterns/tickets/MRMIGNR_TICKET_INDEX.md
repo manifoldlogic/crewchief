@@ -81,12 +81,32 @@ This project implements `.maproomignore` support to allow users to exclude files
 - **Key risk**: Documentation becomes outdated
 - **Success criteria**: Clear, comprehensive documentation with examples
 
+## Phase 2: Maintenance Features
+
+**Objective:** Add optional maintenance commands to clean up indexed data based on `.maproomignore` patterns.
+
+### Tickets
+
+| ID | Title | Status | Agent | Dependencies |
+|----|-------|--------|-------|--------------|
+| MRMIGNR-2001 | Clean Ignored Command | Not Started | rust-indexer-engineer | Phase 1 Complete |
+
+### MRMIGNR-2001: Clean Ignored Command
+- **Scope**: ~4-6 hours
+- **Files**: `crates/maproom/src/main.rs`, `crates/maproom/src/cli/clean_ignored.rs`, `crates/maproom/src/db/sqlite/mod.rs`
+- **Deliverables**: CLI command to delete chunks matching `.maproomignore` patterns
+- **Key risk**: Accidentally deleting wrong chunks
+- **Success criteria**: Command works correctly, has dry-run mode, comprehensive tests
+
 ## Total Estimated Effort
 
 **Phase 1**: 16-21 hours total
 - Implementation: 8-11 hours (tickets 1001-1003)
 - Testing: 6-8 hours (tickets 1004-1005)
 - Documentation: 2 hours (ticket 1006)
+
+**Phase 2**: 4-6 hours total
+- Implementation: 4-6 hours (ticket 2001)
 
 ## Success Metrics
 
