@@ -1,9 +1,9 @@
 # Ticket: [MRMIGNR-1006]: Documentation Update
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,16 +32,16 @@ This documentation serves both as user guidance and as developer reference for f
 Reference: Phase 1 Deliverable (plan.md lines 19-20), Architecture Migration Strategy (architecture.md lines 311-314)
 
 ## Acceptance Criteria
-- [ ] `.maproomignore` section added to `crates/maproom/CLAUDE.md`
-- [ ] Example `.maproomignore` file provided with realistic patterns
-- [ ] Pattern syntax documented (gitignore-style globs, comments, blank lines)
-- [ ] Pattern precedence clearly explained (.maproomignore > .gitignore > defaults)
-- [ ] Integration points documented (scan via OverrideBuilder, watch via event filter)
-- [ ] Limitations documented (hot-reload not supported, pattern validation on startup)
-- [ ] Code examples show how patterns are loaded and applied
-- [ ] CLI help text mentions .maproomignore (if applicable to scan/watch commands)
-- [ ] Documentation builds successfully: `cargo doc --no-deps`
-- [ ] Documentation reviewed for clarity and completeness
+- [x] `.maproomignore` section added to `crates/maproom/CLAUDE.md`
+- [x] Example `.maproomignore` file provided with realistic patterns
+- [x] Pattern syntax documented (gitignore-style globs, comments, blank lines)
+- [x] Pattern precedence clearly explained (.maproomignore > .gitignore > defaults)
+- [x] Integration points documented (scan via OverrideBuilder, watch via event filter)
+- [x] Limitations documented (hot-reload not supported, pattern validation on startup)
+- [x] Code examples show how patterns are loaded and applied
+- [x] CLI help text mentions .maproomignore (if applicable to scan/watch commands)
+- [x] Documentation builds successfully: `cargo doc --no-deps`
+- [x] Documentation reviewed for clarity and completeness
 
 ## Technical Requirements
 

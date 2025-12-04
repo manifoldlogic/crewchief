@@ -145,6 +145,114 @@ cargo run --bin crewchief-maproom -- search --query "test" --repo myrepo
 - `0` - Success
 - `1` - Error (repo/worktree not found, database error, or invalid patterns)
 
+## Ignore Patterns
+
+Maproom supports custom ignore patterns via `.maproomignore` files to exclude files from indexing without modifying `.gitignore`. This allows you to separate indexing concerns from version control, excluding test fixtures, build artifacts, or other files that should remain in git but don't need to be indexed for code search.
+
+### Usage
+
+Create a `.maproomignore` file in your repository root (same location as `.git/`). Patterns are loaded once when scanning or watching starts.
+
+**Important**: `.maproomignore` must be at the repository root. Subdirectory `.maproomignore` files are not supported.
+
+### Pattern Syntax
+
+Patterns use gitignore-style glob syntax:
+
+- **Glob patterns**: `*.tmp`, `test/**`, `build/`
+- **Comments**: Lines starting with `#` are ignored
+- **Blank lines**: Ignored
+- **Relative paths**: All patterns are relative to the repository root
+- **Leading `/`**: Matches only at repository root (e.g., `/README.md` matches root README only)
+- **Trailing `/`**: Matches directories only (e.g., `build/` matches `build/` but not `build.txt`)
+- **Wildcards**: `*` matches any sequence except `/`, `**` matches any sequence including `/`
+
+**Examples:**
+```
+test/**           # Exclude entire test directory
+*.tmp             # Exclude all .tmp files anywhere
+build/            # Exclude build directory (trailing slash = directories only)
+/specific.txt     # Exclude specific.txt at repository root only
+data/**/large.*   # Exclude files named large.* in any subdirectory of data/
+```
+
+### Example .maproomignore File
+
+```
+# Example .maproomignore
+# Exclude test fixtures from indexing
+test-fixtures/**
+tests/data/**
+
+# Exclude build artifacts
+build/
+dist/
+target/
+
+# Exclude temporary files
+*.tmp
+*.bak
+*.swp
+
+# Exclude large data files
+*.sql
+*.csv
+data/**
+
+# Exclude log files
+*.log
+logs/**
+
+# Exclude generated documentation
+docs/api/generated/**
+```
+
+### Pattern Precedence
+
+Maproom uses **additive** ignore patterns - a file is excluded if it matches **any** of the following:
+
+1. **`.maproomignore` patterns** - Custom patterns for indexing exclusions
+2. **`.gitignore` patterns** - Version control ignore patterns (automatically respected)
+3. **Default patterns** - Built-in exclusions (e.g., `.git/`, `node_modules/`)
+
+This is an **OR** relationship, not a hierarchy. All three pattern sources are checked independently, and a file matching any source is excluded.
+
+**Important**: There is no pattern negation or allowlist mechanism. Once a file matches any ignore pattern, it cannot be re-included.
+
+### Integration Details
+
+**Scan operation** (`scan` command):
+- Patterns loaded via `load_ignore_patterns()` at scan start
+- Applied to `WalkBuilder` via `OverrideBuilder`
+- Files matching patterns are skipped during directory traversal
+- Pattern loading errors fail scan startup (fail-fast behavior)
+
+**Watch operation** (incremental indexer):
+- Patterns loaded once at watcher startup
+- File events filtered via `should_ignore()` in `event_conversion_task()`
+- Ignored files generate no indexing events
+- Pattern loading errors fail watcher startup (fail-fast behavior)
+
+**Code references:**
+- Pattern loading: `src/indexer/ignore.rs::load_ignore_patterns()`
+- Scan integration: `src/indexer/scanner.rs` (WalkBuilder configuration)
+- Watch integration: `src/incremental/watcher.rs::event_conversion_task()`
+- Ignore checking: `src/incremental/watcher.rs::should_ignore()`
+
+### Limitations
+
+**Repository root only**: `.maproomignore` files in subdirectories are ignored. Only the root-level file is respected. This simplifies pattern resolution and avoids precedence complexity.
+
+**No hot-reload**: Changes to `.maproomignore` require restarting the watcher. Pattern loading happens once at startup. For scan operations, run a new scan after modifying patterns.
+
+**To apply new patterns to already-indexed files**, use the `clean-ignored` command (see "Clean Ignored Chunks" section above) for surgical removal, or re-run `scan` for a full re-index.
+
+**Fail-fast validation**: Invalid glob patterns (e.g., unclosed brackets `[abc`) cause scan or watch startup to fail immediately with a clear error message. There is no graceful degradation or pattern skipping.
+
+**Pattern format**: Only gitignore-style globs are supported. Regular expressions, literal path matching, or other pattern syntaxes are not supported.
+
+**No negation**: Unlike `.gitignore`, there is no `!pattern` negation syntax. All patterns are exclusions only.
+
 ## Quick Start
 
 ```bash
