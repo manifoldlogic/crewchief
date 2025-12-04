@@ -21,7 +21,7 @@ After implementing `.maproomignore` support in Phase 1, users can prevent new fi
 - [x] **Task completed** - CLI command implementation finished
 - [x] **Tests pass** - All unit and integration tests pass
 - [x] **Verified** - verify-ticket agent confirms all requirements met
-- [ ] **Committed** - Changes committed to repository
+- [x] **Committed** - Changes committed to repository
 
 ### Functional Requirements
 
