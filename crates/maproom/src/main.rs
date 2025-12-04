@@ -1286,9 +1286,11 @@ async fn main() -> anyhow::Result<()> {
 
             // Handle deprecation warning if --worktree flag is provided
             let worktree = if let Some(_wt) = worktree {
-                eprintln!("Warning: --worktree flag is deprecated and ignored.");
-                eprintln!("The watch command now auto-detects branch switches.");
-                eprintln!("Using auto-detected branch: {}", detected_branch);
+                if !json {
+                    eprintln!("Warning: --worktree flag is deprecated and ignored.");
+                    eprintln!("The watch command now auto-detects branch switches.");
+                    eprintln!("Using auto-detected branch: {}", detected_branch);
+                }
                 detected_branch
             } else {
                 detected_branch
@@ -1577,13 +1579,13 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::bail!("--worktree requires --repo to be specified");
             }
 
-            eprintln!("[DEBUG] status: connecting to database...");
+            tracing::debug!("status: connecting to database...");
             let store = db::connect().await?;
-            eprintln!("[DEBUG] status: connected, querying status...");
+            tracing::debug!("status: connected, querying status...");
 
             match status::get_status(Arc::new(store), repo, worktree).await {
                 Ok(status_data) => {
-                    eprintln!("[DEBUG] status: query complete, formatting output...");
+                    tracing::debug!("status: query complete, formatting output...");
                     if json {
                         let output = status::format_json(&status_data)?;
                         println!("{}", output);

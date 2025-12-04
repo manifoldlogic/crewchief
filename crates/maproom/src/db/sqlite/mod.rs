@@ -103,12 +103,12 @@ impl SqliteStore {
 
         // Auto-run migrations on connect to ensure schema is up to date
         // This is idempotent - migrations track applied versions and skip duplicates
-        eprintln!("[DEBUG] SqliteStore::connect: running migrations...");
+        tracing::debug!("SqliteStore::connect: running migrations...");
         store
             .migrate()
             .await
             .context("Failed to run database migrations")?;
-        eprintln!("[DEBUG] SqliteStore::connect: migrations complete");
+        tracing::debug!("SqliteStore::connect: migrations complete");
 
         Ok(store)
     }
