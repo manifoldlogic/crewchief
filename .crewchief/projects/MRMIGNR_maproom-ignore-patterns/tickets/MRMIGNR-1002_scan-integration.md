@@ -1,9 +1,10 @@
 # Ticket: [MRMIGNR-1002]: Scan Integration with .maproomignore
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
+- [x] **Committed** - commit: da0a3cb2
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -28,16 +29,16 @@ This maintains existing `.gitignore` behavior while adding an additional layer o
 Reference: Phase 1 - Scan Integration (plan.md lines 122-128), Architecture Component 2 (architecture.md lines 107-125)
 
 ## Acceptance Criteria
-- [ ] Scan operation loads `.maproomignore` patterns using `load_ignore_patterns()`
-- [ ] Patterns applied to `WalkBuilder` via `OverrideBuilder` as negative overrides
-- [ ] Files matching `.maproomignore` patterns are NOT indexed during scan
-- [ ] Existing `.gitignore` behavior unchanged (regression test)
-- [ ] Programmatic `exclude` parameter continues to work (merges with .maproomignore patterns)
-- [ ] Invalid patterns in `.maproomignore` cause scan to fail with clear error message
-- [ ] Manual smoke test passes: create .maproomignore with pattern, verify files excluded
-- [ ] All existing indexer tests pass (no regression)
-- [ ] Code passes `cargo clippy -p crewchief-maproom` with no warnings
-- [ ] Code formatted with `cargo fmt`
+- [x] Scan operation loads `.maproomignore` patterns using `load_ignore_patterns()`
+- [x] Patterns applied to `WalkBuilder` via `OverrideBuilder` as negative overrides
+- [x] Files matching `.maproomignore` patterns are NOT indexed during scan
+- [x] Existing `.gitignore` behavior unchanged (regression test)
+- [x] Programmatic `exclude` parameter continues to work (merges with .maproomignore patterns)
+- [x] Invalid patterns in `.maproomignore` cause scan to fail with clear error message
+- [x] Manual smoke test passes: create .maproomignore with pattern, verify files excluded
+- [x] All existing indexer tests pass (no regression)
+- [x] Code passes `cargo clippy -p crewchief-maproom` with no warnings
+- [x] Code formatted with `cargo fmt`
 
 ## Technical Requirements
 
@@ -153,3 +154,84 @@ crewchief-maproom scan --path . --repo test --worktree main
 # Verify test-fixtures/data.sql NOT indexed
 # Query database or check file list output
 ```
+
+## Manual Smoke Test Execution
+
+**Test Date:** 2025-12-04
+**Executor:** rust-indexer-engineer
+
+### Setup
+```bash
+mkdir -p /tmp/test-repo && cd /tmp/test-repo
+git init
+echo "test-fixtures/**" > .maproomignore
+mkdir test-fixtures
+echo "large data" > test-fixtures/data.sql
+echo "fn main() {}" > main.rs
+git add .
+git commit -m "initial"
+```
+
+**Output:**
+```
+Initialized empty Git repository in /tmp/test-repo/.git/
+[main (root-commit) bd59014] initial
+ 3 files changed, 3 insertions(+)
+ create mode 100644 .maproomignore
+ create mode 100644 main.rs
+ create mode 100644 test-fixtures/data.sql
+```
+
+### Scan Execution
+```bash
+/workspace/packages/cli/bin/linux-arm64/crewchief-maproom scan --path /tmp/test-repo --repo test --worktree main
+```
+
+**Output:**
+```
+⚡ Incremental scan mode (use --force for full scan)
+🔍 Scanning worktree: main @ bd590146
+   Repository: test
+   Path: /tmp/test-repo
+Progress: 100% complete (1/1 files)
+
+✅ Completed in 0.0s
+
+✅ Scan completed successfully!
+   Files processed: 1
+   Total chunks: 1
+   Total size: 0.00 MB
+
+   Languages indexed:
+     🦀 rs: 1
+```
+
+**Key observation:** Only 1 file processed (not 2), confirming test-fixtures/data.sql was excluded.
+
+### Database Verification
+```bash
+sqlite3 ~/.maproom/maproom.db "SELECT relpath FROM files WHERE repo_id IN (SELECT id FROM repos WHERE name='test')"
+```
+
+**Output:**
+```
+main.rs
+```
+
+```bash
+sqlite3 ~/.maproom/maproom.db "SELECT relpath FROM files WHERE repo_id IN (SELECT id FROM repos WHERE name='test') AND relpath LIKE '%data.sql%'"
+```
+
+**Output:**
+```
+(empty - no rows)
+```
+
+### Conclusion
+
+✅ **PASSED** - All verification criteria met:
+1. .maproomignore pattern `test-fixtures/**` loaded successfully
+2. File `test-fixtures/data.sql` correctly excluded from indexing
+3. File `main.rs` indexed successfully
+4. Database queries confirm only main.rs in index
+5. Pattern exclusion working as expected

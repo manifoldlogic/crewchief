@@ -8,6 +8,7 @@ use ignore::WalkBuilder;
 use tracing::{info, warn};
 
 use crate::db::{ChunkRecord, FileRecord, SqliteStore};
+use crate::incremental::ignore::load_ignore_patterns;
 
 pub mod parser;
 
@@ -271,18 +272,35 @@ pub async fn scan_worktree(
         println!("   Path: {}", root_abs.display());
     }
 
+    // Load .maproomignore patterns and merge with programmatic exclude patterns
+    let maproomignore_patterns = load_ignore_patterns(&root_abs)
+        .with_context(|| format!("Failed to load .maproomignore patterns from {:?}", root_abs))?;
+
     let mut walk = WalkBuilder::new(&root_abs);
     walk.hidden(false)
         .ignore(true)
         .git_ignore(true)
         .git_exclude(true);
-    if let Some(globs) = &exclude {
+
+    // Build combined overrides from .maproomignore and programmatic exclude patterns
+    if !maproomignore_patterns.is_empty() || exclude.is_some() {
         let mut ob = ignore::overrides::OverrideBuilder::new(&root_abs);
-        for g in globs {
-            // Treat excludes as negative overrides
-            ob.add(&format!("!{}", g))?;
+
+        // Add .maproomignore patterns as negative overrides
+        for pattern in &maproomignore_patterns {
+            ob.add(&format!("!{}", pattern))
+                .with_context(|| format!("Invalid pattern in .maproomignore: {}", pattern))?;
         }
-        walk.overrides(ob.build()?);
+
+        // Merge programmatic exclude patterns
+        if let Some(globs) = &exclude {
+            for g in globs {
+                ob.add(&format!("!{}", g))
+                    .with_context(|| format!("Invalid exclude pattern: {}", g))?;
+            }
+        }
+
+        walk.overrides(ob.build().context("Failed to build override patterns")?);
     }
 
     let allow_langs: Option<Vec<String>> =
