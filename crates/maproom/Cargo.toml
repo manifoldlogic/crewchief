@@ -90,6 +90,10 @@ rayon = "1.10"
 crossbeam = "0.8"
 futures = "0.3"
 
+# Unix socket server (MULTICN-2003)
+fs2 = "0.4"     # File locking (flock) for PID file
+users = "0.11"  # UID lookup for socket path
+
 
 [build-dependencies]
 cc = "1.0"
