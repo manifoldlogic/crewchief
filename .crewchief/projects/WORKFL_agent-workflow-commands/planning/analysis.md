@@ -28,9 +28,9 @@ These CLI commands serve **two audiences**:
 - Enables consistent operations across different agents
 
 ### Slash Command Integration
-- Slash commands (e.g., `/create-project`) orchestrate the full workflow
+- Slash commands (e.g., `/workstream:project-create`) orchestrate the full workflow
 - CLI commands are **primitives** that slash commands can invoke
-- Example flow: `/create-project` → validates inputs → calls `crewchief project init` → continues with LLM content generation
+- Example flow: `/workstream:project-create` → validates inputs → calls `crewchief project init` → continues with LLM content generation
 
 ## 3. Requirements
 
@@ -62,12 +62,12 @@ These CLI commands serve **two audiences**:
 
 **Current flow:**
 ```
-User -> /create-project -> LLM reads prompt -> LLM generates files
+User -> /workstream:project-create -> LLM reads prompt -> LLM generates files
 ```
 
 **Target flow:**
 ```
-User -> /create-project -> LLM validates inputs -> CLI scaffolds structure -> LLM generates content
+User -> /workstream:project-create -> LLM validates inputs -> CLI scaffolds structure -> LLM generates content
 ```
 
 **Benefits:**

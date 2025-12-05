@@ -11,7 +11,7 @@ Create CLI commands that support the project workflow by providing deterministic
 - **Slash Command Integration**: CLI commands support (not replace) existing slash commands
 - **Future Skills**: Enables creation of project workflow skills that compose CLI primitives
 
-**Important Clarification**: CLI commands handle *scaffolding* (folder/file creation) and *status reporting* (parsing ticket states). The slash commands (e.g., `/create-project`, `/work-on-project`) continue to orchestrate the full workflow, including content generation that requires LLM creativity.
+**Important Clarification**: CLI commands handle *scaffolding* (folder/file creation) and *status reporting* (parsing ticket states). The slash commands (e.g., `/workstream:project-create`, `/workstream:project-work`) continue to orchestrate the full workflow, including content generation that requires LLM creativity.
 
 ## Commands Overview
 

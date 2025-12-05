@@ -26,5 +26,5 @@
 - Created all planning documents.
 
 ## Verification
-- **Next Steps**: Run `/review-project WORKFL`.
+- **Next Steps**: Run `/workstream:project-review WORKFL`.
 

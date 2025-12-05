@@ -26,8 +26,8 @@
 ## Slash Command Integration
 
 These CLI commands **support** (not replace) existing slash commands:
-- `/create-project` can invoke `crewchief project init` for scaffolding
-- `/work-on-project` can use `crewchief project tickets list --json` to track progress
+- `/workstream:project-create` can invoke `crewchief project init` for scaffolding
+- `/workstream:project-work` can use `crewchief project tickets list --json` to track progress
 - Future project workflow skills can compose these CLI primitives
 
 ## Success Definition
