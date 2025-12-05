@@ -1,9 +1,9 @@
 # Ticket: MULTICN-2004: Daemon Lifecycle Management
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,14 +32,14 @@ Reference: [architecture.md](../planning/architecture.md) - Lifecycle Manager se
 
 ## Acceptance Criteria
 
-- [ ] Idle timeout: daemon shuts down after 5 minutes with no active clients
-- [ ] Idle timeout uses SessionRegistry.active_count() to check for clients
-- [ ] SIGTERM handler triggers graceful shutdown
-- [ ] Graceful shutdown waits for in-flight requests with configurable timeout (default 30s)
-- [ ] PID file automatically removed on shutdown (normal or SIGTERM)
-- [ ] `--socket` flag added to `crewchief-maproom serve` command
-- [ ] Test: Daemon shuts down when idle timeout expires
-- [ ] Test: SIGTERM allows in-flight requests to complete
+- [x] Idle timeout: daemon shuts down after 5 minutes with no active clients
+- [x] Idle timeout uses SessionRegistry.active_count() to check for clients
+- [x] SIGTERM handler triggers graceful shutdown
+- [x] Graceful shutdown waits for in-flight requests with configurable timeout (default 30s)
+- [x] PID file automatically removed on shutdown (normal or SIGTERM)
+- [x] `--socket` flag added to `crewchief-maproom serve` command
+- [x] Test: Daemon shuts down when idle timeout expires
+- [x] Test: SIGTERM allows in-flight requests to complete
 
 ## Technical Requirements
 

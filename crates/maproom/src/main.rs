@@ -474,8 +474,20 @@ enum Commands {
         command: MigrateCommand,
     },
 
-    /// Start the Maproom daemon (JSON-RPC over Stdio)
-    Serve,
+    /// Start the Maproom daemon (JSON-RPC over Stdio or Unix socket)
+    Serve {
+        /// Use Unix socket mode instead of stdio (experimental)
+        #[arg(long)]
+        socket: bool,
+
+        /// Socket path (default: /tmp/maproom-{uid}.sock)
+        #[arg(long)]
+        socket_path: Option<PathBuf>,
+
+        /// Idle timeout in seconds (default: 300 = 5 minutes)
+        #[arg(long, default_value_t = 300)]
+        idle_timeout: u64,
+    },
 
     /// Delete indexed chunks matching patterns in .maproomignore
     ///
@@ -1775,8 +1787,43 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Serve => {
-            daemon::run().await?;
+        Commands::Serve {
+            socket,
+            socket_path,
+            idle_timeout,
+        } => {
+            if socket {
+                // Socket mode (experimental)
+                use crewchief_maproom::daemon::server::{
+                    run_with_signal_handling, ServerConfig, SocketServer,
+                };
+
+                let mut config = ServerConfig::default_for_user()?;
+
+                if let Some(path) = socket_path {
+                    config.socket_path = path;
+                }
+
+                config.idle_timeout = std::time::Duration::from_secs(idle_timeout);
+
+                tracing::info!(
+                    socket_path = %config.socket_path.display(),
+                    idle_timeout_secs = idle_timeout,
+                    "Starting socket server with signal handling"
+                );
+
+                let server = SocketServer::new(config)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create socket server: {}", e))?;
+
+                run_with_signal_handling(server)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Socket server error: {}", e))?;
+            } else {
+                // Stdio mode (default)
+                tracing::info!("Starting stdio daemon");
+                daemon::run().await?;
+            }
         }
 
         Commands::CleanIgnored {
