@@ -211,6 +211,54 @@ jobs:
         timeout-minutes: 10
 ```
 
+## Dual-Mode Compatibility Testing
+
+**Critical: Ensure stdio fallback works identically to socket mode**
+
+### Test Approach
+
+Run entire test suite with both connection modes:
+
+```bash
+# Stdio mode (existing behavior)
+MAPROOM_CONNECTION_MODE=stdio pnpm test daemon-client
+MAPROOM_CONNECTION_MODE=stdio cargo test --package maproom
+
+# Socket mode (new behavior)
+MAPROOM_CONNECTION_MODE=socket pnpm test daemon-client
+MAPROOM_CONNECTION_MODE=socket cargo test --package maproom
+
+# Auto-detect mode (default)
+pnpm test daemon-client
+cargo test --package maproom
+```
+
+### Success Criteria
+
+- [ ] All existing tests pass with `MAPROOM_CONNECTION_MODE=stdio`
+- [ ] All existing tests pass with `MAPROOM_CONNECTION_MODE=socket`
+- [ ] No test changes required (same expectations for both modes)
+- [ ] Response format identical between modes
+- [ ] Error handling identical between modes
+
+### Platform-Specific Testing
+
+- **Linux**: Socket mode default, stdio fallback works
+- **macOS**: Socket mode default, stdio fallback works
+- **Windows**: Stdio mode auto-selected, socket skipped
+
+### Baseline Comparison
+
+After Phase 1 and Phase 2 completion:
+
+1. Load `planning/performance-baseline.json`
+2. Run same benchmarks with new implementation
+3. Compare metrics:
+   - Search latency (p50, p95, p99) - should be within 5ms
+   - Index time - should be similar or better
+   - Memory usage - should be significantly lower (3 agents: ~300MB → <150MB)
+4. Document results in `planning/performance-comparison.json`
+
 ## Confidence Criteria
 
 ### MVP Ready When
@@ -220,9 +268,12 @@ jobs:
 - [ ] Graceful shutdown completes in-flight requests
 - [ ] No SQLITE_BUSY errors in 10-minute stress test
 - [ ] Memory stays under 150MB with 5 clients
+- [ ] Stdio mode passes all existing tests unchanged
+- [ ] Socket mode passes all existing tests unchanged
 
 ### Regression Prevention
 
 - Add multi-agent test to CI gate
+- Add dual-mode test matrix to CI (stdio + socket)
 - Stress test in nightly builds
 - Memory profiling in release process

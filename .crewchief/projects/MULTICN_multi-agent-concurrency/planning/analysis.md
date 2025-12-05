@@ -182,10 +182,12 @@ private async start(): Promise<void> {
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Daemon crash affects all clients | High | Auto-restart, circuit breaker |
-| Socket permission issues | Medium | Fall back to TCP localhost |
-| Windows compatibility | Medium | TCP fallback, named pipes future |
-| Orphan daemon processes | Medium | PID file, idle timeout |
+| Daemon crash affects all clients | High | Auto-restart via DaemonLifecycle, circuit breaker |
+| Socket permission issues | Medium | Automatic fallback to stdio mode |
+| Windows compatibility | Low (out of scope) | Windows auto-detects and uses stdio mode |
+| Orphan daemon processes | Medium | PID file with O_EXCL, idle timeout (5min) |
+| Connect-or-spawn race condition | High | proper-lockfile library, double-check pattern |
+| Message framing corruption | Medium | tokio_util::LengthDelimitedCodec (battle-tested) |
 
 ## Conclusion
 

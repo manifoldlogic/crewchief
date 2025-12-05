@@ -1,227 +1,451 @@
 # Project Review: MULTICN - Multi-Agent Concurrency
 
-**Review Date:** 2025-11-27
-**Project Status:** Proceed with Caution
-**Overall Risk:** Medium
-**Tickets Created:** No - Pre-ticket review
+**Review Date:** 2025-12-05
+**Status:** Ready
+**Risk Level:** Medium
+**Tickets Reviewed:** None - pre-ticket review
+**Previous Review:** 2025-11-27 (Issues addressed via review-updates.md)
 
 ## Executive Summary
 
-The MULTICN project is well-conceived and addresses a real pain point: multiple Claude Code agents cannot work concurrently due to SQLite write contention. The proposed solution—a shared daemon via Unix socket—is architecturally sound and appropriate for the problem.
+The MULTICN project addresses a critical limitation in the current maproom architecture: multiple Claude Code agents cannot work concurrently due to SQLite write contention (SQLITE_BUSY errors). The proposed solution—a shared daemon via Unix socket server with SQLite optimizations—is architecturally sound and well-researched.
 
-However, the review identified several concerns that should be addressed before ticket creation:
+**This is a second review following comprehensive updates.** The previous review (2025-11-27) identified 2 critical issues, 4 high-risk areas, and 9 gaps. All have been addressed in the planning documents with concrete, verifiable solutions.
 
-1. **Significant reuse opportunities exist** but aren't fully leveraged in the plan. The existing `daemon-client` has mature patterns (lifecycle management, circuit breakers, error hierarchy) that should be extended rather than rebuilt.
+**Key Strengths:**
+- Excellent two-phase approach: Phase 1 (SQLite foundation) delivers standalone value
+- Comprehensive codebase integration: properly leverages existing patterns from lifecycle.ts, errors.ts, and config patterns
+- Well-designed fallback strategy: stdio mode remains available for backward compatibility
+- Security-conscious: proper socket permissions, PID file handling with O_EXCL
+- Pragmatic scope: MVP features clearly separated from deferred enhancements
 
-2. **Phase 1 scope is underspecified** for ticket creation. The SQLite configuration work needs more concrete acceptance criteria.
+**Remaining Concerns:**
+- Implementation complexity is high: connect-or-spawn race handling, length-framed protocol, session management
+- Testing requirements are extensive: multi-process scenarios require specialized test infrastructure
+- Timeline risk: 10 tickets across 2 major phases with complex coordination
 
-3. **Testing strategy has gaps** around the stdio/socket dual-mode compatibility that's critical for the rollback plan.
+**Success Probability:** 85% (up from 70% in previous review)
 
-4. ~~**Windows compatibility is mentioned but not planned**~~ - Explicitly out of scope per user decision. Unix socket only; Windows users can use stdio fallback.
+## Verification of Previous Issues
 
-The project should proceed after addressing these gaps. Success probability is high given the well-researched analysis.
+### Critical Issue 1: Underspecified Phase 1 Acceptance Criteria ✅ RESOLVED
 
-## Critical Issues (Blockers)
+**Previous Status:** Phase 1 tickets lacked measurable acceptance criteria.
 
-### Issue 1: Underspecified Phase 1 Acceptance Criteria
+**Resolution Verification:**
+- plan.md lines 43-59: MULTICN-1001 now has 4 specific acceptance criteria including "Test: Spawn 3 indexing processes simultaneously, all complete without SQLITE_BUSY errors"
+- plan.md lines 73-85: MULTICN-1002 includes verification via env var `MAPROOM_SQLITE_BUSY_TIMEOUT_MS=60000` with log output confirmation
+- plan.md lines 97-111: MULTICN-1003 specifies mock test with 5 retry attempts showing exponential backoff delays: 50, 100, 200, 400, 800 ms
 
-**Severity:** Critical
-**Category:** Requirements
-**Description:** The plan for Phase 1 tickets (MULTICN-1001 through 1003) lacks concrete acceptance criteria. For example, MULTICN-1001 says "Update SQLite connection initialization" but doesn't specify:
-- How to verify the changes work (what test?)
-- Expected behavior change (measurable?)
-- Backwards compatibility requirements
+**Assessment:** All Phase 1 tickets now have programmatically verifiable criteria. Agents can objectively determine completion. ✅
 
-**Impact:** Agents cannot verify completion; tickets will be subjective "looks good" assessments.
+### Critical Issue 2: Dual-Mode Compatibility Not Designed ✅ RESOLVED
 
-**Required Action:**
-- Add measurable acceptance criteria to each Phase 1 ticket outline
-- Specify test cases that prove the change works
-- Define performance benchmarks (e.g., "busy_timeout allows 30s wait under contention")
+**Previous Status:** Connection interface abstraction was not explicitly designed.
 
-**Documents Affected:** plan.md
+**Resolution Verification:**
+- architecture.md lines 189-255: Complete "Connection Abstraction Layer" section added
+- architecture.md lines 196-232: `Connection` interface defined with 4 methods: sendRequest, close, isConnected, on()
+- architecture.md lines 234-254: Auto-detection logic specified (Windows → stdio, Unix → socket with fallback)
+- plan.md lines 246-280: MULTICN-2007 ticket comprehensively covers dual-mode implementation
 
-### Issue 2: Dual-Mode Compatibility Not Designed
+**Assessment:** Connection interface is now fully designed with clear separation of concerns. ✅
 
-**Severity:** Critical
-**Category:** Architecture
-**Description:** The rollback plan depends on `MAPROOM_CONNECTION_MODE=stdio` working alongside socket mode, but the architecture document doesn't design this abstraction. The `DaemonClient` class currently has stdio deeply embedded—it's not clear how both modes coexist.
+### Reinvention Issues ✅ RESOLVED
 
-**Impact:** Without a `Connection` interface abstraction designed upfront, Phase 2b tickets may require refactoring Phase 2a work, causing rework.
+**Lifecycle Patterns:**
+- architecture.md lines 690-704: "Reused Components from Existing Codebase" section explicitly documents DaemonLifecycle reuse
+- plan.md line 249: MULTICN-2007 specifies "Reuse existing DaemonLifecycle for connection management"
+- Existing lifecycle.ts has: restartAttempts, resetWindowMs (60s), shouldRestart(), getBackoffDelay() - all confirmed present
 
-**Required Action:**
-- Add a "Connection Abstraction" section to architecture.md
-- Define the `Connection` interface that both `StdioConnection` and `SocketConnection` implement
-- Clarify which methods live in the interface vs transport-specific code
+**Error Hierarchy:**
+- architecture.md lines 714-735: Socket-specific errors extend existing DaemonError, DaemonCommunicationError classes
+- plan.md line 256: "Extend existing error hierarchy (SocketConnectionError, SocketTimeoutError, DaemonLockError)"
+- Existing errors.ts confirmed to have base DaemonError with code field, stack capture - verified
 
-**Documents Affected:** architecture.md
+**Config Patterns:**
+- architecture.md lines 490-632: SqliteConfig follows nested struct pattern matching SearchConfig
+- Confirmed SearchConfig uses nested structs (EmbeddingConfig, FusionConfig, PerformanceConfig) with Default trait, from_env(), validate()
+- architecture.md lines 494-508: SqliteConfig has PoolConfig, PragmaConfig, RetryConfig nested structs matching pattern
 
-## Reinvention & Duplication Analysis
+**Assessment:** All reuse opportunities are now explicitly documented and integrated into the plan. ✅
 
-### Missed Reuse Opportunities
+## Codebase Integration Analysis
 
-**Available Component:** `packages/daemon-client/src/lifecycle.ts`
-**Could Solve:** Connection lifecycle management, circuit breaker, exponential backoff
-**Integration Method:** Extend existing class or extract reusable patterns
-**Integration Effort:** Low
-**Recommendation:** The plan proposes creating new lifecycle management in `discovery.ts`. Instead, extend `DaemonLifecycle` or extract its core patterns (circuit breaker, backoff calculation) into a shared utility. The existing code handles:
-- Restart attempts with reset window (60s)
-- Exponential backoff (2^n * base)
-- Circuit breaker after max failures
-- Graceful shutdown with request draining
+### Verified Existing Components
 
-**Available Component:** `packages/daemon-client/src/errors.ts`
-**Could Solve:** Error hierarchy for socket failures
-**Integration Method:** Extend existing error classes
-**Integration Effort:** Low
-**Recommendation:** Add `SocketConnectionError`, `SocketTimeoutError` extending the existing hierarchy rather than creating new error types. The current errors have `code` fields, stack trace capture, and helper methods.
+**1. DaemonLifecycle (packages/daemon-client/src/lifecycle.ts)** ✅
+- Confirmed: restartAttempts counter, 60s reset window, exponential backoff (2^n * base delay)
+- Confirmed: shouldRestart(), getBackoffDelay(), start(), stop() methods
+- Confirmed: Circuit breaker pattern with maxRestartAttempts (default: 5)
+- **Integration:** Plan correctly identifies reuse for socket reconnection logic
 
-**Available Component:** `packages/daemon-client/src/rpc.ts`
-**Could Solve:** JSON-RPC protocol encoding/decoding
-**Integration Method:** Reuse directly, add length-prefix codec alongside
-**Integration Effort:** Low
-**Recommendation:** Keep `RpcProtocol` for message creation/parsing. Add a new `LengthPrefixedCodec` that wraps the serialization with 4-byte length prefix. Don't duplicate the JSON-RPC message structures.
+**2. Error Hierarchy (packages/daemon-client/src/errors.ts)** ✅
+- Confirmed: DaemonError base class with code field
+- Confirmed: Specific errors (DaemonStartError, DaemonCrashError, DaemonTimeoutError, RpcError, DaemonUnhealthyError)
+- **Integration:** Plan adds SocketConnectionError, SocketTimeoutError, DaemonLockError as extensions
 
-**Available Component:** `crates/maproom/src/config/search_config.rs`
-**Could Solve:** Pattern for SqliteConfig struct
-**Integration Method:** Follow established pattern
-**Integration Effort:** Low
-**Recommendation:** The plan mentions creating SqliteConfig but doesn't reference the existing config patterns. Follow `SearchConfig` pattern exactly: nested structs, `Default` trait, `from_env()`, `validate()` method, `thiserror` for errors.
+**3. Config Pattern (crates/maproom/src/config/search_config.rs)** ✅
+- Confirmed: Nested struct pattern (SearchConfig contains EmbeddingConfig, FusionConfig, etc.)
+- Confirmed: Default trait, from_env(), validate() methods, thiserror for ConfigError
+- **Integration:** architecture.md lines 490-632 matches this pattern exactly for SqliteConfig
 
-### Pattern Violations
+**4. SQLite Current State (crates/maproom/src/db/sqlite/mod.rs)** ✅
+- Confirmed: WAL mode enabled (line 73: `PRAGMA journal_mode = WAL`)
+- Confirmed: busy_timeout = 5000 (line 76: `PRAGMA busy_timeout = 5000`)
+- Confirmed: r2d2 connection pool with max_size=10 (line 82-84)
+- **Gap identified:** No retry logic currently exists (plan addresses in MULTICN-1003)
 
-**Existing Pattern:** Nested config structs with validation
-**Proposed Deviation:** Plan shows flat SqliteConfig
-**Consistency Impact:** Inconsistent with SearchConfig, EmbeddingConfig patterns
-**Recommendation:** Use nested pattern:
-```rust
-pub struct SqliteConfig {
-    pub pool: PoolConfig,
-    pub pragmas: PragmaConfig,
-    pub retry: RetryConfig,
-}
-```
+**5. Current Daemon (crates/maproom/src/daemon/mod.rs)** ✅
+- Confirmed: stdio-based JSON-RPC (lines 89-90: stdin/stdout, line 94: lines.next_line())
+- Confirmed: Shared DaemonState with Arc (line 87)
+- Confirmed: handle_request() function already handles method dispatch
+- **Integration:** Socket mode will reuse handle_request(), DaemonState structure
 
-### Appropriate Reuse Identified
+## No Reinvention Detected
 
-The plan correctly identifies:
-- ✅ Reusing `Arc<DaemonState>` for shared state
-- ✅ Reusing `handle_request()` handler logic
-- ✅ Reusing JSON-RPC protocol structures
-- ✅ Keeping existing daemon methods (ping, search)
+**Search performed for potentially duplicated functionality:**
+- Unix socket server: NO existing implementation found ✅
+- Length-delimited codec: NO existing implementation found ✅
+- Lock file management: NO existing implementation found ✅
+- proper-lockfile: NOT currently in dependencies (will be added) ✅
 
-## High-Risk Areas (Warnings)
+**Appropriate New Dependencies:**
+- proper-lockfile (TypeScript): Industry-standard, 2.1M weekly downloads, battle-tested
+- tokio_util::codec::LengthDelimitedCodec (Rust): Already in dependencies (tokio-util is used), battle-tested framing
 
-### Risk 1: Connect-or-Spawn Race Condition Complexity
+## Architecture Quality Assessment
 
-**Risk Level:** High
-**Category:** Technical
-**Description:** The connect-or-spawn logic involves lock files, double-checking, daemon spawning, and socket waiting. This is complex coordination code with many failure modes.
-**Probability:** Medium
-**Impact:** High - Could cause daemon duplication or connection failures
-**Mitigation:**
-- Add explicit state machine diagram to architecture
-- Consider using a proven library (e.g., `proper-lockfile` in Node.js)
-- Add comprehensive timeout and retry configuration
-- Include detailed logging for debugging production issues
+### Design Strengths
 
-### ~~Risk 2: Cross-Platform Socket Path Handling~~ (Out of Scope)
+**1. Clean Separation of Concerns** ✅
+- Protocol layer (JsonRpcCodec) separate from session management
+- Transport abstraction (Connection interface) decouples socket/stdio
+- Session management isolated in SessionRegistry
+- Database layer unchanged (no coupling to transport)
 
-**Status:** Explicitly out of scope per user decision. Windows users will use stdio fallback mode (`MAPROOM_CONNECTION_MODE=stdio`). No TCP fallback needed for MVP.
+**2. Appropriate Technology Choices** ✅
+- Unix socket vs TCP: Well-reasoned (performance, security, simplicity)
+- LengthDelimitedCodec vs custom: Correct choice (battle-tested, handles edge cases)
+- proper-lockfile vs custom: Correct choice (race conditions are hard)
+- DashMap for sessions: Appropriate (lock-free concurrent hashmap)
 
-### Risk 3: Idle Timeout State Management
+**3. Security Posture** ✅
+- Socket permissions 0600 (security-review.md line 26)
+- PID file with O_EXCL prevents symlink attacks (security-review.md lines 38-47)
+- Message size limit 10MB (architecture.md line 137)
+- UID-based socket path isolation (architecture.md line 15)
 
-**Risk Level:** Medium
-**Category:** Technical
-**Description:** The daemon must track "no clients connected" state for 5-minute idle timeout. With socket connections coming and going, accurate tracking is non-trivial.
-**Probability:** Medium
-**Impact:** Low - Worst case: daemon doesn't shutdown or shuts down prematurely
-**Mitigation:**
-- Use atomic counter for active connections
-- Log connection count changes for debugging
-- Add manual shutdown command (`maproom daemon stop`) as fallback
+**4. Graceful Degradation** ✅
+- Stdio fallback for Windows (no Unix socket support)
+- MAPROOM_CONNECTION_MODE env var override
+- Existing clients continue to work unchanged
+- Vector search degrades gracefully if sqlite-vec missing (already existing pattern)
 
-### Risk 4: Message Framing Edge Cases
+### Identified Risks
 
-**Risk Level:** Medium
-**Category:** Technical
-**Description:** Length-prefixed framing has edge cases: partial reads, oversized messages, corrupt length bytes.
-**Probability:** Medium
-**Impact:** Medium - Corrupted messages could crash clients
-**Mitigation:**
-- Use `tokio_util::codec::LengthDelimitedCodec` (battle-tested)
-- Don't implement custom framing from scratch
-- Add explicit tests for partial read scenarios
-- Include maximum message size check (plan mentions 10MB limit - good)
+**Risk 1: Connect-or-Spawn Race Condition** (Medium)
+- **Complexity:** State machine with 7 states (architecture.md lines 339-378)
+- **Mitigation:** proper-lockfile library + double-check pattern + detailed state diagram ✅
+- **Test coverage:** quality-strategy.md lines 15-36 has comprehensive race condition test
+- **Assessment:** Adequately mitigated with proven library and testing
+
+**Risk 2: Message Framing Corruption** (Low)
+- **Complexity:** Length-prefix protocol with partial reads
+- **Mitigation:** tokio_util::LengthDelimitedCodec (battle-tested) ✅
+- **Test coverage:** quality-strategy.md lines 40-64 tests partial reads
+- **Assessment:** Low risk due to library choice
+
+**Risk 3: Session Isolation** (Low)
+- **Complexity:** Per-client request/response routing
+- **Mitigation:** UUID session IDs + per-session response channels (architecture.md lines 94-117)
+- **Test coverage:** quality-strategy.md lines 68-84 tests concurrent requests from multiple clients
+- **Assessment:** Standard pattern, well-tested approach
+
+**Risk 4: Idle Timeout Accuracy** (Low)
+- **Complexity:** Atomic counter tracking across async tasks
+- **Mitigation:** AtomicUsize with increment/decrement in register/unregister (architecture.md lines 104-117)
+- **Assessment:** Simple counter, low risk of bugs
 
 ## Gaps & Ambiguities
 
-### Requirements Gaps
+### Requirements Clarity ✅
 
-- **SIGHUP reload behavior**: Plan mentions SIGHUP for config reload but doesn't specify what gets reloaded. Is it safe to reload database config mid-operation?
-- **Daemon version compatibility**: What happens if client expects newer protocol than daemon supports? Need version negotiation or clear error.
-- **Lock file location**: Plan uses `/tmp/maproom-{uid}.lock` but this may conflict with `/tmp/maproom-{uid}.sock`. Clarify naming scheme.
+**All previously identified gaps have been addressed:**
 
-### Technical Gaps
+1. **SIGHUP reload behavior** → Moved to "Out of Scope for MVP" (plan.md lines 360-365)
+2. **Daemon version compatibility** → Added protocol version handshake (architecture.md lines 180-186)
+3. **Lock file location** → Clarified: `/tmp/maproom-{uid}.lock` vs `.sock` (architecture.md line 37)
+4. **Pool reconfiguration** → Requires daemon restart (architecture.md line 634)
+5. **Embedding service thread safety** → Verified already thread-safe (architecture.md lines 772-779)
+6. **WAL checkpoint strategy** → Specified: wal_autocheckpoint=10000 (architecture.md line 480)
+7. **Migration testing** → Added dual-mode compatibility testing section (quality-strategy.md lines 215-280)
+8. **Performance baseline** → Added Phase 0 baseline capture (plan.md lines 10-26)
+9. **Multi-process test harness** → Specified implementation (quality-strategy.md lines 140-177)
 
-- **Pool reconfiguration**: Plan mentions configurable pool sizes but doesn't address whether changes require daemon restart.
-- **Embedding service sharing**: Multiple clients may trigger parallel embedding requests. Is `EmbeddingService` thread-safe? Rate limiting?
-- **WAL checkpoint strategy**: Plan mentions "checkpoint during idle" but doesn't specify implementation. Manual PRAGMA wal_checkpoint? Automatic?
+**No new gaps identified in this review.**
 
-### Process Gaps
+### Technical Ambiguities Resolved
 
-- **Migration testing**: How to test that existing stdio clients work unchanged? Need explicit regression test requirement.
-- **Performance baseline**: Plan has success metrics but no baseline. Need to capture current latency/memory before changes.
+**Previously ambiguous, now clear:**
+- Connection mode selection logic: Lines 234-254 in architecture.md specify Windows detection, env var override
+- Daemon spawning parameters: Line 424 specifies `detached: true, stdio: 'ignore', daemon.unref()`
+- Socket path format: `/tmp/maproom-{uid}.sock` where uid is from `process.getuid()` (implied)
+- PID file locking: O_EXCL + flock with 30s stale timeout (architecture.md lines 402-407)
 
-## Scope & Feasibility Concerns
+**Remaining minor ambiguity (acceptable for pre-ticket):**
+- Error code mapping: Which Rust errors map to which TypeScript error codes? (Can be resolved during implementation)
 
-### Scope Creep Indicators
+## Scope Assessment
 
-- **SIGHUP reload**: Nice-to-have, not required for MVP. Consider deferring.
-- **Session metrics tracking**: Plan mentions `request_count: AtomicU64` per session. Is this needed for MVP or just nice observability?
-- **Broadcast capability**: `SessionRegistry.broadcast()` method in plan—what's the use case? If none immediate, defer.
+### MVP Boundaries ✅
 
-### Feasibility Challenges
+**In Scope (Appropriate):**
+- Phase 1: SQLite optimizations (busy_timeout, cache_size, retry logic)
+- Phase 2: Unix socket server with session management
+- Connect-or-spawn with lock file coordination
+- Dual-mode support (socket + stdio fallback)
+- Graceful shutdown with in-flight request draining
+- 5-minute idle timeout
 
-- **Testing multi-process scenarios**: Integration tests spawning multiple clients are complex. May need test harness infrastructure not currently present.
-- **CI timeout risks**: Multi-agent stress tests could be flaky or slow in CI. Plan appropriately.
+**Out of Scope (Appropriate Deferrals):**
+- SIGHUP config reload (daemon restart acceptable)
+- Per-session metrics tracking (observability, not functionality)
+- Broadcast notifications (no use case identified)
+- Runtime pool reconfiguration (restart required)
+- Windows named pipes (stdio fallback sufficient)
+- Authentication/authorization (single-user workstation)
+- Rate limiting (self-DoS not a concern)
+- Manual daemon management commands
+
+**Scope Creep Removed:** Session metrics, broadcast capability, SIGHUP reload (saved ~9 hours)
+
+**Assessment:** MVP scope is disciplined and focused on core concurrency problem. ✅
+
+### Feasibility
+
+**Estimated Effort:**
+- Phase 0: 1 hour (baseline capture)
+- Phase 1: 6-8 hours (3 tickets × 2-3 hours)
+- Phase 2a: 12-16 hours (4 tickets × 3-4 hours)
+- Phase 2b: 8-12 hours (3 tickets × 3-4 hours)
+- **Total: 27-37 hours**
+
+**Timeline Risk:** Medium
+- Complex coordination between Rust and TypeScript changes
+- Multi-phase dependencies (Phase 2b depends on Phase 2a)
+- Integration testing requires multi-process scenarios
+- **Mitigation:** Clear ticket dependencies, comprehensive acceptance criteria
+
+**Technical Risk:** Low-Medium
+- Leverages proven libraries (proper-lockfile, LengthDelimitedCodec)
+- Follows existing patterns (lifecycle, errors, config)
+- Stdio fallback provides safety net
+- **Mitigation:** Battle-tested components, extensive testing strategy
+
+## Execution Readiness
+
+### Ticket Creation Readiness ✅
+
+**Phase 1 Tickets (MULTICN-1001 to 1003):**
+- [x] Specific acceptance criteria defined
+- [x] Verification steps with commands specified
+- [x] Files to modify identified
+- [x] Implementation approach clear
+- [x] Test requirements explicit
+
+**Phase 2a Tickets (MULTICN-2001 to 2004):**
+- [x] Acceptance criteria defined
+- [x] Integration points clear
+- [x] Dependencies documented
+- [x] Error handling specified
+
+**Phase 2b Tickets (MULTICN-2005 to 2007):**
+- [x] Acceptance criteria defined
+- [x] Connection interface designed
+- [x] Dual-mode logic specified
+- [x] Lifecycle integration documented
+
+**Assessment:** All tickets have sufficient detail for agent execution. Ready for ticket generation. ✅
+
+### Testing Strategy ✅
+
+**Critical Test Paths Identified:**
+1. Connect-or-spawn race condition (5 concurrent clients)
+2. Message framing with partial reads
+3. Concurrent request routing
+4. Graceful shutdown with in-flight requests
+5. SQLite retry logic with BUSY simulation
+6. Dual-mode compatibility (stdio + socket)
+
+**Test Infrastructure:**
+- Multi-process test harness specified (quality-strategy.md lines 140-177)
+- Unique socket paths per test
+- Automatic cleanup with Drop trait
+- CI configuration for sequential execution
+
+**Baseline Comparison:**
+- Phase 0 captures: search latency (p50, p95, p99), index time, memory usage
+- Post-implementation comparison with 5ms tolerance for latency
+- Memory reduction target: 300MB → <150MB for 3 agents
+
+**Assessment:** Testing strategy is comprehensive and pragmatic. ✅
 
 ## Alignment Assessment
 
 ### MVP Discipline
-**Rating:** Adequate
-- ✅ Two-phase approach is sensible
-- ✅ Phase 1 provides standalone value (better SQLite handling)
-- ⚠️ Some Phase 2 features (SIGHUP, session metrics) could be deferred
-- ⚠️ Broadcast capability has no stated use case
+**Rating:** Strong (improved from Adequate)
+- Phase 1 provides standalone value (better SQLite handling)
+- Scope creep removed (session metrics, broadcast, SIGHUP)
+- Clear MVP success criteria (quality-strategy.md lines 263-272)
+- Out-of-scope features documented for future consideration
 
-### Pragmatism Score
+### Pragmatism
 **Rating:** Strong
-- ✅ Unix socket vs TCP choice is well-reasoned
-- ✅ Leverages existing WAL mode rather than reimplementing
-- ✅ Keeps stdio as fallback rather than big-bang migration
-- ✅ 5-minute idle timeout is reasonable
+- Uses battle-tested libraries (proper-lockfile, LengthDelimitedCodec)
+- Unix socket vs TCP choice well-reasoned
+- Stdio fallback instead of big-bang migration
+- Idle timeout is practical (5 minutes)
+- Defers nice-to-have features appropriately
 
 ### Agent Compatibility
-**Rating:** Adequate
-- ✅ Ticket sizing appears appropriate (2-8 hour range)
-- ⚠️ Phase 1 tickets need clearer acceptance criteria for agent verification
-- ⚠️ Some tickets have "Secondary Agent" assignments—clarify handoff protocol
-- ✅ Files to modify are explicitly listed per ticket
+**Rating:** Strong (improved from Adequate)
+- Ticket sizing: 2-8 hour range maintained
+- Acceptance criteria are programmatically verifiable
+- Clear verification commands for each ticket
+- Handoffs between agents specified (plan.md lines 292-305)
 
 ### Codebase Integration
-**Rating:** Adequate
-- ✅ Correctly identifies existing patterns to follow
-- ⚠️ Doesn't fully leverage existing lifecycle/error patterns
-- ⚠️ SqliteConfig pattern not specified to match existing config patterns
-- ✅ Preserves backwards compatibility via connection mode abstraction
+**Rating:** Strong (improved from Adequate)
+- Existing patterns explicitly documented and followed
+- DaemonLifecycle, error hierarchy, config patterns all reused
+- No unnecessary reinvention
+- Backward compatibility preserved via connection abstraction
 
-### Separation of Concerns
-**Rating:** Strong
-- ✅ Clear separation: protocol layer, session layer, handler layer
-- ✅ Transport-agnostic handler design
-- ✅ Connection interface abstraction (though needs explicit design)
-- ✅ Database layer unchanged
+## Security Review
+
+### Security Controls ✅
+
+**Implemented:**
+- Socket mode 0600 permissions (UID isolation)
+- PID file O_EXCL (prevents symlink attacks)
+- Message size limit 10MB (prevents memory exhaustion)
+- Session UUID isolation (prevents cross-client interference)
+
+**Deferred (Appropriate):**
+- Authentication (not needed for single-user workstation)
+- Rate limiting (self-DoS only, low priority)
+- Audit logging (operational, not security-critical)
+- Encrypted socket (overkill for localhost)
+
+**Assessment:** Security posture is appropriate for the stated use case (single-user developer workstation). ✅
+
+## Quality Gates
+
+### Phase 1 Complete When
+- [x] Enhanced PRAGMAs in place (criteria specified)
+- [x] SqliteConfig struct with env vars (pattern matches SearchConfig)
+- [x] Retry logic with tests (exponential backoff specified)
+- [x] No regressions in existing tests (dual-mode testing)
+
+### Phase 2 Complete When
+- [x] Socket server accepts connections (acceptance criteria in MULTICN-2003)
+- [x] Multi-client concurrent requests work (test in quality-strategy.md)
+- [x] Connect-or-spawn race condition test passes (test specified)
+- [x] Graceful shutdown test passes (test in quality-strategy.md)
+- [x] Existing daemon-client tests pass with both modes (dual-mode testing)
+
+## Critical Issues (Blockers)
+
+**None identified.** All previous critical issues have been resolved.
+
+## High-Risk Areas (Warnings)
+
+### Warning 1: Implementation Complexity
+
+**Risk Level:** Medium
+**Description:** The project requires coordinated changes across:
+- 8 new files (protocol.rs, session.rs, server.rs, sqlite_config.rs, connection.ts, socket.ts, stdio.ts, discovery.ts)
+- 6 modified files (daemon/mod.rs, main.rs, db/sqlite/mod.rs, client.ts, errors.ts, lifecycle.ts)
+- Rust and TypeScript synchronization
+- Multi-process testing infrastructure
+
+**Mitigation:**
+- Clear ticket sequencing (plan.md lines 306-318)
+- Comprehensive acceptance criteria
+- Incremental testing at each phase
+- Stdio fallback provides rollback path
+
+**Confidence:** High that mitigations are sufficient
+
+### Warning 2: Testing Infrastructure Complexity
+
+**Risk Level:** Medium
+**Description:** Multi-process integration tests require:
+- Unique socket paths per test (race prevention)
+- Process spawning and coordination
+- Timeout and cleanup management
+- CI configuration for sequential execution
+
+**Mitigation:**
+- Test harness design specified (quality-strategy.md lines 140-177)
+- Automatic cleanup with Drop trait
+- CI timeout limits (10 minutes)
+- --test-threads=1 for CI
+
+**Confidence:** Medium-High (test infrastructure is complex but well-planned)
+
+### Warning 3: Timeline Coordination
+
+**Risk Level:** Medium
+**Description:** Phase 2 requires coordination between:
+- rust-indexer-engineer (Phase 2a: 4 tickets)
+- vscode-extension-specialist (Phase 2b: 3 tickets)
+- process-management-specialist (support for both)
+
+**Mitigation:**
+- Clear dependencies documented (plan.md lines 306-318)
+- Primary/secondary agent assignments
+- Phase 2a must complete before Phase 2b starts
+- Integration points well-defined
+
+**Confidence:** Medium (multi-agent coordination adds complexity)
+
+## Recommendations
+
+### Before Creating Tickets
+
+**No blocking issues.** Proceed to ticket creation.
+
+**Optional Enhancements (defer if time-constrained):**
+1. Add explicit error code mapping table (Rust error → TypeScript error code)
+2. Add performance budgets for each phase (e.g., "Phase 1 must not regress latency by >5ms")
+3. Consider adding a "Phase 0.5" ticket for test infrastructure setup
+
+### During Execution
+
+1. **Capture baseline first** - Run Phase 0 baseline capture before any code changes
+2. **Test dual-mode early** - Verify stdio fallback works before deep socket implementation
+3. **Integration test continuously** - Don't wait until Phase 2 completion to test multi-client scenarios
+4. **Monitor memory usage** - Track daemon memory consumption throughout development
+
+### Risk Mitigations (Already in Plan)
+
+- Use proper-lockfile library (not custom lock implementation) ✅
+- Use tokio_util::codec::LengthDelimitedCodec (not custom framing) ✅
+- Add connection count logging from day one ✅
+- Create explicit test fixtures before Phase 2 ✅
+
+## Documentation Quality
+
+**analysis.md:** Excellent - Deep research, clear problem definition, industry solutions analyzed
+**architecture.md:** Excellent - Comprehensive component design, reuse documented, security considered
+**plan.md:** Excellent - Concrete deliverables, acceptance criteria, verification steps, dependencies clear
+**quality-strategy.md:** Excellent - Risk-based testing, dual-mode compatibility, baseline comparison
+**security-review.md:** Good - Appropriate controls for use case, gaps acknowledged
+**review-updates.md:** Excellent - Comprehensive tracking of all issues and resolutions
+
+**Assessment:** Documentation quality is consistently high across all planning documents. ✅
 
 ## Execution Readiness Checklist
 
@@ -229,34 +453,34 @@ The plan correctly identifies:
 - [x] Requirements are specific and measurable
 - [x] Architecture decisions are clear and justified
 - [x] Plan has concrete milestones and deliverables
-- [ ] Plan is detailed enough to create tickets from (Phase 1 needs more detail)
+- [x] Plan is detailed enough to create tickets from
 - [x] Test strategy is defined and pragmatic
 - [x] Security concerns are addressed
-- [ ] Dependencies on existing systems documented (lifecycle reuse not specified)
+- [x] Dependencies on existing systems documented
 
 ### Technical
 - [x] Technology choices are appropriate
 - [x] Dependencies are identified and available
-- [ ] Integration points are well-defined (Connection interface not designed)
+- [x] Integration points are well-defined
 - [x] Performance requirements are clear
 - [x] Error handling is specified
-- [ ] Existing tools/libraries identified for reuse (partial)
-- [ ] No unnecessary duplication of functionality (some duplication risk)
+- [x] Existing tools/libraries identified for reuse
+- [x] No unnecessary duplication of functionality
 
 ### Process
 - [x] Agent assignments are appropriate
 - [x] Task boundaries are clear
-- [ ] Verification criteria are explicit (Phase 1 weak)
+- [x] Verification criteria are explicit
 - [x] Handoffs are defined
 - [x] Rollback plan exists
 - [x] Integration with existing workflows considered
 
 ### Integration & Reuse
-- [ ] Existing solutions evaluated before building new (lifecycle.ts not leveraged)
+- [x] Existing solutions evaluated before building new
 - [x] Current patterns and conventions followed
-- [ ] Reusable components identified (partial - errors.ts, lifecycle.ts underused)
+- [x] Reusable components identified
 - [x] Integration points with existing systems mapped
-- [ ] No reinvention of available functionality (some risk)
+- [x] No reinvention of available functionality
 - [x] Proper integration methods chosen
 - [x] Component boundaries respected
 - [x] Public interfaces used (not internals)
@@ -269,65 +493,63 @@ The plan correctly identifies:
 - [x] Critical path is protected
 - [x] Failure modes are understood
 
-## Recommendations
-
-### Immediate Actions (Before Creating Tickets)
-
-1. **Add Connection interface design** to architecture.md
-   - Define `Connection` interface with `sendRequest`, `close`, `isConnected`
-   - Show how `StdioConnection` and `SocketConnection` implement it
-   - Clarify where connection mode selection happens
-
-2. **Specify Phase 1 acceptance criteria** in plan.md
-   - MULTICN-1001: "Verified by running concurrent indexing test that previously failed"
-   - MULTICN-1002: "Verified by setting env var and confirming log output shows new values"
-   - MULTICN-1003: "Verified by unit test that simulates SQLITE_BUSY and confirms retry behavior"
-
-3. **Document existing component reuse** in architecture.md
-   - Add section: "Reused Components from daemon-client"
-   - List: error hierarchy extension, lifecycle patterns, RPC protocol
-
-4. ~~**Add Windows design**~~ - Out of scope. Windows users use stdio fallback.
-
-### Phase 1 Adjustments
-
-- Consider adding baseline performance capture as "Phase 0" or prerequisite
-- Ensure SqliteConfig follows nested struct pattern from SearchConfig
-
-### Risk Mitigations
-
-- Use `tokio_util::codec::LengthDelimitedCodec` rather than custom implementation
-- Add connection count logging from day one for debugging
-- Create explicit test fixtures for multi-client scenarios before Phase 2
-
-### Documentation Updates
-
-- **architecture.md**: Add Connection interface, reuse documentation
-- **plan.md**: Add acceptance criteria for all Phase 1 tickets
-- **quality-strategy.md**: Add dual-mode compatibility testing requirement
-
 ## Review Conclusion
 
 ### Readiness Assessment
-**Can this project succeed as currently defined?** Yes with caveats
 
-**Primary concerns:**
-1. Phase 1 tickets lack measurable acceptance criteria for agent verification
-2. Connection interface abstraction not explicitly designed (risks Phase 2 rework)
-3. Existing lifecycle/error patterns should be explicitly reused
+**Can this project succeed as currently defined?** YES
+
+**Primary strengths:**
+1. All previous critical issues resolved with concrete, verifiable solutions
+2. Comprehensive codebase integration - properly leverages existing patterns
+3. Well-designed fallback strategy preserves backward compatibility
+4. Pragmatic MVP scope with appropriate deferrals
+5. Extensive testing strategy with clear success criteria
+
+**Remaining challenges (manageable):**
+1. Implementation complexity across Rust and TypeScript
+2. Multi-process testing infrastructure requirements
+3. Timeline coordination between multiple agents
 
 ### Recommended Path Forward
 
-**REVISE THEN PROCEED:** Address critical issues (acceptance criteria, Connection interface design) before creating tickets. The architectural approach is sound; the planning documents need refinement for agent executability.
+**PROCEED TO TICKET CREATION**
+
+The planning documents are comprehensive, well-researched, and execution-ready. All critical issues from the previous review have been resolved. The project has a high probability of success given:
+- Clear architectural design
+- Appropriate technology choices
+- Comprehensive testing strategy
+- Strong integration with existing codebase patterns
+- Pragmatic MVP scope
 
 ### Success Probability
-Given current state: 70%
-After recommended changes: 90%
+
+**Overall: 85%** (improved from 70% after previous review updates)
+
+**Breakdown:**
+- Technical approach: 90% (well-researched, proven components)
+- Execution readiness: 85% (comprehensive planning, some complexity)
+- Timeline risk: 75% (multi-phase, multi-agent coordination)
+- Testing adequacy: 90% (comprehensive strategy, good coverage)
+
+### Next Steps
+
+1. **Immediate:** `/workstream:project-tickets MULTICN` to generate tickets from plan
+2. **After ticket creation:** Quick review of generated tickets for consistency
+3. **Before execution:** Run Phase 0 baseline capture
+4. **During execution:** Monitor progress at phase boundaries, verify dual-mode compatibility early
 
 ### Final Notes
 
-This is a well-researched project solving a real problem. The analysis document shows deep understanding of SQLite concurrency, and the phased approach is pragmatic. The main gaps are in execution readiness—making the plan specific enough for agents to verify their work, and explicitly leveraging existing codebase patterns.
+This is an exemplary project plan that demonstrates:
+- Thorough problem analysis with industry research
+- Pragmatic architectural choices balancing complexity and value
+- Strong integration with existing codebase patterns
+- Comprehensive testing and security considerations
+- Clear MVP discipline with appropriate scope boundaries
 
-The two-phase structure is excellent: Phase 1 delivers standalone value (better SQLite handling helps even with current architecture) while Phase 2 provides the main solution. This de-risks the project significantly.
+The two-phase structure (SQLite foundation → shared daemon) provides incremental value and reduces risk. Phase 1 delivers standalone benefits even if Phase 2 encounters issues.
 
-Recommend spending 1-2 hours updating the planning documents before ticket creation. This small upfront investment will prevent significant rework during execution.
+The previous review process worked as intended: critical issues were identified, addressed with concrete solutions, and verified in this re-review. The project is now ready for ticket generation and execution.
+
+**Confidence Level:** High - This project is well-positioned for successful execution.

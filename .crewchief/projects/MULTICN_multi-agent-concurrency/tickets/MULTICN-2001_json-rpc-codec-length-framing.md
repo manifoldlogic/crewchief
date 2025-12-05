@@ -1,0 +1,364 @@
+# Ticket: MULTICN-2001: JSON-RPC Codec with Length Framing
+
+## Status
+- [ ] **Task completed** - acceptance criteria met
+- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [ ] **Verified** - by the verify-ticket agent
+
+**Note on "Tests pass"**:
+- If tests were created/modified, you MUST run them and show output
+- "Tests pass" means tests were EXECUTED and all passed
+- "Tests pass - N/A" is only valid for documentation-only tickets
+- Test file existence alone does NOT satisfy this requirement
+
+## Agents
+- rust-indexer-engineer
+- unit-test-runner
+- verify-ticket
+- commit-ticket
+
+## Summary
+
+Implement binary framing for JSON-RPC messages using `tokio_util::codec::LengthDelimitedCodec`. Provides 4-byte big-endian length prefix with 10MB maximum message size and protocol version checking for socket-based communication.
+
+## Background
+
+Socket-based communication requires message framing to detect message boundaries (unlike stdio which uses newlines). Using the battle-tested `LengthDelimitedCodec` from tokio_util ensures correct handling of partial reads, oversized messages, and binary-safe transmission.
+
+This codec will be shared by both the Rust socket server (MULTICN-2003) and TypeScript socket client (MULTICN-2005).
+
+Reference: [architecture.md](../planning/architecture.md) - Protocol Layer section
+
+## Acceptance Criteria
+
+- [ ] `JsonRpcCodec` struct uses `LengthDelimitedCodec::builder()` with `max_frame_length(10MB)`
+- [ ] 4-byte big-endian length prefix format
+- [ ] Protocol version constant defined (`PROTOCOL_VERSION = 1`)
+- [ ] Handshake struct includes version field for compatibility checking
+- [ ] Reuses existing JSON-RPC message structures (no duplication)
+- [ ] Test: Encode/decode round-trip preserves message
+- [ ] Test: Partial read simulation (split message) doesn't corrupt data
+- [ ] Test: Oversized message (>10MB) rejected with error
+
+## Technical Requirements
+
+Create `crates/maproom/src/daemon/protocol.rs` implementing codec for JSON-RPC over length-delimited frames.
+
+### Protocol Constants
+
+```rust
+/// Protocol version for compatibility checking.
+/// Increment when making breaking changes to message format.
+pub const PROTOCOL_VERSION: u32 = 1;
+
+/// Maximum message size: 10MB
+/// Prevents memory exhaustion from malicious/malformed messages
+const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
+```
+
+### Wire Format
+
+```
+┌────────────┬────────────────────────────────────┐
+│ 4 bytes    │ N bytes                            │
+│ (big-end)  │ JSON-RPC message                   │
+│ length=N   │ (request or response)              │
+└────────────┴────────────────────────────────────┘
+```
+
+### JsonRpcCodec Implementation
+
+```rust
+use bytes::{Bytes, BytesMut};
+use serde::{Deserialize, Serialize};
+use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
+
+use crate::daemon::types::{JsonRpcRequest, JsonRpcResponse};
+
+/// Codec for length-prefixed JSON-RPC messages over Unix sockets.
+///
+/// Uses tokio_util's battle-tested LengthDelimitedCodec for framing,
+/// then deserializes JSON payload.
+pub struct JsonRpcCodec {
+    inner: LengthDelimitedCodec,
+}
+
+impl JsonRpcCodec {
+    pub fn new() -> Self {
+        Self {
+            inner: LengthDelimitedCodec::builder()
+                .max_frame_length(MAX_MESSAGE_SIZE)
+                .length_field_type::<u32>()
+                .big_endian()
+                .new_codec(),
+        }
+    }
+}
+
+impl Default for JsonRpcCodec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// JSON-RPC message envelope (request or response)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JsonRpcMessage {
+    Request(JsonRpcRequest),
+    Response(JsonRpcResponse),
+}
+
+impl Decoder for JsonRpcCodec {
+    type Item = JsonRpcMessage;
+    type Error = std::io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        // Delegate framing to LengthDelimitedCodec
+        if let Some(bytes) = self.inner.decode(src)? {
+            // Parse JSON payload
+            let message = serde_json::from_slice(&bytes)
+                .map_err(|e| std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid JSON-RPC message: {}", e)
+                ))?;
+            Ok(Some(message))
+        } else {
+            Ok(None) // Need more data
+        }
+    }
+}
+
+impl Encoder<JsonRpcMessage> for JsonRpcCodec {
+    type Error = std::io::Error;
+
+    fn encode(&mut self, item: JsonRpcMessage, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        // Serialize to JSON
+        let json = serde_json::to_vec(&item)
+            .map_err(|e| std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to serialize JSON-RPC message: {}", e)
+            ))?;
+
+        // Delegate framing to LengthDelimitedCodec
+        self.inner.encode(Bytes::from(json), dst)
+    }
+}
+```
+
+### Protocol Handshake
+
+```rust
+/// Initial handshake message sent by client
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Handshake {
+    pub version: u32,
+    pub client_id: uuid::Uuid,
+}
+
+impl Handshake {
+    pub fn new(client_id: uuid::Uuid) -> Self {
+        Self {
+            version: PROTOCOL_VERSION,
+            client_id,
+        }
+    }
+
+    pub fn is_compatible(&self) -> bool {
+        // Major version must match (breaking changes)
+        self.version == PROTOCOL_VERSION
+    }
+}
+
+/// Handshake response from server
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HandshakeResponse {
+    pub version: u32,
+    pub accepted: bool,
+    pub reason: Option<String>,
+}
+
+impl HandshakeResponse {
+    pub fn accepted() -> Self {
+        Self {
+            version: PROTOCOL_VERSION,
+            accepted: true,
+            reason: None,
+        }
+    }
+
+    pub fn rejected(reason: String) -> Self {
+        Self {
+            version: PROTOCOL_VERSION,
+            accepted: false,
+            reason: Some(reason),
+        }
+    }
+}
+```
+
+## Implementation Notes
+
+### Reusing Existing JSON-RPC Types
+
+DO NOT duplicate message structures. Reuse existing types from `crates/maproom/src/daemon/types.rs`:
+
+```rust
+// Already exists in types.rs
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,  // "2.0"
+    pub method: String,
+    pub params: Option<serde_json::Value>,
+    pub id: RequestId,
+}
+
+pub struct JsonRpcResponse {
+    pub jsonrpc: String,  // "2.0"
+    pub result: Option<serde_json::Value>,
+    pub error: Option<JsonRpcError>,
+    pub id: RequestId,
+}
+```
+
+The codec simply wraps these with length-prefix framing.
+
+### Why LengthDelimitedCodec?
+
+Using `tokio_util::codec::LengthDelimitedCodec` instead of custom framing:
+- **Battle-tested**: Used in production by many Tokio-based systems
+- **Handles edge cases**: Partial reads, buffer management, oversized messages
+- **Performance**: Optimized buffer handling and zero-copy where possible
+- **Maintenance**: Maintained by Tokio team, receives security fixes
+
+### Unit Tests
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn test_encode_decode_round_trip() {
+        let mut codec = JsonRpcCodec::new();
+        let mut buffer = BytesMut::new();
+
+        let request = JsonRpcMessage::Request(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "search".into(),
+            params: Some(serde_json::json!({"query": "test"})),
+            id: RequestId::Number(42),
+        });
+
+        // Encode
+        codec.encode(request.clone(), &mut buffer).unwrap();
+        assert!(buffer.len() > 4); // Length prefix + payload
+
+        // Decode
+        let decoded = codec.decode(&mut buffer).unwrap().unwrap();
+        match (request, decoded) {
+            (JsonRpcMessage::Request(r1), JsonRpcMessage::Request(r2)) => {
+                assert_eq!(r1.method, r2.method);
+                assert_eq!(r1.id, r2.id);
+            }
+            _ => panic!("Type mismatch"),
+        }
+    }
+
+    #[test]
+    fn test_partial_read_handling() {
+        let mut codec = JsonRpcCodec::new();
+        let mut buffer = BytesMut::new();
+
+        let message = JsonRpcMessage::Request(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "ping".into(),
+            params: None,
+            id: RequestId::Number(1),
+        });
+
+        // Encode full message
+        codec.encode(message.clone(), &mut buffer).unwrap();
+        let full_len = buffer.len();
+
+        // Split buffer to simulate partial read
+        let first_half = buffer.split_to(full_len / 2);
+        let second_half = buffer.clone();
+
+        // Try decoding first half
+        let mut partial_buf = first_half.clone();
+        let result = codec.decode(&mut partial_buf).unwrap();
+        assert!(result.is_none()); // Should return None (need more data)
+
+        // Add second half
+        partial_buf.unsplit(second_half);
+        let result = codec.decode(&mut partial_buf).unwrap();
+        assert!(result.is_some()); // Should now decode successfully
+    }
+
+    #[test]
+    fn test_oversized_message_rejected() {
+        let mut codec = JsonRpcCodec::new();
+        let mut buffer = BytesMut::new();
+
+        // Create message larger than MAX_MESSAGE_SIZE
+        let huge_payload = "x".repeat(11 * 1024 * 1024); // 11MB
+        let message = JsonRpcMessage::Request(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "test".into(),
+            params: Some(serde_json::json!({"data": huge_payload})),
+            id: RequestId::Number(1),
+        });
+
+        // Encoding huge message should fail
+        let result = codec.encode(message, &mut buffer);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_handshake_version_check() {
+        let handshake = Handshake::new(uuid::Uuid::new_v4());
+        assert_eq!(handshake.version, PROTOCOL_VERSION);
+        assert!(handshake.is_compatible());
+
+        let old_version = Handshake {
+            version: 0,
+            client_id: uuid::Uuid::new_v4(),
+        };
+        assert!(!old_version.is_compatible());
+    }
+
+    #[test]
+    fn test_handshake_response() {
+        let accepted = HandshakeResponse::accepted();
+        assert!(accepted.accepted);
+        assert!(accepted.reason.is_none());
+
+        let rejected = HandshakeResponse::rejected("Version mismatch".into());
+        assert!(!rejected.accepted);
+        assert_eq!(rejected.reason.as_deref(), Some("Version mismatch"));
+    }
+}
+```
+
+## Dependencies
+
+- Phase 1 complete (MULTICN-1001, MULTICN-1002, MULTICN-1003)
+- tokio_util crate (should already be in dependencies)
+
+## Risk Assessment
+
+- **Risk**: Length-delimited framing overhead
+  - **Mitigation**: 4-byte overhead is negligible. Batch requests if latency becomes issue.
+
+- **Risk**: 10MB limit too restrictive for large responses
+  - **Mitigation**: 10MB is generous for JSON-RPC. Pagination should be used for large result sets.
+
+- **Risk**: Protocol version incompatibility
+  - **Mitigation**: Version checking in handshake allows graceful rejection. Clients can fallback to stdio mode.
+
+## Files/Packages Affected
+
+- `crates/maproom/src/daemon/protocol.rs` (NEW)
+- `crates/maproom/src/daemon/mod.rs` (MODIFY - add module export)
+- `Cargo.toml` (VERIFY tokio_util dependency present)
