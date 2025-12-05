@@ -102,6 +102,7 @@
 mod feature_flags;
 mod hot_reload;
 mod search_config;
+mod sqlite_config;
 
 #[cfg(test)]
 mod tests;
@@ -115,3 +116,4 @@ pub use search_config::{
     BufferConfig, DatabaseConfig, EmbeddingConfig, FusionConfig, FusionMethod, IndexConfig,
     IndexingConfig, PerformanceConfig, RuntimeConfig, SearchConfig, SearchConfigError,
 };
+pub use sqlite_config::{PoolConfig, PragmaConfig, RetryConfig, SqliteConfig, SqliteConfigError};

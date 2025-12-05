@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
+use crate::config::SqliteConfig;
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
 use migrations::MigrationRunner;
 
@@ -38,6 +39,13 @@ pub struct SqliteStore {
 
 impl SqliteStore {
     pub async fn connect(path: &str) -> anyhow::Result<Self> {
+        // Load configuration from environment variables
+        let config = SqliteConfig::from_env()
+            .context("Failed to load SQLite configuration from environment")?;
+        Self::connect_with_config(path, &config).await
+    }
+
+    pub async fn connect_with_config(path: &str, config: &SqliteConfig) -> anyhow::Result<Self> {
         let path = if path.starts_with("sqlite://") {
             &path[9..]
         } else {
@@ -66,29 +74,55 @@ impl SqliteStore {
             )));
         }
 
-        let manager = r2d2_sqlite::SqliteConnectionManager::file(path).with_init(|conn| {
-            // Enable WAL mode for concurrency with enhanced settings
-            conn.execute_batch(
-                r#"
-                    PRAGMA journal_mode = WAL;
-                    PRAGMA synchronous = NORMAL;
-                    PRAGMA busy_timeout = 30000;          -- Increased from 5000 for concurrent access
-                    PRAGMA wal_autocheckpoint = 10000;    -- ~40MB threshold before checkpoint
-                    PRAGMA cache_size = -65536;           -- 64MB page cache
-                    PRAGMA mmap_size = 268435456;         -- 256MB memory-mapped I/O
-                    PRAGMA foreign_keys = ON;
-                    "#,
-            )?;
+        // Build PRAGMA statements from configuration
+        let pragmas = format!(
+            r#"
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = {};
+                PRAGMA busy_timeout = {};
+                PRAGMA wal_autocheckpoint = {};
+                PRAGMA cache_size = {};
+                PRAGMA mmap_size = {};
+                PRAGMA foreign_keys = ON;
+                "#,
+            config.pragmas.synchronous,
+            config.pragmas.busy_timeout_ms,
+            config.pragmas.wal_autocheckpoint,
+            -config.pragmas.cache_size_kb, // Negative for KB
+            config.pragmas.mmap_size_bytes
+        );
+
+        let manager = r2d2_sqlite::SqliteConnectionManager::file(path).with_init(move |conn| {
+            conn.execute_batch(&pragmas)?;
             Ok(())
         });
 
-        let pool = r2d2::Pool::builder()
-            .max_size(10) // Configurable?
+        let mut pool_builder = r2d2::Pool::builder().max_size(config.pool.max_size);
+        if let Some(min_idle) = config.pool.min_idle {
+            pool_builder = pool_builder.min_idle(Some(min_idle));
+        }
+        pool_builder = pool_builder.connection_timeout(std::time::Duration::from_millis(
+            config.pool.connection_timeout_ms,
+        ));
+
+        let pool = pool_builder
             .build(manager)
             .context("Failed to create SQLite connection pool")?;
 
         tracing::info!(
-            "SQLite PRAGMAs applied: busy_timeout=30s, wal_autocheckpoint=10000, cache=64MB, mmap=256MB"
+            pool_size = config.pool.max_size,
+            min_idle = ?config.pool.min_idle,
+            connection_timeout_ms = config.pool.connection_timeout_ms,
+            busy_timeout_ms = config.pragmas.busy_timeout_ms,
+            wal_autocheckpoint = config.pragmas.wal_autocheckpoint,
+            cache_size_kb = config.pragmas.cache_size_kb,
+            mmap_size_bytes = config.pragmas.mmap_size_bytes,
+            synchronous = %config.pragmas.synchronous,
+            retry_attempts = config.retry.max_attempts,
+            retry_base_ms = config.retry.base_delay_ms,
+            retry_max_ms = config.retry.max_delay_ms,
+            retry_exponential = config.retry.exponential,
+            "SQLite connection pool created with configuration"
         );
 
         // Set secure file permissions on database file (Unix only)
