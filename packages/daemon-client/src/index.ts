@@ -64,9 +64,13 @@ export {
 } from './errors.js'
 
 // Connection interface and implementations
-export { Connection } from './connection.js'
+export { Connection, ConnectionMode, ConnectionConfig } from './connection.js'
 export { SocketConnection } from './socket.js'
+export { StdioConnection } from './stdio.js'
 export type { RequestId } from './socket.js'
+
+// Connection factory
+export { createConnection, detectConnectionMode } from './connection-factory.js'
 
 // JSON-RPC protocol (for advanced usage)
 export { RpcProtocol } from './rpc.js'

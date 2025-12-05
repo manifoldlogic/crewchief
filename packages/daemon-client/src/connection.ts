@@ -6,6 +6,32 @@
  */
 
 /**
+ * Connection mode for daemon communication
+ */
+export enum ConnectionMode {
+  /** Use Unix domain socket (faster, multi-client) */
+  Socket = 'socket',
+  /** Use stdio (portable, single-client) */
+  Stdio = 'stdio',
+  /** Auto-detect based on platform (Windows→stdio, Unix→socket with fallback) */
+  Auto = 'auto',
+}
+
+/**
+ * Configuration for connection establishment
+ */
+export interface ConnectionConfig {
+  /** Connection mode (socket/stdio/auto) */
+  mode: ConnectionMode
+  /** Path to Unix socket (for socket mode) */
+  socketPath?: string
+  /** Path to crewchief-maproom binary (for stdio/socket spawn) */
+  binaryPath?: string
+  /** Maximum time to wait for daemon startup (ms) */
+  startupTimeout?: number
+}
+
+/**
  * Connection interface for sending requests and receiving responses
  */
 export interface Connection {

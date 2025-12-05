@@ -1,17 +1,13 @@
 /**
  * Main daemon client implementation
+ *
+ * Provides a high-level interface for communicating with the maproom daemon.
+ * Supports both socket and stdio connection modes with automatic fallback.
  */
 
-import { createInterface } from 'node:readline'
-import {
-  DaemonError,
-  DaemonTimeoutError,
-  DaemonCrashError,
-  DaemonUnhealthyError,
-} from './errors.js'
-import { RpcProtocol, type JsonRpcResponse } from './rpc.js'
-import { DaemonLifecycle } from './lifecycle.js'
-import type { DaemonConfig, DaemonProcessDef, PendingRequest } from './types.js'
+import { Connection, ConnectionMode, ConnectionConfig } from './connection.js'
+import { createConnection } from './connection-factory.js'
+import { DaemonError } from './errors.js'
 
 /**
  * Search parameters for daemon search method
@@ -138,18 +134,94 @@ export interface StatusResult {
 }
 
 /**
+ * Configuration for DaemonClient
+ *
+ * Supports legacy DaemonConfig fields for backward compatibility.
+ */
+export interface DaemonClientConfig extends Partial<ConnectionConfig> {
+  // Legacy fields (mapped to ConnectionConfig)
+  binaryPath?: string
+  timeout?: number
+  env?: NodeJS.ProcessEnv
+  startTimeout?: number
+  shutdownTimeout?: number
+  maxRestartAttempts?: number
+  restartBackoffMs?: number
+  autoRestart?: boolean
+}
+
+/**
  * Daemon client for communicating with crewchief-maproom daemon
+ *
+ * Automatically selects the best connection mode (socket or stdio) based on
+ * platform and configuration. Supports both explicit mode selection and
+ * automatic fallback.
+ *
+ * @example
+ * ```typescript
+ * // Auto-detect connection mode (backward compatible)
+ * const client = new DaemonClient()
+ * await client.connect()
+ * const results = await client.search({ query: 'test', repo: 'my-repo' })
+ * await client.close()
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Explicit mode selection
+ * const client = new DaemonClient({ mode: ConnectionMode.Socket })
+ * await client.connect()
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Legacy config (still works)
+ * const client = new DaemonClient({ binaryPath: '/path/to/daemon' })
+ * await client.connect()
+ * ```
  */
 export class DaemonClient {
-  private daemonProcess?: DaemonProcessDef
-  private lifecycle: DaemonLifecycle
-  private requestId = 0
-  private pendingRequests = new Map<number, PendingRequest>()
-  private isStarting = false
-  private isShuttingDown = false
+  private connection: Connection | null = null
+  private isConnecting = false
 
-  constructor(private readonly config: DaemonConfig) {
-    this.lifecycle = new DaemonLifecycle(config)
+  constructor(private readonly config: DaemonClientConfig = {}) {}
+
+  /**
+   * Connect to the daemon
+   *
+   * Creates a connection using the configured mode (or auto-detect).
+   * This is optional - the client will auto-connect on first request.
+   *
+   * @throws {DaemonError} if connection fails
+   */
+  async connect(): Promise<void> {
+    if (this.connection) {
+      return // Already connected
+    }
+
+    if (this.isConnecting) {
+      // Wait for existing connection attempt
+      while (this.isConnecting) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      return
+    }
+
+    this.isConnecting = true
+
+    try {
+      // Map legacy config to ConnectionConfig
+      const connectionConfig: Partial<ConnectionConfig> = {
+        mode: this.config.mode,
+        socketPath: this.config.socketPath,
+        binaryPath: this.config.binaryPath,
+        startupTimeout: this.config.startupTimeout ?? this.config.startTimeout,
+      }
+
+      this.connection = await createConnection(connectionConfig)
+    } finally {
+      this.isConnecting = false
+    }
   }
 
   /**
@@ -196,321 +268,109 @@ export class DaemonClient {
   }
 
   /**
-   * Explicitly start the daemon (optional - daemon will auto-start on first request)
+   * Close the connection gracefully
+   *
+   * Waits for pending requests to complete and cleans up resources.
+   */
+  async close(): Promise<void> {
+    if (this.connection) {
+      await this.connection.close()
+      this.connection = null
+    }
+  }
+
+  /**
+   * Check if the client is connected
+   */
+  isConnected(): boolean {
+    return this.connection?.isConnected() ?? false
+  }
+
+  /**
+   * Register error event handler
+   */
+  onError(handler: (err?: Error) => void): void {
+    this.connection?.on('error', handler)
+  }
+
+  /**
+   * Register close event handler
+   */
+  onClose(handler: (err?: Error) => void): void {
+    this.connection?.on('close', handler)
+  }
+
+  /**
+   * Send a JSON-RPC request to the daemon
+   *
+   * Auto-connects if not already connected.
+   *
+   * @param method - RPC method name
+   * @param params - Optional method parameters
+   * @returns Promise resolving to the result
+   * @throws {DaemonError} if request fails
+   */
+  private async sendRequest<T>(method: string, params?: unknown): Promise<T> {
+    // Auto-connect if needed
+    if (!this.connection) {
+      await this.connect()
+    }
+
+    if (!this.connection) {
+      throw new DaemonError(
+        'Failed to connect to daemon',
+        'CONNECTION_FAILED'
+      )
+    }
+
+    return await this.connection.sendRequest<T>(method, params)
+  }
+
+  // Legacy methods for backward compatibility
+
+  /**
+   * Start the daemon (alias for connect() for backward compatibility)
+   *
+   * @deprecated Use connect() instead
    */
   async start(): Promise<void> {
-    if (this.daemonProcess) {
-      return // Already started
-    }
-
-    if (this.isStarting) {
-      // Wait for existing start operation
-      while (this.isStarting) {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-      return
-    }
-
-    this.isStarting = true
-
-    try {
-      this.daemonProcess = await this.lifecycle.start()
-      this.setupProcessHandlers()
-      this.setupStdoutReader()
-    } finally {
-      this.isStarting = false
-    }
+    await this.connect()
   }
 
   /**
-   * Stop the daemon gracefully
+   * Stop the daemon (alias for close() for backward compatibility)
    *
-   * Waits for in-flight requests to complete (up to shutdownTimeout),
-   * then stops the daemon process. New requests are rejected during shutdown.
+   * @deprecated Use close() instead
    */
   async stop(): Promise<void> {
-    if (!this.daemonProcess || this.isShuttingDown) {
-      return
-    }
-
-    this.isShuttingDown = true
-
-    try {
-      // Wait for in-flight requests to complete (with timeout)
-      if (this.pendingRequests.size > 0) {
-        const shutdownTimeout = this.config.shutdownTimeout ?? 5000
-        const pendingPromises = Array.from(this.pendingRequests.values()).map(
-          (req) =>
-            new Promise<void>((resolve) => {
-              // Wrap in timeout to ensure we don't wait forever
-              const originalResolve = req.resolve
-              const originalReject = req.reject
-
-              req.resolve = (value: unknown) => {
-                originalResolve(value)
-                resolve()
-              }
-
-              req.reject = (error: Error) => {
-                originalReject(error)
-                resolve()
-              }
-            })
-        )
-
-        // Wait for all requests to complete OR timeout
-        await Promise.race([
-          Promise.all(pendingPromises),
-          new Promise<void>((resolve) => setTimeout(resolve, shutdownTimeout)),
-        ])
-      }
-
-      // Reject any remaining pending requests (if timeout occurred)
-      for (const pending of this.pendingRequests.values()) {
-        clearTimeout(pending.timer)
-        pending.reject(
-          new DaemonError('Daemon is shutting down', 'DAEMON_SHUTTING_DOWN')
-        )
-      }
-      this.pendingRequests.clear()
-
-      await this.lifecycle.stop(this.daemonProcess)
-      this.daemonProcess = undefined
-    } finally {
-      this.isShuttingDown = false
-    }
+    await this.close()
   }
 
   /**
-   * Restart the daemon
-   */
-  async restart(): Promise<void> {
-    await this.stop()
-    await this.start()
-  }
-
-  /**
-   * Check if daemon is healthy (running and responsive)
+   * Check if daemon is healthy (same as isConnected for connection mode)
+   *
+   * @deprecated Use isConnected() instead, or call ping() to verify responsiveness
    */
   async isHealthy(): Promise<boolean> {
+    if (!this.isConnected()) {
+      return false
+    }
+
     try {
       await this.ping()
       return true
-    } catch (error) {
+    } catch {
       return false
     }
   }
 
   /**
-   * Get next request ID with rollover handling
+   * Restart the daemon (reconnect)
    *
-   * Request IDs are sequential integers (1, 2, 3...) that reset to 1
-   * when reaching Number.MAX_SAFE_INTEGER to prevent overflow.
-   *
-   * Note: Node.js is single-threaded, so no mutex needed for increment.
+   * @deprecated Connection mode handles reconnection automatically
    */
-  private getNextRequestId(): number {
-    this.requestId++
-
-    // Handle overflow - rollover to 1 (not 0, which is reserved for notifications)
-    if (this.requestId > Number.MAX_SAFE_INTEGER) {
-      this.requestId = 1
-    }
-
-    return this.requestId
-  }
-
-  /**
-   * Send a JSON-RPC request to the daemon
-   */
-  private async sendRequest<T>(method: string, params?: unknown): Promise<T> {
-    // Reject new requests during shutdown
-    if (this.isShuttingDown) {
-      throw new DaemonError('Daemon is shutting down', 'DAEMON_SHUTTING_DOWN')
-    }
-
-    // Ensure daemon is running
-    if (!this.daemonProcess) {
-      await this.start()
-    }
-
-    if (!this.daemonProcess) {
-      throw new DaemonUnhealthyError('Failed to start daemon')
-    }
-
-    const id = this.getNextRequestId()
-    const request = RpcProtocol.createRequest(method, params, id)
-    const requestLine = RpcProtocol.serializeRequest(request)
-
-    // Create promise for response
-    let promiseResolve: (value: T) => void
-    let promiseReject: (error: Error) => void
-
-    const promise = new Promise<T>((resolve, reject) => {
-      promiseResolve = resolve
-      promiseReject = reject
-    })
-
-    const timeout = this.config.timeout ?? 30000
-    const timestamp = Date.now()
-
-    // Set up timeout
-    const timer = setTimeout(() => {
-      this.pendingRequests.delete(id)
-      promiseReject(
-        new DaemonTimeoutError(
-          `Request ${id} (${method}) timed out after ${timeout}ms`
-        )
-      )
-    }, timeout)
-
-    // Store pending request
-    this.pendingRequests.set(id, {
-      promise,
-      resolve: promiseResolve! as (value: unknown) => void,
-      reject: promiseReject!,
-      timestamp,
-      timer,
-    })
-
-    // Send request to daemon
-    try {
-      this.daemonProcess!.stdin.write(requestLine)
-    } catch (error) {
-      this.pendingRequests.delete(id)
-      clearTimeout(timer)
-      promiseReject!(
-        new DaemonError(
-          `Failed to send request to daemon: ${error instanceof Error ? error.message : String(error)}`,
-          'WRITE_FAILED',
-          error instanceof Error ? error : undefined
-        )
-      )
-    }
-
-    return promise
-  }
-
-  /**
-   * Handle response from daemon
-   */
-  private handleResponse(response: JsonRpcResponse): void {
-    if (response.id === null) {
-      // Notification (no response expected) - ignore
-      return
-    }
-
-    const pending = this.pendingRequests.get(response.id)
-    if (!pending) {
-      // Response for unknown request - ignore
-      console.warn(`Received response for unknown request ID: ${response.id}`)
-      return
-    }
-
-    // Remove pending request
-    this.pendingRequests.delete(response.id)
-    clearTimeout(pending.timer)
-
-    // Handle response
-    try {
-      const result = RpcProtocol.extractResult(response)
-      pending.resolve(result)
-      
-      // Reset restart attempts on successful operation
-      this.lifecycle.resetRestartAttempts()
-    } catch (error) {
-      pending.reject(error instanceof Error ? error : new Error(String(error)))
-    }
-  }
-
-  /**
-   * Set up stdout reader for responses
-   */
-  private setupStdoutReader(): void {
-    if (!this.daemonProcess) {
-      return
-    }
-
-    const reader = createInterface({
-      input: this.daemonProcess.stdout,
-      crlfDelay: Infinity,
-    })
-
-    reader.on('line', (line) => {
-      try {
-        const response = RpcProtocol.parseResponse(line)
-        this.handleResponse(response)
-      } catch (error) {
-        console.error(
-          `Failed to parse daemon response: ${error instanceof Error ? error.message : String(error)}`
-        )
-      }
-    })
-
-    reader.on('close', () => {
-      // Stdout closed - daemon likely exited
-      this.handleDaemonExit()
-    })
-  }
-
-  /**
-   * Set up process event handlers
-   */
-  private setupProcessHandlers(): void {
-    if (!this.daemonProcess) {
-      return
-    }
-
-    this.daemonProcess.process.on('exit', (code, signal) => {
-      this.handleDaemonExit(code, signal)
-    })
-
-    this.daemonProcess.process.on('error', (error) => {
-      console.error(`Daemon process error: ${error.message}`)
-    })
-
-    // Log stderr for debugging
-    const stderrReader = createInterface({
-      input: this.daemonProcess.stderr,
-      crlfDelay: Infinity,
-    })
-
-    stderrReader.on('line', (line) => {
-      console.error(`[Daemon stderr] ${line}`)
-    })
-  }
-
-  /**
-   * Handle daemon exit
-   */
-  private handleDaemonExit(code?: number | null, signal?: string | null): void {
-    const wasRunning = this.daemonProcess !== undefined
-    this.daemonProcess = undefined
-
-    // Reject all pending requests
-    for (const pending of this.pendingRequests.values()) {
-      clearTimeout(pending.timer)
-      pending.reject(
-        new DaemonCrashError(
-          `Daemon exited unexpectedly (code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'})`,
-          code ?? undefined,
-          signal ?? undefined
-        )
-      )
-    }
-    this.pendingRequests.clear()
-
-    // Auto-restart if configured and not shutting down
-    if (wasRunning && !this.isShuttingDown && this.lifecycle.shouldRestart()) {
-      const delay = this.lifecycle.getBackoffDelay()
-      console.log(`Daemon crashed, restarting in ${delay}ms...`)
-      setTimeout(() => {
-        this.start().catch((error) => {
-          console.error(
-            `Failed to restart daemon: ${error instanceof Error ? error.message : String(error)}`
-          )
-        })
-      }, delay)
-    }
+  async restart(): Promise<void> {
+    await this.close()
+    await this.connect()
   }
 }

@@ -20,6 +20,7 @@ TypeScript client library for communicating with the `crewchief-maproom` daemon 
 - [Error Handling](#error-handling)
 - [Performance](#performance)
 - [Architecture](#architecture)
+- [Connection Modes](#connection-modes)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
@@ -906,6 +907,84 @@ For detailed security analysis, see [Security Review](../../.crewchief/projects/
 6. **Graceful Shutdown**: Waits for in-flight requests, then terminates
 
 For detailed architecture documentation, see [DAEMIGR Architecture](../../.crewchief/projects/DAEMIGR_daemon-client-migration/planning/architecture.md).
+
+## Connection Modes
+
+The daemon client supports multiple connection modes for communicating with the daemon process:
+
+### Available Modes
+
+- **socket** - Unix domain socket connection (faster, supports multiple concurrent clients)
+- **stdio** - Standard input/output pipes (portable, works on all platforms)
+- **auto** - Automatic detection (tries socket first, falls back to stdio if unavailable)
+
+### Platform Defaults
+
+- **Windows**: Always uses `stdio` mode (Unix domain sockets are not available)
+- **Unix/macOS**: Uses `auto` mode (attempts socket connection, falls back to stdio)
+
+### Explicit Mode Selection
+
+You can explicitly specify the connection mode when creating a `DaemonClient`:
+
+```typescript
+import { DaemonClient, ConnectionMode } from '@maproom/daemon-client'
+
+// Force socket mode
+const client = new DaemonClient({
+  binaryPath: '/path/to/crewchief-maproom',
+  mode: ConnectionMode.Socket,
+})
+
+// Force stdio mode
+const client = new DaemonClient({
+  binaryPath: '/path/to/crewchief-maproom',
+  mode: ConnectionMode.Stdio,
+})
+
+// Auto-detect (default)
+const client = new DaemonClient({
+  binaryPath: '/path/to/crewchief-maproom',
+  mode: ConnectionMode.Auto,
+})
+
+// Or simply omit mode to use platform default
+const client = new DaemonClient({
+  binaryPath: '/path/to/crewchief-maproom',
+})
+```
+
+### Environment Variable Override
+
+Override the connection mode using the `MAPROOM_CONNECTION_MODE` environment variable:
+
+```bash
+# Force stdio mode (useful for debugging or compatibility)
+MAPROOM_CONNECTION_MODE=stdio code .
+
+# Force socket mode (maximum performance on Unix)
+MAPROOM_CONNECTION_MODE=socket code .
+
+# Auto-detect (default behavior)
+MAPROOM_CONNECTION_MODE=auto code .
+```
+
+The environment variable takes precedence over the mode specified in code. This is useful for:
+- Debugging connection issues without code changes
+- Testing different modes in development
+- Platform-specific deployments
+
+### Backward Compatibility
+
+Existing code continues to work without any changes. The client maintains full API compatibility regardless of connection mode:
+
+```typescript
+// This code works with any connection mode
+const client = new DaemonClient({ binaryPath: '/path/to/binary' })
+const results = await client.search({ query: 'test', repo: 'my-repo' })
+```
+
+All connection modes provide the same functionality. The only differences are performance characteristics and platform availability. Socket mode provides better performance and concurrent client support on Unix systems, while stdio mode ensures maximum portability.
 
 ## Troubleshooting
 

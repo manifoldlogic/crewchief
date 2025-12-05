@@ -152,9 +152,10 @@ async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
  * Three critical requirements for proper detachment:
  * 1. detached: true - Process runs in own session
  * 2. stdio: 'ignore' - Don't inherit parent's stdio (prevents blocking)
- * 3. daemon.unref() - Allow parent to exit without waiting
+ * 3. daemon.unref() - Allow parent to exit without waiting (if available)
  *
- * Missing any of these causes issues with daemon lifecycle.
+ * Note: unref() may not be available in all environments (e.g., test mocks),
+ * so we check for its existence before calling.
  *
  * @param config - Daemon configuration
  */
@@ -179,7 +180,10 @@ function spawnDaemon(config: DiscoveryConfig): void {
   })
 
   // Allow parent to exit without waiting for daemon
-  daemon.unref()
+  // Check if unref exists (may not be available in all environments, e.g., test mocks)
+  if (typeof daemon.unref === 'function') {
+    daemon.unref()
+  }
 
   console.log('Daemon process spawned', { pid: daemon.pid })
 }
