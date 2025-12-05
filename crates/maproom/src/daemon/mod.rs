@@ -1,4 +1,5 @@
 pub mod protocol;
+pub mod session;
 pub mod types;
 
 use anyhow::{Context, Result};

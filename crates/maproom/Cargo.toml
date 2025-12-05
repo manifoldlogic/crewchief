@@ -67,6 +67,9 @@ openssl = { version = "0.10", features = ["vendored"] }
 # A/B Testing dependencies
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Concurrent session management (MULTICN-2002)
+dashmap = "6"
+
 # Token counting for context assembly
 tiktoken-rs = "0.5"
 

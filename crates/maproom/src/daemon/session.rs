@@ -1,57 +1,21 @@
-# Ticket: MULTICN-2002: Session Management
-
-## Status
-- [x] **Task completed** - acceptance criteria met
-- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [x] **Verified** - by the verify-ticket agent
-
-**Note on "Tests pass"**:
-- If tests were created/modified, you MUST run them and show output
-- "Tests pass" means tests were EXECUTED and all passed
-- "Tests pass - N/A" is only valid for documentation-only tickets
-- Test file existence alone does NOT satisfy this requirement
-
-## Agents
-- rust-indexer-engineer
-- unit-test-runner
-- verify-ticket
-- commit-ticket
-
-## Summary
-
-Create session tracking infrastructure for managing connected clients. Implements Session struct with UUID tracking, SessionRegistry using DashMap for concurrent access, and atomic counter for idle timeout detection.
-
-## Background
-
-The socket server (MULTICN-2003) needs to track multiple connected clients and route responses back to the correct client. Session management provides the foundation for multiplexing requests/responses and implementing idle timeout (daemon shuts down when no clients connected for 5 minutes).
-
-This is a focused MVP implementation - no per-session metrics or broadcast capabilities (deferred to post-MVP).
-
-Reference: [architecture.md](../planning/architecture.md) - Session Management section
-
-## Acceptance Criteria
-
-- [ ] Session struct has essential fields: id (UUID), connected_at (Instant), response_tx (channel)
-- [ ] SessionRegistry uses DashMap for lock-free concurrent access
-- [ ] active_count() method returns AtomicUsize value
-- [ ] register() logs connection and increments counter
-- [ ] unregister() logs disconnection and decrements counter
-- [ ] NO broadcast capability (explicitly deferred)
-- [ ] NO per-session metrics like request_count (explicitly deferred)
-- [ ] Test: Concurrent register/unregister from 10 threads maintains accurate count
-
-## Technical Requirements
-
-Create `crates/maproom/src/daemon/session.rs` implementing session tracking.
-
-### Session Structure
-
-```rust
+use dashmap::DashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+use thiserror::Error;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::daemon::protocol::JsonRpcMessage;
+
+/// Error types for session operations
+#[derive(Debug, Error)]
+pub enum SessionError {
+    #[error("Session not found: {0}")]
+    SessionNotFound(Uuid),
+
+    #[error("Session channel closed: {0}")]
+    ChannelClosed(Uuid),
+}
 
 /// Represents a connected client session
 pub struct Session {
@@ -70,7 +34,8 @@ impl Session {
     }
 
     pub fn send_response(&self, response: JsonRpcMessage) -> Result<(), SessionError> {
-        self.response_tx.send(response)
+        self.response_tx
+            .send(response)
             .map_err(|_| SessionError::ChannelClosed(self.id))
     }
 
@@ -78,13 +43,6 @@ impl Session {
         self.connected_at.elapsed()
     }
 }
-```
-
-### SessionRegistry Structure
-
-```rust
-use dashmap::DashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Thread-safe registry of active client sessions
 pub struct SessionRegistry {
@@ -139,7 +97,7 @@ impl SessionRegistry {
     pub fn send_to_session(
         &self,
         session_id: &Uuid,
-        response: JsonRpcMessage
+        response: JsonRpcMessage,
     ) -> Result<(), SessionError> {
         self.sessions
             .get(session_id)
@@ -148,7 +106,10 @@ impl SessionRegistry {
     }
 
     /// Get session by ID (for inspection, not routine use)
-    pub fn get_session(&self, session_id: &Uuid) -> Option<dashmap::mapref::one::Ref<Uuid, Session>> {
+    pub fn get_session(
+        &self,
+        session_id: &Uuid,
+    ) -> Option<dashmap::mapref::one::Ref<Uuid, Session>> {
         self.sessions.get(session_id)
     }
 }
@@ -158,59 +119,22 @@ impl Default for SessionRegistry {
         Self::new()
     }
 }
-```
 
-### Error Types
-
-```rust
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum SessionError {
-    #[error("Session not found: {0}")]
-    SessionNotFound(Uuid),
-
-    #[error("Session channel closed: {0}")]
-    ChannelClosed(Uuid),
-}
-```
-
-## Implementation Notes
-
-### Why DashMap?
-
-DashMap provides lock-free concurrent HashMap access:
-- **No RwLock needed**: Internal sharding reduces contention
-- **Better concurrency**: Multiple readers/writers without global lock
-- **Mature library**: Battle-tested in production Rust systems
-
-Alternative considered: `Arc<RwLock<HashMap>>` - rejected due to lock contention under concurrent access.
-
-### Why AtomicUsize for active_count?
-
-While DashMap.len() exists, using AtomicUsize provides:
-- **Fast reads**: No HashMap traversal for idle timeout checks
-- **Explicit lifecycle**: Increment/decrement makes session lifecycle clear
-- **Future-proof**: Supports metrics without HashMap iteration
-
-### Deferred Features (Explicitly Out of Scope)
-
-**Not implementing in MVP:**
-- **Per-session metrics**: request_count, bytes_sent, etc.
-  - *Rationale*: Not needed for core functionality. Add if observability demands.
-
-- **Broadcast capability**: send_to_all() method
-  - *Rationale*: No current use case. Could be added for cache invalidation later.
-
-- **Session timeout per client**: Individual client timeout tracking
-  - *Rationale*: Global idle timeout (MULTICN-2004) is sufficient for MVP.
-
-### Unit Tests
-
-```rust
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::daemon::types::JsonRpcResponse;
+    use std::sync::Arc;
+
+    // Helper to create a test response
+    fn test_response(id: i32) -> JsonRpcMessage {
+        JsonRpcMessage::Response(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            result: Some(serde_json::json!({"status": "ok"})),
+            error: None,
+            id: serde_json::json!(id),
+        })
+    }
 
     #[test]
     fn test_session_creation() {
@@ -226,17 +150,19 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let session = Session::new(tx);
 
-        let response = JsonRpcMessage::Response(JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            result: Some(serde_json::json!({"status": "ok"})),
-            error: None,
-            id: RequestId::Number(1),
-        });
+        let response = test_response(1);
 
         session.send_response(response.clone()).unwrap();
 
         let received = rx.try_recv().unwrap();
         // Verify response matches
+        match (response, received) {
+            (JsonRpcMessage::Response(r1), JsonRpcMessage::Response(r2)) => {
+                assert_eq!(r1.id, r2.id);
+                assert_eq!(r1.jsonrpc, r2.jsonrpc);
+            }
+            _ => panic!("Response type mismatch"),
+        }
     }
 
     #[test]
@@ -289,12 +215,7 @@ mod tests {
         let registry = SessionRegistry::new();
         let fake_id = Uuid::new_v4();
 
-        let response = JsonRpcMessage::Response(JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            result: None,
-            error: None,
-            id: RequestId::Number(1),
-        });
+        let response = test_response(1);
 
         let result = registry.send_to_session(&fake_id, response);
         assert!(matches!(result, Err(SessionError::SessionNotFound(_))));
@@ -310,27 +231,53 @@ mod tests {
         assert!(duration >= std::time::Duration::from_millis(100));
         assert!(duration < std::time::Duration::from_millis(200));
     }
+
+    #[test]
+    fn test_session_channel_closed_error() {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let session = Session::new(tx);
+
+        // Drop the receiver to close the channel
+        drop(rx);
+
+        let response = test_response(1);
+        let result = session.send_response(response);
+        assert!(matches!(result, Err(SessionError::ChannelClosed(_))));
+    }
+
+    #[test]
+    fn test_get_session() {
+        let registry = SessionRegistry::new();
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let session_id = registry.register(tx);
+
+        // Should be able to get the session
+        let session_ref = registry.get_session(&session_id);
+        assert!(session_ref.is_some());
+        assert_eq!(session_ref.unwrap().id, session_id);
+
+        // After unregister, should not be found
+        registry.unregister(&session_id);
+        assert!(registry.get_session(&session_id).is_none());
+    }
+
+    #[test]
+    fn test_send_to_session_success() {
+        let registry = SessionRegistry::new();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let session_id = registry.register(tx);
+
+        let response = test_response(42);
+        registry
+            .send_to_session(&session_id, response.clone())
+            .unwrap();
+
+        let received = rx.try_recv().unwrap();
+        match (response, received) {
+            (JsonRpcMessage::Response(r1), JsonRpcMessage::Response(r2)) => {
+                assert_eq!(r1.id, r2.id);
+            }
+            _ => panic!("Response type mismatch"),
+        }
+    }
 }
-```
-
-## Dependencies
-
-- MULTICN-2001 (JSON-RPC Codec) - uses JsonRpcMessage type
-- dashmap crate (add to Cargo.toml if not present)
-
-## Risk Assessment
-
-- **Risk**: DashMap memory overhead vs standard HashMap
-  - **Mitigation**: Overhead is small (sharding metadata). Acceptable for concurrent access benefits.
-
-- **Risk**: UnboundedSender could cause memory issues if client stops reading
-  - **Mitigation**: Sessions unregister on disconnect. Bounded channels add complexity without clear benefit for MVP.
-
-- **Risk**: Active count could drift out of sync
-  - **Mitigation**: Atomic operations ensure consistency. Unit tests verify correctness.
-
-## Files/Packages Affected
-
-- `crates/maproom/src/daemon/session.rs` (NEW)
-- `crates/maproom/src/daemon/mod.rs` (MODIFY - add module export)
-- `Cargo.toml` (ADD dashmap dependency if needed)
