@@ -301,6 +301,301 @@ export default {
 }
 ```
 
+## Worktree Configuration
+
+### Worktree Path Configuration
+
+CrewChief allows you to configure where worktrees are created using flexible path patterns. By default, worktrees are created in `~/.crewchief/worktrees/<repo-name>` to keep them isolated per repository and outside the main repository directory.
+
+#### Supported Path Patterns
+
+**Tilde Expansion**
+
+`~` expands to your home directory:
+
+```javascript
+export default {
+  repository: {
+    worktreeBasePath: '~/worktrees',
+  },
+}
+// Linux/macOS: /home/username/worktrees
+// Windows: C:\Users\username\worktrees
+```
+
+**Repository Placeholder**
+
+`<repo-name>` is replaced with your repository name:
+
+```javascript
+export default {
+  repository: {
+    worktreeBasePath: '~/.crewchief/worktrees/<repo-name>',
+  },
+}
+// Example: ~/.crewchief/worktrees/myproject
+```
+
+Repository name is extracted from:
+
+1. Git remote URL (e.g., `git@github.com:org/myproject.git` → `myproject`)
+2. Directory basename (fallback if not a git repo)
+
+Special characters (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) in repository names are automatically replaced with `-`.
+
+**Absolute Paths**
+
+Full paths work without joining to repository root:
+
+```javascript
+export default {
+  repository: {
+    worktreeBasePath: '/tmp/worktrees',
+  },
+}
+```
+
+**Relative Paths**
+
+Paths without `/` or `~` are relative to repository root:
+
+```javascript
+export default {
+  repository: {
+    worktreeBasePath: '.crewchief/worktrees',  // Inside repo (legacy)
+  },
+}
+// Or
+export default {
+  repository: {
+    worktreeBasePath: '../worktrees',  // Adjacent to repo
+  },
+}
+```
+
+#### Configuration Examples
+
+```javascript
+// Default: per-repo isolation in home directory
+export default {
+  repository: {
+    worktreeBasePath: '~/.crewchief/worktrees/<repo-name>',
+  },
+}
+
+// Custom: fast SSD with repo isolation
+export default {
+  repository: {
+    worktreeBasePath: '/mnt/ssd/worktrees/<repo-name>',
+  },
+}
+
+// Custom: shared team location
+export default {
+  repository: {
+    worktreeBasePath: '/shared/dev/worktrees/<repo-name>',
+  },
+}
+
+// Legacy: inside repository (v1.x behavior)
+export default {
+  repository: {
+    worktreeBasePath: '.crewchief/worktrees',
+  },
+}
+
+// Simple: home directory, all repos together
+export default {
+  repository: {
+    worktreeBasePath: '~/worktrees',
+  },
+}
+```
+
+### Migration from v1.x
+
+#### Breaking Change: Default Worktree Location
+
+**v1.x default**: `.crewchief/worktrees` (inside repository)
+**v2.0+ default**: `~/.crewchief/worktrees/<repo-name>` (outside repository)
+
+#### Why This Change?
+
+- **Repository isolation**: Multiple repositories can coexist without conflicts
+- **Clean git status**: Worktrees outside repo don't clutter git status
+- **Centralized management**: All worktrees in one location across projects
+- **Developer experience**: Common convention used by other tools
+
+#### Migration Options
+
+**Option 1: Accept New Default (Recommended)**
+
+Do nothing. New worktrees will be created in `~/.crewchief/worktrees/<repo-name>/`.
+
+**Existing worktrees continue to work** - git manages them by path, not location.
+
+You'll have worktrees in two locations temporarily:
+
+- Old: `.crewchief/worktrees/feature-old`
+- New: `~/.crewchief/worktrees/myproject/feature-new`
+
+You can manually migrate old worktrees or leave them in place.
+
+**Option 2: Revert to Old Behavior**
+
+Add to `crewchief.config.js`:
+
+```javascript
+export default {
+  repository: {
+    worktreeBasePath: '.crewchief/worktrees',
+  },
+}
+```
+
+All worktrees will continue to be created inside the repository.
+
+**Option 3: Custom Location**
+
+Use any path pattern:
+
+```javascript
+export default {
+  repository: {
+    // SSD for performance
+    worktreeBasePath: '/mnt/ssd/worktrees/<repo-name>',
+
+    // Shared team location
+    worktreeBasePath: '/shared/worktrees/<repo-name>',
+
+    // Home directory without repo name
+    worktreeBasePath: '~/dev/worktrees',
+  },
+}
+```
+
+#### Manual Worktree Migration
+
+To move existing worktrees to the new location:
+
+```bash
+# 1. List existing worktrees
+git worktree list
+
+# 2. Remove old worktree
+git worktree remove .crewchief/worktrees/feature-x
+
+# 3. Create in new location
+crewchief worktree create feature-x
+
+# Note: This creates a fresh checkout. Local changes are lost.
+# Commit changes before migration!
+```
+
+#### Repository Rename Behavior
+
+If you rename your repository or change the remote URL:
+
+- **Existing worktrees continue to work** (git manages them by absolute path)
+- **New worktrees use the new repository name** in their path
+- **Worktree paths are fixed at creation time** and don't update automatically
+- **This is expected behavior** - no action needed unless you want to consolidate paths
+
+### Worktree Troubleshooting
+
+#### "Invalid worktree path: system directory not allowed"
+
+**Cause**: Configured path resolves to a system directory (`/`, `/etc`, `/usr`, `/System`, `C:\Windows`)
+
+**Solution**: Use a non-system directory:
+
+```javascript
+// Bad
+export default {
+  repository: {
+    worktreeBasePath: '/etc',
+  },
+}
+
+// Good
+export default {
+  repository: {
+    worktreeBasePath: '~/worktrees',
+  },
+}
+// Or
+export default {
+  repository: {
+    worktreeBasePath: '/home/user/worktrees',
+  },
+}
+```
+
+#### "Could not expand <repo-name>: not in a git repository"
+
+**Cause**: Used `<repo-name>` placeholder but not in a git repository
+
+**Solution**:
+
+- Run commands from inside a git repository
+- Or use a path without `<repo-name>` placeholder
+- The placeholder is replaced with directory name as fallback
+
+#### Permission Denied Creating Worktree
+
+**Cause**: Configured path is not writable
+
+**Solution**:
+
+```bash
+# Verify directory permissions
+ls -la ~/
+
+# Create directory manually
+mkdir -p ~/.crewchief/worktrees
+
+# Choose different location with write access
+```
+
+Update your config if needed:
+
+```javascript
+export default {
+  repository: {
+    worktreeBasePath: '~/worktrees', // Use a writable location
+  },
+}
+```
+
+#### Worktrees in Two Locations After Upgrade
+
+**Cause**: Upgraded from v1.x with new default location
+
+**Solution**: This is expected. See [Migration from v1.x](#migration-from-v1x) for options:
+
+- **Keep both locations** (old worktrees still work)
+- **Revert to old behavior** with config override
+- **Manually migrate worktrees** to new location
+
+#### Repository Name Has Special Characters
+
+**Cause**: Repository name contains `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`
+
+**Solution**: These characters are automatically replaced with `-`.
+
+Example: Repository name `my/repo` becomes `my-repo` in the path.
+
+```javascript
+// Repository: my/repo
+// Config:
+export default {
+  repository: {
+    worktreeBasePath: '~/.crewchief/worktrees/<repo-name>',
+  },
+}
+// Result: ~/.crewchief/worktrees/my-repo
+```
+
 ## Command Reference
 
 All commands below should be prefixed with `crewchief`. For example: `crewchief worktree create feature-branch`

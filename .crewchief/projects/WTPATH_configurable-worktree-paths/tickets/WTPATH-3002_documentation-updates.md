@@ -1,9 +1,9 @@
 # Ticket: [WTPATH-3002]: Documentation and Migration Guide
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass - N/A** - documentation-only ticket
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -29,15 +29,15 @@ This ticket implements Phase 3 (Documentation) of the Configurable Worktree Path
 - `/workspace/.crewchief/projects/WTPATH_configurable-worktree-paths/planning/project-review.md` (communication recommendations)
 
 ## Acceptance Criteria
-- [ ] README includes migration section for users upgrading from old default
-- [ ] Migration guide covers accepting new default OR reverting to old behavior
-- [ ] Documentation explains all path features (tilde, placeholder, absolute, relative)
-- [ ] Examples include: (1) default new behavior, (2) legacy opt-out, (3) custom SSD path, (4) shared team path, (5) home directory without repo-name
-- [ ] Troubleshooting covers: (1) system directory rejection, (2) permission errors, (3) worktrees in two locations after upgrade, (4) special characters in repo name, (5) git remote detection failures
-- [ ] Documentation explains repository name detection logic and fallback
-- [ ] Repository rename behavior: documents that (1) old worktrees continue working, (2) new worktrees use new repo name, (3) paths are fixed at creation time, (4) this is expected behavior
-- [ ] Documentation is clear, concise, and actionable
-- [ ] Code examples use proper formatting and are copy-pasteable
+- [x] README includes migration section for users upgrading from old default
+- [x] Migration guide covers accepting new default OR reverting to old behavior
+- [x] Documentation explains all path features (tilde, placeholder, absolute, relative)
+- [x] Examples include: (1) default new behavior, (2) legacy opt-out, (3) custom SSD path, (4) shared team path, (5) home directory without repo-name
+- [x] Troubleshooting covers: (1) system directory rejection, (2) permission errors, (3) worktrees in two locations after upgrade, (4) special characters in repo name, (5) git remote detection failures
+- [x] Documentation explains repository name detection logic and fallback
+- [x] Repository rename behavior: documents that (1) old worktrees continue working, (2) new worktrees use new repo name, (3) paths are fixed at creation time, (4) this is expected behavior
+- [x] Documentation is clear, concise, and actionable
+- [x] Code examples use proper formatting and are copy-pasteable
 
 ## Technical Requirements
 
