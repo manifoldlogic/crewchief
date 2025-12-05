@@ -1,9 +1,9 @@
 # Ticket: MULTICN-2006: Connect-or-Spawn Logic
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,13 +32,13 @@ Reference: [architecture.md](../planning/architecture.md) - Connect-or-Spawn Sta
 
 ## Acceptance Criteria
 
-- [ ] Uses `proper-lockfile` library (not custom lock implementation)
-- [ ] Lock file is `/tmp/maproom-{uid}.lock` (distinct from socket path)
-- [ ] Implements double-check pattern: try connect before and after acquiring lock
-- [ ] Spawns daemon with `detached: true`, `stdio: 'ignore'`, and calls `daemon.unref()`
-- [ ] Waits up to 10 seconds for socket to become available after spawn
-- [ ] Test: 5 concurrent clients calling connectOrSpawn() only create 1 daemon
-- [ ] Test: PID verification shows only 1 maproom daemon process
+- [x] Uses `proper-lockfile` library (not custom lock implementation)
+- [x] Lock file is `/tmp/maproom-{uid}.lock` (distinct from socket path)
+- [x] Implements double-check pattern: try connect before and after acquiring lock
+- [x] Spawns daemon with `detached: true`, `stdio: 'ignore'`, and calls `daemon.unref()`
+- [x] Waits up to 10 seconds for socket to become available after spawn
+- [x] Test: 5 concurrent clients calling connectOrSpawn() only create 1 daemon
+- [x] Test: PID verification shows only 1 maproom daemon process
 
 ## Technical Requirements
 

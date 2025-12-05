@@ -140,3 +140,23 @@ export class SocketTimeoutError extends DaemonError {
     this.name = 'SocketTimeoutError'
   }
 }
+
+/**
+ * Error thrown when daemon fails to start or become ready
+ */
+export class DaemonStartupError extends DaemonError {
+  constructor(message: string, options?: { cause?: Error }) {
+    super(message, 'DAEMON_STARTUP_ERROR', options?.cause)
+    this.name = 'DaemonStartupError'
+  }
+}
+
+/**
+ * Error thrown when lock acquisition fails
+ */
+export class DaemonLockError extends DaemonError {
+  constructor(message: string, options?: { cause?: Error }) {
+    super(message, 'DAEMON_LOCK_ERROR', options?.cause)
+    this.name = 'DaemonLockError'
+  }
+}

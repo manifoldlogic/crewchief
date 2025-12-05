@@ -47,9 +47,12 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {},
+  "dependencies": {
+    "proper-lockfile": "^4.1.2"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/proper-lockfile": "^4.1.4",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0",
     "eslint": "^8.0.0",

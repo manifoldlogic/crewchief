@@ -59,6 +59,8 @@ export {
   DaemonCommunicationError,
   SocketConnectionError,
   SocketTimeoutError,
+  DaemonStartupError,
+  DaemonLockError,
 } from './errors.js'
 
 // Connection interface and implementations
@@ -73,3 +75,7 @@ export type {
   JsonRpcResponse,
   JsonRpcErrorObject,
 } from './rpc.js'
+
+// Daemon discovery and auto-start
+export { connectOrSpawn, getDefaultConfig } from './discovery.js'
+export type { DiscoveryConfig } from './discovery.js'
