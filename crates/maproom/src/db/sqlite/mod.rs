@@ -1666,46 +1666,57 @@ impl SqliteStore {
             return Ok(0);
         }
 
+        // SQLite has a limit of 32766 SQL variables (SQLITE_MAX_VARIABLE_NUMBER).
+        // To avoid "too many SQL variables" errors, batch deletions into chunks of 500.
+        // This allows deleting large numbers of chunks (e.g., 10,000+) without hitting limits.
+        const BATCH_SIZE: usize = 500;
+
         let chunk_ids = chunk_ids.to_vec();
         self.run(move |conn| {
-            // Create placeholders for SQL IN clause
-            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let mut total_deleted = 0;
 
-            // Delete embeddings for these chunks
-            let embeddings_query = format!(
-                "DELETE FROM code_embeddings WHERE blob_sha IN (
-                     SELECT blob_sha FROM chunks WHERE id IN ({})
-                 )",
-                placeholders
-            );
-            let mut stmt = conn.prepare(&embeddings_query)?;
-            stmt.execute(rusqlite::params_from_iter(chunk_ids.iter()))?;
+            // Process chunks in batches
+            for batch in chunk_ids.chunks(BATCH_SIZE) {
+                // Create placeholders for SQL IN clause
+                let placeholders = batch.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
-            // Delete chunk_worktrees junction entries
-            let junction_query = format!(
-                "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
-                placeholders
-            );
-            let mut stmt = conn.prepare(&junction_query)?;
-            stmt.execute(rusqlite::params_from_iter(chunk_ids.iter()))?;
+                // Delete embeddings for these chunks
+                let embeddings_query = format!(
+                    "DELETE FROM code_embeddings WHERE blob_sha IN (
+                         SELECT blob_sha FROM chunks WHERE id IN ({})
+                     )",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&embeddings_query)?;
+                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
 
-            // Delete chunk_edges
-            let edges_query = format!(
-                "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
-                placeholders, placeholders
-            );
-            let mut stmt = conn.prepare(&edges_query)?;
-            let mut params: Vec<i64> = Vec::new();
-            params.extend_from_slice(&chunk_ids);
-            params.extend_from_slice(&chunk_ids);
-            stmt.execute(rusqlite::params_from_iter(params.iter()))?;
+                // Delete chunk_worktrees junction entries
+                let junction_query = format!(
+                    "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&junction_query)?;
+                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
 
-            // Delete chunks themselves and get count
-            let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
-            let mut stmt = conn.prepare(&chunks_query)?;
-            let rows_affected = stmt.execute(rusqlite::params_from_iter(chunk_ids.iter()))?;
+                // Delete chunk_edges
+                let edges_query = format!(
+                    "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
+                    placeholders, placeholders
+                );
+                let mut stmt = conn.prepare(&edges_query)?;
+                let mut params: Vec<i64> = Vec::new();
+                params.extend_from_slice(batch);
+                params.extend_from_slice(batch);
+                stmt.execute(rusqlite::params_from_iter(params.iter()))?;
 
-            Ok(rows_affected)
+                // Delete chunks themselves and accumulate count
+                let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
+                let mut stmt = conn.prepare(&chunks_query)?;
+                let rows_affected = stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+                total_deleted += rows_affected;
+            }
+
+            Ok(total_deleted)
         })
         .await
     }
@@ -5138,5 +5149,103 @@ mod tests {
         // Delete with empty list should return 0
         let deleted_count = store.delete_chunks_by_ids(worktree_id, &[]).await.unwrap();
         assert_eq!(deleted_count, 0, "Deleting empty list should return 0");
+    }
+
+    #[tokio::test]
+    async fn test_delete_chunks_by_ids_batching() {
+        let store = setup_test_store().await;
+
+        // Setup: Create test data
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
+
+        // Create 1200 chunks to test batching (batch size is 500)
+        // This ensures we test multiple batches
+        let mut chunk_ids = Vec::new();
+        for i in 0..1200 {
+            // Create file using proper API
+            let file = FileRecord {
+                repo_id,
+                worktree_id,
+                commit_id,
+                relpath: format!("file{}.rs", i),
+                language: Some("rust".to_string()),
+                content_hash: format!("hash{}", i),
+                size_bytes: 100,
+                last_modified: None,
+            };
+            let file_id = store.upsert_file(&file).await.unwrap();
+
+            // Create chunk using proper API
+            let chunk = ChunkRecord {
+                file_id,
+                worktree_id,
+                blob_sha: format!("blob{}", i),
+                symbol_name: Some(format!("function{}", i)),
+                kind: "function".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: 10,
+                preview: "fn test() {}".to_string(),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            };
+            let chunk_id = store.insert_chunk(&chunk).await.unwrap();
+            chunk_ids.push(chunk_id);
+        }
+
+        // Verify all chunks were created
+        let initial_count: i64 = store
+            .run(move |conn| {
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM chunks",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(initial_count, 1200, "Should have created 1200 chunks");
+
+        // Delete all chunks using batching
+        let deleted_count = store
+            .delete_chunks_by_ids(worktree_id, &chunk_ids)
+            .await
+            .unwrap();
+
+        // Verify deletion count
+        assert_eq!(deleted_count, 1200, "Should have deleted all 1200 chunks");
+
+        // Verify chunks are actually deleted
+        let remaining_count: i64 = store
+            .run(move |conn| {
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM chunks",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(remaining_count, 0, "All chunks should be deleted");
     }
 }
