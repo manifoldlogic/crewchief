@@ -12,6 +12,11 @@ export const RepositorySchema = z.object({
    * @default '~/.crewchief/worktrees/<repo-name>' (changed from '.crewchief/worktrees' in v1.x)
    */
   worktreeBasePath: z.string().default('~/.crewchief/worktrees/<repo-name>'),
+  /**
+   * Custom path to the maproom binary.
+   * If not specified, uses default discovery (PATH, bundled binaries).
+   */
+  maproomBinaryPath: z.string().optional(),
 })
 
 // Removed: orchestrator fields are not used in current iTerm-based orchestration
