@@ -1,10 +1,12 @@
 # Project: Index Stale Worktree Cleanup (IDXCLEAN)
 
+**Status:** ✅ Complete (MVP)
+**Created:** 2025-11-26
+**Completed:** 2025-12-05
+
 ## Project Summary
 
 **Goal:** Implement automated detection and removal of stale worktrees from the maproom index to eliminate search result duplication and restore search quality.
-
-**Status:** Planning Complete → Ready for Ticket Creation
 
 **Priority:** High (🟡) - Significantly impacts search quality
 
