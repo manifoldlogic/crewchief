@@ -1,9 +1,9 @@
 # Ticket: MULTICN-2005: Socket Connection Class
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -31,14 +31,14 @@ Reference: [architecture.md](../planning/architecture.md) - Socket Connection Im
 
 ## Acceptance Criteria
 
-- [ ] SocketConnection implements Connection interface (sendRequest, close, isConnected, on)
-- [ ] 4-byte big-endian length prefix reading/writing matches Rust codec
-- [ ] Buffer management handles partial reads correctly
-- [ ] Request/response multiplexing via request ID
-- [ ] Test: Round-trip encode/decode preserves message
-- [ ] Test: Partial reads reassemble correctly
-- [ ] Test: Concurrent requests get correct responses
-- [ ] Test: Connection error handling and cleanup
+- [x] SocketConnection implements Connection interface (sendRequest, close, isConnected, on)
+- [x] 4-byte big-endian length prefix reading/writing matches Rust codec
+- [x] Buffer management handles partial reads correctly
+- [x] Request/response multiplexing via request ID
+- [x] Test: Round-trip encode/decode preserves message
+- [x] Test: Partial reads reassemble correctly
+- [x] Test: Concurrent requests get correct responses
+- [x] Test: Connection error handling and cleanup
 
 ## Technical Requirements
 

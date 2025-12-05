@@ -56,7 +56,15 @@ export {
   DaemonTimeoutError,
   RpcError,
   DaemonUnhealthyError,
+  DaemonCommunicationError,
+  SocketConnectionError,
+  SocketTimeoutError,
 } from './errors.js'
+
+// Connection interface and implementations
+export { Connection } from './connection.js'
+export { SocketConnection } from './socket.js'
+export type { RequestId } from './socket.js'
 
 // JSON-RPC protocol (for advanced usage)
 export { RpcProtocol } from './rpc.js'

@@ -110,3 +110,33 @@ export class DaemonUnhealthyError extends DaemonError {
     this.name = 'DaemonUnhealthyError'
   }
 }
+
+/**
+ * Base error class for daemon communication errors
+ */
+export class DaemonCommunicationError extends DaemonError {
+  constructor(message: string, options?: { cause?: Error }) {
+    super(message, 'DAEMON_COMMUNICATION_ERROR', options?.cause)
+    this.name = 'DaemonCommunicationError'
+  }
+}
+
+/**
+ * Error thrown for socket connection failures
+ */
+export class SocketConnectionError extends DaemonError {
+  constructor(message: string, options?: { cause?: Error }) {
+    super(message, 'SOCKET_CONNECTION_ERROR', options?.cause)
+    this.name = 'SocketConnectionError'
+  }
+}
+
+/**
+ * Error thrown when socket operations time out
+ */
+export class SocketTimeoutError extends DaemonError {
+  constructor(message: string, public timeoutMs: number) {
+    super(message, 'SOCKET_TIMEOUT')
+    this.name = 'SocketTimeoutError'
+  }
+}
