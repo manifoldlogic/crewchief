@@ -9,7 +9,23 @@
 const config = {
   repository: {
     mainBranch: 'main',
-    worktreeBasePath: '.crewchief/worktrees',
+
+    // Worktree base path - controls where git worktrees are created
+    //
+    // Default (v2.0+): Worktrees outside repo in user-specific location
+    // worktreeBasePath: '~/.crewchief/worktrees/<repo-name>',
+    //
+    // Legacy (v1.x): Worktrees inside repo (opt-in to old behavior)
+    // worktreeBasePath: '.crewchief/worktrees',
+    //
+    // Custom: Absolute path with repository isolation
+    // worktreeBasePath: '/mnt/ssd/worktrees/<repo-name>',
+    //
+    // Features:
+    // - Tilde expansion: ~/path → /home/user/path
+    // - Repo placeholder: <repo-name> → actual repository name
+    // - Absolute paths: /custom/path
+    // - Relative paths: .crewchief/worktrees
   },
 
   // orchestrator and agents sections removed (unused)

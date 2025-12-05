@@ -1,9 +1,9 @@
 # Ticket: [WTPATH-3001]: Config Schema Update
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,13 +30,13 @@ This ticket implements Phase 3 (Config Schema) of the Configurable Worktree Path
 - `/workspace/.crewchief/projects/WTPATH_configurable-worktree-paths/planning/architecture.md` (Config Schema Update section)
 
 ## Acceptance Criteria
-- [ ] Config schema default is `~/.crewchief/worktrees/<repo-name>`
-- [ ] Schema validation still allows custom paths
-- [ ] Example config files document new default with explanatory comments
-- [ ] Test mocks updated to use new default
-- [ ] All existing tests pass with new default
-- [ ] TypeScript types reflect new default value
-- [ ] Config loading correctly uses new default when no config file present
+- [x] Config schema default is `~/.crewchief/worktrees/<repo-name>`
+- [x] Schema validation still allows custom paths
+- [x] Example config files document new default with explanatory comments
+- [x] Test mocks updated to use new default
+- [x] All existing tests pass with new default
+- [x] TypeScript types reflect new default value
+- [x] Config loading correctly uses new default when no config file present
 
 ## Technical Requirements
 

@@ -2,7 +2,16 @@ import { z } from 'zod'
 
 export const RepositorySchema = z.object({
   mainBranch: z.string().default('main'),
-  worktreeBasePath: z.string().default('.crewchief/worktrees'),
+  /**
+   * Base path for worktrees. Supports:
+   * - Tilde expansion: ~/worktrees → /home/user/worktrees
+   * - Repository placeholder: <repo-name> → actual repo name
+   * - Absolute paths: /custom/path
+   * - Relative paths: .crewchief/worktrees (legacy)
+   *
+   * @default '~/.crewchief/worktrees/<repo-name>' (changed from '.crewchief/worktrees' in v1.x)
+   */
+  worktreeBasePath: z.string().default('~/.crewchief/worktrees/<repo-name>'),
 })
 
 // Removed: orchestrator fields are not used in current iTerm-based orchestration

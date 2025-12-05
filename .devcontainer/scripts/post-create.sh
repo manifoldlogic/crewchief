@@ -126,22 +126,27 @@ if [ ! -f crewchief.config.local.js ]; then
 module.exports = {
   repository: {
     mainBranch: 'main',
+
+    // For devcontainer: use legacy path to keep worktrees in repo
+    // (Easier for volume mounting and cleanup)
     worktreeBasePath: '.crewchief/worktrees',
+
+    // Default (v2.0+) would be: '~/.crewchief/worktrees/<repo-name>'
   },
-  
+
   agents: {
     claude: {
       command: 'claude',
       defaultArgs: ['--model', 'claude-3-opus'],
     },
   },
-  
+
   worktree: {
     copyIgnoredFiles: ['.env', '.env.local'],
     copyFromPath: '.',
     overwriteStrategy: 'skip',
   },
-  
+
   // Development-specific settings
   development: {
     verbose: true,

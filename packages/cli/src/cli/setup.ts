@@ -43,7 +43,7 @@ export async function runSetupWizard(): Promise<string> {
   const content = `export default {
   repository: {
     mainBranch: ${JSON.stringify(answers.mainBranch)},
-    worktreeBasePath: '.crewchief/worktrees'
+    // worktreeBasePath uses default: '~/.crewchief/worktrees/<repo-name>'
   },
   worktree: {
     copyIgnoredFiles: ${JSON.stringify(copyIgnoredFilesList)},
