@@ -9,6 +9,7 @@ pub mod cli;
 pub mod config;
 pub mod content_hash;
 pub mod context;
+pub mod daemon;
 pub mod db;
 pub mod embedding;
 pub mod evaluation;

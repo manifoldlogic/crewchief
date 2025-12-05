@@ -12,9 +12,7 @@ use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
 };
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
-use crewchief_maproom::{db, indexer};
-
-mod daemon;
+use crewchief_maproom::{daemon, db, indexer};
 
 /// Validate provider name against supported providers.
 ///

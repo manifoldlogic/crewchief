@@ -1,3 +1,4 @@
+pub mod protocol;
 pub mod types;
 
 use anyhow::{Context, Result};
@@ -6,9 +7,9 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
-use crewchief_maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
-use crewchief_maproom::db::{connect, SearchHit, SqliteStore};
-use crewchief_maproom::embedding::EmbeddingService;
+use crate::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
+use crate::db::{connect, SearchHit, SqliteStore};
+use crate::embedding::EmbeddingService;
 
 use self::types::{
     ContextParams, JsonRpcRequest, JsonRpcResponse, RepoStatus, SearchParams, StatusParams,
