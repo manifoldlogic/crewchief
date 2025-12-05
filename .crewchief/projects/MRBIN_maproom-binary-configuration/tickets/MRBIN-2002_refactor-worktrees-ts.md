@@ -1,9 +1,9 @@
 # Ticket: [MRBIN-2002]: Refactor worktrees.ts to Use Shared Utility
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ The WorktreeService class in worktrees.ts has its own inline binary resolution l
 After this change, both maproom commands and worktree auto-indexing will use identical resolution logic with consistent precedence order and config support.
 
 ## Acceptance Criteria
-- [ ] Import findMaproomBinary at top of file
-- [ ] runMaproomScan() uses shared utility instead of inline resolution
-- [ ] Config loading uses existing loadConfig() pattern
-- [ ] Removed ~40 lines of duplicated resolution logic
-- [ ] Auto-indexing works with config-based binary path
-- [ ] Worktree creation tests pass
-- [ ] Warning message shown when binary not found
-- [ ] Resolution order is: env > config > global > packaged
+- [x] Import findMaproomBinary at top of file
+- [x] runMaproomScan() uses shared utility instead of inline resolution
+- [x] Config loading uses existing loadConfig() pattern
+- [x] Removed ~40 lines of duplicated resolution logic
+- [x] Auto-indexing works with config-based binary path
+- [x] Worktree creation tests pass
+- [x] Warning message shown when binary not found
+- [x] Resolution order is: env > config > global > packaged
 
 ## Technical Requirements
 - Import: `import { findMaproomBinary } from '../utils/maproom-binary.js'`

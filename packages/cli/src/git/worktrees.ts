@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import simpleGit, { SimpleGit } from 'simple-git'
 import { copyIgnoredFiles } from './copy-ignored-files'
 import { loadConfig } from '../config/loader'
 import { ensureDirSync, removeDirSync } from '../utils/fs'
+import { findMaproomBinary } from '../utils/maproom-binary.js'
 import { expandWorktreePath } from '../utils/paths'
 import { WorktreeMetadataService } from '../utils/worktree-metadata'
 
@@ -25,43 +25,12 @@ export class WorktreeService {
 
   private async runMaproomScan(worktreePath: string): Promise<void> {
     try {
-      // Try to find the maproom binary using the same logic as maproom.ts
-      const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
-      const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
-      const platform = `${process.platform}-${arch}`
+      const config = await loadConfig()
+      const result = findMaproomBinary({
+        configPath: config.repository.maproomBinaryPath,
+      })
 
-      let maproomBin: string | null = null
-
-      // Check environment variable first
-      if (process.env.CREWCHIEF_MAPROOM_BIN && fs.existsSync(process.env.CREWCHIEF_MAPROOM_BIN)) {
-        maproomBin = process.env.CREWCHIEF_MAPROOM_BIN
-      }
-
-      // Try packaged binary locations
-      if (!maproomBin) {
-        const __dirname = path.dirname(fileURLToPath(import.meta.url))
-        const possiblePaths = [
-          path.join(__dirname, '..', 'bin', platform, execName),
-          path.join(__dirname, '..', 'bin', execName),
-          path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', platform, execName),
-        ]
-        for (const p of possiblePaths) {
-          if (fs.existsSync(p)) {
-            maproomBin = p
-            break
-          }
-        }
-      }
-
-      // Try global installation
-      if (!maproomBin) {
-        const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
-        if (which.status === 0) {
-          maproomBin = 'crewchief-maproom'
-        }
-      }
-
-      if (!maproomBin) {
+      if (!result.path) {
         console.log('⚠️  Maproom binary not found, skipping indexing for new worktree')
         return
       }
@@ -69,22 +38,22 @@ export class WorktreeService {
       console.log('🔍 Running maproom scan for new worktree...')
 
       // Run maproom scan with automatic detection (it will detect repo, worktree, and commit from the worktree path)
-      const result = spawnSync(maproomBin, ['scan'], {
+      const scanResult = spawnSync(result.path, ['scan'], {
         cwd: worktreePath,
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
       })
 
-      if (result.status === 0) {
+      if (scanResult.status === 0) {
         // Parse output to show summary
-        const output = result.stdout
+        const output = scanResult.stdout
         if (output.includes('files processed') || output.includes('chunks created')) {
           console.log('✅ Maproom indexing completed successfully')
         } else {
           console.log('✅ Maproom scan completed')
         }
       } else {
-        const errorMsg = result.stderr || result.stdout || 'Unknown error'
+        const errorMsg = scanResult.stderr || scanResult.stdout || 'Unknown error'
         console.warn(`⚠️  Maproom scan failed: ${errorMsg.split('\n')[0]}`)
       }
     } catch (error) {
