@@ -1,9 +1,9 @@
 # Ticket: [MRBIN-3001]: Update Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,14 +30,14 @@ Documentation must cover:
 4. Example configuration files
 
 ## Acceptance Criteria
-- [ ] README.md documents maproomBinaryPath config option
-- [ ] README.md shows example configuration with maproomBinaryPath
-- [ ] docs/development/local-development.md updated with config-based workflow
-- [ ] Example includes relative path for local builds
-- [ ] Resolution priority order documented clearly
-- [ ] Migration notes for priority order change included
-- [ ] All documentation examples are accurate and tested
-- [ ] Links to config documentation are correct
+- [x] README.md documents maproomBinaryPath config option
+- [x] README.md shows example configuration with maproomBinaryPath
+- [x] docs/development/local-development.md updated with config-based workflow
+- [x] Example includes relative path for local builds
+- [x] Resolution priority order documented clearly
+- [x] Migration notes for priority order change included
+- [x] All documentation examples are accurate and tested
+- [x] Links to config documentation are correct
 
 ## Technical Requirements
 - Document config field: `repository.maproomBinaryPath` (optional string)

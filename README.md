@@ -215,6 +215,32 @@ crewchief/
 - [Testing Report](TESTING_REPORT.md) - Features that need verification
 - **[Search Optimization Framework](docs/search-optimization/)** - Grep-impossible task design and validation
 
+## Configuration
+
+### Binary Configuration
+
+Specify a custom path to the maproom binary:
+
+```javascript
+// crewchief.config.js
+export default {
+  repository: {
+    maproomBinaryPath: './target/release/crewchief-maproom'
+  }
+}
+```
+
+**Resolution Priority:**
+1. `CREWCHIEF_MAPROOM_BIN` environment variable
+2. `config.repository.maproomBinaryPath`
+3. Global install (`npm install -g @crewchief/cli`)
+4. Packaged binary
+
+**Use cases:**
+- Local development with Rust builds
+- Custom binary locations
+- CI/CD environments with specific versions
+
 ## Embedding Configuration
 
 Embeddings are **automatically generated** during `scan` and `upsert` operations, enabling semantic search out-of-the-box.
@@ -295,6 +321,32 @@ See [User Guide: Cleanup](docs/user-guide-cleanup.md) for detailed instructions 
 - **Optional**: Docker (for PostgreSQL team sharing)
 - **Optional**: iTerm2 (for agent features, macOS only)
 - **Optional**: [Ollama](https://ollama.ai/download) (for local embeddings)
+
+## Migration Guide
+
+### Priority Order Change (v0.x.0)
+
+**Breaking change:** Binary resolution now prefers global installs over packaged binaries.
+
+**Before:**
+1. Environment variable
+2. Packaged binary
+3. Global install
+
+**After:**
+1. Environment variable
+2. Config file
+3. Global install
+4. Packaged binary
+
+**Who is affected:**
+- Users with both global and packaged installs will now use global
+- This prevents stale packaged binaries from being used
+
+**Migration:**
+- No action needed for most users
+- To force packaged binary: uninstall global version
+- To force specific binary: use `CREWCHIEF_MAPROOM_BIN` env var
 
 ## Contributing
 

@@ -254,6 +254,64 @@ crewchief maproom scan --batch-size 25 --embedding-batch-size 25
 
 ## Configuration
 
+### Binary Configuration
+
+Specify a custom path to the maproom binary for local development or custom installations:
+
+```javascript
+// crewchief.config.js
+export default {
+  repository: {
+    maproomBinaryPath: './target/release/crewchief-maproom',
+  },
+}
+```
+
+**Resolution Priority:**
+
+1. `CREWCHIEF_MAPROOM_BIN` environment variable
+2. `config.repository.maproomBinaryPath` (config file)
+3. Global install (`npm install -g @crewchief/cli`)
+4. Packaged binary (bundled with npm package)
+
+**Common Use Cases:**
+
+**Local Rust Development:**
+
+```javascript
+export default {
+  repository: {
+    // Relative path from repository root
+    maproomBinaryPath: './target/release/crewchief-maproom',
+  },
+}
+```
+
+**Shared Team Build:**
+
+```javascript
+export default {
+  repository: {
+    // Absolute path to shared binary
+    maproomBinaryPath: '/shared/builds/crewchief-maproom',
+  },
+}
+```
+
+**CI/CD with Specific Version:**
+
+```javascript
+export default {
+  repository: {
+    maproomBinaryPath: '/opt/crewchief/bin/crewchief-maproom',
+  },
+}
+```
+
+See [docs/development/local-development.md](../../docs/development/local-development.md) for complete development workflows.
+
+### Configuration Wizard
+
 Run the interactive setup wizard on first use:
 
 ```bash

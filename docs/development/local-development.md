@@ -73,7 +73,33 @@ pnpm build:rust
 cargo build --release --bin crewchief-maproom
 ```
 
-### Method 1: Environment Variable Override
+### Method 1: Configuration File (Recommended)
+
+When developing maproom, configure CrewChief to use your local build:
+
+```javascript
+// crewchief.config.local.js
+export default {
+  repository: {
+    maproomBinaryPath: './target/release/crewchief-maproom'
+  }
+}
+```
+
+Build and test:
+```bash
+cd crates/maproom
+cargo build --release
+cd ../..
+crewchief maproom scan  # Uses your local build
+```
+
+This approach is preferred over setting `CREWCHIEF_MAPROOM_BIN` because:
+- Config persists across terminal sessions
+- Can use `.local.js` to keep out of git
+- Relative paths work from any location in repo
+
+### Method 2: Environment Variable Override
 
 ```bash
 # Set the path to your local binary
@@ -87,7 +113,7 @@ crewchief maproom:scan
 crewchief maproom:watch
 ```
 
-### Method 2: Inline Environment Variable
+### Method 3: Inline Environment Variable
 
 ```bash
 # Specify the binary path inline (from project root)
@@ -97,7 +123,7 @@ CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/crewchief-maproom" crewch
 CREWCHIEF_MAPROOM_BIN="$(pwd)/packages/cli/bin/darwin-arm64/crewchief-maproom" crewchief maproom:scan
 ```
 
-### Method 3: Direct Binary Execution
+### Method 4: Direct Binary Execution
 
 ```bash
 # Run the Rust binary directly
