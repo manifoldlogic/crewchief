@@ -1,9 +1,9 @@
 # Ticket: [MRBIN-1004]: Convert Maproom Action Handlers to Async
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -31,13 +31,13 @@ This conversion is safe because:
 This ticket can run in parallel with MRBIN-1002 (utility implementation) since they don't conflict.
 
 ## Acceptance Criteria
-- [ ] All maproom command action handlers are async functions
-- [ ] runMaproomForward() function signature is async
-- [ ] Action handlers use await when calling runMaproomForward()
-- [ ] Existing maproom commands still work correctly
-- [ ] All existing maproom integration tests pass
-- [ ] No TypeScript errors related to async/await
-- [ ] Error handling preserved (exit codes, error messages)
+- [x] All maproom command action handlers are async functions
+- [x] runMaproomForward() function signature is async
+- [x] Action handlers use await when calling runMaproomForward()
+- [x] Existing maproom commands still work correctly
+- [x] All existing maproom integration tests pass
+- [x] No TypeScript errors related to async/await
+- [x] Error handling preserved (exit codes, error messages)
 
 ## Technical Requirements
 - Change function signature: `function runMaproomForward(args)` → `async function runMaproomForward(args)`

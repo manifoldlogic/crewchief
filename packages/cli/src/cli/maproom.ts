@@ -49,7 +49,7 @@ function resolvePackagedMaproomBin(): string | null {
   return null
 }
 
-function runMaproomForward(args: string[]) {
+async function runMaproomForward(args: string[]) {
   const subcommand = args[0]
 
   // Skip validation for help commands and non-database commands
@@ -101,7 +101,7 @@ export function registerMaproomCommands(program: Command) {
       'after',
       '\nAuto-detects: repo name, worktree, file path, and commit from git context\nSupports: TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML',
     )
-    .action((args) => runMaproomForward(['scan', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['scan', ...(args || [])]))
 
   maproom
     .command('search')
@@ -112,7 +112,7 @@ export function registerMaproomCommands(program: Command) {
       'after',
       '\nExamples:\n  $ crewchief maproom search "authentication flow"\n  $ crewchief maproom search "database queries" --limit 10',
     )
-    .action((args) => runMaproomForward(['search', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['search', ...(args || [])]))
 
   maproom
     .command('upsert')
@@ -120,7 +120,7 @@ export function registerMaproomCommands(program: Command) {
     .allowUnknownOption(true)
     .argument('[args...]')
     .addHelpText('after', '\nExample: crewchief maproom upsert src/index.ts src/utils.ts')
-    .action((args) => runMaproomForward(['upsert', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['upsert', ...(args || [])]))
 
   maproom
     .command('watch')
@@ -128,7 +128,7 @@ export function registerMaproomCommands(program: Command) {
     .allowUnknownOption(true)
     .argument('[args...]')
     .addHelpText('after', '\nAuto-detects git context and watches for file changes\nPress Ctrl-C to stop watching')
-    .action((args) => runMaproomForward(['watch', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['watch', ...(args || [])]))
 
   // Nested subcommand for database operations
   const db = maproom.command('db').description('Database operations')
@@ -137,7 +137,7 @@ export function registerMaproomCommands(program: Command) {
     .description('Initialize/migrate SQLite database for code indexing')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .action((args) => runMaproomForward(['db', 'migrate', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['db', 'migrate', ...(args || [])]))
 
   // New commands
   maproom
@@ -145,21 +145,21 @@ export function registerMaproomCommands(program: Command) {
     .description('Auto-index worktrees on branch switch')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .action((args) => runMaproomForward(['branch-watch', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['branch-watch', ...(args || [])]))
 
   maproom
     .command('cache')
     .description('Manage maproom caches')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .action((args) => runMaproomForward(['cache', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['cache', ...(args || [])]))
 
   maproom
     .command('generate-embeddings')
     .description('Generate embeddings for indexed chunks')
     .allowUnknownOption(true)
     .argument('[args...]')
-    .action((args) => runMaproomForward(['generate-embeddings', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['generate-embeddings', ...(args || [])]))
 
   maproom
     .command('clean-ignored')
@@ -170,5 +170,5 @@ export function registerMaproomCommands(program: Command) {
       'after',
       '\nExamples:\n  $ crewchief maproom clean-ignored --repo myrepo --worktree main --dry-run\n  $ crewchief maproom clean-ignored --repo myrepo --worktree main',
     )
-    .action((args) => runMaproomForward(['clean-ignored', ...(args || [])]))
+    .action(async (args) => await runMaproomForward(['clean-ignored', ...(args || [])]))
 }
