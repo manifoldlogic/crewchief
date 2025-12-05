@@ -9,6 +9,9 @@ import { displaySubshellMessage } from '../../utils/subshell-message'
 // Mock modules
 vi.mock('../../git/worktrees')
 vi.mock('../../config/loader')
+vi.mock('../../utils/paths', () => ({
+  expandWorktreePath: vi.fn((p: string) => Promise.resolve(p)), // passthrough for tests
+}))
 vi.mock('../../utils/logger', () => ({
   logger: {
     error: vi.fn(),

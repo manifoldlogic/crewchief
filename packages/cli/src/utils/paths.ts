@@ -163,8 +163,14 @@ export async function expandWorktreePath(pathStr: string, cwd?: string): Promise
   // Step 2: Replace <repo-name> placeholder
   expanded = await expandRepoPlaceholder(expanded, cwd)
 
-  // Step 3: Make absolute
-  expanded = path.resolve(expanded)
+  // Step 3: Make absolute (resolve relative paths against provided cwd or process.cwd())
+  if (path.isAbsolute(expanded)) {
+    // Already absolute, no need to resolve
+    expanded = path.normalize(expanded)
+  } else {
+    // Relative path - resolve against provided cwd or process.cwd()
+    expanded = path.resolve(cwd ?? process.cwd(), expanded)
+  }
 
   // Step 4: Validate not a system directory
   if (isSystemDirectory(expanded)) {

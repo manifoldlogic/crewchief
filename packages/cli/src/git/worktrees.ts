@@ -6,6 +6,7 @@ import simpleGit, { SimpleGit } from 'simple-git'
 import { copyIgnoredFiles } from './copy-ignored-files'
 import { loadConfig } from '../config/loader'
 import { ensureDirSync, removeDirSync } from '../utils/fs'
+import { expandWorktreePath } from '../utils/paths'
 import { WorktreeMetadataService } from '../utils/worktree-metadata'
 
 export interface WorktreeListItem {
@@ -95,8 +96,23 @@ export class WorktreeService {
     ensureDirSync(path.join(this.cwd, storagePath))
   }
 
-  async createWorktree(name: string, baseBranch: string, basePath: string, skipCopyIgnored?: boolean, purpose: 'agent' | 'manual' = 'manual'): Promise<string> {
-    const wtPath = path.join(this.cwd, basePath, name)
+  async createWorktree(
+    name: string,
+    baseBranch: string,
+    basePath: string,
+    skipCopyIgnored?: boolean,
+    purpose: 'agent' | 'manual' = 'manual',
+  ): Promise<string> {
+    // Expand path before construction
+    let expandedBasePath: string
+    try {
+      expandedBasePath = await expandWorktreePath(basePath, this.cwd)
+    } catch (error) {
+      throw new Error(`Invalid worktree path "${basePath}": ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    // Don't join with cwd - expansion already resolved absolute paths
+    const wtPath = path.join(expandedBasePath, name)
     ensureDirSync(wtPath)
 
     // Get current branch before creating worktree

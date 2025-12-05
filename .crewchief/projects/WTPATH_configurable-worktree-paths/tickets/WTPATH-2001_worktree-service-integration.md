@@ -1,9 +1,9 @@
 # Ticket: [WTPATH-2001]: WorktreeService Integration
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,18 +30,18 @@ This ticket implements Phase 2 of the Configurable Worktree Paths project.
 - `/workspace/.crewchief/projects/WTPATH_configurable-worktree-paths/planning/architecture.md` (WorktreeService Integration section)
 
 ## Acceptance Criteria
-- [ ] WorktreeService calls `expandWorktreePath()` before constructing worktree path
-- [ ] Relative paths still work (e.g., `.crewchief/worktrees`)
-- [ ] Absolute paths work without joining to cwd (e.g., `/tmp/worktrees`)
-- [ ] Tilde paths expand correctly (e.g., `~/worktrees`)
-- [ ] `<repo-name>` placeholder expands correctly
-- [ ] Relative paths (`.crewchief/worktrees`) resolve correctly without expansion side effects
-- [ ] Existing worktree unit tests pass with mocked expansion
-- [ ] Integration test creates real worktree with expanded path
-- [ ] Integration test verifies worktree exists at expanded location
-- [ ] Integration test cleans up worktree after test
-- [ ] Expansion errors are caught and re-thrown with context (original path + error reason)
-- [ ] Error messages include expanded path when creation fails
+- [x] WorktreeService calls `expandWorktreePath()` before constructing worktree path
+- [x] Relative paths still work (e.g., `.crewchief/worktrees`)
+- [x] Absolute paths work without joining to cwd (e.g., `/tmp/worktrees`)
+- [x] Tilde paths expand correctly (e.g., `~/worktrees`)
+- [x] `<repo-name>` placeholder expands correctly
+- [x] Relative paths (`.crewchief/worktrees`) resolve correctly without expansion side effects
+- [x] Existing worktree unit tests pass with mocked expansion
+- [x] Integration test creates real worktree with expanded path
+- [x] Integration test verifies worktree exists at expanded location
+- [x] Integration test cleans up worktree after test
+- [x] Expansion errors are caught and re-thrown with context (original path + error reason)
+- [x] Error messages include expanded path when creation fails
 
 ## Technical Requirements
 
