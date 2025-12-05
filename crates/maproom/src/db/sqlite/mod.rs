@@ -35,6 +35,8 @@ pub struct SqliteStore {
     // Extension verification (cached after first check)
     vec_available: Arc<AtomicBool>,
     vec_checked: Arc<AtomicBool>,
+    // Configuration (needed for retry logic)
+    config: SqliteConfig,
 }
 
 impl SqliteStore {
@@ -140,6 +142,7 @@ impl SqliteStore {
             pool,
             vec_available: Arc::new(AtomicBool::new(false)),
             vec_checked: Arc::new(AtomicBool::new(false)),
+            config: config.clone(),
         };
 
         // Auto-run migrations on connect to ensure schema is up to date
@@ -172,12 +175,100 @@ impl SqliteStore {
     pub fn has_vec_extension(&self) -> bool {
         self.vec_available.load(Ordering::Relaxed)
     }
+
+    /// Execute a write operation with automatic retry on SQLITE_BUSY errors.
+    ///
+    /// Uses exponential backoff: 50ms → 100ms → 200ms → 400ms → 800ms
+    /// Logs warnings for observability of contention issues.
+    pub async fn write_with_retry<F, T>(&self, op: F) -> anyhow::Result<T>
+    where
+        F: FnMut(&mut Connection) -> anyhow::Result<T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let config = self.config.retry.clone();
+        let pool = self.pool.clone();
+        let mut delay_ms = config.base_delay_ms;
+
+        // Wrap the operation in an Arc<Mutex<>> so we can use it across multiple spawn_blocking calls
+        let op = Arc::new(std::sync::Mutex::new(op));
+
+        for attempt in 1..=config.max_attempts {
+            // Clone references for this attempt
+            let pool_clone = pool.clone();
+            let op_clone = Arc::clone(&op);
+
+            // Execute the operation in a blocking task
+            let result = spawn_blocking(move || {
+                let mut conn = pool_clone
+                    .get()
+                    .context("Failed to get SQLite connection")?;
+                let mut op_guard = op_clone.lock().unwrap();
+                op_guard(&mut conn)
+            })
+            .await?;
+
+            match result {
+                Ok(value) => {
+                    if attempt > 1 {
+                        tracing::info!(attempt, "Write succeeded after retry");
+                    }
+                    return Ok(value);
+                }
+                Err(e) if is_busy_error(&e) && attempt < config.max_attempts => {
+                    tracing::warn!(
+                        attempt,
+                        total_attempts = config.max_attempts,
+                        delay_ms,
+                        error = %e,
+                        "SQLITE_BUSY error, retrying"
+                    );
+
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+
+                    // Exponential backoff
+                    if config.exponential {
+                        delay_ms = (delay_ms * 2).min(config.max_delay_ms);
+                    }
+                }
+                Err(e) => {
+                    if is_busy_error(&e) {
+                        tracing::error!(
+                            max_attempts = config.max_attempts,
+                            "Write failed after all retry attempts"
+                        );
+                    }
+                    return Err(e);
+                }
+            }
+        }
+
+        anyhow::bail!("Write retry loop completed without returning (this should be unreachable)")
+    }
 }
 
 /// Verify that sqlite-vec extension is loaded correctly
 fn verify_vec_extension(conn: &Connection) -> bool {
     conn.query_row("SELECT vec_version()", [], |row| row.get::<_, String>(0))
         .is_ok()
+}
+
+/// Check if error is a transient lock contention error that should be retried
+fn is_busy_error(error: &anyhow::Error) -> bool {
+    // Check if the error chain contains a rusqlite busy/locked error
+    // We need to iterate through the error chain because rusqlite::Error
+    // might be wrapped inside anyhow::Error
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<rusqlite::Error>()
+            .and_then(|rusqlite_err| match rusqlite_err {
+                rusqlite::Error::SqliteFailure(err, _) => Some(matches!(
+                    err.code,
+                    rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                )),
+                _ => Some(false),
+            })
+            .unwrap_or(false)
+    })
 }
 
 /// Resolve a repo name to its ID with fuzzy matching.
@@ -231,7 +322,7 @@ impl SqliteStore {
     pub async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let name = name.to_string();
         let root_path = root_path.to_string();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             conn.execute(
                 "INSERT OR IGNORE INTO repos(name, root_path) VALUES (?1, ?2)",
                 params![name, root_path],
@@ -262,7 +353,7 @@ impl SqliteStore {
     ) -> anyhow::Result<i64> {
         let name = name.to_string();
         let abs_path = abs_path.to_string();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             conn.execute(
                 "INSERT OR IGNORE INTO worktrees(repo_id, name, abs_path) VALUES (?1, ?2, ?3)",
                 params![repo_id, name, abs_path],
@@ -290,7 +381,7 @@ impl SqliteStore {
         committed_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> anyhow::Result<i64> {
         let sha = sha.to_string();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             conn.execute(
                 "INSERT OR IGNORE INTO commits(repo_id, sha, committed_at) VALUES (?1, ?2, ?3)",
                 params![repo_id, sha, committed_at],
@@ -420,7 +511,7 @@ impl SqliteStore {
 
     pub async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             conn.execute(
                 "INSERT INTO files (repo_id, worktree_id, commit_id, relpath, language, content_hash, size_bytes, last_modified)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -451,7 +542,7 @@ impl SqliteStore {
 
     pub async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
 
             // For JSON fields, we need to serialize to string if rusqlite doesn't support JSON directly
@@ -519,7 +610,7 @@ impl SqliteStore {
 
     pub async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
         let chunks = chunks.to_vec();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
             let mut ids = Vec::new();
 
@@ -550,7 +641,7 @@ impl SqliteStore {
                     "INSERT OR REPLACE INTO fts_chunks(rowid, content, docstring, symbol_name) VALUES (?1, ?2, ?3, ?4)"
                 )?;
 
-                for chunk in chunks {
+                for chunk in &chunks {
                     let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
 
                     let chunk_id: i64 = stmt.query_row(params![
@@ -589,7 +680,7 @@ impl SqliteStore {
         edge_type: &str,
     ) -> anyhow::Result<()> {
         let edge_type = edge_type.to_string();
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             conn.execute(
                 "INSERT OR IGNORE INTO chunk_edges(src_chunk_id, dst_chunk_id, type) VALUES (?1, ?2, ?3)",
                 params![src_chunk_id, dst_chunk_id, edge_type],
@@ -1450,7 +1541,7 @@ impl SqliteStore {
         let tree_sha = tree_sha.to_string();
         let chunks_processed = stats.chunks_processed;
         let embeddings_generated = stats.embeddings_generated;
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             conn.execute(
                 "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
                  VALUES (?1, ?2, ?3, ?4, datetime('now'))
@@ -1518,7 +1609,7 @@ impl SqliteStore {
         &self,
         worktree_id: i64,
     ) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             // Get count of chunks that will be deleted
             let chunks_deleted: i64 = conn
                 .query_row(
@@ -1612,7 +1703,7 @@ impl SqliteStore {
     }
 
     pub async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
-        self.run(move |conn| {
+        self.write_with_retry(move |conn| {
             // Get count of chunks to delete
             let count: i64 = conn
                 .query_row(
@@ -5280,5 +5371,152 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(remaining_count, 0, "All chunks should be deleted");
+    }
+
+    #[tokio::test]
+    async fn test_write_retry_with_eventual_success() {
+        use std::sync::{Arc, Mutex};
+
+        let store = setup_test_store().await;
+        let attempt_count = Arc::new(Mutex::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result = store
+            .write_with_retry(move |_conn| {
+                let mut count = attempt_count_clone.lock().unwrap();
+                *count += 1;
+
+                // Fail first 2 attempts, succeed on 3rd
+                if *count < 3 {
+                    Err(rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(5), // SQLITE_BUSY
+                        Some("simulated busy".into()),
+                    )
+                    .into())
+                } else {
+                    Ok(42)
+                }
+            })
+            .await;
+
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(*attempt_count.lock().unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_write_retry_fails_after_max_attempts() {
+        use std::sync::{Arc, Mutex};
+
+        let store = setup_test_store().await;
+        let attempt_count = Arc::new(Mutex::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result: anyhow::Result<()> = store
+            .write_with_retry(move |_conn| {
+                let mut count = attempt_count_clone.lock().unwrap();
+                *count += 1;
+
+                // Always fail with SQLITE_BUSY
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(5), // SQLITE_BUSY
+                    Some("always busy".into()),
+                )
+                .into())
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(*attempt_count.lock().unwrap(), 5); // Max attempts (default config)
+    }
+
+    #[tokio::test]
+    async fn test_exponential_backoff_timing() {
+        use std::sync::{Arc, Mutex};
+
+        let store = setup_test_store().await;
+        let start = std::time::Instant::now();
+        let attempt_count = Arc::new(Mutex::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let _: anyhow::Result<()> = store
+            .write_with_retry(move |_conn| {
+                let mut count = attempt_count_clone.lock().unwrap();
+                *count += 1;
+
+                // Always fail to test full backoff sequence
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(5), // SQLITE_BUSY
+                    None,
+                )
+                .into())
+            })
+            .await;
+
+        let elapsed = start.elapsed();
+        // With default config: 50 + 100 + 200 + 400 = 750ms minimum
+        // (5 attempts means 4 delays between them)
+        assert!(
+            elapsed >= std::time::Duration::from_millis(750),
+            "Expected at least 750ms, got {:?}",
+            elapsed
+        );
+        // Allow some overhead but should be less than 2 seconds
+        assert!(
+            elapsed < std::time::Duration::from_millis(2000),
+            "Expected less than 2000ms, got {:?}",
+            elapsed
+        );
+    }
+
+    #[test]
+    fn test_is_busy_error_detection() {
+        let busy = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(5), // SQLITE_BUSY
+            None,
+        ));
+        assert!(is_busy_error(&busy));
+
+        let locked = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(6), // SQLITE_LOCKED
+            None,
+        ));
+        assert!(is_busy_error(&locked));
+
+        let other = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(19), // SQLITE_CONSTRAINT
+            None,
+        ));
+        assert!(!is_busy_error(&other));
+
+        // Test non-rusqlite error
+        let generic_error = anyhow::anyhow!("some other error");
+        assert!(!is_busy_error(&generic_error));
+    }
+
+    #[tokio::test]
+    async fn test_write_retry_non_busy_error_fails_immediately() {
+        use std::sync::{Arc, Mutex};
+
+        let store = setup_test_store().await;
+        let attempt_count = Arc::new(Mutex::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result: anyhow::Result<()> = store
+            .write_with_retry(move |_conn| {
+                let mut count = attempt_count_clone.lock().unwrap();
+                *count += 1;
+
+                // Fail with a non-BUSY error
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(rusqlite::ErrorCode::ConstraintViolation as i32),
+                    Some("constraint violation".into()),
+                )
+                .into())
+            })
+            .await;
+
+        assert!(result.is_err());
+        // Should fail immediately without retries
+        assert_eq!(*attempt_count.lock().unwrap(), 1);
     }
 }
