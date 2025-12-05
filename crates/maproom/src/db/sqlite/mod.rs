@@ -67,13 +67,16 @@ impl SqliteStore {
         }
 
         let manager = r2d2_sqlite::SqliteConnectionManager::file(path).with_init(|conn| {
-            // Enable WAL mode for concurrency
+            // Enable WAL mode for concurrency with enhanced settings
             conn.execute_batch(
                 r#"
                     PRAGMA journal_mode = WAL;
                     PRAGMA synchronous = NORMAL;
+                    PRAGMA busy_timeout = 30000;          -- Increased from 5000 for concurrent access
+                    PRAGMA wal_autocheckpoint = 10000;    -- ~40MB threshold before checkpoint
+                    PRAGMA cache_size = -65536;           -- 64MB page cache
+                    PRAGMA mmap_size = 268435456;         -- 256MB memory-mapped I/O
                     PRAGMA foreign_keys = ON;
-                    PRAGMA busy_timeout = 5000;
                     "#,
             )?;
             Ok(())
@@ -83,6 +86,10 @@ impl SqliteStore {
             .max_size(10) // Configurable?
             .build(manager)
             .context("Failed to create SQLite connection pool")?;
+
+        tracing::info!(
+            "SQLite PRAGMAs applied: busy_timeout=30s, wal_autocheckpoint=10000, cache=64MB, mmap=256MB"
+        );
 
         // Set secure file permissions on database file (Unix only)
         #[cfg(unix)]
@@ -5211,11 +5218,7 @@ mod tests {
         let initial_count: i64 = store
             .run(move |conn| {
                 let count: i64 = conn
-                    .query_row(
-                        "SELECT COUNT(*) FROM chunks",
-                        [],
-                        |row| row.get(0),
-                    )
+                    .query_row("SELECT COUNT(*) FROM chunks", [], |row| row.get(0))
                     .unwrap();
                 Ok(count)
             })
@@ -5236,11 +5239,7 @@ mod tests {
         let remaining_count: i64 = store
             .run(move |conn| {
                 let count: i64 = conn
-                    .query_row(
-                        "SELECT COUNT(*) FROM chunks",
-                        [],
-                        |row| row.get(0),
-                    )
+                    .query_row("SELECT COUNT(*) FROM chunks", [], |row| row.get(0))
                     .unwrap();
                 Ok(count)
             })
