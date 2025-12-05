@@ -1,9 +1,9 @@
 # Ticket: [MRBIN-1002]: Implement Shared Binary Resolution Utility
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,15 +26,15 @@ Currently, maproom binary resolution is duplicated across maproom.ts (~86 lines)
 This utility will be used by both CLI consumers in Phase 2, eliminating code duplication and providing consistent behavior across all maproom commands.
 
 ## Acceptance Criteria
-- [ ] New file created at packages/cli/src/utils/maproom-binary.ts
-- [ ] findMaproomBinary() function implements correct precedence order
-- [ ] Function handles Windows platform (uses .exe suffix)
-- [ ] Function handles Unix platforms (no suffix)
-- [ ] Function validates config paths and warns if invalid
-- [ ] Function returns null if no binary found
-- [ ] Function returns source information for debugging
-- [ ] TypeScript types exported (MaproomBinaryOptions, BinaryResolutionResult)
-- [ ] Platform detection uses process.platform and process.arch
+- [x] New file created at packages/cli/src/utils/maproom-binary.ts
+- [x] findMaproomBinary() function implements correct precedence order
+- [x] Function handles Windows platform (uses .exe suffix)
+- [x] Function handles Unix platforms (no suffix)
+- [x] Function validates config paths and warns if invalid
+- [x] Function returns null if no binary found
+- [x] Function returns source information for debugging
+- [x] TypeScript types exported (MaproomBinaryOptions, BinaryResolutionResult)
+- [x] Platform detection uses process.platform and process.arch
 
 ## Technical Requirements
 - Precedence order: CREWCHIEF_MAPROOM_BIN > configPath > global install > packaged binary
