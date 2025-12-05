@@ -1,53 +1,8 @@
 import { spawnSync } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
 import { Command } from 'commander'
 import { validateMaproomEnvironment, displayValidationResult } from './maproom-validation.js'
-
-function resolvePackagedMaproomBin(): string | null {
-  const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
-
-  // Map architecture names to match our build script convention
-  const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
-  const platform = `${process.platform}-${arch}`
-
-  // 1) Explicit env override
-  const envBin = process.env.CREWCHIEF_MAPROOM_BIN
-  if (envBin && fs.existsSync(envBin)) return envBin
-
-  // 2) Packaged inside this CLI package with platform subdirectory
-  try {
-    const here = __dirname
-    const out = path.join(here, '..', 'bin', platform, execName)
-    if (fs.existsSync(out)) return out
-  } catch {
-    // ignore errors
-  }
-
-  // 3) Fallback to symlink in bin root (for backwards compatibility)
-  try {
-    const here = __dirname
-    const out = path.join(here, '..', 'bin', execName)
-    if (fs.existsSync(out)) return out
-  } catch {
-    // ignore errors
-  }
-
-  // 4) Packaged in sibling maproom-mcp package (monorepo dev convenience)
-  try {
-    const here = __dirname
-    const mcp = path.join(here, '..', '..', 'maproom-mcp', 'bin', platform, execName)
-    if (fs.existsSync(mcp)) return mcp
-  } catch {
-    // ignore errors
-  }
-
-  // 5) Global on PATH
-  const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
-  if (which.status === 0) return 'crewchief-maproom'
-
-  return null
-}
+import { loadConfig } from '../config/loader.js'
+import { findMaproomBinary } from '../utils/maproom-binary.js'
 
 async function runMaproomForward(args: string[]) {
   const subcommand = args[0]
@@ -70,16 +25,38 @@ async function runMaproomForward(args: string[]) {
     }
   }
 
-  // Forward to Rust binary
-  const bin = resolvePackagedMaproomBin()
-  if (!bin) {
+  // Load config to get binary path (handle missing config gracefully)
+  let configPath: string | undefined
+  try {
+    const config = await loadConfig()
+    configPath = config.repository.maproomBinaryPath
+  } catch {
+    // Config file missing or invalid - continue with defaults
+  }
+
+  const result = findMaproomBinary({ configPath })
+
+  if (!result.path) {
     console.error(
-      'crewchief-maproom not found. Ensure it is installed or built. You can set CREWCHIEF_MAPROOM_BIN to an absolute path.',
+      'crewchief-maproom not found. Options:\n' +
+        '1. Install globally: npm install -g @crewchief/cli\n' +
+        '2. Set CREWCHIEF_MAPROOM_BIN environment variable\n' +
+        '3. Add maproomBinaryPath to crewchief.config.js\n\n' +
+        'Resolution attempts:\n' +
+        '- Environment: ' +
+        (process.env.CREWCHIEF_MAPROOM_BIN || 'not set') +
+        '\n' +
+        '- Config: ' +
+        (configPath || 'not configured') +
+        '\n' +
+        '- Global: not found\n' +
+        '- Packaged: not found',
     )
     process.exitCode = 1
     return
   }
-  const res = spawnSync(bin, args, { stdio: 'inherit' })
+
+  const res = spawnSync(result.path, args, { stdio: 'inherit' })
   if (res.status !== 0) process.exitCode = res.status ?? 1
 }
 

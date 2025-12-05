@@ -1,9 +1,9 @@
 # Ticket: [MRBIN-2001]: Refactor maproom.ts to Use Shared Utility
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,15 +26,15 @@ This ticket completes the CLI integration by replacing the duplicated binary res
 This is where the behavior change occurs: global installs now take priority over packaged binaries. The change is intentional and improves the user experience by avoiding stale packaged binaries when a global install exists.
 
 ## Acceptance Criteria
-- [ ] Import findMaproomBinary and loadConfig at top of file
-- [ ] runMaproomForward() loads config and passes maproomBinaryPath to utility
-- [ ] Config loading handles missing config gracefully (no error, falls through)
-- [ ] Old resolvePackagedMaproomBin() function removed
-- [ ] Error message shows all resolution attempts with paths
-- [ ] Error message includes configuration guidance
-- [ ] All existing maproom integration tests pass
-- [ ] Commands work without config file (backwards compatible)
-- [ ] Resolution order is: env > config > global > packaged
+- [x] Import findMaproomBinary and loadConfig at top of file
+- [x] runMaproomForward() loads config and passes maproomBinaryPath to utility
+- [x] Config loading handles missing config gracefully (no error, falls through)
+- [x] Old resolvePackagedMaproomBin() function removed
+- [x] Error message shows all resolution attempts with paths
+- [x] Error message includes configuration guidance
+- [x] All existing maproom integration tests pass
+- [x] Commands work without config file (backwards compatible)
+- [x] Resolution order is: env > config > global > packaged
 
 ## Technical Requirements
 - Import: `import { findMaproomBinary } from '../utils/maproom-binary.js'`
