@@ -1,9 +1,9 @@
 # Ticket: [WTSCAN-1002]: Implement Conditional Scan Logic in WorktreeService
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ Currently, `WorktreeService.createWorktree()` unconditionally calls `runMaproomS
 This implements the core logic portion of Phase 1, enabling user control over auto-scanning behavior while maintaining error resilience.
 
 ## Acceptance Criteria
-- [ ] Config is loaded once and reused for both `copyIgnoredFiles` and `autoScanOnWorktreeUse` checks
-- [ ] `runMaproomScan()` is called only when `config.worktree?.autoScanOnWorktreeUse === true`
-- [ ] `runMaproomScan()` is skipped when config is `false`, `undefined`, or missing
-- [ ] Config loading errors are caught and logged as warnings
-- [ ] Config loading errors do not prevent worktree creation
-- [ ] Existing `runMaproomScan()` method remains unchanged
-- [ ] Code follows existing error handling patterns
-- [ ] All existing tests still pass (no regression)
+- [x] Config is loaded once and reused for both `copyIgnoredFiles` and `autoScanOnWorktreeUse` checks
+- [x] `runMaproomScan()` is called only when `config.worktree?.autoScanOnWorktreeUse === true`
+- [x] `runMaproomScan()` is skipped when config is `false`, `undefined`, or missing
+- [x] Config loading errors are caught and logged as warnings
+- [x] Config loading errors do not prevent worktree creation
+- [x] Existing `runMaproomScan()` method remains unchanged
+- [x] Code follows existing error handling patterns
+- [x] All existing tests still pass (no regression)
 
 ## Technical Requirements
 - Modify `createWorktree()` method in `packages/cli/src/git/worktrees.ts`

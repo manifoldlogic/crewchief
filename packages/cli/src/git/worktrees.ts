@@ -4,6 +4,7 @@ import path from 'node:path'
 import simpleGit, { SimpleGit } from 'simple-git'
 import { copyIgnoredFiles } from './copy-ignored-files'
 import { loadConfig } from '../config/loader'
+import { CrewChiefConfig } from '../config/schema'
 import { ensureDirSync, removeDirSync } from '../utils/fs'
 import { logger } from '../utils/logger'
 import { findMaproomBinary } from '../utils/maproom-binary.js'
@@ -107,26 +108,32 @@ export class WorktreeService {
       purpose,
     })
 
+    // Load config once for both operations (efficiency + consistency)
+    let config: CrewChiefConfig | null = null
+    try {
+      config = await loadConfig()
+    } catch (error) {
+      console.warn('⚠️  Failed to load config:', error instanceof Error ? error.message : error)
+    }
+
     // Copy ignored files if configured and not skipped
-    if (!skipCopyIgnored) {
+    if (!skipCopyIgnored && config?.worktree?.copyIgnoredFiles?.length) {
       try {
-        const config = await loadConfig()
-        if (config.worktree?.copyIgnoredFiles?.length) {
-          console.log('\n📁 Copying ignored files to worktree...')
-          await copyIgnoredFiles({
-            sourceRoot: this.cwd,
-            worktreeRoot: wtPath,
-            config,
-          })
-        }
+        console.log('\n📁 Copying ignored files to worktree...')
+        await copyIgnoredFiles({
+          sourceRoot: this.cwd,
+          worktreeRoot: wtPath,
+          config,
+        })
       } catch (error) {
         console.warn('⚠️  Failed to copy ignored files:', error instanceof Error ? error.message : error)
-        // Don't fail worktree creation if copying fails
       }
     }
 
-    // Run maproom scan to index the new worktree
-    await this.runMaproomScan(wtPath)
+    // Run maproom scan if configured (opt-in)
+    if (config?.worktree?.autoScanOnWorktreeUse) {
+      await this.runMaproomScan(wtPath)
+    }
 
     return wtPath
   }
