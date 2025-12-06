@@ -69,6 +69,7 @@ export const WorktreeSchema = z.object({
   copyIgnoredFiles: z.array(z.string()).optional(),
   copyFromPath: z.string().default('.'),
   overwriteStrategy: z.enum(['skip', 'overwrite', 'backup']).default('skip'),
+  autoScanOnWorktreeUse: z.boolean().default(false),
 })
 
 export const ConfigSchema = z.object({

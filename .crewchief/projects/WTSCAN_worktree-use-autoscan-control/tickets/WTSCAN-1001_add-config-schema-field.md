@@ -1,9 +1,9 @@
 # Ticket: [WTSCAN-1001]: Add Config Schema Field for Auto-Scan Control
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,13 +26,13 @@ CrewChief currently performs automatic maproom scanning after every `worktree cr
 This implements the config schema portion of Phase 1 from the execution plan, establishing the foundation for conditional scan logic.
 
 ## Acceptance Criteria
-- [ ] `WorktreeSchema` contains `autoScanOnWorktreeUse` field defined as `z.boolean().default(false)`
-- [ ] Schema validation accepts `true` and `false` values
-- [ ] Schema validation rejects non-boolean values (strings, numbers, objects, arrays)
-- [ ] Default value is `false` when field is undefined or omitted
-- [ ] TypeScript types are automatically inferred from schema
-- [ ] Unit tests verify schema validation behavior
-- [ ] All tests pass
+- [x] `WorktreeSchema` contains `autoScanOnWorktreeUse` field defined as `z.boolean().default(false)`
+- [x] Schema validation accepts `true` and `false` values
+- [x] Schema validation rejects non-boolean values (strings, numbers, objects, arrays)
+- [x] Default value is `false` when field is undefined or omitted
+- [x] TypeScript types are automatically inferred from schema
+- [x] Unit tests verify schema validation behavior
+- [x] All tests pass
 
 ## Technical Requirements
 - Add field to `WorktreeSchema` in `packages/cli/src/config/schema.ts`
