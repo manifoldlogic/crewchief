@@ -5,6 +5,7 @@ import simpleGit, { SimpleGit } from 'simple-git'
 import { copyIgnoredFiles } from './copy-ignored-files'
 import { loadConfig } from '../config/loader'
 import { ensureDirSync, removeDirSync } from '../utils/fs'
+import { logger } from '../utils/logger'
 import { findMaproomBinary } from '../utils/maproom-binary.js'
 import { expandWorktreePath } from '../utils/paths'
 import { WorktreeMetadataService } from '../utils/worktree-metadata'
@@ -197,6 +198,39 @@ export class WorktreeService {
       throw new Error('Refusing to remove the current worktree. Change directories and try again.')
     }
     await this.git.raw(['worktree', 'remove', '--force', targetPath])
+  }
+}
+
+/**
+ * Clean up stale worktree records from the maproom database.
+ * Uses batch cleanup to remove all stale worktree records at once.
+ *
+ * @throws Error if maproom binary not found or cleanup fails (exit code 1)
+ */
+export async function cleanMaproomRecords(): Promise<void> {
+  // Find maproom binary
+  const result = findMaproomBinary()
+
+  if (!result.path) {
+    throw new Error('Maproom binary not found')
+  }
+
+  // Run cleanup command
+  const cleanupResult = spawnSync(result.path, ['db', 'cleanup-stale', '--confirm'], {
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+
+  if (cleanupResult.status !== 0 && cleanupResult.status !== 2) {
+    // Exit code 2 means "no stale worktrees", which is fine
+    const errorMsg = cleanupResult.stderr || cleanupResult.stdout || 'Unknown error'
+    throw new Error(errorMsg.split('\n')[0])
+  }
+
+  // Parse output for user feedback
+  const output = cleanupResult.stdout
+  if (output.includes('Deleted')) {
+    logger.info('Cleaned maproom database records')
   }
 }
 
