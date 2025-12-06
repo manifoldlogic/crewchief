@@ -1,8 +1,8 @@
 # Ticket: [WTCLEAN-3003]: Update README Documentation
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
 - [ ] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
@@ -25,15 +25,15 @@ The `worktree clean` command now performs complete cleanup (directory, metadata,
 This ticket implements Phase 3, Deliverable 3 from the plan: Update README documentation.
 
 ## Acceptance Criteria
-- [ ] README updated with enhanced cleanup behavior
-- [ ] `--keep-branch` flag documented with description and example
-- [ ] `--keep-maproom` flag documented with description and example
-- [ ] Complete cleanup workflow explained (what gets cleaned)
-- [ ] Graceful degradation behavior documented (best-effort cleanup)
-- [ ] Manual recovery procedures documented for common failures
-- [ ] Examples show both success and failure scenarios
-- [ ] Cross-platform considerations mentioned (binary resolution)
-- [ ] CHANGELOG entry added for this feature
+- [x] README updated with enhanced cleanup behavior
+- [x] `--keep-branch` flag documented with description and example
+- [x] `--keep-maproom` flag documented with description and example
+- [x] Complete cleanup workflow explained (what gets cleaned)
+- [x] Graceful degradation behavior documented (best-effort cleanup)
+- [x] Manual recovery procedures documented for common failures
+- [x] Examples show both success and failure scenarios
+- [x] Cross-platform considerations mentioned (binary resolution)
+- [x] CHANGELOG entry added for this feature
 
 ## Technical Requirements
 - Update file: `packages/cli/README.md`

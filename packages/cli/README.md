@@ -45,6 +45,86 @@ crewchief worktree merge feature-branch
 crewchief worktree clean --all
 ```
 
+### Enhanced Worktree Cleanup
+
+The `worktree clean` command now performs complete cleanup by default:
+
+```bash
+# Clean single worktree (removes directory, git metadata, branch, and maproom records)
+crewchief worktree clean feature-123
+
+# Clean all non-current worktrees
+crewchief worktree clean --all
+
+# Keep the git branch (only remove worktree)
+crewchief worktree clean feature-123 --keep-branch
+
+# Skip maproom database cleanup
+crewchief worktree clean feature-123 --keep-maproom
+
+# Keep directory (only remove git metadata)
+crewchief worktree clean feature-123 --keep-dir
+
+# Combine flags
+crewchief worktree clean feature-123 --keep-branch --keep-maproom
+```
+
+**What Gets Cleaned:**
+
+- Worktree directory (unless `--keep-dir`)
+- Git worktree metadata
+- Git branch via safe delete (unless `--keep-branch`)
+- Maproom database records (unless `--keep-maproom`)
+
+**Graceful Error Handling:**
+
+The clean command uses best-effort cleanup and continues even if some steps fail:
+
+- **Maproom binary not found:** Warns and continues (directory and branch still cleaned)
+- **Branch not fully merged:** Warns and continues (directory still cleaned, provides manual delete instructions)
+- **Branch checked out elsewhere:** Warns and continues (provides instructions to switch other worktree)
+- **Multiple failures:** Each failure logged separately with recovery instructions
+
+**Common Troubleshooting:**
+
+If maproom binary is not found:
+
+```bash
+# Install maproom globally
+pnpm install -g @crewchief/cli
+
+# Or run cleanup manually
+crewchief-maproom db cleanup-stale --confirm
+```
+
+If branch deletion fails (not fully merged):
+
+```bash
+# Review commits before force deleting
+git log feature-branch
+
+# Force delete if you're sure
+git branch -D feature-branch
+
+# Or merge first
+git checkout main
+git merge feature-branch
+```
+
+If branch is checked out in another worktree:
+
+```bash
+# Find which worktree has the branch
+git worktree list
+
+# Switch that worktree to different branch
+cd /path/to/other/worktree
+git checkout main
+
+# Then delete the branch
+git branch -d feature-branch
+```
+
 ### Semantic Code Search
 
 #### Recommended: Using Maproom MCP
@@ -660,14 +740,19 @@ All commands below should be prefixed with `crewchief`. For example: `crewchief 
 
 ### Worktree Commands
 
-| Command                        | Description                            |
-| ------------------------------ | -------------------------------------- |
-| `worktree create <name>`       | Create a new worktree                  |
-| `worktree list`                | List all worktrees                     |
-| `worktree use <name>`          | Switch to worktree (creates if needed) |
-| `worktree merge <name>`        | Merge worktree changes back            |
-| `worktree clean`               | Remove worktrees                       |
-| `worktree copy-ignored <name>` | Copy .env files to worktree            |
+| Command                         | Description                                               |
+| ------------------------------- | --------------------------------------------------------- |
+| `worktree create <name>`        | Create a new worktree                                     |
+| `worktree list`                 | List all worktrees                                        |
+| `worktree use <name>`           | Switch to worktree (creates if needed)                    |
+| `worktree merge <name>`         | Merge worktree changes back                               |
+| `worktree clean [selector]`     | Remove worktree (directory, metadata, branch, db records) |
+| `worktree clean --all`          | Remove all non-current worktrees                          |
+| `worktree clean --keep-branch`  | Keep git branch after removing worktree                   |
+| `worktree clean --keep-maproom` | Skip maproom database cleanup                             |
+| `worktree clean --keep-dir`     | Keep directory (only remove git metadata)                 |
+| `worktree clean --stale`        | Remove only stale worktree metadata                       |
+| `worktree copy-ignored <name>`  | Copy .env files to worktree                               |
 
 ### Maproom Commands (Semantic Search)
 

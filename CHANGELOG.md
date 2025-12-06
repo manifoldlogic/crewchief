@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Enhanced Worktree Clean (packages/cli)
+
+- **Complete cleanup workflow** - `worktree clean` now performs comprehensive cleanup
+  - Removes worktree directory (unless `--keep-dir`)
+  - Removes git worktree metadata
+  - Deletes git branch via safe delete (unless `--keep-branch`)
+  - Cleans maproom database records (unless `--keep-maproom`)
+  - All cleanup steps configurable via flags
+
+- **New cleanup flags**:
+  - `--keep-branch` - Preserve git branch after removing worktree
+  - `--keep-maproom` - Skip maproom database cleanup
+  - `--keep-dir` - Keep directory (only remove git metadata)
+  - Flags work with both single worktree and `--all` mode
+
+- **Graceful error handling**:
+  - Best-effort cleanup continues on failures
+  - Specific error categorization (binary not found, database locked, permission denied, not fully merged, checked out elsewhere)
+  - Recovery instructions provided for each failure type
+  - Each failure logged separately with clear guidance
+
+- **Enhanced logging**:
+  - Progress indicators for `--all` mode
+  - Success messages with green checkmarks
+  - Skipped steps logged with explanations
+  - Clear summaries of what was cleaned
+  - Consistent logging across all cleanup modes
+
+### Changed
+
+- **Breaking**: `worktree clean` now deletes git branches by default
+  - Previous behavior: kept branches (manual cleanup required)
+  - New behavior: safe delete branches (use `--keep-branch` to preserve)
+  - Migration: Add `--keep-branch` flag to preserve old behavior
+
 #### Stale Worktree Cleanup (crates/maproom)
 
 - **New `db cleanup-stale` command** - Remove worktrees that no longer exist on disk
