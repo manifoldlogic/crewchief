@@ -151,7 +151,7 @@ Maproom cleanup uses batch cleanup (`db cleanup-stale --confirm`) which scans al
 
 ## References
 
-- **Plan:** `.crewchief/projects/WTCLEAN_enhanced-worktree-clean/planning/plan.md`
-- **Architecture:** `.crewchief/projects/WTCLEAN_enhanced-worktree-clean/planning/architecture.md`
-- **Quality Strategy:** `.crewchief/projects/WTCLEAN_enhanced-worktree-clean/planning/quality-strategy.md`
-- **Project README:** `.crewchief/projects/WTCLEAN_enhanced-worktree-clean/README.md`
+- **Plan:** `.crewchief/archive/projects/WTCLEAN_enhanced-worktree-clean/planning/plan.md`
+- **Architecture:** `.crewchief/archive/projects/WTCLEAN_enhanced-worktree-clean/planning/architecture.md`
+- **Quality Strategy:** `.crewchief/archive/projects/WTCLEAN_enhanced-worktree-clean/planning/quality-strategy.md`
+- **Project README:** `.crewchief/archive/projects/WTCLEAN_enhanced-worktree-clean/README.md`
