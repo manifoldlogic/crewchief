@@ -1,9 +1,9 @@
 # Ticket: [WTCLEAN-2001]: Add CLI Flags for Opt-Out Behavior
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,13 +26,13 @@ The enhanced clean command will delete branches and clean maproom records by def
 This ticket implements Phase 2, Deliverable 2 from the plan: New CLI flags for opt-out behavior.
 
 ## Acceptance Criteria
-- [ ] `--keep-branch` flag added to `worktree clean` command
-- [ ] `--keep-maproom` flag added to `worktree clean` command
-- [ ] Flags are optional (default behavior is to clean everything)
-- [ ] Flags have descriptive help text
-- [ ] Flags work with existing flags (`--all`, `--stale`, `--keep-dir`)
-- [ ] TypeScript types updated to include new flag options
-- [ ] No breaking changes to existing command behavior
+- [x] `--keep-branch` flag added to `worktree clean` command
+- [x] `--keep-maproom` flag added to `worktree clean` command
+- [x] Flags are optional (default behavior is to clean everything)
+- [x] Flags have descriptive help text
+- [x] Flags work with existing flags (`--all`, `--stale`, `--keep-dir`)
+- [x] TypeScript types updated to include new flag options
+- [x] No breaking changes to existing command behavior
 
 ## Technical Requirements
 - Modify file: `packages/cli/src/cli/worktree.ts`

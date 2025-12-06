@@ -114,77 +114,84 @@ Examples:
     .option('--stale', 'Remove stale worktrees only')
     .option('--all', 'Remove all non-current worktrees')
     .option('--keep-dir', 'Keep worktree directories (only remove git metadata)')
+    .option('--keep-branch', 'Keep git branch after removing worktree')
+    .option('--keep-maproom', 'Skip maproom database cleanup')
     .description('Prune worktree metadata, remove a specific worktree, or remove all with --all')
-    .action(async (selector: string | undefined, opts: { stale?: boolean; all?: boolean; keepDir?: boolean }) => {
-      try {
-        const wt = new WorktreeService()
-        // --all always takes precedence
-        if (opts.all) {
-          await wt.pruneWorktrees({ mode: 'all', keepDir: opts.keepDir })
-          logger.success(
-            `Removed all non-current worktrees${opts.keepDir ? ' (kept directories)' : ' and their directories'}`,
-          )
-          return
-        }
+    .action(
+      async (
+        selector: string | undefined,
+        opts: { stale?: boolean; all?: boolean; keepDir?: boolean; keepBranch?: boolean; keepMaproom?: boolean },
+      ) => {
+        try {
+          const wt = new WorktreeService()
+          // --all always takes precedence
+          if (opts.all) {
+            await wt.pruneWorktrees({ mode: 'all', keepDir: opts.keepDir })
+            logger.success(
+              `Removed all non-current worktrees${opts.keepDir ? ' (kept directories)' : ' and their directories'}`,
+            )
+            return
+          }
 
-        // If a selector is provided, remove only the matching worktree
-        if (selector && !opts.stale) {
-          const list = await wt.listWorktrees()
-          const matches = list.filter((item) => {
-            const sel = selector.trim()
-            const byBranch = item.branch && item.branch === sel
-            const byBaseName = path.basename(item.path) === sel
-            let byPath = false
-            try {
-              const resolvedSel = path.resolve(sel)
-              byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
-            } catch {
-              // ignore errors
+          // If a selector is provided, remove only the matching worktree
+          if (selector && !opts.stale) {
+            const list = await wt.listWorktrees()
+            const matches = list.filter((item) => {
+              const sel = selector.trim()
+              const byBranch = item.branch && item.branch === sel
+              const byBaseName = path.basename(item.path) === sel
+              let byPath = false
+              try {
+                const resolvedSel = path.resolve(sel)
+                byPath = path.resolve(item.path) === resolvedSel || path.resolve(item.path).includes(resolvedSel)
+              } catch {
+                // ignore errors
+              }
+              return Boolean(byBranch || byBaseName || byPath)
+            })
+            if (matches.length === 0) {
+              logger.error(`No matching worktree for '${selector}'. Try using branch name or worktree directory name.`)
+              process.exitCode = 1
+              return
             }
-            return Boolean(byBranch || byBaseName || byPath)
-          })
-          if (matches.length === 0) {
-            logger.error(`No matching worktree for '${selector}'. Try using branch name or worktree directory name.`)
-            process.exitCode = 1
+            if (matches.length > 1) {
+              logger.error(`Ambiguous selector '${selector}'. Candidates:`)
+              for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
+              process.exitCode = 1
+              return
+            }
+            const targetPath = path.resolve(matches[0].path)
+            // Resolve real paths to handle symlinks and detect if cwd is inside the target worktree
+            let targetReal = targetPath
+            let cwdReal = process.cwd()
+            try {
+              targetReal = fs.realpathSync(targetPath)
+              cwdReal = fs.realpathSync(process.cwd())
+            } catch {}
+            const rel = path.relative(targetReal, cwdReal)
+            const isCwdInsideTarget = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+            if (isCwdInsideTarget) {
+              logger.error('Refusing to remove the current working tree. Switch to another directory and try again.')
+              process.exitCode = 1
+              return
+            }
+            await wt.removeWorktree(targetPath)
+            if (!opts.keepDir) {
+              removeDirSync(targetPath)
+            }
+            logger.success(`Removed worktree ${targetPath}${opts.keepDir ? ' (kept directory)' : ''}`)
             return
           }
-          if (matches.length > 1) {
-            logger.error(`Ambiguous selector '${selector}'. Candidates:`)
-            for (const m of matches) logger.info(`${m.path}${m.branch ? ` [${m.branch}]` : ''}`)
-            process.exitCode = 1
-            return
-          }
-          const targetPath = path.resolve(matches[0].path)
-          // Resolve real paths to handle symlinks and detect if cwd is inside the target worktree
-          let targetReal = targetPath
-          let cwdReal = process.cwd()
-          try {
-            targetReal = fs.realpathSync(targetPath)
-            cwdReal = fs.realpathSync(process.cwd())
-          } catch {}
-          const rel = path.relative(targetReal, cwdReal)
-          const isCwdInsideTarget = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
-          if (isCwdInsideTarget) {
-            logger.error('Refusing to remove the current working tree. Switch to another directory and try again.')
-            process.exitCode = 1
-            return
-          }
-          await wt.removeWorktree(targetPath)
-          if (!opts.keepDir) {
-            removeDirSync(targetPath)
-          }
-          logger.success(`Removed worktree ${targetPath}${opts.keepDir ? ' (kept directory)' : ''}`)
-          return
-        }
 
-        // Otherwise, default to pruning stale metadata
-        await wt.pruneWorktrees({ mode: 'stale', keepDir: opts.keepDir })
-        logger.success('Pruned stale worktree metadata')
-      } catch (err) {
-        logger.error('Failed to prune worktrees:', err)
-        process.exitCode = 1
-      }
-    })
+          // Otherwise, default to pruning stale metadata
+          await wt.pruneWorktrees({ mode: 'stale', keepDir: opts.keepDir })
+          logger.success('Pruned stale worktree metadata')
+        } catch (err) {
+          logger.error('Failed to prune worktrees:', err)
+          process.exitCode = 1
+        }
+      },
+    )
 
   worktree
     .command('use')
