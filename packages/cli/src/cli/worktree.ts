@@ -508,25 +508,46 @@ Examples:
           }
 
           // Spawn shell ensuring we stay in target directory
-          // Strategy: Use shell's --init-file/--rcfile to source a custom init that:
-          // 1. Sources the normal rc file
-          // 2. Then cd's to the target directory (overriding any cd in the rc)
+          // Strategy: Create temporary rcfile that sources normal rc, then cd's to target
           const shellBase = path.basename(shell)
+          const fs = await import('fs/promises')
+          const os = await import('os')
 
           if (shellBase === 'bash') {
-            // For bash: use --rcfile with a temporary init script
-            const initScript = `
-              [ -f ~/.bashrc ] && source ~/.bashrc
-              cd "${targetPath}"
-            `.trim()
-            const child = spawn(shell, ['--rcfile', '/dev/stdin'], {
-              stdio: ['pipe', 'inherit', 'inherit'],
-              cwd: targetPath,
-              env: process.env,
-            })
-            child.stdin?.write(initScript + '\n')
-            child.stdin?.end()
-            child.on('exit', (code) => process.exit(code ?? 0))
+            // For bash: use --rcfile with a temporary file
+            const tmpRcPath = path.join(os.tmpdir(), `crewchief-rcfile-${Date.now()}`)
+            try {
+              const initScript = `
+# Source normal bashrc
+[ -f ~/.bashrc ] && source ~/.bashrc
+
+# Override directory - go to worktree
+cd "${targetPath}"
+`
+              await fs.writeFile(tmpRcPath, initScript)
+              const child = spawn(shell, ['--rcfile', tmpRcPath], {
+                stdio: 'inherit',
+                cwd: targetPath,
+                env: process.env,
+              })
+              child.on('exit', async (code) => {
+                // Cleanup temp file
+                try {
+                  await fs.unlink(tmpRcPath)
+                } catch {
+                  // Ignore cleanup errors
+                }
+                process.exit(code ?? 0)
+              })
+            } catch {
+              // Fallback if temp file fails
+              const child = spawn(shell, [], {
+                stdio: 'inherit',
+                cwd: targetPath,
+                env: process.env,
+              })
+              child.on('exit', (code) => process.exit(code ?? 0))
+            }
           } else {
             // For other shells (zsh, fish, etc): use cd && exec pattern
             const child = spawn(shell, ['-c', `cd "${targetPath}" && exec ${shell}`], {
