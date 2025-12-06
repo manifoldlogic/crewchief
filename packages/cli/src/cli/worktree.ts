@@ -126,6 +126,22 @@ Examples:
           const wt = new WorktreeService()
           // --all always takes precedence
           if (opts.all) {
+            // CRITICAL: Extract branch names BEFORE removing worktrees
+            let branches: string[] = []
+            if (!opts.keepBranch) {
+              const list = await wt.listWorktrees()
+              const currentDir = process.cwd()
+              branches = list
+                .filter((item) => {
+                  // Only include branches from worktrees that will be removed (not current directory)
+                  const itemPath = path.resolve(item.path)
+                  const rel = path.relative(itemPath, currentDir)
+                  const isCurrent = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+                  return !isCurrent && item.branch
+                })
+                .map((item) => item.branch!)
+            }
+
             await wt.pruneWorktrees({ mode: 'all', keepDir: opts.keepDir })
             logger.success(
               `Removed all non-current worktrees${opts.keepDir ? ' (kept directories)' : ' and their directories'}`,
@@ -140,6 +156,21 @@ Examples:
                 const errorMsg = err instanceof Error ? err.message : String(err)
                 logger.warn('Could not clean maproom records:', errorMsg)
                 logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+              }
+            }
+
+            // Delete git branches (best-effort)
+            if (!opts.keepBranch && branches.length > 0) {
+              const mergeService = new GitMergeService()
+              for (const branch of branches) {
+                try {
+                  await mergeService.deleteBranch(branch)
+                  logger.success(`Deleted branch ${branch}`)
+                } catch (err) {
+                  const errorMsg = err instanceof Error ? err.message : String(err)
+                  logger.warn(`Could not delete branch ${branch}:`, errorMsg)
+                  logger.info(`Delete manually: git branch -d ${branch}`)
+                }
               }
             }
             return
@@ -172,6 +203,8 @@ Examples:
               process.exitCode = 1
               return
             }
+            // CRITICAL: Extract branch name BEFORE removing worktree
+            const branch = matches[0].branch
             const targetPath = path.resolve(matches[0].path)
             // Resolve real paths to handle symlinks and detect if cwd is inside the target worktree
             let targetReal = targetPath
@@ -202,6 +235,19 @@ Examples:
                 const errorMsg = err instanceof Error ? err.message : String(err)
                 logger.warn('Could not clean maproom records:', errorMsg)
                 logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+              }
+            }
+
+            // Delete git branch (best-effort)
+            if (branch && !opts.keepBranch) {
+              try {
+                const mergeService = new GitMergeService()
+                await mergeService.deleteBranch(branch)
+                logger.success(`Deleted branch ${branch}`)
+              } catch (err) {
+                const errorMsg = err instanceof Error ? err.message : String(err)
+                logger.warn(`Could not delete branch ${branch}:`, errorMsg)
+                logger.info(`Delete manually: git branch -d ${branch}`)
               }
             }
             return
