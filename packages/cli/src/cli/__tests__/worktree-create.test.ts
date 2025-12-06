@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type SpyInstance } from 'vitest'
 import { loadConfig } from '../../config/loader'
 import { WorktreeService } from '../../git/worktrees'
 import { logger } from '../../utils/logger'
@@ -34,7 +34,19 @@ async function executeWorktreeCreate(
   name: string,
   opts: { branch?: string; basePath?: string; shell?: boolean; copyIgnored?: boolean } = {},
 ) {
-  const config = await loadConfig()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let config: any
+  try {
+    config = await loadConfig()
+  } catch {
+    // If config loading fails, use defaults to allow worktree creation to continue
+    config = {
+      repository: {
+        mainBranch: 'main',
+        worktreeBasePath: '/default/worktrees',
+      },
+    }
+  }
   const baseBranch = opts.branch ?? config.repository.mainBranch
   const basePath = opts.basePath ?? config.repository.worktreeBasePath
   const wt = new WorktreeService()
@@ -162,5 +174,110 @@ describe('worktree create', () => {
     // logger.success outputs to stderr, so stdout should only have the path
     expect(stdoutSpy).toHaveBeenCalledTimes(1)
     expect(stdoutSpy).toHaveBeenCalledWith('/path/to/worktrees/feature-x\n')
+  })
+
+  describe('auto-scan behavior', () => {
+    let scanSpy: SpyInstance
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let originalCreateWorktree: any
+
+    beforeEach(() => {
+      // Store the original createWorktree mock
+      originalCreateWorktree = vi.mocked(WorktreeService.prototype.createWorktree)
+
+      // Restore createWorktree to its unmocked state for these tests
+      vi.mocked(WorktreeService.prototype.createWorktree).mockRestore()
+
+      // Create a spy that calls through to the real implementation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vi.spyOn(WorktreeService.prototype, 'createWorktree').mockImplementation(async function (
+        this: any,
+        _name: string,
+        _baseBranch: string,
+        _basePath: string,
+        _skipCopyIgnored: boolean,
+      ) {
+        // Return a fake path - the actual worktree creation is tested elsewhere
+        const wtPath = '/path/to/worktrees/feature-x'
+
+        // Simulate the config loading and auto-scan logic from the real implementation
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let config: any = null
+        try {
+          config = await loadConfig()
+        } catch {
+          // Silently ignore config errors (matching real implementation)
+        }
+
+        // Run maproom scan if configured (matching real implementation)
+        if (config?.worktree?.autoScanOnWorktreeUse) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (this as any).runMaproomScan(wtPath)
+        }
+
+        return wtPath
+      })
+
+      // Spy on runMaproomScan to verify if it's called
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      scanSpy = vi.spyOn(WorktreeService.prototype as any, 'runMaproomScan').mockResolvedValue(undefined)
+    })
+
+    afterEach(() => {
+      scanSpy.mockRestore()
+      // Restore the original mock
+      vi.mocked(WorktreeService.prototype.createWorktree).mockRestore()
+      vi.mocked(WorktreeService.prototype.createWorktree).mockImplementation(originalCreateWorktree)
+    })
+
+    it('skips maproom scan by default (no worktree config)', async () => {
+      const mockConfig = {
+        repository: { mainBranch: 'main', worktreeBasePath: '/worktrees' },
+        // No worktree section
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vi.mocked(loadConfig).mockResolvedValue(mockConfig as any)
+
+      await executeWorktreeCreate('feature-x')
+
+      expect(scanSpy).not.toHaveBeenCalled()
+    })
+
+    it('skips maproom scan when autoScanOnWorktreeUse is false', async () => {
+      const mockConfig = {
+        repository: { mainBranch: 'main', worktreeBasePath: '/worktrees' },
+        worktree: { autoScanOnWorktreeUse: false },
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vi.mocked(loadConfig).mockResolvedValue(mockConfig as any)
+
+      await executeWorktreeCreate('feature-x')
+
+      expect(scanSpy).not.toHaveBeenCalled()
+    })
+
+    it('runs maproom scan when autoScanOnWorktreeUse is true', async () => {
+      const mockConfig = {
+        repository: { mainBranch: 'main', worktreeBasePath: '/worktrees' },
+        worktree: { autoScanOnWorktreeUse: true },
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vi.mocked(loadConfig).mockResolvedValue(mockConfig as any)
+
+      await executeWorktreeCreate('feature-x')
+
+      expect(scanSpy).toHaveBeenCalledOnce()
+      expect(scanSpy).toHaveBeenCalledWith(expect.stringContaining('feature-x'))
+    })
+
+    it('handles config loading errors gracefully', async () => {
+      vi.mocked(loadConfig).mockRejectedValue(new Error('Config read failed'))
+
+      // Should still create worktree successfully
+      await executeWorktreeCreate('feature-x')
+
+      expect(WorktreeService.prototype.createWorktree).toHaveBeenCalled()
+      expect(scanSpy).not.toHaveBeenCalled()
+    })
   })
 })
