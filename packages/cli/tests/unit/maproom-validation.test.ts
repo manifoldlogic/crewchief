@@ -23,12 +23,14 @@ describe('validateMaproomEnvironment', () => {
     expect(result.warnings).toHaveLength(1) // Warning about missing provider
   })
 
-  it('returns error when no database URL is set', () => {
-    // All DB env vars unset
+  it('returns valid when no database URL is set (uses default ~/.maproom/maproom.db)', () => {
+    // All DB env vars unset - should use default ~/.maproom/maproom.db
     const result = validateMaproomEnvironment()
-    expect(result.valid).toBe(false)
-    expect(result.errors.length).toBeGreaterThan(0)
-    expect(result.errors[0]).toContain('database')
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+    // Only warning should be about missing embedding provider
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0]).toContain('MAPROOM_EMBEDDING_PROVIDER')
   })
 
   it('returns warning when MAPROOM_EMBEDDING_PROVIDER not set', () => {
@@ -88,22 +90,14 @@ describe('validateMaproomEnvironment', () => {
   })
 
   it('does not leak credentials in error messages', () => {
-    process.env.MAPROOM_DATABASE_URL = 'postgresql://user:secret-password@localhost/db'
     process.env.OPENAI_API_KEY = 'sk-super-secret-key-12345'
     process.env.MAPROOM_EMBEDDING_PROVIDER = 'openai'
-
-    // Force an error by removing DB URL
-    delete process.env.MAPROOM_DATABASE_URL
 
     const result = validateMaproomEnvironment()
 
     // Check that no credential values appear in messages
     const allMessages = [...result.errors, ...result.warnings].join(' ')
-    expect(allMessages).not.toContain('secret-password')
     expect(allMessages).not.toContain('sk-super-secret-key')
-
-    // Only env var names should appear, not values
-    expect(allMessages).toContain('MAPROOM_DATABASE_URL') // Name is OK
   })
 
   it('accepts PG_DATABASE_URL as fallback', () => {

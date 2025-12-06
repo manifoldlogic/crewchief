@@ -25,25 +25,9 @@ export function validateMaproomEnvironment(): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
 
-  // Database URL validation - check all 4 fallback variants
-  const hasDatabaseUrl =
-    !!process.env.MAPROOM_DATABASE_URL ||
-    !!process.env.MAPROOM_DB_HOST ||
-    !!process.env.PG_DATABASE_URL ||
-    !!process.env.DATABASE_URL
-
-  if (!hasDatabaseUrl) {
-    errors.push(
-      'No database connection configured. Set MAPROOM_DATABASE_URL environment variable.\n' +
-        'See: https://github.com/your-org/crewchief#database-setup',
-    )
-    // Return early - database URL is critical
-    return {
-      valid: false,
-      errors,
-      warnings,
-    }
-  }
+  // Database URL validation - maproom uses ~/.maproom/maproom.db by default
+  // MAPROOM_DATABASE_URL can optionally override this location
+  // No validation needed - the default is always available
 
   // Embedding provider validation
   const provider = process.env.MAPROOM_EMBEDDING_PROVIDER
