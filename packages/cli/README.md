@@ -148,6 +148,34 @@ crewchief maproom search "authentication flow"
 crewchief maproom watch
 ```
 
+#### Auto-Scan Configuration
+
+By default, worktree operations do NOT automatically trigger maproom indexing. This keeps worktree creation fast.
+
+To enable auto-scan when creating worktrees, add to your `crewchief.config.js`:
+
+```javascript
+export default {
+  worktree: {
+    autoScanOnWorktreeUse: true, // Enable auto-indexing
+  },
+}
+```
+
+**Trade-offs**:
+
+- **Auto-scan enabled**: New worktrees are immediately searchable, but creation is slower (5-30s depending on repo size)
+- **Auto-scan disabled** (default): Fast worktree operations, but you must manually run `crewchief maproom scan` when needed
+
+**Manual scanning**:
+
+```bash
+# After creating a worktree, index it manually:
+crewchief maproom scan
+```
+
+**Migration from older versions**: If you relied on automatic scanning, simply add `autoScanOnWorktreeUse: true` to your config.
+
 ### AI Agent Orchestration
 
 Agent orchestration supports two modes: **iTerm2** (default) for visual terminal management on macOS, and **Headless** for non-interactive or server environments.

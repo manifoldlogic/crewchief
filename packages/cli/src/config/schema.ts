@@ -69,6 +69,21 @@ export const WorktreeSchema = z.object({
   copyIgnoredFiles: z.array(z.string()).optional(),
   copyFromPath: z.string().default('.'),
   overwriteStrategy: z.enum(['skip', 'overwrite', 'backup']).default('skip'),
+  /**
+   * Automatically trigger maproom indexing when creating worktrees.
+   *
+   * When enabled, new worktrees are immediately searchable but creation is slower (5-30s).
+   * When disabled (default), worktree creation is fast (<1s) but requires manual scanning.
+   *
+   * @default false
+   * @example
+   * // Enable auto-scan for immediate searchability
+   * export default {
+   *   worktree: {
+   *     autoScanOnWorktreeUse: true,
+   *   },
+   * }
+   */
   autoScanOnWorktreeUse: z.boolean().default(false),
 })
 

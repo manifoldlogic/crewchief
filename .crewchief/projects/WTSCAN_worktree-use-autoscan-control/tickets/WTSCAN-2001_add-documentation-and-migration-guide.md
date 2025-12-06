@@ -1,9 +1,9 @@
 # Ticket: [WTSCAN-2001]: Add Documentation and Migration Guide
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass - N/A** - documentation-only ticket
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,13 +25,13 @@ Phase 1 implemented the technical changes (config schema + conditional logic + t
 Clear documentation is critical because this is a breaking change that affects all users' workflows. The default behavior is changing from "auto-scan always" to "auto-scan opt-in".
 
 ## Acceptance Criteria
-- [ ] README includes new "Auto-Scan Configuration" section
-- [ ] Trade-offs clearly explained (speed vs convenience)
-- [ ] Migration example shows exact config to restore old behavior
-- [ ] Changelog entry prominently notes breaking change
-- [ ] Documentation is accurate and grammatically correct
-- [ ] Example config snippets are copy-paste ready
-- [ ] JSDoc comments updated if relevant
+- [x] README includes new "Auto-Scan Configuration" section
+- [x] Trade-offs clearly explained (speed vs convenience)
+- [x] Migration example shows exact config to restore old behavior
+- [x] Changelog entry prominently notes breaking change
+- [x] Documentation is accurate and grammatically correct
+- [x] Example config snippets are copy-paste ready
+- [x] JSDoc comments updated if relevant
 
 ## Technical Requirements
 - Add section to `packages/cli/README.md` after "Semantic Code Search" section

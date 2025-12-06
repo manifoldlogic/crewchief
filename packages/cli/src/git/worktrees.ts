@@ -25,6 +25,15 @@ export class WorktreeService {
     this.git = simpleGit({ baseDir: cwd })
   }
 
+  /**
+   * Run maproom indexing scan for a worktree.
+   *
+   * This method is called conditionally based on the `autoScanOnWorktreeUse` config setting.
+   * By default, automatic scanning is disabled to keep worktree creation fast.
+   *
+   * @param worktreePath - Absolute path to the worktree directory
+   * @private
+   */
   private async runMaproomScan(worktreePath: string): Promise<void> {
     try {
       const config = await loadConfig()
@@ -67,6 +76,20 @@ export class WorktreeService {
     ensureDirSync(path.join(this.cwd, storagePath))
   }
 
+  /**
+   * Create a new git worktree.
+   *
+   * Conditionally triggers maproom scanning based on the `autoScanOnWorktreeUse` config setting.
+   * By default, automatic scanning is disabled (changed in v2.0) to improve performance.
+   * Users can enable it by setting `worktree.autoScanOnWorktreeUse: true` in their config.
+   *
+   * @param name - Name of the worktree/branch
+   * @param baseBranch - Base branch to create from
+   * @param basePath - Base directory path for worktrees
+   * @param skipCopyIgnored - Skip copying ignored files (e.g., .env)
+   * @param purpose - Purpose of the worktree: 'agent' or 'manual'
+   * @returns Absolute path to the created worktree
+   */
   async createWorktree(
     name: string,
     baseBranch: string,
