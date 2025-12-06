@@ -33,6 +33,7 @@ This implements the core logic portion of Phase 1, enabling user control over au
 - [ ] Config loading errors do not prevent worktree creation
 - [ ] Existing `runMaproomScan()` method remains unchanged
 - [ ] Code follows existing error handling patterns
+- [ ] All existing tests still pass (no regression)
 
 ## Technical Requirements
 - Modify `createWorktree()` method in `packages/cli/src/git/worktrees.ts`

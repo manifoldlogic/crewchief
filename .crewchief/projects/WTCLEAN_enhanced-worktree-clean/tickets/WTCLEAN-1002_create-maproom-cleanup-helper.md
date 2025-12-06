@@ -1,7 +1,7 @@
 # Ticket: [WTCLEAN-1002]: Create Maproom Cleanup Helper Function
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
+- [x] **Task completed** - acceptance criteria met
 - [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
 - [ ] **Verified** - by the verify-ticket agent
 

@@ -79,7 +79,7 @@ Create unit tests in the config schema test file (if one exists) or in a new tes
 
 ## Files/Packages Affected
 - `packages/cli/src/config/schema.ts` - Add field to WorktreeSchema
-- `packages/cli/src/config/__tests__/schema.test.ts` - Add validation tests (create if doesn't exist)
+- `packages/cli/src/config/__tests__/schema.test.ts` - Create and add validation tests (file does not currently exist)
 
 ## Verification Notes
 **verify-ticket agent should check**:
