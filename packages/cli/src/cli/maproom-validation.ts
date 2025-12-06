@@ -29,15 +29,11 @@ export function validateMaproomEnvironment(): ValidationResult {
   // MAPROOM_DATABASE_URL can optionally override this location
   // No validation needed - the default is always available
 
-  // Embedding provider validation
+  // Embedding provider validation - defaults to Ollama (auto-detected)
+  // MAPROOM_EMBEDDING_PROVIDER can optionally override to "openai" or "google"
   const provider = process.env.MAPROOM_EMBEDDING_PROVIDER
 
-  if (!provider) {
-    warnings.push(
-      'MAPROOM_EMBEDDING_PROVIDER not set. Embeddings will not be generated during indexing.\n' +
-        'Set to "ollama", "openai", or "google" to enable semantic search.',
-    )
-  } else {
+  if (provider) {
     // Validate provider value
     if (!VALID_PROVIDERS.includes(provider as (typeof VALID_PROVIDERS)[number])) {
       errors.push(`Invalid embedding provider: "${provider}". Must be one of: ${VALID_PROVIDERS.join(', ')}`)

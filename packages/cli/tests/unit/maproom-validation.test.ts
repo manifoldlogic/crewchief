@@ -20,25 +20,24 @@ describe('validateMaproomEnvironment', () => {
     const result = validateMaproomEnvironment()
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
-    expect(result.warnings).toHaveLength(1) // Warning about missing provider
+    expect(result.warnings).toHaveLength(0) // No warnings - defaults to Ollama
   })
 
   it('returns valid when no database URL is set (uses default ~/.maproom/maproom.db)', () => {
     // All DB env vars unset - should use default ~/.maproom/maproom.db
+    // No embedding provider set - should use default Ollama (auto-detected)
     const result = validateMaproomEnvironment()
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
-    // Only warning should be about missing embedding provider
-    expect(result.warnings).toHaveLength(1)
-    expect(result.warnings[0]).toContain('MAPROOM_EMBEDDING_PROVIDER')
+    expect(result.warnings).toHaveLength(0) // No warnings - all defaults work
   })
 
-  it('returns warning when MAPROOM_EMBEDDING_PROVIDER not set', () => {
+  it('returns valid when MAPROOM_EMBEDDING_PROVIDER not set (uses Ollama default)', () => {
     process.env.MAPROOM_DATABASE_URL = 'postgresql://localhost/test'
     const result = validateMaproomEnvironment()
     expect(result.valid).toBe(true)
-    expect(result.warnings.length).toBeGreaterThan(0)
-    expect(result.warnings[0]).toContain('MAPROOM_EMBEDDING_PROVIDER')
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0) // No warning - defaults to Ollama
   })
 
   it('returns error for invalid provider value', () => {
