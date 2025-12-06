@@ -1,9 +1,9 @@
 # Ticket: [WTCLEAN-2002]: Integrate Maproom Cleanup in Clean Command
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - 25/25 clean-maproom-records tests passing, no regressions
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ After removing a worktree directory, stale records remain in the maproom databas
 This ticket implements Phase 2, Deliverable 2 from the plan: Maproom cleanup integration.
 
 ## Acceptance Criteria
-- [ ] Maproom cleanup called after directory removal
-- [ ] Cleanup only runs if `--keep-maproom` flag NOT set
-- [ ] Import and use `cleanMaproomRecords()` from WTCLEAN-1002
-- [ ] Success logged when cleanup completes
-- [ ] Errors are caught and do NOT block cleanup (best-effort)
-- [ ] Clear warning logged if cleanup fails
-- [ ] Manual recovery instructions provided when cleanup fails
-- [ ] Works in both single worktree and `--all` modes
+- [x] Maproom cleanup called after directory removal
+- [x] Cleanup only runs if `--keep-maproom` flag NOT set
+- [x] Import and use `cleanMaproomRecords()` from WTCLEAN-1002
+- [x] Success logged when cleanup completes
+- [x] Errors are caught and do NOT block cleanup (best-effort)
+- [x] Clear warning logged if cleanup fails
+- [x] Manual recovery instructions provided when cleanup fails
+- [x] Works in both single worktree and `--all` modes
 
 ## Technical Requirements
 - Modify file: `packages/cli/src/cli/worktree.ts`

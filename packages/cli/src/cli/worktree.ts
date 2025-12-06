@@ -7,7 +7,7 @@ import inquirer from 'inquirer'
 import { loadConfig } from '../config/loader'
 import { copyIgnoredFiles, copyIgnoredFilesBack } from '../git/copy-ignored-files'
 import { GitMergeService, MergeStrategyType } from '../git/merge'
-import { WorktreeService } from '../git/worktrees'
+import { WorktreeService, cleanMaproomRecords } from '../git/worktrees'
 import { RunManager } from '../orchestrator/runManager'
 import { removeDirSync } from '../utils/fs'
 import { logger } from '../utils/logger'
@@ -130,6 +130,18 @@ Examples:
             logger.success(
               `Removed all non-current worktrees${opts.keepDir ? ' (kept directories)' : ' and their directories'}`,
             )
+
+            // Clean maproom database records (best-effort)
+            if (!opts.keepMaproom) {
+              try {
+                await cleanMaproomRecords()
+                logger.info('Cleaned maproom database records')
+              } catch (err) {
+                const errorMsg = err instanceof Error ? err.message : String(err)
+                logger.warn('Could not clean maproom records:', errorMsg)
+                logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+              }
+            }
             return
           }
 
@@ -180,12 +192,36 @@ Examples:
               removeDirSync(targetPath)
             }
             logger.success(`Removed worktree ${targetPath}${opts.keepDir ? ' (kept directory)' : ''}`)
+
+            // Clean maproom database records (best-effort)
+            if (!opts.keepMaproom) {
+              try {
+                await cleanMaproomRecords()
+                logger.info('Cleaned maproom database records')
+              } catch (err) {
+                const errorMsg = err instanceof Error ? err.message : String(err)
+                logger.warn('Could not clean maproom records:', errorMsg)
+                logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+              }
+            }
             return
           }
 
           // Otherwise, default to pruning stale metadata
           await wt.pruneWorktrees({ mode: 'stale', keepDir: opts.keepDir })
           logger.success('Pruned stale worktree metadata')
+
+          // Clean maproom database records (best-effort)
+          if (!opts.keepMaproom) {
+            try {
+              await cleanMaproomRecords()
+              logger.info('Cleaned maproom database records')
+            } catch (err) {
+              const errorMsg = err instanceof Error ? err.message : String(err)
+              logger.warn('Could not clean maproom records:', errorMsg)
+              logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+            }
+          }
         } catch (err) {
           logger.error('Failed to prune worktrees:', err)
           process.exitCode = 1
