@@ -1,8 +1,9 @@
 # Project: Worktree Use Auto-Scan Control
 
 **Slug:** WTSCAN
-**Status:** Planning
+**Status:** ✅ Completed
 **Created:** 2025-12-05
+**Completed:** 2025-12-06
 **Priority:** Medium
 **Effort:** S (1-2 days)
 
