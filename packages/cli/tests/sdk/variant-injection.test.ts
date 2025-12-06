@@ -2,6 +2,7 @@
  * Tests for tool description variant injection via worktrees
  */
 
+import { execSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { describe, it, expect, afterEach } from 'vitest'
@@ -44,6 +45,27 @@ This tests the regex replacement logic.`,
       }
     }
     cleanupFunctions.length = 0
+
+    // Cleanup any orphaned variant-test branches that might have been left behind
+    // (e.g., from failed tests, interrupted processes, or cleanup failures)
+    try {
+      const branches = execSync('git branch', { encoding: 'utf-8' })
+        .split('\n')
+        .filter((b) => b.includes('variant-test-'))
+        .map((b) => b.trim().replace(/^\*?\s*/, ''))
+
+      for (const branch of branches) {
+        if (branch) {
+          try {
+            execSync(`git branch -D ${branch}`, { stdio: 'ignore' })
+          } catch {
+            // Ignore errors - branch might already be deleted or in use
+          }
+        }
+      }
+    } catch {
+      // Ignore cleanup errors - git commands might fail in some environments
+    }
   })
 
   it('should create a variant worktree', async () => {
