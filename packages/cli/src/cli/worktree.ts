@@ -14,6 +14,53 @@ import { logger } from '../utils/logger'
 import { displaySubshellMessage } from '../utils/subshell-message'
 import { WorktreeMetadataService } from '../utils/worktree-metadata'
 
+/**
+ * Handle branch deletion errors with context-specific guidance
+ */
+function handleBranchDeletionError(branch: string, err: unknown): void {
+  const errorMsg = err instanceof Error ? err.message : String(err)
+  const lowerMsg = errorMsg.toLowerCase()
+
+  // Branch doesn't exist - this is fine, no warning needed
+  if (lowerMsg.includes('not found') || lowerMsg.includes('no such') || lowerMsg.includes('unknown revision')) {
+    logger.info(`Branch ${branch} already removed`)
+    return
+  }
+
+  // Not fully merged - most common case
+  if (lowerMsg.includes('not fully merged')) {
+    logger.warn(`Branch ${branch} not fully merged - skipped deletion`)
+    logger.info('To delete anyway (CAUTION: may lose work):')
+    logger.info(`  git branch -D ${branch}`)
+    logger.info('Or merge the branch first:')
+    logger.info(`  git checkout main && git merge ${branch}`)
+    return
+  }
+
+  // Checked out elsewhere
+  if (lowerMsg.includes('checked out') || lowerMsg.includes('is checked out')) {
+    logger.warn(`Branch ${branch} checked out in another worktree - skipped deletion`)
+    logger.info('Switch the other worktree to a different branch, then:')
+    logger.info(`  git branch -d ${branch}`)
+    return
+  }
+
+  // Cannot delete / protected
+  if (lowerMsg.includes('cannot delete') || lowerMsg.includes('protected')) {
+    logger.warn(`Cannot delete branch ${branch}: protected or in use`)
+    logger.info('Check branch status:')
+    logger.info('  git branch -vv')
+    logger.info('Manual deletion:')
+    logger.info(`  git branch -d ${branch}`)
+    return
+  }
+
+  // Unknown error - show details
+  logger.warn(`Could not delete branch ${branch}:`, errorMsg)
+  logger.info('Delete manually:')
+  logger.info(`  git branch -d ${branch}`)
+}
+
 export function registerWorktreeCommands(program: Command): void {
   const worktree = new Command('worktree').description('Worktree operations')
 
@@ -194,9 +241,7 @@ Examples:
                   await mergeService.deleteBranch(branch)
                   logger.success(`Deleted branch ${branch}`)
                 } catch (err) {
-                  const errorMsg = err instanceof Error ? err.message : String(err)
-                  logger.warn(`Could not delete branch ${branch}:`, errorMsg)
-                  logger.info(`Delete manually: git branch -d ${branch}`)
+                  handleBranchDeletionError(branch, err)
                 }
               }
             }
@@ -299,9 +344,7 @@ Examples:
                 await mergeService.deleteBranch(branch)
                 logger.success(`Deleted branch ${branch}`)
               } catch (err) {
-                const errorMsg = err instanceof Error ? err.message : String(err)
-                logger.warn(`Could not delete branch ${branch}:`, errorMsg)
-                logger.info(`Delete manually: git branch -d ${branch}`)
+                handleBranchDeletionError(branch, err)
               }
             }
             return
@@ -732,7 +775,7 @@ Examples:
               await mergeService.deleteBranch(worktreeBranch)
               logger.success(`Deleted branch ${worktreeBranch}`)
             } catch (error) {
-              logger.warn(`Could not delete branch ${worktreeBranch}: ${error}`)
+              handleBranchDeletionError(worktreeBranch, error)
             }
 
             // Run git worktree prune
