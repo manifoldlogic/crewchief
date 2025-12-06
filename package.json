@@ -11,6 +11,7 @@
     "build": "pnpm -r --filter='./packages/*' build",
     "test": "pnpm -r --filter='./packages/*' test",
     "lint": "pnpm -r --filter='./packages/*' lint",
+    "cleanup-test-branches": "bash scripts/cleanup-test-branches.sh",
     "release": "echo 'Use: pnpm release:patch|minor|major or pnpm release:dry' && exit 1",
     "release:patch": "git push origin main && gh workflow run release-all.yml -f release_type=patch -f packages=all",
     "release:minor": "git push origin main && gh workflow run release-all.yml -f release_type=minor -f packages=all",
