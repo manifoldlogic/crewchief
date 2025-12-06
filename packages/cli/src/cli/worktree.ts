@@ -189,16 +189,32 @@ Examples:
                 .map((item) => item.branch!)
             }
 
+            // Show what will be cleaned
+            const list = await wt.listWorktrees()
+            const currentDir = process.cwd()
+            const toClean = list.filter((item) => {
+              const itemPath = path.resolve(item.path)
+              const rel = path.relative(itemPath, currentDir)
+              const isCurrent = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+              return !isCurrent
+            })
+
+            if (toClean.length > 1) {
+              logger.info(`Found ${toClean.length} worktrees to clean`)
+            }
+
             await wt.pruneWorktrees({ mode: 'all', keepDir: opts.keepDir })
             logger.success(
-              `Removed all non-current worktrees${opts.keepDir ? ' (kept directories)' : ' and their directories'}`,
+              `Removed ${toClean.length} worktree${toClean.length === 1 ? '' : 's'}${opts.keepDir ? ' (kept directories)' : ''}`,
             )
 
             // Clean maproom database records (best-effort)
-            if (!opts.keepMaproom) {
+            if (opts.keepMaproom) {
+              logger.info('Skipping maproom cleanup (--keep-maproom flag)')
+            } else {
               try {
                 await cleanMaproomRecords()
-                logger.info('Cleaned maproom database records')
+                logger.success('Cleaned maproom database records')
               } catch (err) {
                 const errorMsg = err instanceof Error ? err.message : String(err)
                 const lowerMsg = errorMsg.toLowerCase()
@@ -234,7 +250,13 @@ Examples:
             }
 
             // Delete git branches (best-effort)
-            if (!opts.keepBranch && branches.length > 0) {
+            if (opts.keepBranch) {
+              if (branches.length > 0) {
+                logger.info(
+                  `Keeping ${branches.length} branch${branches.length === 1 ? '' : 'es'} (--keep-branch flag)`,
+                )
+              }
+            } else if (branches.length > 0) {
               const mergeService = new GitMergeService()
               for (const branch of branches) {
                 try {
@@ -299,10 +321,12 @@ Examples:
             logger.success(`Removed worktree ${targetPath}${opts.keepDir ? ' (kept directory)' : ''}`)
 
             // Clean maproom database records (best-effort)
-            if (!opts.keepMaproom) {
+            if (opts.keepMaproom) {
+              logger.info('Skipping maproom cleanup (--keep-maproom flag)')
+            } else {
               try {
                 await cleanMaproomRecords()
-                logger.info('Cleaned maproom database records')
+                logger.success('Cleaned maproom database records')
               } catch (err) {
                 const errorMsg = err instanceof Error ? err.message : String(err)
                 const lowerMsg = errorMsg.toLowerCase()
@@ -338,7 +362,11 @@ Examples:
             }
 
             // Delete git branch (best-effort)
-            if (branch && !opts.keepBranch) {
+            if (!branch) {
+              logger.info('No branch associated with worktree')
+            } else if (opts.keepBranch) {
+              logger.info(`Keeping branch ${branch} (--keep-branch flag)`)
+            } else {
               try {
                 const mergeService = new GitMergeService()
                 await mergeService.deleteBranch(branch)
@@ -355,10 +383,12 @@ Examples:
           logger.success('Pruned stale worktree metadata')
 
           // Clean maproom database records (best-effort)
-          if (!opts.keepMaproom) {
+          if (opts.keepMaproom) {
+            logger.info('Skipping maproom cleanup (--keep-maproom flag)')
+          } else {
             try {
               await cleanMaproomRecords()
-              logger.info('Cleaned maproom database records')
+              logger.success('Cleaned maproom database records')
             } catch (err) {
               const errorMsg = err instanceof Error ? err.message : String(err)
               const lowerMsg = errorMsg.toLowerCase()

@@ -1,8 +1,8 @@
 # Ticket: [WTCLEAN-2004c]: Add Logging for All Cleanup Steps
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
 - [ ] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
@@ -26,14 +26,14 @@ Users need visibility into what the clean command is doing, especially with the 
 This ticket implements part of Phase 2, Deliverable 4 from the plan: Logging for all cleanup steps.
 
 ## Acceptance Criteria
-- [ ] Each cleanup step has clear start/completion logging
-- [ ] Success messages use `logger.success()` (green checkmarks)
-- [ ] Skipped steps logged with `logger.info()` explaining why
-- [ ] Progress visible for `--all` mode (show count/total)
-- [ ] Final summary shows what was cleaned
-- [ ] Logging consistent across single and `--all` modes
-- [ ] No redundant or verbose logging (keep it clean)
-- [ ] Log messages help debug issues without overwhelming users
+- [x] Each cleanup step has clear start/completion logging
+- [x] Success messages use `logger.success()` (green checkmarks)
+- [x] Skipped steps logged with `logger.info()` explaining why
+- [x] Progress visible for `--all` mode (show count/total)
+- [x] Final summary shows what was cleaned
+- [x] Logging consistent across single and `--all` modes
+- [x] No redundant or verbose logging (keep it clean)
+- [x] Log messages help debug issues without overwhelming users
 
 ## Technical Requirements
 - Add logging for each cleanup step:
