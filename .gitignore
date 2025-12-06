@@ -27,6 +27,7 @@ node_modules
 
 .crewchief/optimization-runs/
 **/.crewchief/optimization-runs/**
+**/.crewchief/optimization-runs/**
 .crewchief/worktrees/
 **/.crewchief/worktrees/**
 crewchief.config.local.js

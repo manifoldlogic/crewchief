@@ -85,7 +85,7 @@ export class GitMergeService {
 
     // Get diff stats
     const diffStat = await this.git.raw(['diff', '--stat', `${targetBranch}...${sourceBranch}`])
-    const lines = diffStat.split('\n').filter(line => line.trim())
+    const lines = diffStat.split('\n').filter((line) => line.trim())
     const lastLine = lines[lines.length - 1] || ''
 
     // Parse the summary line (e.g., "5 files changed, 123 insertions(+), 45 deletions(-)")

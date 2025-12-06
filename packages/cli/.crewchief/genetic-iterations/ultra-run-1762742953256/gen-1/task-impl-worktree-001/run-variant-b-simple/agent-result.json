@@ -127,12 +127,7 @@
       "apiKeySource": "ANTHROPIC_API_KEY",
       "claude_code_version": "2.0.30",
       "output_style": "default",
-      "agents": [
-        "general-purpose",
-        "statusline-setup",
-        "Explore",
-        "Plan"
-      ],
+      "agents": ["general-purpose", "statusline-setup", "Explore", "Plan"],
       "skills": [],
       "plugins": [],
       "uuid": "8a7a95a1-13d8-4ea1-bb60-2e098b10b026"

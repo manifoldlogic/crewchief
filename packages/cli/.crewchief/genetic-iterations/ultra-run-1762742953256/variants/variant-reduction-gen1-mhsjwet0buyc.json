@@ -4,9 +4,7 @@
   "description": "Semantic code search optimized for AI agents - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.\n\n🤖 AI AGENT QUERY FORMULATION:\n\nTransform natural language questions into optimal search queries:\n\nTRANSFORMATION PATTERNS:\n1. Extract 2-3 core technical terms\n2. Remove: how, what, where, when, why, does, is, are, the, a, an\n3. Prefer code-like terminology\n\nEXAMPLES:\n  \"How does authentication work?\" → \"authentication\"\n  \"What handles errors?\" → \"error handler\"\n  \"Find auth logic\" → \"authentication\"\n\nQUERY BEST PRACTICES:\n✅ Good: 2-3 words, concepts, code terms\n  - \"error handling\"\n  - \"cart validation\"\n  - \"WebSocket disconnect\"\n  - \"processCheckout\"\n\n❌ Avoid: Full sentences, questions, special chars\n  - \"How do I handle errors in the checkout?\"\n  - \"function_that_validates_cart_items\"\n  - \"src/cart/checkout.ts\"\n\nMULTI-QUERY STRATEGY:\nIf first query returns <3 results, try variations:\n  Query 1: \"error handling\"\n  → <3 results?\n  Query 2: \"exception handler\"\n  → <3 results?\n  Query 3: \"try catch error\"\n\nSEARCH MODES:\n- \"fts\" (full-text search): Best for exact keyword matches, identifiers\n- \"vector\" (semantic search): Best for conceptual queries, similar code\n- \"hybrid\" (default): Combines both for optimal results\n\n⚠️ NOT FOR:\n- Exact string matching: \"TODO\", \"FIXME\"\n- File paths (use Glob instead)\n- Very long queries (>4 words)",
   "tokens": 329,
   "generation": 1,
-  "parent_ids": [
-    "variant-a-detailed"
-  ],
+  "parent_ids": ["variant-a-detailed"],
   "mutation_type": "reduction",
   "created_at": "2025-11-10T02:56:27.636Z",
   "notes": "Generated via reduction mutation from 1 parent(s)"
