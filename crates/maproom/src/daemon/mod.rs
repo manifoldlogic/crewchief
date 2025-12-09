@@ -331,6 +331,7 @@ async fn execute_search(
         })
         .map(|hit| {
             serde_json::json!({
+                "chunk_id": hit.chunk_id,
                 "score": hit.score,
                 "start_line": hit.start_line,
                 "end_line": hit.end_line,
