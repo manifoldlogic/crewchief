@@ -15,7 +15,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/**/*.test.ts', 'tests/e2e/**/*_test.ts'],
+    include: ['tests/**/*.test.ts', 'tests/e2e/**/*_test.ts', 'src/**/__tests__/**/*.test.ts'],
     env: {
       // Use SQLite test database
       MAPROOM_DATABASE_URL: getTestDatabaseUrl()
