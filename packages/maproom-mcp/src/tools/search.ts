@@ -308,8 +308,8 @@ export async function handleSearchTool(
       file_relpath: hit.file_path, // Daemon uses file_path, MCP expects file_relpath
       start_line: hit.start_line,
       end_line: hit.end_line,
-      symbol_name: '', // Daemon doesn't return symbol_name yet (Phase 2 enhancement)
-      kind: '', // Daemon doesn't return kind yet (Phase 2 enhancement)
+      symbol_name: hit.symbol_name || '', // Daemon provides symbol_name directly
+      kind: hit.kind, // Daemon provides kind directly
       score: hit.score,
       // Debug fields not yet available from daemon
       base_score: undefined,
@@ -320,17 +320,15 @@ export async function handleSearchTool(
 
   log.debug({ hitCount: rustOutput.hits.length }, 'Received search results from daemon')
 
-  // Chunk IDs are not available from SQLite daemon
-  // Legacy PostgreSQL code path has been removed
-  const chunkIdMap = new Map<string, number>() // Empty map = all chunk_id will be 0
-
   // Transform Rust hits to SearchResult format (SEMRANK-2006: include score_breakdown if debug=true)
-  const hits: SearchResult[] = rustOutput.hits.map((hit) => {
-    const key = `${hit.file_relpath}:${hit.start_line}:${hit.end_line}`
-    const chunk_id = chunkIdMap.get(key) || 0
+  const hits: SearchResult[] = rustOutput.hits.map((hit, index) => {
+    const daemonHit = daemonResult.hits[index]
 
-    if (chunk_id === 0) {
-      log.warn({ hit }, 'Chunk ID not found for search result')
+    // Daemon provides chunk_id directly
+    const chunk_id = daemonHit.chunk_id
+
+    if (!chunk_id || chunk_id === 0) {
+      log.warn({ hit: daemonHit }, 'Invalid chunk_id in search result')
     }
 
     // Build SearchResult with optional score_breakdown (SEMRANK-2006)
