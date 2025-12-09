@@ -247,10 +247,12 @@ interface SearchParams {
 ```typescript
 interface SearchResult {
   hits: Array<{
+    chunk_id: number
     file_path: string
-    chunk_index: number
     start_line: number
     end_line: number
+    symbol_name: string | null
+    kind: string
     content: string
     score: number
   }>
