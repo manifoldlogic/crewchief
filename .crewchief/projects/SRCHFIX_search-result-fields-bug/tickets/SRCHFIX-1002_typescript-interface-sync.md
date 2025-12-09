@@ -1,9 +1,9 @@
 # Ticket: [SRCHFIX-1002]: Update TypeScript Daemon Client Interface
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (build verification only)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,11 +26,11 @@ The TypeScript SearchResult interface currently uses `chunk_index` and lacks `sy
 This ticket implements Tasks 1.2 and 1.2b from the execution plan: Update both daemon-client packages (main and vendored copy in maproom-mcp).
 
 ## Acceptance Criteria
-- [ ] Main daemon-client interface updated with chunk_id, symbol_name, kind fields
-- [ ] Vendored maproom-mcp daemon-client interface matches main package exactly
-- [ ] Sync comment added pointing to Rust struct: `crates/maproom/src/db/mod.rs SearchHit`
-- [ ] TypeScript compilation succeeds with no errors across all packages
-- [ ] Both interfaces have identical field structure
+- [x] Main daemon-client interface updated with chunk_id, symbol_name, kind fields
+- [x] Vendored maproom-mcp daemon-client interface matches main package exactly
+- [x] Sync comment added pointing to Rust struct: `crates/maproom/src/db/mod.rs SearchHit`
+- [x] TypeScript compilation succeeds with no errors across all packages
+- [x] Both interfaces have identical field structure
 
 ## Technical Requirements
 - Rename `chunk_index` → `chunk_id` in SearchResult interface
