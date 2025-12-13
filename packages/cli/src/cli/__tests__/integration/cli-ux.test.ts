@@ -17,22 +17,39 @@ describe('CLI UX Integration', () => {
     }
   })
 
-  describe('worktree use with existing worktree (main branch)', () => {
-    it('returns path when using main branch', () => {
-      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'main'], {
+  describe('worktree use with existing worktree', () => {
+    it('returns path when worktree exists', () => {
+      // First create a test worktree
+      const createResult = spawnSync('node', [CLI_PATH, 'worktree', 'create', 'test-worktree-use'], {
+        cwd: WORKSPACE_PATH,
+        encoding: 'utf-8',
+      })
+      expect(createResult.status).toBe(0)
+      const createdPath = createResult.stdout.trim()
+
+      // Now use it
+      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'test-worktree-use'], {
         cwd: WORKSPACE_PATH,
         encoding: 'utf-8',
       })
 
       expect(result.status).toBe(0)
-      // stdout should be a valid absolute path
+      // stdout should be the same absolute path
       const outputPath = result.stdout.trim()
+      expect(outputPath).toBe(createdPath)
       expect(outputPath).toMatch(/^\//) // Starts with / (absolute path)
-      expect(outputPath.length).toBeGreaterThan(1)
     })
 
     it('outputs only path to stdout (no logger messages)', () => {
-      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'main'], {
+      // Create a test worktree
+      const createResult = spawnSync('node', [CLI_PATH, 'worktree', 'create', 'test-worktree-stdout'], {
+        cwd: WORKSPACE_PATH,
+        encoding: 'utf-8',
+      })
+      expect(createResult.status).toBe(0)
+
+      // Use it
+      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'test-worktree-stdout'], {
         cwd: WORKSPACE_PATH,
         encoding: 'utf-8',
       })
