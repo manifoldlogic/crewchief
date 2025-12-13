@@ -4,9 +4,9 @@
 Extend RpcError with error details deserialization and user message formatting
 
 ## Status
-- [ ] **Implementation Complete**
-- [ ] **Tests Passing**
-- [ ] **Verified**
+- [x] **Implementation Complete**
+- [x] **Tests Passing**
+- [x] **Verified**
 - [ ] **Committed**
 
 ## Agents
@@ -24,14 +24,14 @@ The daemon now serializes `SearchErrorDetails` in JSON-RPC error responses (SRCH
 **Existing Infrastructure**: `RpcError` class already exists in `packages/daemon-client/src/errors.ts` and extends `DaemonError`.
 
 ## Acceptance Criteria
-- [ ] `RpcError` class extended with `details?: SearchErrorDetails` field
-- [ ] Constructor parses `data` field from JSON-RPC error response
-- [ ] `getDetails()` method returns parsed error details or undefined
-- [ ] `getUserMessage()` method formats error with context and suggestions
-- [ ] Fallback to simple error message if no details available
-- [ ] Unit tests validate deserialization for all error types
-- [ ] Unit tests validate `getUserMessage()` formatting
-- [ ] All tests passing
+- [x] `RpcError` class extended with `details?: SearchErrorDetails` field
+- [x] Constructor parses `data` field from JSON-RPC error response
+- [x] `getDetails()` method returns parsed error details or undefined
+- [x] `getUserMessage()` method formats error with context and suggestions
+- [x] Fallback to simple error message if no details available
+- [x] Unit tests validate deserialization for all error types
+- [x] Unit tests validate `getUserMessage()` formatting
+- [x] All tests passing
 
 ## Technical Requirements
 

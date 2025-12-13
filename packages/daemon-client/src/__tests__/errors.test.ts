@@ -11,6 +11,7 @@ import {
   RpcError,
   DaemonUnhealthyError,
 } from '../errors.js'
+import type { SearchErrorDetails } from '../types.js'
 
 describe('DaemonError', () => {
   it('should create error with message, code, and optional cause', () => {
@@ -168,6 +169,191 @@ describe('RpcError', () => {
 
       expect(internalError.isInternalError()).toBe(true)
       expect(otherError.isInternalError()).toBe(false)
+    })
+  })
+
+  describe('SearchErrorDetails deserialization', () => {
+    it('should parse error details from data field', () => {
+      const errorData: SearchErrorDetails = {
+        error_type: 'embedding_provider',
+        stage: 'query_processing',
+        context: { provider_error: 'timeout' },
+        suggestions: ['Check credentials', 'Try FTS mode'],
+      }
+
+      const error = new RpcError('Embedding failed', -32000, errorData)
+
+      expect(error.getDetails()).toEqual(errorData)
+      expect(error.details?.error_type).toBe('embedding_provider')
+    })
+
+    it('should format user message with context and suggestions', () => {
+      const errorData: SearchErrorDetails = {
+        error_type: 'database',
+        stage: 'search_execution',
+        context: { message: 'Connection failed', repo: 'crewchief' },
+        suggestions: ['Check database connectivity', 'Verify repository indexed'],
+      }
+
+      const error = new RpcError('Database error', -32000, errorData)
+      const message = error.getUserMessage()
+
+      expect(message).toContain('search_execution')
+      expect(message).toContain('Connection failed')
+      expect(message).toContain('Check database connectivity')
+      expect(message).toContain('Verify repository indexed')
+    })
+
+    it('should handle missing error details gracefully', () => {
+      const error = new RpcError('Generic error', -32000)
+
+      expect(error.getDetails()).toBeUndefined()
+      expect(error.getUserMessage()).toEqual('Generic error')
+    })
+
+    it('should handle invalid error details structure', () => {
+      const invalidData = { foo: 'bar' }
+
+      const error = new RpcError('Invalid error', -32000, invalidData)
+
+      expect(error.getDetails()).toBeUndefined()
+      expect(error.getUserMessage()).toEqual('Invalid error')
+    })
+
+    it('should deserialize all error types correctly', () => {
+      const errorTypes: Array<SearchErrorDetails['error_type']> = [
+        'embedding_provider',
+        'database',
+        'validation',
+        'timeout',
+        'not_found',
+        'unknown',
+      ]
+
+      for (const type of errorTypes) {
+        const errorData: SearchErrorDetails = {
+          error_type: type,
+          stage: 'query_processing',
+          context: {},
+          suggestions: ['Test suggestion'],
+        }
+
+        const error = new RpcError('Test error', -32000, errorData)
+        expect(error.getDetails()?.error_type).toBe(type)
+      }
+    })
+
+    it('should handle error details with empty context', () => {
+      const errorData: SearchErrorDetails = {
+        error_type: 'timeout',
+        stage: 'search_execution',
+        context: {},
+        suggestions: ['Increase timeout', 'Simplify query'],
+      }
+
+      const error = new RpcError('Search timeout', -32000, errorData)
+      const message = error.getUserMessage()
+
+      expect(message).toContain('search_execution')
+      expect(message).toContain('Increase timeout')
+      expect(message).not.toContain('Context:')
+    })
+
+    it('should handle error details with empty suggestions', () => {
+      const errorData: SearchErrorDetails = {
+        error_type: 'unknown',
+        stage: 'result_assembly',
+        context: { error: 'unexpected failure' },
+        suggestions: [],
+      }
+
+      const error = new RpcError('Unknown error', -32000, errorData)
+      const message = error.getUserMessage()
+
+      expect(message).toContain('result_assembly')
+      expect(message).toContain('unexpected failure')
+      expect(message).not.toContain('Suggestions:')
+    })
+
+    it('should validate all required fields in type guard', () => {
+      // Missing error_type
+      const missingErrorType = {
+        stage: 'query_processing',
+        context: {},
+        suggestions: [],
+      }
+      const error1 = new RpcError('Error', -32000, missingErrorType)
+      expect(error1.getDetails()).toBeUndefined()
+
+      // Missing stage
+      const missingStage = {
+        error_type: 'database',
+        context: {},
+        suggestions: [],
+      }
+      const error2 = new RpcError('Error', -32000, missingStage)
+      expect(error2.getDetails()).toBeUndefined()
+
+      // Missing context
+      const missingContext = {
+        error_type: 'database',
+        stage: 'query_processing',
+        suggestions: [],
+      }
+      const error3 = new RpcError('Error', -32000, missingContext)
+      expect(error3.getDetails()).toBeUndefined()
+
+      // Missing suggestions
+      const missingSuggestions = {
+        error_type: 'database',
+        stage: 'query_processing',
+        context: {},
+      }
+      const error4 = new RpcError('Error', -32000, missingSuggestions)
+      expect(error4.getDetails()).toBeUndefined()
+
+      // context is null
+      const nullContext = {
+        error_type: 'database',
+        stage: 'query_processing',
+        context: null,
+        suggestions: [],
+      }
+      const error5 = new RpcError('Error', -32000, nullContext)
+      expect(error5.getDetails()).toBeUndefined()
+
+      // suggestions is not an array
+      const invalidSuggestions = {
+        error_type: 'database',
+        stage: 'query_processing',
+        context: {},
+        suggestions: 'not an array',
+      }
+      const error6 = new RpcError('Error', -32000, invalidSuggestions)
+      expect(error6.getDetails()).toBeUndefined()
+    })
+
+    it('should format user message with multiple context entries', () => {
+      const errorData: SearchErrorDetails = {
+        error_type: 'validation',
+        stage: 'query_processing',
+        context: {
+          query: 'test query',
+          mode: 'hybrid',
+          issue: 'invalid parameter',
+        },
+        suggestions: ['Check query syntax', 'Use simpler query'],
+      }
+
+      const error = new RpcError('Validation failed', -32000, errorData)
+      const message = error.getUserMessage()
+
+      expect(message).toContain('query_processing')
+      expect(message).toContain('query: test query')
+      expect(message).toContain('mode: hybrid')
+      expect(message).toContain('issue: invalid parameter')
+      expect(message).toContain('Check query syntax')
+      expect(message).toContain('Use simpler query')
     })
   })
 })
