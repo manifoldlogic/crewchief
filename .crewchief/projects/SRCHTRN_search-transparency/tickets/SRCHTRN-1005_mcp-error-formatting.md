@@ -7,7 +7,7 @@ Update MCP tool to format structured errors with context and suggestions
 - [x] **Implementation Complete**
 - [x] **Tests Passing**
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed**
 
 ## Agents
 - **Primary**: typescript-engineer
