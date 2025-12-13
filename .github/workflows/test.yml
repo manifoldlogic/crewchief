@@ -155,7 +155,7 @@ jobs:
         run: |
           if [ ! -f crates/maproom/tests/fixtures/pre-indexed-maproom.db ]; then
             echo "SQLite fixture not found, generating..."
-            cargo test --features sqlite --test create_sqlite_fixture -- --ignored
+            cargo test --test create_sqlite_fixture -- --ignored
           else
             echo "SQLite fixture found"
           fi
@@ -182,8 +182,8 @@ jobs:
 
   # Rust SQLite feature tests
   # SQLite tests run in-memory (no external service needed)
-  test-rust-sqlite:
-    name: Rust SQLite Tests
+  test-rust:
+    name: Rust Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -202,23 +202,23 @@ jobs:
           key: sqlite
 
       - name: Check compilation
-        run: cargo check --features sqlite
+        run: cargo check
         working-directory: crates/maproom
 
       - name: Run tests
         # Use --test-threads=1 due to env var race conditions in config tests
-        run: cargo test --features sqlite -- --test-threads=1
+        run: cargo test -- --test-threads=1
         working-directory: crates/maproom
 
       - name: Job Summary
         if: always()
         run: |
-          echo "## 🗄️ Rust SQLite Tests" >> $GITHUB_STEP_SUMMARY
+          echo "## 🦀 Rust Tests" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** SQLite (only)" >> $GITHUB_STEP_SUMMARY
           echo "**Dependencies:** None - uses in-memory database" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tests Rust \`maproom\` crate with SQLite feature." >> $GITHUB_STEP_SUMMARY
+          echo "Tests Rust \`maproom\` crate (SQLite is the only backend)." >> $GITHUB_STEP_SUMMARY
 
   # =============================================================================
   # TYPESCRIPT PACKAGE TESTS - Unit tests for CLI, VSCode, and Daemon packages

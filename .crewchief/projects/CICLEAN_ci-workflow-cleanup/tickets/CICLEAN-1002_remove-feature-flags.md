@@ -1,9 +1,9 @@
 # Ticket: CICLEAN-1002: Remove feature flags from Rust jobs
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (YAML configuration change - syntax validated)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,13 +32,13 @@ The fix is to remove these non-existent flags and rename jobs to reflect the SQL
 **Planning Reference**: `/home/vscode/.crewchief/worktrees/audit/.crewchief/projects/CICLEAN_ci-workflow-cleanup/planning/architecture.md`
 
 ## Acceptance Criteria
-- [ ] `test-rust-sqlite` job renamed to `test-rust`
-- [ ] Job display name updated to "Rust Tests" (not "Rust SQLite Tests")
-- [ ] `cargo check --features sqlite` changed to `cargo check` (line 208)
-- [ ] `cargo test --features sqlite` changed to `cargo test` (line 213)
-- [ ] `cargo test --features sqlite --test create_sqlite_fixture` changed to `cargo test --test create_sqlite_fixture` (line 161)
-- [ ] Job summary messages updated to reflect SQLite-only backend
-- [ ] YAML file remains syntactically valid
+- [x] `test-rust-sqlite` job renamed to `test-rust`
+- [x] Job display name updated to "Rust Tests" (not "Rust SQLite Tests")
+- [x] `cargo check --features sqlite` changed to `cargo check` (line 208)
+- [x] `cargo test --features sqlite` changed to `cargo test` (line 213)
+- [x] `cargo test --features sqlite --test create_sqlite_fixture` changed to `cargo test --test create_sqlite_fixture` (line 161)
+- [x] Job summary messages updated to reflect SQLite-only backend
+- [x] YAML file remains syntactically valid
 
 ## Technical Requirements
 
