@@ -4,9 +4,9 @@
 Create TypeScript error types mirroring Rust error taxonomy
 
 ## Status
-- [ ] **Implementation Complete**
-- [ ] **Tests Passing**
-- [ ] **Verified**
+- [x] **Implementation Complete**
+- [x] **Tests Passing**
+- [x] **Verified**
 - [ ] **Committed**
 
 ## Agents
@@ -24,15 +24,15 @@ TypeScript clients need to deserialize structured error details from JSON-RPC re
 **Critical Requirement**: Types must match Rust exactly. Sync comments are mandatory to track the source of truth and enable future audits.
 
 ## Acceptance Criteria
-- [ ] `packages/daemon-client/src/types.ts` created with error type definitions
-- [ ] `ErrorType` union type matches Rust enum values exactly (6 variants)
-- [ ] `PipelineStage` union type matches Rust enum values exactly (4 variants)
-- [ ] `SearchErrorDetails` interface matches Rust struct fields exactly
-- [ ] Sync comments link each type to Rust source (e.g., `// Sync with: crates/maproom/src/search/errors.rs::ErrorType`)
-- [ ] Types exported from `packages/daemon-client/src/index.ts`
-- [ ] Type sync validation test passes (enum values match)
-- [ ] No new dependencies added
-- [ ] All tests passing
+- [x] `packages/daemon-client/src/types.ts` created with error type definitions
+- [x] `ErrorType` union type matches Rust enum values exactly (6 variants)
+- [x] `PipelineStage` union type matches Rust enum values exactly (4 variants)
+- [x] `SearchErrorDetails` interface matches Rust struct fields exactly
+- [x] Sync comments link each type to Rust source (e.g., `// Sync with: crates/maproom/src/search/errors.rs::ErrorType`)
+- [x] Types exported from `packages/daemon-client/src/index.ts`
+- [x] Type sync validation test passes (enum values match)
+- [x] No new dependencies added
+- [x] All tests passing
 
 ## Technical Requirements
 
@@ -147,10 +147,10 @@ export type { ErrorType, PipelineStage, SearchErrorDetails } from './types.js'
 **Naming Convention**: Use snake_case to match Rust serde serialization (`'embedding_provider'` not `'embeddingProvider'`).
 
 **Manual Sync Checklist** (Phase 1 Quality Gate):
-- [ ] All `ErrorType` enum variants match Rust
-- [ ] All `PipelineStage` enum variants match Rust
-- [ ] Sync comments link to Rust source
-- [ ] Type sync validation tests pass
+- [x] All `ErrorType` enum variants match Rust
+- [x] All `PipelineStage` enum variants match Rust
+- [x] Sync comments link to Rust source
+- [x] Type sync validation tests pass
 
 ## Dependencies
 - **SRCHTRN-1001**: Rust error taxonomy (must complete first - defines canonical types)

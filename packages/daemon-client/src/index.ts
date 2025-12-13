@@ -46,7 +46,14 @@ export type {
 } from './client.js'
 
 // Configuration and types
-export type { DaemonConfig, DaemonProcessDef, PendingRequest } from './types.js'
+export type {
+  DaemonConfig,
+  DaemonProcessDef,
+  PendingRequest,
+  ErrorType,
+  PipelineStage,
+  SearchErrorDetails,
+} from './types.js'
 
 // Errors
 export {
