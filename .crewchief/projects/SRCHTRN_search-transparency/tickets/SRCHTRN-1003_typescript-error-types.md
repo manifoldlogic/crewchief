@@ -7,7 +7,7 @@ Create TypeScript error types mirroring Rust error taxonomy
 - [x] **Implementation Complete**
 - [x] **Tests Passing**
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed**
 
 ## Agents
 - **Primary**: typescript-engineer
