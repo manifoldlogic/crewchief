@@ -26,9 +26,9 @@ The current `build_fts_query()` implementation uses individual `.replace()` call
 This fix adopts the same regex whitelist approach used by the PostgreSQL FTS module (src/search/fts.rs:69), providing comprehensive coverage for ALL special characters in a single operation.
 
 **Reference**:
-- Plan: `.crewchief/projects/FTSFIX_fts-query-sanitization/planning/plan.md`
-- Architecture: `.crewchief/projects/FTSFIX_fts-query-sanitization/planning/architecture.md`
-- Quality Strategy: `.crewchief/projects/FTSFIX_fts-query-sanitization/planning/quality-strategy.md`
+- Plan: `.crewchief/archive/projects/FTSFIX_fts-query-sanitization/planning/plan.md`
+- Architecture: `.crewchief/archive/projects/FTSFIX_fts-query-sanitization/planning/architecture.md`
+- Quality Strategy: `.crewchief/archive/projects/FTSFIX_fts-query-sanitization/planning/quality-strategy.md`
 
 ## Acceptance Criteria
 - [x] Code change: Sanitization logic refactored to use regex whitelist `[^a-zA-Z0-9_\s]` in `build_fts_query()`

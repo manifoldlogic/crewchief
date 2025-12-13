@@ -207,8 +207,8 @@ time cargo test -p crewchief-maproom fts
 ## References
 - **Original PR**: #19 (FTSFIX-1001: Comprehensive FTS5 query sanitization)
 - **Review Comment**: CodeRabbit review noting code duplication in `mod.rs`
-- **Architecture**: `.crewchief/projects/FTSFIX_fts-query-sanitization/planning/architecture.md`
-- **Quality Strategy**: `.crewchief/projects/FTSFIX_fts-query-sanitization/planning/quality-strategy.md`
+- **Architecture**: `.crewchief/archive/projects/FTSFIX_fts-query-sanitization/planning/architecture.md`
+- **Quality Strategy**: `.crewchief/archive/projects/FTSFIX_fts-query-sanitization/planning/quality-strategy.md`
 
 ## Estimated Time
 - **Implementation**: 20-30 minutes

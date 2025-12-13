@@ -1,8 +1,9 @@
 # Project: FTS Query Sanitization
 
 **Slug:** FTSFIX
-**Status:** Planning
+**Status:** Complete
 **Created:** 2025-12-09
+**Completed:** 2025-12-13
 
 ## Summary
 
@@ -110,30 +111,41 @@ All planning documents are complete:
 
 ## Success Criteria
 
-- [ ] Code: Regex whitelist `[^a-zA-Z0-9_\s]` implemented in `build_fts_query()`
-- [ ] Test: `test_build_fts_query_comprehensive_sanitization` passing (8+ test cases)
-- [ ] All existing tests pass
-- [ ] Performance: Baseline measured, no regression >5%
-- [ ] Manual verification: All special character query types return results (no syntax errors)
+- [x] Code: Regex whitelist `[^a-zA-Z0-9_\s]` implemented in `build_fts_query()`
+- [x] Test: `test_build_fts_query_comprehensive_sanitization` passing (8+ test cases)
+- [x] All existing tests pass (155 tests: 41 FTS + 114 SQLite)
+- [x] Performance: Baseline measured, no regression >5%
+- [x] Manual verification: All special character query types return results (no syntax errors)
   - `package.json` (dots)
   - `src/main.rs` (slashes)
   - `array[0]` (brackets)
   - `user@email.com` (at-signs)
-- [ ] Commit created with conventional commit format
+- [x] Commit created with conventional commit format
+- [x] Code deduplication: Shared `sanitize_fts_term()` function eliminates duplication across three locations
 
-## Next Steps
+## Completed Tickets
 
-1. **Review planning** - Run `/review-project FTSFIX` to validate planning documents
-2. **Create tickets** - Run `/create-project-tickets FTSFIX` to generate implementation ticket
-3. **Execute** - Run `/work-on-project FTSFIX` or `/single-ticket FTSFIX-1001`
+All tickets completed and verified:
 
-## Tickets
+- **FTSFIX-1001:** Comprehensive FTS Query Sanitization - Committed 17d1206c
+- **FTSFIX-1002:** Deduplicate FTS Query Sanitization Logic - Committed b9946ae2
 
-Tickets will be created after planning review. Expected structure:
+## Final Deliverables
 
-- `FTSFIX-1001_comprehensive-fts-query-sanitization.md` - Implementation ticket (Phase 1)
+**Code Changes:**
+- `crates/maproom/src/db/sqlite/fts.rs` - Regex whitelist sanitization + shared function
+- `crates/maproom/src/db/sqlite/mod.rs` - Refactored to use shared sanitization
+
+**Test Coverage:**
+- 8 comprehensive test cases for special character handling
+- 155 total tests passing (41 FTS + 114 SQLite)
+- Zero regressions
+
+**Impact:**
+- Enables FTS queries with all special characters (dots, slashes, brackets, operators, etc.)
+- Eliminates code duplication across three FTS query building locations
+- Provides consistent comprehensive sanitization across all code paths
 
 ---
 
-**Planning complete:** All five planning documents filled with specific, actionable content.
-**Recommendation:** Run `/review-project FTSFIX` to validate readiness before creating tickets.
+**Project Status:** Complete and ready for archive

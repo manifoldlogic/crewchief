@@ -1,7 +1,7 @@
 # FTSFIX Ticket Index
 
 Project: FTS Query Sanitization
-Location: `.crewchief/projects/FTSFIX_fts-query-sanitization`
+Location: `.crewchief/archive/projects/FTSFIX_fts-query-sanitization`
 
 ## Overview
 
