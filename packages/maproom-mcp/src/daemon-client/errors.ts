@@ -2,6 +2,8 @@
  * Error types for daemon-client operations
  */
 
+import type { SearchErrorDetails } from './types.js'
+
 /**
  * Base error class for all daemon-related errors
  */
@@ -56,6 +58,8 @@ export class DaemonTimeoutError extends DaemonError {
  * Error thrown for JSON-RPC protocol errors
  */
 export class RpcError extends DaemonError {
+  public readonly details?: SearchErrorDetails
+
   constructor(
     message: string,
     public readonly rpcCode: number,
@@ -63,6 +67,64 @@ export class RpcError extends DaemonError {
   ) {
     super(message, 'RPC_ERROR')
     this.name = 'RpcError'
+
+    // Attempt to parse structured error details from data field
+    if (data && typeof data === 'object' && this.isSearchErrorDetails(data)) {
+      this.details = data as SearchErrorDetails
+    }
+  }
+
+  /**
+   * Type guard to validate SearchErrorDetails structure
+   */
+  private isSearchErrorDetails(data: unknown): boolean {
+    if (typeof data !== 'object' || data === null) return false
+    const obj = data as Record<string, unknown>
+    return (
+      typeof obj.error_type === 'string' &&
+      typeof obj.stage === 'string' &&
+      typeof obj.context === 'object' &&
+      obj.context !== null &&
+      Array.isArray(obj.suggestions)
+    )
+  }
+
+  /**
+   * Get parsed error details if available
+   */
+  getDetails(): SearchErrorDetails | undefined {
+    return this.details
+  }
+
+  /**
+   * Format error with context and suggestions for user display
+   */
+  getUserMessage(): string {
+    if (!this.details) {
+      return this.message // Fallback to generic error
+    }
+
+    const { stage, context, suggestions } = this.details
+
+    let formatted = `Search failed at ${stage}: ${this.message}\n`
+
+    // Add context if available
+    if (Object.keys(context).length > 0) {
+      formatted += '\nContext:\n'
+      for (const [key, value] of Object.entries(context)) {
+        formatted += `  ${key}: ${value}\n`
+      }
+    }
+
+    // Add suggestions
+    if (suggestions.length > 0) {
+      formatted += '\nSuggestions:\n'
+      for (const suggestion of suggestions) {
+        formatted += `  - ${suggestion}\n`
+      }
+    }
+
+    return formatted
   }
 
   /**

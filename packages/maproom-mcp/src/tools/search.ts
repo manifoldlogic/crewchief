@@ -386,6 +386,53 @@ export async function handleSearchTool(
  * @returns MCP-formatted error response
  */
 export function formatSearchError(error: unknown): any {
+  // Check for RpcError with structured details (SRCHTRN-1005)
+  if (error instanceof RpcError) {
+    const details = error.getDetails()
+
+    if (details) {
+      // Format structured error with error type, stage, context, and suggestions
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                error: details.error_type,
+                stage: details.stage,
+                message: error.message,
+                context: details.context,
+                suggestions: details.suggestions,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      }
+    }
+
+    // Fallback to existing error handling if no details available
+    // (backward compatibility)
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              error: 'RPC_ERROR',
+              message: error.message,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    }
+  }
+
   if (error instanceof ValidationError) {
     return {
       isError: true,

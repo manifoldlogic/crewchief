@@ -4,9 +4,9 @@
 Update MCP tool to format structured errors with context and suggestions
 
 ## Status
-- [ ] **Implementation Complete**
-- [ ] **Tests Passing**
-- [ ] **Verified**
+- [x] **Implementation Complete**
+- [x] **Tests Passing**
+- [x] **Verified**
 - [ ] **Committed**
 
 ## Agents
@@ -24,14 +24,14 @@ With SRCHTRN-1004 providing parsed error details in `RpcError`, the MCP tool can
 **User Impact**: Users will see actionable errors with context and suggestions instead of generic "RPC_ERROR" messages.
 
 ## Acceptance Criteria
-- [ ] `formatSearchError()` function checks for `RpcError` with details
-- [ ] Structured errors formatted with error type, stage, context, and suggestions
-- [ ] Fallback to existing error handling if no details available
-- [ ] Error format follows MCP protocol (JSON content in text field)
-- [ ] Integration test validates end-to-end error flow (Rust → TypeScript → MCP)
+- [x] `formatSearchError()` function checks for `RpcError` with details
+- [x] Structured errors formatted with error type, stage, context, and suggestions
+- [x] Fallback to existing error handling if no details available
+- [x] Error format follows MCP protocol (JSON content in text field)
+- [x] Integration test validates end-to-end error flow (Rust → TypeScript → MCP)
 - [ ] Manual test: Embedding provider offline shows actionable error
-- [ ] Backward compatibility verified: Old clients still work
-- [ ] All tests passing
+- [x] Backward compatibility verified: Old clients still work
+- [x] All tests passing
 
 ## Technical Requirements
 
