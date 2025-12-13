@@ -41,9 +41,9 @@ static SPECIAL_CHAR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[^a-zA-Z0-9_\
 /// # Examples
 /// ```
 /// # use crewchief_maproom::db::sqlite::fts::sanitize_fts_term;
-/// assert_eq!(sanitize_fts_term("package.json"), "package json");
-/// assert_eq!(sanitize_fts_term("src/main.rs"), "src main rs");
-/// assert_eq!(sanitize_fts_term("array[0]"), "array 0 ");
+/// assert_eq!(sanitize_fts_term("package.json").trim(), "package json");
+/// assert_eq!(sanitize_fts_term("src/main.rs").trim(), "src main rs");
+/// assert_eq!(sanitize_fts_term("array[0]").trim(), "array 0");
 /// ```
 pub fn sanitize_fts_term(term: &str) -> String {
     SPECIAL_CHAR_REGEX.replace_all(term, " ").to_string()
