@@ -7,7 +7,7 @@ Measure current search performance baseline for Phase 2 comparison
 - [x] **Implementation Complete**
 - [x] **Tests Passing**
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed**
 
 ## Agents
 - **Primary**: general
