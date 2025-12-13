@@ -1,9 +1,9 @@
 # Ticket: CICLEAN-2001: Update E2E test script to remove feature flag
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -32,10 +32,10 @@ Additionally, error messages in the script instruct users to run the wrong comma
 **Planning Reference**: `/home/vscode/.crewchief/worktrees/audit/.crewchief/projects/CICLEAN_ci-workflow-cleanup/planning/architecture.md`
 
 ## Acceptance Criteria
-- [ ] `cargo build --features sqlite` changed to `cargo build` (line 73)
-- [ ] Error message updated to remove `--features sqlite` from fixture generation command (line 61)
-- [ ] Script executes successfully (builds binary without errors)
-- [ ] Script syntax remains valid (shellcheck passes or no new warnings)
+- [x] `cargo build --features sqlite` changed to `cargo build` (line 73)
+- [x] Error message updated to remove `--features sqlite` from fixture generation command (line 61)
+- [x] Script executes successfully (builds binary without errors)
+- [x] Script syntax remains valid (shellcheck passes or no new warnings)
 
 ## Technical Requirements
 

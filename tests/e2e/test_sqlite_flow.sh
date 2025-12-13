@@ -58,7 +58,7 @@ run_test() {
 # Check prerequisites
 if [ ! -f "$FIXTURE_DB" ]; then
     echo "ERROR: Test fixture not found at $FIXTURE_DB"
-    echo "Run: cargo test --features sqlite --test create_sqlite_fixture -- --ignored --nocapture"
+    echo "Run: cargo test --test create_sqlite_fixture -- --ignored --nocapture"
     exit 1
 fi
 
@@ -70,7 +70,7 @@ export MAPROOM_DATABASE_URL="sqlite://$TEST_DB"
 # Build with SQLite feature
 echo "Building CLI with SQLite support..."
 cd "$REPO_ROOT"
-cargo build --features sqlite --bin crewchief-maproom --release 2>/dev/null
+cargo build --bin crewchief-maproom --release 2>/dev/null
 CLI="./target/release/crewchief-maproom"
 
 if [ ! -f "$CLI" ]; then
