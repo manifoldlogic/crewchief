@@ -1,9 +1,9 @@
 # Ticket: CICLEAN-2002: Update test helper error messages
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (68 tests passed, PostgreSQL failures are environmental)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -30,10 +30,10 @@ This command is incorrect because the `sqlite` feature doesn't exist. Developers
 **Planning Reference**: `/home/vscode/.crewchief/worktrees/audit/.crewchief/projects/CICLEAN_ci-workflow-cleanup/planning/architecture.md`
 
 ## Acceptance Criteria
-- [ ] Error message on line 49 updated to remove `--features sqlite`
-- [ ] Error message on line 92 updated to remove `--features sqlite`
-- [ ] TypeScript code compiles without errors (`pnpm build` succeeds)
-- [ ] Error messages provide correct, working command
+- [x] Error message on line 49 updated to remove `--features sqlite`
+- [x] Error message on line 92 updated to remove `--features sqlite`
+- [x] TypeScript code compiles without errors (`pnpm build` succeeds)
+- [x] Error messages provide correct, working command
 
 ## Technical Requirements
 

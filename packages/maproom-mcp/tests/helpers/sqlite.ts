@@ -46,7 +46,7 @@ export function createTestSqliteDatabase(): string {
   if (!existsSync(FIXTURE_SOURCE)) {
     throw new Error(
       `SQLite fixture not found: ${FIXTURE_SOURCE}\n` +
-        `Run: cargo test --features sqlite --test create_sqlite_fixture -- --ignored`
+        `Run: cargo test --test create_sqlite_fixture -- --ignored`
     )
   }
 
@@ -89,7 +89,7 @@ export function getSqliteFixturePath(): string {
   if (!existsSync(FIXTURE_SOURCE)) {
     throw new Error(
       `SQLite fixture not found: ${FIXTURE_SOURCE}\n` +
-        `Run: cargo test --features sqlite --test create_sqlite_fixture -- --ignored`
+        `Run: cargo test --test create_sqlite_fixture -- --ignored`
     )
   }
   return FIXTURE_SOURCE
