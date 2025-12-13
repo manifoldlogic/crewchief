@@ -15,6 +15,7 @@ use tokio::task::spawn_blocking;
 
 use crate::config::SqliteConfig;
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
+use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
 
 // Declare the C extension init function from sqlite-vec
@@ -722,18 +723,13 @@ impl SqliteStore {
                 .split_whitespace()
                 .filter(|t| !t.is_empty())
                 .map(|t| {
-                    // Sanitize: remove quotes and special FTS characters
-                    let clean = t
-                        .replace('"', "")
-                        .replace('\'', "")
-                        .replace('*', "")
-                        .replace('(', "")
-                        .replace(')', "");
-                    if clean.is_empty() {
+                    // Sanitize: remove FTS5 special characters
+                    let clean = sanitize_fts_term(t);
+                    if clean.trim().is_empty() {
                         return String::new();
                     }
                     // FTS5 prefix syntax: term* (no quotes!)
-                    format!("{}*", clean)
+                    format!("{}*", clean.trim())
                 })
                 .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()
@@ -846,18 +842,13 @@ impl SqliteStore {
                 .split_whitespace()
                 .filter(|t| !t.is_empty())
                 .map(|t| {
-                    // Sanitize: remove quotes and special FTS characters
-                    let clean = t
-                        .replace('"', "")
-                        .replace('\'', "")
-                        .replace('*', "")
-                        .replace('(', "")
-                        .replace(')', "");
-                    if clean.is_empty() {
+                    // Sanitize: remove FTS5 special characters
+                    let clean = sanitize_fts_term(t);
+                    if clean.trim().is_empty() {
                         return String::new();
                     }
                     // FTS5 prefix syntax: term* (no quotes!)
-                    format!("{}*", clean)
+                    format!("{}*", clean.trim())
                 })
                 .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()

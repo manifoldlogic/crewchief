@@ -4,6 +4,8 @@
 //! FTS5 ranks are normalized to 0-1 scale for Reciprocal Rank Fusion with vector search.
 
 use anyhow::Result;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::resolve_repo_id;
@@ -31,6 +33,24 @@ pub fn normalize_fts_rank(rank: f64) -> f64 {
     1.0 / (1.0 + rank.abs())
 }
 
+static SPECIAL_CHAR_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[^\p{L}\p{N}_\s]").unwrap());
+
+/// Sanitize a search term for FTS5 queries by replacing special characters with spaces.
+/// Uses Unicode categories `[^\p{L}\p{N}_\s]` to preserve letters and numbers from any language
+/// while removing FTS5 special characters.
+///
+/// # Examples
+/// ```
+/// # use crewchief_maproom::db::sqlite::fts::sanitize_fts_term;
+/// assert_eq!(sanitize_fts_term("package.json").trim(), "package json");
+/// assert_eq!(sanitize_fts_term("src/main.rs").trim(), "src main rs");
+/// assert_eq!(sanitize_fts_term("array[0]").trim(), "array 0");
+/// ```
+pub fn sanitize_fts_term(term: &str) -> String {
+    SPECIAL_CHAR_REGEX.replace_all(term, " ").to_string()
+}
+
 /// Build FTS5 query from user input
 ///
 /// Sanitizes special FTS5 characters and builds an OR query with prefix matching.
@@ -46,14 +66,7 @@ pub fn build_fts_query(query: &str) -> String {
         .filter(|t| !t.is_empty())
         .map(|t| {
             // Sanitize: remove FTS5 special characters
-            let clean = t
-                .replace('"', "")
-                .replace('\'', "")
-                .replace('*', "")
-                .replace('(', "")
-                .replace(')', "")
-                .replace('-', " ") // Treat hyphen as space
-                .replace(':', " "); // Treat colon as space
+            let clean = sanitize_fts_term(t);
             clean.trim().to_string()
         })
         .filter(|t| !t.is_empty())
@@ -298,6 +311,41 @@ mod tests {
         // Colon should be treated as word separator
         let query = build_fts_query("module:function");
         assert_eq!(query, "module* OR function*");
+    }
+
+    #[test]
+    fn test_build_fts_query_comprehensive_sanitization() {
+        // Dots (file extensions)
+        let query = build_fts_query("package.json");
+        assert_eq!(query, "package* OR json*");
+
+        // Slashes (file paths)
+        let query = build_fts_query("src/main.rs");
+        assert_eq!(query, "src* OR main* OR rs*");
+
+        // Brackets (array syntax)
+        let query = build_fts_query("array[0]");
+        assert_eq!(query, "array* OR 0*");
+
+        // Braces (template syntax)
+        let query = build_fts_query("template{value}");
+        assert_eq!(query, "template* OR value*");
+
+        // At sign (email/decorators)
+        let query = build_fts_query("user@email.com");
+        assert_eq!(query, "user* OR email* OR com*");
+
+        // Backslash (Windows paths)
+        let query = build_fts_query("path\\to\\file");
+        assert_eq!(query, "path* OR to* OR file*");
+
+        // Mixed special characters
+        let query = build_fts_query("src/main@v2.rs");
+        assert_eq!(query, "src* OR main* OR v2* OR rs*");
+
+        // Operators
+        let query = build_fts_query("a+b=c");
+        assert_eq!(query, "a* OR b* OR c*");
     }
 
     #[test]

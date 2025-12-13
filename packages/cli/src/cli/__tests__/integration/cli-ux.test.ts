@@ -17,22 +17,42 @@ describe('CLI UX Integration', () => {
     }
   })
 
-  describe('worktree use with existing worktree (main branch)', () => {
-    it('returns path when using main branch', () => {
-      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'main'], {
+  describe('worktree use with existing worktree', () => {
+    it('returns path when worktree exists', () => {
+      // First create a test worktree
+      const createResult = spawnSync('node', [CLI_PATH, 'worktree', 'create', 'test-worktree-use'], {
+        cwd: WORKSPACE_PATH,
+        encoding: 'utf-8',
+      })
+      expect(createResult.status).toBe(0)
+      // Extract only the path (last line) from create output, ignoring logger messages
+      const createdPath = createResult.stdout.trim().split('\n').pop() || ''
+
+      // Now use it
+      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'test-worktree-use'], {
         cwd: WORKSPACE_PATH,
         encoding: 'utf-8',
       })
 
       expect(result.status).toBe(0)
-      // stdout should be a valid absolute path
+      // stdout should be the same absolute path
       const outputPath = result.stdout.trim()
+      expect(outputPath).toBe(createdPath)
       expect(outputPath).toMatch(/^\//) // Starts with / (absolute path)
-      expect(outputPath.length).toBeGreaterThan(1)
     })
 
     it('outputs only path to stdout (no logger messages)', () => {
-      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'main'], {
+      // Create a test worktree
+      const createResult = spawnSync('node', [CLI_PATH, 'worktree', 'create', 'test-worktree-stdout'], {
+        cwd: WORKSPACE_PATH,
+        encoding: 'utf-8',
+      })
+      expect(createResult.status).toBe(0)
+      // Extract only the path (last line), ignoring any logger messages during creation
+      const createdPath = createResult.stdout.trim().split('\n').pop() || ''
+
+      // Use it
+      const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'test-worktree-stdout'], {
         cwd: WORKSPACE_PATH,
         encoding: 'utf-8',
       })
@@ -43,6 +63,8 @@ describe('CLI UX Integration', () => {
       expect(result.stdout).not.toContain('[') // No logger prefixes
       expect(result.stdout).not.toContain('ok')
       expect(result.stdout).not.toContain('info')
+      // Verify it matches the path from create
+      expect(result.stdout.trim()).toBe(createdPath)
     })
   })
 

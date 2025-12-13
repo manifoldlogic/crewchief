@@ -1,25 +1,21 @@
 name: Test
 
 # =============================================================================
-# CI Workflow: SQLite-First Testing Strategy
+# CI Workflow: SQLite-Only Testing Strategy
 # =============================================================================
 #
-# DATABASE BACKENDS:
-#   - SQLite (Default): Zero-configuration, runs without external services
-#   - PostgreSQL (Integration): For team sharing/production validation
+# Tests CrewChief packages using SQLite as the only database backend.
+# PostgreSQL support was intentionally removed for simplicity.
+#
+# DATABASE BACKEND:
+#   - SQLite (Only): Zero-configuration, runs without external services
+#   - No PostgreSQL support (intentionally removed for simplicity)
 #
 # JOB ORGANIZATION:
-#   1. SQLite Tests (Primary) - Fast, no dependencies
-#      - test-sqlite-e2e: CLI end-to-end tests
-#      - test-mcp-sqlite: TypeScript MCP server tests
-#      - test-rust (sqlite): Rust library tests
-#
-#   2. PostgreSQL Tests (Integration) - Requires service container
-#      - test-postgres: TypeScript PostgreSQL integration
-#      - test-rust (postgres): Rust PostgreSQL feature tests
-#
-# For local development, SQLite is recommended. PostgreSQL setup instructions
-# are in docs/architecture/DATABASE_ARCHITECTURE.md
+#   - test-sqlite-e2e: CLI end-to-end tests
+#   - test-mcp-sqlite: TypeScript MCP server tests
+#   - test-rust: Rust library tests
+#   - test-typescript: TypeScript package tests (CLI, VSCode, daemon-client)
 # =============================================================================
 
 # Run tests only on pull requests
@@ -61,7 +57,7 @@ concurrency:
 
 jobs:
   # =============================================================================
-  # SQLITE TESTS (Primary) - No external dependencies required
+  # TEST JOBS
   # =============================================================================
 
   # SQLite E2E Integration Tests
@@ -158,7 +154,7 @@ jobs:
         run: |
           if [ ! -f crates/maproom/tests/fixtures/pre-indexed-maproom.db ]; then
             echo "SQLite fixture not found, generating..."
-            cargo test --features sqlite --test create_sqlite_fixture -- --ignored
+            cargo test --test create_sqlite_fixture -- --ignored
           else
             echo "SQLite fixture found"
           fi
@@ -185,8 +181,8 @@ jobs:
 
   # Rust SQLite feature tests
   # SQLite tests run in-memory (no external service needed)
-  test-rust-sqlite:
-    name: Rust SQLite Tests
+  test-rust:
+    name: Rust Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -205,200 +201,23 @@ jobs:
           key: sqlite
 
       - name: Check compilation
-        run: cargo check --features sqlite
+        run: cargo check
         working-directory: crates/maproom
 
       - name: Run tests
         # Use --test-threads=1 due to env var race conditions in config tests
-        run: cargo test --features sqlite -- --test-threads=1
+        run: cargo test -- --test-threads=1
         working-directory: crates/maproom
 
       - name: Job Summary
         if: always()
         run: |
-          echo "## 🗄️ Rust SQLite Tests" >> $GITHUB_STEP_SUMMARY
+          echo "## 🦀 Rust Tests" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** SQLite (only)" >> $GITHUB_STEP_SUMMARY
           echo "**Dependencies:** None - uses in-memory database" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tests Rust \`maproom\` crate with SQLite feature." >> $GITHUB_STEP_SUMMARY
-
-  # =============================================================================
-  # POSTGRESQL TESTS (Integration) - Requires service container
-  # =============================================================================
-  # PostgreSQL tests validate team/production scenarios with concurrent access.
-  # These require a PostgreSQL service container and take longer to run.
-  # =============================================================================
-
-  # TypeScript PostgreSQL Integration Tests
-  test-postgres:
-    name: PostgreSQL Integration Tests (TypeScript)
-    runs-on: ubuntu-latest
-
-    # Service container for isolated test database
-    # Matches local development postgres-test configuration
-    services:
-      postgres-test:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_DB: maproom_test
-          POSTGRES_USER: maproom
-          POSTGRES_PASSWORD: maproom
-        ports:
-          # Map container port 5432 to host port 5434 to match local dev
-          - 5434:5432
-        # Health checks ensure database is ready before tests run
-        options: >-
-          --health-cmd "pg_isready -U maproom -d maproom_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      # Test database connection URL - matches local docker-compose setup
-      # Uses localhost:5434 from runner perspective
-      TEST_MAPROOM_DATABASE_URL: postgresql://maproom:maproom@localhost:5434/maproom_test
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "crates/maproom -> target"
-
-      - name: Initialize test database schema
-        run: |
-          echo "Waiting for PostgreSQL to be fully ready..."
-
-          max_attempts=30
-          attempt=0
-
-          until PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test -c '\q' 2>/dev/null; do
-            attempt=$((attempt + 1))
-            if [ $attempt -ge $max_attempts ]; then
-              echo "ERROR: PostgreSQL failed to become ready after $max_attempts attempts"
-              exit 1
-            fi
-            echo "Waiting for PostgreSQL... (attempt $attempt/$max_attempts)"
-            sleep 1
-          done
-
-          echo "PostgreSQL is ready. Building Rust migration runner..."
-          cargo build --release --bin crewchief-maproom
-
-          echo "Running database migrations..."
-          MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5434/maproom_test \
-            ./target/release/crewchief-maproom db migrate
-
-          echo "Schema initialization via migrations complete"
-
-          echo "Verifying schema..."
-          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
-            -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'maproom';"
-
-      - name: Run tests
-        working-directory: packages/maproom-mcp
-        run: pnpm test
-
-      - name: Verify test database usage
-        if: always()
-        run: |
-          echo "Test database statistics:"
-          echo "Database connection test:"
-          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
-            -c "SELECT current_database(), current_user, version();"
-
-          echo ""
-          echo "Checking for test data:"
-          PGPASSWORD=maproom psql -h localhost -p 5434 -U maproom -d maproom_test \
-            -c "SELECT
-                  (SELECT COUNT(*) FROM maproom.repos) as repos,
-                  (SELECT COUNT(*) FROM maproom.worktrees) as worktrees,
-                  (SELECT COUNT(*) FROM maproom.chunks) as chunks,
-                  (SELECT COUNT(*) FROM maproom.symbols) as symbols;" \
-            || echo "Note: No test data found (expected for some test suites)"
-
-      - name: Job Summary
-        if: always()
-        run: |
-          echo "## 🐘 PostgreSQL Integration Tests (TypeScript)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend:** PostgreSQL (integration)" >> $GITHUB_STEP_SUMMARY
-          echo "**Dependencies:** PostgreSQL service container with pgvector" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tests TypeScript MCP server with PostgreSQL for team/production scenarios." >> $GITHUB_STEP_SUMMARY
-
-  # Rust PostgreSQL feature tests
-  test-rust-postgres:
-    name: Rust PostgreSQL Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "crates/maproom -> target"
-          key: postgres
-
-      - name: Check compilation
-        run: cargo check --features postgres
-        working-directory: crates/maproom
-
-      - name: Run tests
-        # Use --test-threads=1 due to env var race conditions in config tests
-        run: cargo test --features postgres -- --test-threads=1
-        working-directory: crates/maproom
-        # Note: postgres tests requiring DB connection will be skipped
-        # This validates compilation and non-DB-dependent tests
-
-      - name: Job Summary
-        if: always()
-        run: |
-          echo "## 🐘 Rust PostgreSQL Tests" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend:** PostgreSQL (integration)" >> $GITHUB_STEP_SUMMARY
-          echo "**Dependencies:** None - validates compilation only" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tests Rust \`maproom\` crate with PostgreSQL feature (DB tests skipped)." >> $GITHUB_STEP_SUMMARY
+          echo "Tests Rust \`maproom\` crate (SQLite is the only backend)." >> $GITHUB_STEP_SUMMARY
 
   # =============================================================================
   # TYPESCRIPT PACKAGE TESTS - Unit tests for CLI, VSCode, and Daemon packages
