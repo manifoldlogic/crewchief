@@ -35,6 +35,20 @@ pub fn normalize_fts_rank(rank: f64) -> f64 {
 
 static SPECIAL_CHAR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[^a-zA-Z0-9_\s]").unwrap());
 
+/// Sanitize a search term for FTS5 queries by replacing special characters with spaces.
+/// Uses regex whitelist `[^a-zA-Z0-9_\s]` to handle ALL special characters comprehensively.
+///
+/// # Examples
+/// ```
+/// # use crewchief_maproom::db::sqlite::fts::sanitize_fts_term;
+/// assert_eq!(sanitize_fts_term("package.json"), "package json");
+/// assert_eq!(sanitize_fts_term("src/main.rs"), "src main rs");
+/// assert_eq!(sanitize_fts_term("array[0]"), "array 0 ");
+/// ```
+pub fn sanitize_fts_term(term: &str) -> String {
+    SPECIAL_CHAR_REGEX.replace_all(term, " ").to_string()
+}
+
 /// Build FTS5 query from user input
 ///
 /// Sanitizes special FTS5 characters and builds an OR query with prefix matching.
@@ -50,7 +64,7 @@ pub fn build_fts_query(query: &str) -> String {
         .filter(|t| !t.is_empty())
         .map(|t| {
             // Sanitize: remove FTS5 special characters
-            let clean = SPECIAL_CHAR_REGEX.replace_all(t, " ").to_string();
+            let clean = sanitize_fts_term(t);
             clean.trim().to_string()
         })
         .filter(|t| !t.is_empty())
