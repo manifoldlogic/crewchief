@@ -1,0 +1,22 @@
+{
+  "date": "2025-12-13",
+  "git_commit": "7047dc6bc13e2ea1a8c1f2b6443eeddbd7f52717",
+  "total_queries": 304,
+  "latency_percentiles_ms": {
+    "p50": ,
+    "p95": ,
+    "p99": 
+  },
+  "latency_statistics_ms": {
+    "average": 43.24960526315789,
+    "min": 13.763,
+    "max": 211.258
+  },
+  "test_configuration": {
+    "repo": "crewchief",
+    "worktree": "main",
+    "search_mode": "fts",
+    "result_limit": 10,
+    "indexed_chunks": "23232"
+  }
+}

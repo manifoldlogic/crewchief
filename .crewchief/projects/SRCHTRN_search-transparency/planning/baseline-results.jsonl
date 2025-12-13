@@ -1,0 +1,304 @@
+{
+  "query": "authentication",
+  "latency_ms": 19.187
+}
+{
+  "query": "search",
+  "latency_ms": 40.928
+}
+{
+  "query": "error",
+  "latency_ms": 34.273
+}
+{
+  "query": "database",
+  "latency_ms": 32.027
+}
+{
+  "query": "handler",
+  "latency_ms": 16.076
+}
+{
+  "query": "metrics",
+  "latency_ms": 19.716
+}
+{
+  "query": "context",
+  "latency_ms": 21.573
+}
+{
+  "query": "pipeline",
+  "latency_ms": 17.323
+}
+{
+  "query": "server",
+  "latency_ms": 18.303
+}
+{
+  "query": "daemon",
+  "latency_ms": 19.13
+}
+{
+  "query": "error handling logic",
+  "latency_ms": 38.529
+}
+{
+  "query": "search query processing",
+  "latency_ms": 45.949
+}
+{
+  "query": "database connection pool",
+  "latency_ms": 33.992
+}
+{
+  "query": "authentication middleware handler",
+  "latency_ms": 17.757
+}
+{
+  "query": "metrics collection prometheus",
+  "latency_ms": 20.542
+}
+{
+  "query": "how to implement error handling in search pipeline",
+  "latency_ms": 197.726
+}
+{
+  "query": "what are the database schema migration procedures",
+  "latency_ms": 80.647
+}
+{
+  "query": "configure prometheus metrics endpoint for monitoring search latency",
+  "latency_ms": 97.126
+}
+{
+  "query": "implement incremental indexing with file system watcher",
+  "latency_ms": 135.812
+}
+{
+  "query": "handle concurrent requests in daemon server session",
+  "latency_ms": 144.91
+}
+{
+  "query": "function search",
+  "latency_ms": 47.378
+}
+{
+  "query": "class SearchPipeline",
+  "latency_ms": 18.177
+}
+{
+  "query": "async fn execute",
+  "latency_ms": 34.914
+}
+{
+  "query": "impl SearchExecutors",
+  "latency_ms": 43.172
+}
+{
+  "query": "trait ScoreFusion",
+  "latency_ms": 22.999
+}
+{
+  "query": "struct SearchMetadata",
+  "latency_ms": 27.645
+}
+{
+  "query": "mod daemon",
+  "latency_ms": 48.891
+}
+{
+  "query": "use tokio",
+  "latency_ms": 55.947
+}
+{
+  "query": "worktree management",
+  "latency_ms": 31.946
+}
+{
+  "query": "git integration",
+  "latency_ms": 45.324
+}
+{
+  "query": "incremental updates",
+  "latency_ms": 22.934
+}
+{
+  "query": "embedding generation",
+  "latency_ms": 31.539
+}
+{
+  "query": "vector search",
+  "latency_ms": 40.428
+}
+{
+  "query": "hybrid search fusion",
+  "latency_ms": 40.165
+}
+{
+  "query": "score ranking algorithm",
+  "latency_ms": 23.254
+}
+{
+  "query": "chunk deduplication",
+  "latency_ms": 29.174
+}
+{
+  "query": "how to configure",
+  "latency_ms": 81.958
+}
+{
+  "query": "installation guide",
+  "latency_ms": 20.152
+}
+{
+  "query": "performance tuning",
+  "latency_ms": 25.756
+}
+{
+  "query": "troubleshooting guide",
+  "latency_ms": 20.872
+}
+{
+  "query": "api documentation",
+  "latency_ms": 29.658
+}
+{
+  "query": "reciprocal rank fusion",
+  "latency_ms": 20.516
+}
+{
+  "query": "sqlite fts5",
+  "latency_ms": 21.544
+}
+{
+  "query": "tree-sitter parsing",
+  "latency_ms": 16.746
+}
+{
+  "query": "json-rpc protocol",
+  "latency_ms": 17.476
+}
+{
+  "query": "unix socket server",
+  "latency_ms": 20.322
+}
+{
+  "query": "prometheus histogram",
+  "latency_ms": 13.763
+}
+{
+  "query": "semantic search",
+  "latency_ms": 36.681
+}
+{
+  "query": "full-text search",
+  "latency_ms": 39.234
+}
+{
+  "query": "search pipeline optimization",
+  "latency_ms": 42.162
+}
+{
+  "query": "error taxonomy design",
+  "latency_ms": 39.716
+}
+{
+  "query": "type synchronization",
+  "latency_ms": 34.023
+}
+{
+  "query": "metadata assembly",
+  "latency_ms": 21.216
+}
+{
+  "query": "query understanding",
+  "latency_ms": 29.391
+}
+{
+  "query": "suggestion generation",
+  "latency_ms": 19.275
+}
+{
+  "query": "validation error messages",
+  "latency_ms": 49.972
+}
+{
+  "query": "performance regression testing",
+  "latency_ms": 45.115
+}
+{
+  "query": "a",
+  "latency_ms": 211.258
+}
+{
+  "query": "to",
+  "latency_ms": 77.973
+}
+{
+  "query": "the",
+  "latency_ms": 43.122
+}
+{
+  "query": "if",
+  "latency_ms": 33.59
+}
+{
+  "query": "function",
+  "latency_ms": 30.119
+}
+{
+  "query": "const",
+  "latency_ms": 25.356
+}
+{
+  "query": "return",
+  "latency_ms": 25.53
+}
+{
+  "query": "async",
+  "latency_ms": 20.169
+}
+{
+  "query": "await",
+  "latency_ms": 19.58
+}
+{
+  "query": "find authentication code",
+  "latency_ms": 51.882
+}
+{
+  "query": "where is error handling",
+  "latency_ms": 67.435
+}
+{
+  "query": "how to add metrics",
+  "latency_ms": 100.646
+}
+{
+  "query": "search result ranking",
+  "latency_ms": 50.149
+}
+{
+  "query": "database migration script",
+  "latency_ms": 40.646
+}
+{
+  "query": "daemon server implementation",
+  "latency_ms": 37.741
+}
+{
+  "query": "context assembly logic",
+  "latency_ms": 29.065
+}
+{
+  "query": "worktree cleanup command",
+  "latency_ms": 40.946
+}
+{
+  "query": "embedding provider config",
+  "latency_ms": 57.573
+}
+{
+  "query": "file watcher implementation",
+  "latency_ms": 63.229
+}

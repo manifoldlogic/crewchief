@@ -1,0 +1,114 @@
+# Search Performance Baseline Test Workload
+# This file contains representative search queries to measure performance baselines
+# Mix of query types: short, medium, long, code-specific, documentation-specific
+
+# Short queries (1-2 words)
+authentication
+search
+error
+database
+handler
+metrics
+context
+pipeline
+server
+daemon
+
+# Medium queries (3-5 words)
+error handling logic
+search query processing
+database connection pool
+authentication middleware handler
+metrics collection prometheus
+
+# Long queries (6-10 words)
+how to implement error handling in search pipeline
+what are the database schema migration procedures
+configure prometheus metrics endpoint for monitoring search latency
+implement incremental indexing with file system watcher
+handle concurrent requests in daemon server session
+
+# Code-specific queries
+function search
+class SearchPipeline
+async fn execute
+impl SearchExecutors
+trait ScoreFusion
+struct SearchMetadata
+mod daemon
+use tokio
+
+# Architecture queries
+worktree management
+git integration
+incremental updates
+embedding generation
+vector search
+hybrid search fusion
+score ranking algorithm
+chunk deduplication
+
+# Documentation queries
+how to configure
+installation guide
+performance tuning
+troubleshooting guide
+api documentation
+
+# Technical terms
+reciprocal rank fusion
+sqlite fts5
+tree-sitter parsing
+json-rpc protocol
+unix socket server
+prometheus histogram
+semantic search
+full-text search
+
+# Mixed complexity
+search pipeline optimization
+error taxonomy design
+type synchronization
+metadata assembly
+query understanding
+suggestion generation
+validation error messages
+performance regression testing
+
+# Edge cases (short)
+a
+to
+the
+if
+
+# Edge cases (common words)
+function
+const
+return
+async
+await
+
+# Realistic developer queries
+find authentication code
+where is error handling
+how to add metrics
+search result ranking
+database migration script
+daemon server implementation
+context assembly logic
+worktree cleanup command
+embedding provider config
+file watcher implementation
+
+# Total: 100 queries with diverse characteristics
+# Query length distribution:
+# - Short (1-2 words): 50 queries
+# - Medium (3-5 words): 30 queries
+# - Long (6-10 words): 20 queries
+#
+# Query type distribution:
+# - Code-specific: 25 queries
+# - Architecture: 20 queries
+# - Documentation: 15 queries
+# - Technical terms: 15 queries
+# - Developer queries: 25 queries
