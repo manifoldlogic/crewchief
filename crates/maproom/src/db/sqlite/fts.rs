@@ -33,8 +33,7 @@ pub fn normalize_fts_rank(rank: f64) -> f64 {
     1.0 / (1.0 + rank.abs())
 }
 
-static SPECIAL_CHAR_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"[^\p{L}\p{N}_\s]").unwrap());
+static SPECIAL_CHAR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[^\p{L}\p{N}_\s]").unwrap());
 
 /// Sanitize a search term for FTS5 queries by replacing special characters with spaces.
 /// Uses Unicode categories `[^\p{L}\p{N}_\s]` to preserve letters and numbers from any language

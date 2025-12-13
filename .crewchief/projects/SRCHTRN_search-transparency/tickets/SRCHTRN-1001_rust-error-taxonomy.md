@@ -4,9 +4,9 @@
 Create structured error taxonomy with conversion logic and actionable suggestions
 
 ## Status
-- [ ] **Implementation Complete**
-- [ ] **Tests Passing**
-- [ ] **Verified**
+- [x] **Implementation Complete**
+- [x] **Tests Passing**
+- [x] **Verified**
 - [ ] **Committed**
 
 ## Agents
@@ -24,15 +24,15 @@ Currently, when search pipeline errors occur, only generic error messages are re
 **Critical First Step**: Audit existing `PipelineError` types to verify sufficient context is available for extraction. May require minor refactoring of error types to capture necessary context.
 
 ## Acceptance Criteria
-- [ ] `PipelineError` types audited for context availability
-- [ ] `SearchErrorDetails` struct created with `error_type`, `stage`, `context`, `suggestions` fields
-- [ ] `ErrorType` enum defined with 6 variants: `embedding_provider`, `database`, `validation`, `timeout`, `not_found`, `unknown`
-- [ ] `PipelineStage` enum defined with 4 variants: `query_processing`, `search_execution`, `score_fusion`, `result_assembly`
-- [ ] `from_pipeline_error()` conversion function implemented with pattern matching
-- [ ] Each error type has 1-2 actionable suggestions (generic suggestions acceptable for limited-context errors)
-- [ ] Unit tests validate error conversion for all 6 error types
-- [ ] All tests passing
-- [ ] Type sync validation: Enum values match expected TypeScript types (manual check)
+- [x] `PipelineError` types audited for context availability
+- [x] `SearchErrorDetails` struct created with `error_type`, `stage`, `context`, `suggestions` fields
+- [x] `ErrorType` enum defined with 6 variants: `embedding_provider`, `database`, `validation`, `timeout`, `not_found`, `unknown`
+- [x] `PipelineStage` enum defined with 4 variants: `query_processing`, `search_execution`, `score_fusion`, `result_assembly`
+- [x] `from_pipeline_error()` conversion function implemented with pattern matching
+- [x] Each error type has 1-2 actionable suggestions (generic suggestions acceptable for limited-context errors)
+- [x] Unit tests validate error conversion for all 6 error types
+- [x] All tests passing
+- [x] Type sync validation: Enum values match expected TypeScript types (manual check)
 
 ## Technical Requirements
 
@@ -196,6 +196,20 @@ mod tests {
 5. **Pragmatic approach**: Generic suggestions for errors with limited context
 
 **Note on Suggestions**: It's acceptable to have 1-2 suggestions instead of 2-3 if error context is limited. Quality over quantity.
+
+**Error Context Whitelist** (security constraint):
+Only extract these whitelisted context keys from errors to prevent accidental exposure of sensitive data:
+- `provider_error` - Embedding provider error details
+- `provider` - Provider name (OpenAI, Google, Ollama)
+- `error` - Generic error message
+- `message` - Human-readable message
+- `length` - Query length for validation errors
+- `max_length` - Maximum allowed query length
+- `repo_name` - Repository name for not found errors
+- `worktree_id` - Worktree identifier
+- `timeout_ms` - Timeout duration
+
+Do NOT extract other fields (e.g., API keys, tokens, file paths, user data) into error context.
 
 ## Dependencies
 - **SRCHTRN-1000**: Performance baseline measured (parallel work acceptable)
