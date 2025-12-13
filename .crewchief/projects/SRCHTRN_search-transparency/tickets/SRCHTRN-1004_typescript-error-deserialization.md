@@ -7,7 +7,7 @@ Extend RpcError with error details deserialization and user message formatting
 - [x] **Implementation Complete**
 - [x] **Tests Passing**
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed**
 
 ## Agents
 - **Primary**: typescript-engineer
