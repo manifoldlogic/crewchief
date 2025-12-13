@@ -12,11 +12,142 @@ use tracing::{error, info};
 use crate::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
 use crate::db::{connect, SearchHit, SqliteStore};
 use crate::embedding::EmbeddingService;
+use crate::search::errors::SearchErrorDetails;
 
 use self::types::{
     ContextParams, JsonRpcRequest, JsonRpcResponse, RepoStatus, SearchParams, StatusParams,
     StatusResult, WorktreeStatus,
 };
+
+/// Create SearchErrorDetails from anyhow::Error by analyzing error message.
+///
+/// This function pattern-matches error messages to infer the appropriate error type
+/// when we can't extract a concrete PipelineError from the error chain.
+fn error_details_from_anyhow(error: &anyhow::Error) -> SearchErrorDetails {
+    use crate::search::errors::{ErrorType, PipelineStage};
+    use std::collections::HashMap;
+
+    let error_str = error.to_string();
+
+    // Check for embedding-related errors
+    if error_str.contains("embed") || error_str.contains("Embed") {
+        if error_str.contains("timeout") || error_str.contains("Timeout") {
+            return SearchErrorDetails {
+                error_type: ErrorType::EmbeddingProvider,
+                stage: PipelineStage::QueryProcessing,
+                context: HashMap::from([(
+                    "error".to_string(),
+                    "Embedding request timeout".to_string(),
+                )]),
+                suggestions: vec![
+                    "Check your embedding provider connectivity".to_string(),
+                    "Try FTS mode while debugging: --mode fts".to_string(),
+                ],
+            };
+        } else if error_str.contains("API")
+            || error_str.contains("api")
+            || error_str.contains("credential")
+        {
+            return SearchErrorDetails {
+                error_type: ErrorType::EmbeddingProvider,
+                stage: PipelineStage::QueryProcessing,
+                context: HashMap::from([(
+                    "error".to_string(),
+                    "Embedding provider authentication failed".to_string(),
+                )]),
+                suggestions: vec![
+                    "Check your API credentials (OPENAI_API_KEY, GOOGLE_API_KEY, etc.)".to_string(),
+                    "Verify your API key is valid and has not expired".to_string(),
+                ],
+            };
+        } else {
+            return SearchErrorDetails {
+                error_type: ErrorType::EmbeddingProvider,
+                stage: PipelineStage::QueryProcessing,
+                context: HashMap::from([("error".to_string(), error_str.clone())]),
+                suggestions: vec![
+                    "Check your embedding provider configuration".to_string(),
+                    "Try FTS mode while debugging: --mode fts".to_string(),
+                ],
+            };
+        }
+    }
+
+    // Check for database-related errors
+    if error_str.contains("not indexed")
+        || error_str.contains("not found")
+        || error_str.contains("No such")
+    {
+        return SearchErrorDetails {
+            error_type: ErrorType::NotFound,
+            stage: PipelineStage::SearchExecution,
+            context: HashMap::from([("error".to_string(), error_str.clone())]),
+            suggestions: vec![
+                "Check that the repository is indexed: crewchief-maproom status".to_string(),
+                "Run a scan to index the repository: crewchief-maproom scan".to_string(),
+            ],
+        };
+    }
+
+    if error_str.contains("database") || error_str.contains("Database") || error_str.contains("SQL")
+    {
+        if error_str.contains("timeout") || error_str.contains("Timeout") {
+            return SearchErrorDetails {
+                error_type: ErrorType::Database,
+                stage: PipelineStage::SearchExecution,
+                context: HashMap::from([("error".to_string(), error_str.clone())]),
+                suggestions: vec![
+                    "Check database connectivity".to_string(),
+                    "Restart the maproom daemon: crewchief-maproom serve".to_string(),
+                ],
+            };
+        } else {
+            return SearchErrorDetails {
+                error_type: ErrorType::Database,
+                stage: PipelineStage::SearchExecution,
+                context: HashMap::from([("error".to_string(), error_str.clone())]),
+                suggestions: vec![
+                    "Check database connectivity and permissions".to_string(),
+                    "Verify repository is indexed: crewchief-maproom status".to_string(),
+                ],
+            };
+        }
+    }
+
+    // Check for timeout errors
+    if error_str.contains("timeout") || error_str.contains("Timeout") {
+        return SearchErrorDetails {
+            error_type: ErrorType::Timeout,
+            stage: PipelineStage::SearchExecution,
+            context: HashMap::from([("error".to_string(), error_str.clone())]),
+            suggestions: vec![
+                "Try narrowing your search scope with more specific terms".to_string(),
+                "Use a simpler query or reduce the result limit".to_string(),
+            ],
+        };
+    }
+
+    // Check for search execution errors
+    if error_str.contains("search") || error_str.contains("Search") {
+        return SearchErrorDetails {
+            error_type: ErrorType::Database,
+            stage: PipelineStage::SearchExecution,
+            context: HashMap::from([("error".to_string(), error_str.clone())]),
+            suggestions: vec![
+                "Check that the repository is indexed".to_string(),
+                "Try a different search mode (fts, vector, or hybrid)".to_string(),
+            ],
+        };
+    }
+
+    // Default: unknown error
+    SearchErrorDetails {
+        error_type: ErrorType::Unknown,
+        stage: PipelineStage::SearchExecution,
+        context: HashMap::from([("error".to_string(), error_str)]),
+        suggestions: vec!["Please report this error with full details".to_string()],
+    }
+}
 
 /// Deduplicate search hits by identity (file_relpath, symbol_name, start_line).
 fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit> {
@@ -142,11 +273,33 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                 Ok(results) => JsonRpcResponse::success(id, results),
                 Err(e) => {
                     error!("Search failed: {}", e);
+
+                    // Try to extract PipelineError from anyhow error chain
+                    let error_details = if let Some(pipeline_err) =
+                        e.downcast_ref::<crate::search::pipeline::PipelineError>()
+                    {
+                        // Direct PipelineError found in error chain
+                        SearchErrorDetails::from_pipeline_error(pipeline_err)
+                    } else {
+                        // Fall back to error message analysis for other error types
+                        // This handles database errors, embedding errors, etc. wrapped in anyhow
+                        error_details_from_anyhow(&e)
+                    };
+
+                    // Serialize error details, with fallback to simple string on error
+                    let error_data = match serde_json::to_value(&error_details) {
+                        Ok(value) => Some(value),
+                        Err(ser_err) => {
+                            tracing::warn!("Failed to serialize error details: {}", ser_err);
+                            Some(serde_json::json!(e.to_string()))
+                        }
+                    };
+
                     JsonRpcResponse::error(
                         id,
                         -32000,
-                        "Search failed".to_string(),
-                        Some(serde_json::json!(e.to_string())),
+                        e.to_string(), // Preserve human-readable message
+                        error_data,
                     )
                 }
             }
