@@ -319,4 +319,58 @@ describe('FilterableSearchResult', () => {
       expect(step2.count).toBe(1)
     })
   })
+
+  describe('sortBy()', () => {
+    it('sorts by score descending (default)', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sorted = result.sortBy("score")
+
+      expect(sorted.hits[0].score).toBeGreaterThanOrEqual(sorted.hits[1].score)
+    })
+
+    it('sorts by relpath ascending', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sorted = result.sortBy("relpath")
+
+      expect(sorted.hits[0].file_path <= sorted.hits[1].file_path).toBe(true)
+    })
+
+    it('sorts by symbol_name ascending', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sorted = result.sortBy("symbol_name")
+
+      const names = sorted.hits.map(h => h.symbol_name ?? "")
+      expect(names[0] <= names[1]).toBe(true)
+    })
+
+    it('sorts by start_line ascending', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sorted = result.sortBy("start_line")
+
+      expect(sorted.hits[0].start_line <= sorted.hits[1].start_line).toBe(true)
+    })
+
+    it('sorts by kind ascending', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sorted = result.sortBy("kind")
+
+      expect(sorted.hits[0].kind <= sorted.hits[1].kind).toBe(true)
+    })
+
+    it('sorts descending when explicitly specified', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sorted = result.sortBy("relpath", "desc")
+
+      expect(sorted.hits[0].file_path >= sorted.hits[1].file_path).toBe(true)
+    })
+
+    it('preserves immutability (original unchanged)', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const originalFirst = result.hits[0]
+
+      result.sortBy("relpath")
+
+      expect(result.hits[0]).toBe(originalFirst)
+    })
+  })
 })

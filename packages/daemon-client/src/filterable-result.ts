@@ -1,5 +1,5 @@
 import type { SearchResult } from './client'
-import type { FilterCriteria } from './filter-types'
+import type { FilterCriteria, SortField, SortOrder } from './filter-types'
 
 /**
  * Individual search hit from daemon
@@ -140,6 +140,75 @@ export class FilterableSearchResult {
       ...this.result,
       hits: filtered,
       total: filtered.length,
+    })
+  }
+
+  /**
+   * Sort results by field.
+   *
+   * Supported fields:
+   * - "score": Relevance score (descending by default)
+   * - "relpath": File path (ascending by default)
+   * - "symbol_name": Symbol name (ascending by default)
+   * - "start_line": Line number (ascending by default)
+   * - "kind": Symbol kind (ascending by default)
+   *
+   * @param field - Field to sort by
+   * @param order - "asc" or "desc" (defaults based on field)
+   *
+   * @example
+   * result.sortBy("score")              // Highest scores first
+   * result.sortBy("relpath")            // Alphabetical by path
+   * result.sortBy("start_line", "desc") // Later lines first
+   */
+  sortBy(field: SortField, order?: SortOrder): FilterableSearchResult {
+    // Determine default order based on field
+    const defaultOrder: Record<SortField, SortOrder> = {
+      score: "desc",      // Higher scores first
+      relpath: "asc",     // Alphabetical
+      symbol_name: "asc", // Alphabetical
+      start_line: "asc",  // Earlier lines first
+      kind: "asc",        // Alphabetical
+    }
+
+    const sortOrder = order ?? defaultOrder[field]
+    const multiplier = sortOrder === "asc" ? 1 : -1
+
+    const sorted = [...this.hits].sort((a, b) => {
+      let aVal: number | string
+      let bVal: number | string
+
+      switch (field) {
+        case "score":
+          aVal = a.score
+          bVal = b.score
+          break
+        case "relpath":
+          aVal = a.file_path
+          bVal = b.file_path
+          break
+        case "symbol_name":
+          aVal = a.symbol_name ?? ""
+          bVal = b.symbol_name ?? ""
+          break
+        case "start_line":
+          aVal = a.start_line
+          bVal = b.start_line
+          break
+        case "kind":
+          aVal = a.kind
+          bVal = b.kind
+          break
+      }
+
+      if (aVal < bVal) return -1 * multiplier
+      if (aVal > bVal) return 1 * multiplier
+      return 0
+    })
+
+    return new FilterableSearchResult({
+      ...this.result,
+      hits: sorted,
     })
   }
 }
