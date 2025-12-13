@@ -25,7 +25,8 @@ describe('CLI UX Integration', () => {
         encoding: 'utf-8',
       })
       expect(createResult.status).toBe(0)
-      const createdPath = createResult.stdout.trim()
+      // Extract only the path (last line) from create output, ignoring logger messages
+      const createdPath = createResult.stdout.trim().split('\n').pop() || ''
 
       // Now use it
       const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'test-worktree-use'], {
@@ -47,6 +48,8 @@ describe('CLI UX Integration', () => {
         encoding: 'utf-8',
       })
       expect(createResult.status).toBe(0)
+      // Extract only the path (last line), ignoring any logger messages during creation
+      const createdPath = createResult.stdout.trim().split('\n').pop() || ''
 
       // Use it
       const result = spawnSync('node', [CLI_PATH, 'worktree', 'use', 'test-worktree-stdout'], {
@@ -60,6 +63,8 @@ describe('CLI UX Integration', () => {
       expect(result.stdout).not.toContain('[') // No logger prefixes
       expect(result.stdout).not.toContain('ok')
       expect(result.stdout).not.toContain('info')
+      // Verify it matches the path from create
+      expect(result.stdout.trim()).toBe(createdPath)
     })
   })
 
