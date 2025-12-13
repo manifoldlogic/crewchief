@@ -59,7 +59,7 @@ If you need to update the fixture (e.g., after schema changes):
 rm crates/maproom/tests/fixtures/pre-indexed-maproom.db
 
 # Generate new fixture
-cargo test --features sqlite --test create_sqlite_fixture -- --ignored --nocapture
+cargo test --test create_sqlite_fixture -- --ignored --nocapture
 ```
 
 The fixture creator is located at:
@@ -145,7 +145,7 @@ echo '{"jsonrpc":"2.0","method":"ping","id":1}' | \
 
 Run the fixture generator:
 ```bash
-cargo test --features sqlite --test create_sqlite_fixture -- --ignored --nocapture
+cargo test --test create_sqlite_fixture -- --ignored --nocapture
 ```
 
 ### "jq: command not found"
