@@ -211,4 +211,26 @@ export class FilterableSearchResult {
       hits: sorted,
     })
   }
+
+  /**
+   * Slice results for pagination.
+   *
+   * Uses the same API as Array.slice() for familiarity.
+   *
+   * @param start - Start index (inclusive, 0-based)
+   * @param end - End index (exclusive), omit for "to end"
+   *
+   * @example
+   * result.slice(0, 10)  // First 10 results (page 1)
+   * result.slice(10, 20) // Next 10 results (page 2)
+   * result.slice(5)      // Skip first 5, return rest
+   */
+  slice(start: number, end?: number): FilterableSearchResult {
+    const sliced = this.hits.slice(start, end)
+
+    return new FilterableSearchResult({
+      ...this.result,
+      hits: sliced as SearchHit[],
+    })
+  }
 }

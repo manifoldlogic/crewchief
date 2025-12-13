@@ -373,4 +373,39 @@ describe('FilterableSearchResult', () => {
       expect(result.hits[0]).toBe(originalFirst)
     })
   })
+
+  describe('slice()', () => {
+    it('slices with start only', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sliced = result.slice(2)
+
+      expect(sliced.hits.length).toBe(mockHits.length - 2)
+      expect(sliced.hits[0]).toBe(result.hits[2])
+    })
+
+    it('slices with start and end', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sliced = result.slice(1, 3)
+
+      expect(sliced.hits.length).toBe(2)
+      expect(sliced.hits[0]).toBe(result.hits[1])
+      expect(sliced.hits[1]).toBe(result.hits[2])
+    })
+
+    it('handles out of bounds gracefully', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const sliced = result.slice(100, 200)
+
+      expect(sliced.hits.length).toBe(0)
+    })
+
+    it('preserves immutability (original unchanged)', () => {
+      const result = new FilterableSearchResult(mockSearchResult)
+      const originalLength = result.hits.length
+
+      result.slice(0, 2)
+
+      expect(result.hits.length).toBe(originalLength)
+    })
+  })
 })
