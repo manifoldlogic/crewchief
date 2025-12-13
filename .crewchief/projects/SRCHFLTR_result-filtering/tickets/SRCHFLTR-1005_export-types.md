@@ -1,9 +1,9 @@
 # Ticket: [SRCHFLTR-1005]: Export Types from Daemon-Client Index
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (export-only change)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (export-only change)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,15 +25,15 @@ This ticket completes Phase 1 by making the new filtering functionality accessib
 This is a critical integration step that enables consumers (MCP server, VSCode extension) to import and use the filtering capabilities.
 
 ## Acceptance Criteria
-- [ ] FilterableSearchResult class exported from index
-- [ ] FilterCriteria type exported from index
-- [ ] SortField type exported from index
-- [ ] SortOrder type exported from index
-- [ ] TypeScript compiles without errors
-- [ ] External import works: `import { FilterableSearchResult } from '@crewchief/daemon-client'`
-- [ ] Type import works: `import type { FilterCriteria } from '@crewchief/daemon-client'`
-- [ ] Package builds successfully: `pnpm build`
-- [ ] No breaking changes to existing exports
+- [x] FilterableSearchResult class exported from index
+- [x] FilterCriteria type exported from index
+- [x] SortField type exported from index
+- [x] SortOrder type exported from index
+- [x] TypeScript compiles without errors
+- [x] External import works: `import { FilterableSearchResult } from '@crewchief/daemon-client'`
+- [x] Type import works: `import type { FilterCriteria } from '@crewchief/daemon-client'`
+- [x] Package builds successfully: `pnpm build`
+- [x] No breaking changes to existing exports
 
 ## Technical Requirements
 
