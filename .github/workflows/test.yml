@@ -1,22 +1,21 @@
 name: Test
 
 # =============================================================================
-# CI Workflow: SQLite Testing Strategy
+# CI Workflow: SQLite-Only Testing Strategy
 # =============================================================================
 #
+# Tests CrewChief packages using SQLite as the only database backend.
+# PostgreSQL support was intentionally removed for simplicity.
+#
 # DATABASE BACKEND:
-#   - SQLite: Zero-configuration, runs without external services
+#   - SQLite (Only): Zero-configuration, runs without external services
+#   - No PostgreSQL support (intentionally removed for simplicity)
 #
 # JOB ORGANIZATION:
-#   1. SQLite Tests - Fast, no dependencies
-#      - test-sqlite-e2e: CLI end-to-end tests
-#      - test-mcp-sqlite: TypeScript MCP server tests
-#      - test-rust-sqlite: Rust library tests
-#
-#   2. TypeScript Package Tests
-#      - test-typescript: Unit tests for CLI, VSCode, and Daemon packages
-#
-# For local development, SQLite is the only supported backend.
+#   - test-sqlite-e2e: CLI end-to-end tests
+#   - test-mcp-sqlite: TypeScript MCP server tests
+#   - test-rust: Rust library tests
+#   - test-typescript: TypeScript package tests (CLI, VSCode, daemon-client)
 # =============================================================================
 
 # Run tests only on pull requests
@@ -58,7 +57,7 @@ concurrency:
 
 jobs:
   # =============================================================================
-  # SQLITE TESTS (Primary) - No external dependencies required
+  # TEST JOBS
   # =============================================================================
 
   # SQLite E2E Integration Tests
