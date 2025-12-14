@@ -7,21 +7,21 @@
  */
 export interface OpenParams {
   /** Relative path to file from repository root */
-  relpath: string
+  relpath: string;
 
   /** Optional line range to extract */
   range?: {
     /** Start line number (1-indexed, inclusive) */
-    start: number
+    start: number;
     /** End line number (1-indexed, inclusive) */
-    end: number
-  }
+    end: number;
+  };
 
   /** Optional worktree identifier for multi-worktree support */
-  worktree?: string
+  worktree?: string;
 
   /** Optional git commit SHA to retrieve file from */
-  commit?: string
+  commit?: string;
 }
 
 /**
@@ -29,16 +29,16 @@ export interface OpenParams {
  */
 export interface FileContent {
   /** File contents as string */
-  content: string
+  content: string;
 
   /** Echo back the relative path */
-  relpath: string
+  relpath: string;
 
   /** Echo back the range if provided */
   range?: {
-    start: number
-    end: number
-  }
+    start: number;
+    end: number;
+  };
 }
 
 /**
@@ -46,10 +46,10 @@ export interface FileContent {
  */
 export interface OpenToolConfig {
   /** Maximum file size in bytes (default 1MB) */
-  maxFileSize?: number
+  maxFileSize?: number;
 
   /** Default worktree to use if not specified */
-  defaultWorktree?: string
+  defaultWorktree?: string;
 }
 
 /**
@@ -57,19 +57,19 @@ export interface OpenToolConfig {
  */
 export interface UpsertParams {
   /** Array of file or directory paths to re-index */
-  paths: string[]
+  paths: string[];
 
   /** Git commit hash for context */
-  commit: string
+  commit: string;
 
   /** Repository name */
-  repo: string
+  repo: string;
 
   /** Worktree identifier for isolation */
-  worktree: string
+  worktree: string;
 
   /** Root directory path of the repository */
-  root: string
+  root: string;
 }
 
 /**
@@ -77,19 +77,19 @@ export interface UpsertParams {
  */
 export interface UpsertResult {
   /** Number of files updated in index */
-  updated_files: number
+  updated_files: number;
 
   /** Number of chunks updated in index */
-  updated_chunks: number
+  updated_chunks: number;
 
   /** Duration of indexing operation in milliseconds */
-  duration_ms: number
+  duration_ms: number;
 
   /** Embedding provider used (ollama, openai, google) */
-  provider?: string
+  provider?: string;
 
   /** Embedding dimension (768 or 1536) */
-  dimension?: number
+  dimension?: number;
 }
 
 /**
@@ -97,10 +97,10 @@ export interface UpsertResult {
  */
 export interface UpsertToolConfig {
   /** Timeout for indexing operation in milliseconds (default 120000 = 2 minutes) */
-  timeout?: number
+  timeout?: number;
 
   /** Environment variables to pass to indexer process */
-  env?: Record<string, string>
+  env?: Record<string, string>;
 }
 
 /**
@@ -108,36 +108,39 @@ export interface UpsertToolConfig {
  */
 export interface SearchParams {
   /** Search query text - use 2-3 keyword concepts for best results */
-  query: string
+  query: string;
 
   /** Repository name to search (e.g., "crewchief") */
-  repo?: string
+  repo?: string;
 
   /** Worktree/branch name to search (e.g., "main") */
-  worktree?: string
+  worktree?: string;
 
   /** Maximum number of results to return (default: 20, max: 100) */
-  limit?: number
+  limit?: number;
 
   /** Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: fts) */
-  mode?: 'fts' | 'vector' | 'hybrid'
+  mode?: "fts" | "vector" | "hybrid";
 
   /** Content type filter */
-  filter?: 'all' | 'code' | 'docs' | 'config' | 'tests'
+  filter?: "all" | "code" | "docs" | "config" | "tests";
 
   /** Advanced filters */
   filters?: {
     /** Comma-separated list of file extensions (e.g., "ts,tsx,js") */
-    file_type?: string
+    file_type?: string;
     /** Filter by specific worktree ID */
-    worktree_id?: number
-  }
+    worktree_id?: number;
+  };
 
   /** Include score breakdown and debug information in results */
-  debug?: boolean
+  debug?: boolean;
 
   /** Deduplicate results across worktrees (default: true) */
-  deduplicate?: boolean
+  deduplicate?: boolean;
+
+  /** Include confidence signals for result quality assessment (default: false) */
+  include_confidence?: boolean;
 }
 
 /**
@@ -145,36 +148,36 @@ export interface SearchParams {
  */
 export interface SearchResult {
   /** Chunk ID for further context retrieval */
-  chunk_id: number
+  chunk_id: number;
 
   /** Symbol name (function, class, etc.) */
-  symbol_name: string | null
+  symbol_name: string | null;
 
   /** Chunk kind (function, class, module, etc.) */
-  kind: string
+  kind: string;
 
   /** Relative path to file from repository root */
-  relpath: string
+  relpath: string;
 
   /** Start line number of the chunk */
-  start_line: number
+  start_line: number;
 
   /** End line number of the chunk */
-  end_line: number
+  end_line: number;
 
   /** Relevance score */
-  score: number
+  score: number;
 
   /** Optional preview text */
-  preview?: string
+  preview?: string;
 
   /** Debug information (only if debug=true) - SEMRANK-2006 */
   score_breakdown?: {
-    base_fts: number
-    kind_multiplier: number
-    exact_match_multiplier: number
-    final: number
-  }
+    base_fts: number;
+    kind_multiplier: number;
+    exact_match_multiplier: number;
+    final: number;
+  };
 }
 
 /**
@@ -182,32 +185,32 @@ export interface SearchResult {
  */
 export interface SearchBundle {
   /** Array of search results */
-  hits: SearchResult[]
+  hits: SearchResult[];
 
   /** Total number of hits returned */
-  total: number
+  total: number;
 
   /** Echo back the query */
-  query: string
+  query: string;
 
   /** Echo back the search mode */
-  mode: string
+  mode: string;
 
   /** Echo back the repository filter */
-  repo?: string
+  repo?: string;
 
   /** Echo back the worktree filter */
-  worktree?: string
+  worktree?: string;
 
   /** Optional hint/warning messages */
-  hint?: string
+  hint?: string;
 
   /** Error message if search failed */
-  error?: string
+  error?: string;
 
   /** Suggestion for fixing the error */
-  suggestion?: string
+  suggestion?: string;
 
   /** Query understanding metadata (optional, added in Phase 2) */
-  metadata?: any
+  metadata?: any;
 }

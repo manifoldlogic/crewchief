@@ -5,23 +5,25 @@
  * Supports both socket and stdio connection modes with automatic fallback.
  */
 
-import { Connection, ConnectionMode, ConnectionConfig } from './connection.js'
-import { createConnection } from './connection-factory.js'
-import { DaemonError } from './errors.js'
-import type { SearchMetadata } from './types.js'
+import { Connection, ConnectionMode, ConnectionConfig } from "./connection.js";
+import { createConnection } from "./connection-factory.js";
+import { DaemonError } from "./errors.js";
+import type { SearchMetadata } from "./types.js";
 
 /**
  * Search parameters for daemon search method
  */
 export interface SearchParams {
-  query: string
-  repo: string
-  worktree?: string
-  limit?: number
-  threshold?: number
-  debug?: boolean
+  query: string;
+  repo: string;
+  worktree?: string;
+  limit?: number;
+  threshold?: number;
+  debug?: boolean;
   /** Deduplicate results across worktrees (default: true) */
-  deduplicate?: boolean
+  deduplicate?: boolean;
+  /** Include confidence signals for result quality assessment (default: false) */
+  include_confidence?: boolean;
 }
 
 /**
@@ -31,19 +33,19 @@ export interface SearchParams {
  */
 export interface SearchResult {
   hits: Array<{
-    chunk_id: number
-    file_path: string
-    start_line: number
-    end_line: number
-    symbol_name: string | null
-    kind: string
-    content: string
-    score: number
-  }>
-  total: number
-  query_embedding_time_ms?: number
-  search_time_ms?: number
-  metadata?: SearchMetadata
+    chunk_id: number;
+    file_path: string;
+    start_line: number;
+    end_line: number;
+    symbol_name: string | null;
+    kind: string;
+    content: string;
+    score: number;
+  }>;
+  total: number;
+  query_embedding_time_ms?: number;
+  search_time_ms?: number;
+  metadata?: SearchMetadata;
 }
 
 /**
@@ -52,20 +54,20 @@ export interface SearchResult {
  * Sync with: crates/maproom/src/daemon/types.rs ContextParams
  */
 export interface ContextParams {
-  chunk_id: string
-  budget_tokens?: number
+  chunk_id: string;
+  budget_tokens?: number;
   expand?: {
-    callers?: boolean
-    callees?: boolean
-    tests?: boolean
-    docs?: boolean
-    config?: boolean
-    max_depth?: number
-    routes?: boolean
-    hooks?: boolean
-    jsx_parents?: boolean
-    jsx_children?: boolean
-  }
+    callers?: boolean;
+    callees?: boolean;
+    tests?: boolean;
+    docs?: boolean;
+    config?: boolean;
+    max_depth?: number;
+    routes?: boolean;
+    hooks?: boolean;
+    jsx_parents?: boolean;
+    jsx_children?: boolean;
+  };
 }
 
 /**
@@ -74,15 +76,15 @@ export interface ContextParams {
  * Sync with: crates/maproom/src/context/types.rs ContextItem
  */
 export interface RustContextItem {
-  relpath: string
+  relpath: string;
   range: {
-    start: number
-    end: number
-  }
-  role: string
-  reason: string
-  content: string
-  tokens: number
+    start: number;
+    end: number;
+  };
+  role: string;
+  reason: string;
+  content: string;
+  tokens: number;
 }
 
 /**
@@ -91,9 +93,9 @@ export interface RustContextItem {
  * Sync with: crates/maproom/src/context/types.rs ContextBundle
  */
 export interface RustContextBundle {
-  items: RustContextItem[]
-  total_tokens: number
-  truncated: boolean
+  items: RustContextItem[];
+  total_tokens: number;
+  truncated: boolean;
 }
 
 /**
@@ -102,7 +104,7 @@ export interface RustContextBundle {
  * Sync with: crates/maproom/src/daemon/types.rs StatusParams
  */
 export interface StatusParams {
-  repo?: string
+  repo?: string;
 }
 
 /**
@@ -111,10 +113,10 @@ export interface StatusParams {
  * Sync with: crates/maproom/src/daemon/types.rs WorktreeStatus
  */
 export interface WorktreeStatus {
-  name: string
-  path: string
-  file_count: number
-  chunk_count: number
+  name: string;
+  path: string;
+  file_count: number;
+  chunk_count: number;
 }
 
 /**
@@ -123,8 +125,8 @@ export interface WorktreeStatus {
  * Sync with: crates/maproom/src/daemon/types.rs RepoStatus
  */
 export interface RepoStatus {
-  name: string
-  worktrees: WorktreeStatus[]
+  name: string;
+  worktrees: WorktreeStatus[];
 }
 
 /**
@@ -133,10 +135,10 @@ export interface RepoStatus {
  * Sync with: crates/maproom/src/daemon/types.rs StatusResult
  */
 export interface StatusResult {
-  repos: RepoStatus[]
-  total_repos: number
-  total_files: number
-  total_chunks: number
+  repos: RepoStatus[];
+  total_repos: number;
+  total_files: number;
+  total_chunks: number;
 }
 
 /**
@@ -146,14 +148,14 @@ export interface StatusResult {
  */
 export interface DaemonClientConfig extends Partial<ConnectionConfig> {
   // Legacy fields (mapped to ConnectionConfig)
-  binaryPath?: string
-  timeout?: number
-  env?: NodeJS.ProcessEnv
-  startTimeout?: number
-  shutdownTimeout?: number
-  maxRestartAttempts?: number
-  restartBackoffMs?: number
-  autoRestart?: boolean
+  binaryPath?: string;
+  timeout?: number;
+  env?: NodeJS.ProcessEnv;
+  startTimeout?: number;
+  shutdownTimeout?: number;
+  maxRestartAttempts?: number;
+  restartBackoffMs?: number;
+  autoRestart?: boolean;
 }
 
 /**
@@ -187,8 +189,8 @@ export interface DaemonClientConfig extends Partial<ConnectionConfig> {
  * ```
  */
 export class DaemonClient {
-  private connection: Connection | null = null
-  private isConnecting = false
+  private connection: Connection | null = null;
+  private isConnecting = false;
 
   constructor(private readonly config: DaemonClientConfig = {}) {}
 
@@ -202,18 +204,18 @@ export class DaemonClient {
    */
   async connect(): Promise<void> {
     if (this.connection) {
-      return // Already connected
+      return; // Already connected
     }
 
     if (this.isConnecting) {
       // Wait for existing connection attempt
       while (this.isConnecting) {
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      return
+      return;
     }
 
-    this.isConnecting = true
+    this.isConnecting = true;
 
     try {
       // Map legacy config to ConnectionConfig
@@ -222,11 +224,11 @@ export class DaemonClient {
         socketPath: this.config.socketPath,
         binaryPath: this.config.binaryPath,
         startupTimeout: this.config.startupTimeout ?? this.config.startTimeout,
-      }
+      };
 
-      this.connection = await createConnection(connectionConfig)
+      this.connection = await createConnection(connectionConfig);
     } finally {
-      this.isConnecting = false
+      this.isConnecting = false;
     }
   }
 
@@ -234,7 +236,7 @@ export class DaemonClient {
    * Send ping request to check daemon health
    */
   async ping(): Promise<string> {
-    return await this.sendRequest<string>('ping')
+    return await this.sendRequest<string>("ping");
   }
 
   /**
@@ -245,8 +247,8 @@ export class DaemonClient {
     const searchParams = {
       ...params,
       deduplicate: params.deduplicate ?? true,
-    }
-    return await this.sendRequest<SearchResult>('search', searchParams)
+    };
+    return await this.sendRequest<SearchResult>("search", searchParams);
   }
 
   /**
@@ -260,8 +262,8 @@ export class DaemonClient {
     const contextParams = {
       ...params,
       budget_tokens: params.budget_tokens ?? 6000,
-    }
-    return await this.sendRequest<RustContextBundle>('context', contextParams)
+    };
+    return await this.sendRequest<RustContextBundle>("context", contextParams);
   }
 
   /**
@@ -270,7 +272,7 @@ export class DaemonClient {
    * Retrieves repository and worktree statistics from the database.
    */
   async status(params: StatusParams = {}): Promise<StatusResult> {
-    return await this.sendRequest<StatusResult>('status', params)
+    return await this.sendRequest<StatusResult>("status", params);
   }
 
   /**
@@ -280,8 +282,8 @@ export class DaemonClient {
    */
   async close(): Promise<void> {
     if (this.connection) {
-      await this.connection.close()
-      this.connection = null
+      await this.connection.close();
+      this.connection = null;
     }
   }
 
@@ -289,21 +291,21 @@ export class DaemonClient {
    * Check if the client is connected
    */
   isConnected(): boolean {
-    return this.connection?.isConnected() ?? false
+    return this.connection?.isConnected() ?? false;
   }
 
   /**
    * Register error event handler
    */
   onError(handler: (err?: Error) => void): void {
-    this.connection?.on('error', handler)
+    this.connection?.on("error", handler);
   }
 
   /**
    * Register close event handler
    */
   onClose(handler: (err?: Error) => void): void {
-    this.connection?.on('close', handler)
+    this.connection?.on("close", handler);
   }
 
   /**
@@ -319,17 +321,14 @@ export class DaemonClient {
   private async sendRequest<T>(method: string, params?: unknown): Promise<T> {
     // Auto-connect if needed
     if (!this.connection) {
-      await this.connect()
+      await this.connect();
     }
 
     if (!this.connection) {
-      throw new DaemonError(
-        'Failed to connect to daemon',
-        'CONNECTION_FAILED'
-      )
+      throw new DaemonError("Failed to connect to daemon", "CONNECTION_FAILED");
     }
 
-    return await this.connection.sendRequest<T>(method, params)
+    return await this.connection.sendRequest<T>(method, params);
   }
 
   // Legacy methods for backward compatibility
@@ -340,7 +339,7 @@ export class DaemonClient {
    * @deprecated Use connect() instead
    */
   async start(): Promise<void> {
-    await this.connect()
+    await this.connect();
   }
 
   /**
@@ -349,7 +348,7 @@ export class DaemonClient {
    * @deprecated Use close() instead
    */
   async stop(): Promise<void> {
-    await this.close()
+    await this.close();
   }
 
   /**
@@ -359,14 +358,14 @@ export class DaemonClient {
    */
   async isHealthy(): Promise<boolean> {
     if (!this.isConnected()) {
-      return false
+      return false;
     }
 
     try {
-      await this.ping()
-      return true
+      await this.ping();
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
@@ -376,7 +375,7 @@ export class DaemonClient {
    * @deprecated Connection mode handles reconnection automatically
    */
   async restart(): Promise<void> {
-    await this.close()
-    await this.connect()
+    await this.close();
+    await this.connect();
   }
 }

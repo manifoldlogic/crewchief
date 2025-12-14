@@ -1,9 +1,9 @@
 # Ticket: [SRCHCONF-3001]: MCP Tool Integration and Parameter Passing
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ Phase 3 exposes confidence scoring to MCP consumers (VS Code extension, Claude C
 This is the final integration point that makes confidence scoring user-accessible via MCP.
 
 ## Acceptance Criteria
-- [ ] SearchParams interface in `packages/daemon-client/src/client.ts` includes `include_confidence?: boolean`
-- [ ] MCP search tool schema in `packages/maproom-mcp/src/tools/search_schema.ts` includes include_confidence parameter
-- [ ] Schema marks parameter as optional with default false
-- [ ] MCP search tool implementation passes include_confidence to daemon client
-- [ ] End-to-end test confirms confidence returned when include_confidence=true
-- [ ] Backward compatibility test confirms existing calls work (parameter omitted)
-- [ ] All TypeScript tests pass (`pnpm test packages/maproom-mcp`)
-- [ ] Zero TypeScript compilation errors
+- [x] SearchParams interface in `packages/daemon-client/src/client.ts` includes `include_confidence?: boolean`
+- [x] MCP search tool schema in `packages/maproom-mcp/src/tools/search_schema.ts` includes include_confidence parameter
+- [x] Schema marks parameter as optional with default false
+- [x] MCP search tool implementation passes include_confidence to daemon client
+- [x] End-to-end test confirms confidence returned when include_confidence=true
+- [x] Backward compatibility test confirms existing calls work (parameter omitted)
+- [x] All TypeScript tests pass (`pnpm test packages/maproom-mcp`)
+- [x] Zero TypeScript compilation errors
 
 ## Technical Requirements
 **1. Update SearchParams Interface** (`packages/daemon-client/src/client.ts`):

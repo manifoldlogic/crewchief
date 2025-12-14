@@ -42,26 +42,26 @@
  * All edge cases are tested in tests/integration/semrank-edge-cases.test.ts
  */
 
-import { Client } from 'pg'
-import pino from 'pino'
-import { z } from 'zod'
-import type { SearchParams, SearchResult, SearchBundle } from '../types.js'
-import type { QueryUnderstanding } from '../daemon-client/types.js'
-import { validateSearchParams } from './search_schema.js'
-import { ValidationError } from '../utils/validation.js'
-import { ProcessError } from '../utils/process.js'
-import { getDaemonClient } from '../daemon.js'
+import { Client } from "pg";
+import pino from "pino";
+import { z } from "zod";
+import type { SearchParams, SearchResult, SearchBundle } from "../types.js";
+import type { QueryUnderstanding } from "../daemon-client/types.js";
+import { validateSearchParams } from "./search_schema.js";
+import { ValidationError } from "../utils/validation.js";
+import { ProcessError } from "../utils/process.js";
+import { getDaemonClient } from "../daemon.js";
 import {
   DaemonError,
   DaemonStartError,
   DaemonTimeoutError,
   RpcError,
-} from '../daemon-client/index.js'
+} from "../daemon-client/index.js";
 
-const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
+const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE;
 const log = LOG_FILE
-  ? pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(LOG_FILE))
-  : pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(2))
+  ? pino({ level: process.env.LOG_LEVEL || "info" }, pino.destination(LOG_FILE))
+  : pino({ level: process.env.LOG_LEVEL || "info" }, pino.destination(2));
 
 /**
  * Format Zod validation errors into readable messages
@@ -71,11 +71,11 @@ const log = LOG_FILE
  */
 export function formatValidationError(error: z.ZodError): string {
   const messages = error.errors.map((err) => {
-    const path = err.path.join('.')
-    return `${path}: ${err.message}`
-  })
+    const path = err.path.join(".");
+    return `${path}: ${err.message}`;
+  });
 
-  return `Validation failed:\n${messages.join('\n')}`
+  return `Validation failed:\n${messages.join("\n")}`;
 }
 
 /**
@@ -93,30 +93,30 @@ export function formatValidationError(error: z.ZodError): string {
  * @returns Normalized snake_case query for ILIKE matching
  */
 export function normalizeForExactMatch(query: string): string {
-  let normalized = query
+  let normalized = query;
 
   // Step 1: Handle consecutive uppercase (acronyms) before lowercase
   // "XMLParser" → "XML_Parser", "HTTPSHandler" → "HTTPS_Handler"
-  normalized = normalized.replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+  normalized = normalized.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2");
 
   // Step 2: Handle transition from lowercase to multiple capitals (acronym after lowercase)
   // "validateHTTP" → "validate_HTTP"
-  normalized = normalized.replace(/([a-z\d])([A-Z]{2,})/g, '$1_$2')
+  normalized = normalized.replace(/([a-z\d])([A-Z]{2,})/g, "$1_$2");
 
   // Step 3: Handle camelCase → snake_case (single capital after lowercase)
   // "validateProvider" → "validate_Provider"
-  normalized = normalized.replace(/([a-z\d])([A-Z])/g, '$1_$2')
+  normalized = normalized.replace(/([a-z\d])([A-Z])/g, "$1_$2");
 
   // Step 4: Handle kebab-case, spaces, and dots → snake_case
-  normalized = normalized.replace(/[\s\-\.]/g, '_')
+  normalized = normalized.replace(/[\s\-\.]/g, "_");
 
   // Step 5: Lowercase everything
-  normalized = normalized.toLowerCase()
+  normalized = normalized.toLowerCase();
 
   // Step 6: Clean up multiple/trailing/leading underscores
-  normalized = normalized.replace(/_+/g, '_').replace(/^_|_$/g, '')
+  normalized = normalized.replace(/_+/g, "_").replace(/^_|_$/g, "");
 
-  return normalized
+  return normalized;
 }
 
 /**
@@ -148,29 +148,29 @@ function formatQueryUnderstanding(understanding: QueryUnderstanding) {
       result_assembly: `${understanding.timing.result_assembly_ms.toFixed(1)}ms`,
       total: `${understanding.timing.total_ms.toFixed(1)}ms`,
     },
-  }
+  };
 }
 
 /**
  * Rust binary search result format (SEMRANK-2006: includes optional debug fields)
  */
 interface RustSearchHit {
-  score: number
-  file_relpath: string
-  symbol_name: string | null
-  kind: string
-  start_line: number
-  end_line: number
-  base_score?: number
-  kind_mult?: number
-  exact_mult?: number
+  score: number;
+  file_relpath: string;
+  symbol_name: string | null;
+  kind: string;
+  start_line: number;
+  end_line: number;
+  base_score?: number;
+  kind_mult?: number;
+  exact_mult?: number;
 }
 
 /**
  * Rust binary output format
  */
 interface RustSearchOutput {
-  hits: RustSearchHit[]
+  hits: RustSearchHit[];
 }
 
 /**
@@ -188,16 +188,16 @@ interface RustSearchOutput {
 async function fetchChunkIds(
   client: Client,
   repo: string,
-  hits: RustSearchHit[]
+  hits: RustSearchHit[],
 ): Promise<Map<string, number>> {
   if (hits.length === 0) {
-    return new Map()
+    return new Map();
   }
 
   // Build composite keys for lookup
   const keys = hits.map(
-    (hit) => `${hit.file_relpath}:${hit.start_line}:${hit.end_line}`
-  )
+    (hit) => `${hit.file_relpath}:${hit.start_line}:${hit.end_line}`,
+  );
 
   // Query chunk IDs for all hits in one database call
   const query = `
@@ -206,28 +206,31 @@ async function fetchChunkIds(
     JOIN maproom.files f ON f.id = c.file_id
     JOIN maproom.repos r ON r.id = f.repo_id
     WHERE r.name = $1
-      AND (f.relpath, c.start_line, c.end_line) IN (${hits.map((_, i) => `($${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`).join(', ')})
-  `
+      AND (f.relpath, c.start_line, c.end_line) IN (${hits.map((_, i) => `($${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`).join(", ")})
+  `;
 
   const params = [
     repo,
     ...hits.flatMap((hit) => [hit.file_relpath, hit.start_line, hit.end_line]),
-  ]
+  ];
 
   try {
-    const { rows } = await client.query(query, params)
+    const { rows } = await client.query(query, params);
 
-    const idMap = new Map<string, number>()
+    const idMap = new Map<string, number>();
     for (const row of rows) {
-      const key = `${row.relpath}:${row.start_line}:${row.end_line}`
-      idMap.set(key, row.id)
+      const key = `${row.relpath}:${row.start_line}:${row.end_line}`;
+      idMap.set(key, row.id);
     }
 
-    return idMap
+    return idMap;
   } catch (error) {
-    log.error({ error, repo, hitCount: hits.length }, 'Failed to fetch chunk IDs')
+    log.error(
+      { error, repo, hitCount: hits.length },
+      "Failed to fetch chunk IDs",
+    );
     // Return empty map rather than failing - chunk_id will be 0 for these hits
-    return new Map()
+    return new Map();
   }
 }
 
@@ -245,40 +248,61 @@ async function fetchChunkIds(
  */
 export async function handleSearchTool(
   params: unknown,
-  client: Client
+  client: Client,
 ): Promise<SearchBundle> {
   // Validate parameters with Zod schema
-  const validatedParams = validateSearchParams(params)
-  const { query, repo, worktree, limit, mode, debug, deduplicate } = validatedParams
+  const validatedParams = validateSearchParams(params);
+  const {
+    query,
+    repo,
+    worktree,
+    limit,
+    mode,
+    debug,
+    deduplicate,
+    include_confidence,
+  } = validatedParams;
 
-  log.debug({ query, repo, worktree, limit, mode, debug, deduplicate }, 'handleSearchTool called')
+  log.debug(
+    {
+      query,
+      repo,
+      worktree,
+      limit,
+      mode,
+      debug,
+      deduplicate,
+      include_confidence,
+    },
+    "handleSearchTool called",
+  );
 
   // SEMRANK-2006: Permission check for debug mode
   // If auth system exists in the future, check user.hasPermission('debug_mode')
   // For now, log warning when debug is enabled (acceptable for MVP, metadata not sensitive)
   if (debug) {
     log.warn(
-      'Debug mode enabled without permission check. ' +
+      "Debug mode enabled without permission check. " +
         'In production, this should verify user.hasPermission("debug_mode"). ' +
-        'Score breakdown metadata is not sensitive for MVP.'
-    )
+        "Score breakdown metadata is not sensitive for MVP.",
+    );
   }
 
   // Validate repo parameter is provided
   if (!repo) {
     throw new ValidationError(
-      'repo parameter is required for search',
-      'MISSING_REPO'
-    )
+      "repo parameter is required for search",
+      "MISSING_REPO",
+    );
   }
 
   // Note: Rust binary only supports FTS mode currently
   // Vector and hybrid modes are handled by TypeScript SQL in index.ts
-  if (!['fts', 'vector'].includes(mode)) {
+  if (!["fts", "vector"].includes(mode)) {
     throw new ValidationError(
       `Search mode "${mode}" not supported. Use mode="fts" or mode="vector".`,
-      'UNSUPPORTED_MODE'
-    )
+      "UNSUPPORTED_MODE",
+    );
   }
 
   // ============================================================================
@@ -287,13 +311,16 @@ export async function handleSearchTool(
   // Old spawning code preserved in utils/process.ts for VSCode extension use.
   // ============================================================================
 
-  log.debug({ mode, query, repo, worktree, limit, debug }, 'Calling daemon for search')
+  log.debug(
+    { mode, query, repo, worktree, limit, debug },
+    "Calling daemon for search",
+  );
 
   // Get daemon client singleton
-  const daemon = getDaemonClient()
+  const daemon = getDaemonClient();
 
   // Call daemon search method
-  let daemonResult: Awaited<ReturnType<typeof daemon.search>>
+  let daemonResult: Awaited<ReturnType<typeof daemon.search>>;
   try {
     daemonResult = await daemon.search({
       query,
@@ -304,50 +331,47 @@ export async function handleSearchTool(
       // Daemon uses hybrid search by default
       debug,
       deduplicate,
-    })
+      include_confidence: include_confidence ?? false,
+    });
   } catch (error) {
     // Convert daemon errors to MCP-friendly errors
     if (error instanceof DaemonStartError) {
       throw new ProcessError(
         `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure crewchief-maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
-        'DAEMON_START_FAILED'
-      )
+        "DAEMON_START_FAILED",
+      );
     }
 
     if (error instanceof DaemonTimeoutError) {
       throw new ProcessError(
         `Search request timed out: ${error.message}\n\nTroubleshooting:\n1. Check database connectivity\n2. Verify network is not slow\n3. Try reducing search scope with filters`,
-        'SEARCH_TIMEOUT'
-      )
+        "SEARCH_TIMEOUT",
+      );
     }
 
     if (error instanceof RpcError) {
       // Check for repository not found error (same as old spawning logic)
-      if (error.message.includes('query returned an unexpected number of rows')) {
+      if (
+        error.message.includes("query returned an unexpected number of rows")
+      ) {
         throw new ValidationError(
           `Repository '${repo}' not found or no data indexed.`,
-          'REPO_NOT_FOUND'
-        )
+          "REPO_NOT_FOUND",
+        );
       }
 
-      throw new ProcessError(
-        `Daemon RPC error: ${error.message}`,
-        'RPC_ERROR'
-      )
+      throw new ProcessError(`Daemon RPC error: ${error.message}`, "RPC_ERROR");
     }
 
     if (error instanceof DaemonError) {
-      throw new ProcessError(
-        `Daemon error: ${error.message}`,
-        'DAEMON_ERROR'
-      )
+      throw new ProcessError(`Daemon error: ${error.message}`, "DAEMON_ERROR");
     }
 
     // Unknown error type
     throw new ProcessError(
       `Search failed: ${error instanceof Error ? error.message : String(error)}`,
-      'SEARCH_FAILED'
-    )
+      "SEARCH_FAILED",
+    );
   }
 
   // Transform daemon result to RustSearchOutput format
@@ -357,7 +381,7 @@ export async function handleSearchTool(
       file_relpath: hit.file_path, // Daemon uses file_path, MCP expects file_relpath
       start_line: hit.start_line,
       end_line: hit.end_line,
-      symbol_name: hit.symbol_name || '', // Daemon provides symbol_name directly
+      symbol_name: hit.symbol_name || "", // Daemon provides symbol_name directly
       kind: hit.kind, // Daemon provides kind directly
       score: hit.score,
       // Debug fields not yet available from daemon
@@ -365,19 +389,22 @@ export async function handleSearchTool(
       kind_mult: undefined,
       exact_mult: undefined,
     })),
-  }
+  };
 
-  log.debug({ hitCount: rustOutput.hits.length }, 'Received search results from daemon')
+  log.debug(
+    { hitCount: rustOutput.hits.length },
+    "Received search results from daemon",
+  );
 
   // Transform Rust hits to SearchResult format (SEMRANK-2006: include score_breakdown if debug=true)
   const hits: SearchResult[] = rustOutput.hits.map((hit, index) => {
-    const daemonHit = daemonResult.hits[index]
+    const daemonHit = daemonResult.hits[index];
 
     // Daemon provides chunk_id directly
-    const chunk_id = daemonHit.chunk_id
+    const chunk_id = daemonHit.chunk_id;
 
     if (!chunk_id || chunk_id === 0) {
-      log.warn({ hit: daemonHit }, 'Invalid chunk_id in search result')
+      log.warn({ hit: daemonHit }, "Invalid chunk_id in search result");
     }
 
     // Build SearchResult with optional score_breakdown (SEMRANK-2006)
@@ -391,25 +418,30 @@ export async function handleSearchTool(
       score: hit.score,
       // preview field not available from Rust binary yet
       // Will be added in Phase 2
-    }
+    };
 
     // Add score breakdown if debug mode enabled and fields are present
-    if (debug && hit.base_score !== undefined && hit.kind_mult !== undefined && hit.exact_mult !== undefined) {
+    if (
+      debug &&
+      hit.base_score !== undefined &&
+      hit.kind_mult !== undefined &&
+      hit.exact_mult !== undefined
+    ) {
       result.score_breakdown = {
         base_fts: hit.base_score,
         kind_multiplier: hit.kind_mult,
         exact_match_multiplier: hit.exact_mult,
         final: hit.score,
-      }
+      };
     }
 
-    return result
-  })
+    return result;
+  });
 
   // Format query understanding metadata if available from daemon
   const metadata = daemonResult.metadata?.understanding
     ? formatQueryUnderstanding(daemonResult.metadata.understanding)
-    : undefined
+    : undefined;
 
   const bundle: SearchBundle = {
     hits,
@@ -419,7 +451,7 @@ export async function handleSearchTool(
     repo,
     worktree,
     metadata,
-  }
+  };
 
   log.debug(
     {
@@ -430,10 +462,10 @@ export async function handleSearchTool(
       worktree,
       has_metadata: !!metadata,
     },
-    'Search completed successfully via Rust binary'
-  )
+    "Search completed successfully via Rust binary",
+  );
 
-  return bundle
+  return bundle;
 }
 
 /**
@@ -444,7 +476,7 @@ export async function handleSearchTool(
 export function formatSearchError(error: unknown): any {
   // Check for RpcError with structured details (SRCHTRN-1005)
   if (error instanceof RpcError) {
-    const details = error.getDetails()
+    const details = error.getDetails();
 
     if (details) {
       // Format structured error with error type, stage, context, and suggestions
@@ -452,7 +484,7 @@ export function formatSearchError(error: unknown): any {
         isError: true,
         content: [
           {
-            type: 'text',
+            type: "text",
             text: JSON.stringify(
               {
                 error: details.error_type,
@@ -462,11 +494,11 @@ export function formatSearchError(error: unknown): any {
                 suggestions: details.suggestions,
               },
               null,
-              2
+              2,
             ),
           },
         ],
-      }
+      };
     }
 
     // Fallback to existing error handling if no details available
@@ -475,18 +507,18 @@ export function formatSearchError(error: unknown): any {
       isError: true,
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(
             {
-              error: 'RPC_ERROR',
+              error: "RPC_ERROR",
               message: error.message,
             },
             null,
-            2
+            2,
           ),
         },
       ],
-    }
+    };
   }
 
   if (error instanceof ValidationError) {
@@ -494,26 +526,26 @@ export function formatSearchError(error: unknown): any {
       isError: true,
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(
             {
               error: error.code,
               message: error.message,
               hint:
-                error.code === 'REPO_NOT_FOUND'
-                  ? 'Use the status tool to see available repositories, or use scan tool to index a new repository.'
-                  : error.code === 'MISSING_REPO'
+                error.code === "REPO_NOT_FOUND"
+                  ? "Use the status tool to see available repositories, or use scan tool to index a new repository."
+                  : error.code === "MISSING_REPO"
                     ? 'The repo parameter is required. Example: {repo: "crewchief", query: "search"}'
-                    : error.code === 'UNSUPPORTED_MODE'
+                    : error.code === "UNSUPPORTED_MODE"
                       ? 'Use mode="fts" for keyword search or mode="vector" for semantic search.'
-                      : 'Check your parameters and try again.',
+                      : "Check your parameters and try again.",
             },
             null,
-            2
+            2,
           ),
         },
       ],
-    }
+    };
   }
 
   if (error instanceof ProcessError) {
@@ -521,25 +553,25 @@ export function formatSearchError(error: unknown): any {
       isError: true,
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(
             {
               error: error.code,
               message: error.message,
               hint:
-                error.code === 'BINARY_NOT_FOUND'
-                  ? 'Install the crewchief-maproom Rust binary or set CREWCHIEF_MAPROOM_BIN environment variable.'
-                  : error.code === 'EXECUTION_FAILED'
-                    ? 'The Rust binary failed to execute. Check that it is properly installed and has execute permissions.'
-                    : 'Search execution failed. Check logs for details.',
+                error.code === "BINARY_NOT_FOUND"
+                  ? "Install the crewchief-maproom Rust binary or set CREWCHIEF_MAPROOM_BIN environment variable."
+                  : error.code === "EXECUTION_FAILED"
+                    ? "The Rust binary failed to execute. Check that it is properly installed and has execute permissions."
+                    : "Search execution failed. Check logs for details.",
               stderr: error.stderr,
             },
             null,
-            2
+            2,
           ),
         },
       ],
-    }
+    };
   }
 
   // Validation errors from Zod
@@ -548,29 +580,29 @@ export function formatSearchError(error: unknown): any {
       isError: true,
       content: [
         {
-          type: 'text',
+          type: "text",
           text: formatValidationError(error),
         },
       ],
-    }
+    };
   }
 
   // Generic error
-  const message = error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error);
   return {
     isError: true,
     content: [
       {
-        type: 'text',
+        type: "text",
         text: JSON.stringify(
           {
-            error: 'INTERNAL_ERROR',
+            error: "INTERNAL_ERROR",
             message,
           },
           null,
-          2
+          2,
         ),
       },
     ],
-  }
+  };
 }
