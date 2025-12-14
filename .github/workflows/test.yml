@@ -220,6 +220,81 @@ jobs:
           echo "Tests Rust \`maproom\` crate (SQLite is the only backend)." >> $GITHUB_STEP_SUMMARY
 
   # =============================================================================
+  # DAEMON CLIENT INTEGRATION TESTS - Tests requiring Rust binary
+  # =============================================================================
+  # Tests daemon discovery, connect-or-spawn, and race condition handling.
+  # These tests spawn actual daemon processes and require the Rust binary.
+  # =============================================================================
+  test-daemon-integration:
+    name: Daemon Client Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          key: daemon-integration
+
+      - name: Build Rust binary (release)
+        run: cargo build --release
+        working-directory: crates/maproom
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build daemon-client package
+        working-directory: packages/daemon-client
+        run: pnpm build
+
+      - name: Run integration tests
+        working-directory: packages/daemon-client
+        run: pnpm test:integration
+        env:
+          CI: true
+          MAPROOM_BINARY_PATH: ${{ github.workspace }}/target/release/crewchief-maproom
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🔌 Daemon Client Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tests:** Daemon discovery, connect-or-spawn, race conditions" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** Rust binary (built in job)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Integration tests for daemon-client that require spawning actual daemon processes." >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
   # TYPESCRIPT PACKAGE TESTS - Unit tests for CLI, VSCode, and Daemon packages
   # =============================================================================
 
