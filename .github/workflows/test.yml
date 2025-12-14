@@ -246,6 +246,62 @@ jobs:
           echo "Tests Rust \`maproom\` crate (SQLite is the only backend)." >> $GITHUB_STEP_SUMMARY
 
   # =============================================================================
+  # PERFORMANCE REGRESSION TESTS - Validates performance budgets
+  # =============================================================================
+  # Tests relationship expansion overhead (<20ms) and response size (<10KB).
+  # These tests ensure performance budgets are maintained as code evolves.
+  # =============================================================================
+  test-performance-regression:
+    name: Performance Regression Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/maproom -> target"
+          key: performance-regression
+
+      - name: Run performance regression tests
+        run: cargo test --test performance_regression_test -- --nocapture
+        working-directory: crates/maproom
+
+      - name: Fail on performance regression
+        if: failure()
+        run: |
+          echo "❌ Performance regression detected!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Budget Exceeded:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Overhead exceeds 20ms budget, OR" >> $GITHUB_STEP_SUMMARY
+          echo "- Response size exceeds 10KB budget" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See test output above for details." >> $GITHUB_STEP_SUMMARY
+          exit 1
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## ⚡ Performance Regression Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Performance Budgets:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Relationship expansion overhead: <20ms at p95" >> $GITHUB_STEP_SUMMARY
+          echo "- Response size: <10KB for typical queries" >> $GITHUB_STEP_SUMMARY
+          echo "- Concurrent expansions: <100ms (3 expansions)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependencies:** None - uses in-memory SQLite" >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
   # DAEMON CLIENT INTEGRATION TESTS - Tests requiring Rust binary
   # =============================================================================
   # Tests daemon discovery, connect-or-spawn, and race condition handling.
