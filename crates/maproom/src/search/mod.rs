@@ -160,6 +160,7 @@ pub mod dedup;
 pub mod errors;
 pub mod fusion;
 pub mod pipeline;
+pub mod relationships;
 pub mod results;
 
 // Performance optimization modules (Phase 4)
@@ -187,6 +188,7 @@ pub use dedup::{deduplicate, ChunkIdentity, DeduplicationConfig, SelectionStrate
 pub use errors::{ErrorType, PipelineStage, SearchErrorDetails};
 pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, RRFFusion, ScoreFusion};
 pub use pipeline::{PipelineError, SearchPipeline};
+pub use relationships::find_top_related_chunks;
 pub use results::{
     ChunkSearchResult, ConfidenceSignals, FinalSearchResults, QueryProcessingDetails,
     RelatedChunkResult, SearchMetadata, SearchOptions, SearchTiming,
