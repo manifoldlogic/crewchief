@@ -120,6 +120,13 @@ Enable debug mode to see score breakdowns:
 const results = await search({ query: 'authenticate', debug: true })
 ```
 
+## Documentation
+
+- [Confidence Scoring](./docs/confidence-scoring.md) - Assess search result quality with confidence signals
+- [Semantic Ranking](./docs/search-ranking.md) - How implementations rank higher than tests and docs
+- [Usage Patterns](./docs/usage_patterns.md) - Common search patterns and best practices
+- [Examples](./docs/examples.md) - Detailed search examples
+
 ## Support
 
 - [GitHub Issues](https://github.com/danielbushman/crewchief/issues)
