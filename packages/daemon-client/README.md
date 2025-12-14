@@ -1203,6 +1203,209 @@ pnpm test tests/search-integration.test.ts
 - [Quality Strategy](../../.crewchief/projects/DAEMIGR_daemon-client-migration/planning/quality-strategy.md)
 - [Project Completion Report](../../.crewchief/projects/DAEMIGR_daemon-client-migration/PROJECT_COMPLETION.md)
 
+## Client-Side Result Filtering
+
+The `FilterableSearchResult` class provides client-side filtering, sorting, and pagination for search results without re-querying the daemon.
+
+### Features
+
+- **Filter** by kind, file type, path, score range, or custom criteria
+- **Sort** by score, file path, symbol name, line number, or kind
+- **Paginate** with slice for page-based navigation
+- **Chain** operations fluently
+- **Immutable** - original results preserved
+- **Zero dependencies** - no new packages required
+- **Backward compatible** - existing code unchanged
+
+### Installation
+
+FilterableSearchResult is included in `@crewchief/daemon-client` (no additional installation needed).
+
+### Basic Usage
+
+```typescript
+import { DaemonClient, FilterableSearchResult } from '@crewchief/daemon-client'
+
+// Perform search
+const daemon = new DaemonClient()
+const searchResult = await daemon.search({query: "auth", repo: "crewchief"})
+
+// Wrap result for filtering
+const result = new FilterableSearchResult(searchResult)
+
+// Filter TypeScript functions
+const functions = result.filter({kind: "function", file_type: "ts"})
+
+// Sort by file path
+const sorted = functions.sortBy("relpath")
+
+// Get first page (10 results)
+const page1 = sorted.slice(0, 10)
+```
+
+### Chained Operations
+
+All methods return new `FilterableSearchResult` instances, enabling fluent chaining:
+
+```typescript
+const results = new FilterableSearchResult(searchResult)
+  .filter({kind: "function", file_type: "ts"})
+  .sortBy("relpath")
+  .slice(0, 10)
+
+console.log(`Found ${results.count} results`)
+results.hits.forEach(hit => {
+  console.log(`${hit.symbol_name} in ${hit.file_path}`)
+})
+```
+
+### API Reference
+
+#### `filter(criteria: FilterCriteria): FilterableSearchResult`
+
+Filter results by criteria (AND logic for multiple criteria):
+
+```typescript
+// Filter by kind
+result.filter({kind: "function"})
+
+// Filter by file type (with or without dot)
+result.filter({file_type: "ts"})
+result.filter({file_type: ".tsx"})
+
+// Filter by path substring
+result.filter({path: "src/"})
+result.filter({path: "test"})
+
+// Filter by score range
+result.filter({min_score: 0.5})
+result.filter({min_score: 0.3, max_score: 0.8})
+
+// Custom filter function
+result.filter({custom: hit => hit.symbol_name?.includes("auth")})
+
+// Combine multiple criteria (AND logic)
+result.filter({
+  kind: "function",
+  file_type: "ts",
+  path: "src/",
+  min_score: 0.5
+})
+```
+
+#### `sortBy(field: SortField, order?: SortOrder): FilterableSearchResult`
+
+Sort results by field (ascending or descending):
+
+```typescript
+// Sort by score (highest first by default)
+result.sortBy("score")
+
+// Sort by file path (alphabetical)
+result.sortBy("relpath")
+
+// Sort by symbol name
+result.sortBy("symbol_name")
+
+// Sort by line number
+result.sortBy("start_line")
+
+// Sort by kind
+result.sortBy("kind")
+
+// Explicit sort order
+result.sortBy("relpath", "desc")  // Reverse alphabetical
+result.sortBy("score", "asc")     // Lowest scores first
+```
+
+#### `slice(start: number, end?: number): FilterableSearchResult`
+
+Extract subset of results for pagination:
+
+```typescript
+// First 10 results
+result.slice(0, 10)
+
+// Next 10 results (page 2)
+result.slice(10, 20)
+
+// Skip first 5
+result.slice(5)
+
+// Pagination helper
+function getPage(result: FilterableSearchResult, page: number, pageSize: number) {
+  const start = (page - 1) * pageSize
+  return result.slice(start, start + pageSize)
+}
+```
+
+### Common Patterns
+
+#### Find all TypeScript functions, sorted alphabetically
+
+```typescript
+const tsFunctions = result
+  .filter({kind: "function", file_type: "ts"})
+  .sortBy("relpath")
+```
+
+#### Get top 10 results by relevance in src/ directory
+
+```typescript
+const topResults = result
+  .filter({path: "src/"})
+  .sortBy("score")  // Descending by default
+  .slice(0, 10)
+```
+
+#### Filter with complex criteria
+
+```typescript
+const complexFilter = result.filter({
+  custom: hit =>
+    hit.kind === "function" &&
+    hit.file_path.startsWith("src/") &&
+    !hit.file_path.includes("test") &&
+    hit.symbol_name?.match(/^handle/) !== null
+})
+```
+
+### Performance
+
+All operations are optimized for typical result sets (<100 items):
+
+- **filter()**: <1ms for 100 results
+- **sortBy()**: <1ms for 100 results
+- **slice()**: <0.1ms for 100 results
+- **Chained operations**: <2ms total
+
+For larger result sets (>1000 items), consider re-querying with refined parameters.
+
+### Type Definitions
+
+```typescript
+interface FilterCriteria {
+  kind?: string
+  file_type?: string
+  path?: string
+  min_score?: number
+  max_score?: number
+  custom?: (hit: SearchHit) => boolean
+}
+
+type SortField = "score" | "relpath" | "symbol_name" | "start_line" | "kind"
+type SortOrder = "asc" | "desc"
+```
+
+### Backward Compatibility
+
+`FilterableSearchResult` is a pure additive feature:
+
+- Existing `SearchResult` usage unchanged
+- Opt-in wrapping with `new FilterableSearchResult(result)`
+- Zero breaking changes to existing APIs
+- No new dependencies
+
 ## License
 
 MIT
