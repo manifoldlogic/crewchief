@@ -24,6 +24,11 @@ name: Test
 on:
   pull_request:
 
+# Permissions needed for dorny/paths-filter to read PR file list
+permissions:
+  contents: read
+  pull-requests: read
+
 # Cancel in-progress runs for PRs only (let main builds complete)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
