@@ -162,6 +162,7 @@ mod tests {
             preview: "...".to_string(),
             score,
             source_scores: StdHashMap::from([(SearchSource::FTS, score)]),
+            confidence: None,
         }
     }
 

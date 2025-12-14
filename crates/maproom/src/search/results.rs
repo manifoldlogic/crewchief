@@ -83,6 +83,10 @@ pub struct ChunkSearchResult {
 
     /// Individual scores from each search source
     pub source_scores: HashMap<SearchSource, f32>,
+
+    /// Confidence signals for result quality assessment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<ConfidenceSignals>,
 }
 
 impl ChunkSearchResult {
@@ -111,6 +115,7 @@ impl ChunkSearchResult {
             preview,
             score,
             source_scores,
+            confidence: None,
         }
     }
 
@@ -450,6 +455,15 @@ pub struct SearchOptions {
     /// Recency threshold filter (e.g., "7 days", "1 month")
     #[serde(default)]
     pub recency_threshold: Option<String>,
+
+    /// Whether to include confidence signals in search results.
+    ///
+    /// When true, each result will include confidence field with quality signals.
+    /// When false (default), confidence is None for backward compatibility.
+    ///
+    /// Default: `false`
+    #[serde(default)]
+    pub include_confidence: bool,
 }
 
 fn default_deduplicate() -> bool {
@@ -492,6 +506,7 @@ impl SearchOptions {
             deduplicate: true,
             file_types: vec![],
             recency_threshold: None,
+            include_confidence: false,
         }
     }
 

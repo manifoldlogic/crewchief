@@ -348,9 +348,21 @@ impl SearchPipeline {
 
         // Merge fused scores with chunk details
         let mut assembled_results = Vec::new();
-        for fused in fused_results {
+        for (index, fused) in fused_results.iter().enumerate() {
             if let Some(details) = chunk_details.get(&fused.chunk_id) {
-                assembled_results.push(ChunkSearchResult::new(
+                // Compute confidence if requested
+                let confidence = if options.include_confidence {
+                    Some(crate::search::confidence::compute_result_confidence(
+                        fused,
+                        &fused_results,
+                        index,
+                        fused.exact_match_multiplier,
+                    ))
+                } else {
+                    None
+                };
+
+                let mut result = ChunkSearchResult::new(
                     fused.chunk_id,
                     details.file_id,
                     details.relpath.clone(),
@@ -360,8 +372,10 @@ impl SearchPipeline {
                     details.end_line,
                     details.preview.clone(),
                     fused.score,
-                    fused.source_scores,
-                ));
+                    fused.source_scores.clone(),
+                );
+                result.confidence = confidence;
+                assembled_results.push(result);
             } else {
                 warn!(
                     "Chunk {} found in fusion but missing from database",

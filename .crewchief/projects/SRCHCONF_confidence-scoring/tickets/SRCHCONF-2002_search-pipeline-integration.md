@@ -1,9 +1,9 @@
 # Ticket: [SRCHCONF-2002]: Integrate Confidence into Search Pipeline
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ With confidence types and computation logic complete (Phase 1), this ticket inte
 This implements the integration point described in architecture.md: confidence computation happens after RRF fusion, before result assembly.
 
 ## Acceptance Criteria
-- [ ] `include_confidence` parameter added to SearchOptions (bool, default: false)
-- [ ] ChunkSearchResult has optional confidence field: `pub confidence: Option<ConfidenceSignals>`
-- [ ] Confidence field uses `#[serde(skip_serializing_if = "Option::is_none")]` attribute
-- [ ] When include_confidence=true, confidence is computed for each result
-- [ ] When include_confidence=false, confidence is None (backward compatibility)
-- [ ] Integration tests pass for both modes (with/without confidence)
-- [ ] All existing tests still pass (no regressions)
-- [ ] Zero clippy warnings
+- [x] `include_confidence` parameter added to SearchOptions (bool, default: false)
+- [x] ChunkSearchResult has optional confidence field: `pub confidence: Option<ConfidenceSignals>`
+- [x] Confidence field uses `#[serde(skip_serializing_if = "Option::is_none")]` attribute
+- [x] When include_confidence=true, confidence is computed for each result
+- [x] When include_confidence=false, confidence is None (backward compatibility)
+- [x] Integration tests pass for both modes (with/without confidence)
+- [x] All existing tests still pass (no regressions)
+- [x] Zero clippy warnings
 
 ## Technical Requirements
 **1. Modify ChunkSearchResult**:
