@@ -189,7 +189,7 @@ pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, RRFFusion, Sco
 pub use pipeline::{PipelineError, SearchPipeline};
 pub use results::{
     ChunkSearchResult, ConfidenceSignals, FinalSearchResults, QueryProcessingDetails,
-    SearchMetadata, SearchOptions, SearchTiming,
+    RelatedChunkResult, SearchMetadata, SearchOptions, SearchTiming,
 };
 
 // Re-export performance optimization types (Phase 4)

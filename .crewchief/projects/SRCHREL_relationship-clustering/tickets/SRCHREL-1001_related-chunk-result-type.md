@@ -1,9 +1,9 @@
 # Ticket: [SRCHREL-1001]: RelatedChunkResult Type Definition
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - type definition only, no behavioral tests; compilation verified, no regressions (1 pre-existing test failure unrelated)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output

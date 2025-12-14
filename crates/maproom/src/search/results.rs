@@ -492,6 +492,54 @@ pub struct ConfidenceSignals {
     pub is_exact_match: bool,
 }
 
+/// Lightweight metadata for a related chunk discovered via graph traversal.
+///
+/// Contains only metadata (no file content) to keep responses small and fast.
+/// Users can invoke context tool to retrieve full content for specific chunks.
+///
+/// Empty Result Semantics:
+/// - `Option::None`: Expansion did not run (confidence too low or disabled)
+/// - `Option::Some(vec![])`: Expansion ran but found no relationships
+///
+/// TYPE_SYNC: packages/daemon-client/src/types.ts::RelatedChunkResult
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelatedChunkResult {
+    /// Chunk ID for requesting full context via context tool
+    pub chunk_id: i64,
+
+    /// File path relative to repository root
+    pub relpath: String,
+
+    /// Symbol name (function, class, etc.)
+    pub symbol_name: Option<String>,
+
+    /// Symbol kind (function, class, interface, etc.)
+    pub kind: String,
+
+    /// Start line in file (1-based)
+    pub start_line: i32,
+
+    /// End line in file (1-based)
+    pub end_line: i32,
+
+    /// Content preview (first 100 characters)
+    pub preview: String,
+
+    /// Graph traversal depth from source chunk (1 or 2)
+    pub depth: i32,
+
+    /// Decay-adjusted relevance score (0.0-1.0)
+    ///
+    /// Computed as: base_decay × edge_weight × module_boost
+    /// - base_decay: 0.7^depth (depth 1: 0.7, depth 2: 0.49)
+    /// - edge_weight: 0.5-1.1 based on edge type and target kind
+    /// - module_boost: 1.2 if same module, else 1.0
+    pub relevance: f32,
+
+    /// Relationship type: "import", "call", "extends", "implements"
+    pub relationship_type: String,
+}
+
 impl SearchOptions {
     /// Create new SearchOptions with required parameters.
     pub fn new(repo_id: i64, worktree_id: Option<i64>, limit: usize) -> Self {
