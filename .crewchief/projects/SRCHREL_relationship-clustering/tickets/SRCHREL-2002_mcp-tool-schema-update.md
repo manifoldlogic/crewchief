@@ -1,9 +1,9 @@
 # Ticket: [SRCHREL-2002]: MCP Search Tool Schema Update
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,13 +26,13 @@ The MCP search tool is the user-facing API for relationship-aware search. Adding
 This implements Phase 2 deliverables: MCP tool schema update and parameter documentation.
 
 ## Acceptance Criteria
-- [ ] `include_related` parameter added to MCP search tool schema
-- [ ] Parameter type is boolean with default false
-- [ ] Parameter description is comprehensive and mentions confidence auto-enable
-- [ ] Example usage documented in schema or tool description
-- [ ] Daemon client passes parameter correctly to Rust backend
-- [ ] MCP tool tests validate parameter acceptance
-- [ ] Backward compatibility verified (without parameter still works)
+- [x] `include_related` parameter added to MCP search tool schema
+- [x] Parameter type is boolean with default false
+- [x] Parameter description is comprehensive and mentions confidence auto-enable
+- [x] Example usage documented in schema or tool description
+- [x] Daemon client passes parameter correctly to Rust backend
+- [x] MCP tool tests validate parameter acceptance
+- [x] Backward compatibility verified (without parameter still works)
 
 ## Technical Requirements
 

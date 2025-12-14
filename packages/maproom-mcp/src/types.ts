@@ -141,6 +141,9 @@ export interface SearchParams {
 
   /** Include confidence signals for result quality assessment (default: false) */
   include_confidence?: boolean;
+
+  /** Include related chunks via graph traversal (default: false) */
+  include_related?: boolean;
 }
 
 /**

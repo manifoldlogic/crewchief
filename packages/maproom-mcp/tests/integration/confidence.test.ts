@@ -1,5 +1,6 @@
 /**
  * End-to-End Integration Tests for Confidence Scoring (SRCHCONF-3001, SRCHCONF-3003)
+ * and Relationship Expansion (SRCHREL-2002)
  *
  * Tests the complete confidence scoring flow:
  * MCP tool → DaemonClient → Rust daemon → SQLite
@@ -10,6 +11,7 @@
  * - Confidence signals have expected structure (source_count, score_gap, is_exact_match)
  * - High confidence scenario: exact match test (SRCHCONF-3003)
  * - Low confidence scenario: ambiguous query test (SRCHCONF-3003)
+ * - include_related parameter acceptance and validation (SRCHREL-2002)
  *
  * Prerequisites:
  * - SQLite test database with test-corpus indexed
@@ -280,6 +282,107 @@ describe("Confidence Scoring Integration (SRCHCONF-3001)", () => {
         expect(topResult.confidence.source_count).toBeLessThanOrEqual(4);
         expect(typeof topResult.confidence.is_exact_match).toBe("boolean");
       }
+    }, 30000);
+  });
+
+  describe("Relationship Expansion (SRCHREL-2002)", () => {
+    it("should accept include_related parameter and return results", async () => {
+      const params = {
+        query: "handleSearchTool",
+        repo: "crewchief",
+        worktree: "main",
+        limit: 5,
+        mode: "fts" as const,
+        include_related: true,
+      };
+
+      const result: SearchBundle = await handleSearchTool(params, client);
+
+      // Verify basic search functionality works with include_related parameter
+      expect(result).toHaveProperty("hits");
+      expect(result.hits).toBeInstanceOf(Array);
+      expect(result.hits.length).toBeGreaterThan(0);
+
+      // Verify standard fields are present
+      const firstHit = result.hits[0];
+      expect(firstHit).toHaveProperty("chunk_id");
+      expect(firstHit).toHaveProperty("score");
+      expect(firstHit).toHaveProperty("relpath");
+
+      // When include_related=true is passed, the search should still work
+      // The Rust backend will handle relationship expansion when supported
+    }, 30000);
+
+    it("should work without include_related parameter (backward compatibility)", async () => {
+      const params = {
+        query: "search",
+        repo: "crewchief",
+        worktree: "main",
+        limit: 5,
+        mode: "fts" as const,
+        // Note: include_related NOT provided
+      };
+
+      const result: SearchBundle = await handleSearchTool(params, client);
+
+      expect(result).toHaveProperty("hits");
+      expect(result.hits).toBeInstanceOf(Array);
+      expect(result.hits.length).toBeGreaterThan(0);
+
+      // Verify standard fields are present
+      const firstHit = result.hits[0];
+      expect(firstHit).toHaveProperty("chunk_id");
+      expect(firstHit).toHaveProperty("score");
+      expect(firstHit).toHaveProperty("relpath");
+    }, 30000);
+
+    it("should work with include_related=false explicitly", async () => {
+      const params = {
+        query: "context",
+        repo: "crewchief",
+        worktree: "main",
+        limit: 5,
+        mode: "fts" as const,
+        include_related: false,
+      };
+
+      const result: SearchBundle = await handleSearchTool(params, client);
+
+      expect(result).toHaveProperty("hits");
+      expect(result.hits).toBeInstanceOf(Array);
+      expect(result.hits.length).toBeGreaterThan(0);
+
+      // Verify standard fields are present
+      const firstHit = result.hits[0];
+      expect(firstHit).toHaveProperty("chunk_id");
+      expect(firstHit).toHaveProperty("score");
+      expect(firstHit).toHaveProperty("relpath");
+    }, 30000);
+
+    it("should work with both include_confidence and include_related", async () => {
+      const params = {
+        query: "daemon",
+        repo: "crewchief",
+        worktree: "main",
+        limit: 5,
+        mode: "fts" as const,
+        include_confidence: true,
+        include_related: true,
+      };
+
+      const result: SearchBundle = await handleSearchTool(params, client);
+
+      expect(result).toHaveProperty("hits");
+      expect(result.hits).toBeInstanceOf(Array);
+      expect(result.hits.length).toBeGreaterThan(0);
+
+      // Verify standard fields are present
+      const firstHit = result.hits[0];
+      expect(firstHit).toHaveProperty("chunk_id");
+      expect(firstHit).toHaveProperty("score");
+      expect(firstHit).toHaveProperty("relpath");
+
+      // Both parameters should be accepted and passed to the backend
     }, 30000);
   });
 });
