@@ -7,48 +7,22 @@ name: Test
 # Tests CrewChief packages using SQLite as the only database backend.
 # PostgreSQL support was intentionally removed for simplicity.
 #
-# DATABASE BACKEND:
-#   - SQLite (Only): Zero-configuration, runs without external services
-#   - No PostgreSQL support (intentionally removed for simplicity)
+# COST OPTIMIZATION:
+#   Jobs only run when their relevant code changes. A 'changes' job detects
+#   which paths changed, and subsequent jobs use conditions to skip when
+#   their code hasn't changed.
 #
 # JOB ORGANIZATION:
-#   - test-sqlite-e2e: CLI end-to-end tests
-#   - test-mcp-sqlite: TypeScript MCP server tests
-#   - test-rust: Rust library tests
-#   - test-typescript: TypeScript package tests (CLI, VSCode, daemon-client)
+#   - changes: Detect which paths changed (always runs, ~5s)
+#   - test-rust: Rust library tests (when Rust code changes)
+#   - test-typescript: TypeScript package tests (when TS code changes)
+#   - test-daemon-integration: Daemon integration tests (when daemon-client OR Rust changes)
+#   - test-sqlite-e2e: CLI E2E tests (when Rust OR E2E tests change)
+#   - test-mcp-sqlite: MCP server tests (when MCP OR Rust changes)
 # =============================================================================
 
-# Run tests only on pull requests
-# Path filters: Only run tests when code, dependencies, workflows, or schemas change
 on:
   pull_request:
-    paths:
-      # Rust code
-      - 'crates/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '**.rs'
-
-      # TypeScript code
-      - 'packages/*/src/**'
-      - 'packages/*/tests/**'
-      - 'packages/**/package.json'
-      - '**.ts'
-
-      # Dependencies
-      - 'pnpm-lock.yaml'
-
-      # Workflows (self + reusables)
-      - '.github/workflows/test.yml'
-      - '.github/workflows/reusable-rust-build.yml'
-      - '.github/workflows/reusable-typescript-build.yml'
-
-      # Database schemas and migrations
-      - 'packages/maproom-mcp/config/init.sql'
-      - 'crates/maproom/migrations/**'
-
-      # E2E tests
-      - 'tests/e2e/**'
 
 # Cancel in-progress runs for PRs only (let main builds complete)
 concurrency:
@@ -57,6 +31,47 @@ concurrency:
 
 jobs:
   # =============================================================================
+  # CHANGE DETECTION - Determines which jobs need to run
+  # =============================================================================
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      typescript: ${{ steps.filter.outputs.typescript }}
+      daemon-client: ${{ steps.filter.outputs.daemon-client }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+      cli: ${{ steps.filter.outputs.cli }}
+      vscode: ${{ steps.filter.outputs.vscode }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      workflow: ${{ steps.filter.outputs.workflow }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            typescript:
+              - 'packages/**/*.ts'
+              - 'packages/**/package.json'
+              - 'pnpm-lock.yaml'
+            daemon-client:
+              - 'packages/daemon-client/**'
+            mcp:
+              - 'packages/maproom-mcp/**'
+            cli:
+              - 'packages/cli/**'
+            vscode:
+              - 'packages/vscode-maproom/**'
+            e2e:
+              - 'tests/e2e/**'
+            workflow:
+              - '.github/workflows/test.yml'
+  # =============================================================================
   # TEST JOBS
   # =============================================================================
 
@@ -64,6 +79,8 @@ jobs:
   # Tests CLI commands work correctly with SQLite backend
   test-sqlite-e2e:
     name: SQLite E2E Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.e2e == 'true' || needs.changes.outputs.workflow == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -108,6 +125,8 @@ jobs:
   # =============================================================================
   test-mcp-sqlite:
     name: MCP SQLite Tests (TypeScript)
+    needs: changes
+    if: ${{ needs.changes.outputs.mcp == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -183,6 +202,8 @@ jobs:
   # SQLite tests run in-memory (no external service needed)
   test-rust:
     name: Rust Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -227,6 +248,8 @@ jobs:
   # =============================================================================
   test-daemon-integration:
     name: Daemon Client Integration Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.daemon-client == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -302,6 +325,8 @@ jobs:
   # Tests cli, vscode-maproom, and daemon-client packages
   test-typescript:
     name: TypeScript Package Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.typescript == 'true' || needs.changes.outputs.workflow == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
