@@ -67,7 +67,7 @@ describe('connectOrSpawn', () => {
     }
 
     // Clean up files
-    ;[config.socketPath, config.lockPath].forEach((path) => {
+    [config.socketPath, config.lockPath].forEach((path) => {
       if (fs.existsSync(path)) {
         fs.unlinkSync(path)
       }
