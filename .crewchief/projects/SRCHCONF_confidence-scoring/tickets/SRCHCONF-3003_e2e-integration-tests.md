@@ -1,9 +1,9 @@
 # Ticket: [SRCHCONF-3003]: End-to-End Integration Tests
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,15 +26,15 @@ This is the final validation for Phase 3. End-to-end tests prove that confidence
 These tests complement unit tests (Phase 1) and integration tests (Phase 2) with full-system validation.
 
 ## Acceptance Criteria
-- [ ] Minimum 4 end-to-end tests created in `packages/maproom-mcp/tests/integration/confidence.test.ts`
-- [ ] Test 1: Search with include_confidence=true returns confidence signals
-- [ ] Test 2: Search without include_confidence works (backward compatibility)
-- [ ] Test 3: Confidence signals have correct values (high confidence scenario)
-- [ ] Test 4: Confidence signals have correct values (low confidence scenario)
-- [ ] All tests pass (`pnpm test packages/maproom-mcp`)
-- [ ] Tests use real daemon (not mocked)
-- [ ] Tests use test database with indexed sample code
-- [ ] Performance overhead validated (<5ms from benchmark in SRCHCONF-1003)
+- [x] Minimum 4 end-to-end tests created in `packages/maproom-mcp/tests/integration/confidence.test.ts`
+- [x] Test 1: Search with include_confidence=true returns confidence signals
+- [x] Test 2: Search without include_confidence works (backward compatibility)
+- [x] Test 3: Confidence signals have correct values (high confidence scenario)
+- [x] Test 4: Confidence signals have correct values (low confidence scenario)
+- [x] All tests pass (`pnpm test packages/maproom-mcp`)
+- [x] Tests use real daemon (not mocked)
+- [x] Tests use test database with indexed sample code
+- [x] Performance overhead validated (<5ms from benchmark in SRCHCONF-1003)
 
 ## Technical Requirements
 **Test Setup**:
