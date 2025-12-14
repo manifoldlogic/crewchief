@@ -305,7 +305,7 @@ jobs:
         run: pnpm test:integration
         env:
           CI: true
-          MAPROOM_BINARY_PATH: ${{ github.workspace }}/target/release/crewchief-maproom
+          MAPROOM_BINARY_PATH: ${{ github.workspace }}/crates/maproom/target/release/crewchief-maproom
 
       - name: Job Summary
         if: always()
