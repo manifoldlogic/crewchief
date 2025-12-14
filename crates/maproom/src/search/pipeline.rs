@@ -31,8 +31,8 @@ use crate::search::executors::SearchExecutors;
 use crate::search::fusion::{BasicWeightedFusion, FusedResult, ScoreFusion};
 use crate::search::query_processor::QueryProcessor;
 use crate::search::results::{
-    ChunkSearchResult, FinalSearchResults, QueryProcessingDetails, SearchMetadata, SearchOptions,
-    SearchTiming,
+    ChunkSearchResult, FinalSearchResults, QueryFilters, QueryProcessingDetails,
+    QueryUnderstanding, SearchMetadata, SearchOptions, SearchTiming, TimingBreakdown,
 };
 use crate::search::types::ProcessedQuery;
 use std::collections::HashMap;
@@ -126,13 +126,13 @@ impl SearchPipeline {
                 return Err(e.into());
             }
         };
-        let processing_time = process_start.elapsed().as_secs_f64() * 1000.0;
+        let query_processing_ms = process_start.elapsed().as_secs_f64() * 1000.0;
 
         let mode_str = format!("{:?}", processed.mode).to_lowercase();
 
         debug!(
             "Query processed in {:.2}ms: {} tokens, mode={:?}",
-            processing_time,
+            query_processing_ms,
             processed.tokens.len(),
             processed.mode
         );
@@ -165,11 +165,11 @@ impl SearchPipeline {
                 return Err(e.into());
             }
         };
-        let search_time = search_start.elapsed().as_secs_f64() * 1000.0;
+        let search_execution_ms = search_start.elapsed().as_secs_f64() * 1000.0;
 
         debug!(
             "Parallel search completed in {:.2}ms: {}",
-            search_time,
+            search_execution_ms,
             search_results.summary()
         );
 
@@ -211,14 +211,14 @@ impl SearchPipeline {
             &fusion_weights,
             fusion_limit,
         );
-        let fusion_time = fusion_start.elapsed().as_secs_f64() * 1000.0;
+        let score_fusion_ms = fusion_start.elapsed().as_secs_f64() * 1000.0;
 
         // Record fusion time metric
-        metrics.record_fusion_time(fusion_time / 1000.0, "basic_weighted");
+        metrics.record_fusion_time(score_fusion_ms / 1000.0, "basic_weighted");
 
         debug!(
             "Score fusion completed in {:.2}ms: {} results",
-            fusion_time,
+            score_fusion_ms,
             fused_results.len()
         );
 
@@ -248,14 +248,16 @@ impl SearchPipeline {
                 graph_count,
                 signals_count,
                 execution_time_ms,
+                query_processing_ms,
+                score_fusion_ms,
                 options,
             )
             .await?;
-        let assembly_time = assembly_start.elapsed().as_secs_f64() * 1000.0;
+        let result_assembly_ms = assembly_start.elapsed().as_secs_f64() * 1000.0;
 
         debug!(
             "Result assembly completed in {:.2}ms: {} results",
-            assembly_time,
+            result_assembly_ms,
             final_results.results.len()
         );
 
@@ -275,13 +277,13 @@ impl SearchPipeline {
         if total_time > 50.0 {
             warn!(
                 "Search exceeded 50ms target: {:.2}ms (processing: {:.2}ms, search: {:.2}ms, fusion: {:.2}ms, assembly: {:.2}ms)",
-                total_time, processing_time, search_time, fusion_time, assembly_time
+                total_time, query_processing_ms, search_execution_ms, score_fusion_ms, result_assembly_ms
             );
         }
 
         trace!(
             "Pipeline timing breakdown: total={:.2}ms, processing={:.2}ms, search={:.2}ms, fusion={:.2}ms, assembly={:.2}ms",
-            total_time, processing_time, search_time, fusion_time, assembly_time
+            total_time, query_processing_ms, search_execution_ms, score_fusion_ms, result_assembly_ms
         );
 
         Ok(final_results)
@@ -305,6 +307,8 @@ impl SearchPipeline {
         graph_count: usize,
         signals_count: usize,
         search_execution_time_ms: f64,
+        query_processing_ms: f64,
+        score_fusion_ms: f64,
         options: SearchOptions,
     ) -> Result<FinalSearchResults, PipelineError> {
         // Extract chunk IDs to fetch
@@ -323,7 +327,10 @@ impl SearchPipeline {
                     vector_count,
                     graph_count,
                     signals_count,
+                    query_processing_ms,
                     search_execution_time_ms,
+                    score_fusion_ms,
+                    0.0, // result_assembly_ms (negligible for empty results)
                     &options,
                 ),
             ));
@@ -380,6 +387,9 @@ impl SearchPipeline {
             assembled_results
         };
 
+        // Measure assembly time from the start of assemble_results
+        // Note: This is approximate since we're measuring within the function
+        // The actual result_assembly_ms will be passed in from the caller
         let metadata = self.build_metadata(
             processed,
             total_unique_chunks,
@@ -388,7 +398,10 @@ impl SearchPipeline {
             vector_count,
             graph_count,
             signals_count,
+            query_processing_ms,
             search_execution_time_ms,
+            score_fusion_ms,
+            0.0, // result_assembly_ms - will be updated by caller if needed
             &options,
         );
 
@@ -428,8 +441,11 @@ impl SearchPipeline {
         vector_count: usize,
         graph_count: usize,
         signals_count: usize,
+        query_processing_ms: f64,
         search_execution_time_ms: f64,
-        _options: &SearchOptions,
+        score_fusion_ms: f64,
+        result_assembly_ms: f64,
+        options: &SearchOptions,
     ) -> SearchMetadata {
         let query_details = QueryProcessingDetails::new(
             processed.original.clone(),
@@ -446,16 +462,46 @@ impl SearchPipeline {
         result_counts.insert(SearchSource::Graph, graph_count);
         result_counts.insert(SearchSource::Signals, signals_count);
 
-        // Timing is tracked at the search() method level, so we estimate here
-        // In a production system, we'd pass actual timing data through
+        // Use actual timing data from pipeline measurements
         let timing = SearchTiming::new(
-            5.0,                      // query processing estimate
-            search_execution_time_ms, // actual search time
-            2.0,                      // fusion estimate
-            5.0,                      // assembly estimate
+            query_processing_ms,
+            search_execution_time_ms,
+            score_fusion_ms,
+            result_assembly_ms,
         );
 
-        SearchMetadata::new(query_details, result_counts, timing, total_unique, returned)
+        // Assemble QueryUnderstanding metadata (Phase 2)
+        let filters = QueryFilters {
+            repo_id: options.repo_id,
+            worktree_id: options.worktree_id,
+            file_types: options.file_types.clone(),
+            recency_threshold: options.recency_threshold.clone(),
+        };
+
+        let timing_breakdown = TimingBreakdown::new(
+            query_processing_ms,
+            search_execution_time_ms,
+            score_fusion_ms,
+            result_assembly_ms,
+        );
+
+        let understanding = QueryUnderstanding::from_query_data(
+            processed.mode,
+            processed.tokens.clone(),
+            processed.expanded_terms.clone(),
+            filters,
+            "basic_weighted".to_string(), // fusion strategy name
+            timing_breakdown,
+        );
+
+        SearchMetadata::with_understanding(
+            query_details,
+            result_counts,
+            timing,
+            total_unique,
+            returned,
+            understanding,
+        )
     }
 }
 

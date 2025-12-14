@@ -442,6 +442,14 @@ pub struct SearchOptions {
     /// Default: `true`
     #[serde(default = "default_deduplicate")]
     pub deduplicate: bool,
+
+    /// File type filters (e.g., ["ts", "tsx", "js"])
+    #[serde(default)]
+    pub file_types: Vec<String>,
+
+    /// Recency threshold filter (e.g., "7 days", "1 month")
+    #[serde(default)]
+    pub recency_threshold: Option<String>,
 }
 
 fn default_deduplicate() -> bool {
@@ -460,6 +468,8 @@ impl SearchOptions {
             skip_graph: false,
             skip_signals: false,
             deduplicate: true,
+            file_types: vec![],
+            recency_threshold: None,
         }
     }
 
