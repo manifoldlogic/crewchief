@@ -147,7 +147,8 @@ describe('FilterableSearchResult', () => {
 
       expect(filtered.hits.length).toBe(0)
       expect(filtered.count).toBe(0)
-      expect(filtered.total).toBe(0)
+      // total preserves original daemon total (useful for "X of Y" UI)
+      expect(filtered.total).toBe(mockSearchResult.total)
     })
 
     it('handles null symbol_name', () => {
@@ -218,7 +219,7 @@ describe('FilterableSearchResult', () => {
       const filtered = result.filter({})
 
       expect(filtered.hits.length).toBe(mockSearchResult.hits.length)
-      expect(filtered.total).toBe(mockSearchResult.hits.length)
+      expect(filtered.total).toBe(mockSearchResult.total)
     })
 
     it('handles filter with all criteria excluding all results', () => {
@@ -229,7 +230,8 @@ describe('FilterableSearchResult', () => {
       })
 
       expect(filtered.hits.length).toBe(0)
-      expect(filtered.total).toBe(0)
+      // total preserves original daemon total
+      expect(filtered.total).toBe(mockSearchResult.total)
     })
 
     it('handles score boundary conditions', () => {

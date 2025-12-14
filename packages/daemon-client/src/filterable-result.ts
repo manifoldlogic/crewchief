@@ -4,7 +4,7 @@ import type { FilterCriteria, SortField, SortOrder } from './filter-types'
 /**
  * Individual search hit from daemon
  *
- * Sync with: crates/maproom/src/db/mod.rs SearchHit
+ * Derived from SearchResult['hits'] type - see client.ts for source of truth.
  */
 export type SearchHit = SearchResult['hits'][number]
 
@@ -178,11 +178,10 @@ export class FilterableSearchResult {
       filtered = filtered.filter(criteria.custom)
     }
 
-    // Return new instance with filtered hits
+    // Return new instance with filtered hits (preserves original total)
     return new FilterableSearchResult({
       ...this.result,
       hits: filtered,
-      total: filtered.length,
     })
   }
 
