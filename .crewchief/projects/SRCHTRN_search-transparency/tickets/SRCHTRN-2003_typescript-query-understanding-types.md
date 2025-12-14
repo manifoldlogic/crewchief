@@ -7,7 +7,7 @@ Create TypeScript interfaces for query understanding metadata
 - [x] **Implementation Complete**
 - [x] **Tests Passing**
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed**
 
 ## Agents
 - **Primary**: typescript-engineer
