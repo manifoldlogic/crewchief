@@ -120,17 +120,21 @@ impl EdgeUpdater {
         self.delete_edges_for_file(file_id).await?;
 
         // 2. Recompute edges
-        // Get file metadata (relpath and language)
+        // Get file metadata (relpath, language) and worktree root path
         let file_metadata = self
             .store
             .run(move |conn| {
                 let result = conn.query_row(
-                    "SELECT relpath, language FROM files WHERE id = ?",
+                    "SELECT f.relpath, f.language, w.abs_path
+                     FROM files f
+                     JOIN worktrees w ON f.worktree_id = w.id
+                     WHERE f.id = ?",
                     rusqlite::params![file_id],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
                             row.get::<_, Option<String>>(1)?,
+                            row.get::<_, String>(2)?,
                         ))
                     },
                 )?;
@@ -138,11 +142,11 @@ impl EdgeUpdater {
             })
             .await?;
 
-        let (relpath, language) = file_metadata;
+        let (relpath, language, root_path) = file_metadata;
 
         // Check if this is a TypeScript/JavaScript file
         let language = match language {
-            Some(lang) if matches!(lang.as_str(), "typescript" | "tsx" | "javascript" | "jsx") => {
+            Some(lang) if matches!(lang.as_str(), "ts" | "tsx" | "js" | "jsx") => {
                 lang
             }
             _ => {
@@ -156,9 +160,10 @@ impl EdgeUpdater {
             }
         };
 
-        // Read file content
-        let content = std::fs::read_to_string(&relpath)
-            .with_context(|| format!("Failed to read file: {}", relpath))?;
+        // Read file content (join root path with relpath)
+        let full_path = std::path::Path::new(&root_path).join(&relpath);
+        let content = std::fs::read_to_string(&full_path)
+            .with_context(|| format!("Failed to read file: {} (root: {}, relpath: {})", full_path.display(), root_path, relpath))?;
 
         // Load chunks for this file
         let chunks_with_ids: Vec<ChunkWithId> = self

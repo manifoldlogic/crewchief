@@ -101,7 +101,7 @@ pub struct ChunkWithId {
 /// ```
 pub fn extract_edges(source: &str, language: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
     match language {
-        "typescript" | "tsx" | "javascript" | "jsx" => typescript::extract_calls(source, chunks),
+        "ts" | "tsx" | "js" | "jsx" => typescript::extract_calls(source, chunks),
         // Python, Rust will be added in Phase 2/3
         _ => {
             // No edge extraction for unsupported languages

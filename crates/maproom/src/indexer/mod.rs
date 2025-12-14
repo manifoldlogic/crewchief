@@ -471,7 +471,7 @@ pub async fn scan_worktree(
             }
 
             // Extract edges for TypeScript/JavaScript
-            if matches!(language, "typescript" | "tsx" | "javascript" | "jsx") {
+            if matches!(language, "ts" | "tsx" | "js" | "jsx") {
                 match edges::extract_edges(&content, language, &chunks_with_ids) {
                     Ok(edges_to_insert) if !edges_to_insert.is_empty() => {
                         if let Err(e) = insert_edges(store, &edges_to_insert).await {
@@ -697,7 +697,7 @@ pub async fn upsert_files(
             }
 
             // Extract edges for TypeScript/JavaScript
-            if matches!(language.unwrap(), "typescript" | "tsx" | "javascript" | "jsx") {
+            if matches!(language.unwrap(), "ts" | "tsx" | "js" | "jsx") {
                 match edges::extract_edges(&content, language.unwrap(), &chunks_with_ids) {
                     Ok(edges_to_insert) if !edges_to_insert.is_empty() => {
                         if let Err(e) = insert_edges(store, &edges_to_insert).await {
