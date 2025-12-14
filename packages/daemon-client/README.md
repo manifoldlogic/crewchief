@@ -358,7 +358,46 @@ if (await client.isHealthy()) {
 
 The library provides specific error types for different failure modes, all extending the base `DaemonError` class.
 
+### Structured Error Details
+
+When RPC errors occur, structured error details are available via `RpcError.getDetails()`:
+
+```typescript
+import { RpcError } from '@crewchief/daemon-client'
+
+try {
+  await client.search({ query: 'test', repo: 'crewchief' })
+} catch (error) {
+  if (error instanceof RpcError) {
+    const details = error.getDetails()
+    if (details) {
+      console.log(`Error type: ${details.error_type}`)
+      console.log(`Stage: ${details.stage}`)
+      console.log(`Suggestions:`, details.suggestions)
+    }
+  }
+}
+```
+
 ### Error Types
+
+| Error Type | Description | Common Causes |
+|------------|-------------|---------------|
+| `embedding_provider` | Embedding service failure | API key invalid, service offline, network issues |
+| `database` | Database operation failure | Repository not indexed, connection timeout, corrupted DB |
+| `validation` | Invalid query parameters | Empty query, query too long |
+| `timeout` | Search execution timeout | Complex query, large repository |
+| `not_found` | Resource not found | Repository doesn't exist, no meaningful content |
+| `unknown` | Unexpected error | Internal errors, unclassified failures |
+
+### Suggestions
+
+Each error includes 1-2 actionable suggestions:
+- Provider-specific fixes (e.g., "Start Ollama service: ollama serve")
+- Fallback modes (e.g., "Try FTS mode: --mode fts")
+- Configuration checks (e.g., "Check OPENAI_API_KEY")
+
+### Error Type Classes
 
 #### `DaemonError`
 

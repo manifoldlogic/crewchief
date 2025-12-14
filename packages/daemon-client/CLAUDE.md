@@ -34,6 +34,52 @@ Key sync points:
 - `ContextParams` ↔ `ContextParams` in Rust
 - `RustContextBundle` ↔ `ContextBundle` in Rust
 
+## Type Synchronization with Rust
+
+**Source of Truth**: Rust types in `crates/maproom/src/search/errors.rs` and `crates/maproom/src/search/results.rs`
+
+**Sync Pattern**: TypeScript types in `src/types.ts` mirror Rust structs with sync comments.
+
+### Manual Sync Checklist
+
+When Rust types change:
+- [ ] Update corresponding TypeScript interfaces
+- [ ] Verify sync comments still link correctly
+- [ ] Run type sync validation tests: `pnpm test types.test.ts`
+- [ ] Check integration tests pass
+
+### Type Sync Validation
+
+Run validation tests:
+```bash
+cd packages/daemon-client
+pnpm test types.test.ts
+```
+
+Tests verify:
+- Enum values match exactly (ErrorType, PipelineStage)
+- Structure fields match (SearchErrorDetails, QueryUnderstanding)
+- Serialization roundtrip works
+
+### Adding New Error Types
+
+1. **Rust** (`crates/maproom/src/search/errors.rs`):
+   - Add variant to `ErrorType` enum
+   - Add conversion case in `from_pipeline_error()`
+   - Add 1-2 actionable suggestions
+
+2. **TypeScript** (`packages/daemon-client/src/types.ts`):
+   - Add variant to `ErrorType` union type
+   - Update sync comment if needed
+
+3. **Validation** (`packages/daemon-client/src/types.test.ts`):
+   - Add new variant to validation test array
+   - Verify test passes
+
+4. **Integration Test** (`crates/maproom/tests/daemon_error_serialization.rs`):
+   - Add test case for new error type
+   - Verify serialization works end-to-end
+
 ## Key Components
 
 - `DaemonClient` - Main client class, manages daemon lifecycle
