@@ -5,32 +5,58 @@
  * race conditions when multiple clients start simultaneously.
  *
  * Requirements:
- * - crewchief-maproom binary must be in PATH or built
+ * - crewchief-maproom binary must be built (set MAPROOM_BINARY_PATH or build in target/release)
  * - Tests spawn actual daemon processes
+ *
+ * Run with: pnpm test:integration
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import {
   connectOrSpawn,
   getDefaultConfig,
   type DiscoveryConfig,
-} from '../discovery.js'
-import { DaemonStartupError } from '../errors.js'
+} from '../src/discovery.js'
+import { DaemonStartupError } from '../src/errors.js'
 
 const execAsync = promisify(exec)
 
+/**
+ * Get the path to the maproom binary.
+ * Checks in order:
+ * 1. MAPROOM_BINARY_PATH environment variable
+ * 2. Workspace target/release (for CI)
+ * 3. Default from getDefaultConfig()
+ */
+function getBinaryPath(): string {
+  if (process.env.MAPROOM_BINARY_PATH) {
+    return process.env.MAPROOM_BINARY_PATH
+  }
+
+  // Check workspace root for CI (monorepo structure)
+  const workspaceRoot = path.resolve(__dirname, '../../../..')
+  const ciPath = path.join(workspaceRoot, 'target/release/crewchief-maproom')
+  if (fs.existsSync(ciPath)) {
+    return ciPath
+  }
+
+  return getDefaultConfig().binaryPath
+}
+
 describe('connectOrSpawn', () => {
   let config: DiscoveryConfig
+  const binaryPath = getBinaryPath()
 
   beforeEach(() => {
     // Use unique paths for each test to avoid conflicts
     const timestamp = Date.now()
     config = {
       ...getDefaultConfig(),
-      binaryPath: '/workspace/target/release/crewchief-maproom', // Use absolute path for tests
+      binaryPath,
       socketPath: `/tmp/test-maproom-${timestamp}.sock`,
       lockPath: `/tmp/test-maproom-${timestamp}.lock`,
     }
@@ -67,7 +93,7 @@ describe('connectOrSpawn', () => {
     }
 
     // Clean up files
-    ;[config.socketPath, config.lockPath].forEach((path) => {
+    [config.socketPath, config.lockPath].forEach((path) => {
       if (fs.existsSync(path)) {
         fs.unlinkSync(path)
       }

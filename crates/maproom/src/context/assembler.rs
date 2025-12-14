@@ -104,6 +104,7 @@ pub trait ContextAssembler: Send + Sync {
 /// }
 /// ```
 pub struct BasicContextAssembler {
+    #[allow(dead_code)] // Will be used when get_chunk_metadata is implemented (IDXABS-4001)
     store: Arc<SqliteStore>,
     token_counter: TokenCounter,
     cache: Arc<ContextCache>,
@@ -135,7 +136,7 @@ impl BasicContextAssembler {
     }
 
     /// Retrieve chunk metadata from the database by ID.
-    pub async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
+    pub async fn get_chunk_metadata(&self, _chunk_id: i64) -> Result<ChunkMetadata> {
         profile_scope!("get_chunk_metadata");
         // TODO: Implement using SqliteStore methods in IDXABS-4001
         anyhow::bail!("get_chunk_metadata not yet implemented for SQLite")
@@ -328,7 +329,7 @@ impl ParallelContextAssembler {
     }
 
     /// Retrieve chunk metadata from the database by ID (same as BasicContextAssembler).
-    async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
+    async fn get_chunk_metadata(&self, _chunk_id: i64) -> Result<ChunkMetadata> {
         // TODO: Implement using SqliteStore methods in IDXABS-4001
         anyhow::bail!("get_chunk_metadata not yet implemented for SQLite")
     }
