@@ -6,7 +6,6 @@
 //!
 //! NOTE: This module is a placeholder for future edge computation implementation.
 //! Most code is dead until the feature is completed.
-#![allow(dead_code)]
 //!
 //! # Edge Types
 //!
@@ -180,19 +179,21 @@ impl EdgeUpdater {
 }
 
 /// Represents a chunk edge relationship.
+///
+/// Public for use by edge extractor module (`crate::indexer::edges`).
 #[derive(Debug, Clone)]
-struct Edge {
-    src_chunk_id: i64,
-    dst_chunk_id: i64,
-    edge_type: EdgeType,
+pub struct Edge {
+    pub src_chunk_id: i64,
+    pub dst_chunk_id: i64,
+    pub edge_type: EdgeType,
 }
 
 /// Edge type enumeration.
 ///
 /// Matches the database enum `maproom.edge_type`.
+/// Public for use by edge extractor module (`crate::indexer::edges`).
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-enum EdgeType {
+pub enum EdgeType {
     Imports,
     Exports,
     Calls,
@@ -203,6 +204,7 @@ enum EdgeType {
 
 impl EdgeType {
     /// Convert edge type to database string representation.
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             EdgeType::Imports => "imports",
@@ -216,6 +218,7 @@ impl EdgeType {
 }
 
 /// Compute edges for a set of chunks.
+#[allow(dead_code)]
 ///
 /// This is a placeholder implementation that will be enhanced in future tickets.
 /// Currently implements basic heuristics:
@@ -243,6 +246,7 @@ async fn compute_edges(_store: &SqliteStore, _chunk_ids: &[i64]) -> Result<Vec<E
 }
 
 /// Check if a chunk represents a test.
+#[allow(dead_code)]
 ///
 /// # Heuristics
 /// - Kind contains "test"
@@ -264,6 +268,7 @@ fn is_test_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
 }
 
 /// Check if a chunk represents a route handler.
+#[allow(dead_code)]
 ///
 /// # Heuristics
 /// - Symbol name contains "route" or "handler"
@@ -282,6 +287,7 @@ fn is_route_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
 }
 
 /// Find test target chunks for a given test chunk.
+#[allow(dead_code)]
 ///
 /// # Strategy
 /// - Extract target name from test symbol name
@@ -306,6 +312,7 @@ async fn find_test_targets(
 }
 
 /// Insert edges into the database in batch.
+#[allow(dead_code)]
 ///
 /// # Arguments
 /// * `store` - SqliteStore instance

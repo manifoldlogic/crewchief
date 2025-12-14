@@ -10,6 +10,7 @@ use tracing::{info, warn};
 use crate::db::{ChunkRecord, FileRecord, SqliteStore};
 use crate::incremental::ignore::load_ignore_patterns;
 
+pub mod edges;
 pub mod parser;
 
 /// Debouncer to prevent rapid successive event handling
