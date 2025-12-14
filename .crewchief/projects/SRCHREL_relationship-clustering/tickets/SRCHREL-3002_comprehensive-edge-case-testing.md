@@ -1,9 +1,9 @@
 # Ticket: [SRCHREL-3002]: Comprehensive Edge Case Testing
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - 18/18 Rust + 25/25 TypeScript tests passed
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ Robust software handles edge cases gracefully. This ticket ensures relationship 
 This implements Phase 3 deliverables: confidence gating validation, error handling validation, edge case coverage.
 
 ## Acceptance Criteria
-- [ ] Edge case test suite created with 10+ scenarios
-- [ ] Confidence gating tests validate threshold (source_count >= 2 OR is_exact_match)
-- [ ] Error handling tests validate graceful degradation
-- [ ] Graph edge cases tested (cycles, empty, depth limits)
-- [ ] Empty result semantics tested (None vs Some([]))
-- [ ] All edge case tests pass
-- [ ] Test coverage includes manual test checklist items from quality-strategy.md
-- [ ] Documentation includes known edge cases and expected behavior
+- [x] Edge case test suite created with 10+ scenarios (18 Rust + 25 TypeScript = 43 total)
+- [x] Confidence gating tests validate threshold (source_count >= 2 OR is_exact_match)
+- [x] Error handling tests validate graceful degradation
+- [x] Graph edge cases tested (cycles, empty, depth limits)
+- [x] Empty result semantics tested (None vs Some([]))
+- [x] All edge case tests pass
+- [x] Test coverage includes manual test checklist items from quality-strategy.md
+- [x] Documentation includes known edge cases and expected behavior
 
 ## Technical Requirements
 
@@ -380,3 +380,94 @@ The verify-ticket agent should check:
 - Empty result semantics tested (None vs Some([]))
 - TypeScript edge case tests pass
 - Manual test checklist from quality-strategy.md completed
+
+## Implementation Notes
+
+**Test File Created**: `/workspace/crates/maproom/tests/edge_cases_test.rs`
+
+**Test Execution Results**:
+```
+Rust Edge Case Tests (edge_cases_test.rs):
+running 18 tests
+test test_no_confidence_data_prevents_expansion ... ok
+test test_all_low_confidence_results ... ok
+test test_exact_match_bypasses_source_count_threshold ... ok
+test test_source_count_threshold_boundary ... ok
+test test_graceful_degradation_on_graph_error ... ok
+test test_graceful_degradation_no_panic ... ok
+test test_empty_graph_returns_empty_array ... ok
+test test_depth_limit_enforced ... ok
+test test_more_than_limit_returns_top_n ... ok
+test test_relevance_score_decay_by_depth ... ok
+test test_none_vs_empty_array_semantics ... ok
+test test_serialization_none_omitted ... ok
+test test_serialization_empty_array_included ... ok
+test test_max_concurrent_expansions_enforced ... ok
+test test_related_chunk_field_validation ... ok
+test test_related_chunk_null_symbol_name ... ok
+test test_relevance_edge_values ... ok
+test test_relationship_types_valid ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored
+
+TypeScript Type Tests (types.test.ts):
+25 tests passed (25)
+```
+
+**Edge Cases Covered (18 Rust tests)**:
+
+1. **Confidence Gating** (4 tests):
+   - `test_no_confidence_data_prevents_expansion`: include_related=true but confidence=None
+   - `test_all_low_confidence_results`: All results below threshold
+   - `test_exact_match_bypasses_source_count_threshold`: is_exact_match=true with source_count=1
+   - `test_source_count_threshold_boundary`: Boundary conditions (1, 2, 3 sources)
+
+2. **Error Handling** (2 tests):
+   - `test_graceful_degradation_on_graph_error`: Graph traversal errors → related=None
+   - `test_graceful_degradation_no_panic`: Edge cases (empty paths, unicode, etc.)
+
+3. **Graph Traversal** (4 tests):
+   - `test_empty_graph_returns_empty_array`: Isolated chunk → Some([])
+   - `test_depth_limit_enforced`: max_depth=2 respected
+   - `test_more_than_limit_returns_top_n`: Top 5 by relevance
+   - `test_relevance_score_decay_by_depth`: Depth decay (0.7^depth)
+
+4. **Empty Result Semantics** (3 tests):
+   - `test_none_vs_empty_array_semantics`: None vs Some([]) distinction
+   - `test_serialization_none_omitted`: JSON skips None
+   - `test_serialization_empty_array_included`: JSON includes Some([])
+
+5. **MAX_CONCURRENT_EXPANSIONS** (1 test):
+   - `test_max_concurrent_expansions_enforced`: Cap at 3 expansions
+
+6. **Field Validation** (4 tests):
+   - `test_related_chunk_field_validation`: All 10 fields validated
+   - `test_related_chunk_null_symbol_name`: null symbol_name handling
+   - `test_relevance_edge_values`: Relevance in (0, 1]
+   - `test_relationship_types_valid`: Valid relationship type strings
+
+**TypeScript Edge Cases (25 tests in types.test.ts)**:
+- RelatedChunkResult Rust JSON deserialization
+- All 10 field type validation
+- null symbol_name handling
+- Depth values (1 or 2)
+- Relevance range [0, 1]
+- relationship_type values
+- ChunkSearchResult with optional related field
+- Empty related array semantics
+- Multiple related chunks
+- Full ChunkSearchResult field validation
+
+**Total Test Coverage**: 57 edge case tests (18 Rust + 14 relationship_integration + 25 TypeScript)
+
+**Run Commands**:
+```bash
+# Rust edge case tests
+cargo test --test edge_cases_test -- --nocapture
+
+# Rust relationship integration tests
+cargo test --test relationship_integration_test
+
+# TypeScript type tests
+cd packages/daemon-client && pnpm test src/types.test.ts
+```
