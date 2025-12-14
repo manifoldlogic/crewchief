@@ -7,7 +7,7 @@ Assemble query understanding metadata in search pipeline
 - [x] **Implementation Complete**
 - [x] **Tests Passing**
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed**
 
 ## Agents
 - **Primary**: rust-engineer
