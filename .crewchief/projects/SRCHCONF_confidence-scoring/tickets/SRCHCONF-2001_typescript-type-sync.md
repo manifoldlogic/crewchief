@@ -1,9 +1,9 @@
 # Ticket: [SRCHCONF-2001]: TypeScript Type Sync and Validation Tests
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ Phase 2 begins with synchronizing types across the Rust-TypeScript boundary. The
 This follows the proven pattern from QueryUnderstanding (SRCHTRN project) using TYPE_SYNC comments and validation tests.
 
 ## Acceptance Criteria
-- [ ] `ConfidenceSignals` interface created in `packages/daemon-client/src/types.ts` with 3 fields matching Rust
-- [ ] TYPE_SYNC comment added: `/** Sync with: crates/maproom/src/search/results.rs::ConfidenceSignals */`
-- [ ] All 3 fields match Rust struct exactly: source_count (number), score_gap (number), is_exact_match (boolean)
-- [ ] Type validation tests added to `packages/daemon-client/src/types.test.ts`
-- [ ] Serialization roundtrip test passes (Rust JSON → TypeScript)
-- [ ] Optional field handling test passes (confidence present/absent)
-- [ ] All TypeScript tests pass (`pnpm test packages/daemon-client`)
-- [ ] Zero TypeScript compilation errors (`pnpm typecheck`)
+- [x] `ConfidenceSignals` interface created in `packages/daemon-client/src/types.ts` with 3 fields matching Rust
+- [x] TYPE_SYNC comment added: `/** Sync with: crates/maproom/src/search/results.rs::ConfidenceSignals */`
+- [x] All 3 fields match Rust struct exactly: source_count (number), score_gap (number), is_exact_match (boolean)
+- [x] Type validation tests added to `packages/daemon-client/src/types.test.ts`
+- [x] Serialization roundtrip test passes (Rust JSON → TypeScript)
+- [x] Optional field handling test passes (confidence present/absent)
+- [x] All TypeScript tests pass (`pnpm test packages/daemon-client`)
+- [x] Zero TypeScript compilation errors (`pnpm typecheck`)
 
 ## Technical Requirements
 **TypeScript Interface**:

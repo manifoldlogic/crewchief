@@ -7,6 +7,7 @@ import type {
   QueryFilters,
   TimingBreakdown,
   SearchMetadata,
+  ConfidenceSignals,
 } from './types.js'
 
 describe('Type synchronization with Rust', () => {
@@ -242,5 +243,76 @@ describe('Type synchronization - Query Understanding', () => {
       timing.score_fusion_ms +
       timing.result_assembly_ms
     expect(sum).toBeCloseTo(timing.total_ms, 1)
+  })
+})
+
+describe('Type synchronization - Confidence Signals', () => {
+  it('should deserialize ConfidenceSignals from Rust JSON', () => {
+    // Example JSON from Rust serialization
+    const rustJson = {
+      source_count: 3,
+      score_gap: 1.25,
+      is_exact_match: true,
+    }
+
+    // TypeScript should parse without errors
+    const signals: ConfidenceSignals = rustJson
+
+    expect(signals.source_count).toBe(3)
+    expect(signals.score_gap).toBeCloseTo(1.25)
+    expect(signals.is_exact_match).toBe(true)
+  })
+
+  it('should validate all field types are correct', () => {
+    const signals: ConfidenceSignals = {
+      source_count: 2,
+      score_gap: 0.42,
+      is_exact_match: false,
+    }
+
+    // Verify field types
+    expect(typeof signals.source_count).toBe('number')
+    expect(typeof signals.score_gap).toBe('number')
+    expect(typeof signals.is_exact_match).toBe('boolean')
+
+    // Verify values
+    expect(signals.source_count).toBe(2)
+    expect(signals.score_gap).toBe(0.42)
+    expect(signals.is_exact_match).toBe(false)
+  })
+
+  it('should handle edge cases for ConfidenceSignals', () => {
+    // Test minimum values
+    const minSignals: ConfidenceSignals = {
+      source_count: 1,
+      score_gap: 0.0,
+      is_exact_match: false,
+    }
+
+    expect(minSignals.source_count).toBe(1)
+    expect(minSignals.score_gap).toBe(0.0)
+    expect(minSignals.is_exact_match).toBe(false)
+
+    // Test maximum expected values
+    const maxSignals: ConfidenceSignals = {
+      source_count: 4,
+      score_gap: 10.5,
+      is_exact_match: true,
+    }
+
+    expect(maxSignals.source_count).toBe(4)
+    expect(maxSignals.score_gap).toBeCloseTo(10.5)
+    expect(maxSignals.is_exact_match).toBe(true)
+  })
+
+  it('should handle ConfidenceSignals with floating point score_gap', () => {
+    const signals: ConfidenceSignals = {
+      source_count: 3,
+      score_gap: 0.123456789,
+      is_exact_match: true,
+    }
+
+    // Verify floating point precision is preserved
+    expect(signals.score_gap).toBeCloseTo(0.123456789, 5)
   })
 })

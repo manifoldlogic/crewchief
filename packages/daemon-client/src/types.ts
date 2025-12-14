@@ -165,6 +165,20 @@ export interface TimingBreakdown {
 }
 
 /**
+ * Confidence signals for assessing search result quality.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::ConfidenceSignals
+ */
+export interface ConfidenceSignals {
+  /** Number of search sources that returned this chunk (1-4) */
+  source_count: number
+  /** Score difference between this result and next result */
+  score_gap: number
+  /** Whether query exactly matched symbol name */
+  is_exact_match: boolean
+}
+
+/**
  * Metadata about search execution and results.
  *
  * Extended in Phase 2 with optional query understanding metadata.
