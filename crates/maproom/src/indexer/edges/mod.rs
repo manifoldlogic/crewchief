@@ -36,6 +36,7 @@ use anyhow::Result;
 pub use crate::incremental::edge_updater::{Edge, EdgeType};
 
 pub mod common;
+pub mod rust;
 pub mod typescript;
 
 /// Chunk with database ID (after insertion).
@@ -102,7 +103,8 @@ pub struct ChunkWithId {
 pub fn extract_edges(source: &str, language: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
     match language {
         "ts" | "tsx" | "js" | "jsx" => typescript::extract_calls(source, chunks),
-        // Python, Rust will be added in Phase 2/3
+        "rs" => rust::extract_calls(source, chunks),
+        // Python will be added in Phase 2/3
         _ => {
             // No edge extraction for unsupported languages
             Ok(Vec::new())
