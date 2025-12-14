@@ -125,6 +125,120 @@ impl ChunkSearchResult {
     }
 }
 
+/// Query understanding metadata for successful searches (Phase 2).
+///
+/// This structure provides transparency about how the query was interpreted,
+/// what filters were applied, and timing breakdown. All data is assembled from
+/// existing in-memory structures - no new computation is performed.
+///
+/// TYPE_SYNC: packages/daemon-client/src/client.ts::QueryUnderstanding
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryUnderstanding {
+    /// Detected search mode
+    pub mode: SearchMode,
+
+    /// Tokenized query terms
+    pub tokens: Vec<String>,
+
+    /// Expanded query terms (synonyms, variations)
+    pub expanded_terms: Vec<String>,
+
+    /// Applied filters
+    pub filters: QueryFilters,
+
+    /// Fusion strategy name (e.g., "reciprocal_rank_fusion", "basic_weighted")
+    pub fusion_strategy: String,
+
+    /// Timing breakdown for search stages
+    pub timing: TimingBreakdown,
+}
+
+impl QueryUnderstanding {
+    /// Create from processed query data and timing information.
+    ///
+    /// This is a convenience constructor that assembles QueryUnderstanding from
+    /// data already available in the search pipeline.
+    pub fn from_query_data(
+        mode: SearchMode,
+        tokens: Vec<String>,
+        expanded_terms: Vec<String>,
+        filters: QueryFilters,
+        fusion_strategy: String,
+        timing: TimingBreakdown,
+    ) -> Self {
+        Self {
+            mode,
+            tokens,
+            expanded_terms,
+            filters,
+            fusion_strategy,
+            timing,
+        }
+    }
+}
+
+/// Filters applied to the search query.
+///
+/// TYPE_SYNC: packages/daemon-client/src/client.ts::QueryFilters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryFilters {
+    /// Repository ID being searched
+    pub repo_id: i64,
+
+    /// Optional worktree ID filter
+    pub worktree_id: Option<i64>,
+
+    /// File type filters (e.g., ["ts", "tsx", "js"])
+    pub file_types: Vec<String>,
+
+    /// Recency threshold filter (e.g., "7 days", "1 month")
+    pub recency_threshold: Option<String>,
+}
+
+/// Timing breakdown for search execution stages.
+///
+/// TYPE_SYNC: packages/daemon-client/src/client.ts::TimingBreakdown
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimingBreakdown {
+    /// Time spent processing the query (ms)
+    pub query_processing_ms: f64,
+
+    /// Time spent executing searches (ms)
+    pub search_execution_ms: f64,
+
+    /// Time spent fusing scores (ms)
+    pub score_fusion_ms: f64,
+
+    /// Time spent assembling final results (ms)
+    pub result_assembly_ms: f64,
+
+    /// Total time across all stages (ms)
+    pub total_ms: f64,
+}
+
+impl TimingBreakdown {
+    /// Create a new TimingBreakdown with automatic total calculation.
+    ///
+    /// The total_ms field is calculated as the sum of all individual timings.
+    pub fn new(
+        query_processing_ms: f64,
+        search_execution_ms: f64,
+        score_fusion_ms: f64,
+        result_assembly_ms: f64,
+    ) -> Self {
+        let total_ms =
+            query_processing_ms + search_execution_ms + score_fusion_ms + result_assembly_ms;
+
+        Self {
+            query_processing_ms,
+            search_execution_ms,
+            score_fusion_ms,
+            result_assembly_ms,
+            total_ms,
+        }
+    }
+}
+
 /// Metadata about search execution and results.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchMetadata {
@@ -142,6 +256,14 @@ pub struct SearchMetadata {
 
     /// Number of results returned after fusion and limit
     pub returned_results: usize,
+
+    /// Query understanding metadata (added in Phase 2)
+    ///
+    /// This field provides transparency about query interpretation, filters,
+    /// and timing. It's optional for backward compatibility and is omitted
+    /// from JSON when None.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub understanding: Option<QueryUnderstanding>,
 }
 
 impl SearchMetadata {
@@ -159,6 +281,26 @@ impl SearchMetadata {
             timing,
             total_unique_chunks,
             returned_results,
+            understanding: None,
+        }
+    }
+
+    /// Create new SearchMetadata with query understanding.
+    pub fn with_understanding(
+        query_processing: QueryProcessingDetails,
+        result_counts: HashMap<SearchSource, usize>,
+        timing: SearchTiming,
+        total_unique_chunks: usize,
+        returned_results: usize,
+        understanding: QueryUnderstanding,
+    ) -> Self {
+        Self {
+            query_processing,
+            result_counts,
+            timing,
+            total_unique_chunks,
+            returned_results,
+            understanding: Some(understanding),
         }
     }
 
@@ -513,5 +655,145 @@ mod tests {
             !options.deduplicate,
             "with_deduplicate(false) should disable deduplication"
         );
+    }
+
+    #[test]
+    fn test_timing_breakdown_total_calculation() {
+        let timing = TimingBreakdown::new(4.2, 35.8, 2.1, 6.4);
+
+        assert_eq!(timing.total_ms, 48.5);
+        assert_eq!(timing.query_processing_ms, 4.2);
+        assert_eq!(timing.search_execution_ms, 35.8);
+        assert_eq!(timing.score_fusion_ms, 2.1);
+        assert_eq!(timing.result_assembly_ms, 6.4);
+    }
+
+    #[test]
+    fn test_query_understanding_serialization() {
+        let understanding = QueryUnderstanding {
+            mode: SearchMode::Auto,
+            tokens: vec!["authenticate".to_string(), "user".to_string()],
+            expanded_terms: vec!["auth".to_string(), "login".to_string()],
+            filters: QueryFilters {
+                repo_id: 1,
+                worktree_id: Some(2),
+                file_types: vec![],
+                recency_threshold: None,
+            },
+            fusion_strategy: "reciprocal_rank_fusion".to_string(),
+            timing: TimingBreakdown::new(4.2, 35.8, 2.1, 6.4),
+        };
+
+        let json = serde_json::to_string(&understanding).unwrap();
+        assert!(json.contains("authenticate"));
+        assert!(json.contains("reciprocal_rank_fusion"));
+        assert!(json.contains("\"total_ms\":48.5"));
+    }
+
+    #[test]
+    fn test_optional_understanding_field_serialization() {
+        let metadata = SearchMetadata {
+            query_processing: QueryProcessingDetails::new(
+                "test query".to_string(),
+                SearchMode::Auto,
+                2,
+                0,
+                "test & query".to_string(),
+                true,
+            ),
+            result_counts: HashMap::new(),
+            timing: SearchTiming::zero(),
+            total_unique_chunks: 0,
+            returned_results: 0,
+            understanding: None,
+        };
+
+        let json = serde_json::to_value(&metadata).unwrap();
+        // When None, field should be omitted (skip_serializing_if)
+        assert!(json.get("understanding").is_none());
+
+        let metadata_with_understanding = SearchMetadata {
+            query_processing: QueryProcessingDetails::new(
+                "test query".to_string(),
+                SearchMode::Auto,
+                2,
+                0,
+                "test & query".to_string(),
+                true,
+            ),
+            result_counts: HashMap::new(),
+            timing: SearchTiming::zero(),
+            total_unique_chunks: 0,
+            returned_results: 0,
+            understanding: Some(QueryUnderstanding {
+                mode: SearchMode::Code,
+                tokens: vec!["test".to_string()],
+                expanded_terms: vec![],
+                filters: QueryFilters {
+                    repo_id: 1,
+                    worktree_id: None,
+                    file_types: vec![],
+                    recency_threshold: None,
+                },
+                fusion_strategy: "basic_weighted".to_string(),
+                timing: TimingBreakdown::new(1.0, 2.0, 3.0, 4.0),
+            }),
+        };
+
+        let json = serde_json::to_value(&metadata_with_understanding).unwrap();
+        assert!(json.get("understanding").is_some());
+        let understanding = json.get("understanding").unwrap();
+        assert_eq!(understanding.get("mode").unwrap(), "code");
+        assert_eq!(
+            understanding.get("fusion_strategy").unwrap(),
+            "basic_weighted"
+        );
+    }
+
+    #[test]
+    fn test_query_filters_serialization() {
+        let filters = QueryFilters {
+            repo_id: 42,
+            worktree_id: Some(123),
+            file_types: vec!["ts".to_string(), "tsx".to_string()],
+            recency_threshold: Some("7 days".to_string()),
+        };
+
+        let json = serde_json::to_value(&filters).unwrap();
+        assert_eq!(json.get("repo_id").unwrap(), 42);
+        assert_eq!(json.get("worktree_id").unwrap(), 123);
+
+        let file_types = json.get("file_types").unwrap().as_array().unwrap();
+        assert_eq!(file_types.len(), 2);
+        assert_eq!(file_types[0], "ts");
+        assert_eq!(file_types[1], "tsx");
+
+        assert_eq!(json.get("recency_threshold").unwrap(), "7 days");
+    }
+
+    #[test]
+    fn test_query_understanding_from_query_data() {
+        let timing = TimingBreakdown::new(5.0, 10.0, 2.0, 3.0);
+        let filters = QueryFilters {
+            repo_id: 1,
+            worktree_id: None,
+            file_types: vec!["rs".to_string()],
+            recency_threshold: None,
+        };
+
+        let understanding = QueryUnderstanding::from_query_data(
+            SearchMode::Code,
+            vec!["search".to_string(), "query".to_string()],
+            vec!["find".to_string()],
+            filters,
+            "reciprocal_rank_fusion".to_string(),
+            timing,
+        );
+
+        assert_eq!(understanding.mode, SearchMode::Code);
+        assert_eq!(understanding.tokens.len(), 2);
+        assert_eq!(understanding.expanded_terms.len(), 1);
+        assert_eq!(understanding.fusion_strategy, "reciprocal_rank_fusion");
+        assert_eq!(understanding.timing.total_ms, 20.0);
     }
 }
