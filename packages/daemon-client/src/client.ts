@@ -8,6 +8,7 @@
 import { Connection, ConnectionMode, ConnectionConfig } from './connection.js'
 import { createConnection } from './connection-factory.js'
 import { DaemonError } from './errors.js'
+import type { SearchMetadata } from './types.js'
 
 /**
  * Search parameters for daemon search method
@@ -42,6 +43,7 @@ export interface SearchResult {
   total: number
   query_embedding_time_ms?: number
   search_time_ms?: number
+  metadata?: SearchMetadata
 }
 
 /**

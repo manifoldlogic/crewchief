@@ -207,4 +207,7 @@ export interface SearchBundle {
 
   /** Suggestion for fixing the error */
   suggestion?: string
+
+  /** Query understanding metadata (optional, added in Phase 2) */
+  metadata?: any
 }

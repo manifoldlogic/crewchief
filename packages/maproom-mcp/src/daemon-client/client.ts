@@ -11,7 +11,7 @@ import {
 } from './errors.js'
 import { RpcProtocol, type JsonRpcResponse } from './rpc.js'
 import { DaemonLifecycle } from './lifecycle.js'
-import type { DaemonConfig, DaemonProcessDef, PendingRequest } from './types.js'
+import type { DaemonConfig, DaemonProcessDef, PendingRequest, SearchMetadata } from './types.js'
 
 /**
  * Search parameters for daemon search method
@@ -46,6 +46,7 @@ export interface SearchResult {
   total: number
   query_embedding_time_ms?: number
   search_time_ms?: number
+  metadata?: SearchMetadata
 }
 
 /**

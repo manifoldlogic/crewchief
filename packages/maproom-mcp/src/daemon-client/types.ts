@@ -106,3 +106,72 @@ export interface SearchErrorDetails {
   /** 1-2 actionable suggestions for resolving the error */
   suggestions: string[]
 }
+
+/**
+ * Query understanding metadata for successful searches (Phase 2).
+ *
+ * Provides transparency about how the query was interpreted, what filters
+ * were applied, and timing breakdown.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::QueryUnderstanding
+ */
+export interface QueryUnderstanding {
+  /** Detected search mode */
+  mode: 'code' | 'text' | 'auto'
+  /** Tokenized query terms */
+  tokens: string[]
+  /** Expanded query terms (synonyms, variations) */
+  expanded_terms: string[]
+  /** Applied filters */
+  filters: QueryFilters
+  /** Fusion strategy name (e.g., "reciprocal_rank_fusion", "basic_weighted") */
+  fusion_strategy: string
+  /** Timing breakdown for search stages */
+  timing: TimingBreakdown
+}
+
+/**
+ * Filters applied to the search query.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::QueryFilters
+ */
+export interface QueryFilters {
+  /** Repository ID being searched */
+  repo_id: number
+  /** Optional worktree ID filter */
+  worktree_id: number | null
+  /** File type filters (e.g., ["ts", "tsx", "js"]) */
+  file_types: string[]
+  /** Recency threshold filter (e.g., "7 days", "1 month") */
+  recency_threshold: string | null
+}
+
+/**
+ * Timing breakdown for search execution stages.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::TimingBreakdown
+ */
+export interface TimingBreakdown {
+  /** Time spent processing the query (ms) */
+  query_processing_ms: number
+  /** Time spent executing searches (ms) */
+  search_execution_ms: number
+  /** Time spent fusing scores (ms) */
+  score_fusion_ms: number
+  /** Time spent assembling final results (ms) */
+  result_assembly_ms: number
+  /** Total time across all stages (ms) */
+  total_ms: number
+}
+
+/**
+ * Metadata about search execution and results.
+ *
+ * Extended in Phase 2 with optional query understanding metadata.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::SearchMetadata
+ */
+export interface SearchMetadata {
+  /** Query understanding metadata (optional, added in Phase 2) */
+  understanding?: QueryUnderstanding
+}

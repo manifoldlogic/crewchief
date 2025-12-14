@@ -45,6 +45,7 @@
 import { Client } from 'pg'
 import pino from 'pino'
 import type { SearchParams, SearchResult, SearchBundle } from '../types.js'
+import type { QueryUnderstanding } from '../daemon-client/types.js'
 import { validateSearchParams } from './search_schema.js'
 import { ValidationError } from '../utils/validation.js'
 import { ProcessError } from '../utils/process.js'
@@ -100,6 +101,38 @@ export function normalizeForExactMatch(query: string): string {
   normalized = normalized.replace(/_+/g, '_').replace(/^_|_$/g, '')
 
   return normalized
+}
+
+/**
+ * Format query understanding metadata for MCP response.
+ *
+ * Transforms QueryUnderstanding from daemon into a structured, readable format
+ * with timing values formatted as strings with 1 decimal place (e.g., "4.2ms").
+ *
+ * @param understanding - Query understanding metadata from daemon
+ * @returns Formatted metadata object for JSON serialization
+ */
+function formatQueryUnderstanding(understanding: QueryUnderstanding) {
+  return {
+    query_interpretation: {
+      mode: understanding.mode,
+      tokens: understanding.tokens,
+      expanded_terms: understanding.expanded_terms,
+    },
+    filters: {
+      repo_id: understanding.filters.repo_id,
+      worktree_id: understanding.filters.worktree_id,
+      file_types: understanding.filters.file_types,
+    },
+    fusion_strategy: understanding.fusion_strategy,
+    timing: {
+      query_processing: `${understanding.timing.query_processing_ms.toFixed(1)}ms`,
+      search_execution: `${understanding.timing.search_execution_ms.toFixed(1)}ms`,
+      score_fusion: `${understanding.timing.score_fusion_ms.toFixed(1)}ms`,
+      result_assembly: `${understanding.timing.result_assembly_ms.toFixed(1)}ms`,
+      total: `${understanding.timing.total_ms.toFixed(1)}ms`,
+    },
+  }
 }
 
 /**
@@ -357,6 +390,11 @@ export async function handleSearchTool(
     return result
   })
 
+  // Format query understanding metadata if available from daemon
+  const metadata = daemonResult.metadata?.understanding
+    ? formatQueryUnderstanding(daemonResult.metadata.understanding)
+    : undefined
+
   const bundle: SearchBundle = {
     hits,
     total: hits.length,
@@ -364,6 +402,7 @@ export async function handleSearchTool(
     mode,
     repo,
     worktree,
+    metadata,
   }
 
   log.debug(
@@ -373,6 +412,7 @@ export async function handleSearchTool(
       mode,
       repo,
       worktree,
+      has_metadata: !!metadata,
     },
     'Search completed successfully via Rust binary'
   )
