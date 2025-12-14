@@ -44,6 +44,7 @@
 
 import { Client } from 'pg'
 import pino from 'pino'
+import { z } from 'zod'
 import type { SearchParams, SearchResult, SearchBundle } from '../types.js'
 import type { QueryUnderstanding } from '../daemon-client/types.js'
 import { validateSearchParams } from './search_schema.js'
@@ -61,6 +62,21 @@ const LOG_FILE = process.env.MAPROOM_MCP_LOG_FILE
 const log = LOG_FILE
   ? pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(LOG_FILE))
   : pino({ level: process.env.LOG_LEVEL || 'info' }, pino.destination(2))
+
+/**
+ * Format Zod validation errors into readable messages
+ *
+ * @param error - Zod validation error
+ * @returns Formatted error message with field paths and messages
+ */
+export function formatValidationError(error: z.ZodError): string {
+  const messages = error.errors.map((err) => {
+    const path = err.path.join('.')
+    return `${path}: ${err.message}`
+  })
+
+  return `Validation failed:\n${messages.join('\n')}`
+}
 
 /**
  * Normalize query for exact match detection
@@ -527,23 +543,13 @@ export function formatSearchError(error: unknown): any {
   }
 
   // Validation errors from Zod
-  if (error && typeof error === 'object' && 'issues' in error) {
-    const zodError = error as any
+  if (error instanceof z.ZodError) {
     return {
       isError: true,
       content: [
         {
           type: 'text',
-          text: JSON.stringify(
-            {
-              error: 'VALIDATION_ERROR',
-              message: 'Invalid parameters',
-              details: zodError.issues,
-              hint: 'Check parameter types and constraints. query and repo are required, limit must be 1-100, mode must be "fts", "vector", or "hybrid".',
-            },
-            null,
-            2
-          ),
+          text: formatValidationError(error),
         },
       ],
     }

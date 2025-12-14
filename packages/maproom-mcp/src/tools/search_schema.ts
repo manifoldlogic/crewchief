@@ -22,11 +22,17 @@ export const SearchParamsSchema = z.object({
   query: z
     .string()
     .trim()
-    .min(1, 'query is required and cannot be empty')
+    .min(1, {
+      message: 'Query cannot be empty. Provide a search query to find relevant code.',
+    })
     .describe('Search query text - use 2-3 keyword concepts for best results'),
   repo: z
-    .string()
-    .optional()
+    .string({
+      required_error: "Repository name is required. Use 'crewchief status' to list available repositories.",
+    })
+    .min(1, {
+      message: "Repository name is required. Use 'crewchief status' to list available repositories.",
+    })
     .describe('Repository name to search (e.g., "crewchief")'),
   worktree: z
     .string()
@@ -35,12 +41,20 @@ export const SearchParamsSchema = z.object({
   limit: z
     .number()
     .int()
-    .min(1)
-    .max(100)
+    .positive({
+      message: 'Limit must be a positive integer.',
+    })
+    .max(1000, {
+      message: 'Limit cannot exceed 1000 results.',
+    })
     .default(20)
-    .describe('Maximum number of results to return (default: 20, max: 100)'),
+    .describe('Maximum number of results to return (default: 20, max: 1000)'),
   mode: z
-    .enum(['fts', 'vector', 'hybrid'])
+    .enum(['fts', 'vector', 'hybrid'], {
+      errorMap: () => ({
+        message: "Invalid search mode. Use 'fts', 'vector', or 'hybrid'.",
+      }),
+    })
     .default('fts')
     .describe('Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: fts)'),
   filter: z
