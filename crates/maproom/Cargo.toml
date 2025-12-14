@@ -196,3 +196,7 @@ harness = false
 name = "confidence_overhead"
 harness = false
 
+[[bench]]
+name = "search_relationships"
+harness = false
+
