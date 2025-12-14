@@ -3,59 +3,88 @@ import type { SearchHit } from './filterable-result'
 /**
  * Criteria for filtering search results.
  *
- * All fields are optional and combined with AND logic.
+ * All fields are optional and combined with AND logic. At least one
+ * criterion should be specified.
  *
  * @example
+ * ```typescript
  * // Filter TypeScript functions
  * {kind: "function", file_type: "ts"}
  *
- * @example
  * // Filter by path and score
  * {path: "src/", min_score: 0.5}
  *
- * @example
  * // Custom filter
  * {custom: hit => hit.symbol_name?.includes("auth")}
+ * ```
  */
 export interface FilterCriteria {
   /**
    * Exact match on symbol kind (function, class, interface, etc.)
    *
-   * @example "function", "class", "interface"
+   * Case-sensitive exact match. Common values:
+   * - "function"
+   * - "class"
+   * - "interface"
+   * - "type"
+   * - "enum"
+   * - "const"
+   *
+   * @example "function"
    */
   kind?: string
 
   /**
-   * File extension (with or without leading dot)
+   * File extension (with or without leading dot).
    *
-   * @example "ts", ".ts", "tsx", ".tsx"
+   * Matched against the file extension. The leading dot is optional
+   * and will be normalized internally.
+   *
+   * @example "ts"
+   * @example ".tsx"
    */
   file_type?: string
 
   /**
-   * Simple path matching - uses string.includes() for substring match.
+   * Path substring matching.
+   *
+   * Uses string.includes() for simple substring match against the
+   * full file path. For more complex path matching, use the custom
+   * filter function.
    *
    * For prefix matching, use custom filter:
+   * ```typescript
    * {custom: h => h.file_path.startsWith("src/")}
+   * ```
    *
    * For suffix matching, use custom filter:
+   * ```typescript
    * {custom: h => h.file_path.endsWith(".config.ts")}
+   * ```
    *
-   * @example "src/", "test", ".config"
+   * @example "src/"
+   * @example "test"
+   * @example ".config"
    */
   path?: string
 
   /**
-   * Minimum relevance score (0.0-1.0)
+   * Minimum relevance score (0.0-1.0).
    *
-   * @example 0.5 for scores >= 50%
+   * Filters out results with scores below this threshold.
+   * Use this to focus on more relevant matches.
+   *
+   * @example 0.5
    */
   min_score?: number
 
   /**
-   * Maximum relevance score (0.0-1.0)
+   * Maximum relevance score (0.0-1.0).
    *
-   * @example 0.8 for scores <= 80%
+   * Filters out results with scores above this threshold.
+   * Useful for finding lower-quality matches that might need improvement.
+   *
+   * @example 0.8
    */
   max_score?: number
 
@@ -63,12 +92,23 @@ export interface FilterCriteria {
    * Custom filter function for advanced filtering.
    *
    * Receives each SearchHit and returns true to keep, false to filter out.
+   * Use this for complex filtering logic that can't be expressed with
+   * the built-in criteria.
+   *
+   * @param hit - The search hit to evaluate
+   * @returns true to keep the hit, false to filter it out
    *
    * @example
+   * ```typescript
+   * // Filter by symbol name
    * {custom: hit => hit.symbol_name?.includes("auth")}
    *
-   * @example
+   * // Filter by line number
    * {custom: hit => hit.start_line > 100}
+   *
+   * // Complex logic
+   * {custom: hit => hit.kind === "function" && hit.score > 0.5}
+   * ```
    */
   custom?: (hit: SearchHit) => boolean
 }

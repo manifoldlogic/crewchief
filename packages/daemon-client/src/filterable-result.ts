@@ -17,41 +17,84 @@ export type SearchHit = SearchResult['hits'][number]
  * All operations are immutable - original result is preserved.
  *
  * @example
+ * ```typescript
  * const result = new FilterableSearchResult(daemonResult)
- * const functions = result.filter({kind: "function"})
+ *
+ * // Filter TypeScript functions
+ * const functions = result.filter({kind: "function", file_type: "ts"})
+ *
+ * // Sort by path
  * const sorted = functions.sortBy("relpath")
+ *
+ * // Get first page
  * const page1 = sorted.slice(0, 10)
+ *
+ * // Or chain it all
+ * const filtered = result
+ *   .filter({kind: "function", file_type: "ts"})
+ *   .sortBy("relpath")
+ *   .slice(0, 10)
+ * ```
  */
 export class FilterableSearchResult {
   private readonly result: SearchResult
 
+  /**
+   * Create a filterable search result wrapper.
+   *
+   * @param result - Search result from daemon
+   *
+   * @example
+   * ```typescript
+   * const daemon = new DaemonClient()
+   * const searchResult = await daemon.search({query: "auth"})
+   * const filterable = new FilterableSearchResult(searchResult)
+   * ```
+   */
   constructor(result: SearchResult) {
     this.result = result
   }
 
   /**
-   * Get raw search result (unwrapped)
+   * Get raw search result (unwrapped).
+   *
+   * Useful for accessing original daemon response or passing to APIs
+   * that expect SearchResult.
+   *
+   * @returns Original SearchResult from daemon
    */
   get raw(): SearchResult {
     return this.result
   }
 
   /**
-   * Get hits array (readonly)
+   * Get hits array (readonly).
+   *
+   * @returns Array of search hits after filtering/sorting
    */
   get hits(): readonly SearchHit[] {
     return this.result.hits
   }
 
   /**
-   * Get total count (before filtering)
+   * Get total count before filtering.
+   *
+   * This is the original total from the daemon, not affected by
+   * client-side filtering.
+   *
+   * @returns Original total count from daemon
    */
   get total(): number {
     return this.result.total
   }
 
   /**
-   * Get count after filtering
+   * Get count after filtering.
+   *
+   * This reflects the current number of hits after all filter/sort/slice
+   * operations have been applied.
+   *
+   * @returns Current number of hits in result
    */
   get count(): number {
     return this.result.hits.length
@@ -155,11 +198,14 @@ export class FilterableSearchResult {
    *
    * @param field - Field to sort by
    * @param order - "asc" or "desc" (defaults based on field)
+   * @returns New FilterableSearchResult instance with sorted hits
    *
    * @example
+   * ```typescript
    * result.sortBy("score")              // Highest scores first
    * result.sortBy("relpath")            // Alphabetical by path
    * result.sortBy("start_line", "desc") // Later lines first
+   * ```
    */
   sortBy(field: SortField, order?: SortOrder): FilterableSearchResult {
     // Determine default order based on field
@@ -219,11 +265,14 @@ export class FilterableSearchResult {
    *
    * @param start - Start index (inclusive, 0-based)
    * @param end - End index (exclusive), omit for "to end"
+   * @returns New FilterableSearchResult instance with sliced hits
    *
    * @example
+   * ```typescript
    * result.slice(0, 10)  // First 10 results (page 1)
    * result.slice(10, 20) // Next 10 results (page 2)
    * result.slice(5)      // Skip first 5, return rest
+   * ```
    */
   slice(start: number, end?: number): FilterableSearchResult {
     const sliced = this.hits.slice(start, end)
