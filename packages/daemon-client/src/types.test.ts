@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import type { ErrorType, PipelineStage, SearchErrorDetails } from './types.js'
+import type {
+  ErrorType,
+  PipelineStage,
+  SearchErrorDetails,
+  QueryUnderstanding,
+  QueryFilters,
+  TimingBreakdown,
+  SearchMetadata,
+} from './types.js'
 
 describe('Type synchronization with Rust', () => {
   // Sync with: crates/maproom/src/search/errors.rs::ErrorType
@@ -147,5 +155,92 @@ describe('Type synchronization with Rust', () => {
     expect(details.context.provider).toBe('openai')
     expect(details.context.provider_error).toBe('Rate limit exceeded')
     expect(details.context.timeout_ms).toBe('5000')
+  })
+})
+
+describe('Type synchronization - Query Understanding', () => {
+  it('should deserialize QueryUnderstanding from Rust JSON', () => {
+    // Example JSON from Rust serialization
+    const rustJson = {
+      mode: 'auto' as const,
+      tokens: ['authenticate', 'user'],
+      expanded_terms: ['auth', 'login', 'authentication'],
+      filters: {
+        repo_id: 1,
+        worktree_id: 2,
+        file_types: [],
+        recency_threshold: null,
+      },
+      fusion_strategy: 'reciprocal_rank_fusion',
+      timing: {
+        query_processing_ms: 4.2,
+        search_execution_ms: 35.8,
+        score_fusion_ms: 2.1,
+        result_assembly_ms: 6.4,
+        total_ms: 48.5,
+      },
+    }
+
+    // TypeScript should parse without errors
+    const understanding: QueryUnderstanding = rustJson
+    expect(understanding.mode).toBe('auto')
+    expect(understanding.tokens).toEqual(['authenticate', 'user'])
+    expect(understanding.timing.total_ms).toBe(48.5)
+  })
+
+  it('should handle optional understanding field', () => {
+    // Metadata without understanding (backward compatibility)
+    const metadataWithout = {}
+
+    const metadata1: SearchMetadata = metadataWithout
+    expect(metadata1.understanding).toBeUndefined()
+
+    // Metadata with understanding
+    const metadataWith = {
+      understanding: {
+        mode: 'code' as const,
+        tokens: ['test'],
+        expanded_terms: [],
+        filters: {
+          repo_id: 1,
+          worktree_id: null,
+          file_types: [],
+          recency_threshold: null,
+        },
+        fusion_strategy: 'linear',
+        timing: {
+          query_processing_ms: 1.0,
+          search_execution_ms: 2.0,
+          score_fusion_ms: 3.0,
+          result_assembly_ms: 4.0,
+          total_ms: 10.0,
+        },
+      },
+    }
+
+    const metadata2: SearchMetadata = metadataWith
+    expect(metadata2.understanding?.mode).toBe('code')
+  })
+
+  it('should validate timing breakdown structure', () => {
+    const timing: TimingBreakdown = {
+      query_processing_ms: 4.2,
+      search_execution_ms: 35.8,
+      score_fusion_ms: 2.1,
+      result_assembly_ms: 6.4,
+      total_ms: 48.5,
+    }
+
+    // Verify all fields are numbers
+    expect(typeof timing.query_processing_ms).toBe('number')
+    expect(typeof timing.total_ms).toBe('number')
+
+    // Verify total is sum of parts
+    const sum =
+      timing.query_processing_ms +
+      timing.search_execution_ms +
+      timing.score_fusion_ms +
+      timing.result_assembly_ms
+    expect(sum).toBeCloseTo(timing.total_ms, 1)
   })
 })

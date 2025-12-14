@@ -4,9 +4,9 @@
 Create TypeScript interfaces for query understanding metadata
 
 ## Status
-- [ ] **Implementation Complete**
-- [ ] **Tests Passing**
-- [ ] **Verified**
+- [x] **Implementation Complete**
+- [x] **Tests Passing**
+- [x] **Verified**
 - [ ] **Committed**
 
 ## Agents
@@ -24,14 +24,14 @@ Phase 2 Rust structures (SRCHTRN-2001) define query understanding metadata. Type
 **Type Sync**: TypeScript mirrors Rust exactly, with sync comments linking to source of truth.
 
 ## Acceptance Criteria
-- [ ] `QueryUnderstanding` interface matches Rust struct exactly
-- [ ] `QueryFilters` interface matches Rust struct exactly
-- [ ] `TimingBreakdown` interface matches Rust struct exactly
-- [ ] `SearchMetadata` interface extended with optional `understanding` field
-- [ ] Sync comments link each interface to Rust source
-- [ ] Type sync validation test passes (field names and types match)
-- [ ] Types exported from `packages/daemon-client/src/index.ts`
-- [ ] All tests passing
+- [x] `QueryUnderstanding` interface matches Rust struct exactly
+- [x] `QueryFilters` interface matches Rust struct exactly
+- [x] `TimingBreakdown` interface matches Rust struct exactly
+- [x] `SearchMetadata` interface extended with optional `understanding` field
+- [x] Sync comments link each interface to Rust source
+- [x] Type sync validation test passes (field names and types match)
+- [x] Types exported from `packages/daemon-client/src/index.ts`
+- [x] All tests passing
 
 ## Technical Requirements
 

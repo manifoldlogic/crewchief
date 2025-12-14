@@ -53,6 +53,10 @@ export type {
   ErrorType,
   PipelineStage,
   SearchErrorDetails,
+  QueryUnderstanding,
+  QueryFilters,
+  TimingBreakdown,
+  SearchMetadata,
 } from './types.js'
 
 // Errors
