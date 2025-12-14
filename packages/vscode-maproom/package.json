@@ -3,7 +3,7 @@
   "displayName": "Maproom Semantic Search",
   "description": "Semantic code search powered by Maproom - find code by concept, not just text",
   "icon": "icon.png",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "publisher": "manifoldlogic",
   "engines": {
     "vscode": "^1.85.0"
