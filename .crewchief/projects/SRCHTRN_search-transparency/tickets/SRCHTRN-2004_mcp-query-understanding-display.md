@@ -7,7 +7,7 @@ Display query understanding metadata in MCP search responses
 - [x] **Implementation Complete**
 - [x] **Tests Passing** - 3/3 new tests passing (query-understanding-display.test.ts), 323/336 overall tests passing (13 failures are pre-existing PostgreSQL connection issues, unrelated to this ticket)
 - [x] **Verified**
-- [ ] **Committed**
+- [x] **Committed** - Commit: 4f5479da
 
 ## Agents
 - **Primary**: typescript-engineer
