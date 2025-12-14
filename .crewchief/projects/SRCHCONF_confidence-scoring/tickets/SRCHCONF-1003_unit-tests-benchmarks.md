@@ -1,9 +1,9 @@
 # Ticket: [SRCHCONF-1003]: Confidence Unit Tests and Performance Benchmarks
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ The confidence computation module needs rigorous testing to ensure correctness a
 Testing happens in Phase 1 (before integration) to catch issues early and validate the MVP design with 3 core signals.
 
 ## Acceptance Criteria
-- [ ] Minimum 8 unit tests for compute_result_confidence() covering normal and edge cases
-- [ ] All unit tests pass (`cargo test -p crewchief-maproom`)
-- [ ] Performance benchmark created in `crates/maproom/benches/confidence_overhead.rs`
-- [ ] Benchmark shows <5ms total overhead for 20 results
-- [ ] Per-result computation verified <1ms
-- [ ] Serde serialization roundtrip test passes
-- [ ] 100% code coverage for confidence.rs module
-- [ ] Zero clippy warnings in test code
+- [x] Minimum 8 unit tests for compute_result_confidence() covering normal and edge cases
+- [x] All unit tests pass (`cargo test -p crewchief-maproom`)
+- [x] Performance benchmark created in `crates/maproom/benches/confidence_overhead.rs`
+- [x] Benchmark shows <5ms total overhead for 20 results
+- [x] Per-result computation verified <1ms
+- [x] Serde serialization roundtrip test passes
+- [x] 100% code coverage for confidence.rs module
+- [x] Zero clippy warnings in test code
 
 ## Technical Requirements
 **Unit Test Coverage** (minimum 8 tests):

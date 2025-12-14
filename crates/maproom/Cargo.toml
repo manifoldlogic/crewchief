@@ -192,3 +192,7 @@ harness = false
 name = "dedup_bench"
 harness = false
 
+[[bench]]
+name = "confidence_overhead"
+harness = false
+

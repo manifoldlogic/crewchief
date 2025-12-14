@@ -294,4 +294,46 @@ mod tests {
             "None multiplier should NOT be detected as exact match"
         );
     }
+
+    /// Test edge case: empty source_scores HashMap.
+    #[test]
+    fn test_empty_source_scores() {
+        use std::collections::HashMap;
+
+        let results = vec![FusedResult::new(1, 0.95, HashMap::new())];
+
+        let confidence = compute_result_confidence(&results[0], &results, 0, None);
+        assert_eq!(confidence.source_count, 0);
+        assert_eq!(confidence.score_gap, 0.0);
+        assert!(!confidence.is_exact_match);
+    }
+
+    /// Test serialization roundtrip: ConfidenceSignals -> JSON -> ConfidenceSignals.
+    #[test]
+    fn test_confidence_signals_serialization_roundtrip() {
+        use crate::search::results::ConfidenceSignals;
+
+        let original = ConfidenceSignals {
+            source_count: 3,
+            score_gap: 0.15,
+            is_exact_match: true,
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&original).expect("Failed to serialize");
+
+        // Deserialize back
+        let deserialized: ConfidenceSignals =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        // Verify all fields match
+        assert_eq!(deserialized.source_count, original.source_count);
+        assert_eq!(deserialized.score_gap, original.score_gap);
+        assert_eq!(deserialized.is_exact_match, original.is_exact_match);
+
+        // Verify JSON format is correct
+        assert!(json.contains("\"source_count\":3"));
+        assert!(json.contains("\"score_gap\":0.15"));
+        assert!(json.contains("\"is_exact_match\":true"));
+    }
 }
