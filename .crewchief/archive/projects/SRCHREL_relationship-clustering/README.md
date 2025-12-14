@@ -1,8 +1,9 @@
 # Project: Relationship-Aware Search
 
 **Slug:** SRCHREL
-**Status:** Planning
+**Status:** Completed
 **Created:** 2025-12-14
+**Completed:** 2025-12-14
 **Initiative:** Maproom Semantic Search Improvements (Phase 2)
 
 ## Summary
