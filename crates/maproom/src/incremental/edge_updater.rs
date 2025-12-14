@@ -192,7 +192,7 @@ pub struct Edge {
 ///
 /// Matches the database enum `maproom.edge_type`.
 /// Public for use by edge extractor module (`crate::indexer::edges`).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EdgeType {
     Imports,
     Exports,

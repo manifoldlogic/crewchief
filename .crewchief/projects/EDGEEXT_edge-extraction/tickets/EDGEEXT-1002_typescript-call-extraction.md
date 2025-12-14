@@ -1,69 +1,61 @@
-//! TypeScript/JavaScript edge extraction.
-//!
-//! This module extracts call edges from TypeScript and JavaScript source code
-//! using tree-sitter parsing to find function calls and resolve them to chunks
-//! within the same file.
+# Ticket: EDGEEXT-1002 - TypeScript Call Extraction
 
+## Status
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
+
+## Agents
+- rust-indexer-engineer
+- verify-ticket
+- commit-ticket
+
+## Summary
+
+Implement TypeScript/JavaScript call expression extraction using tree-sitter to find function calls and resolve them to chunks within the same file. This is the core functionality for Phase 1 MVP.
+
+## Background
+
+TypeScript and JavaScript files contain function calls in various forms (simple calls, method calls, constructor calls). We need to extract these call expressions using tree-sitter, identify the caller and callee, and create edges between chunks.
+
+Phase 1 focuses on same-file resolution only (no cross-file imports), which achieves 70-80% accuracy in typical codebases with simpler implementation and better performance (no database queries).
+
+Tree-sitter provides a `call_expression` node type that captures function calls. We traverse the AST to find these nodes, extract the function identifier, and resolve it against chunks in the same file.
+
+**Integration Note:** This ticket implements the TypeScript extractor only. Integration with scan_worktree() and upsert_files() is handled in EDGEEXT-1003. The ChunkWithId structs are passed in by the caller (not loaded internally by this extractor).
+
+## Acceptance Criteria
+
+- [ ] Implement `extract_calls()` in `edges/typescript.rs` using tree-sitter
+- [ ] Find all `call_expression` nodes in TypeScript/JavaScript AST
+- [ ] Extract function identifier from call expressions (handle simple calls, method calls)
+- [ ] Resolve callee symbol name against same-file chunks
+- [ ] Find enclosing chunk for each call (caller)
+- [ ] Create Edge structs for resolved calls
+- [ ] Skip unresolved calls gracefully (log at trace level)
+- [ ] Works with both TypeScript and JavaScript parsers (ts, tsx, js, jsx)
+- [ ] Unit tests with synthetic TypeScript snippets achieve ≥85% accuracy
+- [ ] Handles parse errors gracefully (return Ok(Vec::new()), log warning)
+
+## Technical Requirements
+
+**TypeScript Extractor Implementation (edges/typescript.rs):**
+
+```rust
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+use tree_sitter::{Node, Parser, Query, QueryCursor};
 use tracing::{debug, trace, warn};
-use tree_sitter::{Node, Parser};
 
-use super::common::{build_symbol_table, find_enclosing_chunk};
 use super::{ChunkWithId, Edge, EdgeType};
+use super::common::{build_symbol_table, find_enclosing_chunk};
 
-/// Extract call edges from TypeScript/JavaScript source.
-///
-/// Parses the source code using tree-sitter, finds all call expressions,
-/// and resolves them to chunks within the same file. Returns edges representing
-/// function calls between chunks.
-///
-/// # Arguments
-///
-/// * `source` - TypeScript/JavaScript source code
-/// * `chunks` - Chunks with database IDs from the same file
-///
-/// # Returns
-///
-/// * `Ok(Vec<Edge>)` - Extracted call edges (may be empty)
-/// * `Err(_)` - Critical failure (parser setup error)
-///
-/// # Example
-///
-/// ```no_run
-/// use crewchief_maproom::indexer::edges::typescript::extract_calls;
-/// use crewchief_maproom::indexer::edges::ChunkWithId;
-///
-/// let source = "function foo() { return 42; }\nfunction bar() { foo(); }";
-/// let chunks = vec![
-///     ChunkWithId {
-///         id: 1,
-///         symbol_name: Some("foo".to_string()),
-///         kind: "function".to_string(),
-///         start_line: 1,
-///         end_line: 1,
-///         file_id: 100,
-///     },
-///     ChunkWithId {
-///         id: 2,
-///         symbol_name: Some("bar".to_string()),
-///         kind: "function".to_string(),
-///         start_line: 2,
-///         end_line: 2,
-///         file_id: 100,
-///     }
-/// ];
-///
-/// let edges = extract_calls(source, &chunks)?;
-/// # Ok::<(), anyhow::Error>(())
-/// ```
+/// Extract call edges from TypeScript/JavaScript source
 pub fn extract_calls(source: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
     // Parse source with tree-sitter
     let mut parser = Parser::new();
     let language = tree_sitter_typescript::language_typescript();
-    parser
-        .set_language(&language)
-        .context("Failed to set TypeScript language")?;
+    parser.set_language(language).context("Failed to set TypeScript language")?;
 
     let tree = match parser.parse(source, None) {
         Some(t) => t,
@@ -86,10 +78,7 @@ pub fn extract_calls(source: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> 
     Ok(edges)
 }
 
-/// Recursively find call expressions in AST.
-///
-/// Traverses the syntax tree depth-first to find all `call_expression` nodes,
-/// processes each one to extract edges, and recursively visits child nodes.
+/// Recursively find call expressions in AST
 fn find_call_expressions(
     node: &Node,
     source: &str,
@@ -108,11 +97,7 @@ fn find_call_expressions(
     }
 }
 
-/// Process a single call expression node.
-///
-/// Extracts the function identifier, resolves it in the symbol table,
-/// finds the enclosing chunk (caller), and creates an edge if both
-/// caller and callee are resolved.
+/// Process a single call expression node
 fn process_call_expression(
     node: &Node,
     source: &str,
@@ -124,10 +109,7 @@ fn process_call_expression(
     let callee_name = match extract_function_identifier(node, source) {
         Some(name) => name,
         None => {
-            trace!(
-                "Could not extract function identifier from call at line {}",
-                node.start_position().row + 1
-            );
+            trace!("Could not extract function identifier from call at line {}", node.start_position().row + 1);
             return;
         }
     };
@@ -136,10 +118,7 @@ fn process_call_expression(
     let callee_id = match symbol_table.get(&callee_name) {
         Some(&id) => id,
         None => {
-            trace!(
-                "Unresolved call: {} (may be cross-file or built-in)",
-                callee_name
-            );
+            trace!("Unresolved call: {} (may be cross-file or built-in)", callee_name);
             return;
         }
     };
@@ -170,23 +149,11 @@ fn process_call_expression(
     );
 }
 
-/// Extract function identifier from call expression.
-///
-/// Handles different call patterns:
-/// - Simple call: `foo()` → extracts "foo"
-/// - Method call: `obj.method()` → extracts "method"
-/// - Complex calls (computed properties, etc.) → returns None for Phase 1
-///
-/// # Arguments
-///
-/// * `node` - The call_expression node
-/// * `source` - Source code text
-///
-/// # Returns
-///
-/// * `Some(String)` - Function/method name
-/// * `None` - Could not extract (complex expression)
+/// Extract function identifier from call expression
+/// Handles: foo(), obj.method(), new Constructor()
 fn extract_function_identifier(node: &Node, source: &str) -> Option<String> {
+    let mut cursor = node.walk();
+
     // call_expression has a "function" child (the callee)
     let function_node = node.child_by_field_name("function")?;
 
@@ -229,7 +196,6 @@ mod tests {
                 kind: "function".to_string(),
                 start_line: 2,
                 end_line: 2,
-                file_id: 100,
             },
             ChunkWithId {
                 id: 2,
@@ -237,7 +203,6 @@ mod tests {
                 kind: "function".to_string(),
                 start_line: 3,
                 end_line: 6,
-                file_id: 100,
             },
         ];
 
@@ -267,7 +232,6 @@ mod tests {
                 kind: "method".to_string(),
                 start_line: 3,
                 end_line: 3,
-                file_id: 100,
             },
             ChunkWithId {
                 id: 2,
@@ -275,7 +239,6 @@ mod tests {
                 kind: "method".to_string(),
                 start_line: 4,
                 end_line: 6,
-                file_id: 100,
             },
         ];
 
@@ -295,14 +258,15 @@ mod tests {
             }
         "#;
 
-        let chunks = vec![ChunkWithId {
-            id: 1,
-            symbol_name: Some("foo".to_string()),
-            kind: "function".to_string(),
-            start_line: 2,
-            end_line: 4,
-            file_id: 100,
-        }];
+        let chunks = vec![
+            ChunkWithId {
+                id: 1,
+                symbol_name: Some("foo".to_string()),
+                kind: "function".to_string(),
+                start_line: 2,
+                end_line: 4,
+            },
+        ];
 
         let edges = extract_calls(source, &chunks).unwrap();
 
@@ -340,7 +304,6 @@ mod tests {
                 kind: "function".to_string(),
                 start_line: 2,
                 end_line: 2,
-                file_id: 100,
             },
             ChunkWithId {
                 id: 2,
@@ -348,7 +311,6 @@ mod tests {
                 kind: "function".to_string(),
                 start_line: 3,
                 end_line: 3,
-                file_id: 100,
             },
             ChunkWithId {
                 id: 3,
@@ -356,7 +318,6 @@ mod tests {
                 kind: "function".to_string(),
                 start_line: 4,
                 end_line: 8,
-                file_id: 100,
             },
         ];
 
@@ -364,9 +325,78 @@ mod tests {
 
         assert_eq!(edges.len(), 2, "Should find two calls");
         assert!(edges.iter().any(|e| e.dst_chunk_id == 1), "Should call add");
-        assert!(
-            edges.iter().any(|e| e.dst_chunk_id == 2),
-            "Should call subtract"
-        );
+        assert!(edges.iter().any(|e| e.dst_chunk_id == 2), "Should call subtract");
     }
 }
+```
+
+**Dependencies (Cargo.toml):**
+Already present in the codebase:
+- `tree-sitter = "0.22"`
+- `tree-sitter-typescript = "0.21"`
+- `tracing = "0.1"`
+
+## Implementation Notes
+
+**Call Expression Patterns:**
+- Simple call: `foo()` → identifier node
+- Method call: `obj.method()` → member_expression with property
+- Constructor: `new Foo()` → new_expression (treat as call for Phase 1)
+- Arrow functions: `array.map(x => x * 2)` → skip for Phase 1 (inline function)
+
+**Symbol Resolution Strategy:**
+1. Build symbol table from chunks (HashMap<symbol_name, chunk_id>)
+2. For each call, extract function name
+3. Look up in symbol table
+4. If found, create edge; if not found, skip (may be cross-file or built-in)
+
+**Performance:**
+- Tree-sitter parse: ~5ms for 200-line file
+- AST traversal: ~10ms (3-5× LOC nodes)
+- Symbol table lookup: O(1) per call
+- Total: ~15-20ms per file (acceptable)
+
+**Logging Levels:**
+- Trace: Unresolved calls (verbose, for debugging)
+- Debug: Edge count per file
+- Warn: Parse failures
+- Info: Not used for this module
+
+**Error Handling Strategy:**
+- Parse failures: Return Ok(Vec::new()) and log warning (don't propagate error)
+- Symbol resolution failures: Skip edge (log at trace level to avoid noise)
+- Database errors: Not applicable (this module doesn't touch database)
+- Partial edges better than no edges: Continue processing even with issues
+
+## Dependencies
+
+**Prerequisites:**
+- EDGEEXT-1001 (edge extractor module with common utilities)
+
+**Blocks:**
+- EDGEEXT-1003 (integration with scan/upsert - needs working extractor)
+
+## Risk Assessment
+
+**Risk:** Tree-sitter node type is not "call_expression"
+**Mitigation:** Validate with simple test first, tree-sitter-typescript docs confirm node type
+
+**Risk:** Method call extraction is more complex than expected
+**Mitigation:** Start with simple calls, add method call support incrementally
+
+**Risk:** Accuracy lower than 85% for same-file calls
+**Mitigation:** Acceptable for MVP, iterate on heuristics based on test results
+
+## Files/Packages Affected
+
+**Modified Files:**
+- `crates/maproom/src/indexer/edges/typescript.rs` (replace stub with full implementation)
+
+**New Test Files:**
+- Unit tests in `edges/typescript.rs` test module
+
+## Planning References
+
+- Architecture: `.crewchief/projects/EDGEEXT_edge-extraction/planning/architecture.md` (lines 125-140)
+- Plan: `.crewchief/projects/EDGEEXT_edge-extraction/planning/plan.md` (Phase 1, lines 14-16)
+- Quality Strategy: `.crewchief/projects/EDGEEXT_edge-extraction/planning/quality-strategy.md` (lines 30-65)
