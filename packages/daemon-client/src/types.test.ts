@@ -8,6 +8,8 @@ import type {
   TimingBreakdown,
   SearchMetadata,
   ConfidenceSignals,
+  RelatedChunkResult,
+  ChunkSearchResult,
 } from './types.js'
 
 describe('Type synchronization with Rust', () => {
@@ -314,5 +316,289 @@ describe('Type synchronization - Confidence Signals', () => {
 
     // Verify floating point precision is preserved
     expect(signals.score_gap).toBeCloseTo(0.123456789, 5)
+  })
+})
+
+describe('Type synchronization - Related Chunks', () => {
+  // Sync with: crates/maproom/src/search/results.rs::RelatedChunkResult
+  it('should deserialize RelatedChunkResult from Rust JSON', () => {
+    // Example JSON from Rust serialization
+    const rustJson = {
+      chunk_id: 123,
+      relpath: 'src/auth/handler.ts',
+      symbol_name: 'authenticate',
+      kind: 'function',
+      start_line: 10,
+      end_line: 25,
+      preview: 'export function authenticate() {...',
+      depth: 2,
+      relevance: 0.7,
+      relationship_type: 'call',
+    }
+
+    // TypeScript should parse without errors
+    const related: RelatedChunkResult = rustJson
+
+    expect(related.chunk_id).toBe(123)
+    expect(related.relpath).toBe('src/auth/handler.ts')
+    expect(related.symbol_name).toBe('authenticate')
+    expect(related.kind).toBe('function')
+    expect(related.start_line).toBe(10)
+    expect(related.end_line).toBe(25)
+    expect(related.preview).toContain('authenticate')
+    expect(related.depth).toBe(2)
+    expect(related.relevance).toBe(0.7)
+    expect(related.relationship_type).toBe('call')
+  })
+
+  it('should validate all RelatedChunkResult fields and types', () => {
+    const sample: RelatedChunkResult = {
+      chunk_id: 123,
+      relpath: 'src/auth/handler.ts',
+      symbol_name: 'authenticate',
+      kind: 'function',
+      start_line: 10,
+      end_line: 25,
+      preview: 'export function authenticate() {...',
+      depth: 2,
+      relevance: 0.7,
+      relationship_type: 'call',
+    }
+
+    // Validate all fields exist and have correct types
+    expect(typeof sample.chunk_id).toBe('number')
+    expect(typeof sample.relpath).toBe('string')
+    expect(typeof sample.symbol_name).toBe('string')
+    expect(typeof sample.kind).toBe('string')
+    expect(typeof sample.start_line).toBe('number')
+    expect(typeof sample.end_line).toBe('number')
+    expect(typeof sample.preview).toBe('string')
+    expect(typeof sample.depth).toBe('number')
+    expect(typeof sample.relevance).toBe('number')
+    expect(typeof sample.relationship_type).toBe('string')
+  })
+
+  it('should handle null symbol_name in RelatedChunkResult', () => {
+    const sample: RelatedChunkResult = {
+      chunk_id: 123,
+      relpath: 'src/config.ts',
+      symbol_name: null, // Anonymous chunk
+      kind: 'module',
+      start_line: 1,
+      end_line: 100,
+      preview: 'export const config = {...',
+      depth: 1,
+      relevance: 0.5,
+      relationship_type: 'import',
+    }
+
+    expect(sample.symbol_name).toBeNull()
+    expect(typeof sample.kind).toBe('string')
+  })
+
+  it('should validate depth values (1 or 2)', () => {
+    const depth1: RelatedChunkResult = {
+      chunk_id: 1,
+      relpath: 'src/file.ts',
+      symbol_name: 'func',
+      kind: 'function',
+      start_line: 1,
+      end_line: 10,
+      preview: 'preview',
+      depth: 1,
+      relevance: 0.7,
+      relationship_type: 'call',
+    }
+
+    const depth2: RelatedChunkResult = {
+      chunk_id: 2,
+      relpath: 'src/file.ts',
+      symbol_name: 'func',
+      kind: 'function',
+      start_line: 1,
+      end_line: 10,
+      preview: 'preview',
+      depth: 2,
+      relevance: 0.49,
+      relationship_type: 'import',
+    }
+
+    expect(depth1.depth).toBe(1)
+    expect(depth2.depth).toBe(2)
+  })
+
+  it('should validate relevance is between 0.0 and 1.0', () => {
+    const sample: RelatedChunkResult = {
+      chunk_id: 1,
+      relpath: 'src/file.ts',
+      symbol_name: 'func',
+      kind: 'function',
+      start_line: 1,
+      end_line: 10,
+      preview: 'preview',
+      depth: 1,
+      relevance: 0.8,
+      relationship_type: 'call',
+    }
+
+    expect(sample.relevance).toBeGreaterThanOrEqual(0.0)
+    expect(sample.relevance).toBeLessThanOrEqual(1.0)
+  })
+
+  it('should validate relationship_type values', () => {
+    const relationshipTypes = ['import', 'call', 'extends', 'implements']
+
+    relationshipTypes.forEach((relType) => {
+      const sample: RelatedChunkResult = {
+        chunk_id: 1,
+        relpath: 'src/file.ts',
+        symbol_name: 'func',
+        kind: 'function',
+        start_line: 1,
+        end_line: 10,
+        preview: 'preview',
+        depth: 1,
+        relevance: 0.5,
+        relationship_type: relType,
+      }
+
+      expect(sample.relationship_type).toBe(relType)
+    })
+  })
+
+  it('should handle ChunkSearchResult with optional related field', () => {
+    // ChunkSearchResult without related field
+    const resultWithout: ChunkSearchResult = {
+      chunk_id: 1,
+      file_id: 10,
+      relpath: 'src/main.ts',
+      symbol_name: 'main',
+      kind: 'function',
+      start_line: 1,
+      end_line: 50,
+      preview: 'export function main() {...',
+      score: 0.95,
+    }
+
+    expect(resultWithout.related).toBeUndefined()
+
+    // ChunkSearchResult with related field
+    const resultWith: ChunkSearchResult = {
+      chunk_id: 1,
+      file_id: 10,
+      relpath: 'src/main.ts',
+      symbol_name: 'main',
+      kind: 'function',
+      start_line: 1,
+      end_line: 50,
+      preview: 'export function main() {...',
+      score: 0.95,
+      related: [
+        {
+          chunk_id: 2,
+          relpath: 'src/helper.ts',
+          symbol_name: 'helper',
+          kind: 'function',
+          start_line: 5,
+          end_line: 10,
+          preview: 'export function helper() {...',
+          depth: 1,
+          relevance: 0.8,
+          relationship_type: 'call',
+        },
+      ],
+    }
+
+    expect(resultWith.related).toBeDefined()
+    expect(Array.isArray(resultWith.related)).toBe(true)
+    expect(resultWith.related?.length).toBe(1)
+    expect(resultWith.related?.[0].chunk_id).toBe(2)
+  })
+
+  it('should handle ChunkSearchResult with empty related array', () => {
+    const result: ChunkSearchResult = {
+      chunk_id: 1,
+      file_id: 10,
+      relpath: 'src/main.ts',
+      symbol_name: 'main',
+      kind: 'function',
+      start_line: 1,
+      end_line: 50,
+      preview: 'export function main() {...',
+      score: 0.95,
+      related: [], // Empty array (expansion ran but found no relationships)
+    }
+
+    expect(result.related).toBeDefined()
+    expect(Array.isArray(result.related)).toBe(true)
+    expect(result.related?.length).toBe(0)
+  })
+
+  it('should handle ChunkSearchResult with multiple related chunks', () => {
+    const result: ChunkSearchResult = {
+      chunk_id: 1,
+      file_id: 10,
+      relpath: 'src/main.ts',
+      symbol_name: 'main',
+      kind: 'function',
+      start_line: 1,
+      end_line: 50,
+      preview: 'export function main() {...',
+      score: 0.95,
+      related: [
+        {
+          chunk_id: 2,
+          relpath: 'src/helper.ts',
+          symbol_name: 'helper',
+          kind: 'function',
+          start_line: 5,
+          end_line: 10,
+          preview: 'export function helper() {...',
+          depth: 1,
+          relevance: 0.8,
+          relationship_type: 'call',
+        },
+        {
+          chunk_id: 3,
+          relpath: 'src/utils.ts',
+          symbol_name: 'format',
+          kind: 'function',
+          start_line: 20,
+          end_line: 30,
+          preview: 'export function format() {...',
+          depth: 2,
+          relevance: 0.49,
+          relationship_type: 'import',
+        },
+      ],
+    }
+
+    expect(result.related?.length).toBe(2)
+    expect(result.related?.[0].depth).toBe(1)
+    expect(result.related?.[1].depth).toBe(2)
+  })
+
+  it('should validate ChunkSearchResult has all required fields', () => {
+    const result: ChunkSearchResult = {
+      chunk_id: 1,
+      file_id: 10,
+      relpath: 'src/main.ts',
+      symbol_name: 'main',
+      kind: 'function',
+      start_line: 1,
+      end_line: 50,
+      preview: 'export function main() {...',
+      score: 0.95,
+    }
+
+    expect(typeof result.chunk_id).toBe('number')
+    expect(typeof result.file_id).toBe('number')
+    expect(typeof result.relpath).toBe('string')
+    expect(typeof result.symbol_name).toBe('string')
+    expect(typeof result.kind).toBe('string')
+    expect(typeof result.start_line).toBe('number')
+    expect(typeof result.end_line).toBe('number')
+    expect(typeof result.preview).toBe('string')
+    expect(typeof result.score).toBe('number')
   })
 })

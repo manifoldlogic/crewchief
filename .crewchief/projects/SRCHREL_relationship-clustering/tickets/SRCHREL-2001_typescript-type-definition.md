@@ -1,9 +1,9 @@
 # Ticket: [SRCHREL-2001]: TypeScript Type Definition and Sync
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - tests executed and passing (or N/A if no tests)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - tests executed and passing (or N/A if no tests)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,14 +26,14 @@ The daemon client needs TypeScript types that exactly match the Rust types for J
 This implements Phase 2 deliverables: TypeScript interface, SearchParams update, type sync validation tests.
 
 ## Acceptance Criteria
-- [ ] `RelatedChunkResult` interface defined in `packages/daemon-client/src/types.ts`
-- [ ] All 10 fields match Rust struct exactly (names, types, nullability)
-- [ ] Sync comment references Rust struct location
-- [ ] `SearchParams` interface updated with `include_related?: boolean`
-- [ ] Type sync validation test created in `packages/daemon-client/src/types.test.ts`
-- [ ] Test validates field presence and types
-- [ ] All TypeScript tests pass with `npm test`
-- [ ] No TypeScript compilation errors with `tsc --noEmit`
+- [x] `RelatedChunkResult` interface defined in `packages/daemon-client/src/types.ts`
+- [x] All 10 fields match Rust struct exactly (names, types, nullability)
+- [x] Sync comment references Rust struct location
+- [x] `SearchParams` interface updated with `include_related?: boolean`
+- [x] Type sync validation test created in `packages/daemon-client/src/types.test.ts`
+- [x] Test validates field presence and types
+- [x] All TypeScript tests pass with `npm test`
+- [x] No TypeScript compilation errors with `tsc --noEmit`
 
 ## Technical Requirements
 

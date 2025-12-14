@@ -189,3 +189,61 @@ export interface SearchMetadata {
   /** Query understanding metadata (optional, added in Phase 2) */
   understanding?: QueryUnderstanding
 }
+
+/**
+ * Lightweight metadata for a related chunk discovered via graph traversal.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::RelatedChunkResult
+ */
+export interface RelatedChunkResult {
+  /** Chunk ID for requesting full context */
+  chunk_id: number
+  /** File path relative to repository root */
+  relpath: string
+  /** Symbol name */
+  symbol_name: string | null
+  /** Symbol kind */
+  kind: string
+  /** Start line (1-based) */
+  start_line: number
+  /** End line (1-based) */
+  end_line: number
+  /** Content preview */
+  preview: string
+  /** Graph traversal depth (1 or 2) */
+  depth: number
+  /** Decay-adjusted relevance (0.0-1.0) */
+  relevance: number
+  /** Relationship type */
+  relationship_type: string
+}
+
+/**
+ * A single search result with complete chunk details and scores.
+ *
+ * Sync with: crates/maproom/src/search/results.rs::ChunkSearchResult
+ */
+export interface ChunkSearchResult {
+  /** Chunk ID from maproom.chunks table */
+  chunk_id: number
+  /** File ID from maproom.files table */
+  file_id: number
+  /** Relative path to the file */
+  relpath: string
+  /** Optional symbol name (function, class, etc.) */
+  symbol_name: string | null
+  /** Chunk kind (function, class, interface, etc.) */
+  kind: string
+  /** Starting line number (1-based) */
+  start_line: number
+  /** Ending line number (1-based) */
+  end_line: number
+  /** Preview text from the chunk */
+  preview: string
+  /** Final fused score (0.0-1.0) */
+  score: number
+  /** Confidence signals for result quality assessment */
+  confidence?: ConfidenceSignals
+  /** Related chunks discovered via graph traversal */
+  related?: RelatedChunkResult[]
+}
