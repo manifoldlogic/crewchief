@@ -109,7 +109,7 @@ impl SessionRegistry {
     pub fn get_session(
         &self,
         session_id: &Uuid,
-    ) -> Option<dashmap::mapref::one::Ref<Uuid, Session>> {
+    ) -> Option<dashmap::mapref::one::Ref<'_, Uuid, Session>> {
         self.sessions.get(session_id)
     }
 }

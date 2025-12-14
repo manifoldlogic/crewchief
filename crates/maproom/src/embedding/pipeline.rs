@@ -513,8 +513,8 @@ impl EmbeddingPipeline {
     pub async fn process_missing_embeddings(
         &self,
         store: &SqliteStore,
-        repo: &str,
-        worktree: &str,
+        _repo: &str,      // TODO: Add repo/worktree filtering to fetch_chunks_needing_embeddings
+        _worktree: &str,  // Currently unused - all chunks are processed regardless of repo/worktree
     ) -> Result<PipelineStats> {
         info!(
             "Finding chunks missing {}-dimensional embeddings (provider: {})",
@@ -667,6 +667,7 @@ impl EmbeddingPipeline {
 
 /// Row data for a chunk from the database.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields read from database but not all are used directly
 struct ChunkRow {
     id: i64,
     signature: Option<String>,

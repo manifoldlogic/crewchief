@@ -4,6 +4,10 @@
 //! after file changes. When a file is modified, edges involving its chunks must be
 //! recomputed to maintain accurate code relationships.
 //!
+//! NOTE: This module is a placeholder for future edge computation implementation.
+//! Most code is dead until the feature is completed.
+#![allow(dead_code)]
+//!
 //! # Edge Types
 //!
 //! Supported edge types (from database schema):

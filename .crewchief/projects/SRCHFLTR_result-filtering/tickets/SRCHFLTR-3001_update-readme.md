@@ -1,9 +1,9 @@
 # Ticket: [SRCHFLTR-3001]: Update Daemon-Client README with Examples
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -25,14 +25,14 @@ Documentation is critical for adoption. This ticket ensures users can discover a
 This completes the user-facing documentation for Phase 3.
 
 ## Acceptance Criteria
-- [ ] README.md updated with FilterableSearchResult section
-- [ ] Usage examples cover common patterns
-- [ ] API reference includes all methods (filter, sortBy, slice)
-- [ ] Type definitions documented
-- [ ] Backward compatibility noted
-- [ ] Performance characteristics documented
-- [ ] Examples are tested and verified working
-- [ ] Clear section structure and formatting
+- [x] README.md updated with FilterableSearchResult section
+- [x] Usage examples cover common patterns
+- [x] API reference includes all methods (filter, sortBy, slice)
+- [x] Type definitions documented
+- [x] Backward compatibility noted
+- [x] Performance characteristics documented
+- [x] Examples are tested and verified working
+- [x] Clear section structure and formatting
 
 ## Technical Requirements
 

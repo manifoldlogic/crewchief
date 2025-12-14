@@ -94,3 +94,8 @@ export type {
 // Daemon discovery and auto-start
 export { connectOrSpawn, getDefaultConfig } from './discovery.js'
 export type { DiscoveryConfig } from './discovery.js'
+
+// Filtering functionality
+export { FilterableSearchResult } from './filterable-result.js'
+export type { SearchHit } from './filterable-result.js'
+export type { FilterCriteria, SortField, SortOrder } from './filter-types.js'

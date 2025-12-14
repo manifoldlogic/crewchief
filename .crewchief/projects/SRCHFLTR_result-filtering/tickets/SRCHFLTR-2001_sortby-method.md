@@ -1,9 +1,9 @@
 # Ticket: [SRCHFLTR-2001]: Implement sortBy() Method
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - all tests passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - all tests passing
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,18 +26,18 @@ This ticket implements sorting functionality for Phase 2. Sorting allows users t
 The sortBy() method integrates seamlessly with filter() for chained operations, enabling workflows like: filter by kind → sort by path → slice for pagination.
 
 ## Acceptance Criteria
-- [ ] sortBy() method implemented with all sort fields
-- [ ] Sort by score (default descending) works correctly
-- [ ] Sort by relpath (default ascending) works correctly
-- [ ] Sort by symbol_name (default ascending) works correctly
-- [ ] Sort by start_line (default ascending) works correctly
-- [ ] Sort by kind (default ascending) works correctly
-- [ ] Explicit sort order (asc/desc) works correctly
-- [ ] Returns new FilterableSearchResult instance (immutable)
-- [ ] Original result unchanged after sorting
-- [ ] Null/undefined values handled gracefully
-- [ ] Unit tests pass with 80%+ coverage on sort logic
-- [ ] Performance <1ms for 100 results
+- [x] sortBy() method implemented with all sort fields
+- [x] Sort by score (default descending) works correctly
+- [x] Sort by relpath (default ascending) works correctly
+- [x] Sort by symbol_name (default ascending) works correctly
+- [x] Sort by start_line (default ascending) works correctly
+- [x] Sort by kind (default ascending) works correctly
+- [x] Explicit sort order (asc/desc) works correctly
+- [x] Returns new FilterableSearchResult instance (immutable)
+- [x] Original result unchanged after sorting
+- [x] Null/undefined values handled gracefully
+- [x] Unit tests pass with 80%+ coverage on sort logic
+- [x] Performance <1ms for 100 results
 
 ## Technical Requirements
 

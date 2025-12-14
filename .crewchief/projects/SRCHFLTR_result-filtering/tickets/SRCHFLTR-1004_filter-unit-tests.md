@@ -1,9 +1,9 @@
 # Ticket: [SRCHFLTR-1004]: Write Unit Tests for Filtering
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - all tests passing
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - all tests passing
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -26,21 +26,21 @@ Unit tests provide confidence that filtering logic works correctly across all cr
 Tests must be fast (<5 seconds total) and provide clear failure messages.
 
 ## Acceptance Criteria
-- [ ] Test file `packages/daemon-client/tests/filterable-result.test.ts` created
-- [ ] All 12 filter tests implemented and passing
-- [ ] Filter by kind (exact match) tested
-- [ ] Filter by file_type (with/without dot) tested
-- [ ] Filter by path substring tested
-- [ ] Filter by min_score and max_score tested
-- [ ] Filter by custom function tested
-- [ ] Multiple criteria (AND logic) tested
-- [ ] Empty results handling tested
-- [ ] Null symbol_name handling tested
-- [ ] Invalid score (NaN, Infinity) handling tested
-- [ ] Immutability tested (original unchanged)
-- [ ] Test coverage ≥80% on filterable-result.ts
-- [ ] All tests pass in <5 seconds
-- [ ] Clear test descriptions and error messages
+- [x] Test file `packages/daemon-client/tests/filterable-result.test.ts` created
+- [x] All 12 filter tests implemented and passing
+- [x] Filter by kind (exact match) tested
+- [x] Filter by file_type (with/without dot) tested
+- [x] Filter by path substring tested
+- [x] Filter by min_score and max_score tested
+- [x] Filter by custom function tested
+- [x] Multiple criteria (AND logic) tested
+- [x] Empty results handling tested
+- [x] Null symbol_name handling tested
+- [x] Invalid score (NaN, Infinity) handling tested
+- [x] Immutability tested (original unchanged)
+- [x] Test coverage ≥80% on filterable-result.ts
+- [x] All tests pass in <5 seconds
+- [x] Clear test descriptions and error messages
 
 ## Technical Requirements
 
