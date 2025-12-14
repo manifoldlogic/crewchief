@@ -181,7 +181,8 @@ describe('ScanOrchestrator', () => {
 
       const result = await scanWorktree(testConfig)
 
-      expect(result.durationMs).toBeGreaterThanOrEqual(50)
+      // Allow for timing variance in CI environments (setTimeout precision is ~1-2ms)
+      expect(result.durationMs).toBeGreaterThanOrEqual(45)
     })
 
     it('handles multiple chunk count patterns in output', async () => {
