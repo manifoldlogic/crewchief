@@ -31,7 +31,7 @@
 //! - Edge computation: Depends on chunk complexity (typically <100ms)
 //! - Edge insertion: Batch operation, <50ms for typical files
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tracing::debug;
 
 use crate::db::SqliteStore;
@@ -112,34 +112,88 @@ impl EdgeUpdater {
     /// # }
     /// ```
     pub async fn update_edges(&self, file_id: i64) -> Result<()> {
+        use crate::indexer::edges::{self, ChunkWithId};
+
         debug!(file_id = file_id, "Updating edges for file");
 
         // 1. Delete old edges for chunks in this file
-        // This clears any stale edges before re-computation
-        self.store
+        self.delete_edges_for_file(file_id).await?;
+
+        // 2. Recompute edges
+        // Get file metadata (relpath and language)
+        let file_metadata = self
+            .store
             .run(move |conn| {
-                // Delete edges where src or dst is a chunk from this file
-                conn.execute(
-                    "DELETE FROM chunk_edges WHERE src_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 ) OR dst_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 )",
+                let result = conn.query_row(
+                    "SELECT relpath, language FROM files WHERE id = ?",
                     rusqlite::params![file_id],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                        ))
+                    },
                 )?;
-                Ok(())
+                Ok(result)
             })
             .await?;
 
-        // 2. TODO: In the future, compute new edges based on chunk content
-        // This requires tree-sitter analysis of imports, calls, extends relationships
-        // For now, edges are cleared but not recomputed - this is acceptable for MVP
-        // Edge computation can be added incrementally without breaking the system
+        let (relpath, language) = file_metadata;
 
-        debug!(
-            file_id = file_id,
-            "Edges cleared for file (computation pending future ticket)"
-        );
+        // Check if this is a TypeScript/JavaScript file
+        let language = match language {
+            Some(lang) if matches!(lang.as_str(), "typescript" | "tsx" | "javascript" | "jsx") => {
+                lang
+            }
+            _ => {
+                // No edge extraction for this language
+                debug!(
+                    file_id = file_id,
+                    "No edge extraction for language {:?}",
+                    language
+                );
+                return Ok(());
+            }
+        };
+
+        // Read file content
+        let content = std::fs::read_to_string(&relpath)
+            .with_context(|| format!("Failed to read file: {}", relpath))?;
+
+        // Load chunks for this file
+        let chunks_with_ids: Vec<ChunkWithId> = self
+            .store
+            .run(move |conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT id, symbol_name, kind, start_line, end_line FROM chunks WHERE file_id = ?",
+                )?;
+                let chunks = stmt
+                    .query_map(rusqlite::params![file_id], |row| {
+                        Ok(ChunkWithId {
+                            id: row.get(0)?,
+                            symbol_name: row.get(1)?,
+                            kind: row.get(2)?,
+                            start_line: row.get(3)?,
+                            end_line: row.get(4)?,
+                            file_id,
+                        })
+                    })?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(chunks)
+            })
+            .await?;
+
+        // Extract edges
+        let edges_to_insert = edges::extract_edges(&content, &language, &chunks_with_ids)?;
+
+        // Insert edges
+        for edge in edges_to_insert {
+            self.store
+                .insert_chunk_edge(edge.src_chunk_id, edge.dst_chunk_id, edge.edge_type.as_str())
+                .await?;
+        }
+
+        debug!(file_id = file_id, "Edges updated for file");
 
         Ok(())
     }
@@ -204,8 +258,7 @@ pub enum EdgeType {
 
 impl EdgeType {
     /// Convert edge type to database string representation.
-    #[allow(dead_code)]
-    fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             EdgeType::Imports => "imports",
             EdgeType::Exports => "exports",
