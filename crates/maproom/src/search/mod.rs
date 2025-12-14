@@ -155,6 +155,7 @@ pub mod signals;
 pub mod vector;
 
 // Search pipeline modules (Phase 2)
+pub mod confidence;
 pub mod dedup;
 pub mod errors;
 pub mod fusion;
@@ -181,13 +182,14 @@ pub use signals::{SignalError, SignalExecutor, SignalWeights};
 pub use vector::{VectorError, VectorExecutor};
 
 // Re-export pipeline types (Phase 2 + Phase 3)
+pub use confidence::compute_result_confidence;
 pub use dedup::{deduplicate, ChunkIdentity, DeduplicationConfig, SelectionStrategy};
 pub use errors::{ErrorType, PipelineStage, SearchErrorDetails};
 pub use fusion::{BasicWeightedFusion, FusedResult, FusionWeights, RRFFusion, ScoreFusion};
 pub use pipeline::{PipelineError, SearchPipeline};
 pub use results::{
-    ChunkSearchResult, FinalSearchResults, QueryProcessingDetails, SearchMetadata, SearchOptions,
-    SearchTiming,
+    ChunkSearchResult, ConfidenceSignals, FinalSearchResults, QueryProcessingDetails,
+    SearchMetadata, SearchOptions, SearchTiming,
 };
 
 // Re-export performance optimization types (Phase 4)

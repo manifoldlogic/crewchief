@@ -456,6 +456,28 @@ fn default_deduplicate() -> bool {
     true
 }
 
+/// Confidence signals for search result quality assessment.
+///
+/// This structure provides transparency about result quality through three
+/// core signals computed from existing search pipeline data. All fields are
+/// derived from in-memory structures with O(1) computation per result.
+///
+/// TYPE_SYNC: packages/daemon-client/src/types.ts::ConfidenceSignals
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfidenceSignals {
+    /// Number of search sources that found this result (FTS, vector, graph, signals).
+    /// Higher values indicate stronger cross-strategy agreement.
+    pub source_count: usize,
+
+    /// Score difference between this result and the next result.
+    /// Larger gaps indicate clearer quality separation. 0.0 for the last result.
+    pub score_gap: f32,
+
+    /// Whether this result received an exact match boost during scoring.
+    /// Exact matches (exact_match_multiplier >= 2.9) have higher confidence.
+    pub is_exact_match: bool,
+}
+
 impl SearchOptions {
     /// Create new SearchOptions with required parameters.
     pub fn new(repo_id: i64, worktree_id: Option<i64>, limit: usize) -> Self {
