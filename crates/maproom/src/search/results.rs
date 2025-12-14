@@ -87,6 +87,15 @@ pub struct ChunkSearchResult {
     /// Confidence signals for result quality assessment.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confidence: Option<ConfidenceSignals>,
+
+    /// Related chunks discovered via graph traversal.
+    ///
+    /// Only populated when include_related=true and confidence criteria are met.
+    /// Empty result semantics:
+    /// - None: Expansion did not run (low confidence, disabled, or error)
+    /// - Some([]): Expansion ran but found no relationships
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related: Option<Vec<RelatedChunkResult>>,
 }
 
 impl ChunkSearchResult {
@@ -116,6 +125,7 @@ impl ChunkSearchResult {
             score,
             source_scores,
             confidence: None,
+            related: None,
         }
     }
 
@@ -464,6 +474,16 @@ pub struct SearchOptions {
     /// Default: `false`
     #[serde(default)]
     pub include_confidence: bool,
+
+    /// Whether to include related chunks via graph traversal.
+    ///
+    /// When true, high-confidence results will include related chunks discovered
+    /// through graph traversal. Auto-enables confidence scoring.
+    /// When false (default), related field is None for backward compatibility.
+    ///
+    /// Default: `false`
+    #[serde(default)]
+    pub include_related: bool,
 }
 
 fn default_deduplicate() -> bool {
@@ -555,6 +575,7 @@ impl SearchOptions {
             file_types: vec![],
             recency_threshold: None,
             include_confidence: false,
+            include_related: false,
         }
     }
 

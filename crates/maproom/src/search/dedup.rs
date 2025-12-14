@@ -163,6 +163,7 @@ mod tests {
             score,
             source_scores: StdHashMap::from([(SearchSource::FTS, score)]),
             confidence: None,
+            related: None,
         }
     }
 

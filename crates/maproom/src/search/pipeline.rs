@@ -348,10 +348,14 @@ impl SearchPipeline {
 
         // Merge fused scores with chunk details
         let mut assembled_results = Vec::new();
+
+        // Auto-enable confidence if related chunks requested
+        let enable_confidence = options.include_confidence || options.include_related;
+
         for (index, fused) in fused_results.iter().enumerate() {
             if let Some(details) = chunk_details.get(&fused.chunk_id) {
-                // Compute confidence if requested
-                let confidence = if options.include_confidence {
+                // Compute confidence if requested (auto-enabled by include_related)
+                let confidence = if enable_confidence {
                     Some(crate::search::confidence::compute_result_confidence(
                         fused,
                         &fused_results,
@@ -382,6 +386,50 @@ impl SearchPipeline {
                     fused.chunk_id
                 );
             }
+        }
+
+        // Relationship expansion (after confidence scoring, before deduplication)
+        const MAX_CONCURRENT_EXPANSIONS: usize = 3;
+
+        if options.include_related {
+            let mut expansion_count = 0;
+
+            for result in &mut assembled_results {
+                if expansion_count >= MAX_CONCURRENT_EXPANSIONS {
+                    break; // Hard cap
+                }
+
+                // Only expand high-confidence results
+                if let Some(conf) = &result.confidence {
+                    if conf.source_count >= 2 || conf.is_exact_match {
+                        match crate::search::relationships::find_top_related_chunks(
+                            self.executors.store(),
+                            result.chunk_id,
+                            5,
+                        )
+                        .await
+                        {
+                            Ok(related) => {
+                                result.related = Some(related);
+                                expansion_count += 1;
+                            }
+                            Err(e) => {
+                                // Log error but don't fail entire search
+                                tracing::warn!(
+                                    "Failed to find related chunks for {}: {}",
+                                    result.chunk_id,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            debug!(
+                "Relationship expansion: {} results expanded (max: {})",
+                expansion_count, MAX_CONCURRENT_EXPANSIONS
+            );
         }
 
         // Apply deduplication if enabled
