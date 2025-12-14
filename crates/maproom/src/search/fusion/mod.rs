@@ -115,16 +115,39 @@ pub struct FusedResult {
     /// Optional detailed breakdown of score contributions (for debug mode)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub breakdown: Option<ScoreBreakdown>,
+
+    /// Exact match multiplier applied during FTS scoring (3.0 for exact matches, 1.0 otherwise).
+    /// Always computed (not debug-only) to enable confidence scoring.
+    /// None if result did not come from FTS or exact match detection was not performed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exact_match_multiplier: Option<f32>,
 }
 
 impl FusedResult {
-    /// Create a new FusedResult without breakdown.
+    /// Create a new FusedResult without breakdown or exact match multiplier.
     pub fn new(chunk_id: i64, score: f32, source_scores: HashMap<SearchSource, f32>) -> Self {
         Self {
             chunk_id,
             score,
             source_scores,
             breakdown: None,
+            exact_match_multiplier: None,
+        }
+    }
+
+    /// Create a new FusedResult with exact match multiplier.
+    pub fn with_exact_match(
+        chunk_id: i64,
+        score: f32,
+        source_scores: HashMap<SearchSource, f32>,
+        exact_match_multiplier: Option<f32>,
+    ) -> Self {
+        Self {
+            chunk_id,
+            score,
+            source_scores,
+            breakdown: None,
+            exact_match_multiplier,
         }
     }
 
@@ -140,6 +163,24 @@ impl FusedResult {
             score,
             source_scores,
             breakdown: Some(breakdown),
+            exact_match_multiplier: None,
+        }
+    }
+
+    /// Create a new FusedResult with score breakdown and exact match multiplier.
+    pub fn with_all(
+        chunk_id: i64,
+        score: f32,
+        source_scores: HashMap<SearchSource, f32>,
+        breakdown: ScoreBreakdown,
+        exact_match_multiplier: Option<f32>,
+    ) -> Self {
+        Self {
+            chunk_id,
+            score,
+            source_scores,
+            breakdown: Some(breakdown),
+            exact_match_multiplier,
         }
     }
 }

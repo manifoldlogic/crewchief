@@ -144,6 +144,9 @@ impl ScoreFusion for RRFFusion {
             HashMap<crate::search::executor_types::SearchSource, f32>,
         > = HashMap::new();
 
+        // Track exact_match_multiplier from FTS results
+        let mut chunk_exact_match: HashMap<i64, f32> = HashMap::new();
+
         // Accumulate RRF scores from each result set
         for result_set in results {
             let source = result_set.source;
@@ -160,6 +163,11 @@ impl ScoreFusion for RRFFusion {
                     .entry(result.chunk_id)
                     .or_default()
                     .insert(source, result.score);
+
+                // Preserve exact_match_multiplier from FTS results
+                if let Some(mult) = result.exact_match_multiplier {
+                    chunk_exact_match.insert(result.chunk_id, mult);
+                }
             }
         }
 
@@ -175,7 +183,8 @@ impl ScoreFusion for RRFFusion {
             .into_iter()
             .map(|(chunk_id, score)| {
                 let source_scores = chunk_source_scores.remove(&chunk_id).unwrap_or_default();
-                FusedResult::new(chunk_id, score, source_scores)
+                let exact_mult = chunk_exact_match.get(&chunk_id).copied();
+                FusedResult::with_exact_match(chunk_id, score, source_scores, exact_mult)
             })
             .collect();
 

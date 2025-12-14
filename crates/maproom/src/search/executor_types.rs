@@ -52,6 +52,11 @@ pub struct RankedResult {
     /// None if result is not from vector search
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding_dimension: Option<String>,
+
+    /// Exact match multiplier applied during FTS scoring (3.0 for exact matches, 1.0 otherwise).
+    /// None if result did not come from FTS.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exact_match_multiplier: Option<f32>,
 }
 
 impl RankedResult {
@@ -62,6 +67,7 @@ impl RankedResult {
             score,
             rank,
             embedding_dimension: None,
+            exact_match_multiplier: None,
         }
     }
 
@@ -77,6 +83,23 @@ impl RankedResult {
             score,
             rank,
             embedding_dimension,
+            exact_match_multiplier: None,
+        }
+    }
+
+    /// Create a new RankedResult with exact match multiplier (for FTS results).
+    pub fn new_with_exact_match(
+        chunk_id: i64,
+        score: f32,
+        rank: usize,
+        exact_match_multiplier: Option<f32>,
+    ) -> Self {
+        Self {
+            chunk_id,
+            score,
+            rank,
+            embedding_dimension: None,
+            exact_match_multiplier,
         }
     }
 }

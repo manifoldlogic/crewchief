@@ -165,6 +165,8 @@ impl ScoreFusion for BasicWeightedFusion {
     ) -> Vec<FusedResult> {
         // Build a map of chunk_id -> scores from each source
         let mut chunk_scores: HashMap<i64, HashMap<SearchSource, f32>> = HashMap::new();
+        // Track exact_match_multiplier from FTS results
+        let mut chunk_exact_match: HashMap<i64, f32> = HashMap::new();
         let num_result_sets = results.len();
 
         for result_set in results {
@@ -174,6 +176,11 @@ impl ScoreFusion for BasicWeightedFusion {
                     .entry(result.chunk_id)
                     .or_default()
                     .insert(source, result.score);
+
+                // Preserve exact_match_multiplier from FTS results
+                if let Some(mult) = result.exact_match_multiplier {
+                    chunk_exact_match.insert(result.chunk_id, mult);
+                }
             }
         }
 
@@ -214,7 +221,8 @@ impl ScoreFusion for BasicWeightedFusion {
 
                 let weighted_sum = fts_contrib + vector_contrib + graph_contrib + signals_contrib;
 
-                FusedResult::new(chunk_id, weighted_sum, source_scores)
+                let exact_mult = chunk_exact_match.get(&chunk_id).copied();
+                FusedResult::with_exact_match(chunk_id, weighted_sum, source_scores, exact_mult)
             })
             .collect();
 

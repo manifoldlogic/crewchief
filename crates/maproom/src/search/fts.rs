@@ -138,7 +138,7 @@ impl FTSExecutor {
     pub async fn execute(
         store: &SqliteStore,
         fts_query: &str,
-        _normalized_query: &str,
+        normalized_query: &str,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
@@ -156,17 +156,30 @@ impl FTSExecutor {
             fts_query, limit, fetch_limit
         );
 
-        // Delegate to SqliteStore's FTS search
+        // Delegate to SqliteStore's FTS search with normalized query for exact matching
         let hits = store
-            .search_fts_by_id(repo_id, worktree_id, fts_query, fetch_limit)
+            .search_fts_by_id(
+                repo_id,
+                worktree_id,
+                fts_query,
+                normalized_query,
+                fetch_limit,
+            )
             .await
             .map_err(|e| FTSError::Database(e.to_string()))?;
 
-        // Convert SearchHit to RankedResult
+        // Convert SearchHit to RankedResult, preserving exact_match_multiplier
         let results: Vec<RankedResult> = hits
             .into_iter()
             .enumerate()
-            .map(|(i, hit)| RankedResult::new(hit.chunk_id, hit.score as f32, i + 1))
+            .map(|(i, hit)| {
+                RankedResult::new_with_exact_match(
+                    hit.chunk_id,
+                    hit.score as f32,
+                    i + 1,
+                    hit.exact_mult.map(|v| v as f32),
+                )
+            })
             .collect();
 
         debug!("FTS search returned {} results", results.len());

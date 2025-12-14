@@ -832,9 +832,11 @@ impl SqliteStore {
         repo_id: i64,
         worktree_id: Option<i64>,
         query: &str,
+        normalized_query: &str,
         k: i64,
     ) -> anyhow::Result<Vec<SearchHit>> {
         let query = query.to_string();
+        let normalized_query = normalized_query.to_string();
         self.run(move |conn| {
             // FTS5 query syntax: term1 term2 (implicit AND), term1 OR term2
             // Prefix matching: term* (no quotes around term!)
@@ -857,6 +859,17 @@ impl SqliteStore {
             if fts_query.is_empty() {
                 return Ok(vec![]);
             }
+
+            // Helper closure to compute exact match multiplier
+            let compute_exact_mult = |symbol_name: Option<String>| -> f64 {
+                if let Some(ref symbol) = symbol_name {
+                    let normalized_symbol = crate::search::fts::normalize_for_exact_match(symbol);
+                    if normalized_symbol.to_lowercase() == normalized_query.to_lowercase() {
+                        return 3.0; // Exact match boost
+                    }
+                }
+                1.0 // No boost
+            };
 
             let sql = if worktree_id.is_some() {
                 r#"
@@ -904,17 +917,19 @@ impl SqliteStore {
             if let Some(wid) = worktree_id {
                 let rows = stmt.query_map(params![fts_query, repo_id, wid, k], |row| {
                     let score: f64 = row.get(6)?;
+                    let symbol_name: Option<String> = row.get(3)?;
+                    let exact_mult = compute_exact_mult(symbol_name.clone());
                     Ok(SearchHit {
                         chunk_id: row.get(0)?,
                         start_line: row.get(1)?,
                         end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
+                        symbol_name,
                         kind: row.get(4)?,
                         file_relpath: row.get(5)?,
                         score: -score, // FTS5 rank is negative, negate for positive score
                         base_score: None,
                         kind_mult: None,
-                        exact_mult: None,
+                        exact_mult: Some(exact_mult),
                     })
                 })?;
                 for row in rows {
@@ -923,17 +938,19 @@ impl SqliteStore {
             } else {
                 let rows = stmt.query_map(params![fts_query, repo_id, k], |row| {
                     let score: f64 = row.get(6)?;
+                    let symbol_name: Option<String> = row.get(3)?;
+                    let exact_mult = compute_exact_mult(symbol_name.clone());
                     Ok(SearchHit {
                         chunk_id: row.get(0)?,
                         start_line: row.get(1)?,
                         end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
+                        symbol_name,
                         kind: row.get(4)?,
                         file_relpath: row.get(5)?,
                         score: -score, // FTS5 rank is negative, negate for positive score
                         base_score: None,
                         kind_mult: None,
-                        exact_mult: None,
+                        exact_mult: Some(exact_mult),
                     })
                 })?;
                 for row in rows {

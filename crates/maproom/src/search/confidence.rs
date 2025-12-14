@@ -220,4 +220,78 @@ mod tests {
         let confidence = compute_result_confidence(&results[0], &results, 0, None);
         assert_eq!(confidence.score_gap, 0.0);
     }
+
+    /// Test that exact_match_multiplier is accessible from FusedResult without debug mode.
+    /// This verifies SRCHCONF-1002: exact match multiplier should be always available.
+    #[test]
+    fn test_exact_match_multiplier_always_available() {
+        use crate::search::fusion::FusedResult;
+        use std::collections::HashMap;
+
+        // Create a FusedResult with exact_match_multiplier set
+        let mut source_scores = HashMap::new();
+        source_scores.insert(SearchSource::FTS, 0.95);
+
+        let result = FusedResult::with_exact_match(1, 0.95, source_scores, Some(3.0));
+
+        // Verify exact_match_multiplier is accessible
+        assert_eq!(result.exact_match_multiplier, Some(3.0));
+
+        // Verify confidence computation uses it correctly
+        let results = vec![result];
+        let confidence =
+            compute_result_confidence(&results[0], &results, 0, results[0].exact_match_multiplier);
+
+        // With multiplier >= 2.9, is_exact_match should be true
+        assert!(confidence.is_exact_match);
+    }
+
+    /// Test that exact_match_multiplier correctly distinguishes exact matches (3.0) from non-exact (1.0).
+    #[test]
+    fn test_exact_match_multiplier_detection() {
+        use crate::search::fusion::FusedResult;
+        use std::collections::HashMap;
+
+        // Test exact match (multiplier = 3.0)
+        let result_exact = FusedResult::with_exact_match(1, 0.95, HashMap::new(), Some(3.0));
+        assert_eq!(result_exact.exact_match_multiplier, Some(3.0));
+        let conf_exact = compute_result_confidence(
+            &result_exact,
+            &vec![result_exact.clone()],
+            0,
+            result_exact.exact_match_multiplier,
+        );
+        assert!(
+            conf_exact.is_exact_match,
+            "Multiplier 3.0 should be detected as exact match"
+        );
+
+        // Test non-exact match (multiplier = 1.0)
+        let result_non_exact = FusedResult::with_exact_match(2, 0.85, HashMap::new(), Some(1.0));
+        assert_eq!(result_non_exact.exact_match_multiplier, Some(1.0));
+        let conf_non_exact = compute_result_confidence(
+            &result_non_exact,
+            &vec![result_non_exact.clone()],
+            0,
+            result_non_exact.exact_match_multiplier,
+        );
+        assert!(
+            !conf_non_exact.is_exact_match,
+            "Multiplier 1.0 should NOT be detected as exact match"
+        );
+
+        // Test None (no FTS result)
+        let result_none = FusedResult::with_exact_match(3, 0.75, HashMap::new(), None);
+        assert_eq!(result_none.exact_match_multiplier, None);
+        let conf_none = compute_result_confidence(
+            &result_none,
+            &vec![result_none.clone()],
+            0,
+            result_none.exact_match_multiplier,
+        );
+        assert!(
+            !conf_none.is_exact_match,
+            "None multiplier should NOT be detected as exact match"
+        );
+    }
 }
