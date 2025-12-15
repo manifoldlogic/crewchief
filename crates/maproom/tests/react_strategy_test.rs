@@ -7,6 +7,8 @@
 //! - Handles JSX parent/child relationships
 //! - Assembles complete context bundles within budget
 
+#![allow(unused_imports)]
+
 use crewchief_maproom::context::{
     detectors::{ComponentDetector, HookDetector, JsxRelationshipDetector},
     strategies::ReactAssemblyStrategy,

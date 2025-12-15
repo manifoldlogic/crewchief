@@ -4,6 +4,7 @@
 //! incoming edges from the chunk_edges table. Different edge types
 //! contribute different weights to the importance score.
 
+use crate::config::SearchConfig;
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use tracing::{debug, instrument};
@@ -23,15 +24,22 @@ impl GraphExecutor {
     /// Execute graph importance query.
     ///
     /// # Parameters
-    /// - `client`: Database client
+    /// - `store`: Database store
     /// - `repo_id`: Repository ID to filter results
     /// - `worktree_id`: Optional worktree ID for additional filtering
     /// - `limit`: Maximum number of results (will over-fetch by 2x)
+    /// - `config`: Optional search config to control quality-weighted scoring
     ///
     /// # Returns
     /// RankedResults with graph importance scores normalized to 0.0-1.0 range
     ///
-    /// # SQL Query
+    /// # Quality-Weighted Mode
+    /// When `config.feature_flags.enable_quality_weighted_graph` is true,
+    /// uses quality-weighted edge scoring with configurable weights from
+    /// `config.graph_importance.edge_quality_weights` (SRCHREL-2002).
+    /// When false or config is None, uses legacy graph scoring.
+    ///
+    /// # SQL Query (Legacy Mode)
     /// ```sql
     /// WITH edge_counts AS (
     ///   SELECT
@@ -58,21 +66,47 @@ impl GraphExecutor {
     /// ORDER BY graph_score DESC
     /// LIMIT $3;
     /// ```
-    #[instrument(skip(store))]
+    #[instrument(skip(store, config))]
     pub async fn execute(
         store: &SqliteStore,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
+        config: Option<&SearchConfig>,
     ) -> Result<RankedResults, GraphError> {
         // Over-fetch by 2x for fusion (graph signals are less selective than FTS/vector)
-        let _fetch_limit = (limit * 2) as i64;
+        let fetch_limit = (limit * 2) as i64;
 
-        debug!("Executing graph importance query (limit: {})", limit);
+        // Extract feature flag, default to false if config not provided
+        let enable_quality = config
+            .map(|c| c.feature_flags.enable_quality_weighted_graph)
+            .unwrap_or(false);
 
-        // Delegate to SqliteStore's graph importance calculation
+        // Extract edge quality weights from config, or use defaults (SRCHREL-2002)
+        let weights = config
+            .map(|c| c.graph_importance.edge_quality_weights.clone())
+            .unwrap_or_default();
+
+        debug!(
+            repo_id = repo_id,
+            worktree_id = ?worktree_id,
+            limit = limit,
+            enable_quality = enable_quality,
+            production_code_weight = weights.production_code,
+            test_code_weight = weights.test_code,
+            calls_weight = weights.calls,
+            "Executing graph importance query"
+        );
+
+        // Delegate to SqliteStore's graph importance calculation with configurable weights
         let hits = store
-            .calculate_graph_importance(repo_id, worktree_id, _fetch_limit as usize)
+            .calculate_graph_importance(
+                repo_id,
+                worktree_id,
+                fetch_limit as usize,
+                enable_quality,
+                &weights,
+            )
             .await
             .map_err(|e| GraphError::Database(e.to_string()))?;
 
@@ -140,11 +174,124 @@ pub enum GraphError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::FeatureFlags;
 
     #[test]
     fn test_graph_executor_exists() {
         // Verify the executor type exists
         let _executor = GraphExecutor;
+    }
+
+    #[test]
+    fn test_extract_quality_flag_none_config() {
+        // None config should default to false
+        let config: Option<&SearchConfig> = None;
+        let enable_quality = config
+            .map(|c| c.feature_flags.enable_quality_weighted_graph)
+            .unwrap_or(false);
+        assert!(!enable_quality, "None config should default to false");
+    }
+
+    #[test]
+    fn test_extract_quality_flag_disabled() {
+        // Config with flag disabled should return false
+        let config = SearchConfig::default();
+        assert!(
+            !config.feature_flags.enable_quality_weighted_graph,
+            "Default config should have quality flag disabled"
+        );
+
+        let enable_quality = Some(&config)
+            .map(|c| c.feature_flags.enable_quality_weighted_graph)
+            .unwrap_or(false);
+        assert!(!enable_quality, "Disabled flag should return false");
+    }
+
+    #[test]
+    fn test_extract_quality_flag_enabled() {
+        // Config with flag enabled should return true
+        let mut config = SearchConfig::default();
+        config.feature_flags.enable_quality_weighted_graph = true;
+
+        let enable_quality = Some(&config)
+            .map(|c| c.feature_flags.enable_quality_weighted_graph)
+            .unwrap_or(false);
+        assert!(enable_quality, "Enabled flag should return true");
+    }
+
+    #[test]
+    fn test_feature_flags_quality_graph_default() {
+        // Verify the FeatureFlags default for quality weighted graph
+        let flags = FeatureFlags::default();
+        assert!(
+            !flags.enable_quality_weighted_graph,
+            "enable_quality_weighted_graph should default to false"
+        );
+    }
+
+    // ===== SRCHREL-2002: Weight Extraction Tests =====
+
+    #[test]
+    fn test_extract_weights_none_config() {
+        // None config should use default weights (SRCHREL-2002)
+        let config: Option<&SearchConfig> = None;
+        let weights = config
+            .map(|c| c.graph_importance.edge_quality_weights.clone())
+            .unwrap_or_default();
+
+        assert!(
+            (weights.production_code - 1.0).abs() < f32::EPSILON,
+            "Default production_code weight should be 1.0"
+        );
+        assert!(
+            (weights.test_code - 0.5).abs() < f32::EPSILON,
+            "Default test_code weight should be 0.5"
+        );
+        assert!(
+            (weights.calls - 1.0).abs() < f32::EPSILON,
+            "Default calls weight should be 1.0"
+        );
+    }
+
+    #[test]
+    fn test_extract_weights_from_config() {
+        // Config with custom weights should extract correctly (SRCHREL-2002)
+        let mut config = SearchConfig::default();
+        config.graph_importance.edge_quality_weights.production_code = 2.0;
+        config.graph_importance.edge_quality_weights.test_code = 0.3;
+        config.graph_importance.edge_quality_weights.calls = 1.5;
+
+        let weights = Some(&config)
+            .map(|c| c.graph_importance.edge_quality_weights.clone())
+            .unwrap_or_default();
+
+        assert!(
+            (weights.production_code - 2.0).abs() < f32::EPSILON,
+            "Custom production_code weight should be 2.0"
+        );
+        assert!(
+            (weights.test_code - 0.3).abs() < f32::EPSILON,
+            "Custom test_code weight should be 0.3"
+        );
+        assert!(
+            (weights.calls - 1.5).abs() < f32::EPSILON,
+            "Custom calls weight should be 1.5"
+        );
+    }
+
+    #[test]
+    fn test_extract_weights_default_from_config() {
+        // Config with default weights should match EdgeQualityWeights::default() (SRCHREL-2002)
+        let config = SearchConfig::default();
+
+        let weights = Some(&config)
+            .map(|c| c.graph_importance.edge_quality_weights.clone())
+            .unwrap_or_default();
+
+        assert!(
+            weights.is_default(),
+            "Default config should have default weights"
+        );
     }
 
     // Note: Full integration tests with real database are in tests/search/executors_test.rs

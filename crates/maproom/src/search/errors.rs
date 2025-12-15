@@ -307,6 +307,7 @@ impl SearchErrorDetails {
     }
 
     /// Convert an `ApiError` into structured error details.
+    #[allow(dead_code)]
     fn from_api_error(error: &ApiError) -> Self {
         match error {
             ApiError::RateLimit { retry_after_ms } => Self {

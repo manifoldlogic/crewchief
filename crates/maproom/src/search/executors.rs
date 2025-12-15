@@ -4,6 +4,7 @@
 //! parallel execution of FTS, vector, graph, and signal searches using
 //! tokio::join! for optimal performance.
 
+use crate::config::SearchConfig;
 use crate::db::SqliteStore;
 use crate::profile_scope;
 use crate::search::executor_types::RankedResults;
@@ -42,6 +43,7 @@ impl SearchExecutors {
     /// - `repo_id`: Repository ID to filter results
     /// - `worktree_id`: Optional worktree ID for additional filtering
     /// - `limit`: Maximum number of results per search strategy
+    /// - `config`: Optional search config for quality-weighted graph scoring (SRCHREL-2003)
     ///
     /// # Returns
     /// Tuple of (FTS, Vector, Graph, Signals) RankedResults
@@ -53,13 +55,14 @@ impl SearchExecutors {
     /// - Graph: ~10-20ms
     /// - Signals: ~5-10ms
     /// - Parallel execution should complete in ~50-80ms
-    #[instrument(skip(self, query), fields(original = %query.original, mode = ?query.mode))]
+    #[instrument(skip(self, query, config), fields(original = %query.original, mode = ?query.mode))]
     pub async fn execute_all(
         &self,
         query: &ProcessedQuery,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
+        config: Option<&SearchConfig>,
     ) -> Result<SearchResults, ExecutorError> {
         profile_scope!("search_execute_all");
         let start = Instant::now();
@@ -98,8 +101,8 @@ impl SearchExecutors {
                 worktree_id,
                 limit
             ),
-            // Graph importance
-            GraphExecutor::execute(&self.store, repo_id, worktree_id, limit),
+            // Graph importance with config for quality-weighted scoring (SRCHREL-2003)
+            GraphExecutor::execute(&self.store, repo_id, worktree_id, limit, config),
             // Temporal signals
             SignalExecutor::execute(&self.store, repo_id, worktree_id),
         );

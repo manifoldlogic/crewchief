@@ -2,11 +2,13 @@
 //!
 //! This test file is currently disabled pending dependency updates.
 //! It tests the VectorStore trait across different backends.
+//!
+//! NOTE: This file is disabled because the required features don't exist.
+//! Re-enable when store compatibility testing is needed.
 
-#![cfg(all(
-    feature = "sqlite",
-    feature = "store_compat_test_deps"  // Enable when rand/tempfile added to dev-deps
-))]
+// Always disabled - these features don't exist
+// Use cfg(any()) which is always false to disable compilation
+#![cfg(any())]
 
 use anyhow::Result;
 use crewchief_maproom::db::{

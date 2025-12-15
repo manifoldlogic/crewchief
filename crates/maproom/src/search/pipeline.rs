@@ -24,11 +24,12 @@
 //! - Fusion: ~2-5ms
 //! - Assembly: ~5-10ms
 
+use crate::config::SearchConfig;
 use crate::metrics::get_metrics;
 use crate::search::dedup::{self, DeduplicationConfig};
 use crate::search::executor_types::SearchSource;
 use crate::search::executors::SearchExecutors;
-use crate::search::fusion::{BasicWeightedFusion, FusedResult, ScoreFusion};
+use crate::search::fusion::{BasicWeightedFusion, FusedResult, FusionWeights, ScoreFusion};
 use crate::search::query_processor::QueryProcessor;
 use crate::search::results::{
     ChunkSearchResult, FinalSearchResults, QueryFilters, QueryProcessingDetails,
@@ -54,6 +55,9 @@ pub struct SearchPipeline {
     /// Score fusion strategy (Basic weighted fusion in Phase 2)
     fusion: Box<dyn ScoreFusion>,
 
+    /// Search configuration for quality-weighted graph scoring (SRCHREL-2003)
+    config: Option<SearchConfig>,
+
     /// Optional cross-encoder for reranking (None in Phase 2)
     #[allow(dead_code)]
     reranker: Option<()>, // Placeholder for Phase 3
@@ -68,6 +72,7 @@ impl SearchPipeline {
             processor,
             executors,
             fusion: Box::new(BasicWeightedFusion::new()),
+            config: None,
             reranker: None,
         }
     }
@@ -82,13 +87,115 @@ impl SearchPipeline {
             processor,
             executors,
             fusion,
+            config: None,
             reranker: None,
         }
+    }
+
+    /// Create a SearchPipeline with search configuration (SRCHREL-2003).
+    ///
+    /// Uses the provided configuration for quality-weighted graph scoring
+    /// and fusion weight overrides.
+    pub fn with_config(
+        processor: Arc<QueryProcessor>,
+        executors: SearchExecutors,
+        config: SearchConfig,
+    ) -> Self {
+        Self {
+            processor,
+            executors,
+            fusion: Box::new(BasicWeightedFusion::new()),
+            config: Some(config),
+            reranker: None,
+        }
+    }
+
+    /// Create a SearchPipeline with both config and custom fusion strategy.
+    pub fn with_config_and_fusion(
+        processor: Arc<QueryProcessor>,
+        executors: SearchExecutors,
+        config: SearchConfig,
+        fusion: Box<dyn ScoreFusion>,
+    ) -> Self {
+        Self {
+            processor,
+            executors,
+            fusion,
+            config: Some(config),
+            reranker: None,
+        }
+    }
+
+    /// Get reference to the current configuration.
+    pub fn config(&self) -> Option<&SearchConfig> {
+        self.config.as_ref()
+    }
+
+    /// Update the search configuration (supports hot reload).
+    pub fn set_config(&mut self, config: SearchConfig) {
+        self.config = Some(config);
     }
 
     /// Get reference to the database store (for testing and utilities).
     pub fn store(&self) -> &crate::db::SqliteStore {
         self.executors.store()
+    }
+
+    /// Calculate fusion weights, applying config overrides if present (SRCHREL-2003).
+    ///
+    /// If `config.graph_importance.fusion_weight_override` is set, uses that value
+    /// for the graph weight and renormalizes other weights proportionally.
+    ///
+    /// # Weight Override Logic
+    /// 1. Start with weights from options or defaults
+    /// 2. If graph weight override is set, apply it
+    /// 3. Renormalize other weights to sum to (1.0 - graph_override)
+    ///
+    /// # Example
+    /// If original weights are {fts: 0.4, vector: 0.35, graph: 0.1, recency: 0.1, churn: 0.05}
+    /// and override is 0.2, the result will be:
+    /// - remaining = 1.0 - 0.2 = 0.8
+    /// - scale = 0.8 / (0.4 + 0.35 + 0.1 + 0.05) = 0.8 / 0.9 = 0.889
+    /// - {fts: 0.356, vector: 0.311, graph: 0.2, recency: 0.089, churn: 0.044}
+    fn calculate_fusion_weights(&self, options: &SearchOptions) -> FusionWeights {
+        let mut weights = options.get_fusion_weights();
+
+        // Apply config override if present
+        if let Some(config) = &self.config {
+            if let Some(graph_override) = config.graph_importance.fusion_weight_override {
+                debug!(
+                    "Applying graph fusion weight override: {} -> {}",
+                    weights.graph, graph_override
+                );
+
+                // Calculate how much weight is currently distributed to non-graph signals
+                let non_graph_sum = weights.fts + weights.vector + weights.recency + weights.churn;
+
+                if non_graph_sum > 0.0001 {
+                    // Calculate the remaining weight after applying the override
+                    let remaining = 1.0 - graph_override;
+
+                    // Scale non-graph weights to fit in the remaining space
+                    let scale = remaining / non_graph_sum;
+
+                    weights.fts *= scale;
+                    weights.vector *= scale;
+                    weights.recency *= scale;
+                    weights.churn *= scale;
+                    weights.graph = graph_override;
+
+                    debug!(
+                        "Renormalized fusion weights: fts={:.3}, vector={:.3}, graph={:.3}, recency={:.3}, churn={:.3}",
+                        weights.fts, weights.vector, weights.graph, weights.recency, weights.churn
+                    );
+                } else {
+                    // Edge case: all non-graph weights are zero, just set graph weight
+                    weights.graph = graph_override;
+                }
+            }
+        }
+
+        weights
     }
 
     /// Execute the complete search pipeline.
@@ -152,7 +259,8 @@ impl SearchPipeline {
                 &processed,
                 options.repo_id,
                 options.worktree_id,
-                options.limit * 3, // Fetch more for better fusion
+                options.limit * 3,    // Fetch more for better fusion
+                self.config.as_ref(), // Pass config for quality-weighted graph scoring (SRCHREL-2003)
             )
             .await
         {
@@ -183,7 +291,7 @@ impl SearchPipeline {
 
         // Stage 3: Fuse scores
         let fusion_start = Instant::now();
-        let fusion_weights = options.get_fusion_weights();
+        let fusion_weights = self.calculate_fusion_weights(&options);
 
         // Extract metadata before moving search_results
         let total_unique_chunks = search_results.total_unique_chunks();
@@ -602,6 +710,7 @@ pub enum PipelineError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::GraphImportanceConfig;
 
     // Note: Full integration tests are in tests/search_pipeline_integration_test.rs
     // These are unit tests for helper functions
@@ -621,5 +730,213 @@ mod tests {
         assert_eq!(details.file_id, 1);
         assert_eq!(details.relpath, "src/main.rs");
         assert_eq!(details.symbol_name, Some("main".to_string()));
+    }
+
+    // ===== SRCHREL-2003: Fusion Weight Override Tests =====
+
+    /// Helper to create a minimal SearchPipeline for testing calculate_fusion_weights.
+    /// Note: This doesn't set up a real processor/executors, just tests the weight logic.
+    fn create_test_pipeline_with_config(
+        config: Option<SearchConfig>,
+    ) -> TestPipelineWeightCalculator {
+        TestPipelineWeightCalculator { config }
+    }
+
+    /// Test helper struct that mirrors SearchPipeline's weight calculation logic.
+    struct TestPipelineWeightCalculator {
+        config: Option<SearchConfig>,
+    }
+
+    impl TestPipelineWeightCalculator {
+        fn calculate_fusion_weights(&self, options: &SearchOptions) -> FusionWeights {
+            let mut weights = options.get_fusion_weights();
+
+            if let Some(config) = &self.config {
+                if let Some(graph_override) = config.graph_importance.fusion_weight_override {
+                    let non_graph_sum =
+                        weights.fts + weights.vector + weights.recency + weights.churn;
+
+                    if non_graph_sum > 0.0001 {
+                        let remaining = 1.0 - graph_override;
+                        let scale = remaining / non_graph_sum;
+
+                        weights.fts *= scale;
+                        weights.vector *= scale;
+                        weights.recency *= scale;
+                        weights.churn *= scale;
+                        weights.graph = graph_override;
+                    } else {
+                        weights.graph = graph_override;
+                    }
+                }
+            }
+
+            weights
+        }
+    }
+
+    #[test]
+    fn test_calculate_fusion_weights_no_config() {
+        // Without config, should use default weights
+        let pipeline = create_test_pipeline_with_config(None);
+        let options = SearchOptions::new(1, None, 10);
+
+        let weights = pipeline.calculate_fusion_weights(&options);
+
+        // Should match FusionWeights::default()
+        assert!(
+            (weights.fts - 0.4).abs() < f32::EPSILON,
+            "FTS weight should be 0.4"
+        );
+        assert!(
+            (weights.vector - 0.35).abs() < f32::EPSILON,
+            "Vector weight should be 0.35"
+        );
+        assert!(
+            (weights.graph - 0.1).abs() < f32::EPSILON,
+            "Graph weight should be 0.1"
+        );
+        assert!(
+            (weights.recency - 0.1).abs() < f32::EPSILON,
+            "Recency weight should be 0.1"
+        );
+        assert!(
+            (weights.churn - 0.05).abs() < f32::EPSILON,
+            "Churn weight should be 0.05"
+        );
+    }
+
+    #[test]
+    fn test_calculate_fusion_weights_config_without_override() {
+        // Config without override should use default weights
+        let config = SearchConfig::default();
+        assert!(
+            config.graph_importance.fusion_weight_override.is_none(),
+            "Default config should not have fusion override"
+        );
+
+        let pipeline = create_test_pipeline_with_config(Some(config));
+        let options = SearchOptions::new(1, None, 10);
+
+        let weights = pipeline.calculate_fusion_weights(&options);
+
+        // Should match FusionWeights::default()
+        assert!((weights.fts - 0.4).abs() < f32::EPSILON);
+        assert!((weights.graph - 0.1).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_fusion_weights_with_override() {
+        // Config with override should renormalize other weights
+        let mut config = SearchConfig::default();
+        config.graph_importance.fusion_weight_override = Some(0.2);
+
+        let pipeline = create_test_pipeline_with_config(Some(config));
+        let options = SearchOptions::new(1, None, 10);
+
+        let weights = pipeline.calculate_fusion_weights(&options);
+
+        // Graph should be exactly the override
+        assert!(
+            (weights.graph - 0.2).abs() < f32::EPSILON,
+            "Graph weight should be override value 0.2"
+        );
+
+        // Other weights should be renormalized
+        // Original non-graph sum: 0.4 + 0.35 + 0.1 + 0.05 = 0.9
+        // Remaining: 1.0 - 0.2 = 0.8
+        // Scale: 0.8 / 0.9 = 0.8889
+        let expected_scale = 0.8 / 0.9;
+        assert!(
+            (weights.fts - 0.4 * expected_scale).abs() < 0.001,
+            "FTS should be scaled: expected {}, got {}",
+            0.4 * expected_scale,
+            weights.fts
+        );
+        assert!(
+            (weights.vector - 0.35 * expected_scale).abs() < 0.001,
+            "Vector should be scaled"
+        );
+        assert!(
+            (weights.recency - 0.1 * expected_scale).abs() < 0.001,
+            "Recency should be scaled"
+        );
+        assert!(
+            (weights.churn - 0.05 * expected_scale).abs() < 0.001,
+            "Churn should be scaled"
+        );
+
+        // Total should still be 1.0
+        let total = weights.fts + weights.vector + weights.graph + weights.recency + weights.churn;
+        assert!(
+            (total - 1.0).abs() < 0.001,
+            "Total weights should be 1.0, got {}",
+            total
+        );
+    }
+
+    #[test]
+    fn test_calculate_fusion_weights_high_override() {
+        // High override value (e.g., 0.5) should still normalize correctly
+        let mut config = SearchConfig::default();
+        config.graph_importance.fusion_weight_override = Some(0.5);
+
+        let pipeline = create_test_pipeline_with_config(Some(config));
+        let options = SearchOptions::new(1, None, 10);
+
+        let weights = pipeline.calculate_fusion_weights(&options);
+
+        assert!(
+            (weights.graph - 0.5).abs() < f32::EPSILON,
+            "Graph weight should be 0.5"
+        );
+
+        // Total should still be 1.0
+        let total = weights.fts + weights.vector + weights.graph + weights.recency + weights.churn;
+        assert!(
+            (total - 1.0).abs() < 0.001,
+            "Total weights should be 1.0, got {}",
+            total
+        );
+    }
+
+    #[test]
+    fn test_calculate_fusion_weights_preserves_custom_options() {
+        // Options with custom weights should be respected, then override applied
+        let mut config = SearchConfig::default();
+        config.graph_importance.fusion_weight_override = Some(0.15);
+
+        let pipeline = create_test_pipeline_with_config(Some(config));
+
+        // Create options with custom fusion weights
+        let custom_weights = FusionWeights::new(0.5, 0.3, 0.1, 0.07, 0.03);
+        let options = SearchOptions::new(1, None, 10).with_fusion_weights(custom_weights);
+
+        let weights = pipeline.calculate_fusion_weights(&options);
+
+        // Graph should be exactly the override
+        assert!(
+            (weights.graph - 0.15).abs() < f32::EPSILON,
+            "Graph weight should be override value 0.15"
+        );
+
+        // Original non-graph sum: 0.5 + 0.3 + 0.07 + 0.03 = 0.9
+        // Remaining: 1.0 - 0.15 = 0.85
+        // Scale: 0.85 / 0.9 = 0.9444
+        let expected_scale = 0.85 / 0.9;
+        assert!(
+            (weights.fts - 0.5 * expected_scale).abs() < 0.001,
+            "FTS should be scaled from custom weight"
+        );
+    }
+
+    #[test]
+    fn test_graph_importance_config_default_no_override() {
+        // Verify GraphImportanceConfig default has no fusion override
+        let config = GraphImportanceConfig::default();
+        assert!(
+            config.fusion_weight_override.is_none(),
+            "Default GraphImportanceConfig should have no fusion override"
+        );
     }
 }

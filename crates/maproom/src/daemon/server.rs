@@ -523,6 +523,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires embedding provider (Ollama)
     async fn test_multiple_clients_concurrent() {
         use tokio::net::UnixStream;
 
@@ -616,6 +617,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires embedding provider (Ollama)
     async fn test_session_cleanup_on_disconnect() {
         use tokio::net::UnixStream;
 
@@ -658,6 +660,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires embedding provider (Ollama)
     async fn test_idle_timeout_triggers() {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
@@ -706,6 +709,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires embedding provider (Ollama)
     async fn test_active_client_prevents_idle_timeout() {
         use tokio::net::UnixStream;
 
@@ -753,6 +757,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires embedding provider (Ollama)
     async fn test_graceful_shutdown_waits_for_sessions() {
         use tokio::net::UnixStream;
 

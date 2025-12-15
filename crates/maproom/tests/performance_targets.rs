@@ -32,7 +32,6 @@
 //! - Cache hit: >60%
 
 use std::env;
-use std::time::{Duration, Instant};
 
 /// Performance targets from PERF_OPT_PLAN.md lines 121-126.
 #[derive(Debug, Clone)]
