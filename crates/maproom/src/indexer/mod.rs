@@ -181,7 +181,11 @@ async fn process_python_imports(
 async fn insert_edges(store: &SqliteStore, edges: &[Edge]) -> Result<()> {
     for edge in edges {
         store
-            .insert_chunk_edge(edge.src_chunk_id, edge.dst_chunk_id, edge.edge_type.as_str())
+            .insert_chunk_edge(
+                edge.src_chunk_id,
+                edge.dst_chunk_id,
+                edge.edge_type.as_str(),
+            )
             .await?;
     }
     Ok(())

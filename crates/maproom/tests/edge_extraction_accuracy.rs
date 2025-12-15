@@ -271,7 +271,7 @@ async fn test_accuracy_complex_repo() {
     expected_edges.insert(EdgePair::new("orchestrate", "inner"));
     expected_edges.insert(EdgePair::new("orchestrate", "helper"));
     expected_edges.insert(EdgePair::new("orchestrate", "map"));
-    expected_edges.insert(EdgePair::new("process", "double"));  // Arrow function should be detected
+    expected_edges.insert(EdgePair::new("process", "double")); // Arrow function should be detected
 
     // Get actual edges
     let actual_edges = get_actual_edges(&store).await;

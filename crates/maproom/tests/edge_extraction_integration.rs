@@ -35,7 +35,12 @@ async fn get_edge_count(store: &SqliteStore) -> i64 {
 }
 
 /// Helper to check if a specific edge exists
-async fn has_edge(store: &SqliteStore, src_symbol: &str, dst_symbol: &str, edge_type: &str) -> bool {
+async fn has_edge(
+    store: &SqliteStore,
+    src_symbol: &str,
+    dst_symbol: &str,
+    edge_type: &str,
+) -> bool {
     let src = src_symbol.to_string();
     let dst = dst_symbol.to_string();
     let etype = edge_type.to_string();
@@ -88,10 +93,7 @@ async fn test_scan_creates_edges_simple() {
 
     // Verify specific edge: calculate → add
     let has_calculate_to_add = has_edge(&store, "calculate", "add", "calls").await;
-    assert!(
-        has_calculate_to_add,
-        "Expected edge from calculate to add"
-    );
+    assert!(has_calculate_to_add, "Expected edge from calculate to add");
 
     // Verify specific edge: calculate → multiply
     let has_calculate_to_multiply = has_edge(&store, "calculate", "multiply", "calls").await;
@@ -131,10 +133,7 @@ async fn test_scan_creates_edges_methods() {
 
     // Verify specific edges
     let has_multiply_to_add = has_edge(&store, "multiply", "add", "calls").await;
-    assert!(
-        has_multiply_to_add,
-        "Expected edge from multiply to add"
-    );
+    assert!(has_multiply_to_add, "Expected edge from multiply to add");
 
     let has_compute_to_add = has_edge(&store, "compute", "add", "calls").await;
     assert!(has_compute_to_add, "Expected edge from compute to add");

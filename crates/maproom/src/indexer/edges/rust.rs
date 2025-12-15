@@ -6,18 +6,20 @@
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use tree_sitter::{Node, Parser};
 use tracing::{debug, trace, warn};
+use tree_sitter::{Node, Parser};
 
-use super::{ChunkWithId, Edge, EdgeType};
 use super::common::{build_symbol_table, find_enclosing_chunk};
+use super::{ChunkWithId, Edge, EdgeType};
 
 /// Extract call edges from Rust source
 pub fn extract_calls(source: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
     // Parse source with tree-sitter
     let mut parser = Parser::new();
     let language = tree_sitter_rust::language();
-    parser.set_language(&language).context("Failed to set Rust language")?;
+    parser
+        .set_language(&language)
+        .context("Failed to set Rust language")?;
 
     let tree = match parser.parse(source, None) {
         Some(t) => t,
@@ -77,7 +79,10 @@ fn process_call_expression(
     let callee_name = match extract_function_identifier(node, source) {
         Some(name) => name,
         None => {
-            trace!("Could not extract function identifier from call at line {}", node.start_position().row + 1);
+            trace!(
+                "Could not extract function identifier from call at line {}",
+                node.start_position().row + 1
+            );
             return;
         }
     };
@@ -97,7 +102,10 @@ fn process_method_call_expression(
     let method_node = match node.child_by_field_name("method") {
         Some(n) => n,
         None => {
-            trace!("Method call at line {} has no method field", node.start_position().row + 1);
+            trace!(
+                "Method call at line {} has no method field",
+                node.start_position().row + 1
+            );
             return;
         }
     };
@@ -105,7 +113,10 @@ fn process_method_call_expression(
     let method_name = match method_node.utf8_text(source.as_bytes()).ok() {
         Some(name) => name.to_string(),
         None => {
-            trace!("Could not extract method name at line {}", node.start_position().row + 1);
+            trace!(
+                "Could not extract method name at line {}",
+                node.start_position().row + 1
+            );
             return;
         }
     };
@@ -141,12 +152,18 @@ fn extract_function_identifier(node: &Node, source: &str) -> Option<String> {
 fn extract_rightmost_identifier(node: &Node, source: &str) -> Option<String> {
     // For scoped_identifier, the rightmost part is the "name" field
     if let Some(name_node) = node.child_by_field_name("name") {
-        return name_node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+        return name_node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string());
     }
 
     // For field_expression, the rightmost part is the "field" field
     if let Some(field_node) = node.child_by_field_name("field") {
-        return field_node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+        return field_node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string());
     }
 
     // Fallback: try to get text of entire node
@@ -168,7 +185,10 @@ fn resolve_and_create_edge(
     let callee_id = match symbol_table.get(callee_name) {
         Some(&id) => id,
         None => {
-            trace!("Unresolved call: {} (may be cross-crate or built-in)", callee_name);
+            trace!(
+                "Unresolved call: {} (may be cross-crate or built-in)",
+                callee_name
+            );
             return;
         }
     };
@@ -287,16 +307,14 @@ mod tests {
             }
         "#;
 
-        let chunks = vec![
-            ChunkWithId {
-                id: 1,
-                symbol_name: Some("foo".to_string()),
-                kind: "function".to_string(),
-                start_line: 2,
-                end_line: 4,
-                file_id: 100,
-            },
-        ];
+        let chunks = vec![ChunkWithId {
+            id: 1,
+            symbol_name: Some("foo".to_string()),
+            kind: "function".to_string(),
+            start_line: 2,
+            end_line: 4,
+            file_id: 100,
+        }];
 
         let edges = extract_calls(source, &chunks).unwrap();
 
@@ -359,7 +377,10 @@ mod tests {
 
         assert_eq!(edges.len(), 2, "Should find two calls");
         assert!(edges.iter().any(|e| e.dst_chunk_id == 1), "Should call add");
-        assert!(edges.iter().any(|e| e.dst_chunk_id == 2), "Should call subtract");
+        assert!(
+            edges.iter().any(|e| e.dst_chunk_id == 2),
+            "Should call subtract"
+        );
     }
 
     #[test]

@@ -146,15 +146,12 @@ impl EdgeUpdater {
 
         // Check if this is a TypeScript/JavaScript file
         let language = match language {
-            Some(lang) if matches!(lang.as_str(), "ts" | "tsx" | "js" | "jsx") => {
-                lang
-            }
+            Some(lang) if matches!(lang.as_str(), "ts" | "tsx" | "js" | "jsx") => lang,
             _ => {
                 // No edge extraction for this language
                 debug!(
                     file_id = file_id,
-                    "No edge extraction for language {:?}",
-                    language
+                    "No edge extraction for language {:?}", language
                 );
                 return Ok(());
             }
@@ -162,8 +159,14 @@ impl EdgeUpdater {
 
         // Read file content (join root path with relpath)
         let full_path = std::path::Path::new(&root_path).join(&relpath);
-        let content = std::fs::read_to_string(&full_path)
-            .with_context(|| format!("Failed to read file: {} (root: {}, relpath: {})", full_path.display(), root_path, relpath))?;
+        let content = std::fs::read_to_string(&full_path).with_context(|| {
+            format!(
+                "Failed to read file: {} (root: {}, relpath: {})",
+                full_path.display(),
+                root_path,
+                relpath
+            )
+        })?;
 
         // Load chunks for this file
         let chunks_with_ids: Vec<ChunkWithId> = self
@@ -194,7 +197,11 @@ impl EdgeUpdater {
         // Insert edges
         for edge in edges_to_insert {
             self.store
-                .insert_chunk_edge(edge.src_chunk_id, edge.dst_chunk_id, edge.edge_type.as_str())
+                .insert_chunk_edge(
+                    edge.src_chunk_id,
+                    edge.dst_chunk_id,
+                    edge.edge_type.as_str(),
+                )
                 .await?;
         }
 
