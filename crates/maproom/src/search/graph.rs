@@ -4,7 +4,7 @@
 //! incoming edges from the chunk_edges table. Different edge types
 //! contribute different weights to the importance score.
 
-use crate::config::{EdgeQualityWeights, SearchConfig};
+use crate::config::SearchConfig;
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use tracing::{debug, instrument};

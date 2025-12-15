@@ -1,9 +1,9 @@
 # Ticket: SRCHREL-2003 - Pipeline Integration
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - search-engineer
@@ -16,13 +16,13 @@ Load configuration in search pipeline initialization and pass it to graph execut
 
 ## Acceptance Criteria
 
-- [ ] Load `SearchConfig` in search pipeline initialization
-- [ ] Pass config to `GraphExecutor::execute()`
-- [ ] Implement fusion weight override from `graph_importance.fusion_weight_override`
-- [ ] Config changes reflected in search results (no restart needed if hot reload exists)
-- [ ] Integration test verifies config propagates correctly
-- [ ] Fusion weight override renormalizes other weights
-- [ ] Default fusion weight (0.10) used if no override
+- [x] Load `SearchConfig` in search pipeline initialization
+- [x] Pass config to `GraphExecutor::execute()`
+- [x] Implement fusion weight override from `graph_importance.fusion_weight_override`
+- [x] Config changes reflected in search results (no restart needed if hot reload exists)
+- [x] Integration test verifies config propagates correctly
+- [x] Fusion weight override renormalizes other weights
+- [x] Default fusion weight (0.10) used if no override
 
 ## Technical Requirements
 
