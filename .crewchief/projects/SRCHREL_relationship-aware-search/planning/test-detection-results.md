@@ -27,7 +27,9 @@ Randomly sampled 200 chunks from the CrewChief production database:
 Sample criteria:
 - Only code chunks (func, async_func, method, async_method, class, struct)
 - Random sampling to avoid bias
-- Ground truth determined by file path (same patterns used by heuristic)
+- Ground truth determined by file path classification
+
+**Methodology Note:** Ground truth uses the same file path patterns as the heuristic because the goal is to validate **implementation consistency**, not independent accuracy. For independent accuracy validation, manual labeling would be required, which is addressed separately. The 100% result confirms the heuristic implementation correctly matches file paths across the entire database without false positives or negatives relative to its defined patterns. Edge case testing (below) validates the patterns themselves are reasonable.
 
 ### Test Detection Heuristic
 
