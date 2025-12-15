@@ -236,6 +236,11 @@ export default {
 3. Global install (`npm install -g @crewchief/cli`)
 4. Packaged binary
 
+**Path Resolution:**
+- Absolute paths: Always resolve correctly (recommended)
+- Relative paths: Resolve relative to config file location for most commands
+- For consistency, use absolute paths or ensure commands run from project root
+
 **Use cases:**
 - Local development with Rust builds
 - Custom binary locations

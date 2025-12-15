@@ -4,369 +4,288 @@
 
 ### Overview
 
-This project adds configuration-based binary path resolution, which introduces a potential attack vector: **arbitrary binary execution**. The primary security concern is preventing malicious configuration files from executing untrusted binaries.
+This project completes an existing configuration feature for specifying custom binary paths. Security considerations are minimal since:
+- No new attack surface (config already loads arbitrary JavaScript)
+- No network communication
+- No sensitive data handling
+- No authentication/authorization changes
 
-**Risk Level:** Medium (local execution context, user controls config files)
+**Risk Level: LOW**
 
-**Threat Model:**
-- Attacker modifies crewchief.config.js to point to malicious binary
-- User runs crewchief command
-- Malicious binary executes with user's permissions
-
-**Mitigations:**
-- Config files are local (user must have write access to repository)
-- No remote config loading
-- Environment variable override exists for emergency recovery
-- Explicit user action required (running CLI command)
+The primary security concern is **arbitrary code execution via config files**, which is an existing, accepted risk of the JavaScript config file pattern.
 
 ### Authentication & Authorization
 
-**Not Applicable** - This is a local CLI tool with no authentication or user accounts.
+**Not applicable.** This project does not involve:
+- User authentication
+- Access control
+- API endpoints
+- Multi-user systems
 
-**Access Control:**
-- Binary execution runs with user's file system permissions
-- No privilege escalation
-- No sudo/root required
-
-**Config File Permissions:**
-- crewchief.config.js must be writable by user (normal file permissions)
-- crewchief.config.local.js is gitignored (not shared across team)
-- Malicious config requires local write access (already compromised)
+The config file is local to the developer's machine and requires filesystem access to modify.
 
 ### Data Protection
 
-**Sensitive Data:** None
+**No sensitive data involved.**
 
-**Config File Contents:**
-- Binary paths (file system locations)
-- No credentials or secrets
-- No personally identifiable information (PII)
-- No API keys or tokens
+**Data handled:**
+1. Config file path (filesystem path)
+2. Binary path (filesystem path)
+3. Environment variable value (CREWCHIEF_MAPROOM_BIN)
 
-**Environment Variables:**
-- CREWCHIEF_MAPROOM_BIN contains file path (not sensitive)
-- No secrets in environment variables
+**None of these are sensitive.** All are local filesystem paths on the developer's machine.
+
+**No encryption needed:** Paths are not secrets and are stored in plaintext config files by design.
 
 ### Input Validation
 
-#### Config File Validation
+**Config validation:** Already implemented via Zod schema
 
-**Zod Schema Validation:**
 ```typescript
-maproomBinaryPath: z.string().optional()
+export const RepositorySchema = z.object({
+  maproomBinaryPath: z.string().optional(),
+})
 ```
 
-**Current Validation:**
-- Type check: Must be string (Zod enforces)
-- Optional: Default is undefined (safe)
-- No format validation (intentional - allows flexibility)
+**Validation coverage:**
+- ✅ Type validation (must be string or undefined)
+- ✅ Optional field (won't crash if missing)
+- ❌ Path validation (no check if path is safe)
 
-**Missing Validation:**
-- No path sanitization (accepts any string)
-- No allowlist of approved binaries
-- No signature verification
+**Path injection risks:**
 
-**Risk Assessment:**
-- **Medium Risk**: Malicious config can specify any binary path
-- **Acceptable for MVP**: User controls config file (trusted input)
-- **Future Enhancement**: Add optional path allowlist
+| Attack Vector | Risk | Mitigation |
+|---------------|------|------------|
+| Path traversal (../../etc/passwd) | Low | Binary execution requires file to exist; OS prevents executing non-binaries |
+| Absolute path to system binary (/bin/rm) | Medium | User could point to destructive system binary |
+| Symlink to system binary | Medium | Same as above |
+| Binary with malicious code | High | User explicitly configures their own binary - assumed trusted |
 
-#### Path Resolution Security
+**Mitigation strategy:**
+- **Accepted risk**: Config files execute arbitrary JavaScript already (more dangerous than binary paths)
+- **Trust model**: Developer controls their own config file
+- **No validation added**: Would be security theater (config can execute arbitrary code anyway)
+- **Documentation**: Clearly state config file should be gitignored (already true for .local.js)
 
-**Relative Path Handling:**
-```typescript
-const resolved = path.resolve(options.configPath)
-```
-
-**Security Properties:**
-- `path.resolve()` normalizes paths (prevents ../ traversal)
-- Absolute paths used as-is (no normalization needed)
-- No URL parsing (no protocol injection)
-
-**Potential Issues:**
-- Symlink following (resolved path might point elsewhere)
-- Relative paths could escape repository (e.g., ../../../usr/bin/malicious)
-
-**Risk Assessment:**
-- **Low Risk**: User must create malicious symlink/config themselves
-- **Acceptable**: Matches existing file system behavior
-
-#### Binary Execution Security
-
-**Execution Pattern:**
-```typescript
-spawnSync(result.path, args, { stdio: 'inherit' })
-```
-
-**Security Properties:**
-- Direct execution (no shell interpretation)
-- Arguments passed as array (no injection)
-- stdio inheritance (no output manipulation)
-- Synchronous (blocks until completion)
-
-**Potential Issues:**
-- No binary signature verification
-- No hash checking
-- Trust on first use (no pinning)
-
-**Risk Assessment:**
-- **Low Risk**: Same as user running the binary directly
-- **Acceptable**: CLI tools typically trust binaries on PATH
+**Decision:** No additional path validation. The trust model assumes developers control their own environment.
 
 ### Known Gaps
 
 | Gap | Risk Level | Mitigation | Status |
 |-----|------------|------------|--------|
-| No binary signature verification | Medium | User controls config file, manual verification required | Accepted for MVP |
-| No path allowlist | Medium | Document trusted binary locations in security docs | Accepted for MVP |
-| Symlink following | Low | Standard file system behavior, user responsibility | Accepted |
-| No hash pinning | Low | Binary updates are expected, hash would break | Accepted |
-| Config file tampering | High | Require code review for config changes in PRs | Accepted |
-| Environment variable injection | Low | User controls environment, expected behavior | Accepted |
+| No validation of binary path safety | Low | Developer controls config, assumed trusted | Accepted |
+| Config executes arbitrary JavaScript | High | Inherent to JS config pattern, matches industry standards | Accepted |
+| Relative paths could escape project | Low | Resolved relative to config file location | Accepted |
+| No binary signature verification | Medium | Out of scope for local development tool | Accepted |
 
-### Additional Security Considerations
+### Command Injection
 
-#### Supply Chain Security
+**Scenario:** Could a malicious binary path cause command injection?
 
-**Risk:** Malicious binary distributed via npm package
-
-**Mitigation:**
-- Binaries built from source in CI (GitHub Actions)
-- Release process requires code review
-- npm package signing (npm provenance)
-
-**Not in scope for this project** - Existing release process handles this
-
-#### File System Security
-
-**Risk:** Unauthorized write access to config file
-
-**Mitigation:**
-- Standard file system permissions
-- crewchief.config.local.js is gitignored (not committed)
-- Code review for crewchief.config.js changes
-
-**Best Practice:**
-```bash
-# Prevent accidental commits
-echo 'crewchief.config.local.js' >> .gitignore
-
-# Restrict permissions (optional)
-chmod 600 crewchief.config.local.js
-```
-
-#### Command Injection
-
-**Risk:** Config path contains shell metacharacters
-
-**Assessment:** **Not vulnerable**
-- `spawnSync` does not invoke shell
-- Path passed as string argument (not interpolated)
-- No eval or exec usage
-
-**Example Safe Handling:**
+**Analysis:**
 ```typescript
-// Safe - no shell interpretation
-spawnSync('/path/with spaces/binary', ['arg1', 'arg2'])
+const result = findMaproomBinary({
+  configPath: config.repository.maproomBinaryPath
+})
 
-// Unsafe (NOT used in this project)
-exec(`${configPath} arg1 arg2`)  // DON'T DO THIS
+spawnSync(result.path, args, { stdio: 'inherit' })
 ```
 
-#### Path Traversal
+**Risk:** Low
+- Binary path is used directly in `spawnSync`, not shell-interpreted
+- No string concatenation or interpolation
+- Args are controlled by CLI, not config
 
-**Risk:** Config path escapes intended directory
+**Mitigation:** None needed. `spawnSync` doesn't invoke a shell by default.
 
-**Assessment:** **Low risk, acceptable**
-- Relative paths are allowed (intentional)
-- User controls config file (trusted input)
-- No remote config loading
+**Edge case:** What if path contains shell metacharacters like `;` or `|`?
+- **Not a risk**: spawnSync treats path as literal string, doesn't interpret shell syntax
 
-**Example:**
+### Arbitrary Code Execution
+
+**Primary risk:** Config file can execute arbitrary JavaScript during import.
+
+**Example attack:**
 ```javascript
-// Allowed (user may want this)
+// crewchief.config.local.js
+import { execSync } from 'child_process'
+execSync('rm -rf /')  // Malicious code
+
 export default {
   repository: {
-    maproomBinaryPath: '../../../usr/local/bin/crewchief-maproom'
+    maproomBinaryPath: './safe/path'
   }
 }
 ```
+
+**Risk level:** HIGH (but accepted)
+
+**Mitigations:**
+1. **Config file is local** - attacker needs filesystem access
+2. **Gitignored** - .local.js files not committed, can't inject via git
+3. **Standard pattern** - Same risk as tsconfig.json, .eslintrc.js, etc.
+4. **Documentation** - Clearly state .local.js should be gitignored
+
+**Decision:** Accepted risk. This is standard for JavaScript tooling.
+
+### Privilege Escalation
+
+**Could this feature enable privilege escalation?**
+
+**Scenarios:**
+1. Point to setuid binary → Execute with elevated privileges
+2. Point to system binary → Execute system commands
+3. Point to malicious binary → Run attacker code
+
+**Analysis:**
+- Binary runs with user's privileges (no elevation)
+- User already controls environment (can run any binary directly)
+- Config merely provides convenience (vs. env var or direct execution)
+
+**Risk:** None. No privilege escalation possible beyond what user already has.
+
+### Dependencies
+
+**No new dependencies introduced.**
+
+**Existing dependencies:**
+- Zod (schema validation) - well-maintained, widely used
+- Node.js built-ins (fs, path, child_process) - no CVE concerns
+
+**Supply chain risk:** Not applicable to this change.
 
 ## MVP Security Scope
 
-### In Scope for MVP
+### In Scope
 
-- [x] Zod validation of config schema
-- [x] Path resolution (normalize paths)
-- [x] Safe binary execution (no shell)
-- [x] Warning on invalid paths
-- [x] Environment variable override
-- [x] Documentation of security considerations
+1. **Config validation** - Zod ensures type safety
+2. **Error handling** - Graceful fallback if config invalid
+3. **Documentation** - Warn about gitignoring .local.js files
 
-### Out of Scope for MVP
+### Out of Scope
 
-- [ ] Binary signature verification
-- [ ] Path allowlist/denylist
-- [ ] Hash pinning
-- [ ] Config file signing
-- [ ] Audit logging of binary execution
-- [ ] Sandboxed execution
+1. **Binary signature verification** - Not needed for local development
+2. **Path allowlisting** - Would be ineffective (arbitrary JS execution already possible)
+3. **Sandboxing** - Out of scope for development tool
+4. **Audit logging** - Not needed for single-user local tool
+5. **Binary version constraints** - Feature work, not security
 
-### Future Enhancements (Post-MVP)
+### Future Security Considerations
 
-**Optional Path Allowlist:**
-```typescript
-export const RepositorySchema = z.object({
-  maproomBinaryPath: z.string().optional(),
-  allowedBinaryPaths: z.array(z.string()).optional(), // Future
-})
+**If this feature expands in the future:**
 
-// Validate path is in allowlist
-if (config.allowedBinaryPaths && !config.allowedBinaryPaths.includes(resolved)) {
-  throw new Error('Binary path not in allowlist')
-}
-```
+1. **Multi-user environments** - Would need access controls
+2. **Remote config loading** - Would need HTTPS, signature verification
+3. **Binary download** - Would need checksum verification
+4. **CI/CD usage** - Would need allowlisting, audit logs
 
-**Binary Hash Verification:**
-```typescript
-export const RepositorySchema = z.object({
-  maproomBinaryPath: z.string().optional(),
-  maproomBinarySha256: z.string().optional(), // Future
-})
-
-// Verify hash before execution
-if (config.maproomBinarySha256) {
-  const actualHash = await hashFile(resolved)
-  if (actualHash !== config.maproomBinarySha256) {
-    throw new Error('Binary hash mismatch - possible tampering')
-  }
-}
-```
+**None apply to current scope** (local development only).
 
 ## Security Checklist
 
-### Code Security
+- [x] No hardcoded secrets (no secrets involved)
+- [x] Input validation on external inputs (Zod validates config schema)
+- [x] Proper error handling (try/catch prevents crashes)
+- [x] Dependencies are up to date (no new dependencies)
+- [x] No SQL injection vulnerabilities (no SQL involved)
+- [x] No XSS vulnerabilities (no web interface)
+- [x] No command injection (spawnSync doesn't use shell)
+- [x] No path traversal beyond accepted risk (relative paths resolved safely)
+- [x] No privilege escalation (runs with user privileges)
+- [x] Documentation includes security guidance (gitignore .local.js)
 
-- [x] No hardcoded secrets
-- [x] No credentials in config files
-- [x] No SQL injection vulnerabilities (not applicable)
-- [x] No XSS vulnerabilities (not applicable)
-- [x] No command injection (using spawnSync safely)
-- [x] No path traversal vulnerabilities (user controls config)
-- [x] Input validation on config fields (Zod schema)
-- [x] Proper error handling (no stack traces to users)
+## Threat Model
 
-### Configuration Security
+### Threat Actors
 
-- [x] Config files are local (not fetched remotely)
-- [x] Zod validation prevents type confusion
-- [x] Optional fields have safe defaults
-- [x] Invalid paths trigger warnings
-- [x] Environment variable override exists
+**Primary threat:** Malicious contributor to codebase
+- Could modify crewchief.config.js (committed file)
+- Could not modify crewchief.config.local.js (gitignored)
 
-### Execution Security
+**Mitigation:** Code review catches malicious config changes.
 
-- [x] Binary execution uses spawnSync (no shell)
-- [x] Arguments passed as array (no injection)
-- [x] stdio inherited (no output manipulation)
-- [x] Exit codes propagated correctly
-- [x] Error messages don't leak sensitive info
+**Secondary threat:** Compromised developer machine
+- Attacker has filesystem access
+- Can modify any file, including config
+- Config binary path is least of concerns (attacker can do anything)
 
-### Documentation Security
+**Mitigation:** None needed. If machine is compromised, game over anyway.
 
-- [x] Document security considerations
-- [x] Warn about malicious config files
-- [x] Document trusted binary sources
-- [x] Include example secure configuration
-- [ ] Add security section to README (Phase 3)
+**Not a threat:** External attacker without filesystem access
+- Cannot modify config files
+- Cannot exploit this feature remotely
 
-## Security Best Practices for Users
+### Attack Vectors
 
-### Recommended Configuration
+**Ranked by likelihood:**
 
-**For Development (local only):**
-```javascript
-// crewchief.config.local.js (gitignored)
-export default {
-  repository: {
-    maproomBinaryPath: './target/release/crewchief-maproom'
-  }
-}
-```
+1. **Malicious JS in config file** (High likelihood, High impact)
+   - Existing risk, not introduced by this project
+   - Mitigated by code review, gitignore
 
-**For Team Use (committed):**
-```javascript
-// crewchief.config.js (code reviewed)
-export default {
-  repository: {
-    // Use global install, not custom path
-    // maproomBinaryPath: undefined
-  }
-}
-```
+2. **Pointing to destructive binary** (Low likelihood, Medium impact)
+   - Requires developer error or malicious intent
+   - Mitigated by trust model (developer controls environment)
 
-### Code Review Checklist
+3. **Path injection** (Very low likelihood, Low impact)
+   - Prevented by spawnSync not using shell
+   - Mitigated by existing safeguards
 
-When reviewing PRs that change crewchief.config.js:
+4. **Binary tampering** (Very low likelihood, High impact)
+   - Requires filesystem access (game over anyway)
+   - Out of scope for local development tool
 
-- [ ] Verify maproomBinaryPath is not set (prefer global install)
-- [ ] If set, verify path points to trusted binary
-- [ ] Check for suspicious paths (/tmp, /dev, unusual locations)
-- [ ] Verify no absolute paths from untrusted sources
-- [ ] Confirm binary exists and is expected version
+### Trust Boundaries
 
-### Emergency Recovery
+**Trusted:**
+- Developer's local machine
+- Config files on local filesystem
+- Binaries compiled from source (local Rust builds)
 
-If malicious config is detected:
+**Untrusted:**
+- (None in this project's scope)
 
-```bash
-# Override with environment variable
-CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom crewchief maproom scan
+**Trust assumption:** Developer controls their own environment and config files.
 
-# Or remove config
-rm crewchief.config.local.js
+## Recommendations
 
-# Or use global install (unset config)
-git checkout crewchief.config.js
-```
+### For MVP
 
-## Risk Acceptance
+1. **Documentation update** - Add to local-development.md:
+   ```markdown
+   **Security Note:** Never commit crewchief.config.local.js to version control.
+   Use .local.js for machine-specific settings like custom binary paths.
+   ```
 
-**Accepted Risks for MVP:**
+2. **No code changes needed** - Existing validation sufficient
 
-1. **No binary signature verification**
-   - **Rationale:** User controls config file (trusted input source)
-   - **Compensating Control:** Code review for config changes
-   - **Future:** Add optional signature verification
+3. **No additional validation** - Would be security theater given arbitrary JS execution
 
-2. **No path allowlist**
-   - **Rationale:** Developer flexibility is priority for MVP
-   - **Compensating Control:** Documentation of security best practices
-   - **Future:** Add optional allowlist configuration
+### For Future
 
-3. **Symlink following**
-   - **Rationale:** Standard file system behavior
-   - **Compensating Control:** User creates symlinks (requires write access)
-   - **Future:** Add option to disable symlink following
+**If expanding beyond local development:**
 
-4. **Config file tampering**
-   - **Rationale:** Attacker with write access to repository is already compromised
-   - **Compensating Control:** File system permissions, code review
-   - **Future:** Config file signing
+1. Implement binary allowlist for CI/CD environments
+2. Add checksum verification for downloaded binaries
+3. Consider read-only config format (TOML/YAML) instead of executable JavaScript
+4. Audit logging for binary path changes in multi-user setups
+
+**None applicable to current scope.**
+
+## Compliance
+
+**Not applicable.** This is a developer tool, not subject to:
+- GDPR (no personal data)
+- PCI-DSS (no payment data)
+- HIPAA (no health data)
+- SOC 2 (not a service)
 
 ## Conclusion
 
-**Security Posture:** Acceptable for MVP
+**Security posture: ACCEPTABLE**
 
-**Key Security Properties:**
-- No remote code execution (local only)
-- No privilege escalation
-- No secrets handling
-- Safe binary execution (no shell)
-- User controls all inputs (trusted context)
+This project introduces **no new security risks** beyond the existing accepted risk of JavaScript config files. The threat model is appropriate for a local development tool where developers control their own environment.
 
-**Residual Risks:**
-- Malicious config file can execute arbitrary binary (mitigated by local trust model)
-- No verification of binary authenticity (acceptable for MVP)
+**No security blockers for MVP.**
 
-**Recommendation:** Ship this feature with documentation of security considerations.
+**Recommendation: Proceed with implementation.**
