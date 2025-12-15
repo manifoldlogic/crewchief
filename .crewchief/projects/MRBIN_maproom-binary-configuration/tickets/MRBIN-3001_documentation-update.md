@@ -1,9 +1,9 @@
 # Ticket: [MRBIN-3001]: Documentation Verification and Enhancement
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - N/A (documentation-only ticket)
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - N/A (documentation-only ticket)
+- [x] **Verified** - by the verify-ticket agent
 
 **Note on "Tests pass"**:
 - If tests were created/modified, you MUST run them and show output
@@ -27,13 +27,13 @@ The `maproomBinaryPath` configuration feature already has good documentation in:
 This ticket verifies the existing documentation is accurate after MRBIN-1001 changes and adds clarification about the relative path resolution behavior discovered during implementation (paths relative to CWD, not config file location, when used from `cleanMaproomRecords`).
 
 ## Acceptance Criteria
-- [ ] Existing "Method 1: Configuration File" section in `local-development.md` verified as accurate
-- [ ] Relative path resolution behavior documented clearly (CWD vs config file location)
-- [ ] Example config shown with both absolute and relative paths
-- [ ] Consistency verified between `README.md` and `local-development.md`
-- [ ] Priority order clearly explained (env > config > global > packaged)
-- [ ] No contradictions or outdated information in documentation
-- [ ] All code examples use correct syntax
+- [x] Existing "Method 1: Configuration File" section in `local-development.md` verified as accurate
+- [x] Relative path resolution behavior documented clearly (CWD vs config file location)
+- [x] Example config shown with both absolute and relative paths
+- [x] Consistency verified between `README.md` and `local-development.md`
+- [x] Priority order clearly explained (env > config > global > packaged)
+- [x] No contradictions or outdated information in documentation
+- [x] All code examples use correct syntax
 
 ## Technical Requirements
 - Review `docs/development/local-development.md` lines 76-100 (existing config documentation)

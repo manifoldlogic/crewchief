@@ -97,7 +97,45 @@ crewchief maproom scan  # Uses your local build
 This approach is preferred over setting `CREWCHIEF_MAPROOM_BIN` because:
 - Config persists across terminal sessions
 - Can use `.local.js` to keep out of git
-- Relative paths work from any location in repo
+- Paths resolve consistently for most commands
+
+#### Path Resolution
+
+The `maproomBinaryPath` supports both absolute and relative paths:
+
+**Absolute paths (recommended):**
+```javascript
+// crewchief.config.local.js
+export default {
+  repository: {
+    maproomBinaryPath: '/Users/username/crewchief/target/release/crewchief-maproom'
+  }
+}
+```
+
+**Relative paths:**
+Resolve relative to the config file location for most commands:
+```javascript
+// crewchief.config.local.js (at project root)
+export default {
+  repository: {
+    maproomBinaryPath: './target/release/crewchief-maproom'
+  }
+}
+```
+
+**Path resolution behavior:**
+- Works correctly in: `crewchief maproom scan`, `crewchief worktree:scan`, and most commands
+- May resolve from current working directory (CWD) in: internal cleanup operations
+- Recommendation: Use absolute paths or ensure you run commands from project root
+
+#### Binary Resolution Priority
+
+CrewChief searches for the maproom binary in this order:
+1. `CREWCHIEF_MAPROOM_BIN` environment variable (highest priority)
+2. `maproomBinaryPath` in `crewchief.config.local.js` or `crewchief.config.js`
+3. Global installation (`maproom` in PATH)
+4. Packaged binary (bundled with CLI)
 
 ### Method 2: Environment Variable Override
 
