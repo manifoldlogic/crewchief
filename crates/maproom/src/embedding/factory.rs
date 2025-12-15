@@ -1124,6 +1124,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    #[ignore] // Requires embedding provider (Ollama)
     async fn test_backward_compat_nomic_embed_text() {
         // Verify that explicit nomic-embed-text configuration still works after default change
         env::set_var("MAPROOM_EMBEDDING_MODEL", "nomic-embed-text");
