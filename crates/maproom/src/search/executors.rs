@@ -98,8 +98,8 @@ impl SearchExecutors {
                 worktree_id,
                 limit
             ),
-            // Graph importance
-            GraphExecutor::execute(&self.store, repo_id, worktree_id, limit),
+            // Graph importance (None config = legacy mode, Phase 2 will pass config)
+            GraphExecutor::execute(&self.store, repo_id, worktree_id, limit, None),
             // Temporal signals
             SignalExecutor::execute(&self.store, repo_id, worktree_id),
         );
