@@ -1,9 +1,9 @@
 # Ticket: SRCHREL-1001 - Modify Database Query
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass (1135/1135 maproom tests pass)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer

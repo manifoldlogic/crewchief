@@ -71,8 +71,9 @@ impl GraphExecutor {
         debug!("Executing graph importance query (limit: {})", limit);
 
         // Delegate to SqliteStore's graph importance calculation
+        // TODO(SRCHREL-1003): Enable quality-weighted scoring when graph executor is updated
         let hits = store
-            .calculate_graph_importance(repo_id, worktree_id, _fetch_limit as usize)
+            .calculate_graph_importance(repo_id, worktree_id, _fetch_limit as usize, false)
             .await
             .map_err(|e| GraphError::Database(e.to_string()))?;
 
