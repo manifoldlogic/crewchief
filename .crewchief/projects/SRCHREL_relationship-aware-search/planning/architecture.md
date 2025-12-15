@@ -578,26 +578,73 @@ impl GraphExecutor {
 
 ## Performance Considerations
 
-### Latency Budget
+### Performance Validation Results (SRCHREL-0002)
 
-| Operation | Old | Enhanced | Delta |
-|-----------|-----|----------|-------|
-| Edge aggregation | 15ms | 20ms | +5ms |
-| Quality computation | 0ms | 3ms | +3ms |
-| Total | 20ms | 28ms | **+8ms** |
+**Validation Date:** 2025-12-15
+**Test Database:** CrewChief production (164,395 chunks, 458 call edges)
+**Test:** `crates/maproom/tests/graph_quality_performance.rs`
 
-**Within Budget:** Yes (28ms < 30ms target, <100ms total)
+**Initial Results (WITHOUT recommended index):**
+
+| Metric | Measured | Target | Status |
+|--------|----------|--------|--------|
+| P50 latency | 52.48ms | <15ms | ❌ FAIL |
+| P95 latency | 53.72ms | <30ms | ❌ FAIL |
+| P99 latency | 53.80ms | <50ms | ❌ FAIL |
+| Index usage | ✓ Partial | Full | ⚠️ Missing dst index |
+
+**Root Cause:** Missing index on `chunk_edges(dst_chunk_id)` causes full table scan of edges.
+
+**EXPLAIN QUERY PLAN showed:**
+- ✅ `SEARCH src_chunk USING INTEGER PRIMARY KEY` - Efficient
+- ✅ `SEARCH src_file USING INTEGER PRIMARY KEY` - Efficient
+- ✅ `SEARCH c USING COVERING INDEX` - Efficient
+- ❌ `SCAN ce` - Full scan of chunk_edges (bottleneck)
+
+**Expected Results (WITH recommended index):**
+
+| Metric | Estimated | Target | Status |
+|--------|-----------|--------|--------|
+| P50 latency | ~8ms | <15ms | ✅ PASS |
+| P95 latency | ~10ms | <30ms | ✅ PASS |
+| P99 latency | ~12ms | <50ms | ✅ PASS |
+| Improvement | **5-6× faster** | - | - |
+
+**Scaling Projections:**
+
+| Database Size | Without Index (p95) | With Index (p95) | Improvement |
+|---------------|-------------------|------------------|-------------|
+| 458 edges (current) | 53.72ms | ~10ms | 5× faster |
+| 100K edges (medium) | ~11 seconds | ~20ms | 500× faster |
+| 1M edges (large) | ~110 seconds | ~30ms | 4000× faster |
+
+See `planning/performance-results.md` for detailed analysis.
 
 ### Database Indexes
 
-**Existing (sufficient):**
+**Existing:**
 ```sql
-CREATE INDEX idx_chunk_edges_dst ON chunk_edges(dst_chunk_id, type);
-CREATE INDEX idx_chunk_edges_src ON chunk_edges(src_chunk_id, type);
-CREATE INDEX idx_chunks_file_id ON chunks(file_id);
+-- Auto-index from UNIQUE constraint
+UNIQUE(src_chunk_id, dst_chunk_id, type)  -- Optimized for source lookups
 ```
 
-**No new indexes needed.**
+**Required (CRITICAL - ADD IN PHASE 1):**
+```sql
+-- Enable efficient destination lookups (our query pattern)
+CREATE INDEX idx_chunk_edges_dst_type_src
+ON chunk_edges(dst_chunk_id, type, src_chunk_id);
+```
+
+**Why This Index:**
+1. **`dst_chunk_id`** - Primary filter (`WHERE ce.dst_chunk_id IN (...)`)
+2. **`type`** - Secondary filter (used in CASE for edge type weight)
+3. **`src_chunk_id`** - Covering index (needed for JOIN to src_chunk)
+
+**Benefits:**
+- Eliminates full table scan of edges
+- 5-6× performance improvement on current database
+- Scales to 1M+ edges with <30ms p95
+- Minimal storage overhead (~50KB per 458 edges)
 
 ### Configuration Cache
 
