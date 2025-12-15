@@ -1,9 +1,9 @@
 # Ticket: SRCHREL-2002 - SQL Parameterization
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - database-engineer
@@ -16,13 +16,13 @@ Replace hardcoded quality weights in SQL query with parameters from configuratio
 
 ## Acceptance Criteria
 
-- [ ] Replace hardcoded 1.0 and 0.5 weights with parameters
-- [ ] Update `calculate_graph_importance_quality()` to accept `EdgeQualityWeights`
-- [ ] Pass weights from config through executor to database layer
-- [ ] SQL query uses weight parameters correctly
-- [ ] Results change when weights are modified
-- [ ] Unit tests validate parameterization works
-- [ ] Backward compatibility maintained (can still use defaults)
+- [x] Replace hardcoded 1.0 and 0.5 weights with parameters
+- [x] Update `calculate_graph_importance_quality()` to accept `EdgeQualityWeights`
+- [x] Pass weights from config through executor to database layer
+- [x] SQL query uses weight parameters correctly
+- [x] Results change when weights are modified
+- [x] Unit tests validate parameterization works
+- [x] Backward compatibility maintained (can still use defaults)
 
 ## Technical Requirements
 

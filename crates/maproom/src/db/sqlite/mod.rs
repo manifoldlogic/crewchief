@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
-use crate::config::SqliteConfig;
+use crate::config::{EdgeQualityWeights, SqliteConfig};
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
 use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
@@ -2418,19 +2418,30 @@ impl SqliteStore {
     /// (calls=0.3, imports=0.2, tests=0.1, logarithmic scaling).
     ///
     /// When `enable_quality` is true: uses quality-weighted edge scoring with test detection
-    /// (production code=1.0, test code=0.5, calls=1.0, logarithmic scaling).
+    /// using configurable weights from EdgeQualityWeights.
+    ///
+    /// # Arguments
+    /// * `repo_id` - Repository ID to query
+    /// * `worktree_id` - Optional worktree ID to filter by
+    /// * `limit` - Maximum number of results
+    /// * `enable_quality` - If true, use quality-weighted scoring; if false, use legacy scoring
+    /// * `weights` - Edge quality weights (production_code, test_code, calls)
     pub async fn calculate_graph_importance(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
         enable_quality: bool,
+        weights: &EdgeQualityWeights,
     ) -> anyhow::Result<Vec<SearchHit>> {
         tracing::debug!(
             repo_id = repo_id,
             worktree_id = ?worktree_id,
             limit = limit,
             enable_quality = enable_quality,
+            production_code_weight = weights.production_code,
+            test_code_weight = weights.test_code,
+            calls_weight = weights.calls,
             "Calculating graph importance"
         );
 
@@ -2441,8 +2452,8 @@ impl SqliteStore {
                 .await;
         }
 
-        // New quality-weighted implementation
-        self.calculate_graph_importance_quality(repo_id, worktree_id, limit)
+        // New quality-weighted implementation with configurable weights
+        self.calculate_graph_importance_quality(repo_id, worktree_id, limit, weights)
             .await
     }
 
@@ -2571,26 +2582,45 @@ impl SqliteStore {
     /// Quality-weighted graph importance calculation
     ///
     /// Applies quality weights based on:
-    /// - Edge type (calls=1.0, imports=1.0)
-    /// - Source code type (production=1.0, test=0.5)
+    /// - Edge type (calls weight from config)
+    /// - Source code type (production weight vs test weight from config)
     ///
     /// Test detection uses file path patterns and chunk kind.
     /// Uses LOG scaling on quality-weighted sum.
+    ///
+    /// # Parameters
+    /// * `repo_id` - Repository ID to query
+    /// * `worktree_id` - Optional worktree ID to filter by
+    /// * `limit` - Maximum number of results
+    /// * `weights` - Configurable edge quality weights (SRCHREL-2002)
     async fn calculate_graph_importance_quality(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
+        weights: &EdgeQualityWeights,
     ) -> anyhow::Result<Vec<SearchHit>> {
+        // Clone weights for move into closure
+        let calls_weight = weights.calls as f64;
+        let test_code_weight = weights.test_code as f64;
+        let production_code_weight = weights.production_code as f64;
+
         self.run(move |conn| {
-            // Quality-weighted SQL query with test detection
+            // Quality-weighted SQL query with parameterized weights (SRCHREL-2002)
+            // Parameters:
+            // - ?1: repo_id
+            // - ?2: worktree_id (when present)
+            // - ?3: limit (position varies based on worktree)
+            // - ?4: calls_weight
+            // - ?5: test_code_weight
+            // - ?6: production_code_weight
             let sql = if worktree_id.is_some() {
                 r#"
                 WITH quality_edges AS (
                   SELECT
                     ce.dst_chunk_id as chunk_id,
                     CASE ce.type
-                      WHEN 'calls' THEN 1.0
+                      WHEN 'calls' THEN ?4
                       ELSE 1.0
                     END *
                     CASE
@@ -2606,8 +2636,8 @@ impl SqliteStore {
                         OR src_file.relpath LIKE '%_test.rs%'
                         OR src_file.relpath LIKE '%_test.py%'
                         OR src_chunk.kind LIKE '%test%'
-                      THEN 0.5
-                      ELSE 1.0
+                      THEN ?5
+                      ELSE ?6
                     END as edge_quality
                   FROM chunk_edges ce
                   JOIN chunks src_chunk ON src_chunk.id = ce.src_chunk_id
@@ -2648,7 +2678,7 @@ impl SqliteStore {
                   SELECT
                     ce.dst_chunk_id as chunk_id,
                     CASE ce.type
-                      WHEN 'calls' THEN 1.0
+                      WHEN 'calls' THEN ?3
                       ELSE 1.0
                     END *
                     CASE
@@ -2664,8 +2694,8 @@ impl SqliteStore {
                         OR src_file.relpath LIKE '%_test.rs%'
                         OR src_file.relpath LIKE '%_test.py%'
                         OR src_chunk.kind LIKE '%test%'
-                      THEN 0.5
-                      ELSE 1.0
+                      THEN ?4
+                      ELSE ?5
                     END as edge_quality
                   FROM chunk_edges ce
                   JOIN chunks src_chunk ON src_chunk.id = ce.src_chunk_id
@@ -2704,38 +2734,59 @@ impl SqliteStore {
             let mut hits = Vec::new();
 
             if let Some(wid) = worktree_id {
-                let rows = stmt.query_map(params![repo_id, wid, limit as i64], |row| {
-                    Ok(SearchHit {
-                        chunk_id: row.get(0)?,
-                        start_line: row.get(1)?,
-                        end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        file_relpath: row.get(5)?,
-                        score: row.get(6)?,
-                        base_score: None,
-                        kind_mult: None,
-                        exact_mult: None,
-                    })
-                })?;
+                // With worktree: ?1=repo_id, ?2=worktree_id, ?3=limit, ?4=calls, ?5=test, ?6=prod
+                let rows = stmt.query_map(
+                    params![
+                        repo_id,
+                        wid,
+                        limit as i64,
+                        calls_weight,
+                        test_code_weight,
+                        production_code_weight
+                    ],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                        })
+                    },
+                )?;
                 for row in rows {
                     hits.push(row?);
                 }
             } else {
-                let rows = stmt.query_map(params![repo_id, limit as i64], |row| {
-                    Ok(SearchHit {
-                        chunk_id: row.get(0)?,
-                        start_line: row.get(1)?,
-                        end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        file_relpath: row.get(5)?,
-                        score: row.get(6)?,
-                        base_score: None,
-                        kind_mult: None,
-                        exact_mult: None,
-                    })
-                })?;
+                // Without worktree: ?1=repo_id, ?2=limit, ?3=calls, ?4=test, ?5=prod
+                let rows = stmt.query_map(
+                    params![
+                        repo_id,
+                        limit as i64,
+                        calls_weight,
+                        test_code_weight,
+                        production_code_weight
+                    ],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                        })
+                    },
+                )?;
                 for row in rows {
                     hits.push(row?);
                 }
@@ -2743,6 +2794,9 @@ impl SqliteStore {
 
             tracing::debug!(
                 hits_count = hits.len(),
+                calls_weight = calls_weight,
+                test_code_weight = test_code_weight,
+                production_code_weight = production_code_weight,
                 "Quality-weighted graph importance query completed"
             );
 
