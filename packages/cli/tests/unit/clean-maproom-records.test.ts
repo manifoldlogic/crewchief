@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadConfig } from '../../src/config/loader.js'
+import type { CrewChiefConfig } from '../../src/config/schema.js'
 import { cleanMaproomRecords } from '../../src/git/worktrees.js'
 import { logger } from '../../src/utils/logger.js'
 import { findMaproomBinary } from '../../src/utils/maproom-binary.js'
@@ -401,5 +403,78 @@ describe('cleanMaproomRecords', () => {
     await cleanMaproomRecords()
 
     expect(logger.info).toHaveBeenCalledWith('Cleaned maproom database records')
+  })
+
+  // ===== CONFIG PARAMETER TESTS =====
+
+  it('should use provided config parameter', async () => {
+    const mockConfig = {
+      repository: {
+        maproomBinaryPath: '/custom/maproom',
+      },
+    } as CrewChiefConfig
+
+    await cleanMaproomRecords(mockConfig)
+
+    // Should NOT call loadConfig when config is provided
+    expect(loadConfig).not.toHaveBeenCalled()
+
+    // Should call findMaproomBinary with the config path
+    expect(findMaproomBinary).toHaveBeenCalledWith({
+      configPath: '/custom/maproom',
+    })
+
+    // Should execute the cleanup command
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  })
+
+  it('should load config when not provided', async () => {
+    const mockConfig = {
+      repository: {
+        maproomBinaryPath: '/loaded/maproom',
+      },
+    } as CrewChiefConfig
+
+    vi.mocked(loadConfig).mockResolvedValue(mockConfig)
+
+    await cleanMaproomRecords() // No config parameter
+
+    // Should call loadConfig to get config
+    expect(loadConfig).toHaveBeenCalled()
+
+    // Should call findMaproomBinary with the loaded config path
+    expect(findMaproomBinary).toHaveBeenCalledWith({
+      configPath: '/loaded/maproom',
+    })
+
+    // Should execute the cleanup command
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  })
+
+  it('should handle config load failure gracefully', async () => {
+    vi.mocked(loadConfig).mockRejectedValue(new Error('Config not found'))
+
+    // Should not throw when config loading fails
+    await expect(cleanMaproomRecords()).resolves.toBeUndefined()
+
+    // Should have attempted to load config
+    expect(loadConfig).toHaveBeenCalled()
+
+    // Should call findMaproomBinary with undefined configPath (fallback)
+    expect(findMaproomBinary).toHaveBeenCalledWith({
+      configPath: undefined,
+    })
+
+    // Should still execute the cleanup command
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
   })
 })
