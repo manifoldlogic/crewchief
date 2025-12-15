@@ -1,4 +1,7 @@
 {
+  "env": {
+    "SDD_ROOT_DIR": "/workspace/.sdd"
+  },
   "enabledPlugins": {
     "workstream@crewchief": true
   },
