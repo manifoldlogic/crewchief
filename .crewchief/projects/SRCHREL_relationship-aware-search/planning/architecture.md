@@ -73,12 +73,42 @@ const EDGE_WEIGHT_INHERITANCE_BOOST: f32 = 1.1;
 
 **Rationale:** Reduce MVP complexity. Prove algorithm works before building configuration infrastructure.
 
-**Phase 1 Configuration (Minimal):**
+**VALIDATED IMPLEMENTATION (SRCHREL-0004):**
+
+The existing `FeatureFlags` struct already provides the infrastructure we need. The `enable_graph_signals: bool` field (line 41 of `feature_flags.rs`) can be used to control quality-weighted graph scoring.
+
+**Existing Infrastructure:**
+- Location: `/crates/maproom/src/config/feature_flags.rs`
+- Field: `pub enable_graph_signals: bool`
+- Default: `true` (enabled)
+- Environment Override: `MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_GRAPH_SIGNALS`
+
+**Phase 1 Configuration (Using Existing Field):**
 ```yaml
 # In existing config/maproom-search.yml
 feature_flags:
-  enable_quality_scoring: false  # Simple boolean toggle
+  enable_vector_search: true
+  enable_hybrid_fusion: true
+  enable_graph_signals: true   # Controls quality-weighted graph scoring
+  enable_temporal_signals: true
+  enable_query_cache: true
+  enable_hot_reload: true
 ```
+
+**Environment Variable Override:**
+```bash
+# Disable quality-weighted graph scoring
+export MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_GRAPH_SIGNALS=false
+
+# Enable quality-weighted graph scoring
+export MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_GRAPH_SIGNALS=true
+```
+
+**Backward Compatibility:**
+- Validated with comprehensive tests in `crates/maproom/tests/config_backward_compatibility.rs`
+- Config files without feature_flags section use defaults (all enabled, including enable_graph_signals=true)
+- Environment variable override already implemented and tested
+- See `planning/config-design.md` for detailed design rationale
 
 **Phase 2 Configuration (Full):**
 ```yaml
