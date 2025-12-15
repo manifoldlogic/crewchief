@@ -235,11 +235,25 @@ export class WorktreeService {
  * Clean up stale worktree records from the maproom database.
  * Uses batch cleanup to remove all stale worktree records at once.
  *
+ * @param config - Optional config object. If not provided, will attempt to load from disk.
  * @throws Error if maproom binary not found or cleanup fails (exit code 1)
  */
-export async function cleanMaproomRecords(): Promise<void> {
+export async function cleanMaproomRecords(config?: CrewChiefConfig): Promise<void> {
+  // Resolve config - use provided or load from disk
+  let resolvedConfig = config
+  if (!resolvedConfig) {
+    try {
+      resolvedConfig = await loadConfig()
+    } catch {
+      // Config not found or invalid - continue without it
+      // Binary resolution will fall back to env var/global/packaged
+    }
+  }
+
   // Find maproom binary
-  const result = findMaproomBinary()
+  const result = findMaproomBinary({
+    configPath: resolvedConfig?.repository.maproomBinaryPath,
+  })
 
   if (!result.path) {
     throw new Error('Maproom binary not found')
