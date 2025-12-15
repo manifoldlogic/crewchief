@@ -81,7 +81,7 @@ impl TestDb {
                 relpath: relpath.to_string(),
                 language: Some(detect_language(relpath)),
                 content_hash: format!("hash_{}", relpath.replace("/", "_")),
-                size_bytes: content.len() as i64,
+                size_bytes: content.len() as i32,
                 last_modified: None,
             };
             let file_id = self.store.upsert_file(&file).await?;
