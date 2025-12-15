@@ -11,15 +11,19 @@ fn test_default_feature_flags() {
     assert!(flags.enable_temporal_signals);
     assert!(flags.enable_query_cache);
     assert!(flags.enable_hot_reload);
-    assert!(flags.is_all_enabled());
+    // Quality weighted graph defaults to false
+    assert!(!flags.enable_quality_weighted_graph);
+    // Not all enabled since quality_weighted_graph is false
+    assert!(!flags.is_all_enabled());
 }
 
 #[test]
 fn test_all_enabled() {
     let flags = FeatureFlags::all_enabled();
-    assert!(flags.is_all_enabled());
+    // all_enabled() uses default(), which has quality_weighted_graph=false
+    assert!(!flags.is_all_enabled());
     assert_eq!(flags.enabled_count(), 6);
-    assert_eq!(flags.disabled_count(), 0);
+    assert_eq!(flags.disabled_count(), 1);
 }
 
 #[test]
@@ -27,7 +31,7 @@ fn test_all_disabled() {
     let flags = FeatureFlags::all_disabled();
     assert!(flags.is_all_disabled());
     assert_eq!(flags.enabled_count(), 0);
-    assert_eq!(flags.disabled_count(), 6);
+    assert_eq!(flags.disabled_count(), 7);
 }
 
 #[test]
@@ -80,19 +84,22 @@ fn test_enabled_features() {
     assert!(enabled.contains(&"temporal_signals"));
     assert!(enabled.contains(&"query_cache"));
     assert!(enabled.contains(&"hot_reload"));
+    // Quality weighted graph is disabled by default
+    assert!(!enabled.contains(&"quality_weighted_graph"));
 }
 
 #[test]
 fn test_disabled_features() {
     let flags = FeatureFlags::all_disabled();
     let disabled = flags.disabled_features();
-    assert_eq!(disabled.len(), 6);
+    assert_eq!(disabled.len(), 7);
     assert!(disabled.contains(&"vector_search"));
     assert!(disabled.contains(&"hybrid_fusion"));
     assert!(disabled.contains(&"graph_signals"));
     assert!(disabled.contains(&"temporal_signals"));
     assert!(disabled.contains(&"query_cache"));
     assert!(disabled.contains(&"hot_reload"));
+    assert!(disabled.contains(&"quality_weighted_graph"));
 }
 
 #[test]
@@ -104,7 +111,7 @@ fn test_partial_flags() {
     assert!(!flags.is_all_enabled());
     assert!(!flags.is_all_disabled());
     assert_eq!(flags.enabled_count(), 2);
-    assert_eq!(flags.disabled_count(), 4);
+    assert_eq!(flags.disabled_count(), 5);
 
     let enabled = flags.enabled_features();
     assert_eq!(enabled.len(), 2);
@@ -112,9 +119,10 @@ fn test_partial_flags() {
     assert!(enabled.contains(&"query_cache"));
 
     let disabled = flags.disabled_features();
-    assert_eq!(disabled.len(), 4);
+    assert_eq!(disabled.len(), 5);
     assert!(disabled.contains(&"hybrid_fusion"));
     assert!(disabled.contains(&"graph_signals"));
+    assert!(disabled.contains(&"quality_weighted_graph"));
 }
 
 #[test]

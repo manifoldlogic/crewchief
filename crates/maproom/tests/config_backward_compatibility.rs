@@ -171,6 +171,7 @@ fn test_feature_flags_serialization_roundtrip() {
         enable_temporal_signals: true,
         enable_query_cache: true,
         enable_hot_reload: false,
+        enable_quality_weighted_graph: false,
     };
 
     let yaml = serde_yaml::to_string(&original).unwrap();
@@ -336,7 +337,7 @@ fn test_feature_flags_helper_methods() {
     assert!(!all_disabled.needs_graph_data());
     assert!(!all_disabled.needs_embeddings());
     assert!(!all_disabled.needs_temporal_data());
-    assert_eq!(all_disabled.disabled_count(), 6);
+    assert_eq!(all_disabled.disabled_count(), 7);
 
     let fts_only = FeatureFlags::fts_only();
     assert!(!fts_only.needs_graph_data());

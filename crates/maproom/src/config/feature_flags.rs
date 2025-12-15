@@ -57,6 +57,14 @@ pub struct FeatureFlags {
     /// When disabled, configuration changes require service restart.
     /// Disabling this can reduce resource usage from file watching.
     pub enable_hot_reload: bool,
+
+    /// Enable quality-weighted graph scoring.
+    ///
+    /// When enabled, uses quality metrics (test coverage, PR review depth, CI success)
+    /// in graph-based ranking. When disabled, uses legacy graph scoring.
+    /// This is a gradual rollout flag - defaults to false for safety.
+    #[serde(default)]
+    pub enable_quality_weighted_graph: bool,
 }
 
 impl Default for FeatureFlags {
@@ -68,6 +76,7 @@ impl Default for FeatureFlags {
             enable_temporal_signals: true,
             enable_query_cache: true,
             enable_hot_reload: true,
+            enable_quality_weighted_graph: false, // Default: disabled for safe rollout
         }
     }
 }
@@ -87,6 +96,7 @@ impl FeatureFlags {
             enable_temporal_signals: false,
             enable_query_cache: false,
             enable_hot_reload: false,
+            enable_quality_weighted_graph: false,
         }
     }
 
@@ -102,6 +112,7 @@ impl FeatureFlags {
             enable_temporal_signals: false,
             enable_query_cache: true,
             enable_hot_reload: false,
+            enable_quality_weighted_graph: false,
         }
     }
 
@@ -141,6 +152,9 @@ impl FeatureFlags {
         if self.enable_hot_reload {
             features.push("hot_reload");
         }
+        if self.enable_quality_weighted_graph {
+            features.push("quality_weighted_graph");
+        }
         features
     }
 
@@ -165,6 +179,9 @@ impl FeatureFlags {
         if !self.enable_hot_reload {
             features.push("hot_reload");
         }
+        if !self.enable_quality_weighted_graph {
+            features.push("quality_weighted_graph");
+        }
         features
     }
 
@@ -180,12 +197,12 @@ impl FeatureFlags {
 
     /// Check if all features are enabled.
     pub fn is_all_enabled(&self) -> bool {
-        self.enabled_count() == 6
+        self.enabled_count() == 7
     }
 
     /// Check if all features are disabled.
     pub fn is_all_disabled(&self) -> bool {
-        self.disabled_count() == 6
+        self.disabled_count() == 7
     }
 }
 
@@ -202,15 +219,18 @@ mod tests {
         assert!(flags.enable_temporal_signals);
         assert!(flags.enable_query_cache);
         assert!(flags.enable_hot_reload);
-        assert!(flags.is_all_enabled());
+        // Quality weighted graph defaults to false
+        assert!(!flags.enable_quality_weighted_graph);
+        assert!(!flags.is_all_enabled());
     }
 
     #[test]
     fn test_all_enabled() {
         let flags = FeatureFlags::all_enabled();
-        assert!(flags.is_all_enabled());
+        // all_enabled() uses default(), which has quality_weighted_graph=false
+        assert!(!flags.is_all_enabled());
         assert_eq!(flags.enabled_count(), 6);
-        assert_eq!(flags.disabled_count(), 0);
+        assert_eq!(flags.disabled_count(), 1);
     }
 
     #[test]
@@ -218,7 +238,7 @@ mod tests {
         let flags = FeatureFlags::all_disabled();
         assert!(flags.is_all_disabled());
         assert_eq!(flags.enabled_count(), 0);
-        assert_eq!(flags.disabled_count(), 6);
+        assert_eq!(flags.disabled_count(), 7);
     }
 
     #[test]
@@ -256,15 +276,18 @@ mod tests {
         assert!(enabled.contains(&"temporal_signals"));
         assert!(enabled.contains(&"query_cache"));
         assert!(enabled.contains(&"hot_reload"));
+        // Quality weighted graph is disabled by default
+        assert!(!enabled.contains(&"quality_weighted_graph"));
     }
 
     #[test]
     fn test_disabled_features() {
         let flags = FeatureFlags::all_disabled();
         let disabled = flags.disabled_features();
-        assert_eq!(disabled.len(), 6);
+        assert_eq!(disabled.len(), 7);
         assert!(disabled.contains(&"vector_search"));
         assert!(disabled.contains(&"hybrid_fusion"));
+        assert!(disabled.contains(&"quality_weighted_graph"));
     }
 
     #[test]
@@ -276,6 +299,70 @@ mod tests {
         assert!(!flags.is_all_enabled());
         assert!(!flags.is_all_disabled());
         assert_eq!(flags.enabled_count(), 2);
-        assert_eq!(flags.disabled_count(), 4);
+        assert_eq!(flags.disabled_count(), 5);
+    }
+
+    #[test]
+    fn test_quality_weighted_graph_defaults_to_false() {
+        let flags = FeatureFlags::default();
+        assert_eq!(flags.enable_quality_weighted_graph, false);
+    }
+
+    #[test]
+    fn test_quality_weighted_graph_can_be_enabled() {
+        let mut flags = FeatureFlags::default();
+        flags.enable_quality_weighted_graph = true;
+        assert!(flags.enable_quality_weighted_graph);
+        let enabled = flags.enabled_features();
+        assert!(enabled.contains(&"quality_weighted_graph"));
+    }
+
+    #[test]
+    fn test_backward_compat_deserialize_without_quality_flag() {
+        // Simulate old config YAML without quality_weighted_graph field
+        let yaml = r#"
+enable_vector_search: true
+enable_hybrid_fusion: true
+enable_graph_signals: true
+enable_temporal_signals: true
+enable_query_cache: true
+enable_hot_reload: true
+        "#;
+        let flags: FeatureFlags = serde_yaml::from_str(yaml).unwrap();
+        // Should default to false for backward compatibility
+        assert_eq!(flags.enable_quality_weighted_graph, false);
+        assert!(flags.enable_vector_search);
+        assert!(flags.enable_hybrid_fusion);
+    }
+
+    #[test]
+    fn test_deserialize_with_quality_flag_true() {
+        let yaml = r#"
+enable_vector_search: true
+enable_hybrid_fusion: true
+enable_graph_signals: true
+enable_temporal_signals: true
+enable_query_cache: true
+enable_hot_reload: true
+enable_quality_weighted_graph: true
+        "#;
+        let flags: FeatureFlags = serde_yaml::from_str(yaml).unwrap();
+        assert!(flags.enable_quality_weighted_graph);
+    }
+
+    #[test]
+    fn test_deserialize_with_quality_flag_false() {
+        let yaml = r#"
+enable_vector_search: true
+enable_hybrid_fusion: true
+enable_graph_signals: true
+enable_temporal_signals: true
+enable_query_cache: true
+enable_hot_reload: true
+enable_quality_weighted_graph: false
+        "#;
+        let flags: FeatureFlags = serde_yaml::from_str(yaml).unwrap();
+        assert!(!flags.enable_quality_weighted_graph);
+        assert!(flags.enable_vector_search);
     }
 }

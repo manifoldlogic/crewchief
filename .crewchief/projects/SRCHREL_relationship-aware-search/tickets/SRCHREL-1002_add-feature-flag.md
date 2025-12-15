@@ -1,9 +1,9 @@
 # Ticket: SRCHREL-1002 - Add Feature Flag Support
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - 113 config tests pass (run with --test-threads=1 due to env var isolation)
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-expert
@@ -26,16 +26,16 @@ Based on SRCHREL-0004 findings, implement the chosen approach (environment varia
 
 ## Acceptance Criteria
 
-- [ ] Implement feature flag according to SRCHREL-0004 design decision
-- [ ] Feature flag defaults to `false` (disabled, safe rollout)
-- [ ] Flag is accessible at graph executor layer
-- [ ] Configuration loads successfully with flag present
-- [ ] Configuration loads successfully without flag (backward compatible)
-- [ ] Flag can be changed without code recompilation
-- [ ] Document flag usage in configuration file or README
-- [ ] Add unit test: flag=false uses legacy behavior
-- [ ] Add unit test: flag=true uses enhanced behavior
-- [ ] Add unit test: missing flag defaults to false
+- [x] Implement feature flag according to SRCHREL-0004 design decision
+- [x] Feature flag defaults to `false` (disabled, safe rollout)
+- [x] Flag is accessible at graph executor layer
+- [x] Configuration loads successfully with flag present
+- [x] Configuration loads successfully without flag (backward compatible)
+- [x] Flag can be changed without code recompilation (env var override)
+- [x] Document flag usage in configuration file or README (inline code docs)
+- [x] Add unit test: flag=false uses legacy behavior
+- [x] Add unit test: flag=true uses enhanced behavior
+- [x] Add unit test: missing flag defaults to false
 
 ## Technical Requirements
 

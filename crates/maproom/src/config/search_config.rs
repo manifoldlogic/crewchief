@@ -346,6 +346,17 @@ impl SearchConfig {
                 self.feature_flags.enable_hot_reload
             );
         }
+        if let Ok(quality_graph) =
+            std::env::var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH")
+        {
+            self.feature_flags.enable_quality_weighted_graph = quality_graph
+                .parse()
+                .context("Failed to parse MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH")?;
+            debug!(
+                "Override: feature_flags.enable_quality_weighted_graph = {}",
+                self.feature_flags.enable_quality_weighted_graph
+            );
+        }
 
         Ok(())
     }
@@ -964,5 +975,79 @@ mod tests {
         config = IndexConfig::default();
         config.ivfflat_probes = 0;
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_quality_weighted_graph_env_override() {
+        // Set environment variable
+        std::env::set_var(
+            "MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH",
+            "true",
+        );
+
+        let mut config = SearchConfig::default();
+        // Before override
+        assert!(!config.feature_flags.enable_quality_weighted_graph);
+
+        // Apply overrides
+        config.apply_env_overrides().unwrap();
+
+        // After override
+        assert!(config.feature_flags.enable_quality_weighted_graph);
+
+        // Cleanup
+        std::env::remove_var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH");
+    }
+
+    #[test]
+    fn test_quality_weighted_graph_env_override_false() {
+        // Set environment variable to false
+        std::env::set_var(
+            "MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH",
+            "false",
+        );
+
+        let mut config = SearchConfig::default();
+        // Default is false
+        assert!(!config.feature_flags.enable_quality_weighted_graph);
+
+        // Apply overrides
+        config.apply_env_overrides().unwrap();
+
+        // Should remain false
+        assert!(!config.feature_flags.enable_quality_weighted_graph);
+
+        // Cleanup
+        std::env::remove_var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH");
+    }
+
+    #[test]
+    fn test_quality_weighted_graph_invalid_env_value() {
+        // Set invalid environment variable value
+        std::env::set_var(
+            "MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH",
+            "invalid",
+        );
+
+        let mut config = SearchConfig::default();
+
+        // Should return error for invalid boolean
+        let result = config.apply_env_overrides();
+        assert!(result.is_err());
+
+        // Cleanup
+        std::env::remove_var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH");
+    }
+
+    #[test]
+    fn test_quality_weighted_graph_no_env_uses_default() {
+        // Ensure no environment variable is set
+        std::env::remove_var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH");
+
+        let mut config = SearchConfig::default();
+        config.apply_env_overrides().unwrap();
+
+        // Should use default value (false)
+        assert!(!config.feature_flags.enable_quality_weighted_graph);
     }
 }
