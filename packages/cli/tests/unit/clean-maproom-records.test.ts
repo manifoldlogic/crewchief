@@ -8,6 +8,7 @@ import { findMaproomBinary } from '../../src/utils/maproom-binary.js'
 vi.mock('node:child_process')
 vi.mock('../../src/utils/maproom-binary.js')
 vi.mock('../../src/utils/logger.js')
+vi.mock('../../src/config/loader.js')
 
 describe('cleanMaproomRecords', () => {
   beforeEach(() => {
@@ -263,10 +264,10 @@ describe('cleanMaproomRecords', () => {
 
   // ===== COMMAND INVOCATION TESTS =====
 
-  it('calls findMaproomBinary without arguments', async () => {
+  it('calls findMaproomBinary with undefined configPath when config not provided', async () => {
     await cleanMaproomRecords()
 
-    expect(findMaproomBinary).toHaveBeenCalledWith()
+    expect(findMaproomBinary).toHaveBeenCalledWith({ configPath: undefined })
   })
 
   it('passes correct arguments to spawnSync', async () => {
