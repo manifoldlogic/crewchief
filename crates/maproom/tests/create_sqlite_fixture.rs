@@ -1,11 +1,15 @@
 //! Test fixture generator for SQLite E2E tests.
 //!
-//! Run with: cargo test --features sqlite --test create_sqlite_fixture -- --ignored --nocapture
+//! Run with: cargo test --test create_sqlite_fixture -- --ignored --nocapture
 //!
 //! This creates a pre-indexed SQLite database at tests/fixtures/pre-indexed-maproom.db
 //! with sample repositories, worktrees, and chunks for E2E testing.
+//!
+//! NOTE: Disabled - VectorStore trait was removed during refactoring.
 
-#[cfg(feature = "sqlite")]
+// Disabled - VectorStore trait no longer exists
+#![cfg(any())]
+
 mod fixture {
     use crewchief_maproom::db::sqlite::SqliteStore;
     use crewchief_maproom::db::{ChunkRecord, FileRecord, VectorStore};

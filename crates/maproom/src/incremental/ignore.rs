@@ -158,6 +158,7 @@ mod tests {
     use tempfile::TempDir;
 
     // Test data constants
+    #[allow(dead_code)]
     const BASIC_PATTERNS: &str = "test/**\n*.tmp\nbuild/\n";
     const WITH_COMMENTS: &str =
         "# Skip test fixtures\ntest-fixtures/**\n\n# Build outputs\nbuild/\n";

@@ -143,6 +143,7 @@ fn default_query_corpus() -> Vec<String> {
 
 /// Results from a single query execution.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct QueryResult {
     query: String,
     latency_ms: f64,

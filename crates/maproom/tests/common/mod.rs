@@ -5,6 +5,10 @@
 //! - Test fixture helpers for chunks, embeddings, and edges
 //! - Assertion utilities for search results
 
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+
 use anyhow::Result;
 use std::path::PathBuf;
 

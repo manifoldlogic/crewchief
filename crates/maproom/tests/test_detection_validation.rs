@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 /// Sample chunk data from database for validation
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct ChunkSample {
     id: i64,
     symbol_name: String,

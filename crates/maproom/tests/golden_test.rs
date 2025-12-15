@@ -18,9 +18,7 @@
 //! cargo test --test golden_test test_simple_symbol_queries -- --ignored
 //! ```
 
-use crewchief_maproom::evaluation::{
-    calculate_all_metrics, EvaluationMetrics, GroundTruthResult, RankedResult,
-};
+use crewchief_maproom::evaluation::{calculate_all_metrics, EvaluationMetrics, RankedResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;

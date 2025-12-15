@@ -1,13 +1,18 @@
 //! VectorStore Contract Tests
 //!
-//! This module tests that both PostgresStore and SqliteStore correctly implement
+//! This module tests that SqliteStore correctly implements
 //! the VectorStore trait. It covers all trait methods added during the VECSTORE project.
 //!
 //! Run with:
-//!   SQLite only:  cargo test --features sqlite --test vectorstore_contract
-//!   PostgreSQL:   cargo test --test vectorstore_contract (requires running postgres)
+//!   cargo test --test vectorstore_contract
+//!
+//! NOTE: This file is disabled - VectorStore trait was removed during refactoring.
+//! Re-enable when contract tests are needed.
 
-#[cfg(feature = "sqlite")]
+// Disabled - VectorStore trait no longer exists
+// Use cfg(any()) which is always false to disable compilation
+#![cfg(any())]
+
 mod sqlite_contract_tests {
     use crewchief_maproom::db::sqlite::SqliteStore;
     use crewchief_maproom::db::{ChunkRecord, FileRecord, UpdateStats, VectorStore};
