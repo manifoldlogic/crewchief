@@ -638,12 +638,12 @@ class DataProcessor:
     assert!(single_dot >= 2, "Should find single-dot relative imports");
     assert!(double_dot >= 2, "Should find double-dot relative imports");
 
-    // Verify dynamic imports
-    let dynamic_imports: Vec<_> = imports_array
+    // Verify dynamic imports (may or may not find dynamic imports - not an error if none found)
+    let _dynamic_imports: Vec<_> = imports_array
         .iter()
         .filter(|i| i.get("import_type").and_then(|t| t.as_str()) == Some("dynamic"))
         .collect();
-    assert!(dynamic_imports.len() >= 0, "May find dynamic imports"); // Dynamic imports in function bodies might not be detected
+    // Dynamic imports in function bodies might not be detected, so we don't assert on count
 }
 
 #[test]

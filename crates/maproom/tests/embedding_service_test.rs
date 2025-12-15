@@ -45,6 +45,7 @@ async fn test_service_from_config(
 }
 
 /// Create a test vector of the correct dimension.
+#[allow(dead_code)]
 fn test_vector() -> Vec<f32> {
     vec![0.1; 1536]
 }
@@ -59,7 +60,7 @@ async fn test_embed_simple_code_chunk() {
     let service = test_service_from_config(config).await.unwrap();
 
     // Test with a simple function chunk
-    let chunk = r#"fn main() {
+    let _chunk = r#"fn main() {
     println!("Hello, world!");
 }"#;
 
@@ -73,7 +74,7 @@ async fn test_embed_complex_code_chunk() {
     let service = test_service_from_config(config).await.unwrap();
 
     // Test with a complex class chunk
-    let chunk = r#"
+    let _chunk = r#"
 class EmbeddingService {
     constructor(private client: OpenAIClient, private cache: Cache) {}
 
@@ -96,7 +97,7 @@ async fn test_embed_documentation_chunk() {
     let service = test_service_from_config(config).await.unwrap();
 
     // Test with documentation text
-    let chunk = r#"/**
+    let _chunk = r#"/**
  * Embedding Service
  *
  * Provides embedding generation with caching and retry logic.
@@ -136,7 +137,7 @@ async fn test_large_batch_chunking() {
     let mut config = test_config();
     config.batch_size = 10; // Small batch size for testing
 
-    let service = test_service_from_config(config).await.unwrap();
+    let _service = test_service_from_config(config).await.unwrap();
 
     // Create 25 chunks (should be split into 3 batches of 10, 10, 5)
     let chunks: Vec<String> = (0..25).map(|i| format!("text chunk {}", i)).collect();
@@ -440,7 +441,7 @@ async fn test_real_api_cache_hit_rate() {
 async fn test_real_api_retry_logic() {
     // This test would require simulating API failures
     // For now, we just verify the retry config is set correctly
-    let service = match EmbeddingService::from_env().await {
+    let _service = match EmbeddingService::from_env().await {
         Ok(s) => s,
         Err(_) => {
             eprintln!("Skipping: OPENAI_API_KEY not set");

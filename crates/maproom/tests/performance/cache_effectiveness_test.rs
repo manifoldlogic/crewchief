@@ -72,6 +72,7 @@ struct MockCache {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CacheEntry {
     key: String,
     value: String,
@@ -133,6 +134,7 @@ impl MockCache {
         self.entries.remove(key);
     }
 
+    #[allow(dead_code)]
     fn clear(&mut self) {
         self.entries.clear();
         self.hits = 0;

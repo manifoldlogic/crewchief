@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 use crewchief_maproom::indexer::parser;
 use std::collections::HashMap;
 use std::time::Instant;

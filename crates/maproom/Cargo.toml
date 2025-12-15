@@ -200,3 +200,7 @@ harness = false
 name = "search_relationships"
 harness = false
 
+[[bench]]
+name = "graph_quality_benchmark"
+harness = false
+

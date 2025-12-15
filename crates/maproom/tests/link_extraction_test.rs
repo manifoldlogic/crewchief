@@ -340,7 +340,7 @@ on next line.
 
     let chunks = extract_chunks(source, "md");
 
-    let links: Vec<_> = chunks
+    let _links: Vec<_> = chunks
         .iter()
         .filter(|c| c.kind == "link" || c.kind == "image_link")
         .collect();

@@ -6,8 +6,11 @@
 //! Requirements:
 //! - Running PostgreSQL with pgvector extension
 //! - MAPROOM_DATABASE_URL environment variable
-//! - OPENAI_API_KEY environment variable  
+//! - OPENAI_API_KEY environment variable
 //! - Indexed repository with generated embeddings
+
+// TODO: Update to use cargo::cargo_bin_cmd! macro
+#![allow(deprecated)]
 
 #[cfg(test)]
 mod vector_search_cli_tests {

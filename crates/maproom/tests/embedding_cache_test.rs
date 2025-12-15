@@ -157,7 +157,7 @@ async fn test_cache_hit_rate_working_set() {
     }
 
     let metrics = cache.metrics().await;
-    let total_operations = 5 + (5 * 20); // 5 initial + 100 repeated
+    let _total_operations = 5 + (5 * 20); // 5 initial + 100 repeated
     let expected_hits = 5 * 20; // 100 hits
     let expected_misses = 5; // 5 misses
 

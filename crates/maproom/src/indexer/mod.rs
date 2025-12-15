@@ -3,13 +3,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 use ignore::WalkBuilder;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::db::{ChunkRecord, FileRecord, SqliteStore};
+use crate::incremental::edge_updater::Edge;
 use crate::incremental::ignore::load_ignore_patterns;
 
+pub mod edges;
 pub mod parser;
 
 /// Debouncer to prevent rapid successive event handling
@@ -172,6 +174,20 @@ async fn process_python_imports(
         }
     }
 
+    Ok(())
+}
+
+/// Batch insert edges into the database
+async fn insert_edges(store: &SqliteStore, edges: &[Edge]) -> Result<()> {
+    for edge in edges {
+        store
+            .insert_chunk_edge(
+                edge.src_chunk_id,
+                edge.dst_chunk_id,
+                edge.edge_type.as_str(),
+            )
+            .await?;
+    }
     Ok(())
 }
 
@@ -399,6 +415,9 @@ pub async fn scan_worktree(
             store.insert_chunk(&chunk_record).await?;
         } else {
             total_chunks += chunks.len();
+
+            // Collect chunk IDs during insertion
+            let mut chunks_with_ids = Vec::new();
             for ch in &chunks {
                 let chunk_content = content
                     .split('\n')
@@ -431,7 +450,15 @@ pub async fn scan_worktree(
                     metadata: ch.metadata.clone(),
                     worktree_id,
                 };
-                store.insert_chunk(&chunk_record).await?;
+                let chunk_id = store.insert_chunk(&chunk_record).await?;
+                chunks_with_ids.push(edges::ChunkWithId {
+                    id: chunk_id,
+                    symbol_name: ch.symbol_name.clone(),
+                    kind: ch.kind.clone(),
+                    start_line: ch.start_line,
+                    end_line: ch.end_line,
+                    file_id,
+                });
             }
 
             // Process Python imports and create edges
@@ -444,6 +471,32 @@ pub async fn scan_worktree(
                         relpath.display(),
                         e
                     );
+                }
+            }
+
+            // Extract edges for TypeScript/JavaScript
+            if matches!(language, "ts" | "tsx" | "js" | "jsx") {
+                match edges::extract_edges(&content, language, &chunks_with_ids) {
+                    Ok(edges_to_insert) if !edges_to_insert.is_empty() => {
+                        if let Err(e) = insert_edges(store, &edges_to_insert).await {
+                            warn!("Failed to insert edges for {}: {}", relpath.display(), e);
+                            // Continue scan despite edge insertion failure
+                        } else {
+                            debug!(
+                                "Inserted {} edges for {}",
+                                edges_to_insert.len(),
+                                relpath.display()
+                            );
+                        }
+                    }
+                    Ok(_) => {
+                        // No edges extracted (empty file or no calls)
+                        debug!("No edges extracted for {}", relpath.display());
+                    }
+                    Err(e) => {
+                        warn!("Edge extraction failed for {}: {}", relpath.display(), e);
+                        // Continue scan despite extraction failure
+                    }
                 }
             }
         }
@@ -589,6 +642,8 @@ pub async fn upsert_files(
             };
             store.insert_chunk(&chunk_record).await?;
         } else {
+            // Collect chunk IDs during insertion
+            let mut chunks_with_ids = Vec::new();
             for ch in &chunks {
                 let chunk_content = content
                     .split('\n')
@@ -621,7 +676,15 @@ pub async fn upsert_files(
                     metadata: ch.metadata.clone(),
                     worktree_id,
                 };
-                store.insert_chunk(&chunk_record).await?;
+                let chunk_id = store.insert_chunk(&chunk_record).await?;
+                chunks_with_ids.push(edges::ChunkWithId {
+                    id: chunk_id,
+                    symbol_name: ch.symbol_name.clone(),
+                    kind: ch.kind.clone(),
+                    start_line: ch.start_line,
+                    end_line: ch.end_line,
+                    file_id,
+                });
             }
 
             // Process Python imports and create edges
@@ -634,6 +697,29 @@ pub async fn upsert_files(
                         relpath.display(),
                         e
                     );
+                }
+            }
+
+            // Extract edges for TypeScript/JavaScript
+            if matches!(language.unwrap(), "ts" | "tsx" | "js" | "jsx") {
+                match edges::extract_edges(&content, language.unwrap(), &chunks_with_ids) {
+                    Ok(edges_to_insert) if !edges_to_insert.is_empty() => {
+                        if let Err(e) = insert_edges(store, &edges_to_insert).await {
+                            warn!("Failed to insert edges for {}: {}", relpath.display(), e);
+                        } else {
+                            debug!(
+                                "Inserted {} edges for {}",
+                                edges_to_insert.len(),
+                                relpath.display()
+                            );
+                        }
+                    }
+                    Ok(_) => {
+                        debug!("No edges extracted for {}", relpath.display());
+                    }
+                    Err(e) => {
+                        warn!("Edge extraction failed for {}: {}", relpath.display(), e);
+                    }
                 }
             }
         }
