@@ -2,404 +2,276 @@
 
 ## Overview
 
-This project will be executed in 3 phases over 1.5 days. The phases are designed to deliver incremental value, with each phase being independently testable and valuable.
+This is a **completion project** finishing an incomplete feature. Most of the implementation already exists:
+- ✅ Config schema field
+- ✅ Binary resolution function
+- ✅ Comprehensive test coverage
+- ✅ User documentation (README.md)
 
-**Total Effort:** S (1.5 days)
-**Phases:** 3
-**Tickets:** 7
+**Work remaining:**
+1. Fix one call site (`cleanMaproomRecords`)
+2. Verify existing developer documentation (already exists, may need minor enhancements)
+3. Add tests for new config parameter scenario (26 tests already exist, need 2-3 new ones)
+
+**Effort:** S (1 day, ~5 hours)
 
 ## Phases
 
-### Phase 1: Configuration Foundation
+### Phase 1: Code Integration
 
-**Objective:** Add configuration schema and shared utility infrastructure without changing existing behavior.
-
-**Deliverables:**
-- Config schema extension (`maproomBinaryPath` added to RepositorySchema)
-- Shared binary resolution utility (packages/cli/src/utils/maproom-binary.ts)
-- Unit tests for binary resolution precedence order
-- No changes to existing consumers yet (worktrees.ts, maproom.ts)
-
-**Agent Assignments:**
-- typescript-engineer: Implement config schema changes and utility function
-- unit-test-runner: Execute unit tests for maproom-binary.ts
-- verify-ticket: Validate schema validation and utility function behavior
-
-**Why This Phase:**
-- Establishes foundation without risking existing functionality
-- Allows testing of resolution logic in isolation
-- Schema change is backwards compatible (optional field)
-
-**Acceptance Criteria:**
-- RepositorySchema includes maproomBinaryPath field (optional string)
-- findMaproomBinary() utility implements correct precedence order
-- Unit tests verify all resolution paths (env, config, global, packaged)
-- Existing tests still pass (no consumers changed yet)
-- Maproom action handlers converted to async (prerequisite for Phase 2)
-
-### Phase 2: CLI Integration
-
-**Objective:** Integrate shared utility into CLI commands and remove duplicated code.
+**Objective:** Make `cleanMaproomRecords()` use config-based binary resolution
 
 **Deliverables:**
-- Update packages/cli/src/cli/maproom.ts to use findMaproomBinary()
-- Update packages/cli/src/git/worktrees.ts to use findMaproomBinary()
-- Remove old resolvePackagedMaproomBin() function
-- Remove inline binary resolution from WorktreeService
-- Updated error messages with clear configuration guidance
+- Update `cleanMaproomRecords()` function signature to accept optional config
+- Load config within function if not provided
+- Pass config path to `findMaproomBinary()`
+- Handle config load errors gracefully (fall back to env var/packaged)
+
+**Specific changes:**
+```typescript
+// packages/cli/src/git/worktrees.ts:240
+
+// Before:
+export async function cleanMaproomRecords(): Promise<void> {
+  const result = findMaproomBinary()
+  // ...
+}
+
+// After:
+export async function cleanMaproomRecords(config?: CrewChiefConfig): Promise<void> {
+  let resolvedConfig = config
+  if (!resolvedConfig) {
+    try {
+      resolvedConfig = await loadConfig()
+    } catch {
+      // Config not found or invalid - continue without it
+    }
+  }
+
+  const result = findMaproomBinary({
+    configPath: resolvedConfig?.repository.maproomBinaryPath
+    // Note: configFileLocation not provided - relative paths must be
+    // absolute or relative to CWD, not relative to config file
+  })
+  // ...
+}
+```
 
 **Agent Assignments:**
-- typescript-engineer: Refactor maproom.ts and worktrees.ts
-- unit-test-runner: Execute integration tests for maproom commands
-- verify-ticket: Validate binary resolution works across all CLI commands
+- **typescript-specialist**: Update cleanMaproomRecords function
+- **typescript-specialist**: Import loadConfig if not already imported
+- **typescript-specialist**: Import CrewChiefConfig type
 
-**Why This Phase:**
-- Consolidates duplicated code (~86 lines removed)
-- Makes resolution consistent across CLI
-- Behavior change (global > packaged) happens here
+**Success Criteria:**
+- [ ] Function signature accepts optional config parameter
+- [ ] Config is loaded if not provided
+- [ ] Config path is passed to findMaproomBinary
+- [ ] configFileLocation intentionally omitted (relative paths relative to CWD, not config file)
+- [ ] Error handling prevents crashes if config invalid
+- [ ] Existing code continues to compile
 
-**Acceptance Criteria:**
-- maproom.ts uses findMaproomBinary() utility
-- worktrees.ts uses findMaproomBinary() utility
-- All existing maproom integration tests pass
-- Error messages guide users to configuration options
-- Error messages show all resolution attempts with paths
-- Resolution order is: env > config > global > packaged
-- Commands work without config file (backwards compatible)
+**Time estimate:** 1 hour
 
-**Dependencies:**
-- Requires Phase 1 completion (utility must exist)
+**Note:** Three existing call sites (worktree.ts lines 216, 328, 390) don't need changes - they can rely on cleanMaproomRecords loading config internally.
 
-### Phase 3: Documentation and Validation
+### Phase 2: Test Coverage
 
-**Objective:** Complete documentation and validate the full implementation with real-world scenarios.
+**Objective:** Verify test coverage for cleanMaproomRecords config usage
 
 **Deliverables:**
-- Updated README.md with configuration example
-- Updated docs/development/local-development.md with config-based workflow
-- Updated packages/cli/README.md (if exists)
-- Example configuration in crewchief.config.js
-- Integration test validating config-based resolution
-- Validation that all acceptance criteria are met
+- Review existing 26 test cases in clean-maproom-records.test.ts
+- Add 2-3 new tests specifically for config parameter passing:
+  - Config parameter provided → uses it
+  - Config parameter not provided → loads it
+  - Config load fails → gracefully falls back
+
+**Test location:** `packages/cli/tests/unit/clean-maproom-records.test.ts`
+
+**Current coverage:** 26 existing tests cover binary resolution, error handling, and edge cases. New tests will specifically cover config parameter integration.
 
 **Agent Assignments:**
-- documentation-engineer: Update all documentation files
-- integration-tester: Test with real config files and scenarios
-- verify-ticket: Final validation of all acceptance criteria
+- **unit-test-specialist**: Review existing tests
+- **unit-test-specialist**: Add new test cases if needed
+- **unit-test-specialist**: Verify mocking works correctly
 
-**Why This Phase:**
-- Ensures users can discover and use the new feature
-- Validates real-world usage patterns
-- Catches any documentation gaps
+**Success Criteria:**
+- [ ] Tests cover config parameter usage
+- [ ] Tests cover config load fallback
+- [ ] Tests cover error handling
+- [ ] All tests pass
 
-**Acceptance Criteria:**
-- README.md documents maproomBinaryPath config option
-- Development docs show how to use config for local builds
-- Example config file includes maproomBinaryPath example
-- Manual testing confirms config file works as expected
-- Windows testing confirmed (on CI or manually)
-- Release notes include priority order change and migration guide
-- All acceptance criteria from initiative are verified
+**Time estimate:** 2 hours
 
-**Dependencies:**
-- Requires Phase 2 completion (implementation must be done)
+### Phase 3: Documentation
 
-## Detailed Ticket Breakdown
+**Objective:** Verify and enhance existing config-based binary resolution documentation
 
-### Phase 1 Tickets (MRBIN-1xxx)
+**Deliverables:**
+- Review existing "Method 1: Configuration File" section in `docs/development/local-development.md` (lines 76-100)
+- Verify accuracy and completeness
+- Add clarification note if needed about relative path limitation (relative to CWD, not config file)
+- Ensure consistency with README.md
 
-**MRBIN-1001: Add maproomBinaryPath to config schema**
-- File: packages/cli/src/config/schema.ts
-- Add optional field to RepositorySchema
-- Export updated types
+**Current state:** Documentation already exists and is well-written with:
+- Configuration example showing relative path to binary
+- Benefits explanation
+- Preference over environment variables clearly stated
 
-**MRBIN-1002: Implement shared binary resolution utility**
-- File: packages/cli/src/utils/maproom-binary.ts (NEW)
-- Implement findMaproomBinary() with precedence logic
-- Handle platform differences (Windows .exe)
-- Add warning for invalid config paths
-- Handle missing config gracefully
+**Potential enhancements (if needed):**
+- Add note about relative path resolution (relative to CWD when used from cleanMaproomRecords)
+- Verify examples are accurate
+- Check consistency with README.md configuration section
 
-**MRBIN-1003: Unit tests for binary resolution**
-- File: packages/cli/tests/utils/maproom-binary.test.ts (NEW)
-- Test precedence order
-- Test platform handling
-- Test missing binary scenarios
-- Test missing config file scenario
-- Mock fs.existsSync and spawnSync
+**Agent Assignments:**
+- **documentation-specialist**: Review existing documentation
+- **documentation-specialist**: Add relative path clarification if helpful
+- **documentation-specialist**: Verify consistency across docs
 
-**MRBIN-1004: Convert maproom action handlers to async**
-- File: packages/cli/src/cli/maproom.ts
-- Change all action handlers to async functions
-- Update calls to use await
-- Verify Commander supports async actions
-- Pattern: `.action(async (args) => await runMaproomForward([...]))`
+**Success Criteria:**
+- [ ] Existing documentation verified as accurate
+- [ ] Relative path limitation documented (if clarification needed)
+- [ ] Consistent with README.md documentation
+- [ ] No contradictions or outdated information
 
-### Phase 2 Tickets (MRBIN-2xxx)
+**Time estimate:** 0.5 hours
 
-**MRBIN-2001: Refactor maproom.ts to use shared utility**
-- File: packages/cli/src/cli/maproom.ts
-- Import findMaproomBinary and loadConfig
-- Make runMaproomForward() async
-- Add try-catch for config loading (handle missing config)
-- Replace resolvePackagedMaproomBin() with utility call
-- Update error messages to show resolution attempts
-- Remove old function
-- Verify action handlers are async (from MRBIN-1004)
+### Phase 4: Verification
 
-**MRBIN-2002: Refactor worktrees.ts to use shared utility**
-- File: packages/cli/src/git/worktrees.ts
-- Import findMaproomBinary
-- Replace inline resolution in runMaproomScan()
-- Load config and pass maproomBinaryPath
-- Remove ~40 lines of duplicated logic
+**Objective:** Confirm all acceptance criteria met and no regressions
 
-### Phase 3 Tickets (MRBIN-3xxx)
+**Deliverables:**
+- Run full test suite
+- Manual testing with actual config file
+- Verify all commands work (maproom, worktree:clean, etc.)
+- Check documentation renders correctly
 
-**MRBIN-3001: Update documentation**
-- Files: README.md, docs/development/local-development.md, packages/cli/README.md
-- Document maproomBinaryPath config option
-- Show example configuration
-- Update development workflow section
-- Add to configuration reference
+**Agent Assignments:**
+- **unit-test-runner**: Execute `pnpm test`
+- **verify-ticket**: Check acceptance criteria from project summary
+- **manual-tester**: Test with real config file (if needed)
+
+**Test scenarios:**
+1. Set maproomBinaryPath in config → all commands use it
+2. Set CREWCHIEF_MAPROOM_BIN env var → overrides config
+3. No config, no env var → falls back to global/packaged
+4. Config with relative path → resolves correctly
+5. Config with invalid path → warns but continues
+
+**Success Criteria:**
+- [ ] All unit tests pass (existing + new)
+- [ ] No TypeScript compilation errors
+- [ ] No linting errors
+- [ ] Manual config test succeeds
+- [ ] Documentation builds without errors
+
+**Time estimate:** 1.5 hours
 
 ## Dependencies
 
-### Internal Dependencies
+### Phase Dependencies
 
-```
-MRBIN-1001 (Schema) ──┐
-                      ├──> MRBIN-1002 (Utility) ──> MRBIN-1003 (Tests)
-                      │                                  │
-MRBIN-1004 (Async) ───┤                                  │
-                      │                                  ▼
-                      └──────────────────────────> MRBIN-2001 (maproom.ts)
-                                                         │
-                                                         ▼
-                                                    MRBIN-2002 (worktrees.ts)
-                                                         │
-                                                         ▼
-                                                    MRBIN-3001 (Docs)
-```
-
-**Critical Path:**
-1. Schema change (MRBIN-1001)
-2. Async conversion (MRBIN-1004) - NEW, runs parallel with utility work
-3. Utility implementation (MRBIN-1002)
-4. Unit tests (MRBIN-1003)
-5. CLI integration (MRBIN-2001, MRBIN-2002) - requires MRBIN-1004 completion
-6. Documentation (MRBIN-3001)
+- Phase 1 → Phase 2: Code must exist before tests can be written
+- Phase 2 → Phase 4: Tests must pass before verification
+- Phase 3: Independent, can run in parallel with Phase 1-2
 
 ### External Dependencies
 
-**None** - This project is self-contained within the CLI package.
-
-**Parallel Development:**
-- Can be developed in parallel with WTPATH project
-- No conflicts expected (different files)
+**None.** All required infrastructure exists:
+- ✅ Config schema (already defined)
+- ✅ Resolution function (already implemented)
+- ✅ Test infrastructure (Vitest setup)
+- ✅ Documentation structure (local-development.md exists)
 
 ## Risk Mitigation
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| Breaking existing workflows | Medium | High | Comprehensive testing, backwards compatible schema, maintain env var priority |
-| Async config loading issues | Medium | Medium | Use existing async patterns from worktrees.ts, make functions async |
-| Platform-specific path issues | Low | Medium | Reuse existing platform detection, test on Windows/macOS/Linux |
-| Incorrect precedence order | Low | High | Explicit unit tests for each priority level, integration tests |
-| Missing edge cases | Medium | Low | Comprehensive test matrix, warn on invalid paths |
-| Documentation incomplete | Low | Medium | Document in multiple places, include examples |
+| Config load breaks existing usage | Low | Medium | Make config parameter optional; existing calls work unchanged |
+| Tests don't cover edge cases | Low | Medium | Review test coverage in Phase 2; add comprehensive scenarios |
+| Documentation unclear | Low | Low | Include examples and comparison table |
+| Regression in binary resolution | Low | High | Run full test suite (20+ existing tests catch issues) |
+| Scope creep (MCP package) | Medium | Medium | Explicitly decided in architecture: MCP unchanged |
 
-### Specific Mitigations
-
-**Breaking Workflows:**
-- All existing resolution paths continue to work
-- Environment variable still has highest priority
-- Optional config field means no config changes required
-- Existing tests must pass (regression check)
-
-**Async Challenges:**
-- Config loading is already async in worktrees.ts (precedent exists)
-- Make runMaproomForward async (Commander supports async)
-- Use same pattern as existing async CLI commands
-
-**Platform Issues:**
-- Copy existing platform detection logic exactly
-- Windows .exe handling already tested in current code
-- Packaged path logic reuses existing paths
+**Overall risk level:** LOW
+- Minimal code changes
+- Comprehensive existing tests
+- Backwards compatible changes
 
 ## Success Metrics
 
-### Code Quality Metrics
+**From project acceptance criteria:**
 
-- [ ] ~100 lines of duplicated code removed
-- [ ] Zero new linting errors
-- [ ] Test coverage maintained or improved
-- [ ] All existing tests pass
-- [ ] 6 new unit tests added (precedence scenarios)
+- [x] Config accepts `maproomBinaryPath` setting (already done)
+- [ ] Config path takes precedence over packaged binary (verify in tests)
+- [x] Env var still takes highest precedence (already implemented)
+- [x] Global install checked before local packaged binary (already correct)
+- [ ] Binary resolution is consistent across all commands (fix cleanMaproomRecords)
+- [ ] Development workflow documented (add to local-development.md)
 
-### Functional Metrics
-
-- [ ] Config schema accepts maproomBinaryPath
-- [ ] Environment variable still takes precedence
-- [ ] Config path overrides global and packaged
-- [ ] Global install checked before packaged
-- [ ] Invalid config path shows warning
-- [ ] Binary resolution consistent across all commands
-
-### User Experience Metrics
-
-- [ ] Clear error message when binary not found
-- [ ] Documentation includes config example
-- [ ] Development workflow documented
-- [ ] Config validates with helpful Zod errors
-- [ ] Works on Windows, macOS, Linux
-
-### Integration Metrics
-
-- [ ] maproom scan command works with config
-- [ ] worktree create auto-indexing works with config
-- [ ] Environment variable override still works
-- [ ] Global install works without config
-- [ ] Packaged binary fallback still works
-
-## Rollout Strategy
-
-**Phase 1 Completion:**
-- Merge schema and utility changes
-- Merge async conversion
-- No user-facing changes yet
-- Safe to deploy
-
-**Phase 2 Completion:**
-- Behavior change (global > packaged priority)
-- Update release notes with new priority order
-- Mark as minor version bump (additive feature)
-
-**Phase 3 Completion:**
-- Full feature available
-- Documentation published
-- Announce in changelog
-
-## Migration Guide
-
-**Release Notes Template:**
-
-```markdown
-## Binary Resolution Improvements
-
-### New Feature: Config-Based Binary Path
-
-You can now specify the maproom binary path in your config file:
-
-```javascript
-// crewchief.config.js
-export default {
-  repository: {
-    maproomBinaryPath: './target/release/crewchief-maproom'
-  }
-}
-```
-
-### Priority Order Change (Behavior Change)
-
-The binary resolution priority order has changed to prefer global installations:
-
-**Before:**
-1. CREWCHIEF_MAPROOM_BIN env var
-2. Packaged binary
-3. Global install
-
-**After:**
-1. CREWCHIEF_MAPROOM_BIN env var
-2. config.repository.maproomBinaryPath
-3. Global install
-4. Packaged binary
-
-**Who is affected:**
-- Users with both global install AND packaged binary will now use global install
-- This is an intentional improvement to avoid stale packaged binaries
-
-**Migration checklist:**
-- [ ] If you have both installations, verify which binary is active
-- [ ] To check: run `crewchief maproom --version` or check error messages
-- [ ] To override: set `CREWCHIEF_MAPROOM_BIN` environment variable
-- [ ] To configure: add `maproomBinaryPath` to crewchief.config.js
-
-**Examples:**
-
-```bash
-# Force specific binary via env var
-CREWCHIEF_MAPROOM_BIN=/custom/path crewchief maproom scan
-
-# Use config file (persistent)
-echo 'export default { repository: { maproomBinaryPath: "./bin/crewchief-maproom" } }' > crewchief.config.local.js
-
-# Verify which binary is being used (error message shows resolution path)
-crewchief maproom --help
-```
-```
-```
-
-## Rollback Plan
-
-**If issues arise:**
-
-1. **Phase 1 issues:** Revert schema change (breaking change for new configs only)
-2. **Phase 2 issues:** Revert CLI integration, keep utility and schema
-3. **Phase 3 issues:** Fix documentation without code changes
-
-**Rollback Impact:**
-- Users who configured maproomBinaryPath will need to use env var temporarily
-- Existing users (no config) are unaffected
-- Environment variable override always works
-
-## Testing Strategy
-
-### Unit Testing
-- Binary resolution precedence (6 test cases)
-- Platform detection (Windows vs Unix)
-- Path validation (relative, absolute, missing)
-- Config parsing (Zod validation)
-
-### Integration Testing
-- maproom scan command with config
-- worktree create with auto-indexing
-- Environment variable override
-- Missing binary error message
-
-### Manual Testing
-- Create crewchief.config.local.js with maproomBinaryPath
-- Run crewchief maproom scan
-- Verify correct binary is used
-- Test with invalid path (warning appears)
-- Test with env var set (env var wins)
+**Additional metrics:**
+- [ ] All 3 CLI call sites pass config path
+- [ ] Test coverage includes cleanMaproomRecords scenarios
+- [ ] No breaking changes to existing code
+- [ ] Documentation includes examples and priority order
 
 ## Timeline
 
-**Day 1:**
-- Morning: Phase 1 (schema + async conversion + utility + tests) - 4-6 hours
-- Afternoon: Phase 2 start (CLI integration) - 2-3 hours
-- End of day: Phase 2 complete
+**Total effort:** 5 hours (S - 1 day)
 
-**Day 2:**
-- Morning: Phase 3 (documentation + validation + Windows testing) - 3-4 hours
-- Buffer: Integration issues, manual testing - 1-2 hours
+| Phase | Duration | Cumulative |
+|-------|----------|------------|
+| Phase 1: Code Integration | 1 hour | 1 hour |
+| Phase 2: Test Coverage | 2 hours | 3 hours |
+| Phase 3: Documentation | 0.5 hours | 3.5 hours |
+| Phase 4: Verification | 1.5 hours | 5 hours |
 
-**Checkpoints:**
-- 12:00 PM Day 1: Phase 1 complete, utility tested, async converted
-- 5:00 PM Day 1: Phase 2 complete, CLI integrated
-- 12:00 PM Day 2: Phase 3 complete, documentation done, Windows tested
+**Buffer:** 1 hour for unexpected issues (20% of total)
 
-## Communication
+## Out of Scope
 
-**Updates:**
-- Commit messages reference ticket IDs (MRBIN-xxxx)
-- PR description links to this plan
-- Release notes mention new config option
+The following are **explicitly excluded** to maintain focus:
 
-**Breaking Changes:**
-- Document priority order change in changelog
-- Not technically breaking (backwards compatible)
-- Behavior change worth calling out
-- Include migration guide in release notes
-- Provide examples of before/after behavior
+1. **MCP package changes**: MCP serves different use case (IDE integration), has different resolution order intentionally
+2. **Shared utility extraction**: CLI and MCP implementations are intentionally different
+3. **Resolution order changes**: Current order is already correct
+4. **New config fields**: Only using existing `maproomBinaryPath`
+5. **Config file location tracking**: Using optional parameter, not changing loadConfig return type
+6. **Relative path resolution from config file**: configFileLocation not passed to cleanMaproomRecords (paths relative to CWD, acceptable for MVP)
+7. **Additional binary options**: No debug/profile binary variants
+8. **Version constraints**: No binary version checking
+
+## Post-Completion Actions
+
+After all phases complete:
+
+1. **Ticket creation** via `/workstream:project-tickets MRBIN`
+2. **Knowledge synthesis**: No new docs needed (updates to existing)
+3. **Archive decision**: Keep in active projects until tickets complete
+
+## Rollback Plan
+
+If issues discovered after completion:
+
+**Scenario:** Config loading breaks something
+**Action:**
+1. Revert cleanMaproomRecords changes
+2. Binary resolution still works via env var/packaged
+3. No user-facing breakage (config is optional)
+
+**Scenario:** Tests reveal edge cases
+**Action:**
+1. Add error handling for specific case
+2. Document limitation if workaround not feasible
+3. Priority: maintain backwards compatibility
+
+## Future Enhancements
+
+**Not in scope for this project, but possible later:**
+
+1. Config validation errors shown in `crewchief config validate` command
+2. `--binary-path` CLI flag for one-off overrides
+3. Per-command binary overrides (scan vs search different binaries)
+4. Binary version detection and warnings
+5. Automatic binary download if not found
+
+These can be separate projects if needed.

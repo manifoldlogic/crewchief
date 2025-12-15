@@ -2,479 +2,394 @@
 
 ## Overview
 
-This project adds configuration-based maproom binary resolution to the crewchief CLI and consolidates three separate binary resolution implementations into a single shared utility. The architecture follows the existing config system pattern and provides a clear precedence order that prioritizes explicit configuration over auto-detection.
+This is a **completion project**, not a greenfield implementation. The binary configuration feature already exists with:
+- Schema definition (`RepositorySchema.maproomBinaryPath`)
+- Resolution logic (`findMaproomBinary()` function)
+- Comprehensive test coverage (20+ test cases)
+- Partial documentation
 
-**Key Components:**
-1. Config schema extension (Zod validation in RepositorySchema)
-2. Shared binary resolution utility (packages/cli/src/utils/maproom-binary.ts)
-3. Updated consumers (maproom.ts, worktrees.ts)
-4. MCP package keeps separate implementation (different package concerns)
-
-**Principles:**
-- Follow existing config patterns (Zod schema, optional fields)
-- Reuse existing utilities (fs, path, spawnSync)
-- Maintain backwards compatibility (all existing paths continue to work)
-- Fail gracefully with clear error messages
+The architecture focuses on **integration gaps**: ensuring all call sites use the existing config path and documenting the feature properly.
 
 ## Design Decisions
 
-### Decision 1: Add to RepositorySchema vs New Top-Level Section
+### Decision 1: No Changes to Resolution Order
 
-**Context:** Binary path could be added to `repository` section or create a new `tools` section for tool configurations.
+**Context:** The project summary mentions "update resolution order to prioritize config over local build detection" and "global install before packaged binary."
 
-**Decision:** Add `maproomBinaryPath` to existing `RepositorySchema`.
+**Analysis:**
+- Current order in `findMaproomBinary()`: env → config → global → packaged
+- This is **already correct** according to the acceptance criteria
+- "Config over local build" is already true (config is priority 2, packaged is priority 4)
+- "Global before packaged" is already true (global is priority 3, packaged is priority 4)
 
-**Rationale:**
-- Follows existing pattern (worktreeBasePath is in repository section)
-- Avoids creating a new top-level section for one field
-- Repository scope is appropriate (different repos might use different builds)
-- Simpler migration path (users already configure repository section)
+**Decision:** No changes to resolution order needed. The current implementation already matches the desired behavior.
 
-**Schema Change:**
-```typescript
-export const RepositorySchema = z.object({
-  mainBranch: z.string().default('main'),
-  worktreeBasePath: z.string().default('.crewchief/worktrees'),
-  maproomBinaryPath: z.string().optional(),
-})
-```
+**Rationale:** Avoid unnecessary changes. The resolution order is well-tested and works correctly.
 
-### Decision 2: Resolution Order Priority
+### Decision 2: MCP Package Unchanged
 
-**Context:** Current implementations prioritize packaged binaries before global installs, which causes confusion when developers have both.
+**Context:** The maproom-mcp package has its own `findMaproomBinary()` with different resolution logic (env → packaged → dev paths).
 
-**Decision:** New priority order:
-1. `CREWCHIEF_MAPROOM_BIN` environment variable
-2. `config.repository.maproomBinaryPath`
-3. Global install (`command -v crewchief-maproom`)
-4. Packaged binary (platform-specific in bin/)
+**Analysis:**
+- MCP runs as a standalone daemon for IDE integration
+- May not be in a crewchief project context (no access to crewchief.config.js)
+- Different resolution order is intentional for monorepo development
+- Used by VSCode extension, not directly by CLI users
+
+**Decision:** Leave MCP package as-is. Do not add config support or change resolution order.
 
 **Rationale:**
-- Environment variable: Highest priority for one-off overrides
-- Config file: Persistent, version-controllable, team-shareable
-- Global install: Most common production deployment
-- Packaged binary: Fallback for bundled distributions
+- MCP serves a different use case (IDE integration vs CLI usage)
+- Adding config loading would create unneeded complexity
+- Development workflow is env var for local builds (already supported)
+- Out of scope for a 1-day effort
 
-**Behavior Change:** This changes the order for users who have both global and packaged binaries. Global install now takes precedence, which better matches production expectations.
+### Decision 3: No Shared Utility Extraction
 
-**Impact on Users:**
-- Users with only global install: No change
-- Users with only packaged binary: No change
-- Users with both: Will now use global install instead of packaged (intentional improvement)
-- Users can override with environment variable if needed
+**Context:** Project summary mentions "Extract `findMaproomBinary()` function for reuse."
 
-### Decision 3: Shared Utility Location
+**Analysis:**
+- CLI and MCP implementations are intentionally different
+- Different resolution priorities serve different contexts
+- Extracting would require complex parameterization
+- Current duplication is acceptable (85 lines vs 52 lines)
 
-**Context:** Binary resolution is needed in both CLI (maproom.ts, worktrees.ts) and potentially other CLI utilities.
+**Decision:** Keep implementations separate. No shared utility extraction.
 
-**Decision:** Create `packages/cli/src/utils/maproom-binary.ts` with shared resolution function.
+**Rationale:** The two implementations serve different needs. Forced abstraction would add complexity without benefit.
 
-**Rationale:**
-- CLI package owns the maproom command integration
-- Utils directory is established pattern for shared utilities
-- Can be imported by both maproom.ts and worktrees.ts
-- MCP package has different concerns (includes dev build detection) and stays separate
+### Decision 4: Config File Location via Optional Parameter
 
-**API:**
-```typescript
-export interface MaproomBinaryOptions {
-  configPath?: string  // from config.repository.maproomBinaryPath
-}
+**Context:** Relative paths in `maproomBinaryPath` need config file location to resolve correctly.
 
-export function findMaproomBinary(options?: MaproomBinaryOptions): string | null
-```
+**Options considered:**
+1. Modify `loadConfig()` return type to include config path
+2. Add configPath to config object as metadata
+3. Pass configFileLocation separately in MaproomBinaryOptions
 
-### Decision 4: MCP Package Independence
-
-**Context:** MCP package has similar but distinct binary resolution needs (includes development build detection).
-
-**Decision:** Keep MCP `findMaproomBinary()` separate, do NOT consolidate with CLI utility.
+**Decision:** Use existing `MaproomBinaryOptions.configFileLocation` parameter (option 3), but don't pass it to cleanMaproomRecords.
 
 **Rationale:**
-- Different package concerns (MCP is published separately)
-- MCP includes dev build detection (`target/release/`) that CLI doesn't need
-- MCP doesn't use crewchief config system (runs standalone via stdio)
-- Avoiding cross-package coupling reduces fragility
-- Small code duplication is acceptable for package independence
+- Already exists in the interface (line 9 in maproom-binary.ts)
+- No breaking changes to loadConfig()
+- Call sites can pass it when available, omit when not
+- For cleanMaproomRecords: Won't pass configFileLocation (acceptable MVP limitation)
+- Relative paths in cleanMaproomRecords context will be relative to CWD, not config file
+- Absolute paths work always (primary use case for local development)
 
-### Decision 5: Path Validation Strategy
+**Accepted limitation:** Relative paths in maproomBinaryPath won't resolve relative to config file location when used from cleanMaproomRecords. This is acceptable because:
+- Most users use absolute paths or paths relative to project root
+- Can be enhanced in future if needed
+- Doesn't break existing functionality
 
-**Context:** Config path might be invalid, relative, or non-existent.
+### Decision 5: Fix cleanMaproomRecords Only
 
-**Decision:**
-- Accept absolute or relative paths in config
-- Resolve relative paths from config file location
-- Check existence with fs.existsSync()
-- Return null if configured path doesn't exist (fall through to next priority)
-- Emit warning if configured path is invalid
-- Handle missing config file gracefully (no error, fall through)
+**Context:** Three call sites for `findMaproomBinary()` in CLI package, one doesn't pass config.
 
-**Rationale:**
-- Relative paths are more portable across environments
-- Silent fallback matches existing behavior
-- Warning helps debugging without breaking existing workflows
-- Config file is optional - commands must work without it
+**Analysis:**
+- `maproom.ts:37` ✅ - Already correct
+- `worktrees.ts:40` ✅ - Already correct
+- `worktrees.ts:242` ❌ - `cleanMaproomRecords()` exports function, doesn't load config
 
-**Example:**
-If config is at `/workspace/subdir/crewchief.config.js` and specifies `maproomBinaryPath: "./bin/maproom"`, it resolves to `/workspace/subdir/bin/maproom`
+**Decision:** Update `cleanMaproomRecords()` to:
+1. Accept optional config parameter
+2. Load config if not provided
+3. Pass config path to `findMaproomBinary()`
+
+**Rationale:** Minimal change with maximum consistency. Backwards compatible (config parameter optional).
 
 ## Technology Choices
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Validation | Zod | Already used for config validation |
-| File system | Node fs | Built-in, matches existing code |
-| Path resolution | Node path | Built-in, handles platform differences |
-| Binary detection | spawnSync + bash | Existing pattern for global binary detection |
-| Config loading | Existing loadConfig() | Reuses established config infrastructure |
+| Config validation | Zod (existing) | Already in use, type-safe |
+| Path resolution | Node.js `path` module | Standard, platform-aware |
+| Binary detection | fs.existsSync + spawnSync | Simple, reliable |
+| Testing | Vitest (existing) | Already set up, good mocking |
+
+No new technology needed. All components already in place.
 
 ## Component Design
 
-### 1. Config Schema Extension
+### Config Schema (No Changes)
 
-**File:** `packages/cli/src/config/schema.ts`
+**Location:** `packages/cli/src/config/schema.ts`
 
-**Change:**
+**Existing implementation:**
 ```typescript
 export const RepositorySchema = z.object({
   mainBranch: z.string().default('main'),
-  worktreeBasePath: z.string().default('.crewchief/worktrees'),
-  maproomBinaryPath: z.string().optional(), // NEW
+  worktreeBasePath: z.string().default('~/.crewchief/worktrees/<repo-name>'),
+  maproomBinaryPath: z.string().optional(), // Line 19
 })
 ```
 
-**Validation:**
-- Optional field (no breaking change)
-- String type (file path)
-- No format validation (Zod level) - handled at runtime
+**No changes needed.** Schema already accepts the config value.
 
-### 2. Binary Resolution Utility
+### Binary Resolution Function (No Changes)
 
-**File:** `packages/cli/src/utils/maproom-binary.ts` (NEW)
+**Location:** `packages/cli/src/utils/maproom-binary.ts`
 
-**Interface:**
+**Existing interface:**
 ```typescript
 export interface MaproomBinaryOptions {
-  /** Path from config.repository.maproomBinaryPath */
-  configPath?: string
+  configPath?: string // from config.repository.maproomBinaryPath
+  configFileLocation?: string // for relative path resolution
 }
 
 export interface BinaryResolutionResult {
-  /** Path to binary or null if not found */
   path: string | null
-  /** Where the binary was found (for debugging/logging) */
   source: 'env' | 'config' | 'global' | 'packaged' | 'not-found'
 }
 
-/**
- * Find the crewchief-maproom binary using priority-based resolution.
- *
- * Priority order:
- * 1. CREWCHIEF_MAPROOM_BIN environment variable
- * 2. configPath option (from config.repository.maproomBinaryPath)
- * 3. Global install (command -v crewchief-maproom)
- * 4. Packaged binary (platform-specific in bin/)
- */
 export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolutionResult
 ```
 
-**Implementation Strategy:**
+**No changes needed.** Function already implements the correct logic.
+
+### cleanMaproomRecords Function (Needs Update)
+
+**Location:** `packages/cli/src/git/worktrees.ts:240-265`
+
+**Current signature:**
 ```typescript
-export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolutionResult {
-  const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
-
-  // Priority 1: Environment variable
-  const envPath = process.env.CREWCHIEF_MAPROOM_BIN
-  if (envPath && fs.existsSync(envPath)) {
-    return { path: envPath, source: 'env' }
-  }
-
-  // Priority 2: Config file
-  if (options?.configPath) {
-    const resolved = path.resolve(options.configPath)
-    if (fs.existsSync(resolved)) {
-      return { path: resolved, source: 'config' }
-    }
-    // Warn but continue to fallback
-    logger.warn(`Configured maproom binary not found at ${resolved}`)
-  }
-
-  // Priority 3: Global install
-  const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
-  if (which.status === 0) {
-    return { path: 'crewchief-maproom', source: 'global' }
-  }
-
-  // Priority 4: Packaged binary
-  // Note: x64 maps to amd64 on some platforms, handle gracefully
-  const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
-  const platform = `${process.platform}-${arch}`
-  const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-  const packagedPaths = [
-    path.join(__dirname, '..', 'bin', platform, execName),
-    path.join(__dirname, '..', 'bin', execName),
-    path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', platform, execName),
-  ]
-
-  for (const p of packagedPaths) {
-    if (fs.existsSync(p)) {
-      return { path: p, source: 'packaged' }
-    }
-  }
-
-  return { path: null, source: 'not-found' }
-}
+export async function cleanMaproomRecords(): Promise<void>
 ```
 
-### 3. Updated maproom.ts Consumer
-
-**File:** `packages/cli/src/cli/maproom.ts`
-
-**Change:**
+**Updated signature:**
 ```typescript
-import { findMaproomBinary } from '../utils/maproom-binary.js'
-import { loadConfig } from '../config/loader.js'
-import { logger } from '../utils/logger.js'
-
-async function runMaproomForward(args: string[]) {
-  // ... validation logic ...
-
-  // Load config to get binary path (handle missing config gracefully)
-  let configPath: string | undefined
-  try {
-    const config = await loadConfig()
-    configPath = config.repository.maproomBinaryPath
-  } catch (error) {
-    // Config file missing or invalid - continue with defaults
-    logger.debug('No config file found, using default binary resolution')
-  }
-
-  const result = findMaproomBinary({ configPath })
-
-  if (!result.path) {
-    console.error(
-      'crewchief-maproom not found. Options:\n' +
-      '1. Install globally: npm install -g @crewchief/cli\n' +
-      '2. Set CREWCHIEF_MAPROOM_BIN environment variable\n' +
-      '3. Add maproomBinaryPath to crewchief.config.js\n\n' +
-      'Resolution attempts:\n' +
-      '- Environment: ' + (process.env.CREWCHIEF_MAPROOM_BIN || 'not set') + '\n' +
-      '- Config: ' + (configPath || 'not configured') + '\n' +
-      '- Global: not found\n' +
-      '- Packaged: not found'
-    )
-    process.exitCode = 1
-    return
-  }
-
-  const res = spawnSync(result.path, args, { stdio: 'inherit' })
-  if (res.status !== 0) process.exitCode = res.status ?? 1
-}
-
-// Commander action handlers must be async
-program
-  .command('scan')
-  .action(async (args) => await runMaproomForward(['scan', ...(args || [])]))
+export async function cleanMaproomRecords(config?: CrewChiefConfig): Promise<void>
 ```
 
-**Note:** Function is now async and Commander action handlers use async/await pattern.
+**Implementation changes:**
+1. Accept optional config parameter
+2. If not provided, call `loadConfig()` to get it
+3. Pass `config.repository.maproomBinaryPath` to `findMaproomBinary()`
+4. Do NOT pass configFileLocation (intentionally omitted for MVP)
+5. Handle config load errors gracefully (continue without config)
 
-### 4. Updated worktrees.ts Consumer
+**Backward compatibility:** Existing callers continue to work (config parameter optional).
 
-**File:** `packages/cli/src/git/worktrees.ts`
+**Call sites (no changes needed):**
+- Line 216: `await cleanMaproomRecords()` in worktree:clean command
+- Line 328: `await cleanMaproomRecords()` in worktree:prune command
+- Line 390: `await cleanMaproomRecords()` in worktree:use --clean flag
 
-**Change:**
-```typescript
-import { findMaproomBinary } from '../utils/maproom-binary.js'
+All three can rely on cleanMaproomRecords loading config internally.
 
-private async runMaproomScan(worktreePath: string): Promise<void> {
-  try {
-    const config = await loadConfig()
-    const result = findMaproomBinary({
-      configPath: config.repository.maproomBinaryPath
-    })
+### Config File Location Tracking (New Helper)
 
-    if (!result.path) {
-      console.log('⚠️  Maproom binary not found, skipping indexing for new worktree')
-      return
-    }
+**Need:** Get config file path from `loadConfig()` for relative path resolution.
 
-    console.log('🔍 Running maproom scan for new worktree...')
+**Solution:** Update `findConfigFile()` to be exported, reuse in call sites.
 
-    const scanResult = spawnSync(result.path, ['scan'], {
-      cwd: worktreePath,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-
-    // ... rest of output handling ...
-  } catch (error) {
-    console.warn('⚠️  Failed to run maproom scan:', error instanceof Error ? error.message : error)
-  }
-}
-```
+**Alternative:** Store in closure/module variable during loadConfig.
+**Decision:** Export `findConfigFile()` helper - cleaner, more explicit.
 
 ## Data Flow
 
-1. **User configures binary path** (optional):
-   ```javascript
-   // crewchief.config.local.js
-   export default {
-     repository: {
-       maproomBinaryPath: './target/release/crewchief-maproom'
-     }
-   }
-   ```
+### Primary Flow: CLI Command → Binary Resolution
 
-2. **CLI command invoked**:
-   ```bash
-   crewchief maproom scan
-   # or
-   crewchief worktree create feature-branch
-   ```
+```
+1. User runs: crewchief maproom scan
+   ↓
+2. maproom.ts:runMaproomForward()
+   ↓
+3. loadConfig() → CrewChiefConfig
+   ↓
+4. findMaproomBinary({
+     configPath: config.repository.maproomBinaryPath,
+     configFileLocation: configFilePath
+   })
+   ↓
+5. Resolution order:
+   a. Check CREWCHIEF_MAPROOM_BIN env var
+   b. Check configPath (resolve relative if needed)
+   c. Check global install (command -v)
+   d. Check packaged binary
+   ↓
+6. Return { path, source }
+   ↓
+7. spawnSync(path, args) → Execute binary
+```
 
-3. **Config loaded** via existing loadConfig():
-   - Traverses directory tree
-   - Finds crewchief.config.js or crewchief.config.local.js
-   - Validates with Zod
-   - Returns parsed config
+### Secondary Flow: cleanMaproomRecords
 
-4. **Binary resolution** via findMaproomBinary():
-   - Check CREWCHIEF_MAPROOM_BIN env var
-   - Check config.repository.maproomBinaryPath
-   - Check global install (command -v)
-   - Check packaged binary locations
-   - Return path + source
+```
+1. Code calls: cleanMaproomRecords()
+   ↓
+2. If config not provided:
+     config = await loadConfig()
+     (handle errors gracefully)
+   ↓
+3. findMaproomBinary({
+     configPath: config?.repository.maproomBinaryPath
+     // Note: configFileLocation NOT provided
+     // Relative paths resolve from CWD, not config file
+   })
+   ↓
+4. Proceed with cleanup using found binary
+```
 
-5. **Binary execution**:
-   - spawnSync with resolved path
-   - Forward args and stdio
-   - Return exit code
+### Config Resolution Flow
+
+```
+1. findConfigFile(cwd) traverses directories up
+   ↓
+2. Checks for:
+   - crewchief.config.local.js (priority 1)
+   - crewchief.config.js (priority 2)
+   ↓
+3. Returns config file path or null
+   ↓
+4. loadConfig() imports the module
+   ↓
+5. Zod validation → CrewChiefConfig
+```
 
 ## Integration Points
 
-### 1. Existing Config System
+### Existing Integration Points (No Changes)
 
-**Integration:** Extends RepositorySchema with new optional field
+1. **maproom.ts CLI commands** - Already passes config correctly
+2. **worktrees.ts:runMaproomScan()** - Already passes config correctly
+3. **Test suite** - Comprehensive coverage already exists
 
-**Touch Points:**
-- `packages/cli/src/config/schema.ts` - Schema definition
-- `packages/cli/src/config/loader.ts` - No changes needed (already returns parsed config)
-- User's `crewchief.config.js` - Optional new field
+### New Integration Point
 
-**Compatibility:** Fully backwards compatible (optional field)
-
-### 2. CLI Commands
-
-**Integration:** Import and use findMaproomBinary() utility
-
-**Touch Points:**
-- `packages/cli/src/cli/maproom.ts` - Replace resolvePackagedMaproomBin()
-- `packages/cli/src/git/worktrees.ts` - Replace inline resolution logic
-
-**Migration:** Remove ~86 lines of duplicated code, replace with utility calls
-
-### 3. MCP Package (NO CHANGES)
-
-**Integration:** None - MCP package remains independent
-
-**Rationale:** Different package concerns, different deployment model
+**worktrees.ts:cleanMaproomRecords()** - Will now:
+- Accept optional config parameter
+- Load config if not provided
+- Pass config path to binary resolution
 
 ## Performance Considerations
 
-**Binary Resolution Performance:**
-- File existence checks: O(1) for each path checked (4-6 checks max)
-- Global binary detection: One bash subprocess (20-50ms overhead)
-- Total overhead: <100ms per CLI invocation (acceptable for CLI tool)
+### Config Loading Performance
 
-**Caching Strategy:**
-- NO caching needed (resolution is fast enough)
-- Each command resolves fresh (handles binary updates mid-session)
-- Config loading overhead: <50ms per command (acceptable for CLI)
-- Missing config is caught and handled, no performance impact
+**Current:** `loadConfig()` is called multiple times (once per command)
+**Impact:** Negligible - config file is small (~50 lines), JavaScript import is cached
+**Optimization:** Not needed. Config loading is fast (<1ms).
 
-**Optimization:**
-- Early returns (env var checked first, exits on match)
-- Packaged paths checked last (least likely in production)
+### Binary Resolution Performance
+
+**Current:** Checks multiple locations in sequence
+**Impact:** Fast - filesystem checks are <1ms each
+**Worst case:** ~5ms (env var, config, global check, 2-3 packaged paths)
+**Optimization:** Not needed. Resolution is fast enough.
+
+### Relative Path Resolution
+
+**Operation:** `path.resolve(configDir, relativePath)`
+**Impact:** Negligible (<0.1ms)
+**Optimization:** Not needed.
 
 ## Maintainability
 
 ### Code Organization
 
-**Before:**
-- 3 separate implementations (~140 lines total)
-- Subtle differences in logic
-- No single source of truth
+**Strengths:**
+- Clear separation: config/ schema, utils/ helpers
+- Well-tested: 20+ test cases with mocking
+- Good error messages: Shows all resolution attempts
+- Type-safe: Zod validation, TypeScript interfaces
 
-**After:**
-- 1 shared utility (~60 lines)
-- 2 simple call sites (~10 lines each)
-- Clear contract via TypeScript interface
+**No changes needed to organization.** Current structure is maintainable.
 
 ### Testing Strategy
 
-**Unit Tests:** `packages/cli/tests/utils/maproom-binary.test.ts`
-- Test precedence order (env > config > global > packaged)
-- Test platform handling (Windows .exe vs Unix)
-- Test relative path resolution
-- Test missing binary handling
-- Mock fs.existsSync and spawnSync
+**Existing tests cover:**
+- Precedence order (env > config > global > packaged)
+- Platform variations (Windows .exe, Unix no suffix)
+- Relative path resolution
+- Missing paths (falls through gracefully)
+- Edge cases (errors, empty paths)
 
-**Integration Tests:** Existing tests should pass
-- `packages/cli/tests/integration/maproom-commands.int.test.ts`
-- Environment variable tests in MCP package
+**New tests needed:**
+- `cleanMaproomRecords()` with config parameter
+- `cleanMaproomRecords()` without config (loads it)
+- Config load failure handling in cleanMaproomRecords
 
-### Error Messages
+**Estimate:** 2-3 additional test cases, ~50 lines.
 
-**Clear guidance for users:**
+### Documentation Structure
+
+**Current state:**
+- README.md: User-facing documentation (configuration section)
+- local-development.md: Developer workflow (env var methods)
+- CLAUDE.md: Component guidance
+
+**Updates needed:**
+- local-development.md: Add config-based method (Method 1)
+- Show example with crewchief.config.local.js
+- Explain when to use each method (config vs env var)
+
+### Future Extensibility
+
+**Potential future needs:**
+1. Additional binary options (debug builds, profiling)
+   - Easy: Add more fields to RepositorySchema
+   - Example: `maproomBinaryDebug`, `maproomBinaryProfile`
+
+2. Per-command binary overrides
+   - Medium: Add command-specific config sections
+   - Example: `commands.scan.maproomBinaryPath`
+
+3. Binary version constraints
+   - Medium: Add version checking after resolution
+   - Example: `maproomBinaryMinVersion: "1.2.0"`
+
+Current architecture supports these extensions without major refactoring.
+
+## Migration Strategy
+
+**Not applicable** - this is completing an existing feature, not migrating from old to new.
+
+### For Users
+
+**No action required:**
+- Existing env var usage continues to work
+- New config option is opt-in
+- No breaking changes
+
+### For Developers
+
+**Immediate benefit:**
+- Can use `maproomBinaryPath` in crewchief.config.local.js
+- Works consistently across all commands
+- Documented in local-development.md
+
+## Error Handling
+
+### Config Load Errors
+
+**Scenarios:**
+1. Config file not found
+2. Config file invalid JavaScript
+3. Config validation fails (Zod)
+
+**Handling:**
+- `maproom.ts`: Already handles with try/catch (lines 29-35)
+- `cleanMaproomRecords`: Will handle with try/catch, continue without config
+- User sees warning but command continues with env var or packaged binary
+
+### Binary Not Found
+
+**Current behavior:** Clear error message showing all attempts
 ```
-crewchief-maproom not found. Options:
-1. Install globally: npm install -g @crewchief/cli
-2. Set CREWCHIEF_MAPROOM_BIN environment variable
-3. Add maproomBinaryPath to crewchief.config.js:
-
-   export default {
-     repository: {
-       maproomBinaryPath: './path/to/crewchief-maproom'
-     }
-   }
+Resolution attempts:
+- Environment: not set
+- Config: ./my-binary (not found)
+- Global: not found
+- Packaged: not found
 ```
 
-### Documentation Updates
+**No changes needed.** Error handling already excellent.
 
-**Files to update:**
-1. `README.md` - Add config option to main documentation
-2. `docs/development/local-development.md` - Update development workflow
-3. `packages/cli/README.md` - Document repository config options
-4. Example config files (if any)
+### Invalid Config Path
 
-## Risks and Mitigations
+**Current behavior:** Logs warning, falls through to next priority
+```typescript
+logger.warn(`Configured maproom binary path not found: ${resolvedConfigPath}`)
+```
 
-### Risk 1: Breaking Existing Workflows
-
-**Mitigation:**
-- All existing paths continue to work (backwards compatible)
-- Change in priority order is intentional improvement
-- Comprehensive testing of existing scenarios
-
-### Risk 2: Path Resolution Edge Cases
-
-**Mitigation:**
-- Handle relative paths explicitly
-- Warn on invalid config paths
-- Fall through to next priority on failure
-
-### Risk 3: Platform Differences
-
-**Mitigation:**
-- Reuse existing platform detection logic
-- Test on Windows, macOS, Linux
-- Handle .exe suffix consistently
-
-### Risk 4: Async Config Loading in Sync Context
-
-**Mitigation:**
-- Config loading is already async in current code
-- Make runMaproomForward async (already in async context via Commander)
-- Document that binary resolution requires config loading
+**No changes needed.** Graceful degradation already implemented.
