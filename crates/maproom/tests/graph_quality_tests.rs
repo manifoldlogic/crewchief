@@ -98,7 +98,7 @@ fn test_file_path_patterns_production_code() {
         "src/testing-utils.ts", // Contains 'test' but not a test file
         "src/latest.ts",        // Ends with 'test.ts' substring but not .test.ts
         "src/manifest.json",
-        "docs/TESTING.md",      // Documentation about testing, not actual test
+        "docs/TESTING.md", // Documentation about testing, not actual test
     ];
 
     for path in &production_paths {
@@ -221,7 +221,7 @@ fn test_production_scores_higher_than_test() {
 #[test]
 fn test_logarithmic_scaling_diminishing_returns() {
     // Adding more edges should have diminishing returns due to LOG scaling
-    let score_5 = expected_quality_score(5, 0);   // ln(7)
+    let score_5 = expected_quality_score(5, 0); // ln(7)
     let score_10 = expected_quality_score(10, 0); // ln(12)
     let score_20 = expected_quality_score(20, 0); // ln(22)
 

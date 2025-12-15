@@ -29,7 +29,9 @@ pub async fn setup_test_db() -> Result<SqliteStore> {
 pub fn test_store() -> SqliteStore {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
     rt.block_on(async {
-        setup_test_db().await.expect("Failed to create test database")
+        setup_test_db()
+            .await
+            .expect("Failed to create test database")
     })
 }
 
@@ -268,7 +270,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_setup_test_db() {
-        let store = setup_test_db().await.expect("Failed to create test database");
+        let store = setup_test_db()
+            .await
+            .expect("Failed to create test database");
         // Verify we can create a repo (proves migrations ran)
         let repo_id = store
             .get_or_create_repo("test", "/test")
@@ -288,10 +292,14 @@ mod tests {
     #[tokio::test]
     async fn test_insert_test_data() {
         let test_db = TestDb::new().await.expect("Failed to create TestDb");
-        test_db.insert_test_data().await.expect("Failed to insert test data");
+        test_db
+            .insert_test_data()
+            .await
+            .expect("Failed to insert test data");
 
         // Verify data was inserted by searching
-        let results = test_db.store
+        let results = test_db
+            .store
             .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false)
             .await
             .expect("Search failed");
@@ -309,6 +317,8 @@ mod tests {
     fn test_sample_chunks_generation() {
         let chunks = sample_chunks(1, 1);
         assert_eq!(chunks.len(), 3);
-        assert!(chunks.iter().any(|c| c.symbol_name.as_deref() == Some("authenticate")));
+        assert!(chunks
+            .iter()
+            .any(|c| c.symbol_name.as_deref() == Some("authenticate")));
     }
 }

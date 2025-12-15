@@ -93,10 +93,7 @@ async fn test_chunk_and_edge_insertion() {
     // Verify chunks exist
     assert!(src_chunk_id > 0, "Source chunk should have positive ID");
     assert!(test_chunk_id > 0, "Test chunk should have positive ID");
-    assert_ne!(
-        src_chunk_id, test_chunk_id,
-        "Chunk IDs should be different"
-    );
+    assert_ne!(src_chunk_id, test_chunk_id, "Chunk IDs should be different");
 }
 
 #[tokio::test]
@@ -136,11 +133,7 @@ async fn test_multiple_edges_from_same_source() {
     // Verify all 3 callers were created with unique IDs
     assert_eq!(caller_ids.len(), 3);
     let unique_ids: std::collections::HashSet<_> = caller_ids.iter().collect();
-    assert_eq!(
-        unique_ids.len(),
-        3,
-        "All caller chunk IDs should be unique"
-    );
+    assert_eq!(unique_ids.len(), 3, "All caller chunk IDs should be unique");
 }
 
 // ============================================================================
@@ -163,7 +156,11 @@ async fn test_production_and_test_file_creation() {
     for path in &prod_paths {
         let file = make_file(&db, path);
         let file_id = store.upsert_file(&file).await.unwrap();
-        assert!(file_id > 0, "Production file {} should have positive ID", path);
+        assert!(
+            file_id > 0,
+            "Production file {} should have positive ID",
+            path
+        );
     }
 
     // Create various test files

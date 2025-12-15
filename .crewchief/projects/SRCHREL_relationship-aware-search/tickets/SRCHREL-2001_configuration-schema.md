@@ -1,9 +1,9 @@
 # Ticket: SRCHREL-2001 - Configuration Schema
 
 ## Status
-- [ ] **Task completed** - acceptance criteria met
-- [ ] **Tests pass** - related tests pass
-- [ ] **Verified** - by the verify-ticket agent
+- [x] **Task completed** - acceptance criteria met
+- [x] **Tests pass** - related tests pass
+- [x] **Verified** - by the verify-ticket agent
 
 ## Agents
 - rust-expert
@@ -16,16 +16,16 @@ Add full YAML configuration schema for quality-weighted edge scoring. Define `Gr
 
 ## Acceptance Criteria
 
-- [ ] Add `GraphImportanceConfig` struct to `SearchConfig`
-- [ ] Define `EdgeQualityWeights` struct with all weight fields
-- [ ] Implement `Default` trait with validated Phase 1 weights
-- [ ] Add config validation (reject negative/extreme weights)
-- [ ] Validate weights sum or scale appropriately
-- [ ] Add fusion_weight_override field (optional)
-- [ ] Configuration loads from YAML successfully
-- [ ] Invalid configs fail with clear error messages
-- [ ] Backward compatible with existing configs (use defaults)
-- [ ] Unit tests for config validation
+- [x] Add `GraphImportanceConfig` struct to `SearchConfig`
+- [x] Define `EdgeQualityWeights` struct with all weight fields
+- [x] Implement `Default` trait with validated Phase 1 weights
+- [x] Add config validation (reject negative/extreme weights)
+- [x] Validate weights sum or scale appropriately (weights validated 0-10 range)
+- [x] Add fusion_weight_override field (optional)
+- [x] Configuration loads from YAML successfully
+- [x] Invalid configs fail with clear error messages
+- [x] Backward compatible with existing configs (use defaults)
+- [x] Unit tests for config validation (15+ tests added)
 
 ## Technical Requirements
 

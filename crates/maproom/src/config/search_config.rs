@@ -65,6 +65,13 @@ pub struct SearchConfig {
     /// Buffer configuration (PERF_OPT-5002)
     #[serde(default)]
     pub buffers: BufferConfig,
+
+    /// Graph importance configuration (SRCHREL-2001)
+    ///
+    /// Controls quality-weighted graph scoring behavior including
+    /// edge weights for production vs test code.
+    #[serde(default)]
+    pub graph_importance: GraphImportanceConfig,
 }
 
 impl SearchConfig {
@@ -349,12 +356,66 @@ impl SearchConfig {
         if let Ok(quality_graph) =
             std::env::var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH")
         {
-            self.feature_flags.enable_quality_weighted_graph = quality_graph
-                .parse()
-                .context("Failed to parse MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH")?;
+            self.feature_flags.enable_quality_weighted_graph = quality_graph.parse().context(
+                "Failed to parse MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH",
+            )?;
             debug!(
                 "Override: feature_flags.enable_quality_weighted_graph = {}",
                 self.feature_flags.enable_quality_weighted_graph
+            );
+        }
+
+        // Graph importance overrides (SRCHREL-2001)
+        if let Ok(enable_quality) =
+            std::env::var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_ENABLE_QUALITY_SCORING")
+        {
+            self.graph_importance.enable_quality_scoring = enable_quality.parse().context(
+                "Failed to parse MAPROOM_SEARCH_GRAPH_IMPORTANCE_ENABLE_QUALITY_SCORING",
+            )?;
+            debug!(
+                "Override: graph_importance.enable_quality_scoring = {}",
+                self.graph_importance.enable_quality_scoring
+            );
+        }
+        if let Ok(prod_weight) =
+            std::env::var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_PRODUCTION_CODE_WEIGHT")
+        {
+            self.graph_importance.edge_quality_weights.production_code =
+                prod_weight.parse().context(
+                    "Failed to parse MAPROOM_SEARCH_GRAPH_IMPORTANCE_PRODUCTION_CODE_WEIGHT",
+                )?;
+            debug!(
+                "Override: graph_importance.edge_quality_weights.production_code = {}",
+                self.graph_importance.edge_quality_weights.production_code
+            );
+        }
+        if let Ok(test_weight) = std::env::var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_TEST_CODE_WEIGHT") {
+            self.graph_importance.edge_quality_weights.test_code = test_weight
+                .parse()
+                .context("Failed to parse MAPROOM_SEARCH_GRAPH_IMPORTANCE_TEST_CODE_WEIGHT")?;
+            debug!(
+                "Override: graph_importance.edge_quality_weights.test_code = {}",
+                self.graph_importance.edge_quality_weights.test_code
+            );
+        }
+        if let Ok(calls_weight) = std::env::var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_CALLS_WEIGHT") {
+            self.graph_importance.edge_quality_weights.calls = calls_weight
+                .parse()
+                .context("Failed to parse MAPROOM_SEARCH_GRAPH_IMPORTANCE_CALLS_WEIGHT")?;
+            debug!(
+                "Override: graph_importance.edge_quality_weights.calls = {}",
+                self.graph_importance.edge_quality_weights.calls
+            );
+        }
+        if let Ok(fusion_override) =
+            std::env::var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_FUSION_WEIGHT_OVERRIDE")
+        {
+            self.graph_importance.fusion_weight_override = Some(fusion_override.parse().context(
+                "Failed to parse MAPROOM_SEARCH_GRAPH_IMPORTANCE_FUSION_WEIGHT_OVERRIDE",
+            )?);
+            debug!(
+                "Override: graph_importance.fusion_weight_override = {:?}",
+                self.graph_importance.fusion_weight_override
             );
         }
 
@@ -386,6 +447,9 @@ impl SearchConfig {
 
         // Validate buffer config (PERF_OPT-5002)
         self.buffers.validate()?;
+
+        // Validate graph importance config (SRCHREL-2001)
+        self.graph_importance.validate()?;
 
         Ok(())
     }
@@ -901,6 +965,172 @@ impl BufferConfig {
     }
 }
 
+/// Graph importance configuration for quality-weighted scoring (SRCHREL-2001).
+///
+/// Controls how graph-based ranking weighs edges differently based on
+/// source code quality signals (production vs test code).
+///
+/// # YAML Configuration
+///
+/// ```yaml
+/// graph_importance:
+///   enable_quality_scoring: true
+///   edge_quality_weights:
+///     production_code: 1.0
+///     test_code: 0.5
+///     calls: 1.0
+///   fusion_weight_override: 0.15  # Optional
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphImportanceConfig {
+    /// Enable quality-weighted scoring.
+    ///
+    /// When enabled, edges from production code are weighted higher than
+    /// edges from test code. When disabled, all edges have equal weight.
+    #[serde(default)]
+    pub enable_quality_scoring: bool,
+
+    /// Edge quality weights for different code contexts.
+    #[serde(default)]
+    pub edge_quality_weights: EdgeQualityWeights,
+
+    /// Optional override for graph fusion weight in hybrid scoring.
+    ///
+    /// When set, overrides the default graph weight in fusion.
+    /// Useful for A/B testing different weight configurations.
+    #[serde(default)]
+    pub fusion_weight_override: Option<f32>,
+}
+
+impl Default for GraphImportanceConfig {
+    fn default() -> Self {
+        Self {
+            enable_quality_scoring: false,
+            edge_quality_weights: EdgeQualityWeights::default(),
+            fusion_weight_override: None,
+        }
+    }
+}
+
+impl GraphImportanceConfig {
+    /// Validate graph importance configuration.
+    pub fn validate(&self) -> Result<()> {
+        // Validate edge quality weights
+        self.edge_quality_weights.validate()?;
+
+        // Validate fusion weight override if present
+        if let Some(weight) = self.fusion_weight_override {
+            if weight < 0.0 || weight > 1.0 {
+                return Err(SearchConfigError::ValidationError(
+                    "fusion_weight_override must be between 0.0 and 1.0".to_string(),
+                )
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Edge quality weights for production vs test code (SRCHREL-2001).
+///
+/// These weights control how much different types of edges contribute
+/// to a chunk's graph importance score.
+///
+/// # Weight Guidelines
+///
+/// - **production_code** (default: 1.0): Full weight for production code edges
+/// - **test_code** (default: 0.5): Reduced weight for test code edges
+/// - **calls** (default: 1.0): Weight multiplier for 'calls' edge type
+///
+/// # Validation
+///
+/// All weights must be between 0.0 and 10.0 (inclusive).
+/// Extreme weights outside this range are rejected to prevent
+/// scoring anomalies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeQualityWeights {
+    /// Weight for edges from production code.
+    ///
+    /// Higher values increase the importance of being called by production code.
+    #[serde(default = "default_production_code_weight")]
+    pub production_code: f32,
+
+    /// Weight for edges from test code.
+    ///
+    /// Lower values reduce the "noise" from test code calling a function.
+    /// A value of 0.5 means test edges contribute half as much as production.
+    #[serde(default = "default_test_code_weight")]
+    pub test_code: f32,
+
+    /// Weight multiplier for 'calls' edge type.
+    ///
+    /// In Phase 1, only 'calls' edges exist. Future phases may add
+    /// 'imports', 'extends', etc. with different weights.
+    #[serde(default = "default_calls_weight")]
+    pub calls: f32,
+}
+
+fn default_production_code_weight() -> f32 {
+    1.0
+}
+
+fn default_test_code_weight() -> f32 {
+    0.5
+}
+
+fn default_calls_weight() -> f32 {
+    1.0
+}
+
+impl Default for EdgeQualityWeights {
+    fn default() -> Self {
+        Self {
+            production_code: 1.0,
+            test_code: 0.5,
+            calls: 1.0,
+        }
+    }
+}
+
+impl EdgeQualityWeights {
+    /// Validate edge quality weights.
+    ///
+    /// Ensures all weights are within the valid range (0.0 - 10.0).
+    /// Returns an error with a clear message if validation fails.
+    pub fn validate(&self) -> Result<()> {
+        if self.production_code < 0.0 || self.production_code > 10.0 {
+            return Err(SearchConfigError::ValidationError(
+                "production_code weight must be between 0.0 and 10.0".to_string(),
+            )
+            .into());
+        }
+
+        if self.test_code < 0.0 || self.test_code > 10.0 {
+            return Err(SearchConfigError::ValidationError(
+                "test_code weight must be between 0.0 and 10.0".to_string(),
+            )
+            .into());
+        }
+
+        if self.calls < 0.0 || self.calls > 10.0 {
+            return Err(SearchConfigError::ValidationError(
+                "calls weight must be between 0.0 and 10.0".to_string(),
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+
+    /// Check if weights are at default values.
+    pub fn is_default(&self) -> bool {
+        (self.production_code - 1.0).abs() < f32::EPSILON
+            && (self.test_code - 0.5).abs() < f32::EPSILON
+            && (self.calls - 1.0).abs() < f32::EPSILON
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1049,5 +1279,257 @@ mod tests {
 
         // Should use default value (false)
         assert!(!config.feature_flags.enable_quality_weighted_graph);
+    }
+
+    // ===== SRCHREL-2001: GraphImportanceConfig Tests =====
+
+    #[test]
+    fn test_graph_importance_default_values() {
+        let config = GraphImportanceConfig::default();
+        assert!(!config.enable_quality_scoring);
+        assert!(config.fusion_weight_override.is_none());
+        assert!((config.edge_quality_weights.production_code - 1.0).abs() < f32::EPSILON);
+        assert!((config.edge_quality_weights.test_code - 0.5).abs() < f32::EPSILON);
+        assert!((config.edge_quality_weights.calls - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_graph_importance_validation_success() {
+        let config = GraphImportanceConfig::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_graph_importance_fusion_weight_override_validation() {
+        // Valid range
+        let mut config = GraphImportanceConfig::default();
+        config.fusion_weight_override = Some(0.15);
+        assert!(config.validate().is_ok());
+
+        config.fusion_weight_override = Some(0.0);
+        assert!(config.validate().is_ok());
+
+        config.fusion_weight_override = Some(1.0);
+        assert!(config.validate().is_ok());
+
+        // Invalid: too low
+        config.fusion_weight_override = Some(-0.1);
+        assert!(config.validate().is_err());
+
+        // Invalid: too high
+        config.fusion_weight_override = Some(1.5);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_edge_quality_weights_default_values() {
+        let weights = EdgeQualityWeights::default();
+        assert!((weights.production_code - 1.0).abs() < f32::EPSILON);
+        assert!((weights.test_code - 0.5).abs() < f32::EPSILON);
+        assert!((weights.calls - 1.0).abs() < f32::EPSILON);
+        assert!(weights.is_default());
+    }
+
+    #[test]
+    fn test_edge_quality_weights_validation() {
+        // Valid weights
+        let mut weights = EdgeQualityWeights::default();
+        assert!(weights.validate().is_ok());
+
+        weights.production_code = 5.0;
+        weights.test_code = 0.3;
+        weights.calls = 2.0;
+        assert!(weights.validate().is_ok());
+
+        // Boundary: 0.0 is valid
+        weights.production_code = 0.0;
+        assert!(weights.validate().is_ok());
+
+        // Boundary: 10.0 is valid
+        weights.production_code = 10.0;
+        assert!(weights.validate().is_ok());
+
+        // Invalid: negative
+        weights.production_code = -0.1;
+        assert!(weights.validate().is_err());
+
+        // Reset and test test_code
+        weights = EdgeQualityWeights::default();
+        weights.test_code = -0.1;
+        assert!(weights.validate().is_err());
+
+        weights.test_code = 10.1;
+        assert!(weights.validate().is_err());
+
+        // Reset and test calls
+        weights = EdgeQualityWeights::default();
+        weights.calls = -0.1;
+        assert!(weights.validate().is_err());
+
+        weights.calls = 10.1;
+        assert!(weights.validate().is_err());
+    }
+
+    #[test]
+    fn test_edge_quality_weights_is_default() {
+        let default = EdgeQualityWeights::default();
+        assert!(default.is_default());
+
+        let mut modified = EdgeQualityWeights::default();
+        modified.test_code = 0.6;
+        assert!(!modified.is_default());
+
+        modified = EdgeQualityWeights::default();
+        modified.production_code = 1.1;
+        assert!(!modified.is_default());
+    }
+
+    #[test]
+    fn test_graph_importance_yaml_deserialization() {
+        let yaml = r#"
+enable_quality_scoring: true
+edge_quality_weights:
+  production_code: 1.0
+  test_code: 0.5
+  calls: 1.0
+fusion_weight_override: 0.15
+        "#;
+        let config: GraphImportanceConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.enable_quality_scoring);
+        assert!((config.edge_quality_weights.production_code - 1.0).abs() < f32::EPSILON);
+        assert!((config.edge_quality_weights.test_code - 0.5).abs() < f32::EPSILON);
+        assert_eq!(config.fusion_weight_override, Some(0.15));
+    }
+
+    #[test]
+    fn test_graph_importance_yaml_backward_compat() {
+        // Old configs without graph_importance section should use defaults
+        // Note: Uses full config structure since SearchConfig requires certain fields
+        let yaml = r#"
+embedding:
+  provider: openai
+  model_name: text-embedding-3-small
+  dimension: 1536
+  cache_size: 10000
+  cache_ttl_seconds: 3600
+fusion:
+  method: rrf
+  rrf_k: 60
+  weights:
+    fts: 0.4
+    vector: 0.3
+    graph: 0.1
+    recency: 0.1
+    churn: 0.1
+performance:
+  max_candidates_per_method: 100
+  final_result_limit: 20
+  timeout_ms: 1000
+  parallel_execution: true
+index:
+  ivfflat_lists: 100
+  ivfflat_probes: 10
+  refresh_interval_seconds: 3600
+feature_flags:
+  enable_vector_search: true
+  enable_hybrid_fusion: true
+  enable_graph_signals: true
+  enable_temporal_signals: true
+  enable_query_cache: true
+  enable_hot_reload: true
+# Note: No graph_importance section - should use defaults
+        "#;
+        let config: SearchConfig = serde_yaml::from_str(yaml).unwrap();
+        // Graph importance should default when missing from YAML
+        assert!(!config.graph_importance.enable_quality_scoring);
+        assert!(config.graph_importance.fusion_weight_override.is_none());
+        assert!(config.graph_importance.edge_quality_weights.is_default());
+    }
+
+    #[test]
+    fn test_graph_importance_partial_yaml() {
+        // Partial config should use defaults for missing fields
+        let yaml = r#"
+enable_quality_scoring: true
+        "#;
+        let config: GraphImportanceConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.enable_quality_scoring);
+        assert!(config.fusion_weight_override.is_none());
+        assert!(config.edge_quality_weights.is_default());
+    }
+
+    #[test]
+    fn test_graph_importance_env_overrides() {
+        // Set environment variables
+        std::env::set_var(
+            "MAPROOM_SEARCH_GRAPH_IMPORTANCE_ENABLE_QUALITY_SCORING",
+            "true",
+        );
+        std::env::set_var(
+            "MAPROOM_SEARCH_GRAPH_IMPORTANCE_PRODUCTION_CODE_WEIGHT",
+            "1.5",
+        );
+        std::env::set_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_TEST_CODE_WEIGHT", "0.3");
+        std::env::set_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_CALLS_WEIGHT", "2.0");
+        std::env::set_var(
+            "MAPROOM_SEARCH_GRAPH_IMPORTANCE_FUSION_WEIGHT_OVERRIDE",
+            "0.2",
+        );
+
+        let mut config = SearchConfig::default();
+        config.apply_env_overrides().unwrap();
+
+        assert!(config.graph_importance.enable_quality_scoring);
+        assert!(
+            (config.graph_importance.edge_quality_weights.production_code - 1.5).abs()
+                < f32::EPSILON
+        );
+        assert!(
+            (config.graph_importance.edge_quality_weights.test_code - 0.3).abs() < f32::EPSILON
+        );
+        assert!((config.graph_importance.edge_quality_weights.calls - 2.0).abs() < f32::EPSILON);
+        assert_eq!(config.graph_importance.fusion_weight_override, Some(0.2));
+
+        // Cleanup
+        std::env::remove_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_ENABLE_QUALITY_SCORING");
+        std::env::remove_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_PRODUCTION_CODE_WEIGHT");
+        std::env::remove_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_TEST_CODE_WEIGHT");
+        std::env::remove_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_CALLS_WEIGHT");
+        std::env::remove_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_FUSION_WEIGHT_OVERRIDE");
+    }
+
+    #[test]
+    fn test_search_config_includes_graph_importance() {
+        let config = SearchConfig::default();
+        assert!(config.validate().is_ok());
+
+        // Graph importance should be present and at defaults
+        assert!(!config.graph_importance.enable_quality_scoring);
+        assert!(config.graph_importance.edge_quality_weights.is_default());
+    }
+
+    #[test]
+    fn test_graph_importance_invalid_env_override() {
+        // Set invalid environment variable value
+        std::env::set_var(
+            "MAPROOM_SEARCH_GRAPH_IMPORTANCE_PRODUCTION_CODE_WEIGHT",
+            "not_a_number",
+        );
+
+        let mut config = SearchConfig::default();
+        let result = config.apply_env_overrides();
+        assert!(result.is_err());
+
+        // Cleanup
+        std::env::remove_var("MAPROOM_SEARCH_GRAPH_IMPORTANCE_PRODUCTION_CODE_WEIGHT");
+    }
+
+    #[test]
+    fn test_search_config_invalid_graph_weights_rejected() {
+        let mut config = SearchConfig::default();
+        config.graph_importance.edge_quality_weights.production_code = -1.0;
+
+        let result = config.validate();
+        assert!(result.is_err());
     }
 }

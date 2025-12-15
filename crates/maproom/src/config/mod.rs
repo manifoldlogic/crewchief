@@ -113,7 +113,8 @@ pub use crate::cache::{CacheConfig, LayerConfig};
 pub use feature_flags::FeatureFlags;
 pub use hot_reload::{ConfigReloader, HotReloadError};
 pub use search_config::{
-    BufferConfig, DatabaseConfig, EmbeddingConfig, FusionConfig, FusionMethod, IndexConfig,
-    IndexingConfig, PerformanceConfig, RuntimeConfig, SearchConfig, SearchConfigError,
+    BufferConfig, DatabaseConfig, EdgeQualityWeights, EmbeddingConfig, FusionConfig, FusionMethod,
+    GraphImportanceConfig, IndexConfig, IndexingConfig, PerformanceConfig, RuntimeConfig,
+    SearchConfig, SearchConfigError,
 };
 pub use sqlite_config::{PoolConfig, PragmaConfig, RetryConfig, SqliteConfig, SqliteConfigError};
