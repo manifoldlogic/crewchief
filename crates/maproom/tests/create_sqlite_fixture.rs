@@ -1,13 +1,16 @@
 //! Test fixture generator for SQLite E2E tests.
 //!
+//! **DISABLED**: This test is currently disabled because the VectorStore trait
+//! was removed during refactoring. The code below will not compile.
+//!
+//! Once re-enabled (remove `#![cfg(any())]` and fix VectorStore references):
 //! Run with: cargo test --test create_sqlite_fixture -- --ignored --nocapture
 //!
 //! This creates a pre-indexed SQLite database at tests/fixtures/pre-indexed-maproom.db
 //! with sample repositories, worktrees, and chunks for E2E testing.
-//!
-//! NOTE: Disabled - VectorStore trait was removed during refactoring.
 
-// Disabled - VectorStore trait no longer exists
+// Disabled - VectorStore trait no longer exists. Remove this line and fix
+// VectorStore references to re-enable.
 #![cfg(any())]
 
 mod fixture {
