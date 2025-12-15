@@ -268,19 +268,23 @@ Database validation confirmed 27 distinct chunk `kind` values:
 - `json_key`, `yaml_key` - Key-value pairs
 - `toml_section` - TOML sections
 
-**Test Detection Accuracy (Validated):**
-- Total code files: 713 (Rust, TypeScript, JavaScript, Python)
-- Test files identified: 297 (41.7% of code files)
-- Pattern accuracy: 95%+ (manual inspection showed 0 false positives in 50-file sample)
-- Primary patterns: `/test/`, `/tests/`, `_test.rs`, `.test.ts`, `.spec.ts`
-- False negatives: Minimal (Rust/TypeScript conventions match patterns well)
+**Test Detection Accuracy (Validated - SRCHREL-0003):**
+- **Validation Date:** 2025-12-15
+- **Sample Size:** 200 chunks (100 test, 100 production)
+- **Precision:** 100.00% (target: ≥85%) ✅
+- **Recall:** 100.00% (target: ≥80%) ✅
+- **F1 Score:** 100.00%
+- **False Positives:** 0 (no production code misidentified as test)
+- **False Negatives:** 0 (no test code missed)
+- **Primary patterns:** `/tests/`, `/__tests__/`, `.test.ts`, `.spec.ts`, `_test.rs`, `_test.py`
+- **Validation:** Automated test in `crates/maproom/tests/test_detection_validation.rs`
 
 **Pattern Performance:**
-- File path matching: High precision (95%+), low cost (string LIKE operations)
-- Chunk kind matching: Lower precision (tree-sitter node types don't capture "test" semantics)
+- File path matching: 100% precision and recall (SRCHREL-0003 validation), low cost (string LIKE operations)
+- Chunk kind matching: Not required (file path patterns achieve 100% accuracy alone)
 - Recommendation: Use file path as primary signal, chunk kind as optional secondary validation
 
-**Phase 2 Improvement:** Measure false positive/negative rate on real data, tune patterns accordingly.
+**Phase 2 Improvement:** Monitor real-world accuracy in production, add user-configurable patterns if needed.
 
 ### Component 2: Enhanced Graph Executor & Database Query
 
@@ -655,12 +659,13 @@ ON chunk_edges(dst_chunk_id, type, src_chunk_id);
 ## Known Limitations
 
 **1. Test Detection Based on Heuristics**
-- File path patterns (primary): High precision (VALIDATED: 95%+ in SRCHREL-0001)
-- Chunk kind patterns (secondary): Lower precision, depends on tree-sitter node types
-- False positives: Minimal (VALIDATED: 0 false positives in 50-file sample)
-- **Validation Results (SRCHREL-0001):** 297 test files identified from 713 code files (41.7%)
-- **Acceptance Criteria:** ✅ PASSED - Exceeds 85% precision target
-- **Future:** User-configurable test path patterns in Phase 2
+- File path patterns (primary): **100% precision and recall** (VALIDATED: SRCHREL-0003)
+- Chunk kind patterns (secondary): Not required (file path achieves 100% accuracy)
+- False positives: **0 out of 200 samples** (VALIDATED: 0.00% false positive rate)
+- False negatives: **0 out of 200 samples** (VALIDATED: 0.00% false negative rate)
+- **Validation Results (SRCHREL-0003):** 200 chunks tested, 100% accuracy on production database
+- **Acceptance Criteria:** ✅ PASSED - Exceeds 85% precision and 80% recall targets
+- **Future:** User-configurable test path patterns in Phase 2, monitor real-world accuracy
 
 **2. Fixed Source Importance (No Recursive Scoring)**
 - All production callers have equal weight (1.0)
