@@ -1,0 +1,19 @@
+{
+  "name": "worktree",
+  "version": "0.1.0",
+  "description": "Git worktree management using the crewchief CLI. Create, manage, and merge parallel development branches safely.",
+  "author": {
+    "name": "Daniel Bushman",
+    "email": "dbushman@manifoldlogic.com",
+    "url": "https://github.com/manifoldlogic/claude-code-plugins"
+  },
+  "repository": "https://github.com/manifoldlogic/claude-code-plugins",
+  "keywords": [
+    "git",
+    "worktree",
+    "branches",
+    "parallel-development",
+    "parallel",
+    "isolation"
+  ]
+}
