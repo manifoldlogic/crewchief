@@ -1,0 +1,18 @@
+{
+  "name": "maproom",
+  "version": "0.1.0",
+  "description": "Semantic code search using the crewchief-maproom CLI. Find code by concept, understand architecture, and explore relationships between code elements.",
+  "author": {
+    "name": "Daniel Bushman",
+    "email": "dbushman@manifoldlogic.com",
+    "url": "https://github.com/manifoldlogic/claude-code-plugins"
+  },
+  "repository": "https://github.com/manifoldlogic/claude-code-plugins",
+  "keywords": [
+    "maproom",
+    "semantic-search",
+    "code-search",
+    "fts",
+    "vector-search"
+  ]
+}
