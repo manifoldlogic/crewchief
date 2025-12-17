@@ -1,0 +1,14 @@
+{
+  "plugins": [
+    {
+      "name": "maproom",
+      "source": "./plugins/maproom",
+      "description": "Semantic code search using crewchief-maproom CLI"
+    },
+    {
+      "name": "worktree",
+      "source": "./plugins/worktree",
+      "description": "Git worktree management using crewchief CLI"
+    }
+  ]
+}
