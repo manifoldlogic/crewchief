@@ -187,7 +187,7 @@ Solution: Verify the chunk ID from search results is correct and the repository 
 ## Reference
 
 For comprehensive search strategies and advanced patterns, see:
-- [Search Best Practices](../../../docs/search-best-practices.md)
+- [Search Best Practices](./references/search-best-practices.md)
 
 For CLI implementation details and command-line options:
 - `crewchief-maproom --help`

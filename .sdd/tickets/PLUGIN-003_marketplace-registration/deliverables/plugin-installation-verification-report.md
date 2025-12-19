@@ -57,7 +57,7 @@ This verification report documents the structural readiness of the marketplace r
 **Actual:** PASS
 
 **Directory Tree:**
-```
+```text
 .crewchief/claude-code-plugins/
 ├── .claude-plugin/
 │   └── marketplace.json
