@@ -1,3 +1,10 @@
 2025-12-15T03:10:14Z|TICKET_CREATED|PLUGIN-001|-|plan-ticket|2 phases planned
 2025-12-17T02:25:23Z|TICKET_CREATED|PLUGIN-002|-|plan-ticket|2 phases planned
 2025-12-17T03:17:27Z|TICKET_CREATED|PLUGIN-003|-|plan-ticket|3 phases planned
+2025-12-19T09:22:06Z|TICKET_CREATED|MPRSKL|-|plan-ticket|3 phases planned
+2025-12-20T00:48:29Z|TASK_COMMITTED|MPRSKL.1001|MPRSKL.1001|commit-task|f88be966: feat(maproom): add from_env_with_provider() to EmbeddingConfig
+2025-12-20T01:03:10Z|TASK_COMMITTED|MPRSKL|MPRSKL.1002|commit-task|6f25b4060ec3a17f7c2441f46ff11aeed1f54aca: fix(maproom): propagate provider in factory auto-detection
+2025-12-20T01:07:22Z|TASK_COMMITTED|MPRSKL|2001|commit-task|c6662f7: docs(maproom): MPRSKL.2001 - implement progressive disclosure SKILL.md
+2025-12-20T01:25:20Z|TASK_COMMITTED|MPRSKL.2003|create-troubleshooting|commit-task|Submodule: 41d93c4, Parent: 1c0e28f5
+2025-12-20T01:43:35Z|TASK_COMMITTED|MPRSKL|MPRSKL.3001|commit-task|ec57ff894569ddd3bebad62ff5bcfa4c7dfdbcb3: fix(maproom): enhance dimension mismatch error with actionable solutions
+2025-12-20T01:49:05Z|TASK_COMMITTED|MPRSKL.3002|3002|commit-task|5d2194a4: docs(maproom): improve --generate-embeddings flag help text
