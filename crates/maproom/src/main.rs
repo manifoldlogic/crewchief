@@ -312,8 +312,25 @@ enum Commands {
         /// Force full scan, bypassing incremental tree SHA optimization (BRANCHX-1011)
         #[arg(long, default_value_t = false)]
         force: bool,
-        /// Automatically generate embeddings after scanning (default: true)
-        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        /// Generate embeddings for vector search (default: true).
+        /// Embeddings enable semantic search but require embedding provider configuration.
+        /// Use --generate-embeddings=false (or --no-generate-embeddings) to skip if:
+        /// - Embedding provider is not configured
+        /// - Only using full-text search
+        /// - Troubleshooting configuration issues
+        #[arg(
+            long,
+            default_value_t = true,
+            action = clap::ArgAction::Set,
+            help = "Generate embeddings for vector search (default: true)",
+            long_help = "Generate embeddings for vector search.\n\
+                         Embeddings enable semantic search via vector-search command.\n\
+                         Full-text search works without embeddings.\n\n\
+                         Skip embeddings with --generate-embeddings=false or --no-generate-embeddings when:\n\
+                         - Embedding provider is not configured\n\
+                         - Only using full-text search\n\
+                         - Troubleshooting configuration issues"
+        )]
         generate_embeddings: bool,
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
