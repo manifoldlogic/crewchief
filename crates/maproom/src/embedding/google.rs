@@ -480,14 +480,18 @@ impl GoogleProvider {
 
         // Validate dimensions
         let expected_dim = self.dimension();
-        for (idx, embedding) in embeddings.iter().enumerate() {
+        for embedding in embeddings.iter() {
             if embedding.len() != expected_dim {
-                return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                    "Dimension mismatch at index {}: expected {} dimensions but got {}",
-                    idx,
-                    expected_dim,
-                    embedding.len()
-                ))));
+                use crate::embedding::error::DimensionMismatchError;
+                return Err(EmbeddingError::DimensionMismatch(
+                    DimensionMismatchError::new(
+                        expected_dim,
+                        embedding.len(),
+                        "Google".to_string(),
+                        self.model.clone(),
+                        expected_dim,
+                    ),
+                ));
             }
         }
 

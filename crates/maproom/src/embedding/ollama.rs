@@ -542,14 +542,18 @@ impl OllamaProvider {
                 let expected_dim = self.dimension();
 
                 // Validate all embeddings have correct dimension
-                for (i, embedding) in body.embeddings.iter().enumerate() {
+                for embedding in body.embeddings.iter() {
                     if embedding.len() != expected_dim {
-                        return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                            "Dimension mismatch in batch at index {}: expected {} dimensions but got {}",
-                            i,
-                            expected_dim,
-                            embedding.len()
-                        ))));
+                        use crate::embedding::error::DimensionMismatchError;
+                        return Err(EmbeddingError::DimensionMismatch(
+                            DimensionMismatchError::new(
+                                expected_dim,
+                                embedding.len(),
+                                "Ollama".to_string(),
+                                self.model.clone(),
+                                self.dimension,
+                            ),
+                        ));
                     }
                 }
 

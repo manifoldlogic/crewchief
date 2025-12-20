@@ -29,9 +29,93 @@ pub enum EmbeddingError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// Dimension mismatch error with configuration context
+    #[error("{0}")]
+    DimensionMismatch(DimensionMismatchError),
+
     /// Generic error
     #[error("Embedding error: {0}")]
     Other(String),
+}
+
+/// Detailed dimension mismatch error with configuration context.
+#[derive(Debug)]
+pub struct DimensionMismatchError {
+    /// Expected dimension (from configuration)
+    pub expected: usize,
+    /// Actual dimension (from API response)
+    pub actual: usize,
+    /// Provider name
+    pub provider: String,
+    /// Model name
+    pub model: String,
+    /// Configured dimension
+    pub configured_dimension: usize,
+}
+
+impl DimensionMismatchError {
+    /// Create a new dimension mismatch error.
+    pub fn new(
+        expected: usize,
+        actual: usize,
+        provider: String,
+        model: String,
+        configured_dimension: usize,
+    ) -> Self {
+        Self {
+            expected,
+            actual,
+            provider,
+            model,
+            configured_dimension,
+        }
+    }
+}
+
+impl std::fmt::Display for DimensionMismatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inferred_provider = infer_provider_from_dimension(self.actual);
+
+        write!(
+            f,
+            "Dimension mismatch: expected {} dimensions but got {}.\n\n\
+             Current configuration:\n\
+             - Provider: {}\n\
+             - Model: {}\n\
+             - Dimension: {}\n\n\
+             This usually means the embedding provider configuration doesn't match the actual provider.\n\n\
+             Solutions:\n\
+             1. Set provider explicitly:\n\
+                export MAPROOM_EMBEDDING_PROVIDER={}\n\
+             2. Set dimension to match your model:\n\
+                export MAPROOM_EMBEDDING_DIMENSION={}\n\
+             3. Skip embeddings if not needed:\n\
+                crewchief-maproom scan --generate-embeddings=false\n\n\
+             See troubleshooting guide: .crewchief/claude-code-plugins/plugins/maproom/skills/maproom-search/references/troubleshooting.md",
+            self.expected,
+            self.actual,
+            self.provider,
+            self.model,
+            self.configured_dimension,
+            inferred_provider,
+            self.actual
+        )
+    }
+}
+
+impl std::error::Error for DimensionMismatchError {}
+
+/// Infer the most likely provider from embedding dimension.
+///
+/// This helps users understand what provider their API is actually using
+/// based on the dimension returned.
+fn infer_provider_from_dimension(dim: usize) -> &'static str {
+    match dim {
+        768 => "ollama  # or set MAPROOM_EMBEDDING_MODEL=nomic-embed-text",
+        1024 => "ollama  # or set MAPROOM_EMBEDDING_MODEL=mxbai-embed-large",
+        1536 => "openai",
+        _ => "unknown  # custom dimension, set both MAPROOM_EMBEDDING_PROVIDER and MAPROOM_EMBEDDING_DIMENSION",
+    }
 }
 
 /// API-specific errors with retryability information.
@@ -128,6 +212,126 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_dimension_mismatch_error_message() {
+        // Test that dimension mismatch error includes all required elements
+        let error = DimensionMismatchError::new(
+            1536,
+            1024,
+            "OpenAI".to_string(),
+            "text-embedding-3-small".to_string(),
+            1536,
+        );
+
+        let error_msg = format!("{}", error);
+
+        // Verify message contains expected elements from acceptance criteria
+        assert!(
+            error_msg.contains("expected 1536"),
+            "Error should contain expected dimension"
+        );
+        assert!(
+            error_msg.contains("got 1024"),
+            "Error should contain actual dimension"
+        );
+        assert!(
+            error_msg.contains("Provider: OpenAI"),
+            "Error should contain provider name"
+        );
+        assert!(
+            error_msg.contains("Model: text-embedding-3-small"),
+            "Error should contain model name"
+        );
+        assert!(
+            error_msg.contains("Dimension: 1536"),
+            "Error should contain configured dimension"
+        );
+        assert!(
+            error_msg.contains("MAPROOM_EMBEDDING_PROVIDER"),
+            "Error should suggest MAPROOM_EMBEDDING_PROVIDER env var"
+        );
+        assert!(
+            error_msg.contains("MAPROOM_EMBEDDING_DIMENSION"),
+            "Error should suggest MAPROOM_EMBEDDING_DIMENSION env var"
+        );
+        assert!(
+            error_msg.contains("--generate-embeddings=false"),
+            "Error should suggest skipping embeddings"
+        );
+        assert!(
+            error_msg.contains("Solutions:"),
+            "Error should have Solutions section"
+        );
+
+        // Test provider inference for common dimensions
+        assert!(
+            error_msg.contains("ollama"),
+            "Error should infer ollama for 1024 dimensions"
+        );
+    }
+
+    #[test]
+    fn test_dimension_mismatch_inference_768() {
+        // Test inference for 768-dim models (nomic-embed-text)
+        let error = DimensionMismatchError::new(
+            1536,
+            768,
+            "OpenAI".to_string(),
+            "text-embedding-3-small".to_string(),
+            1536,
+        );
+
+        let error_msg = format!("{}", error);
+        assert!(
+            error_msg.contains("ollama"),
+            "Error should infer ollama for 768 dimensions"
+        );
+        assert!(
+            error_msg.contains("nomic-embed-text"),
+            "Error should suggest nomic-embed-text for 768 dimensions"
+        );
+    }
+
+    #[test]
+    fn test_dimension_mismatch_inference_1536() {
+        // Test inference for OpenAI dimension
+        let error = DimensionMismatchError::new(
+            1024,
+            1536,
+            "Ollama".to_string(),
+            "mxbai-embed-large".to_string(),
+            1024,
+        );
+
+        let error_msg = format!("{}", error);
+        assert!(
+            error_msg.contains("openai"),
+            "Error should infer openai for 1536 dimensions"
+        );
+    }
+
+    #[test]
+    fn test_dimension_mismatch_unknown_dimension() {
+        // Test handling of unknown/custom dimensions
+        let error = DimensionMismatchError::new(
+            1024,
+            512,
+            "Custom".to_string(),
+            "custom-model".to_string(),
+            1024,
+        );
+
+        let error_msg = format!("{}", error);
+        assert!(
+            error_msg.contains("unknown"),
+            "Error should indicate unknown provider for custom dimensions"
+        );
+        assert!(
+            error_msg.contains("custom dimension"),
+            "Error should mention custom dimension"
+        );
+    }
 
     #[test]
     fn test_api_error_retryability() {

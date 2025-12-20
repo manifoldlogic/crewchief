@@ -466,15 +466,19 @@ impl EmbeddingPipeline {
 
     /// Validate embedding dimensions.
     fn validate_embeddings(&self, embeddings: &[Vec<f32>]) -> Result<()> {
-        for (i, emb) in embeddings.iter().enumerate() {
+        for emb in embeddings.iter() {
             if emb.len() != self.dimension {
-                return Err(anyhow::anyhow!(
-                    "Invalid embedding dimension at index {}: provider={}, expected {}, got {}",
-                    i,
-                    self.provider_name,
-                    self.dimension,
-                    emb.len()
-                ));
+                use crate::embedding::error::{DimensionMismatchError, EmbeddingError};
+                return Err(
+                    EmbeddingError::DimensionMismatch(DimensionMismatchError::new(
+                        self.dimension,
+                        emb.len(),
+                        self.provider_name.clone(),
+                        "unknown".to_string(), // Pipeline doesn't have access to model name
+                        self.dimension,
+                    ))
+                    .into(),
+                );
             }
         }
 

@@ -302,14 +302,18 @@ impl OpenAIClient {
 
         // Validate all embeddings have the expected dimension (contract guarantee)
         let expected_dim = self.config.dimension;
-        for (idx, embedding) in embeddings.iter().enumerate() {
+        for embedding in embeddings.iter() {
             if embedding.len() != expected_dim {
-                return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
-                    "Dimension mismatch at index {}: expected {} dimensions but got {}",
-                    idx,
-                    expected_dim,
-                    embedding.len()
-                ))));
+                use crate::embedding::error::DimensionMismatchError;
+                return Err(EmbeddingError::DimensionMismatch(
+                    DimensionMismatchError::new(
+                        expected_dim,
+                        embedding.len(),
+                        format!("{:?}", self.config.provider),
+                        self.config.model.clone(),
+                        self.config.dimension,
+                    ),
+                ));
             }
         }
 
