@@ -101,11 +101,43 @@ impl EmbeddingConfig {
         Self::default()
     }
 
-    /// Load configuration from environment variables.
-    pub fn from_env() -> Result<Self, EmbeddingError> {
+    /// Load configuration from environment variables with optional provider override.
+    ///
+    /// This method enables factory-detected providers (e.g., auto-detected Ollama)
+    /// to be correctly propagated during configuration loading. The provider override
+    /// is applied before loading environment variables, so explicit env vars always win.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider_override` - Optional provider to use if not specified in environment.
+    ///                        Applied before env var loading, so env vars take precedence.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use crewchief_maproom::embedding::config::{EmbeddingConfig, Provider};
+    ///
+    /// // Factory-detected Ollama without env vars
+    /// let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama))?;
+    /// // Will use Provider::Ollama, infer model and dimension
+    ///
+    /// // Env vars override programmatic provider
+    /// std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
+    /// let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama))?;
+    /// // Will use Provider::OpenAI from env var, not Ollama from override
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn from_env_with_provider(
+        provider_override: Option<Provider>,
+    ) -> Result<Self, EmbeddingError> {
         let mut config = Self::default();
 
-        // Load provider
+        // Apply programmatic provider override first if provided
+        if let Some(p) = provider_override {
+            config.provider = p;
+        }
+
+        // Load provider from env (can override programmatic setting)
         if let Ok(provider) = env::var("MAPROOM_EMBEDDING_PROVIDER") {
             config.provider = provider.parse()?;
         }
@@ -276,6 +308,15 @@ impl EmbeddingConfig {
         }
 
         Ok(config)
+    }
+
+    /// Load configuration from environment variables.
+    ///
+    /// This is a convenience method that delegates to `from_env_with_provider(None)`.
+    /// Use `from_env_with_provider` when you need to provide a programmatic provider
+    /// override (e.g., factory-detected Ollama).
+    pub fn from_env() -> Result<Self, EmbeddingError> {
+        Self::from_env_with_provider(None)
     }
 
     /// Validate the configuration.
@@ -1035,16 +1076,75 @@ mod tests {
         // Cleanup
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     }
+
+    // Tests for from_env_with_provider() (MPRSKL.1001)
+
+    #[test]
+    #[serial]
+    fn test_from_env_with_provider_none() {
+        // Test that None behaves same as from_env()
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "text-embedding-3-small");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config_from_env = EmbeddingConfig::from_env().unwrap();
+        let config_with_none = EmbeddingConfig::from_env_with_provider(None).unwrap();
+
+        assert_eq!(config_from_env.provider, config_with_none.provider);
+        assert_eq!(config_from_env.model, config_with_none.model);
+        assert_eq!(config_from_env.dimension, config_with_none.dimension);
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_with_provider_ollama() {
+        // Test that Provider::Ollama override enables dimension inference
+        // No env vars set - pure programmatic override
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama)).unwrap();
+
+        assert_eq!(config.provider, Provider::Ollama);
+        assert_eq!(config.model, "mxbai-embed-large"); // Auto-defaulted for Ollama
+        assert_eq!(config.dimension, 1024); // Inferred from mxbai-embed-large
+    }
+
+    #[test]
+    #[serial]
+    fn test_from_env_with_provider_env_override() {
+        // Test that env var overrides programmatic provider
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "openai");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        // Programmatic override says Ollama, but env var says OpenAI
+        let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama)).unwrap();
+
+        assert_eq!(config.provider, Provider::OpenAI); // Env var wins
+        assert_eq!(config.model, "text-embedding-3-small"); // OpenAI default
+        assert_eq!(config.dimension, 1536); // OpenAI default (no inference for non-Ollama)
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+    }
 }
 
 /// Tests for endpoint resolution with provider-aware validation (PROVFIX-1002)
 #[cfg(test)]
 mod config_endpoint_tests {
     use super::*;
+    use serial_test::serial;
 
     // OpenAI Provider Tests
 
     #[test]
+    #[serial]
     fn test_openai_uses_default_endpoint() {
         // No MAPROOM_EMBEDDING_API_ENDPOINT set
         env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
@@ -1061,6 +1161,7 @@ mod config_endpoint_tests {
     }
 
     #[test]
+    #[serial]
     fn test_openai_ignores_ollama_endpoint() {
         // THIS IS THE BUG TEST - verify fix prevents regression
         // Set up: Ollama endpoint in environment (like Docker Compose default)
@@ -1084,6 +1185,7 @@ mod config_endpoint_tests {
     }
 
     #[test]
+    #[serial]
     fn test_openai_accepts_custom_openai_endpoint() {
         // Allow explicit OpenAI endpoint override
         env::set_var(
@@ -1106,6 +1208,7 @@ mod config_endpoint_tests {
     // Cohere Provider Tests
 
     #[test]
+    #[serial]
     fn test_cohere_uses_default_endpoint() {
         // No MAPROOM_EMBEDDING_API_ENDPOINT set
         env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
@@ -1119,6 +1222,7 @@ mod config_endpoint_tests {
     }
 
     #[test]
+    #[serial]
     fn test_cohere_ignores_wrong_endpoint() {
         // Cohere should ignore Ollama endpoint
         env::set_var(
@@ -1138,6 +1242,7 @@ mod config_endpoint_tests {
     // Ollama Provider Tests
 
     #[test]
+    #[serial]
     fn test_ollama_uses_custom_endpoint() {
         env::set_var(
             "MAPROOM_EMBEDDING_API_ENDPOINT",
@@ -1154,6 +1259,7 @@ mod config_endpoint_tests {
     }
 
     #[test]
+    #[serial]
     fn test_ollama_uses_default_if_no_override() {
         env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
         env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
@@ -1171,6 +1277,7 @@ mod config_endpoint_tests {
     // Google Provider Tests
 
     #[test]
+    #[serial]
     fn test_google_ignores_embedding_api_endpoint() {
         env::set_var(
             "MAPROOM_EMBEDDING_API_ENDPOINT",
