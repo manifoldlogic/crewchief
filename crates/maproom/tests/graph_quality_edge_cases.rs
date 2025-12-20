@@ -409,10 +409,7 @@ fn test_weight_default_multiplication() {
     let defaults = EdgeQualityWeights::default();
 
     let prod_result = defaults.production_code * defaults.calls;
-    assert_eq!(
-        prod_result, 1.0,
-        "Default production * calls should be 1.0"
-    );
+    assert_eq!(prod_result, 1.0, "Default production * calls should be 1.0");
 
     let test_result = defaults.test_code * defaults.calls;
     assert_eq!(test_result, 0.5, "Default test * calls should be 0.5");

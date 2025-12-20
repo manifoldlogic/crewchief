@@ -80,7 +80,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::embedding::client::OpenAIClient;
-use crate::embedding::config::EmbeddingConfig;
+use crate::embedding::config::{EmbeddingConfig, Provider};
 use crate::embedding::error::{ConfigError, EmbeddingError};
 use crate::embedding::google::GoogleProvider;
 use crate::embedding::ollama::OllamaProvider;
@@ -210,7 +210,8 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                 .unwrap_or_else(|_| "mxbai-embed-large".to_string());
 
             // Load configuration from environment (including dimension)
-            let config = EmbeddingConfig::from_env()?;
+            // Pass detected provider to enable dimension inference
+            let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama))?;
             let dimension = config.dimension;
             let parallel_config = config.parallel;
 
@@ -1161,5 +1162,33 @@ mod tests {
         let provider = result.unwrap();
         assert_eq!(provider.provider_name(), "ollama");
         assert_eq!(provider.dimension(), 1024); // Correctly inferred
+    }
+
+    #[tokio::test]
+    #[serial]
+    #[ignore] // Requires Ollama running
+    async fn test_auto_detected_ollama_uses_correct_dimension() {
+        // Clean environment
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        // Requires Ollama at localhost:11434
+        let result = create_provider_from_env().await;
+
+        match result {
+            Ok(provider) => {
+                assert_eq!(provider.provider_name(), "ollama");
+                assert_eq!(provider.dimension(), 1024); // mxbai-embed-large default
+            }
+            Err(_) => {
+                panic!("Ollama not running - expected for this test");
+            }
+        }
+
+        // Cleanup
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
     }
 }
