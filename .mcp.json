@@ -41,6 +41,19 @@
       "headers": {
         "x-ref-api-key": "ref-a69f62a09e5489964eeb"
       }
+    },
+    "mcp-obsidian-advanced": {
+      "command": "uvx",
+      "args": [
+        "mcp-obsidian-advanced"
+      ],
+      "env": {
+        "OBSIDIAN_API_KEY": "${OBSIDIAN_API_KEY}",
+        "OBSIDIAN_HOST": "${OBSIDIAN_HOST}",
+        "OBSIDIAN_PORT": "27124",
+        "OBSIDIAN_VAULT_PATH": "/obsidian/Intragraph",
+        "INCLUDE_TOOLS": ""
+      }
     }
   }
 }
