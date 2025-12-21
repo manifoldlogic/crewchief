@@ -3,7 +3,8 @@
     "SDD_ROOT_DIR": "/workspace/.sdd"
   },
   "enabledPlugins": {
-    "workstream@crewchief": false
+    "workstream@crewchief": false,
+    "playwright@claude-plugins-official": false
   },
   "extraKnownMarketplaces": {
     "crewchief": {
