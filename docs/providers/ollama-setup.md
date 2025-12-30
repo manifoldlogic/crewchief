@@ -412,6 +412,8 @@ Error: Failed to connect to Ollama at http://localhost:11434
    sudo ufw allow 11434
    ```
 
+4. **Docker/DevContainer users:** See [Docker configuration](#dockerdevcontainer-configuration) in Network Configuration section. Use `MAPROOM_EMBEDDING_API_ENDPOINT=http://host.docker.internal:11434/api/embed` and on Linux add `extra_hosts` or `--add-host host.docker.internal:host-gateway`.
+
 ---
 
 ### "Model mxbai-embed-large not found"
@@ -678,6 +680,42 @@ export OLLAMA_BASE_URL=http://localhost:8080
 export OLLAMA_BASE_URL=http://remote-server:11434
 crewchief maproom scan --generate-embeddings
 ```
+
+**Docker/DevContainer Configuration:**
+
+When running Maproom inside Docker with Ollama on the host machine, use `host.docker.internal` to connect:
+
+```bash
+# Set explicit endpoint to reach host Ollama from container
+export MAPROOM_EMBEDDING_API_ENDPOINT=http://host.docker.internal:11434/api/embed
+```
+
+**docker-compose.yml** (Linux requires `extra_hosts`):
+```yaml
+services:
+  maproom:
+    environment:
+      MAPROOM_EMBEDDING_API_ENDPOINT: http://host.docker.internal:11434/api/embed
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Required for Linux
+```
+
+**.devcontainer.json**:
+```json
+{
+  "containerEnv": {
+    "MAPROOM_EMBEDDING_API_ENDPOINT": "http://host.docker.internal:11434/api/embed"
+  }
+}
+```
+
+**Docker run command**:
+```bash
+docker run -e MAPROOM_EMBEDDING_API_ENDPOINT=http://host.docker.internal:11434/api/embed \
+  --add-host host.docker.internal:host-gateway maproom:latest
+```
+
+**Note**: On macOS/Windows Docker Desktop, `host.docker.internal` works automatically. On Linux, you must add the `extra_hosts` or `--add-host` configuration shown above.
 
 ---
 
