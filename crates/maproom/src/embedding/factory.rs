@@ -195,17 +195,25 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
     // Create provider based on name
     match provider_name.as_str() {
         "ollama" => {
-            // Use detected endpoint if available, else check env var, else default to localhost
-            let env_endpoint = env::var("MAPROOM_EMBEDDING_API_ENDPOINT").ok();
-            tracing::debug!(
-                "Ollama endpoint sources - detected: {:?}, env var: {:?}",
-                detected_endpoint,
-                env_endpoint
-            );
-            let endpoint = detected_endpoint
-                .map(|base| format!("{}/api/embed", base))
-                .or_else(|| env_endpoint)
-                .unwrap_or_else(|| "http://localhost:11434/api/embed".to_string());
+            // Priority: explicit env var → auto-detection → default
+            let endpoint = if let Ok(explicit) = env::var("MAPROOM_EMBEDDING_API_ENDPOINT") {
+                // Explicit config takes absolute precedence
+                let normalized = normalize_endpoint_url(&explicit);
+                tracing::info!(
+                    "Using explicit endpoint from MAPROOM_EMBEDDING_API_ENDPOINT: {}",
+                    normalized
+                );
+                normalized
+            } else if let Some(detected) = detected_endpoint {
+                // Auto-detected base URL needs path appended
+                let endpoint = format!("{}/api/embed", detected);
+                tracing::debug!("Using auto-detected endpoint: {}", endpoint);
+                endpoint
+            } else {
+                // Default fallback
+                tracing::debug!("Using default endpoint: http://localhost:11434/api/embed");
+                "http://localhost:11434/api/embed".to_string()
+            };
             let model = env::var("MAPROOM_EMBEDDING_MODEL")
                 .unwrap_or_else(|_| "mxbai-embed-large".to_string());
 
@@ -406,6 +414,49 @@ fn validate_service_account_json(path: &std::path::Path) -> Result<(), Embedding
     Ok(())
 }
 
+/// Normalize an endpoint URL for Ollama API.
+///
+/// Given a base URL or full embed endpoint, ensures the URL:
+/// - Has no trailing slashes
+/// - Has `/api/embed` suffix
+///
+/// # Arguments
+///
+/// * `url` - Base URL (e.g., `http://localhost:11434`) or full endpoint (e.g., `http://localhost:11434/api/embed`)
+///
+/// # Returns
+///
+/// Normalized endpoint URL with `/api/embed` suffix
+///
+/// # Examples
+///
+/// ```ignore
+/// // This function is private and cannot be tested in doctests
+/// assert_eq!(
+///     normalize_endpoint_url("http://localhost:11434"),
+///     "http://localhost:11434/api/embed"
+/// );
+/// assert_eq!(
+///     normalize_endpoint_url("http://localhost:11434/api/embed"),
+///     "http://localhost:11434/api/embed"
+/// );
+/// assert_eq!(
+///     normalize_endpoint_url("http://localhost:11434/"),
+///     "http://localhost:11434/api/embed"
+/// );
+/// ```
+fn normalize_endpoint_url(url: &str) -> String {
+    let url = url.trim().trim_end_matches('/');
+
+    // If already has /api/embed, use as-is
+    if url.ends_with("/api/embed") {
+        return url.to_string();
+    }
+
+    // Otherwise append standard path
+    format!("{}/api/embed", url)
+}
+
 /// Extract the base URL from an Ollama embed endpoint.
 ///
 /// Given a full embed endpoint URL (e.g., `http://host:port/api/embed`),
@@ -554,6 +605,75 @@ mod tests {
         assert_eq!("Ollama".to_lowercase(), "ollama");
         assert_eq!("openai".to_lowercase(), "openai");
         assert_eq!("OpenAI".to_lowercase(), "openai");
+    }
+
+    #[test]
+    fn test_normalize_endpoint_url_base_url() {
+        // Base URL should get /api/embed appended
+        assert_eq!(
+            normalize_endpoint_url("http://localhost:11434"),
+            "http://localhost:11434/api/embed"
+        );
+        assert_eq!(
+            normalize_endpoint_url("http://host.docker.internal:11434"),
+            "http://host.docker.internal:11434/api/embed"
+        );
+    }
+
+    #[test]
+    fn test_normalize_endpoint_url_full_url() {
+        // Full URL with /api/embed should remain unchanged
+        assert_eq!(
+            normalize_endpoint_url("http://localhost:11434/api/embed"),
+            "http://localhost:11434/api/embed"
+        );
+        assert_eq!(
+            normalize_endpoint_url("http://host.docker.internal:11434/api/embed"),
+            "http://host.docker.internal:11434/api/embed"
+        );
+    }
+
+    #[test]
+    fn test_normalize_endpoint_url_trailing_slashes() {
+        // Trailing slash on base URL
+        assert_eq!(
+            normalize_endpoint_url("http://localhost:11434/"),
+            "http://localhost:11434/api/embed"
+        );
+        // Trailing slash on full URL
+        assert_eq!(
+            normalize_endpoint_url("http://localhost:11434/api/embed/"),
+            "http://localhost:11434/api/embed"
+        );
+        // Multiple trailing slashes on base
+        assert_eq!(
+            normalize_endpoint_url("http://localhost:11434///"),
+            "http://localhost:11434/api/embed"
+        );
+        // Multiple trailing slashes on full
+        assert_eq!(
+            normalize_endpoint_url("http://localhost:11434/api/embed///"),
+            "http://localhost:11434/api/embed"
+        );
+    }
+
+    #[test]
+    fn test_normalize_endpoint_url_whitespace() {
+        // Leading and trailing whitespace
+        assert_eq!(
+            normalize_endpoint_url("  http://localhost:11434  "),
+            "http://localhost:11434/api/embed"
+        );
+        assert_eq!(
+            normalize_endpoint_url("  http://localhost:11434/api/embed  "),
+            "http://localhost:11434/api/embed"
+        );
+    }
+
+    #[test]
+    fn test_normalize_endpoint_url_empty_string() {
+        // Empty string gets /api/embed appended (edge case)
+        assert_eq!(normalize_endpoint_url(""), "/api/embed");
     }
 
     #[test]
@@ -1080,6 +1200,124 @@ mod tests {
             Ok(provider) => {
                 // If it succeeded, it must have detected Ollama
                 assert_eq!(provider.provider_name(), "ollama");
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_explicit_endpoint_takes_precedence() {
+        // Clean up all environment variables first
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Set explicit Ollama configuration with Docker host endpoint
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://host.docker.internal:11434",
+        );
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "mxbai-embed-large");
+        env::set_var("MAPROOM_EMBEDDING_DIMENSION", "1024");
+
+        let result = create_provider_from_env().await;
+
+        // Clean up env vars
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        // Provider should be created successfully (connection failure is OK - we're testing configuration)
+        assert!(
+            result.is_ok(),
+            "Failed to create Ollama provider with explicit endpoint: {:?}",
+            result.err()
+        );
+        let provider = result.unwrap();
+        assert_eq!(provider.provider_name(), "ollama");
+        assert_eq!(provider.dimension(), 1024);
+
+        // Verify endpoint normalization worked by checking the provider was configured
+        // (actual HTTP connection may fail, but provider should be created)
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_explicit_endpoint_with_full_url() {
+        // Clean up all environment variables first
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Set explicit endpoint with full URL (including /api/embed)
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "ollama");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://host.docker.internal:11434/api/embed",
+        );
+        env::set_var("MAPROOM_EMBEDDING_MODEL", "mxbai-embed-large");
+        env::set_var("MAPROOM_EMBEDDING_DIMENSION", "1024");
+
+        let result = create_provider_from_env().await;
+
+        // Clean up env vars
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+
+        assert!(
+            result.is_ok(),
+            "Failed to create Ollama provider with full endpoint URL: {:?}",
+            result.err()
+        );
+        let provider = result.unwrap();
+        assert_eq!(provider.provider_name(), "ollama");
+        assert_eq!(provider.dimension(), 1024);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_backward_compat_auto_detection_when_no_explicit_endpoint() {
+        // Clean up all environment variables first
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_MODEL");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+        env::remove_var("MAPROOM_EMBEDDING_DIMENSION");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Do NOT set MAPROOM_EMBEDDING_API_ENDPOINT - should trigger auto-detection
+        // This test verifies backward compatibility with existing auto-detection behavior
+        let result = create_provider_from_env().await;
+
+        // Test should either:
+        // 1. Succeed if Ollama is detected (auto-detection worked)
+        // 2. Fail with helpful error if no Ollama detected (expected when Ollama not running)
+        match result {
+            Ok(provider) => {
+                // Auto-detection succeeded
+                assert_eq!(provider.provider_name(), "ollama");
+            }
+            Err(err) => {
+                // Auto-detection failed (expected when Ollama not running)
+                let err_msg = err.to_string();
+                assert!(
+                    err_msg.contains("Ollama") || err_msg.contains("MAPROOM_EMBEDDING_PROVIDER"),
+                    "Error message should provide helpful guidance: {}",
+                    err_msg
+                );
             }
         }
     }
