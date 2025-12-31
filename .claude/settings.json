@@ -1,6 +1,6 @@
 {
   "env": {
-    "SDD_ROOT_DIR": "/workspace/.sdd"
+    "SDD_ROOT_DIR": "/workspace/repos/crewchief/crewchief/.SDD"
   },
   "enabledPlugins": {
     "workstream@crewchief": false,
