@@ -1,16 +1,18 @@
 {
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  },
   "env": {
-    "SDD_ROOT_DIR": "/workspace/repos/crewchief/crewchief/.SDD"
+    "SDD_ROOT_DIR": "/workspace/repos/crewchief/_SDD"
   },
   "enabledPlugins": {
-    "workstream@crewchief": false,
-    "playwright@claude-plugins-official": false
+    "playwright@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "crewchief": {
       "source": {
         "source": "directory",
-        "path": ".crewchief/claude-code-plugins"
+        "path": "/workspace/repos/claude-code-plugins/claude-code-plugins"
       }
     }
   }
