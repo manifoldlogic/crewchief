@@ -40,7 +40,7 @@ jobs:
   # Job 3: Package extension with vsce and run smoke tests
   package-extension:
     name: Package Extension
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [build-rust, build-extension]
 
     outputs:
@@ -219,7 +219,7 @@ jobs:
   # Job 3: Publish to marketplaces and create GitHub release
   publish-extension:
     name: Publish Extension
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: package-extension
     if: ${{ !inputs.dry_run }}
 

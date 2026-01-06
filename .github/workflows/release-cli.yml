@@ -36,7 +36,7 @@ jobs:
   # Job 3: Validate and publish (depends on both builds)
   publish:
     name: Publish to npm
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [build-rust, build-typescript]
     permissions:
       contents: read

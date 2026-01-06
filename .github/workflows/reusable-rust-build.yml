@@ -48,7 +48,7 @@ jobs:
             os: ubuntu-latest
             use_cross: true
           - platform: linux-arm64
-            target: aarch64-unknown-linux-gnu
+            target: blacksmith-4vcpu-ubuntu-2404-arm
             os: ubuntu-latest
             use_cross: true
           - platform: darwin-x64

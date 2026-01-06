@@ -43,7 +43,7 @@ jobs:
   # ============================================
   validate:
     name: Validate Release
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       release_cli: ${{ steps.plan.outputs.release_cli }}
       release_maproom_mcp: ${{ steps.plan.outputs.release_maproom_mcp }}
@@ -176,7 +176,7 @@ jobs:
   prepare-releases:
     name: Prepare Releases
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ !inputs.dry_run }}
 
     steps:
@@ -242,7 +242,7 @@ jobs:
     name: CLI Release
     needs: [validate, prepare-releases]
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_cli == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Trigger and wait for CLI release workflow
         env:
@@ -273,7 +273,7 @@ jobs:
     name: MCP Release
     needs: [validate, prepare-releases, trigger-cli-release]
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_maproom_mcp == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Trigger and wait for MCP release workflow
         env:
@@ -304,7 +304,7 @@ jobs:
     name: VSCode Release
     needs: [validate, prepare-releases, trigger-cli-release, trigger-mcp-release]
     if: ${{ !inputs.dry_run && needs.validate.outputs.release_vscode == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Trigger and wait for VSCode release workflow
         env:
@@ -339,7 +339,7 @@ jobs:
     name: Release Summary
     needs: [validate, prepare-releases, trigger-cli-release, trigger-mcp-release, trigger-vscode-release]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - name: Generate summary
