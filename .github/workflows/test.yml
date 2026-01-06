@@ -40,7 +40,7 @@ jobs:
   # =============================================================================
   changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       typescript: ${{ steps.filter.outputs.typescript }}
@@ -86,7 +86,7 @@ jobs:
     name: SQLite E2E Tests
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.e2e == 'true' || needs.changes.outputs.workflow == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - name: Checkout code
@@ -132,7 +132,7 @@ jobs:
     name: MCP SQLite Tests (TypeScript)
     needs: changes
     if: ${{ needs.changes.outputs.mcp == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
 
     steps:
@@ -209,7 +209,7 @@ jobs:
     name: Rust Tests
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - name: Checkout code
@@ -255,7 +255,7 @@ jobs:
     name: Performance Regression Tests
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
 
     steps:
@@ -311,7 +311,7 @@ jobs:
     name: Daemon Client Integration Tests
     needs: changes
     if: ${{ needs.changes.outputs.daemon-client == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
 
     steps:
@@ -388,7 +388,7 @@ jobs:
     name: TypeScript Package Tests
     needs: changes
     if: ${{ needs.changes.outputs.typescript == 'true' || needs.changes.outputs.workflow == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
 
     steps:
