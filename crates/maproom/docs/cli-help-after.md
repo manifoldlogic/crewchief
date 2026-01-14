@@ -67,5 +67,3 @@ DEVELOPMENT SETUP:
 
     Or in .claude/settings.json:
         { "env": { "CREWCHIEF_MAPROOM_BIN": "./target/release/..." } }
-
-For full documentation: https://github.com/crewchief/crewchief
