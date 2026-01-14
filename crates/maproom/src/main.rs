@@ -212,7 +212,12 @@ async fn handle_branch_switch(
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "crewchief-maproom", version, about = "Maproom indexer & CLI")]
+#[command(
+    name = "crewchief-maproom",
+    version,
+    about = "Maproom indexer & CLI",
+    after_help = include_str!("../docs/cli-help-after.md")
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
