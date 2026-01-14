@@ -48,9 +48,9 @@ jobs:
             os: ubuntu-latest
             use_cross: true
           - platform: linux-arm64
-            target: blacksmith-4vcpu-ubuntu-2404-arm
-            os: ubuntu-latest
-            use_cross: true
+            target: aarch64-unknown-linux-gnu
+            os: blacksmith-4vcpu-ubuntu-2404-arm
+            use_cross: false
           - platform: darwin-x64
             target: x86_64-apple-darwin
             os: macos-latest
@@ -92,18 +92,10 @@ jobs:
               --target ${{ matrix.config.target }}
           fi
 
-      - name: Strip binary (ARM64 Linux - Docker container)
-        if: matrix.config.platform == 'linux-arm64'
-        run: |
-          docker run --rm -v $(pwd):/workspace -w /workspace \
-            ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest \
-            aarch64-linux-gnu-strip target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}
-
-      - name: Strip binary (Other platforms - native)
-        if: matrix.config.platform != 'linux-arm64'
+      - name: Strip binary
         run: |
           BINARY_PATH="target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}"
-          strip "$BINARY_PATH" 2>/dev/null || strip --strip-all "$BINARY_PATH"
+          strip "$BINARY_PATH" 2>/dev/null || strip --strip-all "$BINARY_PATH" || echo "Strip not available, skipping"
 
       - name: Verify binary
         run: |
