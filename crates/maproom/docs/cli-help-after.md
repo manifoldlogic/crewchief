@@ -17,10 +17,10 @@ ENVIRONMENT VARIABLES:
     MAPROOM_DATABASE_URL
         Path to the SQLite database file. Default: ~/.maproom/maproom.db
 
-        Example: export MAPROOM_DATABASE_URL="~/.maproom/my-project.db"
+        Example: export MAPROOM_DATABASE_URL="sqlite://~/.maproom/my-project.db"
 
         For per-repository databases, configure in .claude/settings.json:
-          { "env": { "MAPROOM_DATABASE_URL": "~/.maproom/myrepo.db" } }
+          { "env": { "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/myrepo.db" } }
 
     MAPROOM_DB_ROOT
         Alternative database directory root. MAPROOM_DATABASE_URL takes
