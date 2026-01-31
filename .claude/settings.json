@@ -3,7 +3,7 @@
     "defaultMode": "bypassPermissions"
   },
   "env": {
-    "SDD_ROOT_DIR": "/workspace/repos/crewchief/_SDD"
+    "SDD_ROOT_DIR": "/workspace/_SPECS/crewchief"
   },
   "enabledPlugins": {
     "playwright@claude-plugins-official": true
