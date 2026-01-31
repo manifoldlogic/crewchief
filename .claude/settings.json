@@ -3,7 +3,8 @@
     "defaultMode": "bypassPermissions"
   },
   "env": {
-    "SDD_ROOT_DIR": "/workspace/_SPECS/crewchief"
+    "SDD_ROOT_DIR": "/workspace/_SPECS/crewchief",
+    "MAPROOM_DB_ROOT": "/home/vscode/.maproom/crewchief/maproom.db"
   },
   "enabledPlugins": {
     "playwright@claude-plugins-official": true
