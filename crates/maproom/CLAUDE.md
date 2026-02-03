@@ -577,6 +577,28 @@ crewchief-maproom generate-embeddings --repo myrepo
 # Automatically uses mxbai-embed-large at 1024 dimensions
 ```
 
+## Google Vertex AI Provider - Parallel Configuration
+
+The Google provider supports parallel batch processing for improved throughput:
+
+**Default Configuration:**
+- `sub_batch_size`: 200 (near API limit of 250)
+- `max_concurrency`: 16 (cloud API is I/O-bound)
+- `enabled`: true
+
+**Environment Variables:**
+- `MAPROOM_EMBEDDING_PARALLEL_ENABLED`: Enable/disable (default: true)
+- `MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE`: Texts per sub-batch (default: 200)
+- `MAPROOM_EMBEDDING_PARALLEL_MAX_CONCURRENCY`: Concurrent requests (default: 16)
+
+**Performance:**
+- 1000 texts: ~5-8x faster than sequential
+- 10,000 texts: ~10-12x faster than sequential
+- Throughput limited by API quotas (5M tokens/min)
+
+**Usage:**
+See module documentation in `src/embedding/google.rs` for examples.
+
 ## Known Limitations
 
 - Single-user only (no multi-process concurrent writes)

@@ -261,6 +261,10 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
         "google" => {
             tracing::debug!("Creating Google provider from environment configuration");
 
+            // Load embedding config with Google provider to get parallel settings
+            let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Google))?;
+            let parallel_config = config.parallel;
+
             // Validate GOOGLE_PROJECT_ID (try Maproom-specific var first)
             let project_id = env::var("MAPROOM_GOOGLE_PROJECT_ID")
                 .or_else(|_| env::var("GOOGLE_PROJECT_ID"))
@@ -274,49 +278,72 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                     ))
                 })?;
 
-            // Validate GOOGLE_APPLICATION_CREDENTIALS (try Maproom-specific var first)
-            let creds_path_str = env::var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS")
-                .or_else(|_| env::var("GOOGLE_APPLICATION_CREDENTIALS"))
-                .map_err(|_| {
-                    EmbeddingError::Config(ConfigError::MissingConfig(
-                        "Google application credentials required for Google provider.\n\
-                         Set it to the path of your service account JSON key file.\n\
-                         Download from: https://console.cloud.google.com/iam-admin/serviceaccounts\n\
-                         Then set: export MAPROOM_GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json\n\
-                         (or use standard: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json)"
-                            .to_string(),
-                    ))
-                })?;
-
-            let creds_path = PathBuf::from(&creds_path_str);
-
-            // Check credentials file exists
-            if !creds_path.exists() {
-                return Err(EmbeddingError::Config(ConfigError::FileError(format!(
-                    "Service account credentials file not found at: {}\n\
-                     Verify the path is correct and the file exists.",
-                    creds_path.display()
-                ))));
-            }
-
-            // Validate credentials file is readable and has valid JSON structure
-            validate_service_account_json(&creds_path)?;
-
             // Read optional configuration
             let region = env::var("GOOGLE_REGION")
                 .unwrap_or_else(|_| GoogleProvider::DEFAULT_REGION.to_string());
             let model = env::var("GOOGLE_MODEL")
                 .unwrap_or_else(|_| GoogleProvider::DEFAULT_MODEL.to_string());
 
-            tracing::info!(
-                "Using provider: google (project: {}, region: {}, model: {})",
-                project_id,
-                region,
-                model
-            );
+            // Try GOOGLE_APPLICATION_CREDENTIALS first (service account file)
+            // Fall back to ADC if not set
+            let creds_path_result = env::var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS")
+                .or_else(|_| env::var("GOOGLE_APPLICATION_CREDENTIALS"));
 
-            let provider = GoogleProvider::new(project_id, creds_path, region, model).await?;
-            Ok(Box::new(provider))
+            let provider: Box<dyn EmbeddingProvider> = if let Ok(creds_path_str) = creds_path_result
+            {
+                let creds_path = PathBuf::from(&creds_path_str);
+
+                // Check credentials file exists
+                if !creds_path.exists() {
+                    return Err(EmbeddingError::Config(ConfigError::FileError(format!(
+                        "Service account credentials file not found at: {}\n\
+                         Verify the path is correct and the file exists.",
+                        creds_path.display()
+                    ))));
+                }
+
+                // Validate credentials file is readable and has valid JSON structure
+                validate_service_account_json(&creds_path)?;
+
+                tracing::info!(
+                    "Using provider: google with service account (project: {}, region: {}, model: {}, parallel: enabled={}, sub_batch={}, concurrency={})",
+                    project_id,
+                    region,
+                    model,
+                    parallel_config.enabled,
+                    parallel_config.sub_batch_size,
+                    parallel_config.max_concurrency
+                );
+
+                Box::new(
+                    GoogleProvider::new_with_config(
+                        project_id,
+                        creds_path,
+                        region,
+                        model,
+                        parallel_config,
+                    )
+                    .await?,
+                )
+            } else {
+                // No explicit credentials file - try ADC (Application Default Credentials)
+                // This supports: gcloud auth application-default login, GCE metadata, Workload Identity
+                tracing::info!(
+                    "Using provider: google with ADC (project: {}, region: {}, model: {}, parallel: enabled={}, sub_batch={}, concurrency={})",
+                    project_id,
+                    region,
+                    model,
+                    parallel_config.enabled,
+                    parallel_config.sub_batch_size,
+                    parallel_config.max_concurrency
+                );
+
+                Box::new(
+                    GoogleProvider::from_adc(project_id, region, model, parallel_config).await?,
+                )
+            };
+
+            Ok(provider)
         }
         unknown => {
             tracing::error!("Unknown provider requested: {}", unknown);

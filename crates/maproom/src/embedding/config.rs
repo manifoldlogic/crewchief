@@ -468,6 +468,61 @@ impl Default for ParallelConfig {
 }
 
 impl ParallelConfig {
+    /// Create a parallel config optimized for Google Vertex AI.
+    ///
+    /// Google Vertex AI has different optimal settings than local Ollama due to
+    /// the I/O-bound nature of cloud API calls vs local inference.
+    ///
+    /// # Default Values
+    ///
+    /// - `enabled`: `true` - Parallel processing is enabled by default
+    /// - `sub_batch_size`: `200` - Near the 250 API limit with 20% safety margin
+    /// - `max_concurrency`: `16` - Higher concurrency for network-bound operations
+    ///
+    /// # Rationale
+    ///
+    /// **Sub-batch size (200):** The Vertex AI API accepts up to 250 texts per
+    /// request. Using 200 provides a safety margin for variable token lengths
+    /// while still maximizing throughput per request.
+    ///
+    /// **Concurrency (16):** Cloud APIs are I/O-bound (waiting for network),
+    /// so higher concurrency is beneficial. 16 concurrent requests provides
+    /// good throughput without hitting rate limits on typical quotas.
+    ///
+    /// # When to Use
+    ///
+    /// Use `google_defaults()` when:
+    /// - Creating a `GoogleProvider` programmatically
+    /// - You need Google-optimized parallel settings
+    ///
+    /// Use `ParallelConfig::default()` (Ollama defaults) when:
+    /// - Using local Ollama provider
+    /// - CPU/GPU bound inference where high concurrency causes contention
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    ///
+    /// let config = ParallelConfig::google_defaults();
+    /// assert!(config.enabled);
+    /// assert_eq!(config.sub_batch_size, 200);
+    /// assert_eq!(config.max_concurrency, 16);
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`ParallelConfig::default()`] for Ollama-optimized defaults
+    /// - [`GoogleProvider::new_with_config()`](crate::embedding::google::GoogleProvider::new_with_config)
+    ///   for creating a provider with custom parallel settings
+    pub fn google_defaults() -> Self {
+        Self {
+            enabled: true,
+            sub_batch_size: 200,
+            max_concurrency: 16,
+        }
+    }
+
     /// Validate parallel configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
         if self.sub_batch_size == 0 {
@@ -1132,6 +1187,40 @@ mod tests {
 
         // Cleanup
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+    }
+
+    // Tests for ParallelConfig::google_defaults() (GVERTEX.1005)
+
+    #[test]
+    fn test_parallel_config_google_defaults() {
+        let config = ParallelConfig::google_defaults();
+        assert!(config.enabled);
+        assert_eq!(config.sub_batch_size, 200);
+        assert_eq!(config.max_concurrency, 16);
+    }
+
+    #[test]
+    fn test_parallel_config_google_defaults_values() {
+        // Individual field assertions for clarity
+        let config = ParallelConfig::google_defaults();
+
+        // enabled should be true for parallel processing
+        assert!(
+            config.enabled,
+            "Google defaults should have parallel processing enabled"
+        );
+
+        // sub_batch_size should be 200 (near 250 API limit with safety margin)
+        assert_eq!(
+            config.sub_batch_size, 200,
+            "Google defaults should use sub_batch_size=200 (near 250 API limit)"
+        );
+
+        // max_concurrency should be 16 (higher for I/O-bound cloud API)
+        assert_eq!(
+            config.max_concurrency, 16,
+            "Google defaults should use max_concurrency=16 (optimized for cloud API)"
+        );
     }
 }
 
