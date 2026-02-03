@@ -141,6 +141,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
 
+use crate::context::TokenCounter;
 use crate::embedding::config::{EmbeddingConfig, ParallelConfig, Provider};
 use crate::embedding::error::{ApiError, ConfigError, EmbeddingError};
 use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics, Vector};
@@ -261,6 +262,9 @@ impl GoogleProvider {
 
     /// Maximum texts per batch request.
     pub const MAX_BATCH_SIZE: usize = 250;
+
+    /// Maximum tokens per text for Google Vertex AI (with safety margin below 20k limit)
+    const MAX_TOKENS_PER_TEXT: usize = 19_000;
 
     /// Request timeout for single embeddings (30 seconds).
     const REQUEST_TIMEOUT_SECS: u64 = 30;
@@ -771,12 +775,25 @@ impl GoogleProvider {
             )));
         }
 
-        // Convert texts to instances
+        // Convert texts to instances with truncation
+        let token_counter = TokenCounter::new();
         let instances: Vec<EmbeddingInstance> = texts
             .into_iter()
-            .map(|content| EmbeddingInstance {
-                content,
-                task_type: self.task_type.as_str(),
+            .map(|content| {
+                let truncated =
+                    token_counter.truncate_to_limit(&content, Self::MAX_TOKENS_PER_TEXT);
+                if truncated.len() < content.len() {
+                    tracing::warn!(
+                        "Truncated embedding text from {} to {} chars (max {} tokens)",
+                        content.len(),
+                        truncated.len(),
+                        Self::MAX_TOKENS_PER_TEXT
+                    );
+                }
+                EmbeddingInstance {
+                    content: truncated,
+                    task_type: self.task_type.as_str(),
+                }
             })
             .collect();
 
