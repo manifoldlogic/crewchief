@@ -191,15 +191,14 @@ async fn create_provider_from_env() -> Option<GoogleProvider> {
     }
 
     // Fall back to ADC
-    let project_id = match env::var("GOOGLE_PROJECT_ID")
-        .or_else(|_| env::var("MAPROOM_GOOGLE_PROJECT_ID"))
-    {
-        Ok(id) => id,
-        Err(_) => {
-            eprintln!("GOOGLE_PROJECT_ID not set");
-            return None;
-        }
-    };
+    let project_id =
+        match env::var("GOOGLE_PROJECT_ID").or_else(|_| env::var("MAPROOM_GOOGLE_PROJECT_ID")) {
+            Ok(id) => id,
+            Err(_) => {
+                eprintln!("GOOGLE_PROJECT_ID not set");
+                return None;
+            }
+        };
 
     let region =
         env::var("GOOGLE_REGION").unwrap_or_else(|_| GoogleProvider::DEFAULT_REGION.to_string());

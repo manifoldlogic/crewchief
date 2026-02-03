@@ -15,18 +15,25 @@ ENVIRONMENT VARIABLES:
           4. Packaged binary (bundled with CLI)
 
     MAPROOM_DATABASE_URL
-        Path to the SQLite database file. Default: ~/.maproom/maproom.db
+        Path to the SQLite database file. Default: $HOME/.maproom/maproom.db
 
-        Example: export MAPROOM_DATABASE_URL="sqlite://~/.maproom/my-project.db"
+        Example: export MAPROOM_DATABASE_URL="sqlite://$HOME/.maproom/my-project.db"
 
         For per-repository databases, configure in .claude/settings.json:
-          { "env": { "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/myrepo.db" } }
+          { "env": { "MAPROOM_DATABASE_URL": "sqlite:///home/user/.maproom/myrepo.db" } }
+
+        Note: Use absolute paths or $HOME in shell. Tilde (~) is not expanded
+        in JSON config files.
 
     MAPROOM_DB_ROOT
-        Alternative database directory root. MAPROOM_DATABASE_URL takes
-        precedence if both are set.
+        Root directory for per-repository databases. Each repo gets its own
+        subdirectory: $MAPROOM_DB_ROOT/<repo-name>/maproom.db
 
-        Example: export MAPROOM_DB_ROOT="~/.maproom/crewchief"
+        MAPROOM_DATABASE_URL takes precedence if both are set.
+
+        Example: export MAPROOM_DB_ROOT="$HOME/.maproom"
+
+        Note: Use $HOME, not ~. Tilde is not expanded in JSON config files.
 
     MAPROOM_EMBEDDING_PROVIDER
         Embedding provider: ollama, openai, or google
