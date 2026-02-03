@@ -277,43 +277,225 @@ fn fibonacci(n: u32) -> u32 {
         assert!(count > 0);
     }
 
+    // ===== HAPPY PATH TESTS - TEXT WITHIN LIMITS =====
+
     #[test]
-    fn test_truncate_under_limit() {
+    fn test_truncate_short_text_unchanged() {
+        // Short text under limit should be returned unchanged
         let counter = TokenCounter::new();
-        let text = "Short text";
+        let text = "This is a short sentence.";
         let result = counter.truncate_to_limit(text, 100);
-        assert_eq!(result, text);
+        assert_eq!(result, text, "Short text should be unchanged");
     }
 
     #[test]
-    fn test_truncate_at_limit() {
+    fn test_truncate_at_exact_limit_unchanged() {
+        // Text exactly at token limit should be returned unchanged
         let counter = TokenCounter::new();
-        let text = "a".repeat(100);
+        let text = "a ".repeat(50); // ~50 tokens
         let token_count = TOKENIZER.encode_with_special_tokens(&text).len();
         let result = counter.truncate_to_limit(&text, token_count);
-        assert_eq!(result, text);
+        assert_eq!(result, text, "Text at exact limit should be unchanged");
     }
 
     #[test]
-    fn test_truncate_over_limit() {
+    fn test_truncate_medium_text_under_limit() {
+        // Medium text under limit should be returned unchanged
         let counter = TokenCounter::new();
-        let text = "a".repeat(1000);
-        let result = counter.truncate_to_limit(&text, 10);
-        assert!(result.len() < text.len());
+        let text = "word ".repeat(200); // ~200 tokens
+        let result = counter.truncate_to_limit(&text, 1000);
+        assert_eq!(result, text, "Medium text under limit should be unchanged");
     }
+
+    // ===== TRUNCATION TESTS - TEXT OVER LIMITS =====
+
+    #[test]
+    fn test_truncate_over_limit_reduces_size() {
+        // Text over limit should be truncated to correct token count
+        let counter = TokenCounter::new();
+        let text = "word ".repeat(1000); // ~1000 tokens
+        let result = counter.truncate_to_limit(&text, 100);
+        assert!(
+            result.len() < text.len(),
+            "Truncated text should be shorter"
+        );
+
+        // Verify truncated result is within token limit
+        let result_tokens = TOKENIZER.encode_with_special_tokens(&result);
+        assert!(
+            result_tokens.len() <= 100,
+            "Truncated text should be within token limit"
+        );
+    }
+
+    #[test]
+    fn test_truncate_very_large_text() {
+        // Very large text (20k+ tokens) should truncate to limit
+        let counter = TokenCounter::new();
+        let text = "word ".repeat(20000); // ~20k tokens (over Vertex AI limit)
+        let result = counter.truncate_to_limit(&text, 19_000);
+
+        let result_tokens = TOKENIZER.encode_with_special_tokens(&result);
+        assert!(
+            result_tokens.len() <= 19_000,
+            "Very large text should truncate to limit"
+        );
+        assert!(
+            result.len() < text.len(),
+            "Truncated text should be shorter than original"
+        );
+    }
+
+    #[test]
+    fn test_truncate_result_fewer_tokens() {
+        // Truncated result should have fewer tokens than original
+        let counter = TokenCounter::new();
+        let text = "word ".repeat(500);
+        let original_tokens = TOKENIZER.encode_with_special_tokens(&text).len();
+        let result = counter.truncate_to_limit(&text, 100);
+        let result_tokens = TOKENIZER.encode_with_special_tokens(&result);
+
+        assert!(
+            result_tokens.len() < original_tokens,
+            "Truncated result should have fewer tokens than original"
+        );
+        assert!(
+            result_tokens.len() <= 100,
+            "Truncated result should be within limit"
+        );
+    }
+
+    #[test]
+    fn test_truncate_result_is_valid_utf8() {
+        // Truncated result should decode to valid UTF-8 string
+        let counter = TokenCounter::new();
+        let text = "word ".repeat(1000);
+        let result = counter.truncate_to_limit(&text, 100);
+
+        // If this doesn't panic, UTF-8 is valid
+        assert!(
+            std::str::from_utf8(result.as_bytes()).is_ok(),
+            "Result should be valid UTF-8"
+        );
+    }
+
+    // ===== EDGE CASE TESTS =====
 
     #[test]
     fn test_truncate_empty_string() {
+        // Empty string should return empty string
         let counter = TokenCounter::new();
         let result = counter.truncate_to_limit("", 100);
-        assert_eq!(result, "");
+        assert_eq!(result, "", "Empty string should return empty string");
     }
 
     #[test]
     fn test_truncate_single_token() {
+        // Single token text should be handled correctly
         let counter = TokenCounter::new();
         let text = "word";
         let result = counter.truncate_to_limit(text, 1);
-        assert!(!result.is_empty());
+        assert!(
+            !result.is_empty(),
+            "Single token truncation should return non-empty string"
+        );
+    }
+
+    #[test]
+    fn test_truncate_one_over_limit() {
+        // Text with exactly max_tokens + 1 (boundary condition)
+        let counter = TokenCounter::new();
+        let text = "word ".repeat(100);
+        let token_count = TOKENIZER.encode_with_special_tokens(&text).len();
+        let result = counter.truncate_to_limit(&text, token_count - 1);
+
+        let result_tokens = TOKENIZER.encode_with_special_tokens(&result);
+        assert!(
+            result_tokens.len() <= token_count - 1,
+            "Text one token over should truncate"
+        );
+    }
+
+    #[test]
+    fn test_truncate_zero_max_tokens() {
+        // Zero max_tokens parameter (edge case)
+        let counter = TokenCounter::new();
+        let text = "Some text";
+        let result = counter.truncate_to_limit(text, 0);
+
+        // Should return empty or very short string, should not panic
+        assert!(
+            result.len() <= text.len(),
+            "Zero limit should not panic and result should not be longer"
+        );
+    }
+
+    // ===== UNICODE TESTS =====
+
+    #[test]
+    fn test_truncate_emoji_text() {
+        // Unicode text (emoji) should truncate correctly
+        let counter = TokenCounter::new();
+        let text = "Hello 👋 World 🌍 ".repeat(100);
+        let result = counter.truncate_to_limit(&text, 50);
+
+        assert!(result.len() < text.len(), "Emoji text should truncate");
+        assert!(
+            std::str::from_utf8(result.as_bytes()).is_ok(),
+            "Emoji result should be valid UTF-8"
+        );
+    }
+
+    #[test]
+    fn test_truncate_cjk_characters() {
+        // CJK characters (Chinese/Japanese/Korean) should truncate correctly
+        let counter = TokenCounter::new();
+        let text = "你好世界 こんにちは 안녕하세요 ".repeat(100);
+        let result = counter.truncate_to_limit(&text, 50);
+
+        assert!(result.len() < text.len(), "CJK text should truncate");
+        assert!(
+            std::str::from_utf8(result.as_bytes()).is_ok(),
+            "CJK result should be valid UTF-8"
+        );
+    }
+
+    #[test]
+    fn test_truncate_mixed_unicode_ascii() {
+        // Mixed Unicode and ASCII should truncate correctly
+        let counter = TokenCounter::new();
+        let text = "English 中文 Emoji 🎉 ".repeat(100);
+        let result = counter.truncate_to_limit(&text, 50);
+
+        assert!(
+            result.len() < text.len(),
+            "Mixed Unicode/ASCII should truncate"
+        );
+        assert!(
+            std::str::from_utf8(result.as_bytes()).is_ok(),
+            "Mixed result should be valid UTF-8"
+        );
+    }
+
+    #[test]
+    fn test_truncate_unicode_no_panic() {
+        // Unicode should not cause panics or invalid UTF-8
+        let counter = TokenCounter::new();
+        // Various Unicode edge cases
+        let texts = vec![
+            "🎉".repeat(1000),
+            "你".repeat(1000),
+            "a🎉b".repeat(1000),
+            "test\u{FFFD}".repeat(100), // Replacement character
+        ];
+
+        for text in texts {
+            let result = counter.truncate_to_limit(&text, 10);
+            // Should not panic, should return valid string
+            assert!(
+                !result.is_empty() || text.is_empty(),
+                "Unicode truncation should not panic"
+            );
+        }
     }
 }
