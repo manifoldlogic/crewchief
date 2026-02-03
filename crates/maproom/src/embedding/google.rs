@@ -578,6 +578,135 @@ impl GoogleProvider {
 
         Ok(embeddings)
     }
+
+    /// Execute a single batch embedding request to Vertex AI.
+    ///
+    /// This method makes a direct API call without parallel processing.
+    /// Used internally by `embed_batch_parallel()` for sub-batches.
+    async fn embed_batch_raw(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Validate batch size
+        if texts.len() > Self::MAX_BATCH_SIZE {
+            return Err(EmbeddingError::InvalidInput(format!(
+                "Batch size {} exceeds maximum of {}",
+                texts.len(),
+                Self::MAX_BATCH_SIZE
+            )));
+        }
+
+        // Convert texts to instances
+        let instances: Vec<EmbeddingInstance> = texts
+            .into_iter()
+            .map(|content| EmbeddingInstance {
+                content,
+                task_type: self.task_type.as_str(),
+            })
+            .collect();
+
+        self.predict_with_retry(instances).await
+    }
+
+    /// Execute batch embedding with parallel sub-batch processing.
+    ///
+    /// Splits the input into sub-batches and processes them concurrently,
+    /// respecting the semaphore concurrency limit. Results are merged in
+    /// the original order using index tracking.
+    async fn embed_batch_parallel(
+        &self,
+        texts: Vec<String>,
+    ) -> Result<Vec<Vector>, EmbeddingError> {
+        let total_texts = texts.len();
+        // Use smaller of configured sub_batch_size or MAX_BATCH_SIZE
+        let sub_batch_size = self
+            .parallel_config
+            .sub_batch_size
+            .min(Self::MAX_BATCH_SIZE);
+
+        // Split into sub-batches
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        let num_batches = sub_batches.len();
+
+        tracing::info!(
+            "Parallel batch embedding: {} texts in {} sub-batches (size: {}, concurrency: {})",
+            total_texts,
+            num_batches,
+            sub_batch_size,
+            self.parallel_config.max_concurrency
+        );
+
+        let start = std::time::Instant::now();
+
+        // Process sub-batches in parallel with semaphore limiting concurrency
+        let handles: Vec<_> = sub_batches
+            .into_iter()
+            .enumerate()
+            .map(|(idx, batch)| {
+                let semaphore = self.semaphore.clone();
+                let this = self.clone();
+                let batch_size = batch.len();
+
+                tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    let batch_start = std::time::Instant::now();
+
+                    tracing::debug!("Starting sub-batch {} ({} texts)", idx, batch_size);
+
+                    let result = this.embed_batch_raw(batch).await;
+
+                    let elapsed = batch_start.elapsed();
+                    tracing::debug!(
+                        "Sub-batch {} completed in {:.2}s ({} texts)",
+                        idx,
+                        elapsed.as_secs_f64(),
+                        batch_size
+                    );
+
+                    (idx, result)
+                })
+            })
+            .collect();
+
+        // Collect results from all tasks
+        let mut results: Vec<(usize, Result<Vec<Vector>, EmbeddingError>)> = Vec::new();
+        for handle in handles {
+            let (idx, result) = handle.await.map_err(|e| {
+                EmbeddingError::Api(ApiError::InvalidResponse(format!("Task join error: {}", e)))
+            })?;
+            results.push((idx, result));
+        }
+
+        // Sort by index to preserve order
+        results.sort_by_key(|(idx, _)| *idx);
+
+        // Check for errors and flatten results
+        let mut embeddings = Vec::with_capacity(total_texts);
+        for (idx, result) in results {
+            let batch_embeddings = result.map_err(|e| {
+                EmbeddingError::Api(ApiError::InvalidResponse(format!(
+                    "Sub-batch {} failed: {}",
+                    idx, e
+                )))
+            })?;
+            embeddings.extend(batch_embeddings);
+        }
+
+        let elapsed = start.elapsed();
+        let throughput = total_texts as f64 / elapsed.as_secs_f64();
+        tracing::info!(
+            "Parallel batch completed in {:.2}s ({:.1} texts/sec)",
+            elapsed.as_secs_f64(),
+            throughput
+        );
+
+        Ok(embeddings)
+    }
 }
 
 #[async_trait]
@@ -621,12 +750,15 @@ impl EmbeddingProvider for GoogleProvider {
 
     /// Generate embeddings for a batch of texts.
     ///
-    /// This method uses Vertex AI's native batch embedding API to efficiently
-    /// process up to 250 texts in a single request.
+    /// This method automatically routes to parallel or sequential processing
+    /// based on the parallel config and batch size:
+    /// - If `parallel_config.enabled` is true and the batch is larger than
+    ///   `sub_batch_size`, uses parallel processing with concurrent sub-batches
+    /// - Otherwise, uses a single API request (up to 250 texts)
     ///
     /// # Arguments
     ///
-    /// * `texts` - Vector of texts to embed (up to 250)
+    /// * `texts` - Vector of texts to embed
     ///
     /// # Returns
     ///
@@ -651,25 +783,11 @@ impl EmbeddingProvider for GoogleProvider {
             return Ok(Vec::new());
         }
 
-        // Validate batch size
-        if texts.len() > Self::MAX_BATCH_SIZE {
-            return Err(EmbeddingError::InvalidInput(format!(
-                "Batch size {} exceeds maximum of {}",
-                texts.len(),
-                Self::MAX_BATCH_SIZE
-            )));
+        if self.parallel_config.enabled && texts.len() > self.parallel_config.sub_batch_size {
+            self.embed_batch_parallel(texts).await
+        } else {
+            self.embed_batch_raw(texts).await
         }
-
-        // Convert texts to instances
-        let instances: Vec<EmbeddingInstance> = texts
-            .into_iter()
-            .map(|content| EmbeddingInstance {
-                content,
-                task_type: self.task_type.as_str(),
-            })
-            .collect();
-
-        self.predict_with_retry(instances).await
     }
 
     /// Get the embedding dimension for this provider.
