@@ -469,6 +469,74 @@ impl GoogleProvider {
         .await
     }
 
+    /// Create a new GoogleProvider using Application Default Credentials (ADC).
+    ///
+    /// This constructor supports authentication via:
+    /// - `gcloud auth application-default login` (user credentials)
+    /// - Service account on GCE/Cloud Run (metadata server)
+    /// - Workload Identity Federation
+    ///
+    /// Unlike `new_with_config()`, this does NOT require a service account key file.
+    ///
+    /// # Arguments
+    ///
+    /// * `project_id` - GCP project ID
+    /// * `region` - GCP region (e.g., "us-central1")
+    /// * `model` - Model name (default: "text-embedding-004")
+    /// * `parallel_config` - Parallel processing configuration
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::embedding::google::GoogleProvider;
+    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// // First run: gcloud auth application-default login
+    /// let provider = GoogleProvider::from_adc(
+    ///     "my-project".to_string(),
+    ///     "us-central1".to_string(),
+    ///     "text-embedding-004".to_string(),
+    ///     ParallelConfig::google_defaults(),
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn from_adc(
+        project_id: String,
+        region: String,
+        model: String,
+        parallel_config: ParallelConfig,
+    ) -> Result<Self, EmbeddingError> {
+        // Don't set GOOGLE_APPLICATION_CREDENTIALS - let gcp_auth auto-discover ADC
+        // This supports: ~/.config/gcloud/application_default_credentials.json,
+        // GCE metadata server, and Workload Identity Federation
+        let token_provider = gcp_auth::provider().await.map_err(|e| {
+            EmbeddingError::Config(ConfigError::InvalidValue {
+                field: "credentials".to_string(),
+                reason: format!("Failed to create token provider from ADC: {}", e),
+            })
+        })?;
+
+        let client = Client::builder()
+            .timeout(Duration::from_secs(Self::REQUEST_TIMEOUT_SECS))
+            .build()?;
+
+        let semaphore = Arc::new(Semaphore::new(parallel_config.max_concurrency));
+
+        Ok(Self {
+            client,
+            project_id,
+            region,
+            model,
+            task_type: TaskType::RetrievalDocument,
+            token_provider,
+            metrics: Arc::new(RwLock::new(ProviderMetrics::default())),
+            parallel_config,
+            semaphore,
+        })
+    }
+
     /// Set the task type for embeddings.
     ///
     /// This configures how embeddings will be optimized. Use:
