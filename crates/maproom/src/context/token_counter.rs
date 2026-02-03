@@ -119,6 +119,40 @@ impl TokenCounter {
             .sum::<Result<usize>>()
             .context("Failed to count tokens for multiple texts")
     }
+
+    /// Truncate text to fit within a maximum token count.
+    ///
+    /// Returns the original string if within limit, otherwise truncates
+    /// at a token boundary. Uses character-based fallback if decoding fails.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use crewchief_maproom::context::TokenCounter;
+    ///
+    /// let counter = TokenCounter::new();
+    /// let long_text = "word ".repeat(1000);
+    /// let truncated = counter.truncate_to_limit(&long_text, 100);
+    /// assert!(truncated.len() < long_text.len());
+    /// ```
+    pub fn truncate_to_limit(&self, text: &str, max_tokens: usize) -> String {
+        let tokens = TOKENIZER.encode_with_special_tokens(text);
+
+        if tokens.len() <= max_tokens {
+            return text.to_string();
+        }
+
+        // Truncate tokens and decode back to string
+        let truncated_tokens: Vec<usize> = tokens.into_iter().take(max_tokens).collect();
+        TOKENIZER.decode(truncated_tokens).unwrap_or_else(|_| {
+            // Fallback: character-based truncation (4 chars per token estimate)
+            let max_chars = max_tokens * 4;
+            text.char_indices()
+                .take_while(|(i, _)| *i < max_chars)
+                .map(|(_, c)| c)
+                .collect()
+        })
+    }
 }
 
 impl Default for TokenCounter {
@@ -241,5 +275,45 @@ fn fibonacci(n: u32) -> u32 {
         let chinese = "你好世界";
         let count = counter.count(chinese).unwrap();
         assert!(count > 0);
+    }
+
+    #[test]
+    fn test_truncate_under_limit() {
+        let counter = TokenCounter::new();
+        let text = "Short text";
+        let result = counter.truncate_to_limit(text, 100);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn test_truncate_at_limit() {
+        let counter = TokenCounter::new();
+        let text = "a".repeat(100);
+        let token_count = TOKENIZER.encode_with_special_tokens(&text).len();
+        let result = counter.truncate_to_limit(&text, token_count);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn test_truncate_over_limit() {
+        let counter = TokenCounter::new();
+        let text = "a".repeat(1000);
+        let result = counter.truncate_to_limit(&text, 10);
+        assert!(result.len() < text.len());
+    }
+
+    #[test]
+    fn test_truncate_empty_string() {
+        let counter = TokenCounter::new();
+        let result = counter.truncate_to_limit("", 100);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_truncate_single_token() {
+        let counter = TokenCounter::new();
+        let text = "word";
+        let result = counter.truncate_to_limit(text, 1);
+        assert!(!result.is_empty());
     }
 }
