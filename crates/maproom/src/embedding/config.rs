@@ -468,6 +468,23 @@ impl Default for ParallelConfig {
 }
 
 impl ParallelConfig {
+    /// Create a parallel config optimized for Google Vertex AI.
+    ///
+    /// Google Vertex AI has different optimal settings than local Ollama:
+    /// - `sub_batch_size: 200` - Near the 250 API limit with safety margin
+    /// - `max_concurrency: 16` - Higher concurrency for I/O-bound cloud API
+    ///
+    /// These defaults differ from Ollama (sub_batch_size: 50, max_concurrency: 8)
+    /// because Vertex AI is a cloud service with higher latency but better
+    /// parallelism characteristics.
+    pub fn google_defaults() -> Self {
+        Self {
+            enabled: true,
+            sub_batch_size: 200,
+            max_concurrency: 16,
+        }
+    }
+
     /// Validate parallel configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
         if self.sub_batch_size == 0 {

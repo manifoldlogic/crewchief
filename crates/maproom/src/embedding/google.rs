@@ -56,7 +56,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio::sync::Semaphore;
 
+use crate::embedding::config::ParallelConfig;
 use crate::embedding::error::{ApiError, ConfigError, EmbeddingError};
 use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics, Vector};
 
@@ -159,6 +161,12 @@ pub struct GoogleProvider {
     token_provider: Arc<dyn TokenProvider>,
     /// Metrics tracking
     metrics: Arc<RwLock<ProviderMetrics>>,
+    /// Parallel processing configuration for batch embedding.
+    /// Controls sub-batch size and concurrency limits.
+    parallel_config: ParallelConfig,
+    /// Semaphore to limit concurrent API requests.
+    /// Initialized from parallel_config.max_concurrency.
+    semaphore: Arc<Semaphore>,
 }
 
 impl GoogleProvider {
