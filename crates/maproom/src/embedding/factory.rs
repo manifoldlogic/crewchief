@@ -261,6 +261,10 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
         "google" => {
             tracing::debug!("Creating Google provider from environment configuration");
 
+            // Load embedding config with Google provider to get parallel settings
+            let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Google))?;
+            let parallel_config = config.parallel;
+
             // Validate GOOGLE_PROJECT_ID (try Maproom-specific var first)
             let project_id = env::var("MAPROOM_GOOGLE_PROJECT_ID")
                 .or_else(|_| env::var("GOOGLE_PROJECT_ID"))
@@ -309,13 +313,23 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                 .unwrap_or_else(|_| GoogleProvider::DEFAULT_MODEL.to_string());
 
             tracing::info!(
-                "Using provider: google (project: {}, region: {}, model: {})",
+                "Using provider: google (project: {}, region: {}, model: {}, parallel: enabled={}, sub_batch={}, concurrency={})",
                 project_id,
                 region,
-                model
+                model,
+                parallel_config.enabled,
+                parallel_config.sub_batch_size,
+                parallel_config.max_concurrency
             );
 
-            let provider = GoogleProvider::new(project_id, creds_path, region, model).await?;
+            let provider = GoogleProvider::new_with_config(
+                project_id,
+                creds_path,
+                region,
+                model,
+                parallel_config,
+            )
+            .await?;
             Ok(Box::new(provider))
         }
         unknown => {
