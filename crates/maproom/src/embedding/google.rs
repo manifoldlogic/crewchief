@@ -58,7 +58,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
 
-use crate::embedding::config::ParallelConfig;
+use crate::embedding::config::{EmbeddingConfig, ParallelConfig, Provider};
 use crate::embedding::error::{ApiError, ConfigError, EmbeddingError};
 use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics, Vector};
 
@@ -191,7 +191,88 @@ impl GoogleProvider {
     /// Base delay for exponential backoff (milliseconds).
     const BASE_RETRY_DELAY_MS: u64 = 1000;
 
+    /// Create a new GoogleProvider with explicit configuration and parallel processing settings.
+    ///
+    /// This is the full-featured constructor that allows complete control over all settings
+    /// including parallel batch processing configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `project_id` - GCP project ID
+    /// * `credentials_path` - Path to service account JSON key file
+    /// * `region` - GCP region (e.g., "us-central1", "europe-west1")
+    /// * `model` - Model name (default: "text-embedding-004")
+    /// * `parallel_config` - Parallel processing configuration for batch requests
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::embedding::google::GoogleProvider;
+    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    /// use std::path::PathBuf;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let provider = GoogleProvider::new_with_config(
+    ///     "my-project".to_string(),
+    ///     PathBuf::from("/path/to/service-account.json"),
+    ///     "us-central1".to_string(),
+    ///     "text-embedding-004".to_string(),
+    ///     ParallelConfig::google_defaults(),
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn new_with_config(
+        project_id: String,
+        credentials_path: PathBuf,
+        region: String,
+        model: String,
+        parallel_config: ParallelConfig,
+    ) -> Result<Self, EmbeddingError> {
+        // Validate credentials file exists
+        if !credentials_path.exists() {
+            return Err(EmbeddingError::Config(ConfigError::FileError(format!(
+                "Credentials file not found: {}",
+                credentials_path.display()
+            ))));
+        }
+
+        // Set credentials path for gcp_auth to discover
+        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", &credentials_path);
+
+        // Create token provider (will use GOOGLE_APPLICATION_CREDENTIALS)
+        let token_provider = gcp_auth::provider().await.map_err(|e| {
+            EmbeddingError::Config(ConfigError::InvalidValue {
+                field: "credentials".to_string(),
+                reason: format!("Failed to create token provider: {}", e),
+            })
+        })?;
+
+        // Create HTTP client with appropriate timeout
+        let client = Client::builder()
+            .timeout(Duration::from_secs(Self::REQUEST_TIMEOUT_SECS))
+            .build()?;
+
+        // Initialize semaphore from parallel config
+        let semaphore = Arc::new(Semaphore::new(parallel_config.max_concurrency));
+
+        Ok(Self {
+            client,
+            project_id,
+            region,
+            model,
+            task_type: TaskType::RetrievalDocument,
+            token_provider,
+            metrics: Arc::new(RwLock::new(ProviderMetrics::default())),
+            parallel_config,
+            semaphore,
+        })
+    }
+
     /// Create a new GoogleProvider with explicit configuration.
+    ///
+    /// Uses default parallel processing settings optimized for Google Vertex AI
+    /// (sub_batch_size: 200, max_concurrency: 16).
     ///
     /// # Arguments
     ///
@@ -227,39 +308,14 @@ impl GoogleProvider {
         region: String,
         model: String,
     ) -> Result<Self, EmbeddingError> {
-        // Validate credentials file exists
-        if !credentials_path.exists() {
-            return Err(EmbeddingError::Config(ConfigError::FileError(format!(
-                "Credentials file not found: {}",
-                credentials_path.display()
-            ))));
-        }
-
-        // Set credentials path for gcp_auth to discover
-        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", &credentials_path);
-
-        // Create token provider (will use GOOGLE_APPLICATION_CREDENTIALS)
-        let token_provider = gcp_auth::provider().await.map_err(|e| {
-            EmbeddingError::Config(ConfigError::InvalidValue {
-                field: "credentials".to_string(),
-                reason: format!("Failed to create token provider: {}", e),
-            })
-        })?;
-
-        // Create HTTP client with appropriate timeout
-        let client = Client::builder()
-            .timeout(Duration::from_secs(Self::REQUEST_TIMEOUT_SECS))
-            .build()?;
-
-        Ok(Self {
-            client,
+        Self::new_with_config(
             project_id,
+            credentials_path,
             region,
             model,
-            task_type: TaskType::RetrievalDocument,
-            token_provider,
-            metrics: Arc::new(RwLock::new(ProviderMetrics::default())),
-        })
+            ParallelConfig::google_defaults(),
+        )
+        .await
     }
 
     /// Create a new GoogleProvider from environment variables.
@@ -269,6 +325,12 @@ impl GoogleProvider {
     /// - `GOOGLE_PROJECT_ID`: GCP project ID (required)
     /// - `GOOGLE_REGION`: GCP region (optional, defaults to "us-central1")
     /// - `GOOGLE_MODEL`: Model name (optional, defaults to "text-embedding-004")
+    /// - `MAPROOM_EMBEDDING_PARALLEL_ENABLED`: Enable parallel processing (optional)
+    /// - `MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE`: Sub-batch size (optional)
+    /// - `MAPROOM_EMBEDDING_PARALLEL_MAX_CONCURRENCY`: Max concurrent requests (optional)
+    ///
+    /// Uses `EmbeddingConfig::from_env_with_provider(Some(Provider::Google))` to load
+    /// parallel config, ensuring Google-specific defaults are applied.
     ///
     /// # Returns
     ///
@@ -287,6 +349,10 @@ impl GoogleProvider {
     /// # }
     /// ```
     pub async fn from_env() -> Result<Self, EmbeddingError> {
+        // Load embedding config with Google provider to get parallel settings
+        let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Google))?;
+        let parallel_config = config.parallel;
+
         // Try Maproom-specific env vars first, then fall back to standard vars
         let credentials_path = std::env::var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS")
             .or_else(|_| std::env::var("GOOGLE_APPLICATION_CREDENTIALS"))
@@ -310,7 +376,14 @@ impl GoogleProvider {
         let model =
             std::env::var("GOOGLE_MODEL").unwrap_or_else(|_| Self::DEFAULT_MODEL.to_string());
 
-        Self::new(project_id, PathBuf::from(credentials_path), region, model).await
+        Self::new_with_config(
+            project_id,
+            PathBuf::from(credentials_path),
+            region,
+            model,
+            parallel_config,
+        )
+        .await
     }
 
     /// Set the task type for embeddings.
