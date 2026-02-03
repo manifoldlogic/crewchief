@@ -470,13 +470,51 @@ impl Default for ParallelConfig {
 impl ParallelConfig {
     /// Create a parallel config optimized for Google Vertex AI.
     ///
-    /// Google Vertex AI has different optimal settings than local Ollama:
-    /// - `sub_batch_size: 200` - Near the 250 API limit with safety margin
-    /// - `max_concurrency: 16` - Higher concurrency for I/O-bound cloud API
+    /// Google Vertex AI has different optimal settings than local Ollama due to
+    /// the I/O-bound nature of cloud API calls vs local inference.
     ///
-    /// These defaults differ from Ollama (sub_batch_size: 50, max_concurrency: 8)
-    /// because Vertex AI is a cloud service with higher latency but better
-    /// parallelism characteristics.
+    /// # Default Values
+    ///
+    /// - `enabled`: `true` - Parallel processing is enabled by default
+    /// - `sub_batch_size`: `200` - Near the 250 API limit with 20% safety margin
+    /// - `max_concurrency`: `16` - Higher concurrency for network-bound operations
+    ///
+    /// # Rationale
+    ///
+    /// **Sub-batch size (200):** The Vertex AI API accepts up to 250 texts per
+    /// request. Using 200 provides a safety margin for variable token lengths
+    /// while still maximizing throughput per request.
+    ///
+    /// **Concurrency (16):** Cloud APIs are I/O-bound (waiting for network),
+    /// so higher concurrency is beneficial. 16 concurrent requests provides
+    /// good throughput without hitting rate limits on typical quotas.
+    ///
+    /// # When to Use
+    ///
+    /// Use `google_defaults()` when:
+    /// - Creating a `GoogleProvider` programmatically
+    /// - You need Google-optimized parallel settings
+    ///
+    /// Use `ParallelConfig::default()` (Ollama defaults) when:
+    /// - Using local Ollama provider
+    /// - CPU/GPU bound inference where high concurrency causes contention
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    ///
+    /// let config = ParallelConfig::google_defaults();
+    /// assert!(config.enabled);
+    /// assert_eq!(config.sub_batch_size, 200);
+    /// assert_eq!(config.max_concurrency, 16);
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`ParallelConfig::default()`] for Ollama-optimized defaults
+    /// - [`GoogleProvider::new_with_config()`](crate::embedding::google::GoogleProvider::new_with_config)
+    ///   for creating a provider with custom parallel settings
     pub fn google_defaults() -> Self {
         Self {
             enabled: true,
