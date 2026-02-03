@@ -1,10 +1,16 @@
 # CLAUDE.md
 
+######## IMPORTANT! SHELL TARGET: ZSH ######## IMPORTANT! SHELL TARGET: ZSH ########
+All commands execute in ZSH. Use POSIX-compatible syntax. Never use bash-only syntax.
+Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, portable syntax.
+######## IMPORTANT! SHELL TARGET: ZSH ######## IMPORTANT! SHELL TARGET: ZSH ########
+
 Guidance for Claude Code when working with this repository.
 
 ## Project Overview
 
 CrewChief is a CLI tool combining:
+
 - **Git worktree management** - Create, list, and manage git worktrees
 - **Semantic code search (Maproom)** - Index and search code using SQLite and tree-sitter
 
@@ -64,6 +70,7 @@ This prevents divergent branches when CI pushes between your changes.
 **File operations must stay within current worktree.**
 
 Never modify:
+
 - System directories (`/usr/`, `/etc//`)
 - Home files outside worktree (`~/.bashrc`, `~/.gitconfig`)
 - Other repositories or worktrees

@@ -1,15 +1,3 @@
 {
-  "mcpServers": {
-    "maproom": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@crewchief/maproom-mcp"
-      ],
-      "env": {
-        "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/maproom.db",
-        "MAPROOM_EMBEDDING_PROVIDER": "ollama"
-      }
-    }
-  }
+  "mcpServers": {}
 }
