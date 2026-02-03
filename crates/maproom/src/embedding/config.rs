@@ -1150,6 +1150,40 @@ mod tests {
         // Cleanup
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
     }
+
+    // Tests for ParallelConfig::google_defaults() (GVERTEX.1005)
+
+    #[test]
+    fn test_parallel_config_google_defaults() {
+        let config = ParallelConfig::google_defaults();
+        assert!(config.enabled);
+        assert_eq!(config.sub_batch_size, 200);
+        assert_eq!(config.max_concurrency, 16);
+    }
+
+    #[test]
+    fn test_parallel_config_google_defaults_values() {
+        // Individual field assertions for clarity
+        let config = ParallelConfig::google_defaults();
+
+        // enabled should be true for parallel processing
+        assert!(
+            config.enabled,
+            "Google defaults should have parallel processing enabled"
+        );
+
+        // sub_batch_size should be 200 (near 250 API limit with safety margin)
+        assert_eq!(
+            config.sub_batch_size, 200,
+            "Google defaults should use sub_batch_size=200 (near 250 API limit)"
+        );
+
+        // max_concurrency should be 16 (higher for I/O-bound cloud API)
+        assert_eq!(
+            config.max_concurrency, 16,
+            "Google defaults should use max_concurrency=16 (optimized for cloud API)"
+        );
+    }
 }
 
 /// Tests for endpoint resolution with provider-aware validation (PROVFIX-1002)

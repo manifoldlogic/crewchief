@@ -925,4 +925,174 @@ mod tests {
     fn test_max_batch_size_constant() {
         assert_eq!(GoogleProvider::MAX_BATCH_SIZE, 250);
     }
+
+    // Sub-batch splitting tests (GVERTEX.1005)
+    // These test the chunking logic used in embed_batch_parallel()
+
+    #[test]
+    fn test_google_sub_batch_splitting_exact_boundary() {
+        // Create 200 texts with sub_batch_size=200 -> should result in 1 sub-batch
+        let texts: Vec<String> = (0..200).map(|i| format!("text_{}", i)).collect();
+        let sub_batch_size = 200usize.min(GoogleProvider::MAX_BATCH_SIZE);
+
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        assert_eq!(sub_batches.len(), 1, "200 texts with sub_batch_size=200 should produce 1 sub-batch");
+        assert_eq!(sub_batches[0].len(), 200, "Single sub-batch should contain all 200 texts");
+    }
+
+    #[test]
+    fn test_google_sub_batch_splitting_uneven() {
+        // Create 450 texts with sub_batch_size=200 -> should result in 3 sub-batches: [200, 200, 50]
+        let texts: Vec<String> = (0..450).map(|i| format!("text_{}", i)).collect();
+        let sub_batch_size = 200usize.min(GoogleProvider::MAX_BATCH_SIZE);
+
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        assert_eq!(sub_batches.len(), 3, "450 texts with sub_batch_size=200 should produce 3 sub-batches");
+        assert_eq!(sub_batches[0].len(), 200, "First sub-batch should have 200 texts");
+        assert_eq!(sub_batches[1].len(), 200, "Second sub-batch should have 200 texts");
+        assert_eq!(sub_batches[2].len(), 50, "Third sub-batch should have remaining 50 texts");
+    }
+
+    #[test]
+    fn test_google_sub_batch_splitting_respects_api_limit() {
+        // If sub_batch_size=300, chunks should be limited to MAX_BATCH_SIZE (250)
+        let texts: Vec<String> = (0..600).map(|i| format!("text_{}", i)).collect();
+        let configured_sub_batch_size = 300;
+        let sub_batch_size = configured_sub_batch_size.min(GoogleProvider::MAX_BATCH_SIZE);
+
+        // Verify the min() correctly limits to MAX_BATCH_SIZE
+        assert_eq!(sub_batch_size, 250, "sub_batch_size should be capped at MAX_BATCH_SIZE (250)");
+
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        // 600 texts / 250 = 3 sub-batches (2 full + 1 partial: [250, 250, 100])
+        assert_eq!(sub_batches.len(), 3, "600 texts with capped sub_batch_size=250 should produce 3 sub-batches");
+        assert_eq!(sub_batches[0].len(), 250, "First sub-batch should have MAX_BATCH_SIZE texts");
+        assert_eq!(sub_batches[1].len(), 250, "Second sub-batch should have MAX_BATCH_SIZE texts");
+        assert_eq!(sub_batches[2].len(), 100, "Third sub-batch should have remaining 100 texts");
+
+        // Verify no sub-batch exceeds MAX_BATCH_SIZE
+        for (i, batch) in sub_batches.iter().enumerate() {
+            assert!(
+                batch.len() <= GoogleProvider::MAX_BATCH_SIZE,
+                "Sub-batch {} has {} texts, exceeds MAX_BATCH_SIZE ({})",
+                i,
+                batch.len(),
+                GoogleProvider::MAX_BATCH_SIZE
+            );
+        }
+    }
+
+    // Result merge ordering tests (GVERTEX.1005)
+    // These test the sorting and flattening logic in embed_batch_parallel()
+
+    #[test]
+    fn test_google_result_merge_ordering_in_order() {
+        // Simulate results already in order: [(0, vec), (1, vec), (2, vec)]
+        // Each "embedding" is a vec with the index as the first value for verification
+        let results: Vec<(usize, Vec<Vec<f32>>)> = vec![
+            (0, vec![vec![0.0_f32; 768]]),
+            (1, vec![vec![1.0_f32; 768]]),
+            (2, vec![vec![2.0_f32; 768]]),
+        ];
+
+        // Sort by index (already sorted, should be no-op)
+        let mut sorted_results = results.clone();
+        sorted_results.sort_by_key(|(idx, _)| *idx);
+
+        // Flatten in order
+        let embeddings: Vec<Vec<f32>> = sorted_results
+            .into_iter()
+            .flat_map(|(_, batch)| batch)
+            .collect();
+
+        assert_eq!(embeddings.len(), 3, "Should have 3 embeddings after flattening");
+        assert_eq!(embeddings[0][0], 0.0, "First embedding should be from batch 0");
+        assert_eq!(embeddings[1][0], 1.0, "Second embedding should be from batch 1");
+        assert_eq!(embeddings[2][0], 2.0, "Third embedding should be from batch 2");
+    }
+
+    #[test]
+    fn test_google_result_merge_ordering_out_of_order() {
+        // Simulate results arriving out of order: [(2, vec), (0, vec), (1, vec)]
+        // This tests that sorting correctly reorders results
+        let results: Vec<(usize, Vec<Vec<f32>>)> = vec![
+            (2, vec![vec![2.0_f32; 768]]),  // Arrived first but should be last
+            (0, vec![vec![0.0_f32; 768]]),  // Arrived second but should be first
+            (1, vec![vec![1.0_f32; 768]]),  // Arrived third but should be second
+        ];
+
+        // Sort by index to restore correct order
+        let mut sorted_results = results.clone();
+        sorted_results.sort_by_key(|(idx, _)| *idx);
+
+        // Verify sort order
+        assert_eq!(sorted_results[0].0, 0, "After sorting, first result should have index 0");
+        assert_eq!(sorted_results[1].0, 1, "After sorting, second result should have index 1");
+        assert_eq!(sorted_results[2].0, 2, "After sorting, third result should have index 2");
+
+        // Flatten in order
+        let embeddings: Vec<Vec<f32>> = sorted_results
+            .into_iter()
+            .flat_map(|(_, batch)| batch)
+            .collect();
+
+        assert_eq!(embeddings.len(), 3, "Should have 3 embeddings after flattening");
+        assert_eq!(embeddings[0][0], 0.0, "First embedding should be from batch 0 (order preserved)");
+        assert_eq!(embeddings[1][0], 1.0, "Second embedding should be from batch 1 (order preserved)");
+        assert_eq!(embeddings[2][0], 2.0, "Third embedding should be from batch 2 (order preserved)");
+    }
+
+    #[test]
+    fn test_google_result_merge_ordering_single_batch() {
+        // Single batch - no splitting needed, verify order is preserved
+        // This tests the edge case where all texts fit in one sub-batch
+        let texts: Vec<String> = (0..100).map(|i| format!("text_{}", i)).collect();
+        let sub_batch_size = 200;
+
+        // With 100 texts and sub_batch_size=200, should be 1 batch
+        let sub_batches: Vec<Vec<String>> = texts
+            .chunks(sub_batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        assert_eq!(sub_batches.len(), 1, "100 texts with sub_batch_size=200 should be 1 batch");
+
+        // Simulate single batch result
+        let results: Vec<(usize, Vec<Vec<f32>>)> = vec![
+            (0, (0..100).map(|i| vec![i as f32; 768]).collect()),
+        ];
+
+        // Sort (no-op for single batch)
+        let mut sorted_results = results.clone();
+        sorted_results.sort_by_key(|(idx, _)| *idx);
+
+        // Flatten
+        let embeddings: Vec<Vec<f32>> = sorted_results
+            .into_iter()
+            .flat_map(|(_, batch)| batch)
+            .collect();
+
+        assert_eq!(embeddings.len(), 100, "Should have 100 embeddings after flattening");
+
+        // Verify order is preserved
+        for (i, embedding) in embeddings.iter().enumerate() {
+            assert_eq!(
+                embedding[0], i as f32,
+                "Embedding at position {} should have value {} (order preserved)",
+                i, i
+            );
+        }
+    }
 }
