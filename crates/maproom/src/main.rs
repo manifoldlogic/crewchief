@@ -1527,8 +1527,8 @@ async fn main() -> anyhow::Result<()> {
             k,
             debug,
             deduplicate,
-            kind: _kind,
-            lang: _lang,
+            kind,
+            lang,
         } => {
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
@@ -1540,8 +1540,8 @@ async fn main() -> anyhow::Result<()> {
                     &query,
                     fetch_k,
                     debug,
-                    None,
-                    None,
+                    kind.as_deref(),
+                    lang.as_deref(),
                 )
                 .await?;
 
@@ -1564,8 +1564,8 @@ async fn main() -> anyhow::Result<()> {
             query,
             k,
             threshold,
-            kind: _kind,
-            lang: _lang,
+            kind,
+            lang,
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
 
@@ -1596,8 +1596,8 @@ async fn main() -> anyhow::Result<()> {
                     &query_embedding,
                     k as i64,
                     false,
-                    None,
-                    None,
+                    kind.as_deref(),
+                    lang.as_deref(),
                 )
                 .await
             {
