@@ -96,6 +96,8 @@ pub fn build_fts_query(query: &str) -> String {
 /// * `worktree` - Optional worktree name to filter by
 /// * `query` - User's search query
 /// * `limit` - Maximum number of results
+/// * `kind_filter` - Optional filter for chunk kinds (e.g., "function", "class")
+/// * `lang_filter` - Optional filter for file languages (e.g., "rust", "typescript")
 ///
 /// # Returns
 /// Vector of FtsResult with chunk_ids, ranks, and positions
@@ -105,6 +107,8 @@ pub fn search_fts(
     worktree: Option<&str>,
     query: &str,
     limit: usize,
+    kind_filter: Option<&[String]>,
+    lang_filter: Option<&[String]>,
 ) -> Result<Vec<FtsResult>> {
     let fts_query = build_fts_query(query);
     if fts_query.is_empty() {
@@ -126,9 +130,46 @@ pub fn search_fts(
         None
     };
 
-    // Build SQL based on worktree filter
+    // Build dynamic SQL with filter conditions
+    // Base params: ?1 = fts_query, ?2 = repo_id
+    // With worktree: ?3 = worktree_id, then filters, then LIMIT
+    // Without worktree: filters start at ?3, then LIMIT
+    let mut param_idx: usize = if worktree_id.is_some() { 4 } else { 3 };
+    let mut filter_conditions = Vec::new();
+
+    if let Some(kinds) = kind_filter {
+        if !kinds.is_empty() {
+            let placeholders = (0..kinds.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("c.kind IN ({})", placeholders));
+            param_idx += kinds.len();
+        }
+    }
+
+    if let Some(langs) = lang_filter {
+        if !langs.is_empty() {
+            let placeholders = (0..langs.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("f.language IN ({})", placeholders));
+            param_idx += langs.len();
+        }
+    }
+
+    let filter_clause = if filter_conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", filter_conditions.join(" AND "))
+    };
+
+    let limit_placeholder = format!("?{}", param_idx);
+
     let sql = if worktree_id.is_some() {
-        r#"
+        format!(
+            r#"
             SELECT c.id, fts_chunks.rank
             FROM fts_chunks
             JOIN chunks c ON c.id = fts_chunks.rowid
@@ -137,55 +178,70 @@ pub fn search_fts(
             WHERE fts_chunks MATCH ?1
               AND f.repo_id = ?2
               AND cw.worktree_id = ?3
+              {}
             ORDER BY fts_chunks.rank ASC
-            LIMIT ?4
-        "#
+            LIMIT {}
+        "#,
+            filter_clause, limit_placeholder
+        )
     } else {
-        r#"
+        format!(
+            r#"
             SELECT DISTINCT c.id, fts_chunks.rank
             FROM fts_chunks
             JOIN chunks c ON c.id = fts_chunks.rowid
             JOIN files f ON f.id = c.file_id
             WHERE fts_chunks MATCH ?1
               AND f.repo_id = ?2
+              {}
             ORDER BY fts_chunks.rank ASC
-            LIMIT ?3
-        "#
+            LIMIT {}
+        "#,
+            filter_clause, limit_placeholder
+        )
     };
 
-    let mut stmt = conn.prepare(sql)?;
-    let mut results = Vec::new();
+    // Build dynamic parameter list
+    let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    param_values.push(Box::new(fts_query));
+    param_values.push(Box::new(repo_id));
 
     if let Some(wid) = worktree_id {
-        let rows = stmt.query_map(params![fts_query, repo_id, wid, limit as i64], |row| {
-            let chunk_id: i64 = row.get(0)?;
-            let rank: f64 = row.get(1)?;
-            Ok(FtsResult {
-                chunk_id,
-                rank,
-                normalized_rank: normalize_fts_rank(rank),
-                position: 0, // Will be set after collecting
-            })
-        })?;
+        param_values.push(Box::new(wid));
+    }
 
-        for result in rows {
-            results.push(result?);
+    if let Some(kinds) = kind_filter {
+        for kind in kinds {
+            param_values.push(Box::new(kind.clone()));
         }
-    } else {
-        let rows = stmt.query_map(params![fts_query, repo_id, limit as i64], |row| {
-            let chunk_id: i64 = row.get(0)?;
-            let rank: f64 = row.get(1)?;
-            Ok(FtsResult {
-                chunk_id,
-                rank,
-                normalized_rank: normalize_fts_rank(rank),
-                position: 0, // Will be set after collecting
-            })
-        })?;
+    }
 
-        for result in rows {
-            results.push(result?);
+    if let Some(langs) = lang_filter {
+        for lang in langs {
+            param_values.push(Box::new(lang.clone()));
         }
+    }
+
+    param_values.push(Box::new(limit as i64));
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+
+    let mut stmt = conn.prepare(&sql)?;
+    let mut results = Vec::new();
+
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
+        let chunk_id: i64 = row.get(0)?;
+        let rank: f64 = row.get(1)?;
+        Ok(FtsResult {
+            chunk_id,
+            rank,
+            normalized_rank: normalize_fts_rank(rank),
+            position: 0, // Will be set after collecting
+        })
+    })?;
+
+    for result in rows {
+        results.push(result?);
     }
 
     // Set position (0-indexed rank in result set)

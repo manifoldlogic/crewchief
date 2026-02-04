@@ -193,9 +193,7 @@ impl HookDetector {
                 "*",  // All repos
                 None, // All worktrees initially
                 "use", 100, // Get more results to filter
-                false,
-                None,
-                None,
+                false, None, None,
             )
             .await?;
 
@@ -251,9 +249,7 @@ impl HookDetector {
                 "*",  // All repos
                 None, // All worktrees
                 hook_name, 10, // Just need to find one
-                false,
-                None,
-                None,
+                false, None, None,
             )
             .await?;
 

@@ -174,7 +174,15 @@ mod sqlite_tests {
 
         // Search should find the chunk
         let results = store
-            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false, None, None)
+            .search_chunks_fts(
+                "test-repo",
+                Some("main"),
+                "authenticate",
+                10,
+                false,
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -283,7 +291,15 @@ mod sqlite_tests {
 
         // Queries with special characters should not crash
         let result = store
-            .search_chunks_fts("test-repo", None, "test \"quoted\" func", 10, false, None, None)
+            .search_chunks_fts(
+                "test-repo",
+                None,
+                "test \"quoted\" func",
+                10,
+                false,
+                None,
+                None,
+            )
             .await;
         assert!(result.is_ok(), "Should handle quotes in query");
 

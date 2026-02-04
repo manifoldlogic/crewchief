@@ -1534,7 +1534,15 @@ async fn main() -> anyhow::Result<()> {
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
             let hits = store
-                .search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug, None, None)
+                .search_chunks_fts(
+                    &repo,
+                    worktree.as_deref(),
+                    &query,
+                    fetch_k,
+                    debug,
+                    None,
+                    None,
+                )
                 .await?;
 
             // Apply deduplication if enabled

@@ -332,7 +332,16 @@ mod sqlite_contract_tests {
         // Hybrid search should fallback to FTS when no embeddings
         let embedding = vec![0.1f32; 1536];
         let result = store
-            .search_chunks_hybrid("contract-test", None, "test", &embedding, 10, false, None, None)
+            .search_chunks_hybrid(
+                "contract-test",
+                None,
+                "test",
+                &embedding,
+                10,
+                false,
+                None,
+                None,
+            )
             .await;
 
         // Should either succeed (fallback to FTS) or fail gracefully

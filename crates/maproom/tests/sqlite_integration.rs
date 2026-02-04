@@ -131,7 +131,15 @@ mod integration_tests {
 
         // 4. Search - FTS
         let fts_results = store
-            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false, None, None)
+            .search_chunks_fts(
+                "test-repo",
+                Some("main"),
+                "authenticate",
+                10,
+                false,
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert!(!fts_results.is_empty(), "FTS search should return results");
@@ -231,7 +239,15 @@ mod integration_tests {
 
         // Search in specific worktree
         let results_main = store
-            .search_chunks_fts("multi-wt-repo", Some("main"), "process_data", 10, false, None, None)
+            .search_chunks_fts(
+                "multi-wt-repo",
+                Some("main"),
+                "process_data",
+                10,
+                false,
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -241,7 +257,15 @@ mod integration_tests {
         );
 
         let results_feature = store
-            .search_chunks_fts("multi-wt-repo", Some("feature"), "process_data", 10, false, None, None)
+            .search_chunks_fts(
+                "multi-wt-repo",
+                Some("feature"),
+                "process_data",
+                10,
+                false,
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -562,7 +586,15 @@ mod integration_tests {
 
             // Search should find the persisted chunk
             let results = store
-                .search_chunks_fts("persist-test", None, "persistent_func", 10, false, None, None)
+                .search_chunks_fts(
+                    "persist-test",
+                    None,
+                    "persistent_func",
+                    10,
+                    false,
+                    None,
+                    None,
+                )
                 .await
                 .unwrap();
             assert!(
@@ -834,7 +866,15 @@ mod integration_tests {
             .unwrap();
 
         let results = store
-            .search_chunks_fts("exists-repo", Some("nonexistent-wt"), "query", 10, false, None, None)
+            .search_chunks_fts(
+                "exists-repo",
+                Some("nonexistent-wt"),
+                "query",
+                10,
+                false,
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert!(

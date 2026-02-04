@@ -304,7 +304,15 @@ mod tests {
         // Verify data was inserted by searching
         let results = test_db
             .store
-            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false, None, None)
+            .search_chunks_fts(
+                "test-repo",
+                Some("main"),
+                "authenticate",
+                10,
+                false,
+                None,
+                None,
+            )
             .await
             .expect("Search failed");
 
