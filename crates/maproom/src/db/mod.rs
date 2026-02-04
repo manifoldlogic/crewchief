@@ -98,6 +98,8 @@ pub struct SearchHit {
     pub kind_mult: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exact_mult: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
 }
 
 /// Full chunk data for display/context - read-only view of a chunk
@@ -168,4 +170,16 @@ pub struct ChunkForEmbedding {
     pub signature: Option<String>,
     pub docstring: Option<String>,
     pub preview: String,
+}
+
+/// Truncate a string to max_length characters, appending "..." if truncated.
+/// Uses chars().count() for character-based length checks (not .len() which is bytes).
+/// Uses char_indices() for Unicode-safe truncation -- never splits multi-byte sequences.
+pub fn truncate_preview(content: &str, max_length: usize) -> String {
+    if content.chars().count() <= max_length {
+        content.to_string()
+    } else {
+        let truncated: String = content.chars().take(max_length).collect();
+        format!("{}...", truncated)
+    }
 }

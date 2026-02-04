@@ -842,7 +842,8 @@ impl SqliteStore {
                     c.symbol_name,
                     c.kind,
                     f.relpath,
-                    fts_chunks.rank as score
+                    fts_chunks.rank as score,
+                    c.preview
                 FROM fts_chunks
                 JOIN chunks c ON c.id = fts_chunks.rowid
                 JOIN files f ON f.id = c.file_id
@@ -866,7 +867,8 @@ impl SqliteStore {
                     c.symbol_name,
                     c.kind,
                     f.relpath,
-                    fts_chunks.rank as score
+                    fts_chunks.rank as score,
+                    c.preview
                 FROM fts_chunks
                 JOIN chunks c ON c.id = fts_chunks.rowid
                 JOIN files f ON f.id = c.file_id
@@ -909,6 +911,7 @@ impl SqliteStore {
             let mut stmt = conn.prepare(&sql)?;
 
             let mut hits = Vec::new();
+            // Columns: id(0), start_line(1), end_line(2), symbol_name(3), kind(4), relpath(5), score(6), preview(7)
             let rows = stmt.query_map(params_refs.as_slice(), |row| {
                 let score: f64 = row.get(6)?;
                 Ok(SearchHit {
@@ -922,6 +925,7 @@ impl SqliteStore {
                     base_score: None,
                     kind_mult: None,
                     exact_mult: None,
+                    preview: Some(row.get(7)?),
                 })
             })?;
             for row in rows {
@@ -1036,6 +1040,7 @@ impl SqliteStore {
                         base_score: None,
                         kind_mult: None,
                         exact_mult: Some(exact_mult),
+                        preview: None,
                     })
                 })?;
                 for row in rows {
@@ -1057,6 +1062,7 @@ impl SqliteStore {
                         base_score: None,
                         kind_mult: None,
                         exact_mult: Some(exact_mult),
+                        preview: None,
                     })
                 })?;
                 for row in rows {
@@ -1147,6 +1153,7 @@ impl SqliteStore {
                         base_score: None,
                         kind_mult: None,
                         exact_mult: None,
+                        preview: None,
                     })
                 })?;
                 for row in rows {
@@ -1166,6 +1173,7 @@ impl SqliteStore {
                         base_score: None,
                         kind_mult: None,
                         exact_mult: None,
+                        preview: None,
                     })
                 })?;
                 for row in rows {
@@ -1230,10 +1238,11 @@ impl SqliteStore {
             for vec_result in vec_results {
                 // Fetch chunk details with file relpath
                 let chunk_id = vec_result.chunk_id;
+                // Columns: start_line(0), end_line(1), symbol_name(2), kind(3), relpath(4), preview(5)
                 let hit_result = if let Some(wid) = worktree_id {
                     conn.query_row(
                         r#"
-                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath
+                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview
                         FROM chunks c
                         JOIN files f ON f.id = c.file_id
                         JOIN chunk_worktrees cw ON cw.chunk_id = c.id
@@ -1256,6 +1265,7 @@ impl SqliteStore {
                                 },
                                 kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
                                 exact_mult: None,
+                                preview: Some(row.get(5)?),
                             })
                         },
                     )
@@ -1263,7 +1273,7 @@ impl SqliteStore {
                 } else {
                     conn.query_row(
                         r#"
-                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath
+                        SELECT c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview
                         FROM chunks c
                         JOIN files f ON f.id = c.file_id
                         WHERE c.id = ?1
@@ -1285,6 +1295,7 @@ impl SqliteStore {
                                 },
                                 kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
                                 exact_mult: None,
+                                preview: Some(row.get(5)?),
                             })
                         },
                     )
@@ -1401,6 +1412,7 @@ impl SqliteStore {
                                 },
                                 kind_mult: None, // RRF score already incorporates semantic ranking
                                 exact_mult: None,
+                                preview: None,
                             })
                         },
                     )
@@ -1430,6 +1442,7 @@ impl SqliteStore {
                                 },
                                 kind_mult: None, // RRF score already incorporates semantic ranking
                                 exact_mult: None,
+                                preview: None,
                             })
                         },
                     )
@@ -2699,6 +2712,7 @@ impl SqliteStore {
                         base_score: None,
                         kind_mult: None,
                         exact_mult: None,
+                        preview: None,
                     })
                 })?;
                 for row in rows {
@@ -2717,6 +2731,7 @@ impl SqliteStore {
                         base_score: None,
                         kind_mult: None,
                         exact_mult: None,
+                        preview: None,
                     })
                 })?;
                 for row in rows {
@@ -2905,6 +2920,7 @@ impl SqliteStore {
                             base_score: None,
                             kind_mult: None,
                             exact_mult: None,
+                            preview: None,
                         })
                     },
                 )?;
@@ -2933,6 +2949,7 @@ impl SqliteStore {
                             base_score: None,
                             kind_mult: None,
                             exact_mult: None,
+                            preview: None,
                         })
                     },
                 )?;
@@ -3080,6 +3097,7 @@ impl SqliteStore {
                     base_score: None,
                     kind_mult: None,
                     exact_mult: None,
+                    preview: None,
                 })
             })?;
             for row in rows {
@@ -3155,6 +3173,7 @@ impl SqliteStore {
                             base_score: None,
                             kind_mult: None,
                             exact_mult: None,
+                            preview: None,
                         })
                     },
                 )?;
@@ -3176,6 +3195,7 @@ impl SqliteStore {
                             base_score: None,
                             kind_mult: None,
                             exact_mult: None,
+                            preview: None,
                         })
                     },
                 )?;
@@ -3276,6 +3296,7 @@ impl SqliteStore {
                     base_score: None,
                     kind_mult: None,
                     exact_mult: None,
+                    preview: None,
                 })
             })?;
             for row in rows {
