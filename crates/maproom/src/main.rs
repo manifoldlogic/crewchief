@@ -419,6 +419,12 @@ enum Commands {
         /// Filter by file language (comma-separated: py,ts,rs). Case-sensitive. Use file extensions.
         #[arg(long, value_delimiter = ',')]
         lang: Option<Vec<String>>,
+        /// Include content preview in search results
+        #[arg(long, default_value_t = false)]
+        preview: bool,
+        /// Maximum length of preview text in characters (default: 200)
+        #[arg(long, default_value_t = 200)]
+        preview_length: usize,
     },
 
     /// Vector similarity search using embeddings
@@ -458,6 +464,14 @@ enum Commands {
         /// Filter by file language (comma-separated: py,ts,rs). Case-sensitive. Use file extensions.
         #[arg(long, value_delimiter = ',')]
         lang: Option<Vec<String>>,
+
+        /// Include content preview in search results
+        #[arg(long, default_value_t = false)]
+        preview: bool,
+
+        /// Maximum length of preview text in characters (default: 200)
+        #[arg(long, default_value_t = 200)]
+        preview_length: usize,
     },
 
     /// Show status of indexed repositories and worktrees
@@ -1532,6 +1546,8 @@ async fn main() -> anyhow::Result<()> {
             deduplicate,
             kind,
             lang,
+            preview,
+            preview_length,
         } => {
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
@@ -1555,6 +1571,23 @@ async fn main() -> anyhow::Result<()> {
                 hits
             };
 
+            // Post-process preview field
+            let hits: Vec<_> = hits
+                .into_iter()
+                .map(|mut hit| {
+                    if preview {
+                        // Truncate preview to preview_length
+                        if let Some(preview_text) = hit.preview.take() {
+                            hit.preview = Some(db::truncate_preview(&preview_text, preview_length));
+                        }
+                    } else {
+                        // Strip preview if flag not set
+                        hit.preview = None;
+                    }
+                    hit
+                })
+                .collect();
+
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
@@ -1569,6 +1602,8 @@ async fn main() -> anyhow::Result<()> {
             threshold,
             kind,
             lang,
+            preview,
+            preview_length,
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
 
@@ -1620,9 +1655,9 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            // Build hits with threshold filtering
+            // Build hits with threshold filtering and preview processing
             let mut hits = Vec::new();
-            for hit in search_hits {
+            for mut hit in search_hits {
                 // Apply threshold filter if specified
                 if let Some(thresh) = threshold {
                     if hit.score < thresh as f64 {
@@ -1630,14 +1665,35 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                hits.push(serde_json::json!({
+                // Post-process preview field
+                let preview_value = if preview {
+                    // Truncate preview to preview_length
+                    hit.preview
+                        .take()
+                        .map(|p| db::truncate_preview(&p, preview_length))
+                } else {
+                    // Strip preview if flag not set
+                    None
+                };
+
+                let mut obj = serde_json::json!({
+                    "chunk_id": hit.chunk_id,
                     "score": hit.score,
                     "start_line": hit.start_line,
                     "end_line": hit.end_line,
                     "symbol_name": hit.symbol_name,
                     "kind": hit.kind,
                     "file_path": hit.file_relpath,
-                }));
+                });
+
+                // Conditionally add preview if flag is set and preview exists
+                if let Some(preview_text) = preview_value {
+                    obj.as_object_mut()
+                        .unwrap()
+                        .insert("preview".to_string(), serde_json::json!(preview_text));
+                }
+
+                hits.push(obj);
             }
 
             // Output JSON schema for MCP client consumption
@@ -2423,9 +2479,7 @@ mod tests {
     fn test_status_verbose_with_json() {
         let cli = Cli::parse_from(&["maproom", "status", "--verbose", "--json"]);
         match cli.command {
-            Commands::Status {
-                json, verbose, ..
-            } => {
+            Commands::Status { json, verbose, .. } => {
                 assert!(json);
                 assert!(verbose);
             }
@@ -2437,13 +2491,164 @@ mod tests {
     fn test_status_verbose_with_repo() {
         let cli = Cli::parse_from(&["maproom", "status", "--verbose", "--repo", "myrepo"]);
         match cli.command {
-            Commands::Status {
-                repo, verbose, ..
-            } => {
+            Commands::Status { repo, verbose, .. } => {
                 assert_eq!(repo, Some("myrepo".to_string()));
                 assert!(verbose);
             }
             _ => panic!("Expected Status command"),
+        }
+    }
+
+    // ==================== Preview Flag CLI Parsing Tests (MRIMP-3.2001) ====================
+
+    #[test]
+    fn test_search_preview_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::Search { preview, .. } => {
+                assert!(preview);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_preview_length_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview-length",
+            "150",
+        ]);
+        match cli.command {
+            Commands::Search { preview_length, .. } => {
+                assert_eq!(preview_length, 150);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_defaults() {
+        let cli = Cli::parse_from(&["maproom", "search", "--repo", "test", "--query", "foo"]);
+        match cli.command {
+            Commands::Search {
+                preview,
+                preview_length,
+                ..
+            } => {
+                assert_eq!(preview, false);
+                assert_eq!(preview_length, 200);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_preview_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { preview, .. } => {
+                assert!(preview);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_preview_length_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview-length",
+            "150",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { preview_length, .. } => {
+                assert_eq!(preview_length, 150);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_search_combined_flags_with_preview() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview",
+            "--kind",
+            "func",
+            "--lang",
+            "py",
+        ]);
+        match cli.command {
+            Commands::Search {
+                preview,
+                kind,
+                lang,
+                ..
+            } => {
+                assert!(preview);
+                assert_eq!(kind, Some(vec!["func".to_string()]));
+                assert_eq!(lang, Some(vec!["py".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_preview_length_without_preview() {
+        // Flag interaction: --preview-length without --preview is valid
+        // (length is parsed but ignored when preview=false per architecture.md Decision 4)
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview-length",
+            "150",
+        ]);
+        match cli.command {
+            Commands::Search {
+                preview,
+                preview_length,
+                ..
+            } => {
+                assert_eq!(preview, false);
+                assert_eq!(preview_length, 150);
+            }
+            _ => panic!("Expected Search command"),
         }
     }
 }

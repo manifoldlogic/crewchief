@@ -34,6 +34,7 @@ fn create_search_hit(
         base_score: None,
         kind_mult: None,
         exact_mult: None,
+        preview: None,
     }
 }
 

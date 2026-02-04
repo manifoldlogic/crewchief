@@ -963,6 +963,174 @@ mod filter_integration_tests {
             results_with_none.len()
         );
     }
+
+    // ==================== Preview Integration Tests (MRIMP-3.2001) ====================
+
+    #[tokio::test]
+    async fn test_fts_search_returns_preview() {
+        let store = setup_store().await;
+        let repo = "preview-test-repo";
+
+        let repo_id = store
+            .get_or_create_repo(repo, "/tmp/preview-test")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/tmp/preview-test")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(worktree_id, "abc123", None)
+            .await
+            .unwrap();
+
+        // Create a test file
+        let file = make_file(repo_id, worktree_id, commit_id, "test.py", "py", "hash1");
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create a chunk with known preview content
+        let chunk = make_chunk(
+            file_id,
+            worktree_id,
+            "blob1",
+            "test_function",
+            "func",
+            10,
+            20,
+        );
+        store.insert_chunk(&chunk).await.unwrap();
+
+        // Search - preview is always populated by database query
+        let hits = store
+            .search_chunks_fts(repo, None, "filterable", 10, false, None, None)
+            .await
+            .unwrap();
+
+        assert!(!hits.is_empty(), "Should find at least one result");
+        for hit in &hits {
+            assert!(
+                hit.preview.is_some(),
+                "Preview should be Some (populated by database)"
+            );
+            let preview = hit.preview.as_ref().unwrap();
+            assert!(!preview.is_empty(), "Preview should not be empty");
+            // Verify it's actually populated with chunk preview content
+            assert!(
+                preview.contains("filterable"),
+                "Preview should contain search content"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fts_search_without_preview_field_absence() {
+        let store = setup_store().await;
+        let repo = "preview-absence-test";
+
+        let repo_id = store
+            .get_or_create_repo(repo, "/tmp/preview-absence-test")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/tmp/preview-absence-test")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(worktree_id, "abc123", None)
+            .await
+            .unwrap();
+
+        let file = make_file(repo_id, worktree_id, commit_id, "test.py", "py", "hash1");
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        let chunk = make_chunk(
+            file_id,
+            worktree_id,
+            "blob1",
+            "test_function",
+            "func",
+            10,
+            20,
+        );
+        store.insert_chunk(&chunk).await.unwrap();
+
+        // Search - get results with preview populated
+        let hits = store
+            .search_chunks_fts(repo, None, "filterable", 10, false, None, None)
+            .await
+            .unwrap();
+
+        assert!(!hits.is_empty(), "Should find at least one result");
+
+        // Simulate what CLI does: set preview to None
+        for mut hit in hits {
+            hit.preview = None;
+
+            // Serialize and verify "preview" key is absent (not null)
+            let json = serde_json::to_string(&hit).unwrap();
+            assert!(
+                !json.contains("\"preview\""),
+                "JSON should not contain preview key when None (skip_serializing_if behavior)"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_vector_search_returns_preview() {
+        let store = setup_store().await;
+        let repo = "vector-preview-test";
+
+        let repo_id = store
+            .get_or_create_repo(repo, "/tmp/vector-preview-test")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/tmp/vector-preview-test")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(worktree_id, "abc123", None)
+            .await
+            .unwrap();
+
+        let file = make_file(repo_id, worktree_id, commit_id, "test.py", "py", "hash1");
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        let chunk = make_chunk(
+            file_id,
+            worktree_id,
+            "blob1",
+            "test_function",
+            "func",
+            10,
+            20,
+        );
+        let _chunk_id = store.insert_chunk(&chunk).await.unwrap();
+
+        // Insert a test embedding for vector search
+        let test_embedding = vec![0.1; 1024]; // 1024-dim vector
+        store
+            .upsert_embedding("blob1", &test_embedding, "test-model")
+            .await
+            .unwrap();
+
+        // Perform vector search - preview is populated by database
+        let query_embedding = vec![0.1; 1024];
+        let hits = store
+            .search_chunks_vector(repo, None, &query_embedding, 10, false, None, None)
+            .await
+            .unwrap();
+
+        assert!(!hits.is_empty(), "Should find at least one result");
+        for hit in &hits {
+            assert!(
+                hit.preview.is_some(),
+                "Preview should be Some (populated by database) in vector search"
+            );
+            let preview = hit.preview.as_ref().unwrap();
+            assert!(!preview.is_empty(), "Preview should not be empty");
+        }
+    }
 }
 
 // ============================================================================
