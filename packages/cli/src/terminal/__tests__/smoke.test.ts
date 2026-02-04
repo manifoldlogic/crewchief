@@ -5,20 +5,116 @@ import { MockProvider } from '../providers/mock'
 
 describe('Terminal Provider Smoke Tests', () => {
   describe('TerminalFactory', () => {
-    it('auto-detects headless in non-iTerm environment', () => {
-      // In this test environment, TERM_PROGRAM is not iTerm.app
-      const provider = TerminalFactory.autoDetect()
-      expect(provider.id).toBe('headless')
+    // Save original env/argv state
+    let originalTmux: string | undefined
+    let originalTermProgram: string | undefined
+    let originalArgv: string[]
+
+    beforeEach(() => {
+      originalTmux = process.env.TMUX
+      originalTermProgram = process.env.TERM_PROGRAM
+      originalArgv = [...process.argv]
+      // Clean env for deterministic tests
+      delete process.env.TMUX
+      delete process.env.TERM_PROGRAM
+      // Remove --headless from argv if present
+      process.argv = process.argv.filter((arg) => arg !== '--headless')
     })
 
-    it('returns mock provider when requested', () => {
-      const provider = TerminalFactory.getProvider('mock')
-      expect(provider.id).toBe('mock')
+    afterEach(() => {
+      // Restore original env/argv
+      if (originalTmux !== undefined) {
+        process.env.TMUX = originalTmux
+      } else {
+        delete process.env.TMUX
+      }
+      if (originalTermProgram !== undefined) {
+        process.env.TERM_PROGRAM = originalTermProgram
+      } else {
+        delete process.env.TERM_PROGRAM
+      }
+      process.argv = originalArgv
     })
 
-    it('returns headless provider when requested', () => {
-      const provider = TerminalFactory.getProvider('headless')
-      expect(provider.id).toBe('headless')
+    describe('autoDetect', () => {
+      it('returns HeadlessProvider when no special env is set (fallback)', () => {
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('headless')
+      })
+
+      it('returns HeadlessProvider when --headless flag is present', () => {
+        process.argv.push('--headless')
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('headless')
+      })
+
+      it('returns TmuxProvider when TMUX env var is set', () => {
+        process.env.TMUX = '/tmp/tmux-1000/default,1,0'
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('tmux')
+      })
+
+      it('returns ITermProvider when TERM_PROGRAM is iTerm.app', () => {
+        process.env.TERM_PROGRAM = 'iTerm.app'
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('iterm')
+      })
+
+      it('--headless flag overrides TMUX env var', () => {
+        process.env.TMUX = '/tmp/tmux-1000/default,1,0'
+        process.argv.push('--headless')
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('headless')
+      })
+
+      it('--headless flag overrides iTerm.app', () => {
+        process.env.TERM_PROGRAM = 'iTerm.app'
+        process.argv.push('--headless')
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('headless')
+      })
+
+      it('TMUX env var takes priority over iTerm.app', () => {
+        process.env.TMUX = '/tmp/tmux-1000/default,1,0'
+        process.env.TERM_PROGRAM = 'iTerm.app'
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('tmux')
+      })
+
+      it('--headless overrides both TMUX and iTerm.app', () => {
+        process.env.TMUX = '/tmp/tmux-1000/default,1,0'
+        process.env.TERM_PROGRAM = 'iTerm.app'
+        process.argv.push('--headless')
+        const provider = TerminalFactory.autoDetect()
+        expect(provider.id).toBe('headless')
+      })
+    })
+
+    describe('getProvider', () => {
+      it('returns mock provider for "mock" id', () => {
+        const provider = TerminalFactory.getProvider('mock')
+        expect(provider.id).toBe('mock')
+      })
+
+      it('returns headless provider for "headless" id', () => {
+        const provider = TerminalFactory.getProvider('headless')
+        expect(provider.id).toBe('headless')
+      })
+
+      it('returns iterm provider for "iterm" id', () => {
+        const provider = TerminalFactory.getProvider('iterm')
+        expect(provider.id).toBe('iterm')
+      })
+
+      it('returns tmux provider for "tmux" id', () => {
+        const provider = TerminalFactory.getProvider('tmux')
+        expect(provider.id).toBe('tmux')
+      })
+
+      it('throws for unknown provider id', () => {
+        // @ts-expect-error Testing invalid input
+        expect(() => TerminalFactory.getProvider('unknown')).toThrow('Unknown provider: unknown')
+      })
     })
   })
 
