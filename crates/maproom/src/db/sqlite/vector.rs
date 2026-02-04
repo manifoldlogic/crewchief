@@ -1,6 +1,6 @@
 use super::embeddings::vec_to_blob;
 use anyhow::{bail, Result};
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 /// Supported embedding dimensions
 const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1024, 1536];
@@ -50,6 +50,8 @@ pub fn search_vector(
     worktree: Option<&str>,
     query_embedding: &[f32],
     limit: usize,
+    kind_filter: Option<&[String]>,
+    lang_filter: Option<&[String]>,
 ) -> Result<Vec<VectorResult>> {
     // Validate embedding dimension and get the appropriate table
     let dimension = query_embedding.len();
@@ -66,7 +68,45 @@ pub fn search_vector(
 
     // SQL with JOIN path: vec_code/vec_code_768.rowid → code_embeddings.id → chunks.blob_sha
     // The MATCH operator expects: WHERE embedding MATCH ?1 AND k = ?N
-    // The query_blob contains both the query vector and the limit parameter
+    // Base params: ?1 = query_blob, ?2 = repo name
+    // With worktree: ?3 = worktree name, ?4 = k, then filters
+    // Without worktree: ?3 = k, then filters
+    //
+    // Note: For sqlite-vec, k must be specified early in the WHERE clause alongside MATCH.
+    // The k parameter position is fixed relative to the MATCH clause.
+    // Filter conditions are appended after the base WHERE clauses.
+    let k_param_idx: usize = if worktree.is_some() { 4 } else { 3 };
+    let mut param_idx: usize = k_param_idx + 1;
+    let mut filter_conditions = Vec::new();
+
+    if let Some(kinds) = kind_filter {
+        if !kinds.is_empty() {
+            let placeholders = (0..kinds.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("c.kind IN ({})", placeholders));
+            param_idx += kinds.len();
+        }
+    }
+
+    if let Some(langs) = lang_filter {
+        if !langs.is_empty() {
+            let placeholders = (0..langs.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("f.language IN ({})", placeholders));
+            // param_idx += langs.len(); // Not needed as no more params follow
+        }
+    }
+
+    let filter_clause = if filter_conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", filter_conditions.join(" AND "))
+    };
+
     let sql = if worktree.is_some() {
         format!(
             r#"
@@ -82,9 +122,10 @@ pub fn search_vector(
               AND k = ?4
               AND r.name = ?2
               AND w.name = ?3
+              {}
             ORDER BY v.distance ASC
         "#,
-            vec_table
+            vec_table, filter_clause
         )
     } else {
         format!(
@@ -98,44 +139,53 @@ pub fn search_vector(
             WHERE v.embedding MATCH ?1
               AND k = ?3
               AND r.name = ?2
+              {}
             ORDER BY v.distance ASC
         "#,
-            vec_table
+            vec_table, filter_clause
         )
     };
 
-    let mut stmt = conn.prepare(&sql)?;
-
-    let mut vec_results = Vec::new();
+    // Build dynamic parameter list
+    let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    param_values.push(Box::new(query_blob));
+    param_values.push(Box::new(repo.to_string()));
 
     if let Some(wt) = worktree {
-        let rows = stmt.query_map(params![query_blob, repo, wt, limit as i64], |row| {
-            let chunk_id: i64 = row.get(0)?;
-            let distance: f64 = row.get(1)?;
-            Ok(VectorResult {
-                chunk_id,
-                distance,
-                similarity: distance_to_similarity(distance),
-            })
-        })?;
+        param_values.push(Box::new(wt.to_string()));
+    }
 
-        for result in rows {
-            vec_results.push(result?);
-        }
-    } else {
-        let rows = stmt.query_map(params![query_blob, repo, limit as i64], |row| {
-            let chunk_id: i64 = row.get(0)?;
-            let distance: f64 = row.get(1)?;
-            Ok(VectorResult {
-                chunk_id,
-                distance,
-                similarity: distance_to_similarity(distance),
-            })
-        })?;
+    param_values.push(Box::new(limit as i64));
 
-        for result in rows {
-            vec_results.push(result?);
+    if let Some(kinds) = kind_filter {
+        for kind in kinds {
+            param_values.push(Box::new(kind.clone()));
         }
+    }
+
+    if let Some(langs) = lang_filter {
+        for lang in langs {
+            param_values.push(Box::new(lang.clone()));
+        }
+    }
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+
+    let mut stmt = conn.prepare(&sql)?;
+    let mut vec_results = Vec::new();
+
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
+        let chunk_id: i64 = row.get(0)?;
+        let distance: f64 = row.get(1)?;
+        Ok(VectorResult {
+            chunk_id,
+            distance,
+            similarity: distance_to_similarity(distance),
+        })
+    })?;
+
+    for result in rows {
+        vec_results.push(result?);
     }
 
     Ok(vec_results)
@@ -203,5 +253,32 @@ mod tests {
                 dist
             );
         }
+    }
+
+    // ==================== Vector Search Filter Tests ====================
+    // These tests validate the filter logic aspects of search_vector that can be tested
+    // without the sqlite-vec extension.
+
+    #[test]
+    fn test_vector_search_unsupported_dimension_error() {
+        let conn = Connection::open_in_memory().unwrap();
+        let query_embedding = vec![0.1f32; 999]; // Unsupported dimension
+
+        let result = search_vector(&conn, "repo", None, &query_embedding, 10, None, None);
+        assert!(result.is_err(), "Unsupported dimension should return error");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Unsupported embedding dimension"),
+            "Error should mention unsupported dimension, got: {}",
+            err_msg,
+        );
+    }
+
+    #[test]
+    fn test_get_vec_table_name_all_supported() {
+        assert_eq!(get_vec_table_name(768).unwrap(), "vec_code_768");
+        assert_eq!(get_vec_table_name(1024).unwrap(), "vec_code_1024");
+        assert_eq!(get_vec_table_name(1536).unwrap(), "vec_code");
+        assert!(get_vec_table_name(512).is_err());
     }
 }

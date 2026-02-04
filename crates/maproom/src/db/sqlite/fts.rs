@@ -96,6 +96,8 @@ pub fn build_fts_query(query: &str) -> String {
 /// * `worktree` - Optional worktree name to filter by
 /// * `query` - User's search query
 /// * `limit` - Maximum number of results
+/// * `kind_filter` - Optional filter for chunk kinds (e.g., "function", "class")
+/// * `lang_filter` - Optional filter for file languages (e.g., "rust", "typescript")
 ///
 /// # Returns
 /// Vector of FtsResult with chunk_ids, ranks, and positions
@@ -105,6 +107,8 @@ pub fn search_fts(
     worktree: Option<&str>,
     query: &str,
     limit: usize,
+    kind_filter: Option<&[String]>,
+    lang_filter: Option<&[String]>,
 ) -> Result<Vec<FtsResult>> {
     let fts_query = build_fts_query(query);
     if fts_query.is_empty() {
@@ -126,9 +130,46 @@ pub fn search_fts(
         None
     };
 
-    // Build SQL based on worktree filter
+    // Build dynamic SQL with filter conditions
+    // Base params: ?1 = fts_query, ?2 = repo_id
+    // With worktree: ?3 = worktree_id, then filters, then LIMIT
+    // Without worktree: filters start at ?3, then LIMIT
+    let mut param_idx: usize = if worktree_id.is_some() { 4 } else { 3 };
+    let mut filter_conditions = Vec::new();
+
+    if let Some(kinds) = kind_filter {
+        if !kinds.is_empty() {
+            let placeholders = (0..kinds.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("c.kind IN ({})", placeholders));
+            param_idx += kinds.len();
+        }
+    }
+
+    if let Some(langs) = lang_filter {
+        if !langs.is_empty() {
+            let placeholders = (0..langs.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("f.language IN ({})", placeholders));
+            param_idx += langs.len();
+        }
+    }
+
+    let filter_clause = if filter_conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", filter_conditions.join(" AND "))
+    };
+
+    let limit_placeholder = format!("?{}", param_idx);
+
     let sql = if worktree_id.is_some() {
-        r#"
+        format!(
+            r#"
             SELECT c.id, fts_chunks.rank
             FROM fts_chunks
             JOIN chunks c ON c.id = fts_chunks.rowid
@@ -137,55 +178,70 @@ pub fn search_fts(
             WHERE fts_chunks MATCH ?1
               AND f.repo_id = ?2
               AND cw.worktree_id = ?3
+              {}
             ORDER BY fts_chunks.rank ASC
-            LIMIT ?4
-        "#
+            LIMIT {}
+        "#,
+            filter_clause, limit_placeholder
+        )
     } else {
-        r#"
+        format!(
+            r#"
             SELECT DISTINCT c.id, fts_chunks.rank
             FROM fts_chunks
             JOIN chunks c ON c.id = fts_chunks.rowid
             JOIN files f ON f.id = c.file_id
             WHERE fts_chunks MATCH ?1
               AND f.repo_id = ?2
+              {}
             ORDER BY fts_chunks.rank ASC
-            LIMIT ?3
-        "#
+            LIMIT {}
+        "#,
+            filter_clause, limit_placeholder
+        )
     };
 
-    let mut stmt = conn.prepare(sql)?;
-    let mut results = Vec::new();
+    // Build dynamic parameter list
+    let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    param_values.push(Box::new(fts_query));
+    param_values.push(Box::new(repo_id));
 
     if let Some(wid) = worktree_id {
-        let rows = stmt.query_map(params![fts_query, repo_id, wid, limit as i64], |row| {
-            let chunk_id: i64 = row.get(0)?;
-            let rank: f64 = row.get(1)?;
-            Ok(FtsResult {
-                chunk_id,
-                rank,
-                normalized_rank: normalize_fts_rank(rank),
-                position: 0, // Will be set after collecting
-            })
-        })?;
+        param_values.push(Box::new(wid));
+    }
 
-        for result in rows {
-            results.push(result?);
+    if let Some(kinds) = kind_filter {
+        for kind in kinds {
+            param_values.push(Box::new(kind.clone()));
         }
-    } else {
-        let rows = stmt.query_map(params![fts_query, repo_id, limit as i64], |row| {
-            let chunk_id: i64 = row.get(0)?;
-            let rank: f64 = row.get(1)?;
-            Ok(FtsResult {
-                chunk_id,
-                rank,
-                normalized_rank: normalize_fts_rank(rank),
-                position: 0, // Will be set after collecting
-            })
-        })?;
+    }
 
-        for result in rows {
-            results.push(result?);
+    if let Some(langs) = lang_filter {
+        for lang in langs {
+            param_values.push(Box::new(lang.clone()));
         }
+    }
+
+    param_values.push(Box::new(limit as i64));
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+
+    let mut stmt = conn.prepare(&sql)?;
+    let mut results = Vec::new();
+
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
+        let chunk_id: i64 = row.get(0)?;
+        let rank: f64 = row.get(1)?;
+        Ok(FtsResult {
+            chunk_id,
+            rank,
+            normalized_rank: normalize_fts_rank(rank),
+            position: 0, // Will be set after collecting
+        })
+    })?;
+
+    for result in rows {
+        results.push(result?);
     }
 
     // Set position (0-indexed rank in result set)
@@ -351,5 +407,633 @@ mod tests {
     fn test_build_fts_query_whitespace() {
         let query = build_fts_query("  hello   world  ");
         assert_eq!(query, "hello* OR world*");
+    }
+
+    // ==================== Filter Generation / search_fts Tests ====================
+
+    /// Create a minimal in-memory SQLite database with the schema needed for search_fts.
+    fn setup_fts_test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE repos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                root_path TEXT NOT NULL
+            );
+            CREATE TABLE worktrees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL REFERENCES repos(id),
+                name TEXT NOT NULL,
+                abs_path TEXT NOT NULL,
+                UNIQUE(repo_id, name)
+            );
+            CREATE TABLE commits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL REFERENCES repos(id),
+                sha TEXT NOT NULL,
+                committed_at DATETIME,
+                UNIQUE(repo_id, sha)
+            );
+            CREATE TABLE files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL REFERENCES repos(id),
+                worktree_id INTEGER NOT NULL REFERENCES worktrees(id),
+                commit_id INTEGER NOT NULL REFERENCES commits(id),
+                relpath TEXT NOT NULL,
+                language TEXT,
+                content_hash TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                last_modified DATETIME,
+                UNIQUE(commit_id, relpath, content_hash)
+            );
+            CREATE TABLE chunks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id INTEGER NOT NULL REFERENCES files(id),
+                blob_sha TEXT NOT NULL,
+                symbol_name TEXT,
+                kind TEXT NOT NULL,
+                signature TEXT,
+                docstring TEXT,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                preview TEXT NOT NULL,
+                ts_doc_text TEXT,
+                recency_score REAL NOT NULL,
+                churn_score REAL NOT NULL,
+                metadata JSON,
+                UNIQUE(file_id, start_line, end_line)
+            );
+            CREATE TABLE chunk_worktrees (
+                chunk_id INTEGER NOT NULL REFERENCES chunks(id),
+                worktree_id INTEGER NOT NULL REFERENCES worktrees(id),
+                PRIMARY KEY (chunk_id, worktree_id)
+            );
+            CREATE VIRTUAL TABLE fts_chunks USING fts5(
+                content,
+                docstring,
+                symbol_name,
+                content='chunks',
+                content_rowid='id'
+            );
+            ",
+        )
+        .unwrap();
+        conn
+    }
+
+    /// Insert a chunk with a specific kind, language, and searchable text into the test DB.
+    /// Returns the chunk_id.
+    fn insert_test_chunk(
+        conn: &Connection,
+        repo_id: i64,
+        worktree_id: i64,
+        commit_id: i64,
+        relpath: &str,
+        language: &str,
+        kind: &str,
+        symbol_name: &str,
+        preview: &str,
+        start_line: i32,
+    ) -> i64 {
+        // Upsert file (may already exist for same relpath)
+        let content_hash = format!("hash_{}_{}", relpath, start_line);
+        conn.execute(
+            "INSERT OR IGNORE INTO files (repo_id, worktree_id, commit_id, relpath, language, content_hash, size_bytes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![repo_id, worktree_id, commit_id, relpath, language, content_hash, 100],
+        )
+        .unwrap();
+
+        let file_id: i64 = conn
+            .query_row(
+                "SELECT id FROM files WHERE relpath = ?1 AND commit_id = ?2",
+                params![relpath, commit_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let blob_sha = format!("blob_{}_{}", symbol_name, start_line);
+        let end_line = start_line + 10;
+
+        conn.execute(
+            "INSERT INTO chunks (file_id, blob_sha, symbol_name, kind, start_line, end_line, preview, ts_doc_text, recency_score, churn_score)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![file_id, blob_sha, symbol_name, kind, start_line, end_line, preview, preview, 1.0, 0.5],
+        )
+        .unwrap();
+
+        let chunk_id: i64 = conn
+            .query_row(
+                "SELECT id FROM chunks WHERE file_id = ?1 AND start_line = ?2 AND end_line = ?3",
+                params![file_id, start_line, end_line],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        // Insert into chunk_worktrees junction
+        conn.execute(
+            "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
+            params![chunk_id, worktree_id],
+        )
+        .unwrap();
+
+        // Insert into FTS
+        conn.execute(
+            "INSERT OR REPLACE INTO fts_chunks(rowid, content, docstring, symbol_name) VALUES (?1, ?2, ?3, ?4)",
+            params![chunk_id, preview, preview, symbol_name],
+        )
+        .unwrap();
+
+        chunk_id
+    }
+
+    /// Set up a test database with diverse test data for filter testing.
+    /// Returns (conn, repo_id, worktree_id, commit_id).
+    fn setup_filter_test_data() -> (Connection, i64, i64, i64) {
+        let conn = setup_fts_test_db();
+
+        conn.execute(
+            "INSERT INTO repos (name, root_path) VALUES ('test-repo', '/tmp/test')",
+            [],
+        )
+        .unwrap();
+        let repo_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO worktrees (repo_id, name, abs_path) VALUES (?1, 'main', '/tmp/test')",
+            params![repo_id],
+        )
+        .unwrap();
+        let worktree_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO commits (repo_id, sha) VALUES (?1, 'abc123')",
+            params![repo_id],
+        )
+        .unwrap();
+        let commit_id: i64 = conn.last_insert_rowid();
+
+        // Insert diverse chunks:
+        // Python functions
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/auth.py",
+            "py",
+            "func",
+            "authenticate_user",
+            "def authenticate_user(): pass",
+            1,
+        );
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/auth.py",
+            "py",
+            "class",
+            "AuthManager",
+            "class AuthManager: authenticate logic",
+            20,
+        );
+
+        // TypeScript functions and classes
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/user.ts",
+            "ts",
+            "func",
+            "getUser",
+            "function getUser() authenticate fetch",
+            1,
+        );
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/user.ts",
+            "ts",
+            "class",
+            "UserService",
+            "class UserService authenticate",
+            20,
+        );
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/user.ts",
+            "ts",
+            "method",
+            "findById",
+            "method findById authenticate search",
+            40,
+        );
+
+        // Rust functions
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/main.rs",
+            "rs",
+            "func",
+            "main_authenticate",
+            "fn main_authenticate() authenticate",
+            1,
+        );
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "src/main.rs",
+            "rs",
+            "import",
+            "use_auth",
+            "use auth authenticate module",
+            20,
+        );
+
+        // Markdown headings
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            worktree_id,
+            commit_id,
+            "docs/auth.md",
+            "md",
+            "heading_2",
+            "auth_docs",
+            "authenticate documentation guide",
+            1,
+        );
+
+        (conn, repo_id, worktree_id, commit_id)
+    }
+
+    #[test]
+    fn test_filter_generation_no_filters() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // No filters should return all matching results
+        let results = search_fts(&conn, "test-repo", None, "authenticate", 50, None, None).unwrap();
+
+        // All 8 chunks mention "authenticate" in their content
+        assert!(
+            results.len() >= 6,
+            "No filters should return many results, got {}",
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_filter_generation_kind_only_single() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let kind_filter = vec!["func".to_string()];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            Some(&kind_filter),
+            None,
+        )
+        .unwrap();
+
+        // Should only return func chunks
+        for result in &results {
+            // Verify all returned chunks have kind == "func"
+            let kind: String = conn
+                .query_row(
+                    "SELECT kind FROM chunks WHERE id = ?1",
+                    params![result.chunk_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(kind, "func", "Expected kind 'func', got '{}'", kind);
+        }
+        assert!(!results.is_empty(), "Should find at least one func chunk");
+    }
+
+    #[test]
+    fn test_filter_generation_kind_only_multiple() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let kind_filter = vec![
+            "func".to_string(),
+            "class".to_string(),
+            "method".to_string(),
+        ];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            Some(&kind_filter),
+            None,
+        )
+        .unwrap();
+
+        // Should return func, class, and method chunks
+        for result in &results {
+            let kind: String = conn
+                .query_row(
+                    "SELECT kind FROM chunks WHERE id = ?1",
+                    params![result.chunk_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(
+                kind == "func" || kind == "class" || kind == "method",
+                "Expected kind in [func, class, method], got '{}'",
+                kind,
+            );
+        }
+        assert!(
+            results.len() >= 3,
+            "Should find multiple chunk kinds, got {}",
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_filter_generation_lang_only_single() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let lang_filter = vec!["py".to_string()];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            None,
+            Some(&lang_filter),
+        )
+        .unwrap();
+
+        // Should only return chunks from Python files
+        for result in &results {
+            let language: String = conn
+                .query_row(
+                    "SELECT f.language FROM chunks c JOIN files f ON f.id = c.file_id WHERE c.id = ?1",
+                    params![result.chunk_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(language, "py", "Expected language 'py', got '{}'", language);
+        }
+        assert!(!results.is_empty(), "Should find at least one py chunk");
+    }
+
+    #[test]
+    fn test_filter_generation_lang_only_multiple() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let lang_filter = vec!["py".to_string(), "ts".to_string()];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            None,
+            Some(&lang_filter),
+        )
+        .unwrap();
+
+        for result in &results {
+            let language: String = conn
+                .query_row(
+                    "SELECT f.language FROM chunks c JOIN files f ON f.id = c.file_id WHERE c.id = ?1",
+                    params![result.chunk_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(
+                language == "py" || language == "ts",
+                "Expected language in [py, ts], got '{}'",
+                language,
+            );
+        }
+        assert!(
+            results.len() >= 3,
+            "Should find results from py and ts files, got {}",
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_filter_generation_both_filters() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let kind_filter = vec!["func".to_string()];
+        let lang_filter = vec!["py".to_string()];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            Some(&kind_filter),
+            Some(&lang_filter),
+        )
+        .unwrap();
+
+        // Should only return func chunks from py files (AND semantics)
+        for result in &results {
+            let (kind, language): (String, String) = conn
+                .query_row(
+                    "SELECT c.kind, f.language FROM chunks c JOIN files f ON f.id = c.file_id WHERE c.id = ?1",
+                    params![result.chunk_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(kind, "func", "Expected kind 'func', got '{}'", kind);
+            assert_eq!(language, "py", "Expected language 'py', got '{}'", language);
+        }
+        // We know there is exactly 1 Python func: authenticate_user
+        assert_eq!(
+            results.len(),
+            1,
+            "Should find exactly 1 py func chunk, got {}",
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_filter_generation_empty_array_treated_as_none() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // Empty arrays should behave the same as None
+        let results_none =
+            search_fts(&conn, "test-repo", None, "authenticate", 50, None, None).unwrap();
+
+        let empty_kind: Vec<String> = vec![];
+        let empty_lang: Vec<String> = vec![];
+        let results_empty = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            Some(&empty_kind),
+            Some(&empty_lang),
+        )
+        .unwrap();
+
+        assert_eq!(
+            results_none.len(),
+            results_empty.len(),
+            "Empty filter arrays should return same results as None. None={}, Empty={}",
+            results_none.len(),
+            results_empty.len(),
+        );
+    }
+
+    #[test]
+    fn test_parameter_index_calculation() {
+        // Test with worktree specified + both filters to validate param index arithmetic
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let kind_filter = vec!["func".to_string(), "class".to_string()];
+        let lang_filter = vec!["py".to_string(), "ts".to_string(), "rs".to_string()];
+
+        // With worktree (adds worktree_id param, shifting indices)
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            Some("main"),
+            "authenticate",
+            50,
+            Some(&kind_filter),
+            Some(&lang_filter),
+        )
+        .unwrap();
+
+        // Should return func and class chunks from py, ts, or rs files
+        for result in &results {
+            let (kind, language): (String, String) = conn
+                .query_row(
+                    "SELECT c.kind, f.language FROM chunks c JOIN files f ON f.id = c.file_id WHERE c.id = ?1",
+                    params![result.chunk_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert!(
+                kind == "func" || kind == "class",
+                "Expected kind in [func, class], got '{}'",
+                kind,
+            );
+            assert!(
+                language == "py" || language == "ts" || language == "rs",
+                "Expected language in [py, ts, rs], got '{}'",
+                language,
+            );
+        }
+        assert!(
+            !results.is_empty(),
+            "Should find results with combined filters"
+        );
+    }
+
+    #[test]
+    fn test_filter_nonexistent_kind_returns_empty() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let kind_filter = vec!["nonexistent_kind".to_string()];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            Some(&kind_filter),
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            results.is_empty(),
+            "Nonexistent kind should return empty results, got {}",
+            results.len(),
+        );
+    }
+
+    #[test]
+    fn test_filter_nonexistent_lang_returns_empty() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let lang_filter = vec!["nonexistent_lang".to_string()];
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            None,
+            Some(&lang_filter),
+        )
+        .unwrap();
+
+        assert!(
+            results.is_empty(),
+            "Nonexistent lang should return empty results, got {}",
+            results.len(),
+        );
+    }
+
+    #[test]
+    fn test_filter_long_kind_list() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // Test with 10+ kind values to ensure SQL generation handles long lists
+        let kind_filter: Vec<String> = vec![
+            "func",
+            "class",
+            "method",
+            "import",
+            "heading_2",
+            "variable",
+            "constant",
+            "interface",
+            "enum",
+            "trait",
+            "module",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            50,
+            Some(&kind_filter),
+            None,
+        )
+        .unwrap();
+
+        // Should still work and return results for the kinds that match
+        assert!(
+            !results.is_empty(),
+            "Long kind list should still return results"
+        );
     }
 }

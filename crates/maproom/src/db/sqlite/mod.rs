@@ -690,6 +690,7 @@ impl SqliteStore {
         }).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_fts(
         &self,
         repo: &str,
@@ -697,10 +698,14 @@ impl SqliteStore {
         query: &str,
         k: i64,
         _debug: bool,
+        kind_filter: Option<&[String]>,
+        lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         let repo = repo.to_string();
         let worktree = worktree.map(|s| s.to_string());
         let query = query.to_string();
+        let kind_filter: Option<Vec<String>> = kind_filter.map(|k| k.to_vec());
+        let lang_filter: Option<Vec<String>> = lang_filter.map(|l| l.to_vec());
         self.run(move |conn| {
             // Resolve repo/worktree ids with fuzzy matching
             let repo_id = resolve_repo_id(conn, &repo)?;
@@ -739,8 +744,46 @@ impl SqliteStore {
             // SQLite FTS5 rank is built-in function 'bm25' or 'rank'
             // We join with chunks and files
 
+            // Build dynamic filter conditions
+            // Base params: ?1 = fts_query, ?2 = repo_id
+            // With worktree: ?3 = worktree_id, then filters, then LIMIT
+            // Without worktree: filters start at ?3, then LIMIT
+            let mut param_idx: usize = if worktree_id.is_some() { 4 } else { 3 };
+            let mut filter_conditions = Vec::new();
+
+            if let Some(ref kinds) = kind_filter {
+                if !kinds.is_empty() {
+                    let placeholders = (0..kinds.len())
+                        .map(|i| format!("?{}", param_idx + i))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    filter_conditions.push(format!("c.kind IN ({})", placeholders));
+                    param_idx += kinds.len();
+                }
+            }
+
+            if let Some(ref langs) = lang_filter {
+                if !langs.is_empty() {
+                    let placeholders = (0..langs.len())
+                        .map(|i| format!("?{}", param_idx + i))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    filter_conditions.push(format!("f.language IN ({})", placeholders));
+                    param_idx += langs.len();
+                }
+            }
+
+            let filter_clause = if filter_conditions.is_empty() {
+                String::new()
+            } else {
+                format!(" AND {}", filter_conditions.join(" AND "))
+            };
+
+            let limit_placeholder = format!("?{}", param_idx);
+
             let sql = if worktree_id.is_some() {
-                r#"
+                format!(
+                    r#"
                 SELECT
                     c.id,
                     c.start_line,
@@ -756,11 +799,15 @@ impl SqliteStore {
                 WHERE fts_chunks MATCH ?1
                   AND f.repo_id = ?2
                   AND cw.worktree_id = ?3
+                  {}
                 ORDER BY score
-                LIMIT ?4
-                "#
+                LIMIT {}
+                "#,
+                    filter_clause, limit_placeholder
+                )
             } else {
-                r#"
+                format!(
+                    r#"
                 SELECT
                     c.id,
                     c.start_line,
@@ -774,52 +821,60 @@ impl SqliteStore {
                 JOIN files f ON f.id = c.file_id
                 WHERE fts_chunks MATCH ?1
                   AND f.repo_id = ?2
+                  {}
                 ORDER BY score
-                LIMIT ?3
-                "#
+                LIMIT {}
+                "#,
+                    filter_clause, limit_placeholder
+                )
             };
 
-            let mut stmt = conn.prepare(sql)?;
+            // Build dynamic parameter list
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            param_values.push(Box::new(fts_query));
+            param_values.push(Box::new(repo_id));
+
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            if let Some(ref kinds) = kind_filter {
+                for kind in kinds {
+                    param_values.push(Box::new(kind.clone()));
+                }
+            }
+
+            if let Some(ref langs) = lang_filter {
+                for lang in langs {
+                    param_values.push(Box::new(lang.clone()));
+                }
+            }
+
+            param_values.push(Box::new(k));
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
+
+            let mut stmt = conn.prepare(&sql)?;
 
             let mut hits = Vec::new();
-            if let Some(wid) = worktree_id {
-                let rows = stmt.query_map(params![fts_query, repo_id, wid, k], |row| {
-                    let score: f64 = row.get(6)?;
-                    Ok(SearchHit {
-                        chunk_id: row.get(0)?,
-                        start_line: row.get(1)?,
-                        end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        file_relpath: row.get(5)?,
-                        score: -score, // FTS5 rank is negative, negate for positive score
-                        base_score: None,
-                        kind_mult: None,
-                        exact_mult: None,
-                    })
-                })?;
-                for row in rows {
-                    hits.push(row?);
-                }
-            } else {
-                let rows = stmt.query_map(params![fts_query, repo_id, k], |row| {
-                    let score: f64 = row.get(6)?;
-                    Ok(SearchHit {
-                        chunk_id: row.get(0)?,
-                        start_line: row.get(1)?,
-                        end_line: row.get(2)?,
-                        symbol_name: row.get(3)?,
-                        kind: row.get(4)?,
-                        file_relpath: row.get(5)?,
-                        score: -score, // FTS5 rank is negative, negate for positive score
-                        base_score: None,
-                        kind_mult: None,
-                        exact_mult: None,
-                    })
-                })?;
-                for row in rows {
-                    hits.push(row?);
-                }
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                let score: f64 = row.get(6)?;
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: -score, // FTS5 rank is negative, negate for positive score
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
             }
             Ok(hits)
         })
@@ -1070,6 +1125,7 @@ impl SqliteStore {
         }).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_vector(
         &self,
         repo: &str,
@@ -1077,6 +1133,8 @@ impl SqliteStore {
         embedding: &[f32],
         k: i64,
         debug: bool,
+        kind_filter: Option<&[String]>,
+        lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Graceful degradation if sqlite-vec not available
         if !self.has_vec_extension() {
@@ -1087,6 +1145,8 @@ impl SqliteStore {
         let worktree = worktree.map(|s| s.to_string());
         let embedding = embedding.to_vec();
         let limit = k as usize;
+        let kind_filter: Option<Vec<String>> = kind_filter.map(|k| k.to_vec());
+        let lang_filter: Option<Vec<String>> = lang_filter.map(|l| l.to_vec());
 
         self.run(move |conn| {
             // Resolve repo/worktree ids with fuzzy matching
@@ -1104,8 +1164,15 @@ impl SqliteStore {
             };
 
             // Get vector search results (chunk_id, distance, similarity)
-            let vec_results =
-                vector::search_vector(conn, &repo, worktree.as_deref(), &embedding, limit)?;
+            let vec_results = vector::search_vector(
+                conn,
+                &repo,
+                worktree.as_deref(),
+                &embedding,
+                limit,
+                kind_filter.as_deref(),
+                lang_filter.as_deref(),
+            )?;
 
             // Convert VectorResult to SearchHit by fetching chunk metadata
             let mut hits = Vec::new();
@@ -1183,6 +1250,7 @@ impl SqliteStore {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_hybrid(
         &self,
         repo: &str,
@@ -1191,6 +1259,8 @@ impl SqliteStore {
         embedding: &[f32],
         k: i64,
         debug: bool,
+        kind_filter: Option<&[String]>,
+        lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Check vec extension availability before entering blocking closure
         let has_vec = self.has_vec_extension();
@@ -1200,6 +1270,8 @@ impl SqliteStore {
         let query = query.to_string();
         let embedding = embedding.to_vec();
         let limit = k as usize;
+        let kind_filter: Option<Vec<String>> = kind_filter.map(|k| k.to_vec());
+        let lang_filter: Option<Vec<String>> = lang_filter.map(|l| l.to_vec());
 
         self.run(move |conn| {
             // Resolve repo/worktree ids with fuzzy matching
@@ -1217,11 +1289,27 @@ impl SqliteStore {
             };
 
             // Run FTS and vector search in sequence (no async in blocking closure)
-            let fts_results = fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit * 3)?;
+            let fts_results = fts::search_fts(
+                conn,
+                &repo,
+                worktree.as_deref(),
+                &query,
+                limit * 3,
+                kind_filter.as_deref(),
+                lang_filter.as_deref(),
+            )?;
 
             // Vector search with graceful fallback
             let vec_results = if has_vec {
-                vector::search_vector(conn, &repo, worktree.as_deref(), &embedding, limit * 3)?
+                vector::search_vector(
+                    conn,
+                    &repo,
+                    worktree.as_deref(),
+                    &embedding,
+                    limit * 3,
+                    kind_filter.as_deref(),
+                    lang_filter.as_deref(),
+                )?
             } else {
                 vec![]
             };
@@ -2135,7 +2223,15 @@ impl SqliteStore {
         let query_embedding = query_embedding.to_vec();
 
         self.run(move |conn| {
-            vector::search_vector(conn, &repo, worktree.as_deref(), &query_embedding, limit)
+            vector::search_vector(
+                conn,
+                &repo,
+                worktree.as_deref(),
+                &query_embedding,
+                limit,
+                None,
+                None,
+            )
         })
         .await
     }
@@ -2155,8 +2251,10 @@ impl SqliteStore {
         let worktree = worktree.map(|s| s.to_string());
         let query = query.to_string();
 
-        self.run(move |conn| fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit))
-            .await
+        self.run(move |conn| {
+            fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit, None, None)
+        })
+        .await
     }
 
     /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
