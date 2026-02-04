@@ -131,7 +131,7 @@ mod integration_tests {
 
         // 4. Search - FTS
         let fts_results = store
-            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false)
+            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false, None, None)
             .await
             .unwrap();
         assert!(!fts_results.is_empty(), "FTS search should return results");
@@ -231,7 +231,7 @@ mod integration_tests {
 
         // Search in specific worktree
         let results_main = store
-            .search_chunks_fts("multi-wt-repo", Some("main"), "process_data", 10, false)
+            .search_chunks_fts("multi-wt-repo", Some("main"), "process_data", 10, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -241,7 +241,7 @@ mod integration_tests {
         );
 
         let results_feature = store
-            .search_chunks_fts("multi-wt-repo", Some("feature"), "process_data", 10, false)
+            .search_chunks_fts("multi-wt-repo", Some("feature"), "process_data", 10, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -252,7 +252,7 @@ mod integration_tests {
 
         // Search across all worktrees
         let results_all = store
-            .search_chunks_fts("multi-wt-repo", None, "process_data", 10, false)
+            .search_chunks_fts("multi-wt-repo", None, "process_data", 10, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -306,6 +306,8 @@ mod integration_tests {
                 "unique_function",
                 10,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -323,6 +325,8 @@ mod integration_tests {
                 "unique_function",
                 10,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -396,7 +400,7 @@ mod integration_tests {
 
         // Search should find both chunks even though one embedding
         let results = store
-            .search_chunks_fts("dedup-test", None, "helper", 10, false)
+            .search_chunks_fts("dedup-test", None, "helper", 10, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -558,7 +562,7 @@ mod integration_tests {
 
             // Search should find the persisted chunk
             let results = store
-                .search_chunks_fts("persist-test", None, "persistent_func", 10, false)
+                .search_chunks_fts("persist-test", None, "persistent_func", 10, false, None, None)
                 .await
                 .unwrap();
             assert!(
@@ -692,7 +696,7 @@ mod integration_tests {
 
         for _ in 0..10 {
             let _results = store
-                .search_chunks_fts("search-perf", None, "searchable", 10, false)
+                .search_chunks_fts("search-perf", None, "searchable", 10, false, None, None)
                 .await
                 .unwrap();
         }
@@ -806,7 +810,7 @@ mod integration_tests {
 
         // Search in repo that doesn't exist - may return empty or error
         let result = store
-            .search_chunks_fts("nonexistent-repo", None, "query", 10, false)
+            .search_chunks_fts("nonexistent-repo", None, "query", 10, false, None, None)
             .await;
 
         // Either empty results or error is acceptable for nonexistent repo
@@ -830,7 +834,7 @@ mod integration_tests {
             .unwrap();
 
         let results = store
-            .search_chunks_fts("exists-repo", Some("nonexistent-wt"), "query", 10, false)
+            .search_chunks_fts("exists-repo", Some("nonexistent-wt"), "query", 10, false, None, None)
             .await
             .unwrap();
         assert!(
@@ -845,7 +849,7 @@ mod integration_tests {
 
         // Search in completely empty database - may return empty or error
         let result = store
-            .search_chunks_fts("any-repo", None, "any query", 10, false)
+            .search_chunks_fts("any-repo", None, "any query", 10, false, None, None)
             .await;
 
         // Either empty results or error is acceptable for empty database

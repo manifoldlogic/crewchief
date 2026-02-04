@@ -413,6 +413,12 @@ enum Commands {
         /// Use --no-deduplicate to see all results including duplicates
         #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         deduplicate: bool,
+        /// Filter by chunk kind (comma-separated: func,class,method,heading_2). Case-sensitive.
+        #[arg(long, value_delimiter = ',')]
+        kind: Option<Vec<String>>,
+        /// Filter by file language (comma-separated: py,ts,rs). Case-sensitive. Use file extensions.
+        #[arg(long, value_delimiter = ',')]
+        lang: Option<Vec<String>>,
     },
 
     /// Vector similarity search using embeddings
@@ -444,6 +450,14 @@ enum Commands {
         /// Only return results with similarity >= threshold
         #[arg(long)]
         threshold: Option<f32>,
+
+        /// Filter by chunk kind (comma-separated: func,class,method,heading_2). Case-sensitive.
+        #[arg(long, value_delimiter = ',')]
+        kind: Option<Vec<String>>,
+
+        /// Filter by file language (comma-separated: py,ts,rs). Case-sensitive. Use file extensions.
+        #[arg(long, value_delimiter = ',')]
+        lang: Option<Vec<String>>,
     },
 
     /// Show status of indexed repositories and worktrees
@@ -1513,12 +1527,14 @@ async fn main() -> anyhow::Result<()> {
             k,
             debug,
             deduplicate,
+            kind: _kind,
+            lang: _lang,
         } => {
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
             let hits = store
-                .search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug)
+                .search_chunks_fts(&repo, worktree.as_deref(), &query, fetch_k, debug, None, None)
                 .await?;
 
             // Apply deduplication if enabled
@@ -1540,6 +1556,8 @@ async fn main() -> anyhow::Result<()> {
             query,
             k,
             threshold,
+            kind: _kind,
+            lang: _lang,
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
 
@@ -1570,6 +1588,8 @@ async fn main() -> anyhow::Result<()> {
                     &query_embedding,
                     k as i64,
                     false,
+                    None,
+                    None,
                 )
                 .await
             {

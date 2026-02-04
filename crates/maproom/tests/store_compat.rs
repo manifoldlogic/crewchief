@@ -82,7 +82,7 @@ async fn run_store_tests(store: Arc<dyn VectorStore>, name: &str) -> Result<()> 
 
     // 5. Search (FTS)
     let hits = store
-        .search_chunks_fts("test-repo", Some("main"), "main", 10, true)
+        .search_chunks_fts("test-repo", Some("main"), "main", 10, true, None, None)
         .await?;
     assert!(!hits.is_empty(), "{}: FTS search failed", name);
     assert_eq!(hits[0].symbol_name.as_deref(), Some("main"));

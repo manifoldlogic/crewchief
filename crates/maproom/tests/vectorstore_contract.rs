@@ -314,7 +314,7 @@ mod sqlite_contract_tests {
         // Vector search with no embeddings should work (return empty or handle gracefully)
         let embedding = vec![0.1f32; 1536];
         let result = store
-            .search_chunks_vector("contract-test", None, &embedding, 10, false)
+            .search_chunks_vector("contract-test", None, &embedding, 10, false, None, None)
             .await;
 
         // Should either succeed with empty results or fail gracefully (no vec extension)
@@ -332,7 +332,7 @@ mod sqlite_contract_tests {
         // Hybrid search should fallback to FTS when no embeddings
         let embedding = vec![0.1f32; 1536];
         let result = store
-            .search_chunks_hybrid("contract-test", None, "test", &embedding, 10, false)
+            .search_chunks_hybrid("contract-test", None, "test", &embedding, 10, false, None, None)
             .await;
 
         // Should either succeed (fallback to FTS) or fail gracefully

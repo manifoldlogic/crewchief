@@ -174,7 +174,7 @@ mod sqlite_tests {
 
         // Search should find the chunk
         let results = store
-            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false)
+            .search_chunks_fts("test-repo", Some("main"), "authenticate", 10, false, None, None)
             .await
             .unwrap();
 
@@ -238,7 +238,7 @@ mod sqlite_tests {
 
         // Multi-word query should not cause syntax error
         let result = store
-            .search_chunks_fts("test-repo", None, "test function", 10, false)
+            .search_chunks_fts("test-repo", None, "test function", 10, false, None, None)
             .await;
 
         assert!(result.is_ok(), "Multi-word FTS query should not error");
@@ -260,7 +260,7 @@ mod sqlite_tests {
 
         // Search in empty repo should return empty, not error
         let results = store
-            .search_chunks_fts("empty-repo", None, "nonexistent", 10, false)
+            .search_chunks_fts("empty-repo", None, "nonexistent", 10, false, None, None)
             .await
             .unwrap();
 
@@ -283,12 +283,12 @@ mod sqlite_tests {
 
         // Queries with special characters should not crash
         let result = store
-            .search_chunks_fts("test-repo", None, "test \"quoted\" func", 10, false)
+            .search_chunks_fts("test-repo", None, "test \"quoted\" func", 10, false, None, None)
             .await;
         assert!(result.is_ok(), "Should handle quotes in query");
 
         let result = store
-            .search_chunks_fts("test-repo", None, "func()", 10, false)
+            .search_chunks_fts("test-repo", None, "func()", 10, false, None, None)
             .await;
         assert!(result.is_ok(), "Should handle parentheses in query");
     }
@@ -307,7 +307,7 @@ mod sqlite_tests {
 
         // Empty or whitespace query - may return error or empty results
         let result = store
-            .search_chunks_fts("test-repo", None, "   ", 10, false)
+            .search_chunks_fts("test-repo", None, "   ", 10, false, None, None)
             .await;
         // Should either return empty results or handle gracefully (error is acceptable for empty query)
         assert!(

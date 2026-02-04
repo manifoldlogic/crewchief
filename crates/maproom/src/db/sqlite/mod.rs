@@ -690,6 +690,7 @@ impl SqliteStore {
         }).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_fts(
         &self,
         repo: &str,
@@ -697,6 +698,8 @@ impl SqliteStore {
         query: &str,
         k: i64,
         _debug: bool,
+        _kind_filter: Option<&[String]>,
+        _lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         let repo = repo.to_string();
         let worktree = worktree.map(|s| s.to_string());
@@ -1070,6 +1073,7 @@ impl SqliteStore {
         }).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_vector(
         &self,
         repo: &str,
@@ -1077,6 +1081,8 @@ impl SqliteStore {
         embedding: &[f32],
         k: i64,
         debug: bool,
+        _kind_filter: Option<&[String]>,
+        _lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Graceful degradation if sqlite-vec not available
         if !self.has_vec_extension() {
@@ -1183,6 +1189,7 @@ impl SqliteStore {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_hybrid(
         &self,
         repo: &str,
@@ -1191,6 +1198,8 @@ impl SqliteStore {
         embedding: &[f32],
         k: i64,
         debug: bool,
+        _kind_filter: Option<&[String]>,
+        _lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Check vec extension availability before entering blocking closure
         let has_vec = self.has_vec_extension();
