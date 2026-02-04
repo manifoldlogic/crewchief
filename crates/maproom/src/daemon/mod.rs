@@ -397,8 +397,8 @@ async fn execute_search(
                     &params.query,
                     fetch_k,
                     false, // debug
-                    None,
-                    None,
+                    params.kind.as_deref(),
+                    params.lang.as_deref(),
                 )
                 .await
                 .context("FTS search execution failed")?
@@ -419,8 +419,8 @@ async fn execute_search(
                     &query_embedding,
                     fetch_k,
                     false, // debug
-                    None,
-                    None,
+                    params.kind.as_deref(),
+                    params.lang.as_deref(),
                 )
                 .await
                 .context("Vector search execution failed")?
@@ -442,8 +442,8 @@ async fn execute_search(
                             &query_embedding,
                             fetch_k,
                             false, // debug
-                            None,
-                            None,
+                            params.kind.as_deref(),
+                            params.lang.as_deref(),
                         )
                         .await
                         .unwrap_or_else(|_| {
@@ -461,8 +461,8 @@ async fn execute_search(
                             &params.query,
                             fetch_k,
                             false, // debug
-                            None,
-                            None,
+                            params.kind.as_deref(),
+                            params.lang.as_deref(),
                         )
                         .await
                         .context("FTS search execution failed")?

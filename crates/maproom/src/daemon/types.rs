@@ -20,6 +20,12 @@ pub struct SearchParams {
     /// Deduplicate results across worktrees (default: true)
     #[serde(default = "default_deduplicate")]
     pub deduplicate: Option<bool>,
+    /// Filter by chunk kind (e.g., ["func", "class"])
+    #[serde(default)]
+    pub kind: Option<Vec<String>>,
+    /// Filter by file language (e.g., ["py", "ts"])
+    #[serde(default)]
+    pub lang: Option<Vec<String>>,
 }
 
 fn default_deduplicate() -> Option<bool> {
