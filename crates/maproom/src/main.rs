@@ -471,6 +471,9 @@ enum Commands {
         /// Output as JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         json: bool,
+        /// Show all languages instead of top 5
+        #[arg(long, default_value_t = false)]
+        verbose: bool,
     },
 
     /// Generate embeddings for indexed chunks
@@ -1654,6 +1657,7 @@ async fn main() -> anyhow::Result<()> {
             repo,
             worktree,
             json,
+            verbose,
         } => {
             use crewchief_maproom::status;
 
@@ -1666,14 +1670,14 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("status: connected, querying status...");
 
-            match status::get_status(Arc::new(store), repo, worktree).await {
+            match status::get_status(Arc::new(store), repo, worktree, verbose).await {
                 Ok(status_data) => {
                     tracing::debug!("status: query complete, formatting output...");
                     if json {
                         let output = status::format_json(&status_data)?;
                         println!("{}", output);
                     } else {
-                        let output = status::format_text(&status_data);
+                        let output = status::format_text(&status_data, verbose);
                         print!("{}", output);
                     }
                 }
@@ -2382,6 +2386,64 @@ mod tests {
                 assert_eq!(lang, None);
             }
             _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_status_default_no_verbose() {
+        let cli = Cli::parse_from(&["maproom", "status"]);
+        match cli.command {
+            Commands::Status {
+                repo,
+                worktree,
+                json,
+                verbose,
+            } => {
+                assert_eq!(repo, None);
+                assert_eq!(worktree, None);
+                assert!(!json);
+                assert!(!verbose);
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    #[test]
+    fn test_status_with_verbose() {
+        let cli = Cli::parse_from(&["maproom", "status", "--verbose"]);
+        match cli.command {
+            Commands::Status { verbose, .. } => {
+                assert!(verbose);
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    #[test]
+    fn test_status_verbose_with_json() {
+        let cli = Cli::parse_from(&["maproom", "status", "--verbose", "--json"]);
+        match cli.command {
+            Commands::Status {
+                json, verbose, ..
+            } => {
+                assert!(json);
+                assert!(verbose);
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    #[test]
+    fn test_status_verbose_with_repo() {
+        let cli = Cli::parse_from(&["maproom", "status", "--verbose", "--repo", "myrepo"]);
+        match cli.command {
+            Commands::Status {
+                repo, verbose, ..
+            } => {
+                assert_eq!(repo, Some("myrepo".to_string()));
+                assert!(verbose);
+            }
+            _ => panic!("Expected Status command"),
         }
     }
 }
