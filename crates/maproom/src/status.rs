@@ -38,6 +38,7 @@ pub async fn get_status(
     store: Arc<SqliteStore>,
     repo_filter: Option<String>,
     worktree_filter: Option<String>,
+    _verbose: bool,
 ) -> Result<StatusResponse> {
     // Get all repositories
     let repos = store.list_repos().await?;
@@ -361,7 +362,7 @@ mod tests {
             .unwrap();
 
         // Get status
-        let status = get_status(store.clone(), None, None).await.unwrap();
+        let status = get_status(store.clone(), None, None, false).await.unwrap();
 
         // Verify response structure
         assert_eq!(status.repos.len(), 1);
@@ -401,7 +402,7 @@ mod tests {
             .unwrap();
 
         // Get status
-        let status = get_status(store.clone(), None, None).await.unwrap();
+        let status = get_status(store.clone(), None, None, false).await.unwrap();
 
         // Verify worktree status
         let worktree_status = &status.repos[0].worktrees[0];
@@ -431,7 +432,7 @@ mod tests {
             .unwrap();
 
         // Get status
-        let status = get_status(store.clone(), None, None).await.unwrap();
+        let status = get_status(store.clone(), None, None, false).await.unwrap();
 
         // For in-memory database, index_size_bytes should be None
         assert_eq!(status.index_size_bytes, None);
@@ -510,7 +511,7 @@ mod tests {
         }
 
         // Get status
-        let status = get_status(store.clone(), None, None).await.unwrap();
+        let status = get_status(store.clone(), None, None, false).await.unwrap();
 
         // Verify embedding percentage (3/4 = 75%)
         let worktree_status = &status.repos[0].worktrees[0];
@@ -561,7 +562,7 @@ mod tests {
         }
 
         // Get status
-        let status = get_status(store.clone(), None, None).await.unwrap();
+        let status = get_status(store.clone(), None, None, false).await.unwrap();
 
         // Verify language breakdown
         let worktree_status = &status.repos[0].worktrees[0];
