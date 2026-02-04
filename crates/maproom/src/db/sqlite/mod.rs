@@ -510,6 +510,57 @@ impl SqliteStore {
         .await
     }
 
+    pub async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT cw.chunk_id)
+                 FROM chunk_worktrees cw
+                 JOIN chunks c ON c.id = cw.chunk_id
+                 WHERE cw.worktree_id = ?1
+                   AND c.blob_sha IN (SELECT blob_sha FROM code_embeddings)",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    pub async fn get_worktree_language_breakdown(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(String, i64)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT COALESCE(f.language, 'unknown') as lang, COUNT(*) as file_count
+                 FROM files f
+                 WHERE f.worktree_id = ?1
+                 GROUP BY f.language
+                 ORDER BY file_count DESC",
+            )?;
+            let rows = stmt.query_map(params![worktree_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            let results: Vec<(String, i64)> = rows.collect::<Result<_, _>>()?;
+            Ok(results)
+        })
+        .await
+    }
+
+    pub async fn get_worktree_last_scan(&self, worktree_id: i64) -> anyhow::Result<Option<String>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT last_indexed FROM index_state WHERE worktree_id = ?1",
+                    params![worktree_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
     pub async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
         self.write_with_retry(move |conn| {
@@ -5897,5 +5948,247 @@ mod tests {
         assert!(result.is_err());
         // Should fail immediately without retries
         assert_eq!(*attempt_count.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_worktree_embedding_count() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
+
+        // Test with no chunks - should return 0
+        let count = store
+            .get_worktree_embedding_count(worktree_id)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+
+        // Create file and chunks
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash1".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        // Create chunks without embeddings
+        let chunk1 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob1".to_string(),
+            symbol_name: Some("fn1".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 10,
+            preview: "fn fn1() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        let _chunk1_id = store.insert_chunk(&chunk1).await.unwrap();
+
+        // Still no embeddings - should return 0
+        let count = store
+            .get_worktree_embedding_count(worktree_id)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+
+        // Add an embedding
+        store
+            .run(move |conn| {
+                conn.execute(
+                    "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params!["blob1", vec![0u8; 4096], 1024, "test-model"],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // Now should return 1
+        let count = store
+            .get_worktree_embedding_count(worktree_id)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Add another chunk with embedding
+        let chunk2 = ChunkRecord {
+            file_id,
+            worktree_id,
+            blob_sha: "blob2".to_string(),
+            symbol_name: Some("fn2".to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 11,
+            end_line: 20,
+            preview: "fn fn2() {}".to_string(),
+            ts_doc_text: String::new(),
+            recency_score: 1.0,
+            churn_score: 0.5,
+            metadata: None,
+        };
+        let _chunk2_id = store.insert_chunk(&chunk2).await.unwrap();
+
+        store
+            .run(move |conn| {
+                conn.execute(
+                    "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params!["blob2", vec![0u8; 4096], 1024, "test-model"],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // Should return 2
+        let count = store
+            .get_worktree_embedding_count(worktree_id)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+
+        // Test with non-existent worktree ID - should return 0
+        let count = store.get_worktree_embedding_count(99999).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_worktree_language_breakdown() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
+
+        // Test with no files - should return empty vec
+        let breakdown = store
+            .get_worktree_language_breakdown(worktree_id)
+            .await
+            .unwrap();
+        assert_eq!(breakdown.len(), 0);
+
+        // Add files with various languages
+        let files = vec![
+            ("file1.rs", Some("rust")),
+            ("file2.rs", Some("rust")),
+            ("file3.rs", Some("rust")),
+            ("file1.ts", Some("typescript")),
+            ("file2.ts", Some("typescript")),
+            ("file1.py", Some("python")),
+            ("unknown.txt", None), // NULL language
+        ];
+
+        for (idx, (relpath, language)) in files.iter().enumerate() {
+            let file = FileRecord {
+                repo_id,
+                worktree_id,
+                commit_id,
+                relpath: relpath.to_string(),
+                language: language.map(|s| s.to_string()),
+                content_hash: format!("hash{}", idx),
+                size_bytes: 100,
+                last_modified: None,
+            };
+            store.upsert_file(&file).await.unwrap();
+        }
+
+        // Get breakdown
+        let breakdown = store
+            .get_worktree_language_breakdown(worktree_id)
+            .await
+            .unwrap();
+
+        // Should have 4 entries (rust, typescript, python, unknown)
+        assert_eq!(breakdown.len(), 4);
+
+        // Check order (should be sorted by file_count DESC)
+        assert_eq!(breakdown[0].0, "rust");
+        assert_eq!(breakdown[0].1, 3);
+        assert_eq!(breakdown[1].0, "typescript");
+        assert_eq!(breakdown[1].1, 2);
+        assert_eq!(breakdown[2].0, "python");
+        assert_eq!(breakdown[2].1, 1);
+        assert_eq!(breakdown[3].0, "unknown");
+        assert_eq!(breakdown[3].1, 1);
+
+        // Test with non-existent worktree ID - should return empty vec
+        let breakdown = store.get_worktree_language_breakdown(99999).await.unwrap();
+        assert_eq!(breakdown.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_worktree_last_scan() {
+        let store = setup_test_store().await;
+
+        // Create test repo and worktree
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+
+        // Test with no index_state - should return None
+        let last_scan = store.get_worktree_last_scan(worktree_id).await.unwrap();
+        assert_eq!(last_scan, None);
+
+        // Insert index_state record
+        let test_timestamp = "2024-01-15 10:30:45";
+        store
+            .run(move |conn| {
+                conn.execute(
+                    "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![worktree_id, "tree123", 100, 50, test_timestamp],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // Should return the timestamp
+        let last_scan = store.get_worktree_last_scan(worktree_id).await.unwrap();
+        assert_eq!(last_scan, Some(test_timestamp.to_string()));
+
+        // Test with non-existent worktree ID - should return None
+        let last_scan = store.get_worktree_last_scan(99999).await.unwrap();
+        assert_eq!(last_scan, None);
     }
 }
