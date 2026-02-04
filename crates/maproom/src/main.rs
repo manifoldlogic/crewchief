@@ -2236,4 +2236,152 @@ mod tests {
         // Check total tokens
         assert!(output.contains("Used: 300 tokens")); // 100 + 120 + 80
     }
+
+    // ==================== Filter Flag CLI Parsing Tests ====================
+
+    #[test]
+    fn test_search_with_kind_single_value() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--kind", "func",
+        ]);
+        match cli.command {
+            Commands::Search { kind, .. } => {
+                assert_eq!(kind, Some(vec!["func".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_with_kind_multiple_values() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--kind",
+            "func,class,method",
+        ]);
+        match cli.command {
+            Commands::Search { kind, .. } => {
+                assert_eq!(
+                    kind,
+                    Some(vec![
+                        "func".to_string(),
+                        "class".to_string(),
+                        "method".to_string(),
+                    ])
+                );
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_with_lang_single_value() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--lang", "py",
+        ]);
+        match cli.command {
+            Commands::Search { lang, .. } => {
+                assert_eq!(lang, Some(vec!["py".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_with_lang_multiple_values() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--lang", "py,ts,rs",
+        ]);
+        match cli.command {
+            Commands::Search { lang, .. } => {
+                assert_eq!(
+                    lang,
+                    Some(vec!["py".to_string(), "ts".to_string(), "rs".to_string(),])
+                );
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_with_both_kind_and_lang() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--kind",
+            "func,class",
+            "--lang",
+            "py,rs",
+        ]);
+        match cli.command {
+            Commands::Search { kind, lang, .. } => {
+                assert_eq!(kind, Some(vec!["func".to_string(), "class".to_string()]));
+                assert_eq!(lang, Some(vec!["py".to_string(), "rs".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_with_no_filters() {
+        let cli = Cli::parse_from(&["maproom", "search", "--repo", "test", "--query", "foo"]);
+        match cli.command {
+            Commands::Search { kind, lang, .. } => {
+                assert_eq!(kind, None);
+                assert_eq!(lang, None);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_with_kind_and_lang() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "authentication logic",
+            "--kind",
+            "func,method",
+            "--lang",
+            "ts,rs",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { kind, lang, .. } => {
+                assert_eq!(kind, Some(vec!["func".to_string(), "method".to_string()]));
+                assert_eq!(lang, Some(vec!["ts".to_string(), "rs".to_string()]));
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_with_no_filters() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "authentication logic",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { kind, lang, .. } => {
+                assert_eq!(kind, None);
+                assert_eq!(lang, None);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
 }

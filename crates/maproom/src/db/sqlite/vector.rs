@@ -254,4 +254,31 @@ mod tests {
             );
         }
     }
+
+    // ==================== Vector Search Filter Tests ====================
+    // These tests validate the filter logic aspects of search_vector that can be tested
+    // without the sqlite-vec extension.
+
+    #[test]
+    fn test_vector_search_unsupported_dimension_error() {
+        let conn = Connection::open_in_memory().unwrap();
+        let query_embedding = vec![0.1f32; 999]; // Unsupported dimension
+
+        let result = search_vector(&conn, "repo", None, &query_embedding, 10, None, None);
+        assert!(result.is_err(), "Unsupported dimension should return error");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Unsupported embedding dimension"),
+            "Error should mention unsupported dimension, got: {}",
+            err_msg,
+        );
+    }
+
+    #[test]
+    fn test_get_vec_table_name_all_supported() {
+        assert_eq!(get_vec_table_name(768).unwrap(), "vec_code_768");
+        assert_eq!(get_vec_table_name(1024).unwrap(), "vec_code_1024");
+        assert_eq!(get_vec_table_name(1536).unwrap(), "vec_code");
+        assert!(get_vec_table_name(512).is_err());
+    }
 }
