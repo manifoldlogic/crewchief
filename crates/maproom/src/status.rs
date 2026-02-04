@@ -136,7 +136,7 @@ async fn get_database_size() -> Option<u64> {
 }
 
 /// Format status as human-readable text
-pub fn format_text(status: &StatusResponse) -> String {
+pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
     if status.repos.is_empty() {
         return "No repositories indexed yet.\n\nRun 'crewchief-maproom scan' to index a repository.".to_string();
     }
@@ -156,13 +156,63 @@ pub fn format_text(status: &StatusResponse) -> String {
                     format_number(worktree.chunk_count)
                 ));
 
-                if let Some(ref last_updated) = worktree.last_updated {
-                    output.push_str(&format!("    Last Updated: {}\n", last_updated));
+                // Embeddings line with count and percentage
+                output.push_str(&format!(
+                    "    Embeddings: {} ({:.1}%)\n",
+                    format_number(worktree.embedding_count),
+                    worktree.embedding_percentage
+                ));
+
+                // Languages line with sorted list
+                output.push_str("    Languages: ");
+                if worktree.languages.is_empty() {
+                    output.push_str("(none)\n");
+                } else {
+                    // Sort languages by count descending, then alphabetically
+                    let mut lang_pairs: Vec<_> = worktree.languages.iter().collect();
+                    lang_pairs.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+
+                    // Determine how many to show
+                    let show_count = if verbose {
+                        lang_pairs.len()
+                    } else {
+                        lang_pairs.len().min(5)
+                    };
+                    let truncated = !verbose && lang_pairs.len() > 5;
+
+                    // Format the languages
+                    let lang_strs: Vec<String> = lang_pairs
+                        .iter()
+                        .take(show_count)
+                        .map(|(lang, count)| format!("{} ({})", lang, count))
+                        .collect();
+                    output.push_str(&lang_strs.join(", "));
+
+                    // Add truncation indicator if needed
+                    if truncated {
+                        let remaining = lang_pairs.len() - show_count;
+                        output.push_str(&format!(" ...and {} more (use --verbose)", remaining));
+                    }
+                    output.push('\n');
                 }
+
+                // Last scan line
+                output.push_str("    Last scan: ");
+                if let Some(ref last_updated) = worktree.last_updated {
+                    output.push_str(last_updated);
+                } else {
+                    output.push_str("never");
+                }
+                output.push('\n');
             }
         }
 
         output.push('\n');
+    }
+
+    // Add total index size at the end (once, not per-worktree)
+    if let Some(bytes) = status.index_size_bytes {
+        output.push_str(&format!("Total index size: {}\n", format_size_mb(bytes)));
     }
 
     output
@@ -183,6 +233,11 @@ fn format_number(n: i64) -> String {
     }
 
     result
+}
+
+/// Format bytes as megabytes with 2 decimal places
+fn format_size_mb(bytes: u64) -> String {
+    format!("{:.2} MB", bytes as f64 / 1_048_576.0)
 }
 
 /// Format status as JSON
@@ -514,5 +569,264 @@ mod tests {
         assert_eq!(worktree_status.languages.get("rust"), Some(&2));
         assert_eq!(worktree_status.languages.get("python"), Some(&1));
         assert_eq!(worktree_status.languages.get("go"), Some(&1));
+    }
+
+    #[test]
+    fn test_format_text_full_output() {
+        let mut languages = HashMap::new();
+        languages.insert("md".to_string(), 122);
+        languages.insert("json".to_string(), 36);
+        languages.insert("py".to_string(), 12);
+
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "manifoldlogic/claude-code-plugins".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 6276,
+                    embedding_count: 6226,
+                    embedding_percentage: 99.2,
+                    languages,
+                    last_updated: Some("2026-02-04 00:59:41".to_string()),
+                }],
+            }],
+            index_size_bytes: Some(1_405_456), // ~1.34 MB
+        };
+
+        let output = format_text(&status, false);
+        assert!(output.contains("Repository: manifoldlogic/claude-code-plugins"));
+        assert!(output.contains("Worktree: main"));
+        assert!(output.contains("Chunks: 6,276"));
+        assert!(output.contains("Embeddings: 6,226 (99.2%)"));
+        assert!(output.contains("Languages: md (122), json (36), py (12)"));
+        assert!(output.contains("Last scan: 2026-02-04 00:59:41"));
+        assert!(output.contains("Total index size: 1.34 MB"));
+    }
+
+    #[test]
+    fn test_format_text_zero_chunks() {
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "test-repo".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 0,
+                    embedding_count: 0,
+                    embedding_percentage: 0.0,
+                    languages: HashMap::new(),
+                    last_updated: None,
+                }],
+            }],
+            index_size_bytes: None,
+        };
+
+        let output = format_text(&status, false);
+        assert!(output.contains("Chunks: 0"));
+        assert!(output.contains("Embeddings: 0 (0.0%)"));
+        assert!(output.contains("Languages: (none)"));
+        assert!(output.contains("Last scan: never"));
+        assert!(!output.contains("Total index size"));
+    }
+
+    #[test]
+    fn test_format_text_verbose_shows_all_languages() {
+        let mut languages = HashMap::new();
+        for i in 0..10 {
+            languages.insert(format!("lang{}", i), i as i64);
+        }
+
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "test-repo".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 100,
+                    embedding_count: 100,
+                    embedding_percentage: 100.0,
+                    languages,
+                    last_updated: Some("2026-02-04 00:00:00".to_string()),
+                }],
+            }],
+            index_size_bytes: None,
+        };
+
+        let output = format_text(&status, true);
+        // Should show all 10 languages in verbose mode
+        assert!(output.contains("lang0"));
+        assert!(output.contains("lang9"));
+        assert!(!output.contains("...and"));
+    }
+
+    #[test]
+    fn test_format_text_truncates_languages_non_verbose() {
+        let mut languages = HashMap::new();
+        for i in 0..10 {
+            languages.insert(format!("lang{}", i), (10 - i) as i64); // Descending counts
+        }
+
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "test-repo".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 100,
+                    embedding_count: 100,
+                    embedding_percentage: 100.0,
+                    languages,
+                    last_updated: Some("2026-02-04 00:00:00".to_string()),
+                }],
+            }],
+            index_size_bytes: None,
+        };
+
+        let output = format_text(&status, false);
+        // Should show only top 5 and truncation indicator
+        assert!(output.contains("...and 5 more (use --verbose)"));
+    }
+
+    #[test]
+    fn test_format_text_exactly_five_languages_no_truncation() {
+        let mut languages = HashMap::new();
+        languages.insert("lang1".to_string(), 5);
+        languages.insert("lang2".to_string(), 4);
+        languages.insert("lang3".to_string(), 3);
+        languages.insert("lang4".to_string(), 2);
+        languages.insert("lang5".to_string(), 1);
+
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "test-repo".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 100,
+                    embedding_count: 100,
+                    embedding_percentage: 100.0,
+                    languages,
+                    last_updated: Some("2026-02-04 00:00:00".to_string()),
+                }],
+            }],
+            index_size_bytes: None,
+        };
+
+        let output = format_text(&status, false);
+        // Exactly 5 languages should show no truncation indicator
+        assert!(!output.contains("...and"));
+        assert!(output.contains("lang1 (5)"));
+        assert!(output.contains("lang5 (1)"));
+    }
+
+    #[test]
+    fn test_format_text_six_languages_shows_truncation() {
+        let mut languages = HashMap::new();
+        for i in 0..6 {
+            languages.insert(format!("lang{}", i), (6 - i) as i64);
+        }
+
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "test-repo".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 100,
+                    embedding_count: 100,
+                    embedding_percentage: 100.0,
+                    languages,
+                    last_updated: Some("2026-02-04 00:00:00".to_string()),
+                }],
+            }],
+            index_size_bytes: None,
+        };
+
+        let output = format_text(&status, false);
+        // 6 languages should show truncation with "...and 1 more"
+        assert!(output.contains("...and 1 more (use --verbose)"));
+    }
+
+    #[test]
+    fn test_format_text_multi_repo_shows_index_size_once() {
+        let status = StatusResponse {
+            repos: vec![
+                RepoStatus {
+                    name: "repo1".to_string(),
+                    worktrees: vec![WorktreeStatus {
+                        name: "main".to_string(),
+                        chunk_count: 100,
+                        embedding_count: 100,
+                        embedding_percentage: 100.0,
+                        languages: HashMap::new(),
+                        last_updated: Some("2026-02-04 00:00:00".to_string()),
+                    }],
+                },
+                RepoStatus {
+                    name: "repo2".to_string(),
+                    worktrees: vec![WorktreeStatus {
+                        name: "main".to_string(),
+                        chunk_count: 200,
+                        embedding_count: 200,
+                        embedding_percentage: 100.0,
+                        languages: HashMap::new(),
+                        last_updated: Some("2026-02-04 00:00:00".to_string()),
+                    }],
+                },
+            ],
+            index_size_bytes: Some(2_097_152), // 2.00 MB
+        };
+
+        let output = format_text(&status, false);
+        // Should show index size exactly once at the end
+        let size_occurrences = output.matches("Total index size:").count();
+        assert_eq!(size_occurrences, 1);
+        assert!(output.contains("Total index size: 2.00 MB"));
+    }
+
+    #[test]
+    fn test_format_size_mb() {
+        assert_eq!(format_size_mb(0), "0.00 MB");
+        assert_eq!(format_size_mb(1_048_576), "1.00 MB");
+        assert_eq!(format_size_mb(1_405_456), "1.34 MB");
+        assert_eq!(format_size_mb(2_097_152), "2.00 MB");
+        assert_eq!(format_size_mb(10_485_760), "10.00 MB");
+        assert_eq!(format_size_mb(1_073_741_824), "1024.00 MB");
+    }
+
+    #[test]
+    fn test_language_sorting_by_count_then_alphabetically() {
+        let mut languages = HashMap::new();
+        languages.insert("python".to_string(), 10);
+        languages.insert("rust".to_string(), 10); // Same count as python
+        languages.insert("javascript".to_string(), 5);
+        languages.insert("go".to_string(), 5); // Same count as javascript
+
+        let status = StatusResponse {
+            repos: vec![RepoStatus {
+                name: "test-repo".to_string(),
+                worktrees: vec![WorktreeStatus {
+                    name: "main".to_string(),
+                    chunk_count: 100,
+                    embedding_count: 100,
+                    embedding_percentage: 100.0,
+                    languages,
+                    last_updated: Some("2026-02-04 00:00:00".to_string()),
+                }],
+            }],
+            index_size_bytes: None,
+        };
+
+        let output = format_text(&status, false);
+        // Should be sorted: python (10), rust (10), go (5), javascript (5)
+        // (descending by count, then alphabetically for ties)
+        let lang_line = output.lines().find(|l| l.contains("Languages:")).unwrap();
+        let python_pos = lang_line.find("python").unwrap();
+        let rust_pos = lang_line.find("rust").unwrap();
+        let go_pos = lang_line.find("go").unwrap();
+        let javascript_pos = lang_line.find("javascript").unwrap();
+
+        // Higher counts come first
+        assert!(python_pos < go_pos);
+        assert!(rust_pos < javascript_pos);
+
+        // Within same count, alphabetical order
+        assert!(python_pos < rust_pos); // 'p' < 'r'
+        assert!(go_pos < javascript_pos); // 'g' < 'j'
     }
 }

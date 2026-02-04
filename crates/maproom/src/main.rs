@@ -1673,7 +1673,7 @@ async fn main() -> anyhow::Result<()> {
                         let output = status::format_json(&status_data)?;
                         println!("{}", output);
                     } else {
-                        let output = status::format_text(&status_data);
+                        let output = status::format_text(&status_data, false);
                         print!("{}", output);
                     }
                 }
