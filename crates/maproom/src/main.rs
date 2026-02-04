@@ -2498,4 +2498,157 @@ mod tests {
             _ => panic!("Expected Status command"),
         }
     }
+
+    // ==================== Preview Flag CLI Parsing Tests (MRIMP-3.2001) ====================
+
+    #[test]
+    fn test_search_preview_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::Search { preview, .. } => {
+                assert!(preview);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_preview_length_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview-length",
+            "150",
+        ]);
+        match cli.command {
+            Commands::Search { preview_length, .. } => {
+                assert_eq!(preview_length, 150);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_defaults() {
+        let cli = Cli::parse_from(&["maproom", "search", "--repo", "test", "--query", "foo"]);
+        match cli.command {
+            Commands::Search {
+                preview,
+                preview_length,
+                ..
+            } => {
+                assert_eq!(preview, false);
+                assert_eq!(preview_length, 200);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_preview_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { preview, .. } => {
+                assert!(preview);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_preview_length_flag() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview-length",
+            "150",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { preview_length, .. } => {
+                assert_eq!(preview_length, 150);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_search_combined_flags_with_preview() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview",
+            "--kind",
+            "func",
+            "--lang",
+            "py",
+        ]);
+        match cli.command {
+            Commands::Search {
+                preview,
+                kind,
+                lang,
+                ..
+            } => {
+                assert!(preview);
+                assert_eq!(kind, Some(vec!["func".to_string()]));
+                assert_eq!(lang, Some(vec!["py".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_preview_length_without_preview() {
+        // Flag interaction: --preview-length without --preview is valid
+        // (length is parsed but ignored when preview=false per architecture.md Decision 4)
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--preview-length",
+            "150",
+        ]);
+        match cli.command {
+            Commands::Search {
+                preview,
+                preview_length,
+                ..
+            } => {
+                assert_eq!(preview, false);
+                assert_eq!(preview_length, 150);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
 }

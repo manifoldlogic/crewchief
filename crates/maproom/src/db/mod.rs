@@ -183,3 +183,155 @@ pub fn truncate_preview(content: &str, max_length: usize) -> String {
         format!("{}...", truncated)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== truncate_preview() Unit Tests ====================
+
+    #[test]
+    fn test_truncate_preview_normal_truncation() {
+        let result = truncate_preview("Hello, world! This is a long string", 10);
+        assert_eq!(result, "Hello, wor...");
+    }
+
+    #[test]
+    fn test_truncate_preview_no_truncation() {
+        let result = truncate_preview("short", 200);
+        assert_eq!(result, "short");
+    }
+
+    #[test]
+    fn test_truncate_preview_exact_length() {
+        let result = truncate_preview("12345", 5);
+        assert_eq!(result, "12345");
+    }
+
+    #[test]
+    fn test_truncate_preview_one_over() {
+        let result = truncate_preview("123456", 5);
+        assert_eq!(result, "12345...");
+    }
+
+    #[test]
+    fn test_truncate_preview_empty_string() {
+        let result = truncate_preview("", 200);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_truncate_preview_max_length_zero() {
+        let result = truncate_preview("hello", 0);
+        assert_eq!(result, "...");
+    }
+
+    #[test]
+    fn test_truncate_preview_unicode_2byte() {
+        // café is 4 characters, 5 bytes
+        let result = truncate_preview("café", 4);
+        assert_eq!(result, "café");
+    }
+
+    #[test]
+    fn test_truncate_preview_unicode_cjk() {
+        // 你好世界 is 4 characters, 12 bytes
+        let result = truncate_preview("你好世界", 2);
+        assert_eq!(result, "你好...");
+    }
+
+    #[test]
+    fn test_truncate_preview_emoji() {
+        // 5 single-codepoint emojis
+        let result = truncate_preview("👍👎😀😁😂", 3);
+        assert_eq!(result, "👍👎😀...");
+    }
+
+    #[test]
+    fn test_truncate_preview_single_char() {
+        let result = truncate_preview("a", 1);
+        assert_eq!(result, "a");
+    }
+
+    #[test]
+    fn test_truncate_preview_whitespace() {
+        let result = truncate_preview("hello   ", 5);
+        assert_eq!(result, "hello...");
+    }
+
+    #[test]
+    fn test_truncate_preview_default_length() {
+        // Create a 201-character string
+        let long_string = "a".repeat(201);
+        let result = truncate_preview(&long_string, 200);
+        // Should be 200 'a's + "..."
+        assert_eq!(result.len(), 203); // 200 + 3 for "..."
+        assert!(result.ends_with("..."));
+        assert_eq!(result.chars().filter(|c| *c == 'a').count(), 200);
+    }
+
+    // ==================== SearchHit Serialization Tests ====================
+
+    #[test]
+    fn test_searchhit_preview_none_omitted() {
+        let hit = SearchHit {
+            chunk_id: 1,
+            score: 0.95,
+            file_relpath: "test.rs".to_string(),
+            symbol_name: Some("test_func".to_string()),
+            kind: "func".to_string(),
+            start_line: 10,
+            end_line: 20,
+            base_score: None,
+            kind_mult: None,
+            exact_mult: None,
+            preview: None,
+        };
+
+        let json = serde_json::to_string(&hit).unwrap();
+        // Verify "preview" key is NOT in JSON (field omitted, not null)
+        assert!(!json.contains("\"preview\""));
+    }
+
+    #[test]
+    fn test_searchhit_preview_some_included() {
+        let hit = SearchHit {
+            chunk_id: 1,
+            score: 0.95,
+            file_relpath: "test.rs".to_string(),
+            symbol_name: Some("test_func".to_string()),
+            kind: "func".to_string(),
+            start_line: 10,
+            end_line: 20,
+            base_score: None,
+            kind_mult: None,
+            exact_mult: None,
+            preview: Some("sample text".to_string()),
+        };
+
+        let json = serde_json::to_string(&hit).unwrap();
+        // Verify "preview" key IS in JSON with correct value
+        assert!(json.contains("\"preview\":\"sample text\""));
+    }
+
+    #[test]
+    fn test_searchhit_preview_empty_string_included() {
+        let hit = SearchHit {
+            chunk_id: 1,
+            score: 0.95,
+            file_relpath: "test.rs".to_string(),
+            symbol_name: Some("test_func".to_string()),
+            kind: "func".to_string(),
+            start_line: 10,
+            end_line: 20,
+            base_score: None,
+            kind_mult: None,
+            exact_mult: None,
+            preview: Some("".to_string()),
+        };
+
+        let json = serde_json::to_string(&hit).unwrap();
+        // Verify "preview" key IS in JSON (empty string is NOT omitted, only None is omitted)
+        assert!(json.contains("\"preview\":\"\""));
+    }
+}
