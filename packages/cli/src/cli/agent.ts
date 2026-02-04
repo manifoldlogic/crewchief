@@ -17,6 +17,17 @@ interface SpawnOptions {
   headless?: boolean
 }
 
+/** Known backend identifiers accepted by --backend */
+export const VALID_BACKENDS = ['iterm', 'tmux', 'headless', 'auto'] as const
+
+/**
+ * Validate a backend string against known providers.
+ * Returns true if valid, false otherwise.
+ */
+export function validateBackend(backend: string): backend is (typeof VALID_BACKENDS)[number] {
+  return (VALID_BACKENDS as readonly string[]).includes(backend)
+}
+
 export function registerAgentCommands(program: Command): void {
   const agent = new Command('agent').description('Agent communication and management')
 
@@ -209,7 +220,7 @@ Examples:
     .option('-v, --vertical', 'Split pane vertically instead of horizontally')
     .option('-a, --args <args>', 'Additional arguments to pass to the agent command')
     .option('--no-label', 'Skip labeling the pane')
-    .option('--backend <backend>', 'Force specific backend (iterm only)')
+    .option('--backend <backend>', 'Terminal backend (iterm|tmux|headless|auto, default: auto)')
     .option('--headless', 'Force headless mode (no terminal UI)')
     .addHelpText(
       'after',
@@ -226,13 +237,81 @@ Examples:
 
   Spawn multiple agents:
     crewchief agent spawn claude,gemini "review code"
+
+  Spawn with explicit tmux backend (Linux/server):
+    crewchief agent spawn claude "fix bug" --backend tmux
+
+  Spawn with explicit iTerm2 backend (macOS):
+    crewchief agent spawn claude "add tests" --backend iterm
+
+  Spawn with explicit headless backend:
+    crewchief agent spawn claude "refactor" --backend headless
+
+  Auto-detect backend (default):
+    crewchief agent spawn claude "implement feature" --backend auto
+
+Backend Options:
+  iterm    - iTerm2 terminal (macOS only, requires iTerm.app)
+  tmux     - tmux multiplexer (Linux/macOS, requires tmux >= 2.1)
+  headless - Background process (no terminal UI, logs to files)
+  auto     - Auto-detect based on environment (default)
 `,
     )
     .action(async (agents: string, task: string | undefined, options: SpawnOptions) => {
       try {
-        // Detect terminal provider
-        const terminal = TerminalFactory.autoDetect()
-        await terminal.initialize()
+        // Validate --backend option if provided
+        if (options.backend && !validateBackend(options.backend)) {
+          logger.error(`Invalid backend: ${options.backend}\n` + `Valid options: ${VALID_BACKENDS.join(', ')}`)
+          process.exit(1)
+        }
+
+        // Warn if both --headless and --backend are specified (--headless takes precedence)
+        if (options.headless && options.backend && options.backend !== 'headless' && options.backend !== 'auto') {
+          logger.warn(`Both --headless and --backend ${options.backend} specified. ` + '--headless takes precedence.')
+        }
+
+        // Determine terminal provider: --headless > --backend > auto-detect
+        let terminal
+        if (options.headless) {
+          terminal = TerminalFactory.getProvider('headless')
+        } else if (options.backend && options.backend !== 'auto') {
+          terminal = TerminalFactory.getProvider(options.backend as 'iterm' | 'tmux' | 'headless')
+        } else {
+          terminal = TerminalFactory.autoDetect()
+        }
+
+        // Initialize with helpful error messages on failure
+        try {
+          await terminal.initialize()
+        } catch (initErr: unknown) {
+          const initMessage = initErr instanceof Error ? initErr.message : String(initErr)
+          logger.error(`Failed to initialize ${options.backend || 'auto-detected'} backend: ${initMessage}`)
+
+          if (initMessage.includes('tmux not found') || initMessage.includes('tmux: not found')) {
+            logger.info(
+              'Install tmux:\n' +
+                '  Ubuntu/Debian: sudo apt install tmux\n' +
+                '  macOS: brew install tmux\n' +
+                '  Or use --backend headless for non-terminal operation',
+            )
+          } else if (initMessage.includes('iTerm') || initMessage.includes('iterm')) {
+            logger.info(
+              'iTerm2 is macOS-only. On Linux, use:\n' +
+                '  --backend tmux   (terminal multiplexer)\n' +
+                '  --backend headless (background process)',
+            )
+          } else if (initMessage.includes('too old') || initMessage.includes('version')) {
+            logger.info(
+              'Upgrade tmux:\n' +
+                '  Ubuntu/Debian: sudo apt update && sudo apt install tmux\n' +
+                '  macOS: brew upgrade tmux',
+            )
+          } else {
+            logger.info('Try --backend headless for non-terminal operation')
+          }
+
+          process.exit(1)
+        }
 
         // Use the Scheduler architecture
         const scheduler = new Scheduler(terminal)

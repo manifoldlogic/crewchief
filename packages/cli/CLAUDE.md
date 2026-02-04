@@ -53,3 +53,71 @@ pnpm format
 - **iterm/** - macOS terminal automation
 - **orchestrator/** - Run scheduling
 - **terminal/** - Backend abstraction
+
+## Terminal Providers
+
+CrewChief supports multiple terminal backends for spawning agents:
+
+### iTerm2 (macOS)
+
+- **Auto-detected**: When `TERM_PROGRAM=iTerm.app`
+- **Explicit use**: `--backend iterm`
+- **Requirements**: iTerm2 installed, macOS only
+- **Best for**: macOS development with visual pane management
+
+### tmux (Linux/macOS)
+
+- **Auto-detected**: When `TMUX` environment variable is set
+- **Explicit use**: `--backend tmux`
+- **Requirements**: tmux >= 2.1 installed
+- **Best for**: Remote servers, SSH sessions, Linux environments
+
+### Headless (Any OS)
+
+- **Auto-detected**: When no terminal detected or `--headless` flag
+- **Explicit use**: `--backend headless`
+- **Requirements**: None
+- **Best for**: CI/CD, REPL mode, background processes
+- **Note**: Logs written to `.crewchief/runs/<runId>/logs/`
+
+### Auto (Default)
+
+- **Detection order**:
+  1. `--headless` flag -> headless
+  2. `TMUX` env var -> tmux
+  3. `TERM_PROGRAM=iTerm.app` -> iterm
+  4. Otherwise -> headless
+
+### Configuration
+
+```typescript
+// .crewchief/config.ts
+export default {
+  terminal: {
+    backend: 'auto', // or 'iterm', 'tmux', 'headless'
+    tmux: {
+      sessionName: 'crewchief', // Custom tmux session name
+    },
+    iterm: {
+      sessionName: 'crewchief', // Custom iTerm session name
+    },
+  },
+}
+```
+
+### Usage Examples
+
+```bash
+# Auto-detect backend
+crewchief agent spawn claude "task"
+
+# Explicit tmux (requires tmux installed)
+crewchief agent spawn claude "task" --backend tmux
+
+# Headless with log files
+crewchief agent spawn claude "task" --backend headless
+crewchief runs logs <runId>  # View logs later
+
+# iTerm2 on macOS
+crewchief agent spawn claude "task" --backend iterm
+```
