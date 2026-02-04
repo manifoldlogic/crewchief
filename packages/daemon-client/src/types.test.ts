@@ -11,6 +11,7 @@ import type {
   RelatedChunkResult,
   ChunkSearchResult,
 } from './types.js'
+import type { SearchParams } from './client.js'
 
 describe('Type synchronization with Rust', () => {
   // Sync with: crates/maproom/src/search/errors.rs::ErrorType
@@ -601,4 +602,53 @@ describe('Type synchronization - Related Chunks', () => {
     expect(typeof result.preview).toBe('string')
     expect(typeof result.score).toBe('number')
   })
+})
+
+describe('Type synchronization - SearchParams filters', () => {
+  // Sync with: crates/maproom/src/daemon/types.rs::SearchParams
+  it('should validate SearchParams filter fields match Rust', () => {
+    // This test validates that SearchParams has the expected filter fields
+    // matching the Rust SearchParams in daemon/types.rs
+    const params: SearchParams = {
+      repo: 'test-repo',
+      query: 'test query',
+      kind: ['func', 'class'],
+      lang: ['py', 'ts'],
+    };
+
+    // Verify fields exist and have correct types
+    expect(params.kind).toBeInstanceOf(Array);
+    expect(params.lang).toBeInstanceOf(Array);
+    expect(params.kind![0]).toBe('func');
+    expect(params.lang![0]).toBe('py');
+  });
+
+  it('should handle optional filter fields', () => {
+    // Verify filters are truly optional (backward compatibility)
+    const params: SearchParams = {
+      repo: 'test-repo',
+      query: 'test query',
+    };
+
+    expect(params.kind).toBeUndefined();
+    expect(params.lang).toBeUndefined();
+  });
+
+  it('should serialize to JSON matching Rust expectations', () => {
+    const params: SearchParams = {
+      repo: 'test-repo',
+      query: 'test query',
+      kind: ['func'],
+      lang: ['py'],
+    };
+
+    const json = JSON.stringify(params);
+    const parsed = JSON.parse(json);
+
+    // Verify JSON keys match Rust field names exactly
+    expect(parsed.kind).toEqual(['func']);
+    expect(parsed.lang).toEqual(['py']);
+    expect(parsed.repo).toBe('test-repo');
+    expect(parsed.query).toBe('test query');
+  });
 })

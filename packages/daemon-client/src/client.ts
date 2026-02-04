@@ -12,6 +12,7 @@ import type { SearchMetadata } from "./types.js";
 
 /**
  * Search parameters for daemon search method
+ * TYPE_SYNC: Must match crates/maproom/src/daemon/types.rs::SearchParams
  */
 export interface SearchParams {
   query: string;
@@ -26,6 +27,10 @@ export interface SearchParams {
   include_confidence?: boolean;
   /** Include related chunks via graph traversal (default: false) */
   include_related?: boolean;
+  /** Filter by chunk kind (e.g., ["func", "class"]) */
+  kind?: string[];
+  /** Filter by file language (e.g., ["py", "ts"]) */
+  lang?: string[];
 }
 
 /**
