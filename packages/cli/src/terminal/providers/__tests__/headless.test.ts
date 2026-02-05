@@ -238,6 +238,119 @@ describe('HeadlessProvider', () => {
   })
 })
 
+describe('HeadlessProvider resource limits', () => {
+  let provider: HeadlessProvider
+
+  afterEach(async () => {
+    await provider.dispose()
+  })
+
+  it('enforces max concurrent agents limit', async () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 2 })
+    await provider.initialize()
+
+    // Spawn 2 agents with long-running commands (should succeed)
+    await provider.runCommand('agent1__claude', 'sleep 10')
+    await provider.runCommand('agent2__claude', 'sleep 10')
+
+    // Give time for processes to start
+    await new Promise((r) => setTimeout(r, 100))
+
+    // 3rd should fail
+    await expect(provider.runCommand('agent3__claude', 'sleep 10')).rejects.toThrow(
+      'Maximum concurrent agents (2) reached',
+    )
+  })
+
+  it('includes current running count in error message', async () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 2 })
+    await provider.initialize()
+
+    await provider.runCommand('agent1__claude', 'sleep 10')
+    await provider.runCommand('agent2__claude', 'sleep 10')
+    await new Promise((r) => setTimeout(r, 100))
+
+    await expect(provider.runCommand('agent3__claude', 'sleep 10')).rejects.toThrow('Currently running: 2')
+  })
+
+  it('includes cleanup suggestion in error message', async () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 1 })
+    await provider.initialize()
+
+    await provider.runCommand('agent1__claude', 'sleep 10')
+    await new Promise((r) => setTimeout(r, 100))
+
+    await expect(provider.runCommand('agent2__claude', 'sleep 10')).rejects.toThrow(
+      'Stop or wait for agents to complete before spawning more.',
+    )
+  })
+
+  it('allows spawning after agent exits (exited agents do not count)', async () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 1 })
+    await provider.initialize()
+
+    // Spawn a quick-exit command
+    await provider.runCommand('agent1__claude', 'true')
+    // Wait for it to exit
+    await new Promise((r) => setTimeout(r, 300))
+
+    // Verify agent has exited
+    const agents = await provider.listAgents()
+    const agent = agents.find((a) => a.name === 'agent1__claude')
+    expect(agent?.status).toBe('stopped')
+
+    // Should succeed because the first agent already exited
+    await expect(provider.runCommand('agent2__claude', 'true')).resolves.not.toThrow()
+  })
+
+  it('uses default limit of 20 when not configured', () => {
+    provider = new HeadlessProvider()
+    // Access private field to verify default
+    expect((provider as unknown as { maxConcurrentAgents: number }).maxConcurrentAgents).toBe(20)
+  })
+
+  it('respects custom limit from constructor', () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 50 })
+    expect((provider as unknown as { maxConcurrentAgents: number }).maxConcurrentAgents).toBe(50)
+  })
+
+  it('allows spawning up to the exact limit', async () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 3 })
+    await provider.initialize()
+
+    // Spawn exactly 3 agents (the limit)
+    await provider.runCommand('agent1__claude', 'sleep 10')
+    await provider.runCommand('agent2__claude', 'sleep 10')
+    await provider.runCommand('agent3__claude', 'sleep 10')
+    await new Promise((r) => setTimeout(r, 100))
+
+    // Verify all 3 are running
+    const agents = await provider.listAgents()
+    const running = agents.filter((a) => a.status === 'running')
+    expect(running.length).toBe(3)
+
+    // 4th should fail
+    await expect(provider.runCommand('agent4__claude', 'sleep 10')).rejects.toThrow(
+      'Maximum concurrent agents (3) reached',
+    )
+  })
+
+  it('frees slot when agent exits allowing new spawn', async () => {
+    provider = new HeadlessProvider({ maxConcurrentAgents: 2 })
+    await provider.initialize()
+
+    // Fill both slots: one quick-exit, one long-running
+    await provider.runCommand('quick__claude', 'true')
+    await provider.runCommand('long__claude', 'sleep 10')
+
+    // Wait for quick agent to exit
+    await new Promise((r) => setTimeout(r, 300))
+
+    // quick agent exited, so only 1 running - should be able to spawn another
+    await expect(provider.runCommand('new__claude', 'sleep 10')).resolves.not.toThrow()
+  })
+})
+
 describe('HeadlessProvider log persistence', () => {
   let provider: HeadlessProvider
   let tmpDir: string

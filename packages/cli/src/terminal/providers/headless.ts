@@ -100,6 +100,12 @@ export interface HeadlessProviderOptions {
    * Primarily useful for testing.
    */
   baseDir?: string
+  /**
+   * Maximum number of concurrent running agents.
+   * Prevents resource exhaustion from unbounded agent spawning.
+   * Defaults to 20 if not specified.
+   */
+  maxConcurrentAgents?: number
 }
 
 export class HeadlessProvider implements TerminalProvider {
@@ -107,9 +113,11 @@ export class HeadlessProvider implements TerminalProvider {
   private agents = new Map<string, HeadlessAgent>()
   private logicalPaneCounter = 0
   private readonly baseDir: string
+  private readonly maxConcurrentAgents: number
 
   constructor(options?: HeadlessProviderOptions) {
     this.baseDir = options?.baseDir ?? process.cwd()
+    this.maxConcurrentAgents = options?.maxConcurrentAgents ?? 20
   }
 
   /**
@@ -178,6 +186,17 @@ export class HeadlessProvider implements TerminalProvider {
   }
 
   async runCommand(paneId: string, command: string, runId?: string): Promise<void> {
+    // Count currently running agents (exitCode === null means still running)
+    const runningCount = Array.from(this.agents.values()).filter((agent) => agent.child.exitCode === null).length
+
+    if (runningCount >= this.maxConcurrentAgents) {
+      throw new Error(
+        `Maximum concurrent agents (${this.maxConcurrentAgents}) reached. ` +
+          `Currently running: ${runningCount}. ` +
+          'Stop or wait for agents to complete before spawning more.',
+      )
+    }
+
     logger.info(`[${paneId}] Spawning: ${command}`)
 
     // Create log streams BEFORE spawning the process to ensure no output

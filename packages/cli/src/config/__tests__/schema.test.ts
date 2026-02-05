@@ -263,6 +263,84 @@ describe('TmuxSchema', () => {
 })
 
 describe('TerminalSchema', () => {
+  describe('maxConcurrentAgents', () => {
+    it('defaults to 20 when not specified', () => {
+      const result = TerminalSchema.safeParse({})
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.maxConcurrentAgents).toBe(20)
+      }
+    })
+
+    it('accepts valid integer values', () => {
+      for (const value of [1, 5, 20, 100, 500, 1000]) {
+        const result = TerminalSchema.safeParse({ maxConcurrentAgents: value })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.maxConcurrentAgents).toBe(value)
+        }
+      }
+    })
+
+    it('rejects 0', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: 0 })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects negative numbers', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: -1 })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects values greater than 1000', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: 1001 })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects non-integer (float)', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: 10.5 })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects string values', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: '20' })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects null', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: null })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects boolean', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: true })
+      expect(result.success).toBe(false)
+    })
+
+    it('accepts minimum value of 1', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: 1 })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.maxConcurrentAgents).toBe(1)
+      }
+    })
+
+    it('accepts maximum value of 1000', () => {
+      const result = TerminalSchema.safeParse({ maxConcurrentAgents: 1000 })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.maxConcurrentAgents).toBe(1000)
+      }
+    })
+
+    it('has a description for documentation', () => {
+      const shape = TerminalSchema.shape
+      const description = shape.maxConcurrentAgents.description
+      expect(description).toBeDefined()
+      expect(description).toContain('concurrent')
+    })
+  })
+
   describe('backend enum', () => {
     it('accepts "iterm" backend', () => {
       const result = TerminalSchema.safeParse({ backend: 'iterm' })
