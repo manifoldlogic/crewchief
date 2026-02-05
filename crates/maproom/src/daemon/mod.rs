@@ -12,7 +12,10 @@ use tracing::{error, info};
 use crate::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
 use crate::db::{connect, SearchHit, SqliteStore};
 use crate::embedding::EmbeddingService;
+use crate::search::confidence::compute_result_confidence;
 use crate::search::errors::SearchErrorDetails;
+use crate::search::executor_types::SearchSource;
+use crate::search::fusion::FusedResult;
 
 use self::types::{
     ContextParams, JsonRpcRequest, JsonRpcResponse, RepoStatus, SearchParams, StatusParams,
@@ -479,8 +482,10 @@ async fn execute_search(
         raw_hits
     };
 
-    // Format response - SearchHit already contains all needed fields
-    let formatted_hits: Vec<serde_json::Value> = hits
+    let include_confidence = params.include_confidence.unwrap_or(false);
+
+    // Apply threshold filter first so we have the filtered list for confidence computation
+    let filtered_hits: Vec<&SearchHit> = hits
         .iter()
         .filter(|hit| {
             // Apply threshold filter if specified
@@ -490,8 +495,27 @@ async fn execute_search(
                 true
             }
         })
-        .map(|hit| {
-            serde_json::json!({
+        .collect();
+
+    // Build all_fused once for score_gap calculation (only when confidence is requested)
+    // Note: In daemon mode, source_count will be 1 (fts/vector) or 2 (hybrid),
+    // not 1-4 like the full pipeline. This is acceptable because score_gap and
+    // is_exact_match are the most actionable signals.
+    let all_fused: Vec<FusedResult> = if include_confidence {
+        filtered_hits
+            .iter()
+            .map(|h| FusedResult::new(h.chunk_id, h.score as f32, HashMap::new()))
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // Format response - SearchHit already contains all needed fields
+    let formatted_hits: Vec<serde_json::Value> = filtered_hits
+        .iter()
+        .enumerate()
+        .map(|(index, hit)| {
+            let mut json = serde_json::json!({
                 "chunk_id": hit.chunk_id,
                 "score": hit.score,
                 "start_line": hit.start_line,
@@ -499,7 +523,25 @@ async fn execute_search(
                 "symbol_name": hit.symbol_name,
                 "kind": hit.kind,
                 "file_path": hit.file_relpath,
-            })
+            });
+
+            if include_confidence {
+                // Convert SearchHit to FusedResult using adapter function
+                let fused_result = searchhit_to_fused_result(hit, mode);
+
+                // Call existing confidence function - zero new computation logic
+                let confidence = compute_result_confidence(
+                    &fused_result,
+                    &all_fused,
+                    index,
+                    fused_result.exact_match_multiplier,
+                );
+
+                json["confidence"] =
+                    serde_json::to_value(&confidence).unwrap_or(serde_json::Value::Null);
+            }
+
+            json
         })
         .collect();
 
@@ -626,4 +668,216 @@ async fn execute_status(state: Arc<DaemonState>, params: StatusParams) -> Result
         total_files,
         total_chunks,
     })
+}
+
+/// Convert a SearchHit to a FusedResult for confidence computation.
+///
+/// This is the adapter pattern that bridges daemon SearchHit results
+/// to the existing confidence computation infrastructure in search/confidence.rs.
+///
+/// # Parameters
+/// - `hit`: The daemon SearchHit to convert
+/// - `mode`: Search mode string ("fts", "vector", "hybrid") to determine source_scores
+///
+/// # Returns
+/// A FusedResult suitable for passing to `compute_result_confidence()`
+fn searchhit_to_fused_result(hit: &SearchHit, mode: &str) -> FusedResult {
+    let mut source_scores = HashMap::new();
+    match mode {
+        "fts" => {
+            source_scores.insert(SearchSource::FTS, hit.score as f32);
+        }
+        "vector" => {
+            source_scores.insert(SearchSource::Vector, hit.score as f32);
+        }
+        "hybrid" => {
+            source_scores.insert(SearchSource::FTS, hit.score as f32);
+            source_scores.insert(SearchSource::Vector, hit.score as f32);
+        }
+        _ => {}
+    }
+
+    FusedResult::with_exact_match(
+        hit.chunk_id,
+        hit.score as f32,
+        source_scores,
+        hit.exact_mult.map(|m| m as f32),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::SearchHit;
+    use crate::search::confidence::compute_result_confidence;
+    use crate::search::executor_types::SearchSource;
+    use crate::search::fusion::FusedResult;
+
+    /// Helper to create a SearchHit with test data.
+    fn make_search_hit(chunk_id: i64, score: f64, exact_mult: Option<f64>) -> SearchHit {
+        SearchHit {
+            chunk_id,
+            score,
+            file_relpath: format!("src/test_{}.rs", chunk_id),
+            symbol_name: Some(format!("test_fn_{}", chunk_id)),
+            kind: "function".to_string(),
+            start_line: 1,
+            end_line: 10,
+            base_score: None,
+            kind_mult: None,
+            exact_mult,
+            preview: None,
+        }
+    }
+
+    #[test]
+    fn test_searchhit_to_fusedresult_fts_mode() {
+        let hit = make_search_hit(42, 0.95, Some(3.0));
+        let fused = searchhit_to_fused_result(&hit, "fts");
+
+        assert_eq!(fused.chunk_id, 42);
+        assert!((fused.score - 0.95).abs() < 0.001);
+        assert_eq!(fused.exact_match_multiplier, Some(3.0));
+        assert_eq!(fused.source_scores.len(), 1);
+        assert!(fused.source_scores.contains_key(&SearchSource::FTS));
+        assert!(!fused.source_scores.contains_key(&SearchSource::Vector));
+    }
+
+    #[test]
+    fn test_searchhit_to_fusedresult_vector_mode() {
+        let hit = make_search_hit(99, 0.80, None);
+        let fused = searchhit_to_fused_result(&hit, "vector");
+
+        assert_eq!(fused.chunk_id, 99);
+        assert!((fused.score - 0.80).abs() < 0.001);
+        assert_eq!(fused.exact_match_multiplier, None);
+        assert_eq!(fused.source_scores.len(), 1);
+        assert!(fused.source_scores.contains_key(&SearchSource::Vector));
+        assert!(!fused.source_scores.contains_key(&SearchSource::FTS));
+    }
+
+    #[test]
+    fn test_searchhit_to_fusedresult_hybrid_mode() {
+        let hit = make_search_hit(7, 0.88, Some(1.0));
+        let fused = searchhit_to_fused_result(&hit, "hybrid");
+
+        assert_eq!(fused.chunk_id, 7);
+        assert!((fused.score - 0.88).abs() < 0.001);
+        assert_eq!(fused.exact_match_multiplier, Some(1.0));
+        // Hybrid mode has 2 sources: FTS + Vector
+        assert_eq!(fused.source_scores.len(), 2);
+        assert!(fused.source_scores.contains_key(&SearchSource::FTS));
+        assert!(fused.source_scores.contains_key(&SearchSource::Vector));
+    }
+
+    #[test]
+    fn test_confidence_computed_from_adapter_fts() {
+        let hits = vec![
+            make_search_hit(1, 0.95, Some(3.0)),
+            make_search_hit(2, 0.82, None),
+            make_search_hit(3, 0.70, Some(1.0)),
+        ];
+
+        let all_fused: Vec<FusedResult> = hits
+            .iter()
+            .map(|h| FusedResult::new(h.chunk_id, h.score as f32, HashMap::new()))
+            .collect();
+
+        // Compute confidence for first hit (FTS mode)
+        let fused = searchhit_to_fused_result(&hits[0], "fts");
+        let confidence =
+            compute_result_confidence(&fused, &all_fused, 0, fused.exact_match_multiplier);
+
+        // source_count: 1 for FTS mode
+        assert_eq!(confidence.source_count, 1);
+        // score_gap: 0.95 - 0.82 = 0.13
+        assert!((confidence.score_gap - 0.13).abs() < 0.01);
+        // is_exact_match: exact_mult 3.0 >= 2.9 threshold
+        assert!(confidence.is_exact_match);
+    }
+
+    #[test]
+    fn test_confidence_computed_from_adapter_hybrid() {
+        let hits = vec![
+            make_search_hit(1, 0.90, None),
+            make_search_hit(2, 0.85, None),
+        ];
+
+        let all_fused: Vec<FusedResult> = hits
+            .iter()
+            .map(|h| FusedResult::new(h.chunk_id, h.score as f32, HashMap::new()))
+            .collect();
+
+        // Compute confidence for first hit (hybrid mode)
+        let fused = searchhit_to_fused_result(&hits[0], "hybrid");
+        let confidence =
+            compute_result_confidence(&fused, &all_fused, 0, fused.exact_match_multiplier);
+
+        // source_count: 2 for hybrid mode (FTS + Vector)
+        assert_eq!(confidence.source_count, 2);
+        // score_gap: 0.90 - 0.85 = 0.05
+        assert!((confidence.score_gap - 0.05).abs() < 0.01);
+        // is_exact_match: None exact_mult means false
+        assert!(!confidence.is_exact_match);
+    }
+
+    #[test]
+    fn test_confidence_last_result_zero_gap() {
+        let hits = vec![
+            make_search_hit(1, 0.90, None),
+            make_search_hit(2, 0.85, None),
+        ];
+
+        let all_fused: Vec<FusedResult> = hits
+            .iter()
+            .map(|h| FusedResult::new(h.chunk_id, h.score as f32, HashMap::new()))
+            .collect();
+
+        // Last result should have score_gap = 0.0
+        let fused = searchhit_to_fused_result(&hits[1], "fts");
+        let confidence =
+            compute_result_confidence(&fused, &all_fused, 1, fused.exact_match_multiplier);
+
+        assert_eq!(confidence.score_gap, 0.0);
+    }
+
+    #[test]
+    fn test_confidence_exact_mult_below_threshold() {
+        let hit = make_search_hit(1, 0.90, Some(2.8));
+        let all_fused = vec![FusedResult::new(
+            hit.chunk_id,
+            hit.score as f32,
+            HashMap::new(),
+        )];
+
+        let fused = searchhit_to_fused_result(&hit, "fts");
+        let confidence =
+            compute_result_confidence(&fused, &all_fused, 0, fused.exact_match_multiplier);
+
+        // 2.8 < 2.9 threshold, so NOT an exact match
+        assert!(!confidence.is_exact_match);
+    }
+
+    #[test]
+    fn test_confidence_signals_json_serialization() {
+        let hit = make_search_hit(1, 0.95, Some(3.0));
+        let all_fused = vec![FusedResult::new(
+            hit.chunk_id,
+            hit.score as f32,
+            HashMap::new(),
+        )];
+
+        let fused = searchhit_to_fused_result(&hit, "fts");
+        let confidence =
+            compute_result_confidence(&fused, &all_fused, 0, fused.exact_match_multiplier);
+
+        // Verify serialization produces all 3 required fields
+        let json = serde_json::to_value(&confidence).unwrap();
+        assert!(json.get("source_count").is_some());
+        assert!(json.get("score_gap").is_some());
+        assert!(json.get("is_exact_match").is_some());
+
+        assert_eq!(json["source_count"], 1);
+        assert_eq!(json["is_exact_match"], true);
+    }
 }

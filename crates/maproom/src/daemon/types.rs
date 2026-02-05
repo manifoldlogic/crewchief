@@ -26,6 +26,9 @@ pub struct SearchParams {
     /// Filter by file language (e.g., ["py", "ts"])
     #[serde(default)]
     pub lang: Option<Vec<String>>,
+    /// Include confidence signals in results (default: false)
+    #[serde(default)]
+    pub include_confidence: Option<bool>,
 }
 
 fn default_deduplicate() -> Option<bool> {
@@ -282,5 +285,27 @@ mod tests {
         assert!(params.expand.tests);
         assert!(!params.expand.docs); // Default
         assert_eq!(params.expand.max_depth, 2); // Default
+    }
+
+    #[test]
+    fn test_search_params_with_confidence_true() {
+        let json = r#"{"query": "test", "repo": "myrepo", "include_confidence": true}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.include_confidence, Some(true));
+    }
+
+    #[test]
+    fn test_search_params_with_confidence_false() {
+        let json = r#"{"query": "test", "repo": "myrepo", "include_confidence": false}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.include_confidence, Some(false));
+    }
+
+    #[test]
+    fn test_search_params_without_confidence_field() {
+        // Backward compatibility: field omitted, defaults to None
+        let json = r#"{"query": "test", "repo": "myrepo"}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.include_confidence, None);
     }
 }

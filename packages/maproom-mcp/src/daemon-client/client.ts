@@ -12,6 +12,7 @@ import {
 import { RpcProtocol, type JsonRpcResponse } from "./rpc.js";
 import { DaemonLifecycle } from "./lifecycle.js";
 import type {
+  ConfidenceSignals,
   DaemonConfig,
   DaemonProcessDef,
   PendingRequest,
@@ -51,6 +52,8 @@ export interface SearchResult {
     kind: string;
     content: string;
     score: number;
+    /** Confidence signals for result quality assessment (present when include_confidence=true) */
+    confidence?: ConfidenceSignals;
   }>;
   total: number;
   query_embedding_time_ms?: number;

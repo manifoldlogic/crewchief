@@ -8,7 +8,7 @@
 import { Connection, ConnectionMode, ConnectionConfig } from "./connection.js";
 import { createConnection } from "./connection-factory.js";
 import { DaemonError } from "./errors.js";
-import type { SearchMetadata } from "./types.js";
+import type { ConfidenceSignals, SearchMetadata } from "./types.js";
 
 /**
  * Search parameters for daemon search method
@@ -48,6 +48,8 @@ export interface SearchResult {
     kind: string;
     content: string;
     score: number;
+    /** Confidence signals for result quality assessment (present when include_confidence=true) */
+    confidence?: ConfidenceSignals;
   }>;
   total: number;
   query_embedding_time_ms?: number;
