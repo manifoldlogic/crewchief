@@ -86,6 +86,18 @@ export class RunManager {
     return path.join(this.baseDir, runId)
   }
 
+  /**
+   * Get the file path for a run's cross-process message bus.
+   * Does not create the file - the writer creates it on first write.
+   * Does not validate that the run exists - caller is responsible for that.
+   *
+   * @param runId - The run ID
+   * @returns Absolute path to the run's bus.jsonl file
+   */
+  getRunBusPath(runId: string): string {
+    return path.join(this.getRunDir(runId), 'bus.jsonl')
+  }
+
   appendLog(runId: string, fileName: string, line: string): void {
     const dir = this.getRunDir(runId)
     ensureDirSync(dir)
