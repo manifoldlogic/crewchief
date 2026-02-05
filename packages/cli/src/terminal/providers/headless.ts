@@ -3,6 +3,7 @@ import { createWriteStream, WriteStream } from 'node:fs'
 import { mkdir, open, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import treeKill from 'tree-kill'
+import { validateRunId } from '../../cli/runs'
 import { logger } from '../../utils/logger'
 import { TerminalProvider, WindowOptions, SplitDirection, AgentInfo } from '../interface'
 
@@ -282,19 +283,28 @@ export class HeadlessProvider implements TerminalProvider {
   /**
    * Get the log file path for a given pane and stream type.
    * Returns undefined if the agent has no runId (no log persistence).
+   * @throws {Error} if the agent's runId does not match UUID format
    */
   getLogPath(paneId: string, stream: 'stdout' | 'stderr' | 'combined' = 'combined'): string | undefined {
     const agent = this.agents.get(paneId)
     if (!agent?.runId) return undefined
 
+    validateRunId(agent.runId)
     return path.join(this.runsDir, agent.runId, 'logs', `${stream}.log`)
   }
 
   /**
    * Get log content for a pane. Returns combined log by default.
    * If `lines` is specified, returns only the last N lines.
+   * @throws {Error} if the agent's runId does not match UUID format
    */
   async getLogs(paneId: string, lines?: number): Promise<string> {
+    // Validate runId before constructing any file paths
+    const agent = this.agents.get(paneId)
+    if (agent?.runId) {
+      validateRunId(agent.runId)
+    }
+
     const logPath = this.getLogPath(paneId)
     if (!logPath) throw new Error(`No logs found for pane ${paneId}`)
 

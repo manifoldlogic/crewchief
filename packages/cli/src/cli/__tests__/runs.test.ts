@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import chalk from 'chalk'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { getLogPath, runExists, isValidStreamType, colorize } from '../runs'
+import { getLogPath, runExists, isValidStreamType, colorize, validateRunId } from '../runs'
 
 // Force chalk color level so colorize tests produce ANSI codes in non-TTY environments
 const savedLevel = chalk.level
@@ -13,6 +13,22 @@ beforeAll(() => {
 afterAll(() => {
   chalk.level = savedLevel
 })
+
+// ---------------------------------------------------------------------------
+// Valid UUID fixtures for tests
+// ---------------------------------------------------------------------------
+const UUID_1 = '550e8400-e29b-41d4-a716-446655440000'
+const UUID_2 = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+const UUID_3 = '00000000-0000-0000-0000-000000000001'
+const UUID_4 = '11111111-2222-3333-4444-555555555555'
+const UUID_5 = '22222222-3333-4444-5555-666666666666'
+const UUID_6 = '33333333-4444-5555-6666-777777777777'
+const UUID_7 = '44444444-5555-6666-7777-888888888888'
+const UUID_8 = '55555555-6666-7777-8888-999999999999'
+const UUID_9 = '66666666-7777-8888-9999-aaaaaaaaaaaa'
+const UUID_10 = '77777777-8888-9999-aaaa-bbbbbbbbbbbb'
+const UUID_11 = '88888888-9999-aaaa-bbbb-cccccccccccc'
+const UUID_12 = '99999999-aaaa-bbbb-cccc-dddddddddddd'
 
 // ---------------------------------------------------------------------------
 // Helper: create a temporary run directory structure with log files
@@ -47,27 +63,84 @@ afterEach(() => {
 })
 
 // ---------------------------------------------------------------------------
+// validateRunId
+// ---------------------------------------------------------------------------
+describe('validateRunId', () => {
+  it('accepts valid lowercase UUID', () => {
+    expect(() => validateRunId('550e8400-e29b-41d4-a716-446655440000')).not.toThrow()
+  })
+
+  it('accepts valid uppercase UUID', () => {
+    expect(() => validateRunId('550E8400-E29B-41D4-A716-446655440000')).not.toThrow()
+  })
+
+  it('accepts valid mixed-case UUID', () => {
+    expect(() => validateRunId('550e8400-E29B-41d4-A716-446655440000')).not.toThrow()
+  })
+
+  it('rejects path traversal attempt with ../', () => {
+    expect(() => validateRunId('../../etc/passwd')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects path traversal attempt with ../../../', () => {
+    expect(() => validateRunId('../../../tmp')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects short strings', () => {
+    expect(() => validateRunId('not-a-uuid')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects string that is too long', () => {
+    expect(() => validateRunId('550e8400-e29b-41d4-a716-446655440000-extra')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects empty string', () => {
+    expect(() => validateRunId('')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects string with special characters', () => {
+    expect(() => validateRunId('550e8400-e29b-41d4-a716-44665544000!')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects string with slashes', () => {
+    expect(() => validateRunId('550e8400/e29b/41d4/a716/446655440000')).toThrow('Invalid run ID format')
+  })
+
+  it('rejects simple identifiers like run-123', () => {
+    expect(() => validateRunId('run-123')).toThrow('Invalid run ID format')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // getLogPath
 // ---------------------------------------------------------------------------
 describe('getLogPath', () => {
   it('returns correct path for combined stream', () => {
-    const result = getLogPath('run-123', 'combined', tmpDir)
-    expect(result).toBe(path.join(tmpDir, '.crewchief', 'runs', 'run-123', 'logs', 'combined.log'))
+    const result = getLogPath(UUID_1, 'combined', tmpDir)
+    expect(result).toBe(path.join(tmpDir, '.crewchief', 'runs', UUID_1, 'logs', 'combined.log'))
   })
 
   it('returns correct path for stdout stream', () => {
-    const result = getLogPath('run-123', 'stdout', tmpDir)
-    expect(result).toBe(path.join(tmpDir, '.crewchief', 'runs', 'run-123', 'logs', 'stdout.log'))
+    const result = getLogPath(UUID_1, 'stdout', tmpDir)
+    expect(result).toBe(path.join(tmpDir, '.crewchief', 'runs', UUID_1, 'logs', 'stdout.log'))
   })
 
   it('returns correct path for stderr stream', () => {
-    const result = getLogPath('run-123', 'stderr', tmpDir)
-    expect(result).toBe(path.join(tmpDir, '.crewchief', 'runs', 'run-123', 'logs', 'stderr.log'))
+    const result = getLogPath(UUID_1, 'stderr', tmpDir)
+    expect(result).toBe(path.join(tmpDir, '.crewchief', 'runs', UUID_1, 'logs', 'stderr.log'))
   })
 
   it('defaults to process.cwd() when no baseDir provided', () => {
-    const result = getLogPath('run-xyz', 'combined')
-    expect(result).toBe(path.join(process.cwd(), '.crewchief', 'runs', 'run-xyz', 'logs', 'combined.log'))
+    const result = getLogPath(UUID_2, 'combined')
+    expect(result).toBe(path.join(process.cwd(), '.crewchief', 'runs', UUID_2, 'logs', 'combined.log'))
+  })
+
+  it('rejects invalid run ID format', () => {
+    expect(() => getLogPath('not-a-uuid', 'combined', tmpDir)).toThrow('Invalid run ID format')
+  })
+
+  it('rejects path traversal attempts', () => {
+    expect(() => getLogPath('../../etc/passwd', 'stdout', tmpDir)).toThrow('Invalid run ID format')
   })
 })
 
@@ -76,12 +149,20 @@ describe('getLogPath', () => {
 // ---------------------------------------------------------------------------
 describe('runExists', () => {
   it('returns true when run directory exists', () => {
-    createRunDir('existing-run')
-    expect(runExists('existing-run', tmpDir)).toBe(true)
+    createRunDir(UUID_3)
+    expect(runExists(UUID_3, tmpDir)).toBe(true)
   })
 
   it('returns false when run directory does not exist', () => {
-    expect(runExists('nonexistent-run', tmpDir)).toBe(false)
+    expect(runExists(UUID_4, tmpDir)).toBe(false)
+  })
+
+  it('rejects invalid run ID format', () => {
+    expect(() => runExists('not-a-uuid', tmpDir)).toThrow('Invalid run ID format')
+  })
+
+  it('rejects path traversal attempts', () => {
+    expect(() => runExists('../../etc/passwd', tmpDir)).toThrow('Invalid run ID format')
   })
 })
 
@@ -192,9 +273,9 @@ describe('runs logs command logic', () => {
   describe('log reading', () => {
     it('reads combined log by default', () => {
       const logContent = 'line1\nline2\nline3\n'
-      createRunLogs('run-abc', { combined: logContent })
+      createRunLogs(UUID_5, { combined: logContent })
 
-      const logPath = getLogPath('run-abc', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_5, 'combined', tmpDir)
       expect(fs.existsSync(logPath)).toBe(true)
 
       const content = fs.readFileSync(logPath, 'utf-8')
@@ -202,23 +283,23 @@ describe('runs logs command logic', () => {
     })
 
     it('reads stdout log when requested', () => {
-      createRunLogs('run-abc', {
+      createRunLogs(UUID_5, {
         stdout: 'stdout line1\nstdout line2\n',
         combined: 'combined output\n',
       })
 
-      const logPath = getLogPath('run-abc', 'stdout', tmpDir)
+      const logPath = getLogPath(UUID_5, 'stdout', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       expect(content).toContain('stdout line1')
     })
 
     it('reads stderr log when requested', () => {
-      createRunLogs('run-abc', {
+      createRunLogs(UUID_5, {
         stderr: 'error output\n',
         combined: 'combined output\n',
       })
 
-      const logPath = getLogPath('run-abc', 'stderr', tmpDir)
+      const logPath = getLogPath(UUID_5, 'stderr', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       expect(content).toContain('error output')
     })
@@ -228,9 +309,9 @@ describe('runs logs command logic', () => {
     it('shows last N lines from log file', () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`)
       const logContent = lines.join('\n') + '\n'
-      createRunLogs('run-lines', { combined: logContent })
+      createRunLogs(UUID_6, { combined: logContent })
 
-      const logPath = getLogPath('run-lines', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_6, 'combined', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       const allLines = content.split('\n')
 
@@ -244,9 +325,9 @@ describe('runs logs command logic', () => {
 
     it('shows all lines when --lines is larger than file', () => {
       const logContent = 'line1\nline2\nline3\n'
-      createRunLogs('run-small', { combined: logContent })
+      createRunLogs(UUID_7, { combined: logContent })
 
-      const logPath = getLogPath('run-small', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_7, 'combined', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       const allLines = content.split('\n')
 
@@ -258,15 +339,15 @@ describe('runs logs command logic', () => {
 
   describe('error cases', () => {
     it('detects when run does not exist', () => {
-      expect(runExists('nonexistent', tmpDir)).toBe(false)
+      expect(runExists(UUID_8, tmpDir)).toBe(false)
     })
 
     it('detects when run exists but log file is missing', () => {
       // Create run directory without log files
-      createRunDir('run-no-logs')
-      expect(runExists('run-no-logs', tmpDir)).toBe(true)
+      createRunDir(UUID_9)
+      expect(runExists(UUID_9, tmpDir)).toBe(true)
 
-      const logPath = getLogPath('run-no-logs', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_9, 'combined', tmpDir)
       expect(fs.existsSync(logPath)).toBe(false)
     })
 
@@ -294,15 +375,15 @@ describe('runs logs command logic', () => {
 
   describe('--stream option', () => {
     it('correctly reads from each stream log file', () => {
-      createRunLogs('run-streams', {
+      createRunLogs(UUID_10, {
         stdout: 'stdout content\n',
         stderr: 'stderr content\n',
         combined: 'combined content\n',
       })
 
-      const stdoutPath = getLogPath('run-streams', 'stdout', tmpDir)
-      const stderrPath = getLogPath('run-streams', 'stderr', tmpDir)
-      const combinedPath = getLogPath('run-streams', 'combined', tmpDir)
+      const stdoutPath = getLogPath(UUID_10, 'stdout', tmpDir)
+      const stderrPath = getLogPath(UUID_10, 'stderr', tmpDir)
+      const combinedPath = getLogPath(UUID_10, 'combined', tmpDir)
 
       expect(fs.readFileSync(stdoutPath, 'utf-8')).toBe('stdout content\n')
       expect(fs.readFileSync(stderrPath, 'utf-8')).toBe('stderr content\n')
@@ -329,27 +410,27 @@ describe('runs logs command logic', () => {
 
   describe('edge cases', () => {
     it('handles empty log file', () => {
-      createRunLogs('run-empty', { combined: '' })
+      createRunLogs(UUID_11, { combined: '' })
 
-      const logPath = getLogPath('run-empty', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_11, 'combined', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       const lines = content.split('\n')
       expect(lines).toEqual([''])
     })
 
     it('handles log file with only newlines', () => {
-      createRunLogs('run-newlines', { combined: '\n\n\n' })
+      createRunLogs(UUID_12, { combined: '\n\n\n' })
 
-      const logPath = getLogPath('run-newlines', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_12, 'combined', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       const lines = content.split('\n')
       expect(lines).toEqual(['', '', '', ''])
     })
 
     it('handles single line without trailing newline', () => {
-      createRunLogs('run-single', { combined: 'single line' })
+      createRunLogs(UUID_1, { combined: 'single line' })
 
-      const logPath = getLogPath('run-single', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_1, 'combined', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       const lines = content.split('\n')
       expect(lines).toEqual(['single line'])
@@ -357,9 +438,9 @@ describe('runs logs command logic', () => {
 
     it('handles very long lines', () => {
       const longLine = 'x'.repeat(10000)
-      createRunLogs('run-long', { combined: longLine + '\n' })
+      createRunLogs(UUID_2, { combined: longLine + '\n' })
 
-      const logPath = getLogPath('run-long', 'combined', tmpDir)
+      const logPath = getLogPath(UUID_2, 'combined', tmpDir)
       const content = fs.readFileSync(logPath, 'utf-8')
       expect(content).toBe(longLine + '\n')
     })

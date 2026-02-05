@@ -4,6 +4,27 @@ import path from 'node:path'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { HeadlessProvider, checkLogDirectorySize } from '../headless'
 
+// ---------------------------------------------------------------------------
+// Valid UUID fixtures for tests
+// ---------------------------------------------------------------------------
+const UUID_PERM = '00000000-0000-0000-0000-000000000001'
+const UUID_DIR = '00000000-0000-0000-0000-000000000002'
+const UUID_THREE = '00000000-0000-0000-0000-000000000003'
+const UUID_STDOUT = '00000000-0000-0000-0000-000000000004'
+const UUID_STDERR = '00000000-0000-0000-0000-000000000005'
+const UUID_NOCROSS = '00000000-0000-0000-0000-000000000006'
+const UUID_MIXED = '00000000-0000-0000-0000-000000000007'
+const UUID_PERSIST = '00000000-0000-0000-0000-000000000008'
+const UUID_PATH_STDOUT = '00000000-0000-0000-0000-000000000009'
+const UUID_PATH_STDERR = '00000000-0000-0000-0000-00000000000a'
+const UUID_PATH_DEFAULT = '00000000-0000-0000-0000-00000000000b'
+const UUID_GETLOGS_FULL = '00000000-0000-0000-0000-00000000000c'
+const UUID_GETLOGS_TAIL = '00000000-0000-0000-0000-00000000000d'
+const UUID_BLOCKED = '11111111-1111-1111-1111-111111111111'
+const UUID_SIZE = '00000000-0000-0000-0000-00000000000e'
+const UUID_DISPOSE = '00000000-0000-0000-0000-00000000000f'
+const UUID_INVALID_TRAVERSAL = '../../etc/passwd'
+
 describe('HeadlessProvider', () => {
   let provider: HeadlessProvider
 
@@ -232,7 +253,7 @@ describe('HeadlessProvider log persistence', () => {
   describe('log file creation', () => {
     it('creates log files with 0o600 permissions when runId is provided', async () => {
       const paneId = 'perm-test__claude'
-      const runId = 'test-run-perm-600'
+      const runId = UUID_PERM
 
       await provider.runCommand(paneId, 'echo "permission test"', runId)
       await new Promise((r) => setTimeout(r, 200))
@@ -256,7 +277,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('creates log directory with 0o700 permissions', async () => {
       const paneId = 'dir-perm-test__claude'
-      const runId = 'test-run-dir-700'
+      const runId = UUID_DIR
 
       await provider.runCommand(paneId, 'echo "dir test"', runId)
       await new Promise((r) => setTimeout(r, 200))
@@ -268,7 +289,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('creates all three log files (stdout, stderr, combined)', async () => {
       const paneId = 'files-test__claude'
-      const runId = 'test-run-three-files'
+      const runId = UUID_THREE
 
       await provider.runCommand(paneId, 'echo "hello"', runId)
       await new Promise((r) => setTimeout(r, 200))
@@ -297,7 +318,7 @@ describe('HeadlessProvider log persistence', () => {
   describe('log streaming', () => {
     it('writes stdout to stdout.log and combined.log', async () => {
       const paneId = 'stdout-test__claude'
-      const runId = 'test-run-stdout'
+      const runId = UUID_STDOUT
 
       await provider.runCommand(paneId, 'echo "hello stdout"', runId)
       await new Promise((r) => setTimeout(r, 300))
@@ -314,7 +335,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('writes stderr to stderr.log and combined.log', async () => {
       const paneId = 'stderr-test__claude'
-      const runId = 'test-run-stderr'
+      const runId = UUID_STDERR
 
       await provider.runCommand(paneId, 'echo "hello stderr" >&2', runId)
       await new Promise((r) => setTimeout(r, 300))
@@ -331,7 +352,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('does not write stderr to stdout.log', async () => {
       const paneId = 'no-cross-test__claude'
-      const runId = 'test-run-no-cross'
+      const runId = UUID_NOCROSS
 
       await provider.runCommand(paneId, 'echo "only stderr" >&2', runId)
       await new Promise((r) => setTimeout(r, 300))
@@ -345,7 +366,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('handles mixed stdout and stderr output', async () => {
       const paneId = 'mixed-test__claude'
-      const runId = 'test-run-mixed'
+      const runId = UUID_MIXED
 
       // Command that writes to both stdout and stderr
       await provider.runCommand(paneId, 'echo "out line" && echo "err line" >&2', runId)
@@ -363,7 +384,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('logs persist after process exits', async () => {
       const paneId = 'persist-test__claude'
-      const runId = 'test-run-persist'
+      const runId = UUID_PERSIST
 
       await provider.runCommand(paneId, 'echo "persisted output"', runId)
       // Wait for process to exit
@@ -383,7 +404,7 @@ describe('HeadlessProvider log persistence', () => {
   describe('getLogPath', () => {
     it('returns correct path for stdout stream', async () => {
       const paneId = 'path-stdout__claude'
-      const runId = 'test-run-path-stdout'
+      const runId = UUID_PATH_STDOUT
 
       await provider.runCommand(paneId, 'echo "test"', runId)
       await new Promise((r) => setTimeout(r, 100))
@@ -394,7 +415,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('returns correct path for stderr stream', async () => {
       const paneId = 'path-stderr__claude'
-      const runId = 'test-run-path-stderr'
+      const runId = UUID_PATH_STDERR
 
       await provider.runCommand(paneId, 'echo "test"', runId)
       await new Promise((r) => setTimeout(r, 100))
@@ -405,7 +426,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('defaults to combined stream when no stream specified', async () => {
       const paneId = 'path-default__claude'
-      const runId = 'test-run-path-default'
+      const runId = UUID_PATH_DEFAULT
 
       await provider.runCommand(paneId, 'echo "test"', runId)
       await new Promise((r) => setTimeout(r, 100))
@@ -431,7 +452,7 @@ describe('HeadlessProvider log persistence', () => {
   describe('getLogs', () => {
     it('returns full log content when lines is not specified', async () => {
       const paneId = 'getlogs-full__claude'
-      const runId = 'test-run-getlogs-full'
+      const runId = UUID_GETLOGS_FULL
 
       await provider.runCommand(paneId, 'printf "line1\\nline2\\nline3\\n"', runId)
       await new Promise((r) => setTimeout(r, 300))
@@ -444,7 +465,7 @@ describe('HeadlessProvider log persistence', () => {
 
     it('returns last N lines when lines is specified', async () => {
       const paneId = 'getlogs-tail__claude'
-      const runId = 'test-run-getlogs-tail'
+      const runId = UUID_GETLOGS_TAIL
 
       await provider.runCommand(paneId, 'printf "line1\\nline2\\nline3\\nline4\\nline5\\n"', runId)
       await new Promise((r) => setTimeout(r, 300))
@@ -471,18 +492,61 @@ describe('HeadlessProvider log persistence', () => {
     })
   })
 
+  describe('run ID validation', () => {
+    it('rejects path traversal in getLogPath when agent has invalid runId', async () => {
+      const paneId = 'traversal-test__claude'
+      // Directly spawn with an invalid runId to test validation in getLogPath
+      // The runCommand stores the runId, and getLogPath validates it on retrieval
+      await provider.runCommand(paneId, 'echo "test"', UUID_INVALID_TRAVERSAL)
+      await new Promise((r) => setTimeout(r, 200))
+
+      expect(() => provider.getLogPath(paneId)).toThrow('Invalid run ID format')
+    })
+
+    it('rejects path traversal in getLogs when agent has invalid runId', async () => {
+      const paneId = 'traversal-logs-test__claude'
+      await provider.runCommand(paneId, 'echo "test"', UUID_INVALID_TRAVERSAL)
+      await new Promise((r) => setTimeout(r, 200))
+
+      await expect(provider.getLogs(paneId)).rejects.toThrow('Invalid run ID format')
+    })
+
+    it('accepts valid UUID runId in getLogPath', async () => {
+      const paneId = 'valid-uuid-test__claude'
+      const runId = UUID_PERM
+
+      await provider.runCommand(paneId, 'echo "test"', runId)
+      await new Promise((r) => setTimeout(r, 200))
+
+      const logPath = provider.getLogPath(paneId)
+      expect(logPath).toBeDefined()
+      expect(logPath).toContain(runId)
+    })
+
+    it('accepts valid UUID runId in getLogs', async () => {
+      const paneId = 'valid-uuid-logs__claude'
+      const runId = UUID_PERSIST
+
+      await provider.runCommand(paneId, 'echo "uuid test output"', runId)
+      await new Promise((r) => setTimeout(r, 300))
+
+      const logs = await provider.getLogs(paneId)
+      expect(logs).toContain('uuid test output')
+    })
+  })
+
   describe('error handling', () => {
     it('continues without file logging when log creation fails', async () => {
       const paneId = 'fail-log__claude'
       // Create a file where the runId directory should go, causing mkdir to fail
       const runsDir = path.join(tmpDir, '.crewchief/runs')
       await mkdir(runsDir, { recursive: true })
-      const blockingPath = path.join(runsDir, 'blocked-run')
+      const blockingPath = path.join(runsDir, UUID_BLOCKED)
       await writeFile(blockingPath, 'blocking file', { mode: 0o444 })
 
       // runCommand should not throw even when log creation fails
-      // (blocked-run is a file, so mkdir blocked-run/logs will fail)
-      await expect(provider.runCommand(paneId, 'echo "still works"', 'blocked-run')).resolves.not.toThrow()
+      // (UUID_BLOCKED is a file, so mkdir UUID_BLOCKED/logs will fail)
+      await expect(provider.runCommand(paneId, 'echo "still works"', UUID_BLOCKED)).resolves.not.toThrow()
 
       await new Promise((r) => setTimeout(r, 200))
 
@@ -510,7 +574,7 @@ describe('HeadlessProvider log persistence', () => {
   describe('log directory size monitoring', () => {
     it('returns size of log directory', async () => {
       const paneId = 'size-test__claude'
-      const runId = 'test-run-size'
+      const runId = UUID_SIZE
 
       await provider.runCommand(paneId, 'echo "some output for size check"', runId)
       await new Promise((r) => setTimeout(r, 300))
@@ -547,7 +611,7 @@ describe('HeadlessProvider log persistence', () => {
   describe('dispose closes log streams', () => {
     it('closes log streams on dispose', async () => {
       const paneId = 'dispose-logs__claude'
-      const runId = 'test-run-dispose-logs'
+      const runId = UUID_DISPOSE
 
       await provider.runCommand(paneId, 'sleep 5', runId)
       await new Promise((r) => setTimeout(r, 200))

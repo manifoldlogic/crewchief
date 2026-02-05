@@ -10,11 +10,26 @@ import { logger } from '../utils/logger'
 const VALID_STREAM_TYPES = ['stdout', 'stderr', 'combined'] as const
 type StreamType = (typeof VALID_STREAM_TYPES)[number]
 
+/** UUID format regex: 36 characters of hex digits and hyphens (case-insensitive) */
+const UUID_REGEX = /^[0-9a-f-]{36}$/i
+
+/**
+ * Validate that a run ID matches UUID format.
+ * Defense-in-depth measure to prevent path traversal attacks.
+ * @throws {Error} if runId does not match UUID format
+ */
+export function validateRunId(runId: string): void {
+  if (!UUID_REGEX.test(runId)) {
+    throw new Error('Invalid run ID format')
+  }
+}
+
 /**
  * Get the log file path for a given run and stream type.
  * Log files are stored at: .crewchief/runs/<runId>/logs/<stream>.log
  */
 export function getLogPath(runId: string, stream: StreamType, baseDir?: string): string {
+  validateRunId(runId)
   const runsDir = path.join(baseDir ?? process.cwd(), '.crewchief', 'runs')
   return path.join(runsDir, runId, 'logs', `${stream}.log`)
 }
@@ -23,6 +38,7 @@ export function getLogPath(runId: string, stream: StreamType, baseDir?: string):
  * Check whether a run directory exists on disk.
  */
 export function runExists(runId: string, baseDir?: string): boolean {
+  validateRunId(runId)
   const runsDir = path.join(baseDir ?? process.cwd(), '.crewchief', 'runs')
   const runDir = path.join(runsDir, runId)
   return fs.existsSync(runDir)
