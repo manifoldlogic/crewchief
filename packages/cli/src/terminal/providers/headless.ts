@@ -1,7 +1,8 @@
 import { spawn, ChildProcess } from 'node:child_process'
-import { createWriteStream, WriteStream } from 'node:fs'
+import { createReadStream, createWriteStream, WriteStream } from 'node:fs'
 import { mkdir, open, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
+import * as readline from 'node:readline'
 import treeKill from 'tree-kill'
 import { validateRunId } from '../../cli/runs'
 import { logger } from '../../utils/logger'
@@ -295,7 +296,9 @@ export class HeadlessProvider implements TerminalProvider {
 
   /**
    * Get log content for a pane. Returns combined log by default.
-   * If `lines` is specified, returns only the last N lines.
+   * If `lines` is specified, streams the file and returns only the last N lines
+   * using a circular buffer (O(k) memory where k = requested lines).
+   * When no line limit is specified, reads the full file content.
    * @throws {Error} if the agent's runId does not match UUID format
    */
   async getLogs(paneId: string, lines?: number): Promise<string> {
@@ -308,11 +311,27 @@ export class HeadlessProvider implements TerminalProvider {
     const logPath = this.getLogPath(paneId)
     if (!logPath) throw new Error(`No logs found for pane ${paneId}`)
 
-    const content = await readFile(logPath, 'utf-8')
-    if (!lines) return content
+    // When no line limit, read full content (entire file needed anyway)
+    if (!lines) {
+      return await readFile(logPath, 'utf-8')
+    }
 
-    const allLines = content.split('\n')
-    return allLines.slice(-lines).join('\n')
+    // Stream file line-by-line, keeping only last N lines in memory
+    const buffer: string[] = []
+    const fileStream = createReadStream(logPath, { encoding: 'utf-8' })
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    })
+
+    for await (const line of rl) {
+      buffer.push(line)
+      if (buffer.length > lines) {
+        buffer.shift()
+      }
+    }
+
+    return buffer.join('\n')
   }
 
   /**

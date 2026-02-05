@@ -24,6 +24,11 @@ const UUID_BLOCKED = '11111111-1111-1111-1111-111111111111'
 const UUID_SIZE = '00000000-0000-0000-0000-00000000000e'
 const UUID_DISPOSE = '00000000-0000-0000-0000-00000000000f'
 const UUID_INVALID_TRAVERSAL = '../../etc/passwd'
+const UUID_STREAM_LARGE = '00000000-0000-0000-0000-000000000010'
+const UUID_STREAM_EMPTY = '00000000-0000-0000-0000-000000000011'
+const UUID_STREAM_SMALL = '00000000-0000-0000-0000-000000000012'
+const UUID_STREAM_ORDER = '00000000-0000-0000-0000-000000000013'
+const UUID_STREAM_SINGLE = '00000000-0000-0000-0000-000000000014'
 
 describe('HeadlessProvider', () => {
   let provider: HeadlessProvider
@@ -628,6 +633,88 @@ describe('HeadlessProvider log persistence', () => {
       // Log files should still exist on disk after dispose
       const statAfter = await stat(logPath!)
       expect(statAfter.isFile()).toBe(true)
+    })
+  })
+
+  describe('getLogs streaming behavior', () => {
+    it('streams large log files and returns correct last N lines', async () => {
+      const paneId = 'stream-large__claude'
+      const runId = UUID_STREAM_LARGE
+
+      // Generate a file with 500 lines to simulate a large log
+      const lineNumbers = Array.from({ length: 500 }, (_, i) => `log-line-${i + 1}`)
+      const printfArg = lineNumbers.join('\\n') + '\\n'
+
+      await provider.runCommand(paneId, `printf "${printfArg}"`, runId)
+      await new Promise((r) => setTimeout(r, 500))
+
+      // Request only the last 5 lines via streaming
+      const logs = await provider.getLogs(paneId, 5)
+      const resultLines = logs.split('\n')
+
+      expect(resultLines).toContain('log-line-496')
+      expect(resultLines).toContain('log-line-497')
+      expect(resultLines).toContain('log-line-498')
+      expect(resultLines).toContain('log-line-499')
+      expect(resultLines).toContain('log-line-500')
+      expect(logs).not.toContain('log-line-1\n')
+      expect(logs).not.toContain('log-line-495\n')
+    })
+
+    it('handles empty log file', async () => {
+      const paneId = 'stream-empty__claude'
+      const runId = UUID_STREAM_EMPTY
+
+      // Spawn a command that produces no output (true exits silently)
+      await provider.runCommand(paneId, 'true', runId)
+      await new Promise((r) => setTimeout(r, 300))
+
+      // Request last 10 lines from empty file
+      const logs = await provider.getLogs(paneId, 10)
+      expect(logs).toBe('')
+    })
+
+    it('handles file with fewer lines than requested', async () => {
+      const paneId = 'stream-small__claude'
+      const runId = UUID_STREAM_SMALL
+
+      // Create a file with only 3 lines
+      await provider.runCommand(paneId, 'printf "alpha\\nbeta\\ngamma\\n"', runId)
+      await new Promise((r) => setTimeout(r, 300))
+
+      // Request last 100 lines (more than available)
+      const logs = await provider.getLogs(paneId, 100)
+      expect(logs).toContain('alpha')
+      expect(logs).toContain('beta')
+      expect(logs).toContain('gamma')
+    })
+
+    it('preserves correct line order in streaming output', async () => {
+      const paneId = 'stream-order__claude'
+      const runId = UUID_STREAM_ORDER
+
+      await provider.runCommand(paneId, 'printf "first\\nsecond\\nthird\\nfourth\\nfifth\\n"', runId)
+      await new Promise((r) => setTimeout(r, 300))
+
+      // Request last 3 lines
+      const logs = await provider.getLogs(paneId, 3)
+      const resultLines = logs.split('\n').filter((l) => l.length > 0)
+
+      // Lines must appear in chronological order
+      expect(resultLines.indexOf('third')).toBeLessThan(resultLines.indexOf('fourth'))
+      expect(resultLines.indexOf('fourth')).toBeLessThan(resultLines.indexOf('fifth'))
+    })
+
+    it('handles single-line file', async () => {
+      const paneId = 'stream-single__claude'
+      const runId = UUID_STREAM_SINGLE
+
+      await provider.runCommand(paneId, 'printf "only-one-line\\n"', runId)
+      await new Promise((r) => setTimeout(r, 300))
+
+      // Request last 5 lines from a single-line file
+      const logs = await provider.getLogs(paneId, 5)
+      expect(logs).toContain('only-one-line')
     })
   })
 })
