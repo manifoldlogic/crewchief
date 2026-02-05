@@ -7,7 +7,17 @@ export class TmuxProvider implements TerminalProvider {
   private sessionName: string
 
   constructor(options?: { sessionName?: string }) {
-    this.sessionName = options?.sessionName || 'crewchief'
+    const sessionName = options?.sessionName ?? 'crewchief'
+
+    // Validate session name characters (tmux limitation)
+    if (!/^[a-zA-Z0-9_.]+$/.test(sessionName)) {
+      throw new Error(
+        `Session name '${sessionName}' contains invalid characters. ` +
+          'Use only letters, digits, underscores, and periods.',
+      )
+    }
+
+    this.sessionName = sessionName
   }
 
   async initialize(): Promise<void> {

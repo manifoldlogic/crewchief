@@ -8,7 +8,7 @@ const tmuxAvailable = tmuxCheck.status === 0
 
 describe.skipIf(!tmuxAvailable)('TmuxProvider Integration', () => {
   let provider: TmuxProvider
-  const testSession = 'crewchief-test'
+  const testSession = 'crewchief_test'
 
   beforeAll(async () => {
     // Kill any existing test session to start clean

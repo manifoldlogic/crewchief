@@ -39,8 +39,76 @@ describe('TmuxProvider', () => {
     })
 
     it('accepts custom session name', () => {
-      const customProvider = new TmuxProvider({ sessionName: 'my-session' })
+      const customProvider = new TmuxProvider({ sessionName: 'my_session' })
       expect(customProvider.id).toBe('tmux')
+    })
+  })
+
+  describe('session name validation', () => {
+    it('accepts alphanumeric session name', () => {
+      expect(() => new TmuxProvider({ sessionName: 'crewchief123' })).not.toThrow()
+    })
+
+    it('accepts session name with underscores', () => {
+      expect(() => new TmuxProvider({ sessionName: 'my_session' })).not.toThrow()
+    })
+
+    it('accepts session name with periods', () => {
+      expect(() => new TmuxProvider({ sessionName: 'app.dev' })).not.toThrow()
+    })
+
+    it('accepts session name with mixed valid characters', () => {
+      expect(() => new TmuxProvider({ sessionName: 'my_app.v2' })).not.toThrow()
+    })
+
+    it('uses default session name "crewchief" when none provided', () => {
+      const p = new TmuxProvider()
+      expect(p['sessionName']).toBe('crewchief')
+    })
+
+    it('uses default session name when undefined is passed', () => {
+      const p = new TmuxProvider({ sessionName: undefined })
+      expect(p['sessionName']).toBe('crewchief')
+    })
+
+    it('rejects session name with spaces', () => {
+      expect(() => new TmuxProvider({ sessionName: 'my session' })).toThrow(
+        "Session name 'my session' contains invalid characters. Use only letters, digits, underscores, and periods.",
+      )
+    })
+
+    it('rejects session name with hyphens', () => {
+      expect(() => new TmuxProvider({ sessionName: 'my-session' })).toThrow('contains invalid characters')
+    })
+
+    it('rejects session name with dollar sign', () => {
+      expect(() => new TmuxProvider({ sessionName: 'session$name' })).toThrow('contains invalid characters')
+    })
+
+    it('rejects session name with exclamation mark', () => {
+      expect(() => new TmuxProvider({ sessionName: 'session!' })).toThrow('contains invalid characters')
+    })
+
+    it('rejects session name with at sign', () => {
+      expect(() => new TmuxProvider({ sessionName: 'session@name' })).toThrow('contains invalid characters')
+    })
+
+    it('rejects session name with hash', () => {
+      expect(() => new TmuxProvider({ sessionName: 'session#1' })).toThrow('contains invalid characters')
+    })
+
+    it('rejects empty session name', () => {
+      expect(() => new TmuxProvider({ sessionName: '' })).toThrow('contains invalid characters')
+    })
+
+    it('error message includes the invalid session name', () => {
+      expect(() => new TmuxProvider({ sessionName: 'bad name' })).toThrow("Session name 'bad name'")
+    })
+
+    it('error message includes guidance on allowed characters', () => {
+      expect(() => new TmuxProvider({ sessionName: 'bad-name' })).toThrow(
+        'Use only letters, digits, underscores, and periods.',
+      )
     })
   })
 
@@ -257,7 +325,7 @@ describe('TmuxProvider', () => {
     })
 
     it('uses custom session name when creating session', async () => {
-      const customProvider = new TmuxProvider({ sessionName: 'custom-session' })
+      const customProvider = new TmuxProvider({ sessionName: 'custom_session' })
 
       // command -v tmux succeeds
       mockSpawnSync.mockReturnValueOnce({
@@ -291,7 +359,7 @@ describe('TmuxProvider', () => {
 
       // Verify new-session was called with custom session name
       const newSessionCall = mockSpawnSync.mock.calls[3]
-      expect(newSessionCall[1]).toEqual(['new-session', '-d', '-s', 'custom-session'])
+      expect(newSessionCall[1]).toEqual(['new-session', '-d', '-s', 'custom_session'])
     })
 
     it('includes version output in error when version is unparseable', async () => {
@@ -438,7 +506,7 @@ describe('TmuxProvider', () => {
     })
 
     it('uses custom session name in tmux command', async () => {
-      const customProvider = new TmuxProvider({ sessionName: 'my-session' })
+      const customProvider = new TmuxProvider({ sessionName: 'my_session' })
 
       mockSpawnSync.mockReturnValue({
         status: 0,
@@ -449,7 +517,7 @@ describe('TmuxProvider', () => {
       await customProvider.createWindow({ title: 'agent' })
 
       const call = mockSpawnSync.mock.calls[0]
-      expect(call[1][2]).toBe('my-session')
+      expect(call[1][2]).toBe('my_session')
     })
   })
 
@@ -781,7 +849,7 @@ describe('TmuxProvider', () => {
     })
 
     it('uses custom session name in list-panes command', async () => {
-      const customProvider = new TmuxProvider({ sessionName: 'my-session' })
+      const customProvider = new TmuxProvider({ sessionName: 'my_session' })
 
       mockSpawnSync.mockReturnValue({
         status: 0,
@@ -792,7 +860,7 @@ describe('TmuxProvider', () => {
       await customProvider.listAgents()
 
       const call = mockSpawnSync.mock.calls[0]
-      expect(call[1][3]).toBe('my-session')
+      expect(call[1][3]).toBe('my_session')
     })
 
     it('returns empty array when list-panes fails', async () => {
