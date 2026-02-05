@@ -99,8 +99,8 @@ describe('HeadlessProvider', () => {
   describe('runCommand', () => {
     it('spawns a process and tracks it', async () => {
       const paneId = 'test-pane__claude'
-      await provider.runCommand(paneId, 'echo "test"')
-      // Give time for spawn
+      // Use sleep to keep agent in map for verification
+      await provider.runCommand(paneId, 'sleep 5')
       await new Promise((r) => setTimeout(r, 100))
 
       const agents = await provider.listAgents()
@@ -111,7 +111,8 @@ describe('HeadlessProvider', () => {
 
     it('parses agent type from pane ID', async () => {
       const paneId = 'my-task__gemini'
-      await provider.runCommand(paneId, 'echo "test"')
+      // Use sleep to keep agent in map for verification
+      await provider.runCommand(paneId, 'sleep 5')
       await new Promise((r) => setTimeout(r, 100))
 
       const agents = await provider.listAgents()
@@ -121,7 +122,8 @@ describe('HeadlessProvider', () => {
 
     it('sets type to unknown for non-standard pane IDs', async () => {
       const paneId = 'simple-pane'
-      await provider.runCommand(paneId, 'echo "test"')
+      // Use sleep to keep agent in map for verification
+      await provider.runCommand(paneId, 'sleep 5')
       await new Promise((r) => setTimeout(r, 100))
 
       const agents = await provider.listAgents()
@@ -152,12 +154,12 @@ describe('HeadlessProvider', () => {
       expect(result).toBe(true)
     })
 
-    it('returns false when process has exited', async () => {
+    it('returns false when process has exited (agent removed from map)', async () => {
       const paneId = 'exited-test__claude'
       // Spawn a process that exits immediately
       await provider.runCommand(paneId, 'echo done')
-      // Wait for it to exit
-      await new Promise((r) => setTimeout(r, 300))
+      // Wait for it to exit and be cleaned up from map
+      await new Promise((r) => setTimeout(r, 500))
 
       const result = await provider.sendMessage(paneId, 'test message')
       expect(result).toBe(false)
@@ -185,15 +187,15 @@ describe('HeadlessProvider', () => {
       })
     })
 
-    it('marks exited processes as stopped', async () => {
+    it('removes exited processes from agent map', async () => {
       const paneId = 'quick-task__claude'
       await provider.runCommand(paneId, 'echo done')
-      // Wait for process to exit
-      await new Promise((r) => setTimeout(r, 300))
+      // Wait for process to exit and cleanup
+      await new Promise((r) => setTimeout(r, 500))
 
       const agents = await provider.listAgents()
       const agent = agents.find((a) => a.name === paneId)
-      expect(agent?.status).toBe('stopped')
+      expect(agent).toBeUndefined()
     })
 
     it('tracks multiple agents independently', async () => {
@@ -285,21 +287,21 @@ describe('HeadlessProvider resource limits', () => {
     )
   })
 
-  it('allows spawning after agent exits (exited agents do not count)', async () => {
+  it('allows spawning after agent exits (exited agents removed from map)', async () => {
     provider = new HeadlessProvider({ maxConcurrentAgents: 1 })
     await provider.initialize()
 
     // Spawn a quick-exit command
     await provider.runCommand('agent1__claude', 'true')
-    // Wait for it to exit
-    await new Promise((r) => setTimeout(r, 300))
+    // Wait for it to exit and be cleaned up
+    await new Promise((r) => setTimeout(r, 500))
 
-    // Verify agent has exited
+    // Verify agent has been removed from map after exit
     const agents = await provider.listAgents()
     const agent = agents.find((a) => a.name === 'agent1__claude')
-    expect(agent?.status).toBe('stopped')
+    expect(agent).toBeUndefined()
 
-    // Should succeed because the first agent already exited
+    // Should succeed because the first agent was cleaned up
     await expect(provider.runCommand('agent2__claude', 'true')).resolves.not.toThrow()
   })
 
@@ -351,6 +353,60 @@ describe('HeadlessProvider resource limits', () => {
   })
 })
 
+describe('HeadlessProvider agent cleanup', () => {
+  let provider: HeadlessProvider
+
+  beforeEach(async () => {
+    provider = new HeadlessProvider()
+    await provider.initialize()
+  })
+
+  afterEach(async () => {
+    await provider.dispose()
+  })
+
+  it('removes agent from map after process exits', async () => {
+    const paneId = 'cleanup-test-1__claude'
+
+    await provider.runCommand(paneId, 'echo "done"')
+
+    // Agent should be in map immediately after spawn
+    expect(provider['agents'].has(paneId)).toBe(true)
+
+    // Wait for process to exit and cleanup
+    await new Promise((r) => setTimeout(r, 500))
+
+    // Agent should be removed from map after exit
+    expect(provider['agents'].has(paneId)).toBe(false)
+  })
+
+  it('map size decreases when agents stop', async () => {
+    await provider.runCommand('cleanup-a1__claude', 'sleep 1')
+    await provider.runCommand('cleanup-a2__claude', 'sleep 1')
+
+    expect(provider['agents'].size).toBe(2)
+
+    // Wait for both to exit
+    await new Promise((r) => setTimeout(r, 1500))
+
+    expect(provider['agents'].size).toBe(0)
+  })
+
+  it('cleanup does not affect other running agents', async () => {
+    await provider.runCommand('cleanup-quick__claude', 'echo "done"') // Exits quickly
+    await provider.runCommand('cleanup-long__claude', 'sleep 10') // Runs longer
+
+    // Wait for quick agent to exit
+    await new Promise((r) => setTimeout(r, 500))
+
+    // Quick agent should be removed
+    expect(provider['agents'].has('cleanup-quick__claude')).toBe(false)
+
+    // Long-running agent should still be present
+    expect(provider['agents'].has('cleanup-long__claude')).toBe(true)
+  })
+})
+
 describe('HeadlessProvider log persistence', () => {
   let provider: HeadlessProvider
   let tmpDir: string
@@ -374,8 +430,7 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_PERM
 
       await provider.runCommand(paneId, 'echo "permission test"', runId)
-      await new Promise((r) => setTimeout(r, 200))
-
+      // Capture log paths immediately (before process exits and agent is cleaned up)
       const stdoutPath = provider.getLogPath(paneId, 'stdout')
       const stderrPath = provider.getLogPath(paneId, 'stderr')
       const combinedPath = provider.getLogPath(paneId, 'combined')
@@ -383,6 +438,9 @@ describe('HeadlessProvider log persistence', () => {
       expect(stdoutPath).toBeDefined()
       expect(stderrPath).toBeDefined()
       expect(combinedPath).toBeDefined()
+
+      // Wait for process to complete and files to be written
+      await new Promise((r) => setTimeout(r, 300))
 
       const stdoutStat = await stat(stdoutPath!)
       const stderrStat = await stat(stderrPath!)
@@ -426,8 +484,7 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'no-logs-test__claude'
 
       await provider.runCommand(paneId, 'echo "no logs"')
-      await new Promise((r) => setTimeout(r, 200))
-
+      // Check immediately (before process exits and agent is cleaned up)
       const logPath = provider.getLogPath(paneId)
       expect(logPath).toBeUndefined()
     })
@@ -439,10 +496,11 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_STDOUT
 
       await provider.runCommand(paneId, 'echo "hello stdout"', runId)
-      await new Promise((r) => setTimeout(r, 300))
-
+      // Capture log paths immediately (before process exits and agent is cleaned up)
       const stdoutPath = provider.getLogPath(paneId, 'stdout')!
       const combinedPath = provider.getLogPath(paneId, 'combined')!
+
+      await new Promise((r) => setTimeout(r, 300))
 
       const stdoutContent = await readFile(stdoutPath, 'utf-8')
       const combinedContent = await readFile(combinedPath, 'utf-8')
@@ -456,10 +514,11 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_STDERR
 
       await provider.runCommand(paneId, 'echo "hello stderr" >&2', runId)
-      await new Promise((r) => setTimeout(r, 300))
-
+      // Capture log paths immediately (before process exits and agent is cleaned up)
       const stderrPath = provider.getLogPath(paneId, 'stderr')!
       const combinedPath = provider.getLogPath(paneId, 'combined')!
+
+      await new Promise((r) => setTimeout(r, 300))
 
       const stderrContent = await readFile(stderrPath, 'utf-8')
       const combinedContent = await readFile(combinedPath, 'utf-8')
@@ -473,9 +532,11 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_NOCROSS
 
       await provider.runCommand(paneId, 'echo "only stderr" >&2', runId)
+      // Capture log path immediately (before process exits and agent is cleaned up)
+      const stdoutPath = provider.getLogPath(paneId, 'stdout')!
+
       await new Promise((r) => setTimeout(r, 300))
 
-      const stdoutPath = provider.getLogPath(paneId, 'stdout')!
       const stdoutContent = await readFile(stdoutPath, 'utf-8')
 
       // stdout.log should be empty (no stdout output was produced)
@@ -488,11 +549,16 @@ describe('HeadlessProvider log persistence', () => {
 
       // Command that writes to both stdout and stderr
       await provider.runCommand(paneId, 'echo "out line" && echo "err line" >&2', runId)
+      // Capture log paths immediately (before process exits and agent is cleaned up)
+      const stdoutLogPath = provider.getLogPath(paneId, 'stdout')!
+      const stderrLogPath = provider.getLogPath(paneId, 'stderr')!
+      const combinedLogPath = provider.getLogPath(paneId, 'combined')!
+
       await new Promise((r) => setTimeout(r, 300))
 
-      const stdoutContent = await readFile(provider.getLogPath(paneId, 'stdout')!, 'utf-8')
-      const stderrContent = await readFile(provider.getLogPath(paneId, 'stderr')!, 'utf-8')
-      const combinedContent = await readFile(provider.getLogPath(paneId, 'combined')!, 'utf-8')
+      const stdoutContent = await readFile(stdoutLogPath, 'utf-8')
+      const stderrContent = await readFile(stderrLogPath, 'utf-8')
+      const combinedContent = await readFile(combinedLogPath, 'utf-8')
 
       expect(stdoutContent).toContain('out line')
       expect(stderrContent).toContain('err line')
@@ -500,22 +566,25 @@ describe('HeadlessProvider log persistence', () => {
       expect(combinedContent).toContain('err line')
     })
 
-    it('logs persist after process exits', async () => {
+    it('logs persist on disk after process exits and agent is cleaned up', async () => {
       const paneId = 'persist-test__claude'
       const runId = UUID_PERSIST
 
+      // Capture log path immediately after spawn (before process exits)
       await provider.runCommand(paneId, 'echo "persisted output"', runId)
-      // Wait for process to exit
+      const logPath = provider.getLogPath(paneId, 'combined')
+      expect(logPath).toBeDefined()
+
+      // Wait for process to exit and agent to be cleaned up
       await new Promise((r) => setTimeout(r, 500))
 
-      // Verify process has exited
+      // Agent should be removed from map
       const agents = await provider.listAgents()
-      const agent = agents.find((a) => a.name === paneId)
-      expect(agent?.status).toBe('stopped')
+      expect(agents.find((a) => a.name === paneId)).toBeUndefined()
 
-      // Logs should still be readable
-      const logs = await provider.getLogs(paneId)
-      expect(logs).toContain('persisted output')
+      // Log files should still exist on disk
+      const content = await readFile(logPath!, 'utf-8')
+      expect(content).toContain('persisted output')
     })
   })
 
@@ -525,8 +594,7 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_PATH_STDOUT
 
       await provider.runCommand(paneId, 'echo "test"', runId)
-      await new Promise((r) => setTimeout(r, 100))
-
+      // Capture immediately before process exits and agent is cleaned up
       const logPath = provider.getLogPath(paneId, 'stdout')
       expect(logPath).toBe(path.join(tmpDir, '.crewchief/runs', runId, 'logs/stdout.log'))
     })
@@ -536,8 +604,7 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_PATH_STDERR
 
       await provider.runCommand(paneId, 'echo "test"', runId)
-      await new Promise((r) => setTimeout(r, 100))
-
+      // Capture immediately before process exits and agent is cleaned up
       const logPath = provider.getLogPath(paneId, 'stderr')
       expect(logPath).toBe(path.join(tmpDir, '.crewchief/runs', runId, 'logs/stderr.log'))
     })
@@ -547,8 +614,7 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_PATH_DEFAULT
 
       await provider.runCommand(paneId, 'echo "test"', runId)
-      await new Promise((r) => setTimeout(r, 100))
-
+      // Capture immediately before process exits and agent is cleaned up
       const logPath = provider.getLogPath(paneId)
       expect(logPath).toBe(path.join(tmpDir, '.crewchief/runs', runId, 'logs/combined.log'))
     })
@@ -557,8 +623,7 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'no-run__claude'
 
       await provider.runCommand(paneId, 'echo "test"')
-      await new Promise((r) => setTimeout(r, 100))
-
+      // Check immediately before process exits and agent is cleaned up
       expect(provider.getLogPath(paneId)).toBeUndefined()
     })
 
@@ -572,7 +637,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'getlogs-full__claude'
       const runId = UUID_GETLOGS_FULL
 
-      await provider.runCommand(paneId, 'printf "line1\\nline2\\nline3\\n"', runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, 'printf "line1\\nline2\\nline3\\n" && sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       const logs = await provider.getLogs(paneId)
@@ -585,7 +651,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'getlogs-tail__claude'
       const runId = UUID_GETLOGS_TAIL
 
-      await provider.runCommand(paneId, 'printf "line1\\nline2\\nline3\\nline4\\nline5\\n"', runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, 'printf "line1\\nline2\\nline3\\nline4\\nline5\\n" && sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       const logs = await provider.getLogs(paneId, 2)
@@ -599,7 +666,8 @@ describe('HeadlessProvider log persistence', () => {
 
     it('throws error for pane without logs', async () => {
       const paneId = 'no-logs__claude'
-      await provider.runCommand(paneId, 'echo "test"')
+      // Use sleep to keep agent in map so we test the no-runId path, not the missing-agent path
+      await provider.runCommand(paneId, 'sleep 5')
       await new Promise((r) => setTimeout(r, 100))
 
       await expect(provider.getLogs(paneId)).rejects.toThrow('No logs found for pane no-logs__claude')
@@ -614,17 +682,18 @@ describe('HeadlessProvider log persistence', () => {
     it('rejects path traversal in getLogPath when agent has invalid runId', async () => {
       const paneId = 'traversal-test__claude'
       // Directly spawn with an invalid runId to test validation in getLogPath
-      // The runCommand stores the runId, and getLogPath validates it on retrieval
-      await provider.runCommand(paneId, 'echo "test"', UUID_INVALID_TRAVERSAL)
-      await new Promise((r) => setTimeout(r, 200))
+      // Use sleep to keep agent in map for getLogPath test
+      await provider.runCommand(paneId, 'sleep 5', UUID_INVALID_TRAVERSAL)
+      await new Promise((r) => setTimeout(r, 100))
 
       expect(() => provider.getLogPath(paneId)).toThrow('Invalid run ID format')
     })
 
     it('rejects path traversal in getLogs when agent has invalid runId', async () => {
       const paneId = 'traversal-logs-test__claude'
-      await provider.runCommand(paneId, 'echo "test"', UUID_INVALID_TRAVERSAL)
-      await new Promise((r) => setTimeout(r, 200))
+      // Use sleep to keep agent in map for getLogs test
+      await provider.runCommand(paneId, 'sleep 5', UUID_INVALID_TRAVERSAL)
+      await new Promise((r) => setTimeout(r, 100))
 
       await expect(provider.getLogs(paneId)).rejects.toThrow('Invalid run ID format')
     })
@@ -634,8 +703,7 @@ describe('HeadlessProvider log persistence', () => {
       const runId = UUID_PERM
 
       await provider.runCommand(paneId, 'echo "test"', runId)
-      await new Promise((r) => setTimeout(r, 200))
-
+      // Capture immediately before process exits and agent is cleaned up
       const logPath = provider.getLogPath(paneId)
       expect(logPath).toBeDefined()
       expect(logPath).toContain(runId)
@@ -645,7 +713,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'valid-uuid-logs__claude'
       const runId = UUID_PERSIST
 
-      await provider.runCommand(paneId, 'echo "uuid test output"', runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, 'echo "uuid test output" && sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       const logs = await provider.getLogs(paneId)
@@ -664,28 +733,33 @@ describe('HeadlessProvider log persistence', () => {
 
       // runCommand should not throw even when log creation fails
       // (UUID_BLOCKED is a file, so mkdir UUID_BLOCKED/logs will fail)
-      await expect(provider.runCommand(paneId, 'echo "still works"', UUID_BLOCKED)).resolves.not.toThrow()
+      // Use sleep to keep agent in map for verification
+      await expect(provider.runCommand(paneId, 'sleep 5', UUID_BLOCKED)).resolves.not.toThrow()
 
       await new Promise((r) => setTimeout(r, 200))
 
-      // Agent should still be tracked
+      // Agent should still be tracked (process still running)
       const agents = await provider.listAgents()
       const agent = agents.find((a) => a.name === paneId)
       expect(agent).toBeDefined()
     })
 
-    it('works exactly as before when runId is not provided (backward compat)', async () => {
+    it('works when runId is not provided (backward compat, agent cleaned up after exit)', async () => {
       const paneId = 'compat-test__claude'
 
       // Call without runId - exactly matches old signature
       await provider.runCommand(paneId, 'echo "backward compatible"')
-      await new Promise((r) => setTimeout(r, 200))
+      // Agent should be in map initially
+      await new Promise((r) => setTimeout(r, 50))
+      expect(provider.getLogPath(paneId)).toBeUndefined()
 
+      // Wait for exit and cleanup
+      await new Promise((r) => setTimeout(r, 500))
+
+      // Agent should be removed from map after exit
       const agents = await provider.listAgents()
       const agent = agents.find((a) => a.name === paneId)
-      expect(agent).toBeDefined()
-      expect(agent?.status).toBe('stopped')
-      expect(provider.getLogPath(paneId)).toBeUndefined()
+      expect(agent).toBeUndefined()
     })
   })
 
@@ -758,7 +832,8 @@ describe('HeadlessProvider log persistence', () => {
       const lineNumbers = Array.from({ length: 500 }, (_, i) => `log-line-${i + 1}`)
       const printfArg = lineNumbers.join('\\n') + '\\n'
 
-      await provider.runCommand(paneId, `printf "${printfArg}"`, runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, `printf "${printfArg}" && sleep 5`, runId)
       await new Promise((r) => setTimeout(r, 500))
 
       // Request only the last 5 lines via streaming
@@ -778,8 +853,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'stream-empty__claude'
       const runId = UUID_STREAM_EMPTY
 
-      // Spawn a command that produces no output (true exits silently)
-      await provider.runCommand(paneId, 'true', runId)
+      // Use sleep to keep process alive (no output produced, but agent stays in map)
+      await provider.runCommand(paneId, 'sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       // Request last 10 lines from empty file
@@ -791,8 +866,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'stream-small__claude'
       const runId = UUID_STREAM_SMALL
 
-      // Create a file with only 3 lines
-      await provider.runCommand(paneId, 'printf "alpha\\nbeta\\ngamma\\n"', runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, 'printf "alpha\\nbeta\\ngamma\\n" && sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       // Request last 100 lines (more than available)
@@ -806,7 +881,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'stream-order__claude'
       const runId = UUID_STREAM_ORDER
 
-      await provider.runCommand(paneId, 'printf "first\\nsecond\\nthird\\nfourth\\nfifth\\n"', runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, 'printf "first\\nsecond\\nthird\\nfourth\\nfifth\\n" && sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       // Request last 3 lines
@@ -822,7 +898,8 @@ describe('HeadlessProvider log persistence', () => {
       const paneId = 'stream-single__claude'
       const runId = UUID_STREAM_SINGLE
 
-      await provider.runCommand(paneId, 'printf "only-one-line\\n"', runId)
+      // Use sleep to keep process alive so agent stays in map for getLogs()
+      await provider.runCommand(paneId, 'printf "only-one-line\\n" && sleep 5', runId)
       await new Promise((r) => setTimeout(r, 300))
 
       // Request last 5 lines from a single-line file

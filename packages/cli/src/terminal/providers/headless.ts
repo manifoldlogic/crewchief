@@ -249,8 +249,10 @@ export class HeadlessProvider implements TerminalProvider {
         agent.logStreams.stderr.end()
         agent.logStreams.combined.end()
       }
-      // NOTE: Do NOT delete from agents map on exit - keep for listAgents()
-      // to show stopped agents. Cleanup only happens on explicit dispose() call.
+
+      // Cleanup: Remove agent from map to free memory
+      this.agents.delete(paneId)
+      logger.debug(`[${paneId}] Removed from agent map (${this.agents.size} agents remaining)`)
     })
 
     child.on('error', (err) => {

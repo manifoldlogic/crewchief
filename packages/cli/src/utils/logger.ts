@@ -1,6 +1,11 @@
 import chalk from 'chalk'
 
 export const logger = {
+  debug: (...args: unknown[]): void => {
+    if (process.env.DEBUG) {
+      console.log(chalk.gray('[debug]'), ...args)
+    }
+  },
   info: (...args: unknown[]): void => console.log(chalk.blue('[info]'), ...args),
   success: (...args: unknown[]): void => console.log(chalk.green('[ok]'), ...args),
   warn: (...args: unknown[]): void => console.warn(chalk.yellow('[warn]'), ...args),
