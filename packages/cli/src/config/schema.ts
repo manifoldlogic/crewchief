@@ -23,15 +23,25 @@ export const RepositorySchema = z.object({
 
 // Removed: agents command config is not used by current orchestration
 
-// Removed: tmux config no longer supported
-
 export const ITermSchema = z.object({
   sessionName: z.string().default('crewchief'),
 })
 
+export const TmuxSchema = z.object({
+  sessionName: z.string().default('crewchief'),
+})
+
 export const TerminalSchema = z.object({
-  backend: z.enum(['iterm', 'auto']).default('iterm'),
+  backend: z.enum(['iterm', 'tmux', 'headless', 'auto']).default('auto'),
+  maxConcurrentAgents: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .default(20)
+    .describe('Maximum number of concurrent headless agents (prevents resource exhaustion)'),
   iterm: ITermSchema.optional(),
+  tmux: TmuxSchema.optional(),
 })
 
 export const EvaluationSchema = z.object({
