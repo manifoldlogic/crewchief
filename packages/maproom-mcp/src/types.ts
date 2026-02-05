@@ -2,6 +2,8 @@
  * Type definitions for MCP server tools and data structures
  */
 
+import type { ConfidenceSignals } from "./daemon-client/types.js";
+
 /**
  * Parameters for the Open tool
  */
@@ -173,6 +175,9 @@ export interface SearchResult {
 
   /** Optional preview text */
   preview?: string;
+
+  /** Confidence signals for result quality assessment (present when include_confidence=true) */
+  confidence?: ConfidenceSignals;
 
   /** Debug information (only if debug=true) - SEMRANK-2006 */
   score_breakdown?: {

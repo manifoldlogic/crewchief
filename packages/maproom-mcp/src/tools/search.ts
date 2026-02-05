@@ -423,6 +423,11 @@ export async function handleSearchTool(
       // Will be added in Phase 2
     };
 
+    // Add confidence signals if present (MRIMP-4: confidence scoring)
+    if (daemonHit.confidence) {
+      result.confidence = daemonHit.confidence;
+    }
+
     // Add score breakdown if debug mode enabled and fields are present
     if (
       debug &&

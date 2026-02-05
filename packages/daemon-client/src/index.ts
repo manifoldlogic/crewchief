@@ -56,6 +56,7 @@ export type {
   QueryUnderstanding,
   QueryFilters,
   TimingBreakdown,
+  ConfidenceSignals,
   SearchMetadata,
 } from './types.js'
 
