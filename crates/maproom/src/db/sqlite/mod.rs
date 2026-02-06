@@ -3522,6 +3522,20 @@ impl SqliteStore {
         .await
     }
 
+    /// Mark all encoding runs with status='running' as 'failed'.
+    ///
+    /// This is used on startup to clean up stale runs from previous crashes.
+    pub async fn mark_stale_runs_as_failed(&self) -> anyhow::Result<()> {
+        self.write_with_retry(move |conn| {
+            conn.execute(
+                "UPDATE encoding_runs SET status = ?1, finished_at = datetime('now') WHERE status = ?2",
+                params!["failed", "running"],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
     /// Get the currently active (running) encoding run, if any.
     ///
     /// Returns the most recently started running run.

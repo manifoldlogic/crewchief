@@ -202,6 +202,10 @@ mod tests {
     use crate::db::sqlite::SqliteStore;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Counter for unique shared in-memory database names.
+    static TEST_STORE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     /// Helper to create a test store with migrations applied.
     async fn setup_test_store() -> Arc<SqliteStore> {
@@ -1012,5 +1016,145 @@ mod tests {
         // Still works
         let count = store.get_global_chunk_count().await.unwrap();
         assert_eq!(count, 0);
+    }
+
+    // ==================== mark_stale_runs_as_failed - marks multiple stale runs ====================
+    #[tokio::test]
+    async fn test_mark_stale_runs_as_failed_multiple() {
+        let store = setup_test_store().await;
+
+        // Create multiple running runs
+        let run1 = store
+            .create_encoding_run(100, Some("ollama"), Some(768))
+            .await
+            .unwrap();
+        let run2 = store
+            .create_encoding_run(200, Some("openai"), Some(1536))
+            .await
+            .unwrap();
+        let run3 = store.create_encoding_run(50, None, None).await.unwrap();
+
+        // Complete one so it shouldn't be affected
+        store
+            .complete_encoding_run(run3, "completed")
+            .await
+            .unwrap();
+
+        // Mark stale runs as failed
+        store.mark_stale_runs_as_failed().await.unwrap();
+
+        // No active runs should remain
+        let active = store.get_active_encoding_run().await.unwrap();
+        assert!(active.is_none());
+
+        // Verify run1 and run2 are failed, run3 is still completed
+        store
+            .run(move |conn| {
+                let status1: String = conn.query_row(
+                    "SELECT status FROM encoding_runs WHERE id = ?1",
+                    params![run1],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(status1, "failed");
+
+                let status2: String = conn.query_row(
+                    "SELECT status FROM encoding_runs WHERE id = ?1",
+                    params![run2],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(status2, "failed");
+
+                let status3: String = conn.query_row(
+                    "SELECT status FROM encoding_runs WHERE id = ?1",
+                    params![run3],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(status3, "completed");
+
+                // Verify finished_at is set on the failed runs
+                let finished1: Option<String> = conn.query_row(
+                    "SELECT finished_at FROM encoding_runs WHERE id = ?1",
+                    params![run1],
+                    |row| row.get(0),
+                )?;
+                assert!(finished1.is_some());
+
+                let finished2: Option<String> = conn.query_row(
+                    "SELECT finished_at FROM encoding_runs WHERE id = ?1",
+                    params![run2],
+                    |row| row.get(0),
+                )?;
+                assert!(finished2.is_some());
+
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    // ==================== mark_stale_runs_as_failed - no running runs ====================
+    #[tokio::test]
+    async fn test_mark_stale_runs_as_failed_none() {
+        let store = setup_test_store().await;
+
+        // No runs at all - should not error
+        store.mark_stale_runs_as_failed().await.unwrap();
+
+        // Create and complete a run, then call again - should not error
+        let run_id = store.create_encoding_run(100, None, None).await.unwrap();
+        store
+            .complete_encoding_run(run_id, "completed")
+            .await
+            .unwrap();
+        store.mark_stale_runs_as_failed().await.unwrap();
+    }
+
+    // ==================== Test Case #32: concurrent access - no locks ====================
+    #[tokio::test]
+    async fn test_concurrent_read_write_no_locks() {
+        // Use shared in-memory database so concurrent connections share the same data.
+        // Plain `:memory:` creates a separate database per connection in the pool.
+        let counter = TEST_STORE_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let db_name = format!(
+            "file:encprog_concurrent_{}?mode=memory&cache=shared",
+            counter
+        );
+        let store = Arc::new(SqliteStore::connect(&db_name).await.unwrap());
+        let run_id = store
+            .create_encoding_run(1000, Some("ollama"), Some(768))
+            .await
+            .unwrap();
+
+        // Spawn writer task: updates progress repeatedly
+        let writer_store = store.clone();
+        let writer = tokio::spawn(async move {
+            for i in 1..=10 {
+                writer_store
+                    .update_encoding_run_progress(run_id, i * 100, Some(50.0))
+                    .await
+                    .unwrap();
+            }
+        });
+
+        // Spawn reader task: queries active run repeatedly
+        let reader_store = store.clone();
+        let reader = tokio::spawn(async move {
+            for _ in 0..10 {
+                let result = reader_store.get_active_encoding_run().await;
+                assert!(result.is_ok(), "Reader should not encounter lock errors");
+                // The run should exist (still running)
+                let run = result.unwrap();
+                assert!(run.is_some(), "Active run should be found during reads");
+            }
+        });
+
+        // Both tasks should complete without errors
+        let (writer_result, reader_result) = tokio::join!(writer, reader);
+        writer_result.unwrap();
+        reader_result.unwrap();
+
+        // Verify final state
+        let run = store.get_active_encoding_run().await.unwrap().unwrap();
+        assert_eq!(run.chunks_completed, 1000);
     }
 }
