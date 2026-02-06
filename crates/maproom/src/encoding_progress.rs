@@ -4,6 +4,7 @@
 //! query function + response structs + formatters.
 
 use anyhow::Result;
+use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -31,6 +32,54 @@ pub struct ActiveRunInfo {
     pub provider: Option<String>,
     pub dimension: Option<i32>,
     pub estimated_seconds_remaining: Option<f64>,
+    pub elapsed_seconds: Option<f64>,
+}
+
+/// Calculate ETA in seconds based on remaining chunks and throughput.
+///
+/// Returns `None` when `chunks_per_second` is zero, negative, or `None`.
+pub fn calculate_eta(remaining_chunks: i64, chunks_per_second: Option<f64>) -> Option<f64> {
+    match chunks_per_second {
+        Some(rate) if rate > 0.0 => Some(remaining_chunks as f64 / rate),
+        _ => None,
+    }
+}
+
+/// Calculate elapsed seconds from a timestamp string to now.
+///
+/// Accepts SQLite `datetime('now')` format: `YYYY-MM-DD HH:MM:SS`
+/// and RFC 3339 / ISO 8601 format: `YYYY-MM-DDTHH:MM:SS+00:00`.
+pub fn calculate_elapsed_seconds(started_at: &str) -> Result<f64> {
+    // Try SQLite datetime format first: "2026-02-05 14:30:00"
+    let naive = NaiveDateTime::parse_from_str(started_at, "%Y-%m-%d %H:%M:%S")
+        .or_else(|_| {
+            // Try ISO 8601 / RFC 3339 with T separator: "2026-02-05T14:30:00"
+            NaiveDateTime::parse_from_str(started_at, "%Y-%m-%dT%H:%M:%S")
+        })
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to parse timestamp '{}': {}. Expected format: YYYY-MM-DD HH:MM:SS",
+                started_at,
+                e
+            )
+        })?;
+
+    // Treat the parsed time as UTC (SQLite datetime('now') produces UTC)
+    let start_utc = naive.and_utc();
+    let now = Utc::now();
+    let elapsed = now.signed_duration_since(start_utc);
+    Ok(elapsed.num_milliseconds() as f64 / 1000.0)
+}
+
+/// Check if a timestamp is stale (more than 1 hour old).
+///
+/// Returns `true` if the timestamp is more than 3600 seconds in the past,
+/// or if the timestamp cannot be parsed.
+fn is_stale(timestamp: &str) -> bool {
+    match calculate_elapsed_seconds(timestamp) {
+        Ok(elapsed) => elapsed > 3600.0,
+        Err(_) => true, // If we can't parse, treat as stale
+    }
 }
 
 /// Query the database for encoding progress statistics.
@@ -65,24 +114,33 @@ pub async fn get_encoding_progress(
     // Check for active encoding run
     let active_run = match store.get_active_encoding_run().await? {
         Some(run) => {
-            let estimated_seconds_remaining = match run.chunks_per_second {
-                Some(cps) if cps > 0.0 => {
-                    let remaining = (run.total_chunks - run.chunks_completed).max(0) as f64;
-                    Some(remaining / cps)
-                }
-                _ => None,
+            // Staleness detection: if last_batch_at is >1 hour old, don't show as active
+            let stale = match &run.last_batch_at {
+                Some(last_batch) => is_stale(last_batch),
+                // If there's no last_batch_at, check started_at instead
+                None => is_stale(&run.started_at),
             };
 
-            Some(ActiveRunInfo {
-                run_id: run.id,
-                started_at: run.started_at,
-                total_chunks: run.total_chunks,
-                chunks_completed: run.chunks_completed,
-                chunks_per_second: run.chunks_per_second,
-                provider: run.provider,
-                dimension: run.dimension,
-                estimated_seconds_remaining,
-            })
+            if stale {
+                None
+            } else {
+                let remaining = (run.total_chunks - run.chunks_completed).max(0);
+                let estimated_seconds_remaining = calculate_eta(remaining, run.chunks_per_second);
+
+                let elapsed_seconds = calculate_elapsed_seconds(&run.started_at).ok();
+
+                Some(ActiveRunInfo {
+                    run_id: run.id,
+                    started_at: run.started_at,
+                    total_chunks: run.total_chunks,
+                    chunks_completed: run.chunks_completed,
+                    chunks_per_second: run.chunks_per_second,
+                    provider: run.provider,
+                    dimension: run.dimension,
+                    estimated_seconds_remaining,
+                    elapsed_seconds,
+                })
+            }
         }
         None => None,
     };
@@ -163,23 +221,48 @@ pub fn format_text(response: &EncodingProgressResponse) -> String {
     match &response.active_run {
         Some(run) => {
             output.push_str("\nActive Run:\n");
-            if let Some(ref provider) = run.provider {
-                output.push_str(&format!("  Provider: {}\n", provider));
+
+            // Provider line: "ollama (1024 dimensions)" or just provider or just dimension
+            match (&run.provider, run.dimension) {
+                (Some(provider), Some(dim)) => {
+                    output.push_str(&format!(
+                        "  Provider:        {} ({} dimensions)\n",
+                        provider, dim
+                    ));
+                }
+                (Some(provider), None) => {
+                    output.push_str(&format!("  Provider:        {}\n", provider));
+                }
+                (None, Some(dim)) => {
+                    output.push_str(&format!("  Provider:        ({} dimensions)\n", dim));
+                }
+                (None, None) => {}
             }
-            if let Some(dimension) = run.dimension {
-                output.push_str(&format!("  Dimension: {}\n", dimension));
+
+            output.push_str(&format!("  Started:         {}\n", run.started_at));
+
+            if let Some(elapsed) = run.elapsed_seconds {
+                output.push_str(&format!(
+                    "  Elapsed:         {}\n",
+                    format_duration(elapsed)
+                ));
             }
-            output.push_str(&format!("  Started: {}\n", run.started_at));
+
             output.push_str(&format!(
-                "  Progress: {}/{}\n",
+                "  Batch progress:  {} / {} chunks\n",
                 format_number(run.chunks_completed),
                 format_number(run.total_chunks)
             ));
+
             if let Some(cps) = run.chunks_per_second {
-                output.push_str(&format!("  Throughput: {:.1} chunks/sec\n", cps));
+                output.push_str(&format!("  Throughput:      {:.1} chunks/s\n", cps));
             }
+
             if let Some(eta_secs) = run.estimated_seconds_remaining {
-                output.push_str(&format!("  ETA: {}\n", format_duration(eta_secs)));
+                output.push_str(&format!(
+                    "  ETA:             {} remaining\n",
+                    format_duration(eta_secs)
+                ));
             }
         }
         None => {
@@ -786,15 +869,18 @@ mod tests {
                 provider: Some("ollama".to_string()),
                 dimension: Some(768),
                 estimated_seconds_remaining: Some(50.0),
+                elapsed_seconds: Some(135.0),
             }),
         };
 
         let output = format_text(&response);
         assert!(output.contains("Active Run:"));
-        assert!(output.contains("Provider: ollama"));
-        assert!(output.contains("Started: 2026-01-01 00:00:00"));
-        assert!(output.contains("Throughput: 10.0 chunks/sec"));
-        assert!(output.contains("ETA: ~50s"));
+        assert!(output.contains("Provider:        ollama (768 dimensions)"));
+        assert!(output.contains("Started:         2026-01-01 00:00:00"));
+        assert!(output.contains("Elapsed:         ~2m 15s"));
+        assert!(output.contains("Batch progress:  500 / 1,000 chunks"));
+        assert!(output.contains("Throughput:      10.0 chunks/s"));
+        assert!(output.contains("ETA:             ~50s remaining"));
     }
 
     // ==================== Test Case #18: format_text - zero chunks ====================
@@ -854,6 +940,7 @@ mod tests {
                 provider: Some("ollama".to_string()),
                 dimension: Some(768),
                 estimated_seconds_remaining: Some(5.0),
+                elapsed_seconds: Some(120.0),
             }),
         };
 
@@ -960,6 +1047,7 @@ mod tests {
             provider: None,
             dimension: None,
             estimated_seconds_remaining: None, // Should not be computed with 0 throughput
+            elapsed_seconds: None,
         };
         // Verified the logic: when chunks_per_second is 0.0, cps > 0.0 is false, so ETA = None
         assert!(run.estimated_seconds_remaining.is_none());
@@ -1156,5 +1244,298 @@ mod tests {
         // Verify final state
         let run = store.get_active_encoding_run().await.unwrap().unwrap();
         assert_eq!(run.chunks_completed, 1000);
+    }
+
+    // ==================== Test Case #22: ETA with zero throughput returns None ====================
+    #[test]
+    fn test_calculate_eta_zero_throughput() {
+        assert_eq!(calculate_eta(100, Some(0.0)), None);
+        assert_eq!(calculate_eta(100, None), None);
+        assert_eq!(calculate_eta(100, Some(-1.0)), None);
+    }
+
+    // ==================== Test Case #23: ETA with positive throughput calculates correctly ====================
+    #[test]
+    fn test_calculate_eta_positive_throughput() {
+        // 100 remaining / 10 per sec = 10 seconds
+        let eta = calculate_eta(100, Some(10.0)).unwrap();
+        assert!((eta - 10.0).abs() < f64::EPSILON);
+
+        // 500 remaining / 25.0 per sec = 20 seconds
+        let eta = calculate_eta(500, Some(25.0)).unwrap();
+        assert!((eta - 20.0).abs() < f64::EPSILON);
+
+        // 0 remaining = 0 seconds
+        let eta = calculate_eta(0, Some(10.0)).unwrap();
+        assert!((eta - 0.0).abs() < f64::EPSILON);
+    }
+
+    // ==================== Test Case #24: ETA with very fast throughput (<1s) ====================
+    #[test]
+    fn test_calculate_eta_very_fast_throughput() {
+        // 10 remaining / 1000 per sec = 0.01 seconds
+        let eta = calculate_eta(10, Some(1000.0)).unwrap();
+        assert!((eta - 0.01).abs() < 1e-10);
+
+        // 1 remaining / 10000 per sec = 0.0001 seconds
+        let eta = calculate_eta(1, Some(10000.0)).unwrap();
+        assert!((eta - 0.0001).abs() < 1e-10);
+    }
+
+    // ==================== Test Case #25: ETA with very slow throughput (hours) ====================
+    #[test]
+    fn test_calculate_eta_very_slow_throughput() {
+        // 10000 remaining / 0.5 per sec = 20000 seconds (~5.5 hours)
+        let eta = calculate_eta(10000, Some(0.5)).unwrap();
+        assert!((eta - 20000.0).abs() < f64::EPSILON);
+
+        // 1000000 remaining / 0.1 per sec = 10000000 seconds (~115 days)
+        let eta = calculate_eta(1000000, Some(0.1)).unwrap();
+        assert!((eta - 10000000.0).abs() < 1e-6);
+    }
+
+    // ==================== Elapsed time calculation tests ====================
+    #[test]
+    fn test_calculate_elapsed_seconds_sqlite_format() {
+        // Use a timestamp very close to now to get a small positive result
+        let now = Utc::now();
+        let ts = now.format("%Y-%m-%d %H:%M:%S").to_string();
+        let elapsed = calculate_elapsed_seconds(&ts).unwrap();
+        // Should be very close to 0 (within 1 second)
+        assert!(elapsed >= 0.0 && elapsed < 2.0, "elapsed was {}", elapsed);
+    }
+
+    #[test]
+    fn test_calculate_elapsed_seconds_iso8601_format() {
+        let now = Utc::now();
+        let ts = now.format("%Y-%m-%dT%H:%M:%S").to_string();
+        let elapsed = calculate_elapsed_seconds(&ts).unwrap();
+        assert!(elapsed >= 0.0 && elapsed < 2.0, "elapsed was {}", elapsed);
+    }
+
+    #[test]
+    fn test_calculate_elapsed_seconds_known_past() {
+        // A timestamp 60 seconds in the past
+        let past = Utc::now() - chrono::Duration::seconds(60);
+        let ts = past.format("%Y-%m-%d %H:%M:%S").to_string();
+        let elapsed = calculate_elapsed_seconds(&ts).unwrap();
+        // Should be approximately 60 seconds (within 2 seconds tolerance)
+        assert!(
+            (elapsed - 60.0).abs() < 2.0,
+            "elapsed was {}, expected ~60",
+            elapsed
+        );
+    }
+
+    #[test]
+    fn test_calculate_elapsed_seconds_invalid_format() {
+        let result = calculate_elapsed_seconds("not-a-timestamp");
+        assert!(result.is_err());
+    }
+
+    // ==================== Staleness detection tests ====================
+    #[test]
+    fn test_is_stale_recent_timestamp() {
+        let now = Utc::now();
+        let ts = now.format("%Y-%m-%d %H:%M:%S").to_string();
+        assert!(!is_stale(&ts), "Recent timestamp should not be stale");
+    }
+
+    #[test]
+    fn test_is_stale_old_timestamp() {
+        // 2 hours ago
+        let old = Utc::now() - chrono::Duration::hours(2);
+        let ts = old.format("%Y-%m-%d %H:%M:%S").to_string();
+        assert!(is_stale(&ts), "2-hour old timestamp should be stale");
+    }
+
+    #[test]
+    fn test_is_stale_just_under_threshold() {
+        // 59 minutes ago - should not be stale
+        let recent = Utc::now() - chrono::Duration::minutes(59);
+        let ts = recent.format("%Y-%m-%d %H:%M:%S").to_string();
+        assert!(
+            !is_stale(&ts),
+            "59-minute old timestamp should not be stale"
+        );
+    }
+
+    #[test]
+    fn test_is_stale_just_over_threshold() {
+        // 61 minutes ago - should be stale
+        let old = Utc::now() - chrono::Duration::minutes(61);
+        let ts = old.format("%Y-%m-%d %H:%M:%S").to_string();
+        assert!(is_stale(&ts), "61-minute old timestamp should be stale");
+    }
+
+    #[test]
+    fn test_is_stale_invalid_timestamp() {
+        assert!(
+            is_stale("invalid"),
+            "Invalid timestamp should be treated as stale"
+        );
+    }
+
+    // ==================== Staleness in get_encoding_progress ====================
+    #[tokio::test]
+    async fn test_encoding_progress_stale_run_hidden() {
+        let store = setup_test_store().await;
+        setup_test_data(&store, "test-repo", 100).await;
+        let run_id = store
+            .create_encoding_run(100, Some("ollama"), Some(768))
+            .await
+            .unwrap();
+
+        // Manually set last_batch_at to 2 hours ago to simulate staleness
+        let two_hours_ago = (Utc::now() - chrono::Duration::hours(2))
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        let ts = two_hours_ago.clone();
+        store
+            .run(move |conn| {
+                conn.execute(
+                    "UPDATE encoding_runs SET last_batch_at = ?1 WHERE id = ?2",
+                    params![ts, run_id],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let progress = get_encoding_progress(store, None).await.unwrap();
+        // Stale run should not appear as active
+        assert!(
+            progress.active_run.is_none(),
+            "Stale run (>1 hour old) should not be shown as active"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_encoding_progress_fresh_run_shown() {
+        let store = setup_test_store().await;
+        setup_test_data(&store, "test-repo", 100).await;
+        let run_id = store
+            .create_encoding_run(100, Some("ollama"), Some(768))
+            .await
+            .unwrap();
+
+        // Update progress so last_batch_at is set to now
+        store
+            .update_encoding_run_progress(run_id, 50, Some(10.0))
+            .await
+            .unwrap();
+
+        let progress = get_encoding_progress(store, None).await.unwrap();
+        assert!(
+            progress.active_run.is_some(),
+            "Fresh run should be shown as active"
+        );
+    }
+
+    // ==================== format_text - active run with elapsed and new format ====================
+    #[test]
+    fn test_format_text_active_run_full_format() {
+        let response = EncodingProgressResponse {
+            total_chunks: 2226,
+            total_embeddings: 1226,
+            percentage: 55.1,
+            chunks_remaining: 1000,
+            repo_filter: None,
+            active_run: Some(ActiveRunInfo {
+                run_id: 1,
+                started_at: "2026-02-05 14:30:00".to_string(),
+                total_chunks: 2226,
+                chunks_completed: 1226,
+                chunks_per_second: Some(22.3),
+                provider: Some("ollama".to_string()),
+                dimension: Some(1024),
+                estimated_seconds_remaining: Some(44.8),
+                elapsed_seconds: Some(135.0),
+            }),
+        };
+
+        let output = format_text(&response);
+        assert!(output.contains("Active Run:"));
+        assert!(output.contains("Provider:        ollama (1024 dimensions)"));
+        assert!(output.contains("Started:         2026-02-05 14:30:00"));
+        assert!(output.contains("Elapsed:         ~2m 15s"));
+        assert!(output.contains("Batch progress:  1,226 / 2,226 chunks"));
+        assert!(output.contains("Throughput:      22.3 chunks/s"));
+        assert!(output.contains("ETA:             ~45s remaining"));
+    }
+
+    // ==================== format_text - provider without dimension ====================
+    #[test]
+    fn test_format_text_provider_without_dimension() {
+        let response = EncodingProgressResponse {
+            total_chunks: 100,
+            total_embeddings: 50,
+            percentage: 50.0,
+            chunks_remaining: 50,
+            repo_filter: None,
+            active_run: Some(ActiveRunInfo {
+                run_id: 1,
+                started_at: "2026-01-01 00:00:00".to_string(),
+                total_chunks: 100,
+                chunks_completed: 50,
+                chunks_per_second: None,
+                provider: Some("openai".to_string()),
+                dimension: None,
+                estimated_seconds_remaining: None,
+                elapsed_seconds: None,
+            }),
+        };
+
+        let output = format_text(&response);
+        assert!(output.contains("Provider:        openai"));
+        assert!(!output.contains("dimensions"));
+        // No throughput or ETA when chunks_per_second is None
+        assert!(!output.contains("Throughput:"));
+        assert!(!output.contains("ETA:"));
+    }
+
+    // ==================== format_json - includes elapsed_seconds ====================
+    #[test]
+    fn test_format_json_includes_elapsed_seconds() {
+        let response = EncodingProgressResponse {
+            total_chunks: 100,
+            total_embeddings: 50,
+            percentage: 50.0,
+            chunks_remaining: 50,
+            repo_filter: None,
+            active_run: Some(ActiveRunInfo {
+                run_id: 1,
+                started_at: "2026-01-01 00:00:00".to_string(),
+                total_chunks: 100,
+                chunks_completed: 50,
+                chunks_per_second: Some(10.0),
+                provider: Some("ollama".to_string()),
+                dimension: Some(768),
+                estimated_seconds_remaining: Some(5.0),
+                elapsed_seconds: Some(120.5),
+            }),
+        };
+
+        let json_str = format_json(&response).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed["active_run"]["elapsed_seconds"], 120.5);
+        assert_eq!(parsed["active_run"]["estimated_seconds_remaining"], 5.0);
+    }
+
+    // ==================== format_duration edge cases for ETA display ====================
+    #[test]
+    fn test_format_duration_sub_second() {
+        // Very fast ETA rounds to 0
+        assert_eq!(format_duration(0.01), "~0s");
+        assert_eq!(format_duration(0.4), "~0s");
+        assert_eq!(format_duration(0.5), "~1s");
+    }
+
+    #[test]
+    fn test_format_duration_very_long() {
+        // 10 hours
+        assert_eq!(format_duration(36000.0), "~10h");
+        // 25 hours 30 minutes
+        assert_eq!(format_duration(91800.0), "~25h 30m");
     }
 }
