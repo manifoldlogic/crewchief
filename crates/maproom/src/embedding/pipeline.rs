@@ -228,6 +228,11 @@ impl EmbeddingPipeline {
             self.provider_name, self.dimension
         );
 
+        // PROGRESS TRACKING: Mark stale runs as failed before starting new run
+        if let Err(e) = store.mark_stale_runs_as_failed().await {
+            warn!("Failed to mark stale encoding runs as failed: {}", e);
+        }
+
         // STEP 1: Copy existing embeddings from code_embeddings table
         // This is the critical missing step from BLOBSHA infrastructure
         match self.copy_existing_embeddings(store).await {
@@ -258,6 +263,86 @@ impl EmbeddingPipeline {
 
         info!("Found {} chunks needing embeddings", chunks.len());
 
+        // PROGRESS TRACKING: Create encoding run record
+        let run_id: Option<i64> = match store
+            .create_encoding_run(
+                chunks.len() as i64,
+                Some(&self.provider_name),
+                Some(self.dimension as i32),
+            )
+            .await
+        {
+            Ok(id) => {
+                info!("Created encoding run {} for {} chunks", id, chunks.len());
+                Some(id)
+            }
+            Err(e) => {
+                warn!("Failed to create encoding run record: {}", e);
+                None
+            }
+        };
+
+        // Run the main processing loop, capturing any fatal error so we can
+        // mark the encoding run as "failed" before propagating it.
+        let processing_result = self
+            .run_batch_loop(
+                store,
+                &chunks,
+                &mut stats,
+                progress_callback,
+                start_time,
+                run_id,
+            )
+            .await;
+
+        // Gather final metrics regardless of success/failure
+        let cache_metrics = self.service.cache_metrics().await;
+        stats.cache_hit_rate = cache_metrics.hit_rate();
+
+        // Get provider metrics if available
+        if let Some(provider_metrics) = self.service.provider_metrics() {
+            stats.total_tokens = provider_metrics.total_tokens;
+            stats.estimated_cost_usd = provider_metrics.estimated_cost_usd;
+            stats.api_calls = provider_metrics.total_requests as usize;
+        }
+
+        stats.duration_secs = start_time.elapsed().as_secs_f64();
+
+        // PROGRESS TRACKING: Mark encoding run as completed or failed
+        if let Some(id) = run_id {
+            let final_status = if processing_result.is_ok() {
+                "completed"
+            } else {
+                "failed"
+            };
+            if let Err(e) = store.complete_encoding_run(id, final_status).await {
+                warn!("Failed to mark encoding run as {}: {}", final_status, e);
+            }
+        }
+
+        // Propagate fatal errors after marking the run
+        processing_result?;
+
+        info!("Pipeline completed");
+        info!("{}", stats.summary());
+
+        Ok(stats)
+    }
+
+    /// Run the batch processing loop for embedding generation.
+    ///
+    /// This is extracted from `run_with_progress` so that any fatal error can be
+    /// caught by the caller and the encoding run can be marked as "failed" before
+    /// the error is propagated.
+    async fn run_batch_loop(
+        &self,
+        store: &SqliteStore,
+        chunks: &[ChunkRow],
+        stats: &mut PipelineStats,
+        progress_callback: Option<&dyn Fn(usize, usize)>,
+        start_time: std::time::Instant,
+        run_id: Option<i64>,
+    ) -> Result<()> {
         // Process chunks in batches
         for (batch_idx, batch) in chunks.chunks(self.config.batch_size).enumerate() {
             let batch_num = batch_idx + 1;
@@ -285,7 +370,7 @@ impl EmbeddingPipeline {
             }
 
             // Generate embeddings for batch
-            match self.process_batch(store, batch, &mut stats).await {
+            match self.process_batch(store, batch, stats).await {
                 Ok(_) => {
                     debug!("Batch {} completed successfully", batch_num);
                 }
@@ -313,25 +398,36 @@ impl EmbeddingPipeline {
                     std::cmp::min(batch_num * self.config.batch_size, chunks.len());
                 callback(chunks_processed, chunks.len());
             }
+
+            // PROGRESS TRACKING: Update encoding run progress after each batch
+            if let Some(id) = run_id {
+                let chunks_completed =
+                    std::cmp::min(batch_num * self.config.batch_size, chunks.len()) as i64;
+                let elapsed_secs = start_time.elapsed().as_secs_f64();
+                let chunks_per_second = if elapsed_secs > 0.0 {
+                    chunks_completed as f64 / elapsed_secs
+                } else {
+                    0.0
+                };
+                if let Err(e) = store
+                    .update_encoding_run_progress(id, chunks_completed, Some(chunks_per_second))
+                    .await
+                {
+                    warn!("Failed to update encoding run progress: {}", e);
+                }
+            }
         }
 
-        // Gather final metrics
-        let cache_metrics = self.service.cache_metrics().await;
-        stats.cache_hit_rate = cache_metrics.hit_rate();
-
-        // Get provider metrics if available
-        if let Some(provider_metrics) = self.service.provider_metrics() {
-            stats.total_tokens = provider_metrics.total_tokens;
-            stats.estimated_cost_usd = provider_metrics.estimated_cost_usd;
-            stats.api_calls = provider_metrics.total_requests as usize;
+        // If every chunk failed, treat the entire run as a fatal error so the
+        // encoding run is marked as "failed" rather than "completed".
+        if stats.failed_chunks > 0 && stats.failed_chunks >= stats.total_chunks {
+            anyhow::bail!(
+                "All {} chunks failed during embedding generation",
+                stats.total_chunks
+            );
         }
 
-        stats.duration_secs = start_time.elapsed().as_secs_f64();
-
-        info!("Pipeline completed");
-        info!("{}", stats.summary());
-
-        Ok(stats)
+        Ok(())
     }
 
     /// Fetch chunks that need embeddings.
@@ -862,6 +958,351 @@ mod tests {
         assert!(err_msg.contains("768"));
         assert!(err_msg.contains("1536"));
         assert!(err_msg.contains("ollama"));
+    }
+
+    // ========================================================================
+    // Tests for pipeline progress instrumentation - ENCPROG.2002
+    // ========================================================================
+
+    use crate::db::sqlite::SqliteStore;
+    use crate::db::{ChunkRecord, FileRecord};
+    use rusqlite::params;
+
+    /// Helper to create a test store with migrations applied.
+    async fn setup_test_store() -> SqliteStore {
+        SqliteStore::connect(":memory:").await.unwrap()
+    }
+
+    /// Helper to create test data: a repo, worktree, commit, file, and N chunks.
+    async fn setup_pipeline_test_data(store: &SqliteStore, num_chunks: usize) {
+        let repo_id = store
+            .get_or_create_repo("test-repo", "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
+
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash_test".to_string(),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        for i in 0..num_chunks {
+            let chunk = ChunkRecord {
+                file_id,
+                worktree_id,
+                blob_sha: format!("blob_test_{}", i),
+                symbol_name: Some(format!("fn_{}", i)),
+                kind: "function".to_string(),
+                signature: Some(format!("fn fn_{}()", i)),
+                docstring: Some(format!("Test function {}", i)),
+                start_line: (i * 10 + 1) as i32,
+                end_line: (i * 10 + 10) as i32,
+                preview: format!("fn fn_{}() {{}}", i),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            };
+            store.insert_chunk(&chunk).await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_progress_persisted_during_run() {
+        // Setup: create store with test chunks
+        let store = setup_test_store().await;
+        setup_pipeline_test_data(&store, 5).await;
+
+        // Create pipeline with small batch size so we get multiple batches
+        let service = create_test_service(1536, "openai");
+        let config = PipelineConfig {
+            batch_size: 2,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        // Run the pipeline
+        let stats = pipeline.run(&store).await.unwrap();
+        assert_eq!(stats.total_chunks, 5);
+
+        // Verify: encoding run was created and completed
+        // The run should be completed (not active anymore)
+        let active_run = store.get_active_encoding_run().await.unwrap();
+        assert!(active_run.is_none(), "Run should be completed, not active");
+
+        // Query the encoding_runs table directly to verify the record
+        store
+            .run(move |conn| {
+                let (status, total_chunks, chunks_completed, provider, dimension, finished_at): (
+                    String,
+                    i64,
+                    i64,
+                    Option<String>,
+                    Option<i32>,
+                    Option<String>,
+                ) = conn.query_row(
+                    "SELECT status, total_chunks, chunks_completed, provider, dimension, finished_at FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+                )?;
+
+                assert_eq!(status, "completed");
+                assert_eq!(total_chunks, 5);
+                // chunks_completed should be 5 (all chunks processed across 3 batches: 2+2+1)
+                assert_eq!(chunks_completed, 5);
+                assert_eq!(provider, Some("openai".to_string()));
+                assert_eq!(dimension, Some(1536));
+                assert!(finished_at.is_some(), "finished_at should be set");
+
+                // Verify chunks_per_second was set
+                let cps: Option<f64> = conn.query_row(
+                    "SELECT chunks_per_second FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert!(cps.is_some(), "chunks_per_second should have been set");
+                assert!(cps.unwrap() > 0.0, "chunks_per_second should be positive");
+
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_stale_runs_cleaned_on_startup() {
+        // Setup: create store and insert a "stale" running run
+        let store = setup_test_store().await;
+        let stale_run_id = store
+            .create_encoding_run(500, Some("ollama"), Some(768))
+            .await
+            .unwrap();
+
+        // Verify it's active
+        let active = store.get_active_encoding_run().await.unwrap();
+        assert!(active.is_some(), "Stale run should be active initially");
+        assert_eq!(active.unwrap().id, stale_run_id);
+
+        // Create some test chunks so the pipeline has work to do
+        setup_pipeline_test_data(&store, 2).await;
+
+        // Run the pipeline - it should mark stale runs as failed first
+        let service = create_test_service(1536, "openai");
+        let config = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+        let _stats = pipeline.run(&store).await.unwrap();
+
+        // Verify: the stale run should now be marked as failed
+        store
+            .run(move |conn| {
+                let status: String = conn.query_row(
+                    "SELECT status FROM encoding_runs WHERE id = ?1",
+                    params![stale_run_id],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(status, "failed", "Stale run should be marked as failed");
+
+                // Also verify a new run was created and completed
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM encoding_runs WHERE status = 'completed'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(
+                    count, 1,
+                    "There should be exactly one completed run (the new pipeline run)"
+                );
+
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_no_run_created_when_no_chunks() {
+        // Setup: create store with no chunks
+        let store = setup_test_store().await;
+
+        let service = create_test_service(1536, "openai");
+        let config = PipelineConfig::default();
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        // Run the pipeline - should return early with no encoding run created
+        let stats = pipeline.run(&store).await.unwrap();
+        assert_eq!(stats.total_chunks, 0);
+
+        // Verify: no encoding run was created
+        store
+            .run(move |conn| {
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM encoding_runs", [], |row| row.get(0))?;
+                assert_eq!(
+                    count, 0,
+                    "No encoding run should be created when there are no chunks"
+                );
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_progress_tracks_provider_and_dimension() {
+        let store = setup_test_store().await;
+        setup_pipeline_test_data(&store, 3).await;
+
+        // Use a specific provider and dimension
+        let service = create_test_service(768, "ollama");
+        let config = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+        let _stats = pipeline.run(&store).await.unwrap();
+
+        // Verify provider and dimension were persisted
+        store
+            .run(move |conn| {
+                let (provider, dimension): (Option<String>, Option<i32>) = conn.query_row(
+                    "SELECT provider, dimension FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )?;
+                assert_eq!(provider, Some("ollama".to_string()));
+                assert_eq!(dimension, Some(768));
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    // Mock provider that always fails - used to test error handling
+    struct FailingProvider {
+        dimension: usize,
+        name: &'static str,
+    }
+
+    #[async_trait]
+    impl EmbeddingProvider for FailingProvider {
+        async fn embed(&self, _text: String) -> Result<Vec<f32>, EmbeddingError> {
+            Err(EmbeddingError::Other(
+                "simulated embedding failure".to_string(),
+            ))
+        }
+
+        async fn embed_batch(&self, _texts: Vec<String>) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+            Err(EmbeddingError::Other(
+                "simulated batch embedding failure".to_string(),
+            ))
+        }
+
+        fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        fn provider_name(&self) -> &'static str {
+            self.name
+        }
+
+        fn metrics(&self) -> Option<ProviderMetrics> {
+            None
+        }
+    }
+
+    fn create_failing_service(dimension: usize, name: &'static str) -> EmbeddingService {
+        let provider = Box::new(FailingProvider { dimension, name });
+        let cache_config = CacheConfig {
+            max_entries: 100,
+            ttl_seconds: 3600,
+            enable_metrics: true,
+        };
+        let cache = EmbeddingCache::new(cache_config).unwrap();
+        EmbeddingService::new(provider, Arc::new(cache))
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_run_marks_encoding_run_as_failed_on_error() {
+        // Setup: create store with test chunks
+        let store = setup_test_store().await;
+        setup_pipeline_test_data(&store, 3).await;
+
+        // Create pipeline with a provider that always fails
+        let service = create_failing_service(1536, "failing-provider");
+        let config = PipelineConfig {
+            batch_size: 2,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        // Run the pipeline - it should return an error since all batches fail
+        let result = pipeline.run(&store).await;
+        assert!(
+            result.is_err(),
+            "Pipeline should return an error when all chunks fail"
+        );
+
+        // Verify: encoding run should be marked as "failed", NOT left as "running"
+        let active_run = store.get_active_encoding_run().await.unwrap();
+        assert!(
+            active_run.is_none(),
+            "No run should be active (running) after a failure"
+        );
+
+        // Query the encoding_runs table directly to verify the record
+        store
+            .run(move |conn| {
+                let (status, total_chunks, finished_at): (String, i64, Option<String>) =
+                    conn.query_row(
+                        "SELECT status, total_chunks, finished_at FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                        [],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                    )?;
+
+                assert_eq!(status, "failed", "Encoding run should be marked as 'failed'");
+                assert_eq!(total_chunks, 3);
+                assert!(
+                    finished_at.is_some(),
+                    "finished_at should be set even on failure"
+                );
+
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 
     // ========================================================================
