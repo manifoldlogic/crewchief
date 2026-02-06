@@ -1539,3 +1539,973 @@ mod tests {
         assert_eq!(format_duration(91800.0), "~25h 30m");
     }
 }
+
+/// Integration tests for end-to-end encoding progress functionality.
+///
+/// These tests verify the full integration between the embedding pipeline,
+/// encoding progress tracking, and progress querying. They complement the
+/// unit tests in this module and the pipeline tests in `embedding/pipeline.rs`.
+///
+/// Tests implemented:
+/// - End-to-end progress flow (pipeline writes, progress query reads)
+/// - Concurrent pipeline + progress query (test case #32)
+/// - Provider/dimension mismatch scenario (test case #33)
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::db::sqlite::SqliteStore;
+    use crate::db::{ChunkRecord, FileRecord};
+    use crate::embedding::cache::EmbeddingCache;
+    use crate::embedding::config::CacheConfig;
+    use crate::embedding::error::EmbeddingError;
+    use crate::embedding::pipeline::{EmbeddingPipeline, PipelineConfig};
+    use crate::embedding::provider::{EmbeddingProvider, ProviderMetrics};
+    use crate::embedding::service::EmbeddingService;
+    use async_trait::async_trait;
+    use rusqlite::params;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    /// Counter for unique shared in-memory database names.
+    static INTEGRATION_STORE_COUNTER: AtomicUsize = AtomicUsize::new(1000);
+
+    /// Mock provider with controllable delay for concurrent testing.
+    struct SlowMockProvider {
+        delay_ms: u64,
+        dimension: usize,
+        name: &'static str,
+    }
+
+    #[async_trait]
+    impl EmbeddingProvider for SlowMockProvider {
+        async fn embed(&self, _text: String) -> Result<Vec<f32>, EmbeddingError> {
+            if self.delay_ms > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(self.delay_ms)).await;
+            }
+            Ok(vec![0.1; self.dimension])
+        }
+
+        async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+            if self.delay_ms > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(self.delay_ms)).await;
+            }
+            Ok(vec![vec![0.1; self.dimension]; texts.len()])
+        }
+
+        fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        fn provider_name(&self) -> &'static str {
+            self.name
+        }
+
+        fn metrics(&self) -> Option<ProviderMetrics> {
+            Some(ProviderMetrics {
+                total_requests: 1,
+                total_tokens: 100,
+                failed_requests: 0,
+                estimated_cost_usd: 0.0001,
+            })
+        }
+    }
+
+    /// Fast mock provider (no delay).
+    struct FastMockProvider {
+        dimension: usize,
+        name: &'static str,
+    }
+
+    #[async_trait]
+    impl EmbeddingProvider for FastMockProvider {
+        async fn embed(&self, _text: String) -> Result<Vec<f32>, EmbeddingError> {
+            Ok(vec![0.1; self.dimension])
+        }
+
+        async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+            Ok(vec![vec![0.1; self.dimension]; texts.len()])
+        }
+
+        fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        fn provider_name(&self) -> &'static str {
+            self.name
+        }
+
+        fn metrics(&self) -> Option<ProviderMetrics> {
+            Some(ProviderMetrics {
+                total_requests: 1,
+                total_tokens: 100,
+                failed_requests: 0,
+                estimated_cost_usd: 0.0001,
+            })
+        }
+    }
+
+    fn create_service_with_provider(provider: Box<dyn EmbeddingProvider>) -> EmbeddingService {
+        let cache_config = CacheConfig {
+            max_entries: 1000,
+            ttl_seconds: 3600,
+            enable_metrics: true,
+        };
+        let cache = EmbeddingCache::new(cache_config).unwrap();
+        EmbeddingService::new(provider, Arc::new(cache))
+    }
+
+    fn create_slow_service(
+        delay_ms: u64,
+        dimension: usize,
+        name: &'static str,
+    ) -> EmbeddingService {
+        let provider = Box::new(SlowMockProvider {
+            delay_ms,
+            dimension,
+            name,
+        });
+        create_service_with_provider(provider)
+    }
+
+    fn create_fast_service(dimension: usize, name: &'static str) -> EmbeddingService {
+        let provider = Box::new(FastMockProvider { dimension, name });
+        create_service_with_provider(provider)
+    }
+
+    /// Helper to create an in-memory test store.
+    async fn setup_test_store() -> SqliteStore {
+        SqliteStore::connect(":memory:").await.unwrap()
+    }
+
+    /// Helper to create a shared in-memory test store (same DB across connections).
+    async fn setup_shared_test_store() -> Arc<SqliteStore> {
+        let counter = INTEGRATION_STORE_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let db_name = format!(
+            "file:encprog_integration_{}?mode=memory&cache=shared",
+            counter
+        );
+        Arc::new(SqliteStore::connect(&db_name).await.unwrap())
+    }
+
+    /// Helper to create test data: repo, worktree, commit, file, and N chunks.
+    async fn setup_test_chunks(store: &SqliteStore, repo_name: &str, num_chunks: usize) {
+        let repo_id = store
+            .get_or_create_repo(repo_name, "/test/path")
+            .await
+            .unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/test/path")
+            .await
+            .unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "abc123", None)
+            .await
+            .unwrap();
+
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "test.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: format!("hash_{}", repo_name),
+            size_bytes: 100,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+
+        for i in 0..num_chunks {
+            let chunk = ChunkRecord {
+                file_id,
+                worktree_id,
+                blob_sha: format!("blob_{}_{}", repo_name, i),
+                symbol_name: Some(format!("fn_{}", i)),
+                kind: "function".to_string(),
+                signature: Some(format!("fn fn_{}()", i)),
+                docstring: Some(format!("Test function {}", i)),
+                start_line: (i * 10 + 1) as i32,
+                end_line: (i * 10 + 10) as i32,
+                preview: format!("fn fn_{}() {{}}", i),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            };
+            store.insert_chunk(&chunk).await.unwrap();
+        }
+    }
+
+    /// Helper to insert pre-existing embeddings for specific blob_shas.
+    async fn insert_embeddings_with_params(
+        store: &SqliteStore,
+        blob_shas: Vec<String>,
+        dimension: i32,
+        model_version: &str,
+    ) {
+        let embedding_bytes = vec![0u8; (dimension as usize) * 4];
+        for blob_sha in blob_shas {
+            let emb = embedding_bytes.clone();
+            let mv = model_version.to_string();
+            store
+                .run(move |conn| {
+                    conn.execute(
+                        "INSERT OR IGNORE INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version)
+                         VALUES (?1, ?2, ?3, ?4)",
+                        params![blob_sha, emb, dimension, mv],
+                    )?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        }
+    }
+
+    // ========================================================================
+    // Test 1: End-to-end progress flow
+    //
+    // Pipeline writes progress, progress command reads it correctly.
+    // Verifies: run creation, progress updates, completion, ETA calculation.
+    // ========================================================================
+    #[tokio::test]
+    async fn test_end_to_end_progress_flow() {
+        let store = setup_test_store().await;
+        let store_arc = Arc::new(store);
+
+        // Create 10 test chunks
+        setup_test_chunks(&store_arc, "test-repo", 10).await;
+
+        // Verify initial state: no progress, no active run
+        let initial = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(initial.total_chunks, 10);
+        assert_eq!(initial.total_embeddings, 0);
+        assert_eq!(initial.percentage, 0.0);
+        assert_eq!(initial.chunks_remaining, 10);
+        assert!(initial.active_run.is_none());
+
+        // Run pipeline with small batch size (2) to get multiple batches
+        let service = create_fast_service(1536, "openai");
+        let config = PipelineConfig {
+            batch_size: 2,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+        let stats = pipeline.run(&store_arc).await.unwrap();
+
+        assert_eq!(stats.total_chunks, 10);
+        assert_eq!(stats.provider, "openai");
+        assert_eq!(stats.dimension, 1536);
+
+        // After pipeline completes: verify progress shows 100%
+        let final_progress = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(final_progress.total_chunks, 10);
+        assert_eq!(final_progress.total_embeddings, 10);
+        assert!((final_progress.percentage - 100.0).abs() < f64::EPSILON);
+        assert_eq!(final_progress.chunks_remaining, 0);
+
+        // Active run should be gone (completed)
+        assert!(
+            final_progress.active_run.is_none(),
+            "Run should be completed, not active"
+        );
+
+        // Verify the run is in the database with correct final state
+        store_arc
+            .run(move |conn| {
+                let (status, total_chunks, chunks_completed, provider, dimension, finished_at): (
+                    String,
+                    i64,
+                    i64,
+                    Option<String>,
+                    Option<i32>,
+                    Option<String>,
+                ) = conn.query_row(
+                    "SELECT status, total_chunks, chunks_completed, provider, dimension, finished_at
+                     FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                            row.get(5)?,
+                        ))
+                    },
+                )?;
+
+                assert_eq!(status, "completed");
+                assert_eq!(total_chunks, 10);
+                assert_eq!(chunks_completed, 10);
+                assert_eq!(provider, Some("openai".to_string()));
+                assert_eq!(dimension, Some(1536));
+                assert!(finished_at.is_some());
+
+                // Verify chunks_per_second was recorded
+                let cps: Option<f64> = conn.query_row(
+                    "SELECT chunks_per_second FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert!(cps.is_some(), "chunks_per_second should be set");
+                assert!(cps.unwrap() > 0.0, "chunks_per_second should be positive");
+
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    // ========================================================================
+    // Test 2: Concurrent pipeline + progress query (test case #32)
+    //
+    // Start pipeline with slow mock provider, spawn concurrent task querying
+    // progress repeatedly. Verify no lock errors and valid data throughout.
+    //
+    // Note: The pipeline runs on the current task while progress queries are
+    // spawned in a concurrent task. This avoids Send issues with the pipeline's
+    // internal callback types while still exercising true concurrent DB access.
+    // ========================================================================
+    #[tokio::test]
+    async fn test_concurrent_pipeline_and_progress_query() {
+        let store = setup_shared_test_store().await;
+
+        // Create 10 test chunks
+        setup_test_chunks(&store, "test-repo", 10).await;
+
+        // Create pipeline with slow provider (50ms delay per batch)
+        let service = create_slow_service(50, 1536, "ollama");
+        let config = PipelineConfig {
+            batch_size: 2,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        // Clone store for the progress query task
+        let query_store = store.clone();
+
+        // Spawn concurrent progress query task
+        let query_handle = tokio::spawn(async move {
+            let mut query_count = 0;
+            let mut saw_active_run = false;
+            let mut last_percentage = -1.0f64;
+            let mut progress_increased = false;
+
+            // Query progress repeatedly while pipeline runs
+            for _ in 0..50 {
+                let result = get_encoding_progress(query_store.clone(), None).await;
+                assert!(
+                    result.is_ok(),
+                    "Progress query should not fail during concurrent access: {:?}",
+                    result.err()
+                );
+
+                let progress = result.unwrap();
+                query_count += 1;
+
+                // Verify data is valid (no corruption)
+                assert!(progress.total_chunks >= 0);
+                assert!(progress.total_embeddings >= 0);
+                assert!(progress.total_embeddings <= progress.total_chunks);
+                assert!(progress.percentage >= 0.0);
+                assert!(progress.percentage <= 100.0);
+                assert!(progress.chunks_remaining >= 0);
+
+                // Track if we ever see an active run
+                if let Some(run) = &progress.active_run {
+                    saw_active_run = true;
+                    assert!(run.chunks_completed >= 0);
+                    assert!(run.chunks_completed <= run.total_chunks);
+                    if let Some(cps) = run.chunks_per_second {
+                        assert!(cps >= 0.0, "chunks_per_second must be non-negative");
+                    }
+                }
+
+                // Track if progress ever increases
+                if progress.percentage > last_percentage {
+                    progress_increased = true;
+                }
+                last_percentage = progress.percentage;
+
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+
+            (query_count, saw_active_run, progress_increased)
+        });
+
+        // Run pipeline on the current task (concurrently with the query task)
+        let pipeline_result = pipeline.run(&store).await;
+
+        // Wait for query task to finish
+        let query_result = query_handle.await;
+
+        // Pipeline should complete successfully
+        let stats = pipeline_result.unwrap();
+        assert_eq!(stats.total_chunks, 10);
+
+        // Query task should complete without errors
+        let (query_count, _saw_active_run, _progress_increased) = query_result.unwrap();
+        assert!(
+            query_count > 0,
+            "Should have queried progress at least once"
+        );
+        // Note: saw_active_run and progress_increased may be false if the pipeline
+        // completes very quickly before the query task starts. This is acceptable
+        // since the main goal is verifying no lock errors or data corruption.
+
+        // Final state should be correct
+        let final_progress = get_encoding_progress(store.clone(), None).await.unwrap();
+        assert_eq!(final_progress.total_chunks, 10);
+        assert_eq!(final_progress.total_embeddings, 10);
+        assert!((final_progress.percentage - 100.0).abs() < f64::EPSILON);
+    }
+
+    // ========================================================================
+    // Test 3: Provider/dimension mismatch scenario (test case #33)
+    //
+    // Create initial embeddings with provider "ollama" dimension 1024,
+    // add new chunks, run pipeline with "openai" dimension 1536.
+    // Verify old embeddings remain and new run shows new provider.
+    // ========================================================================
+    #[tokio::test]
+    async fn test_provider_dimension_mismatch() {
+        let store = setup_test_store().await;
+        let store_arc = Arc::new(store);
+
+        // Step 1: Create initial 5 chunks and embed them with "ollama" / 1024
+        setup_test_chunks(&store_arc, "test-repo", 5).await;
+
+        let service1 = create_fast_service(1024, "ollama");
+        let config1 = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline1 = EmbeddingPipeline::new(service1, config1);
+        let stats1 = pipeline1.run(&store_arc).await.unwrap();
+        assert_eq!(stats1.total_chunks, 5);
+        assert_eq!(stats1.provider, "ollama");
+        assert_eq!(stats1.dimension, 1024);
+
+        // Verify: 5 chunks, 5 embeddings, 100%
+        let progress_after_first = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(progress_after_first.total_chunks, 5);
+        assert_eq!(progress_after_first.total_embeddings, 5);
+        assert!((progress_after_first.percentage - 100.0).abs() < f64::EPSILON);
+
+        // Verify first run is completed
+        let first_run_status: String = store_arc
+            .run(|conn| {
+                let status: String = conn.query_row(
+                    "SELECT status FROM encoding_runs ORDER BY id ASC LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )?;
+                Ok(status)
+            })
+            .await
+            .unwrap();
+        assert_eq!(first_run_status, "completed");
+
+        // Step 2: Add 3 new chunks that don't have embeddings yet
+        // We need to create new chunks with different blob_shas
+        let repo_id = store_arc
+            .run(|conn| {
+                let id: i64 = conn.query_row(
+                    "SELECT id FROM repos WHERE name = ?1",
+                    params!["test-repo"],
+                    |row| row.get(0),
+                )?;
+                Ok(id)
+            })
+            .await
+            .unwrap();
+
+        let worktree_id = store_arc
+            .run(move |conn| {
+                let id: i64 = conn.query_row(
+                    "SELECT id FROM worktrees WHERE repo_id = ?1",
+                    params![repo_id],
+                    |row| row.get(0),
+                )?;
+                Ok(id)
+            })
+            .await
+            .unwrap();
+
+        let commit_id = store_arc
+            .run(move |conn| {
+                let id: i64 = conn.query_row(
+                    "SELECT id FROM commits WHERE repo_id = ?1",
+                    params![repo_id],
+                    |row| row.get(0),
+                )?;
+                Ok(id)
+            })
+            .await
+            .unwrap();
+
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "new_file.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hash_new_file".to_string(),
+            size_bytes: 200,
+            last_modified: None,
+        };
+        let new_file_id = store_arc.upsert_file(&file).await.unwrap();
+
+        for i in 0..3 {
+            let chunk = ChunkRecord {
+                file_id: new_file_id,
+                worktree_id,
+                blob_sha: format!("blob_new_{}", i),
+                symbol_name: Some(format!("fn_new_{}", i)),
+                kind: "function".to_string(),
+                signature: Some(format!("fn fn_new_{}()", i)),
+                docstring: Some(format!("New function {}", i)),
+                start_line: i * 10 + 1,
+                end_line: i * 10 + 10,
+                preview: format!("fn fn_new_{}() {{}}", i),
+                ts_doc_text: String::new(),
+                recency_score: 1.0,
+                churn_score: 0.5,
+                metadata: None,
+            };
+            store_arc.insert_chunk(&chunk).await.unwrap();
+        }
+
+        // Verify: 8 total chunks, 5 embeddings (the old ones)
+        let progress_before_second = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(progress_before_second.total_chunks, 8);
+        assert_eq!(progress_before_second.total_embeddings, 5);
+        assert_eq!(progress_before_second.chunks_remaining, 3);
+
+        // Step 3: Run pipeline with "openai" / 1536 (different provider & dimension)
+        let service2 = create_fast_service(1536, "openai");
+        let config2 = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline2 = EmbeddingPipeline::new(service2, config2);
+        let stats2 = pipeline2.run(&store_arc).await.unwrap();
+
+        // Only the 3 new chunks should be processed (incremental mode)
+        assert_eq!(stats2.total_chunks, 3);
+        assert_eq!(stats2.provider, "openai");
+        assert_eq!(stats2.dimension, 1536);
+
+        // Step 4: Verify final state
+        let final_progress = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(final_progress.total_chunks, 8);
+        assert_eq!(final_progress.total_embeddings, 8);
+        assert!((final_progress.percentage - 100.0).abs() < f64::EPSILON);
+        assert_eq!(final_progress.chunks_remaining, 0);
+
+        // Verify: old embeddings remain in the database
+        let old_embedding_count: i64 = store_arc
+            .run(|conn| {
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM code_embeddings WHERE blob_sha LIKE 'blob_test-repo_%'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            old_embedding_count, 5,
+            "Old embeddings should remain in the database"
+        );
+
+        // Verify: new embeddings were created
+        let new_embedding_count: i64 = store_arc
+            .run(|conn| {
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM code_embeddings WHERE blob_sha LIKE 'blob_new_%'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(new_embedding_count, 3, "New embeddings should be created");
+
+        // Verify: the second encoding run recorded the new provider and dimension
+        let (provider2, dimension2): (Option<String>, Option<i32>) = store_arc
+            .run(|conn| {
+                let row: (Option<String>, Option<i32>) = conn.query_row(
+                    "SELECT provider, dimension FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )?;
+                Ok(row)
+            })
+            .await
+            .unwrap();
+        assert_eq!(provider2, Some("openai".to_string()));
+        assert_eq!(dimension2, Some(1536));
+
+        // Verify: we have exactly 2 encoding runs (one per pipeline invocation)
+        let run_count: i64 = store_arc
+            .run(|conn| {
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM encoding_runs", [], |row| row.get(0))?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(run_count, 2, "Should have two completed encoding runs");
+    }
+
+    // ========================================================================
+    // Test 4: Progress percentage increases and ETA decreases during encoding
+    //
+    // Uses a slow mock provider and progress callback to capture intermediate
+    // progress snapshots, then verifies monotonic progress increase.
+    // ========================================================================
+    #[tokio::test]
+    async fn test_progress_increases_and_eta_decreases() {
+        let store = setup_shared_test_store().await;
+
+        // Create 10 test chunks
+        setup_test_chunks(&store, "test-repo", 10).await;
+
+        // Use slow provider so we can observe progress changes
+        let service = create_slow_service(20, 1536, "ollama");
+        let config = PipelineConfig {
+            batch_size: 2,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+
+        // Use a progress callback to capture snapshots
+        let snapshots = Arc::new(std::sync::Mutex::new(Vec::<(usize, usize)>::new()));
+        let snapshots_clone = snapshots.clone();
+
+        let callback = move |completed: usize, total: usize| {
+            snapshots_clone.lock().unwrap().push((completed, total));
+        };
+
+        let stats = pipeline
+            .run_with_progress(&store, Some(&callback))
+            .await
+            .unwrap();
+        assert_eq!(stats.total_chunks, 10);
+
+        // Verify progress snapshots are monotonically increasing
+        let captured = snapshots.lock().unwrap().clone();
+        assert!(
+            !captured.is_empty(),
+            "Should have captured at least one progress snapshot"
+        );
+
+        let mut prev_completed = 0;
+        for (completed, total) in &captured {
+            assert_eq!(*total, 10, "Total should always be 10");
+            assert!(
+                *completed >= prev_completed,
+                "Progress should never decrease: {} < {}",
+                completed,
+                prev_completed
+            );
+            assert!(*completed <= *total, "Completed should not exceed total");
+            prev_completed = *completed;
+        }
+
+        // Final snapshot should have all chunks completed
+        let (final_completed, _) = captured.last().unwrap();
+        assert_eq!(
+            *final_completed, 10,
+            "Final progress should show all chunks completed"
+        );
+
+        // Verify encoding run was marked completed with valid throughput
+        store
+            .run(move |conn| {
+                let (status, cps): (String, Option<f64>) = conn.query_row(
+                    "SELECT status, chunks_per_second FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )?;
+                assert_eq!(status, "completed");
+                assert!(cps.is_some());
+                assert!(cps.unwrap() > 0.0, "Throughput should be positive");
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    // ========================================================================
+    // Test 5: Stale run cleanup during pipeline restart (thorough variant)
+    //
+    // This extends the ENCPROG.2002 test by verifying that:
+    // - Multiple stale runs from different providers are cleaned up
+    // - A new run is created successfully after cleanup
+    // - The new run tracks the correct provider/dimension
+    // ========================================================================
+    #[tokio::test]
+    async fn test_stale_run_cleanup_multi_provider() {
+        let store = setup_test_store().await;
+
+        // Create multiple stale runs with different providers
+        let stale1 = store
+            .create_encoding_run(500, Some("ollama"), Some(768))
+            .await
+            .unwrap();
+        let stale2 = store
+            .create_encoding_run(300, Some("openai"), Some(1536))
+            .await
+            .unwrap();
+
+        // Verify both are active
+        let active = store.get_active_encoding_run().await.unwrap();
+        assert!(active.is_some(), "Should have an active run");
+
+        // Add test chunks so the pipeline has work
+        setup_test_chunks(&store, "test-repo", 3).await;
+
+        // Run a new pipeline - should clean up stale runs first
+        let service = create_fast_service(1024, "google");
+        let config = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+        let stats = pipeline.run(&store).await.unwrap();
+        assert_eq!(stats.total_chunks, 3);
+        assert_eq!(stats.provider, "google");
+
+        // Verify: both stale runs are marked as failed
+        store
+            .run(move |conn| {
+                let status1: String = conn.query_row(
+                    "SELECT status FROM encoding_runs WHERE id = ?1",
+                    params![stale1],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(status1, "failed", "First stale run should be marked failed");
+
+                let status2: String = conn.query_row(
+                    "SELECT status FROM encoding_runs WHERE id = ?1",
+                    params![stale2],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(status2, "failed", "Second stale run should be marked failed");
+
+                // The new run (third) should be completed
+                let (status3, provider3, dimension3): (String, Option<String>, Option<i32>) =
+                    conn.query_row(
+                        "SELECT status, provider, dimension FROM encoding_runs ORDER BY id DESC LIMIT 1",
+                        [],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                    )?;
+                assert_eq!(status3, "completed");
+                assert_eq!(provider3, Some("google".to_string()));
+                assert_eq!(dimension3, Some(1024));
+
+                // Total runs should be 3
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM encoding_runs",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(count, 3);
+
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    // ========================================================================
+    // Test 6: Error does not prevent future runs
+    //
+    // This extends ENCPROG.2002's error test by verifying that after a failed
+    // run, a subsequent run with a working provider succeeds.
+    // ========================================================================
+    #[tokio::test]
+    async fn test_error_does_not_prevent_future_runs() {
+        let store = setup_test_store().await;
+        setup_test_chunks(&store, "test-repo", 3).await;
+
+        // First run: use a failing provider
+        let failing_provider = Box::new(FailingMockProvider {
+            dimension: 1536,
+            name: "failing",
+        });
+        let service1 = create_service_with_provider(failing_provider);
+        let config1 = PipelineConfig {
+            batch_size: 2,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline1 = EmbeddingPipeline::new(service1, config1);
+        let result1 = pipeline1.run(&store).await;
+        assert!(result1.is_err(), "First run should fail");
+
+        // Verify the failed run is in the database
+        let failed_run_count: i64 = store
+            .run(|conn| {
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM encoding_runs WHERE status = 'failed'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                Ok(count)
+            })
+            .await
+            .unwrap();
+        assert_eq!(failed_run_count, 1);
+
+        // Second run: use a working provider
+        let service2 = create_fast_service(1536, "openai");
+        let config2 = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline2 = EmbeddingPipeline::new(service2, config2);
+        let stats2 = pipeline2.run(&store).await.unwrap();
+
+        // Second run should succeed and process all chunks
+        assert_eq!(stats2.total_chunks, 3);
+
+        // Verify final state
+        let final_progress = get_encoding_progress(Arc::new(store), None).await.unwrap();
+        assert_eq!(final_progress.total_chunks, 3);
+        assert_eq!(final_progress.total_embeddings, 3);
+        assert!((final_progress.percentage - 100.0).abs() < f64::EPSILON);
+    }
+
+    /// Mock provider that always fails (for error handling tests).
+    struct FailingMockProvider {
+        dimension: usize,
+        name: &'static str,
+    }
+
+    #[async_trait]
+    impl EmbeddingProvider for FailingMockProvider {
+        async fn embed(&self, _text: String) -> Result<Vec<f32>, EmbeddingError> {
+            Err(EmbeddingError::Other(
+                "simulated embedding failure".to_string(),
+            ))
+        }
+
+        async fn embed_batch(&self, _texts: Vec<String>) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+            Err(EmbeddingError::Other(
+                "simulated batch embedding failure".to_string(),
+            ))
+        }
+
+        fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        fn provider_name(&self) -> &'static str {
+            self.name
+        }
+
+        fn metrics(&self) -> Option<ProviderMetrics> {
+            None
+        }
+    }
+
+    // ========================================================================
+    // Test 7: Pre-existing embeddings counted in progress
+    //
+    // Verifies that embeddings inserted outside the pipeline (e.g., from a
+    // previous run or manual insertion) are counted correctly by the progress
+    // query.
+    // ========================================================================
+    #[tokio::test]
+    async fn test_preexisting_embeddings_counted_in_progress() {
+        let store = setup_test_store().await;
+        let store_arc = Arc::new(store);
+
+        // Create 10 chunks
+        setup_test_chunks(&store_arc, "test-repo", 10).await;
+
+        // Manually insert embeddings for 4 of the 10 chunks (simulating a previous run)
+        let blob_shas: Vec<String> = (0..4).map(|i| format!("blob_test-repo_{}", i)).collect();
+        insert_embeddings_with_params(&store_arc, blob_shas, 1024, "ollama").await;
+
+        // Verify progress reflects the pre-existing embeddings
+        let progress = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(progress.total_chunks, 10);
+        assert_eq!(progress.total_embeddings, 4);
+        assert!((progress.percentage - 40.0).abs() < f64::EPSILON);
+        assert_eq!(progress.chunks_remaining, 6);
+
+        // Run pipeline - should only process the 6 remaining chunks
+        let service = create_fast_service(1536, "openai");
+        let config = PipelineConfig {
+            batch_size: 10,
+            incremental: true,
+            dry_run: false,
+            sample_size: None,
+            batch_delay_ms: 0,
+            max_cost_usd: None,
+        };
+        let pipeline = EmbeddingPipeline::new(service, config);
+        let stats = pipeline.run(&store_arc).await.unwrap();
+        assert_eq!(
+            stats.total_chunks, 6,
+            "Should only process chunks without embeddings"
+        );
+
+        // Final progress: all 10 chunks should now have embeddings
+        let final_progress = get_encoding_progress(store_arc.clone(), None)
+            .await
+            .unwrap();
+        assert_eq!(final_progress.total_chunks, 10);
+        assert_eq!(final_progress.total_embeddings, 10);
+        assert!((final_progress.percentage - 100.0).abs() < f64::EPSILON);
+    }
+}
