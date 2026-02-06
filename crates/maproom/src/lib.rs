@@ -12,6 +12,7 @@ pub mod context;
 pub mod daemon;
 pub mod db;
 pub mod embedding;
+pub mod encoding_progress;
 pub mod evaluation;
 pub mod git;
 pub mod incremental;

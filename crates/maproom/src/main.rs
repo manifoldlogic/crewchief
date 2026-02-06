@@ -490,6 +490,23 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Show encoding (embedding generation) progress
+    ///
+    /// Displays chunk/embedding counts, percentage complete, and active encoding run info.
+    ///
+    /// Examples:
+    ///   maproom encoding-progress                  # Global progress
+    ///   maproom encoding-progress --repo myrepo    # Repo-specific progress
+    ///   maproom encoding-progress --json           # JSON output
+    EncodingProgress {
+        /// Filter by repository name
+        #[arg(long)]
+        repo: Option<String>,
+        /// Output as JSON instead of human-readable text
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
     /// Generate embeddings for indexed chunks
     GenerateEmbeddings {
         /// Only process chunks where embeddings are NULL (default: true)
@@ -1744,6 +1761,31 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
+        Commands::EncodingProgress { repo, json } => {
+            use crewchief_maproom::encoding_progress;
+
+            tracing::debug!("encoding-progress: connecting to database...");
+            let store = db::connect().await?;
+            tracing::debug!("encoding-progress: connected, querying progress...");
+
+            match encoding_progress::get_encoding_progress(Arc::new(store), repo).await {
+                Ok(progress_data) => {
+                    tracing::debug!("encoding-progress: query complete, formatting output...");
+                    if json {
+                        let output = encoding_progress::format_json(&progress_data)?;
+                        println!("{}", output);
+                    } else {
+                        let output = encoding_progress::format_text(&progress_data);
+                        print!("{}", output);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error querying encoding progress: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
         Commands::GenerateEmbeddings {
             incremental,
             batch_size,
@@ -2649,6 +2691,60 @@ mod tests {
                 assert_eq!(preview_length, 150);
             }
             _ => panic!("Expected Search command"),
+        }
+    }
+
+    // ==================== Encoding Progress CLI Parsing Tests (ENCPROG.1001) ====================
+
+    // Test Case #26: encoding-progress with no args
+    #[test]
+    fn test_encoding_progress_no_args() {
+        let cli = Cli::parse_from(&["maproom", "encoding-progress"]);
+        match cli.command {
+            Commands::EncodingProgress { repo, json } => {
+                assert_eq!(repo, None);
+                assert!(!json);
+            }
+            _ => panic!("Expected EncodingProgress command"),
+        }
+    }
+
+    // Test Case #27: encoding-progress --json
+    #[test]
+    fn test_encoding_progress_json() {
+        let cli = Cli::parse_from(&["maproom", "encoding-progress", "--json"]);
+        match cli.command {
+            Commands::EncodingProgress { repo, json } => {
+                assert_eq!(repo, None);
+                assert!(json);
+            }
+            _ => panic!("Expected EncodingProgress command"),
+        }
+    }
+
+    // Test Case #28: encoding-progress --repo myrepo
+    #[test]
+    fn test_encoding_progress_repo() {
+        let cli = Cli::parse_from(&["maproom", "encoding-progress", "--repo", "myrepo"]);
+        match cli.command {
+            Commands::EncodingProgress { repo, json } => {
+                assert_eq!(repo, Some("myrepo".to_string()));
+                assert!(!json);
+            }
+            _ => panic!("Expected EncodingProgress command"),
+        }
+    }
+
+    // Test Case #29: encoding-progress --repo myrepo --json
+    #[test]
+    fn test_encoding_progress_repo_and_json() {
+        let cli = Cli::parse_from(&["maproom", "encoding-progress", "--repo", "myrepo", "--json"]);
+        match cli.command {
+            Commands::EncodingProgress { repo, json } => {
+                assert_eq!(repo, Some("myrepo".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected EncodingProgress command"),
         }
     }
 }

@@ -3392,6 +3392,186 @@ impl SqliteStore {
         })
         .await
     }
+
+    // ==================== Encoding Progress Methods ====================
+
+    /// Get the global count of distinct chunks (by blob_sha) across all repos.
+    pub async fn get_global_chunk_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 =
+                conn.query_row("SELECT COUNT(DISTINCT blob_sha) FROM chunks", [], |row| {
+                    row.get(0)
+                })?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the global count of embeddings.
+    pub async fn get_global_embedding_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM code_embeddings", [], |row| row.get(0))?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the count of distinct chunks (by blob_sha) for a specific repo.
+    ///
+    /// Uses chunk_worktrees junction table to filter by repo via worktrees.
+    /// Returns 0 if the repo does not exist.
+    pub async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        let repo_name = repo_name.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT c.blob_sha)
+                 FROM chunks c
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                 JOIN worktrees w ON w.id = cw.worktree_id
+                 JOIN repos r ON r.id = w.repo_id
+                 WHERE r.name = ?1",
+                params![repo_name],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the count of embeddings for a specific repo.
+    ///
+    /// Counts embeddings whose blob_sha matches chunks in the specified repo.
+    /// Returns 0 if the repo does not exist.
+    pub async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        let repo_name = repo_name.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT ce.id)
+                 FROM code_embeddings ce
+                 WHERE ce.blob_sha IN (
+                     SELECT DISTINCT c.blob_sha
+                     FROM chunks c
+                     JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                     JOIN worktrees w ON w.id = cw.worktree_id
+                     JOIN repos r ON r.id = w.repo_id
+                     WHERE r.name = ?1
+                 )",
+                params![repo_name],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Create a new encoding run record. Returns the run ID.
+    pub async fn create_encoding_run(
+        &self,
+        total_chunks: i64,
+        provider: Option<&str>,
+        dimension: Option<i32>,
+    ) -> anyhow::Result<i64> {
+        let provider = provider.map(|s| s.to_string());
+        self.write_with_retry(move |conn| {
+            conn.execute(
+                "INSERT INTO encoding_runs (total_chunks, provider, dimension)
+                 VALUES (?1, ?2, ?3)",
+                params![total_chunks, provider, dimension],
+            )?;
+            let id: i64 = conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+            Ok(id)
+        })
+        .await
+    }
+
+    /// Update the progress of an encoding run.
+    pub async fn update_encoding_run_progress(
+        &self,
+        run_id: i64,
+        chunks_completed: i64,
+        chunks_per_second: Option<f64>,
+    ) -> anyhow::Result<()> {
+        self.write_with_retry(move |conn| {
+            conn.execute(
+                "UPDATE encoding_runs
+                 SET chunks_completed = ?1,
+                     chunks_per_second = ?2,
+                     last_batch_at = datetime('now')
+                 WHERE id = ?3",
+                params![chunks_completed, chunks_per_second, run_id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Complete an encoding run, setting its final status and finished_at timestamp.
+    pub async fn complete_encoding_run(&self, run_id: i64, status: &str) -> anyhow::Result<()> {
+        let status = status.to_string();
+        self.write_with_retry(move |conn| {
+            conn.execute(
+                "UPDATE encoding_runs
+                 SET status = ?1,
+                     finished_at = datetime('now')
+                 WHERE id = ?2",
+                params![status, run_id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Get the currently active (running) encoding run, if any.
+    ///
+    /// Returns the most recently started running run.
+    pub async fn get_active_encoding_run(&self) -> anyhow::Result<Option<EncodingRunRow>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT id, started_at, finished_at, status, total_chunks,
+                            chunks_completed, chunks_per_second, last_batch_at,
+                            provider, dimension
+                     FROM encoding_runs
+                     WHERE status = 'running'
+                     ORDER BY id DESC
+                     LIMIT 1",
+                    [],
+                    |row| {
+                        Ok(EncodingRunRow {
+                            id: row.get(0)?,
+                            started_at: row.get(1)?,
+                            finished_at: row.get(2)?,
+                            status: row.get(3)?,
+                            total_chunks: row.get(4)?,
+                            chunks_completed: row.get(5)?,
+                            chunks_per_second: row.get(6)?,
+                            last_batch_at: row.get(7)?,
+                            provider: row.get(8)?,
+                            dimension: row.get(9)?,
+                        })
+                    },
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+}
+
+/// Row data from the encoding_runs table.
+#[derive(Debug, Clone)]
+pub struct EncodingRunRow {
+    pub id: i64,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub status: String,
+    pub total_chunks: i64,
+    pub chunks_completed: i64,
+    pub chunks_per_second: Option<f64>,
+    pub last_batch_at: Option<String>,
+    pub provider: Option<String>,
+    pub dimension: Option<i32>,
 }
 
 #[cfg(test)]
