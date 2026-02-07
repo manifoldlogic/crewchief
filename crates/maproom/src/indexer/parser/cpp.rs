@@ -223,7 +223,12 @@ fn extract_cpp_struct(
     }
 }
 
-fn walk_cpp_class_body(source: &str, body: Node, chunks: &mut Vec<SymbolChunk>, default_access: &str) {
+fn walk_cpp_class_body(
+    source: &str,
+    body: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    default_access: &str,
+) {
     let mut current_access = default_access;
     let mut cursor = body.walk();
 
@@ -320,11 +325,8 @@ fn extract_cpp_function_impl(
     let is_final = modifiers.contains(&"final");
 
     // Build signature
-    let signature = build_cpp_function_signature(
-        return_type.as_deref(),
-        params.as_deref(),
-        &modifiers,
-    );
+    let signature =
+        build_cpp_function_signature(return_type.as_deref(), params.as_deref(), &modifiers);
 
     // Extract doc comment
     let docstring = extract_cpp_doc_comment(source, node);
@@ -335,7 +337,10 @@ fn extract_cpp_function_impl(
         "access".to_string(),
         serde_json::Value::String(access.to_string()),
     );
-    metadata_obj.insert("is_virtual".to_string(), serde_json::Value::Bool(is_virtual));
+    metadata_obj.insert(
+        "is_virtual".to_string(),
+        serde_json::Value::Bool(is_virtual),
+    );
     metadata_obj.insert("is_static".to_string(), serde_json::Value::Bool(is_static));
     metadata_obj.insert("is_const".to_string(), serde_json::Value::Bool(is_const));
 
@@ -555,8 +560,8 @@ fn collect_cpp_include(source: &str, node: Node, includes: &mut Vec<serde_json::
     // Determine if system or local include based on node kind
     let include_type = match path_node.kind() {
         "system_lib_string" => "system", // <vector>
-        "string_literal" => "local",      // "utils/foo.h"
-        _ => "system",                    // Default to system
+        "string_literal" => "local",     // "utils/foo.h"
+        _ => "system",                   // Default to system
     };
 
     // Strip delimiters (< > or " ")
@@ -638,8 +643,12 @@ fn extract_function_name(source: &str, declarator: Option<Node>) -> Option<Strin
                 let mut cursor = declarator.walk();
                 for child in declarator.children(&mut cursor) {
                     match child.kind() {
-                        "identifier" | "field_identifier" | "operator_name"
-                        | "destructor_name" | "qualified_identifier" | "scoped_identifier" => {
+                        "identifier"
+                        | "field_identifier"
+                        | "operator_name"
+                        | "destructor_name"
+                        | "qualified_identifier"
+                        | "scoped_identifier" => {
                             return child
                                 .utf8_text(source.as_bytes())
                                 .ok()
@@ -697,7 +706,10 @@ fn extract_function_parameters(source: &str, declarator: Option<Node>) -> Option
     // Find parameter_list node
     if declarator.kind() == "function_declarator" {
         if let Some(params) = declarator.child_by_field_name("parameters") {
-            return params.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+            return params
+                .utf8_text(source.as_bytes())
+                .ok()
+                .map(|s| s.to_string());
         }
     }
 
@@ -706,7 +718,10 @@ fn extract_function_parameters(source: &str, declarator: Option<Node>) -> Option
         if let Some(child) = declarator.child(i) {
             if child.kind() == "function_declarator" {
                 if let Some(params) = child.child_by_field_name("parameters") {
-                    return params.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+                    return params
+                        .utf8_text(source.as_bytes())
+                        .ok()
+                        .map(|s| s.to_string());
                 }
             }
             // Try recursing
@@ -727,22 +742,16 @@ fn extract_cpp_function_modifiers(source: &str, node: Node) -> Vec<&'static str>
     for child in node.children(&mut cursor) {
         match child.kind() {
             "storage_class_specifier" => {
-                if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    match text {
-                        "static" => modifiers.push("static"),
-                        _ => {}
-                    }
+                if let Ok("static") = child.utf8_text(source.as_bytes()) {
+                    modifiers.push("static");
                 }
             }
             "virtual_specifier" | "virtual_function_specifier" | "virtual" => {
                 modifiers.push("virtual");
             }
             "type_qualifier" => {
-                if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    match text {
-                        "const" => modifiers.push("const"),
-                        _ => {}
-                    }
+                if let Ok("const") = child.utf8_text(source.as_bytes()) {
+                    modifiers.push("const");
                 }
             }
             _ => {}
