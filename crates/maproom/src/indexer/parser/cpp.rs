@@ -31,6 +31,9 @@
 //! a current access state while walking class/struct bodies, updating when encountering
 //! `public:`, `private:`, or `protected:` labels. Nested classes reset to their own defaults.
 
+use std::time::Instant;
+
+use tracing::{debug, warn};
 use tree_sitter::{Node, Parser};
 
 use super::common::lang_cpp;
@@ -42,10 +45,28 @@ pub(super) fn extract_cpp_chunks(source: &str) -> Vec<SymbolChunk> {
         .set_language(&lang_cpp())
         .expect("Failed to set C++ language");
 
+    let start = Instant::now();
     let tree = match parser.parse(source, None) {
         Some(tree) => tree,
-        None => return vec![],
+        None => {
+            warn!(
+                language = "cpp",
+                source_length = source.len(),
+                "Failed to parse C++ source - tree-sitter returned None"
+            );
+            return vec![];
+        }
     };
+    let parse_duration = start.elapsed();
+
+    if parse_duration.as_secs() >= 1 {
+        debug!(
+            language = "cpp",
+            source_length = source.len(),
+            duration_ms = parse_duration.as_millis() as u64,
+            "Slow C++ parse detected"
+        );
+    }
 
     let mut chunks = Vec::new();
     let mut includes = Vec::new();
@@ -117,6 +138,14 @@ fn extract_cpp_class(
         .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
+
+    if name.is_none() {
+        debug!(
+            node_kind = node.kind(),
+            line = node.start_position().row + 1,
+            "Failed to extract class name - identifier not found"
+        );
+    }
 
     // Extract base classes
     let mut base_classes = Vec::new();
@@ -198,6 +227,14 @@ fn extract_cpp_struct(
         .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
+
+    if name.is_none() {
+        debug!(
+            node_kind = node.kind(),
+            line = node.start_position().row + 1,
+            "Failed to extract struct name - identifier not found"
+        );
+    }
 
     // Extract base classes (structs can also have inheritance)
     let mut base_classes = Vec::new();
@@ -363,6 +400,14 @@ fn extract_cpp_function_impl(
     let declarator = node.child_by_field_name("declarator");
     let name = extract_function_name(source, declarator);
 
+    if name.is_none() {
+        debug!(
+            node_kind = node.kind(),
+            line = node.start_position().row + 1,
+            "Failed to extract function name - identifier not found"
+        );
+    }
+
     // Extract parameters
     let params = extract_function_parameters(source, declarator);
 
@@ -455,6 +500,14 @@ fn extract_cpp_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
+    if name.is_none() {
+        debug!(
+            node_kind = node.kind(),
+            line = node.start_position().row + 1,
+            "Failed to extract enum name - identifier not found"
+        );
+    }
+
     // Check if scoped enum (enum class)
     let is_scoped = node
         .utf8_text(source.as_bytes())
@@ -490,10 +543,20 @@ fn extract_cpp_namespace(
     includes: &mut Vec<serde_json::Value>,
 ) {
     // Extract namespace name (may be None for anonymous namespaces)
+    let has_name_node = node.child_by_field_name("name").is_some();
     let name = node
         .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
+
+    // Log only if a name node exists but text extraction failed (not anonymous)
+    if name.is_none() && has_name_node {
+        debug!(
+            node_kind = node.kind(),
+            line = node.start_position().row + 1,
+            "Failed to extract namespace name - identifier not found"
+        );
+    }
 
     let is_anonymous = name.is_none();
     let symbol_name = if is_anonymous {
