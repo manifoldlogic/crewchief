@@ -817,22 +817,88 @@ fn collect_csharp_using(source: &str, node: Node, imports: &mut Vec<serde_json::
     }
 }
 
-#[allow(unused_variables)]
 fn extract_csharp_doc_comment(source: &str, node: Node) -> Option<String> {
-    // Stub - will be implemented in task 2004
-    None
+    let start_row = node.start_position().row;
+    if start_row == 0 {
+        return None;
+    }
+
+    let lines: Vec<&str> = source.lines().collect();
+    let mut doc_lines = Vec::new();
+
+    // Walk backward from the line before the node
+    for i in (0..start_row).rev() {
+        let line = lines[i].trim();
+
+        if line.starts_with("///") {
+            // Doc comment line - strip prefix and collect
+            let content = line.strip_prefix("///").unwrap_or("");
+            let content = content.strip_prefix(' ').unwrap_or(content);
+            doc_lines.push(content.to_string());
+        } else if line.is_empty() {
+            // Blank line - continue searching
+            continue;
+        } else if line.starts_with("//") {
+            // Regular comment - stop searching
+            break;
+        } else {
+            // Non-comment line - stop searching
+            break;
+        }
+    }
+
+    if doc_lines.is_empty() {
+        return None;
+    }
+
+    // Reverse to get original order
+    doc_lines.reverse();
+    Some(doc_lines.join("\n"))
 }
 
-#[allow(unused_variables)]
 fn extract_csharp_visibility(node: Node, source: &str) -> String {
-    // Stub - will be implemented in task 2004
-    "private".to_string()
+    let mut access_modifiers = Vec::new();
+
+    // Iterate through modifier children
+    for child in node.children(&mut node.walk()) {
+        if child.kind() == "modifier" {
+            if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
+                // Access modifiers: public, private, protected, internal
+                match modifier_text {
+                    "public" | "private" | "protected" | "internal" => {
+                        access_modifiers.push(modifier_text.to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    if access_modifiers.is_empty() {
+        // Default visibility in C#:
+        // - Members: private
+        // - Top-level types: internal
+        // For simplicity, default to "private" here
+        // (top-level type detection would require parent context)
+        "private".to_string()
+    } else {
+        // Handle combined modifiers like "protected internal"
+        access_modifiers.join(" ")
+    }
 }
 
-#[allow(unused_variables)]
 fn extract_csharp_modifiers(node: Node, source: &str) -> Vec<String> {
-    // Stub - will be implemented in task 2004
-    Vec::new()
+    let mut modifiers = Vec::new();
+
+    for child in node.children(&mut node.walk()) {
+        if child.kind() == "modifier" {
+            if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
+                modifiers.push(modifier_text.to_string());
+            }
+        }
+    }
+
+    modifiers
 }
 
 #[cfg(test)]
@@ -850,6 +916,10 @@ public class MyClass<T> : BaseClass, IInterface {
         assert!(!chunks.is_empty());
         assert_eq!(chunks[0].kind, "class");
         assert_eq!(chunks[0].symbol_name.as_deref(), Some("MyClass"));
+
+        // Verify visibility is extracted correctly
+        let metadata = chunks[0].metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "public");
     }
 
     #[test]
@@ -1005,9 +1075,10 @@ class MyClass {
         let chunks = extract_csharp_chunks(source);
         let method = chunks.iter().find(|c| c.kind == "method").unwrap();
         assert_eq!(method.symbol_name.as_deref(), Some("FetchAsync"));
-        // Note: is_async will be false until task 2004 (modifiers extraction)
+        // is_async should now be true after implementing modifiers
         let metadata = method.metadata.as_ref().unwrap();
-        assert_eq!(metadata["is_async"], false); // Stubbed - will be true after task 2004
+        assert_eq!(metadata["is_async"], true);
+        assert_eq!(metadata["visibility"], "public");
     }
 
     #[test]
@@ -1024,12 +1095,16 @@ class MyClass {
         let methods: Vec<_> = chunks.iter().filter(|c| c.kind == "method").collect();
         assert!(methods.len() >= 4);
 
-        // Note: All modifiers will be false until task 2004 (modifiers extraction)
+        // Modifiers should now be extracted correctly
         let static_method = methods
             .iter()
             .find(|m| m.symbol_name.as_deref() == Some("StaticMethod"))
             .unwrap();
-        assert_eq!(static_method.metadata.as_ref().unwrap()["is_static"], false); // Stubbed
+        assert_eq!(static_method.metadata.as_ref().unwrap()["is_static"], true);
+        assert_eq!(
+            static_method.metadata.as_ref().unwrap()["visibility"],
+            "public"
+        );
 
         let virtual_method = methods
             .iter()
@@ -1037,8 +1112,8 @@ class MyClass {
             .unwrap();
         assert_eq!(
             virtual_method.metadata.as_ref().unwrap()["is_virtual"],
-            false
-        ); // Stubbed
+            true
+        );
 
         let override_method = methods
             .iter()
@@ -1046,8 +1121,8 @@ class MyClass {
             .unwrap();
         assert_eq!(
             override_method.metadata.as_ref().unwrap()["is_override"],
-            false
-        ); // Stubbed
+            true
+        );
 
         let abstract_method = methods
             .iter()
@@ -1055,8 +1130,8 @@ class MyClass {
             .unwrap();
         assert_eq!(
             abstract_method.metadata.as_ref().unwrap()["is_abstract"],
-            false
-        ); // Stubbed
+            true
+        );
     }
 
     #[test]
@@ -1482,5 +1557,311 @@ public class MyClass {}
             Some("MyCompany.MyProduct")
         );
         assert_eq!(class.symbol_name.as_deref(), Some("MyClass"));
+    }
+
+    // Utility function tests (task 2004)
+
+    #[test]
+    fn test_doc_comment_single_line() {
+        let source = r#"
+class MyClass {
+    /// Does something important
+    public void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        assert_eq!(
+            method.docstring.as_deref(),
+            Some("Does something important")
+        );
+    }
+
+    #[test]
+    fn test_doc_comment_multi_line() {
+        let source = r#"
+class MyClass {
+    /// <summary>
+    /// Does something important
+    /// </summary>
+    /// <param name="x">The parameter</param>
+    /// <returns>The result</returns>
+    public int DoSomething(int x) { return x; }
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let docstring = method.docstring.as_ref().unwrap();
+        assert!(docstring.contains("<summary>"));
+        assert!(docstring.contains("Does something important"));
+        assert!(docstring.contains("<param name=\"x\">"));
+        assert!(docstring.contains("<returns>"));
+    }
+
+    #[test]
+    fn test_doc_comment_with_blank_line() {
+        let source = r#"
+/// Doc comment
+
+public class Foo { }
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        assert_eq!(class.docstring.as_deref(), Some("Doc comment"));
+    }
+
+    #[test]
+    fn test_doc_comment_stops_at_regular_comment() {
+        let source = r#"
+// Regular comment
+/// Doc comment
+public class Foo { }
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        // Should only capture the doc comment, not the regular comment
+        assert_eq!(class.docstring.as_deref(), Some("Doc comment"));
+    }
+
+    #[test]
+    fn test_doc_comment_stops_at_code() {
+        let source = r#"
+int x = 5;
+/// Doc comment
+public class Foo { }
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        // Should only capture the doc comment, not preceding code
+        assert_eq!(class.docstring.as_deref(), Some("Doc comment"));
+    }
+
+    #[test]
+    fn test_doc_comment_none_when_missing() {
+        let source = r#"
+public class Foo { }
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        assert!(class.docstring.is_none());
+    }
+
+    #[test]
+    fn test_doc_comment_at_start_of_file() {
+        let source = r#"public class Foo { }
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        assert!(class.docstring.is_none());
+    }
+
+    #[test]
+    fn test_visibility_public() {
+        let source = r#"
+public class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        let metadata = class.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "public");
+    }
+
+    #[test]
+    fn test_visibility_private() {
+        let source = r#"
+class MyClass {
+    private void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "private");
+    }
+
+    #[test]
+    fn test_visibility_protected() {
+        let source = r#"
+class MyClass {
+    protected void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "protected");
+    }
+
+    #[test]
+    fn test_visibility_internal() {
+        let source = r#"
+internal class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        let metadata = class.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "internal");
+    }
+
+    #[test]
+    fn test_visibility_protected_internal() {
+        let source = r#"
+class MyClass {
+    protected internal void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "protected internal");
+    }
+
+    #[test]
+    fn test_visibility_default_private() {
+        let source = r#"
+class MyClass {
+    void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "private");
+    }
+
+    #[test]
+    fn test_modifiers_abstract() {
+        let source = r#"
+public abstract class MyClass {
+    public abstract void Method();
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        let metadata = class.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_abstract"], true);
+
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_abstract"], true);
+    }
+
+    #[test]
+    fn test_modifiers_static() {
+        let source = r#"
+public static class MyClass {
+    public static void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        let metadata = class.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_static"], true);
+
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_static"], true);
+    }
+
+    #[test]
+    fn test_modifiers_sealed() {
+        let source = r#"
+public sealed class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        // Note: sealed is not tracked in metadata for class currently
+        // This test just verifies the modifier is extracted without error
+        assert_eq!(class.symbol_name.as_deref(), Some("MyClass"));
+    }
+
+    #[test]
+    fn test_modifiers_partial() {
+        let source = r#"
+public partial class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        let metadata = class.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_partial"], true);
+    }
+
+    #[test]
+    fn test_modifiers_virtual() {
+        let source = r#"
+class MyClass {
+    public virtual void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_virtual"], true);
+    }
+
+    #[test]
+    fn test_modifiers_override() {
+        let source = r#"
+class MyClass {
+    public override void Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_override"], true);
+    }
+
+    #[test]
+    fn test_modifiers_async() {
+        let source = r#"
+class MyClass {
+    public async Task Method() {}
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_async"], true);
+    }
+
+    #[test]
+    fn test_modifiers_combined() {
+        let source = r#"
+class MyClass {
+    public static async Task<int> Method() { return 42; }
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let metadata = method.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "public");
+        assert_eq!(metadata["is_static"], true);
+        assert_eq!(metadata["is_async"], true);
+    }
+
+    #[test]
+    fn test_doc_comment_preserves_xml_tags() {
+        let source = r#"
+class MyClass {
+    /// <summary>
+    /// Processes the <paramref name="input"/> and returns the result.
+    /// </summary>
+    /// <param name="input">The input to process</param>
+    /// <returns>A <see cref="Result"/> object</returns>
+    public Result Process(string input) { return null; }
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        let docstring = method.docstring.as_ref().unwrap();
+
+        // Verify all XML tags are preserved
+        assert!(docstring.contains("<summary>"));
+        assert!(docstring.contains("</summary>"));
+        assert!(docstring.contains("<paramref name=\"input\"/>"));
+        assert!(docstring.contains("<param name=\"input\">"));
+        assert!(docstring.contains("<returns>"));
+        assert!(docstring.contains("<see cref=\"Result\"/>"));
     }
 }
