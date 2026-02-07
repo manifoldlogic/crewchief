@@ -1,4 +1,35 @@
-//! C++ parser
+//! C++ language parser for the maproom indexer.
+//!
+//! This module extracts semantic symbols from C++ source code using tree-sitter-cpp.
+//!
+//! # Extracted Constructs
+//!
+//! - **Classes and Structs**: Including inheritance, template parameters, access specifiers
+//! - **Functions and Methods**: Free functions, member functions, operator overloads
+//! - **Namespaces**: Named and anonymous namespaces
+//! - **Enums**: Both scoped (`enum class`) and unscoped enums
+//! - **Templates**: Template classes, functions, and parameter extraction
+//! - **Include Directives**: Collected into a single `__imports__` chunk
+//! - **Doc Comments**: `//` and `/* */` style comments
+//!
+//! # Design Approach
+//!
+//! The parser uses a recursive AST walker (`walk_cpp_decls`) that dispatches to specialized
+//! extraction functions based on node types. Access specifiers for classes are tracked using
+//! a state machine that processes `public:`, `private:`, and `protected:` sections.
+//!
+//! # Known Limitations
+//!
+//! - **Preprocessor macros**: Only `#include` directives are captured; `#define` and conditionals are ignored
+//! - **C++20+ features**: Concepts, modules, and coroutines are not extracted
+//! - **Template metaprogramming**: SFINAE and advanced template patterns are not analyzed
+//! - **constexpr modifiers**: Detection deferred to future enhancement
+//!
+//! # Access Specifier Handling
+//!
+//! Classes default to `private` access; structs default to `public`. The parser maintains
+//! a current access state while walking class/struct bodies, updating when encountering
+//! `public:`, `private:`, or `protected:` labels. Nested classes reset to their own defaults.
 
 use tree_sitter::{Node, Parser};
 
@@ -61,6 +92,20 @@ fn walk_cpp_decls(
     }
 }
 
+/// Extracts a class declaration, including inheritance and template parameters.
+///
+/// Parses the base class list to populate `metadata.base_classes` with inheritance
+/// relationships. If the class is preceded by a template declaration, template parameters
+/// are extracted and included in the signature.
+///
+/// # Inheritance Extraction
+///
+/// The base class list is parsed to extract each base class name and access specifier
+/// (e.g., `public Base`, `private Impl`). Multiple inheritance is supported.
+///
+/// # Access Specifier Default
+///
+/// Classes default to `private` access for members (unless overridden by `public:` labels).
 fn extract_cpp_class(
     source: &str,
     node: Node,
@@ -223,6 +268,18 @@ fn extract_cpp_struct(
     }
 }
 
+/// Walks the body of a class or struct, extracting members and tracking access specifiers.
+///
+/// Maintains a state machine for access control labels (`public:`, `private:`, `protected:`),
+/// updating the current access level as each section is encountered. All members extracted
+/// within a section inherit that section's access level until the next label.
+///
+/// # Parameters
+///
+/// - `body`: The `field_declaration_list` node from the class/struct declaration
+/// - `source`: The full source text
+/// - `chunks`: Accumulator for extracted symbol chunks
+/// - `default_access`: Starting access level (`"private"` for class, `"public"` for struct)
 fn walk_cpp_class_body(
     source: &str,
     body: Node,
@@ -473,6 +530,18 @@ fn extract_cpp_namespace(
     }
 }
 
+/// Extracts template parameters from a template declaration node.
+///
+/// Returns the raw template parameter list text (e.g., `"<typename T, int N>"`).
+/// Supports type parameters (`typename`, `class`), non-type parameters, and
+/// variadic parameters (`typename... Args`).
+///
+/// # Approach
+///
+/// Extracts the text between `template` and the following declaration, capturing
+/// the full parameter list including defaults. Does not parse individual parameters
+/// into structured data - the raw text is preserved in metadata. The inner declaration
+/// (class, struct, or function) is then delegated to the appropriate extraction function.
 fn extract_cpp_template(
     source: &str,
     node: Node,
@@ -629,6 +698,18 @@ fn is_inside_cpp_class(node: Node) -> bool {
     false
 }
 
+/// Extracts the function name from a function declarator node.
+///
+/// Handles operator overloads (e.g., `operator+`, `operator<<`) and special
+/// functions like constructors and destructors. Returns the raw function name
+/// without parameters or qualifiers.
+///
+/// # Behavior
+///
+/// - For normal functions: Returns identifier text (e.g., `"calculate"`)
+/// - For operator overloads: Returns full operator signature (e.g., `"operator+"`)
+/// - For conversion operators: Returns `"operator <type>"`
+/// - For constructors/destructors: Returns class name or `"~ClassName"`
 fn extract_function_name(source: &str, declarator: Option<Node>) -> Option<String> {
     let declarator = declarator?;
 
