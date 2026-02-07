@@ -197,6 +197,12 @@ pub fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         return Some("gomod");
     }
 
+    // Check for Ruby special filenames
+    match path.file_name().and_then(|n| n.to_str()) {
+        Some("Gemfile") | Some("Rakefile") => return Some("rb"),
+        _ => {}
+    }
+
     match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "ts" => Some("ts"),
         "tsx" => Some("tsx"),
@@ -205,6 +211,7 @@ pub fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         "rs" => Some("rs"),
         "py" => Some("py"),
         "go" => Some("go"),
+        "rb" | "rake" => Some("rb"),
         "md" => Some("md"),
         "mdx" => Some("mdx"),
         "json" => Some("json"),
