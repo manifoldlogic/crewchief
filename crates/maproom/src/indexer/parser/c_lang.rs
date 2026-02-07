@@ -13,7 +13,12 @@ pub(super) fn extract_c_chunks(source: &str) -> Vec<SymbolChunk> {
 
     let tree = match parser.parse(source, None) {
         Some(tree) => tree,
-        None => return Vec::new(),
+        None => {
+            tracing::warn!(
+                "Failed to parse C source - malformed syntax or grammar incompatibility"
+            );
+            return Vec::new();
+        }
     };
 
     let mut chunks = Vec::new();
@@ -34,6 +39,23 @@ pub(super) fn extract_c_chunks(source: &str) -> Vec<SymbolChunk> {
             metadata: Some(serde_json::json!(includes)),
         });
     }
+
+    // Log successful parse with chunk summary
+    let func_count = chunks.iter().filter(|c| c.kind == "func").count();
+    let struct_count = chunks.iter().filter(|c| c.kind == "struct").count();
+    let enum_count = chunks.iter().filter(|c| c.kind == "enum").count();
+    let typedef_count = chunks.iter().filter(|c| c.kind == "typedef").count();
+    let other_count = chunks.len() - func_count - struct_count - enum_count - typedef_count;
+
+    tracing::debug!(
+        "Parsed C source: {} chunks extracted ({} functions, {} structs, {} enums, {} typedefs, {} other)",
+        chunks.len(),
+        func_count,
+        struct_count,
+        enum_count,
+        typedef_count,
+        other_count
+    );
 
     chunks
 }
