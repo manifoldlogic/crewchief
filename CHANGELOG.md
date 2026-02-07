@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### C Language Support (crates/maproom)
+
+- C source file (`.c`) indexing with function, struct, enum, typedef, and variable extraction
+- `#include` directive tracking (system vs local headers)
+- Doc comment extraction (`//` and `/* */` styles)
+- Static function detection and storage class metadata
+
 #### Enhanced Worktree Clean (packages/cli)
 
 - **Complete cleanup workflow** - `worktree clean` now performs comprehensive cleanup
@@ -236,6 +243,10 @@ See [packages/daemon-client/README.md#security-considerations](packages/daemon-c
 - **Integration tests**: Actual daemon spawning, search operations, crash recovery
 - **Performance tests**: Latency benchmarks, throughput measurements, connection pooling
 - **Regression tests**: Backward compatibility with existing MCP server functionality
+
+### Known Limitations
+
+- C header files (`.h`) are not indexed — header support deferred to MLLANG-1004 (C++ language support)
 
 ---
 
