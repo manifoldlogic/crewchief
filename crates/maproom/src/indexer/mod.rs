@@ -212,6 +212,7 @@ pub fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         "py" => Some("py"),
         "go" => Some("go"),
         "rb" | "rake" => Some("rb"),
+        "c" => Some("c"),
         "md" => Some("md"),
         "mdx" => Some("mdx"),
         "json" => Some("json"),
