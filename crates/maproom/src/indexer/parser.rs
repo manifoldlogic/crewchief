@@ -3663,6 +3663,200 @@ fn extract_ruby_chunks(source: &str) -> Vec<SymbolChunk> {
     parser
         .set_language(&lang_ruby())
         .expect("Failed to set Ruby language");
-    let _tree = parser.parse(source, None);
-    Vec::new() // Stub - Phase 2 will implement extraction
+    let tree = parser.parse(source, None);
+    let mut chunks = Vec::new();
+
+    if let Some(tree) = tree {
+        let root = tree.root_node();
+        let mut imports = Vec::new(); // For forward compatibility with task 2003
+        let mut visibility = "public"; // Ruby default visibility
+        walk_ruby_decls(source, root, &mut chunks, &mut imports, &mut visibility);
+    }
+
+    chunks
+}
+
+fn walk_ruby_decls(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    imports: &mut Vec<serde_json::Value>,
+    visibility: &mut &str,
+) {
+    match node.kind() {
+        "class" => {
+            extract_ruby_class(source, node, chunks, visibility);
+        }
+        "module" => {
+            extract_ruby_module(source, node, chunks, visibility);
+        }
+        "call" => {
+            // Check if this is a visibility modifier call
+            if let Some(method) = node.child_by_field_name("method") {
+                if let Ok(method_text) = method.utf8_text(source.as_bytes()) {
+                    let method_text = method_text.trim();
+                    // Check if no arguments (affects subsequent methods)
+                    // A call node with just the method name and no arguments is a visibility modifier
+                    let has_arguments = node.child_by_field_name("arguments").is_some();
+                    if !has_arguments {
+                        match method_text {
+                            "private" => *visibility = "private",
+                            "protected" => *visibility = "protected",
+                            "public" => *visibility = "public",
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    // Recursively walk child nodes
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        walk_ruby_decls(source, child, chunks, imports, visibility);
+    }
+}
+
+fn extract_ruby_class(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    visibility: &mut &str,
+) {
+    // Extract class name
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract superclass for signature
+    let signature = node
+        .child_by_field_name("superclass")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract doc comment
+    let docstring = extract_ruby_doc_comment(source, node);
+
+    // Extract superclass name for metadata (strip "< " prefix if present)
+    let base_class = node
+        .child_by_field_name("superclass")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.trim().strip_prefix('<').unwrap_or(s).trim().to_string());
+
+    // Build metadata object
+    let mut metadata_obj = serde_json::Map::new();
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.to_string()),
+    );
+    if let Some(base) = base_class {
+        metadata_obj.insert("base_class".to_string(), serde_json::Value::String(base));
+    }
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "class".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(serde_json::Value::Object(metadata_obj)),
+    });
+
+    // Save current visibility, reset to public for nested content, then restore
+    let saved_visibility = *visibility;
+    *visibility = "public";
+
+    // Recurse into class body
+    if let Some(body) = node.child_by_field_name("body") {
+        let mut imports = Vec::new();
+        walk_ruby_decls(source, body, chunks, &mut imports, visibility);
+    }
+
+    *visibility = saved_visibility;
+}
+
+fn extract_ruby_module(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    visibility: &mut &str,
+) {
+    // Extract module name
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract doc comment
+    let docstring = extract_ruby_doc_comment(source, node);
+
+    // Build metadata object
+    let mut metadata_obj = serde_json::Map::new();
+    metadata_obj.insert(
+        "visibility".to_string(),
+        serde_json::Value::String(visibility.to_string()),
+    );
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "module".to_string(),
+        signature: None,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(serde_json::Value::Object(metadata_obj)),
+    });
+
+    // Save current visibility, reset to public for nested content, then restore
+    let saved_visibility = *visibility;
+    *visibility = "public";
+
+    // Recurse into module body
+    if let Some(body) = node.child_by_field_name("body") {
+        let mut imports = Vec::new();
+        walk_ruby_decls(source, body, chunks, &mut imports, visibility);
+    }
+
+    *visibility = saved_visibility;
+}
+
+fn extract_ruby_doc_comment(source: &str, node: Node) -> Option<String> {
+    let start_line = node.start_position().row;
+    let lines: Vec<&str> = source.lines().collect();
+    let mut doc_lines = Vec::new();
+
+    // Walk backward from the line before the node
+    for i in (0..start_line).rev() {
+        let line = lines.get(i)?.trim();
+        if line.starts_with('#') {
+            // Strip "# " or "#" prefix
+            let comment = if let Some(stripped) = line.strip_prefix("# ") {
+                stripped
+            } else if let Some(stripped) = line.strip_prefix('#') {
+                stripped
+            } else {
+                ""
+            };
+            doc_lines.insert(0, comment);
+        } else if !line.is_empty() {
+            // Non-comment, non-blank line - stop
+            break;
+        }
+    }
+
+    if doc_lines.is_empty() {
+        None
+    } else {
+        Some(doc_lines.join("\n"))
+    }
 }

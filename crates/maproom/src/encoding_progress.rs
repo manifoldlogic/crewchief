@@ -2658,10 +2658,7 @@ mod benchmark_tests {
         println!();
         println!("Benchmark: 100K chunks performance test");
         println!("----------------------------------------");
-        println!(
-            "Database setup:        {}ms",
-            setup_duration.as_millis()
-        );
+        println!("Database setup:        {}ms", setup_duration.as_millis());
 
         // ---- Warm-up query (not measured) ----
         let _ = get_encoding_progress(store.clone(), None).await.unwrap();
@@ -2670,10 +2667,7 @@ mod benchmark_tests {
         let start = Instant::now();
         let global_result = get_encoding_progress(store.clone(), None).await.unwrap();
         let global_duration = start.elapsed();
-        println!(
-            "Global progress query: {}ms",
-            global_duration.as_millis()
-        );
+        println!("Global progress query: {}ms", global_duration.as_millis());
 
         // Sanity-check the data
         assert_eq!(
@@ -2698,10 +2692,7 @@ mod benchmark_tests {
             .await
             .unwrap();
         let repo_duration = start.elapsed();
-        println!(
-            "Repo filtered query:   {}ms",
-            repo_duration.as_millis()
-        );
+        println!("Repo filtered query:   {}ms", repo_duration.as_millis());
 
         assert_eq!(
             repo_result.total_chunks, CHUNKS_PER_REPO as i64,
@@ -2718,10 +2709,7 @@ mod benchmark_tests {
         let start = Instant::now();
         let run_result = get_encoding_progress(store.clone(), None).await.unwrap();
         let run_duration = start.elapsed();
-        println!(
-            "With active run:       {}ms",
-            run_duration.as_millis()
-        );
+        println!("With active run:       {}ms", run_duration.as_millis());
 
         assert!(
             run_result.active_run.is_some(),
