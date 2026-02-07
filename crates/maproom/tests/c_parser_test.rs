@@ -185,7 +185,10 @@ typedef struct Rectangle {
 
     // Verify metadata contains underlying type
     let metadata = uint_typedef.metadata.as_ref().unwrap();
-    assert!(metadata["underlying_type"].as_str().unwrap().contains("unsigned int"));
+    assert!(metadata["underlying_type"]
+        .as_str()
+        .unwrap()
+        .contains("unsigned int"));
 
     // Find Point typedef (anonymous struct)
     let point_typedef = chunks

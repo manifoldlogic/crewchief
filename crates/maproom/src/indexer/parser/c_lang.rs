@@ -371,10 +371,7 @@ fn extract_c_global_variable(source: &str, node: Node, chunks: &mut Vec<SymbolCh
 
                 let mut metadata_obj = serde_json::Map::new();
                 if let Some(ref typ) = type_text {
-                    metadata_obj.insert(
-                        "type".to_string(),
-                        serde_json::Value::String(typ.clone()),
-                    );
+                    metadata_obj.insert("type".to_string(), serde_json::Value::String(typ.clone()));
                 }
 
                 let start = node.start_position();
@@ -400,7 +397,10 @@ fn extract_c_global_variable(source: &str, node: Node, chunks: &mut Vec<SymbolCh
     // Fallback: try to extract name from the declarator directly
     if let Some(name) = extract_declarator_name(source, declarator) {
         // Check if we already added this (avoid duplicates)
-        if !chunks.iter().any(|c| c.symbol_name.as_deref() == Some(&name)) {
+        if !chunks
+            .iter()
+            .any(|c| c.symbol_name.as_deref() == Some(&name))
+        {
             let docstring = extract_c_doc_comment(source, node);
 
             let mut metadata_obj = serde_json::Map::new();
@@ -627,7 +627,10 @@ fn extract_function_name_and_params(source: &str, node: Node) -> (Option<String>
             }
         }
         "identifier" => {
-            let name = node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+            let name = node
+                .utf8_text(source.as_bytes())
+                .ok()
+                .map(|s| s.to_string());
             (name, None)
         }
         _ => (None, None),
@@ -636,7 +639,10 @@ fn extract_function_name_and_params(source: &str, node: Node) -> (Option<String>
 
 fn extract_identifier(source: &str, node: Node) -> Option<String> {
     match node.kind() {
-        "identifier" => node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string()),
+        "identifier" => node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string()),
         "pointer_declarator" => {
             let declarator = node.child_by_field_name("declarator")?;
             extract_identifier(source, declarator)
@@ -651,7 +657,10 @@ fn extract_identifier(source: &str, node: Node) -> Option<String> {
 
 fn extract_declarator_name(source: &str, node: Node) -> Option<String> {
     match node.kind() {
-        "identifier" => node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string()),
+        "identifier" => node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string()),
         "init_declarator" => {
             let declarator = node.child_by_field_name("declarator")?;
             extract_declarator_name(source, declarator)
@@ -664,7 +673,10 @@ fn extract_declarator_name(source: &str, node: Node) -> Option<String> {
             let declarator = node.child_by_field_name("declarator")?;
             extract_declarator_name(source, declarator)
         }
-        "type_identifier" => node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string()),
+        "type_identifier" => node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string()),
         _ => None,
     }
 }
@@ -673,7 +685,10 @@ fn extract_storage_class(source: &str, node: Node) -> Option<String> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "storage_class_specifier" {
-            return child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+            return child
+                .utf8_text(source.as_bytes())
+                .ok()
+                .map(|s| s.to_string());
         }
     }
     None
