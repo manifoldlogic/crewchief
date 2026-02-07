@@ -24,6 +24,19 @@ pub(super) fn extract_java_chunks(source: &str) -> Vec<SymbolChunk> {
     let root = tree.root_node();
     walk_java_decls(source, root, &mut chunks, &mut imports);
 
+    // Aggregate imports into __imports__ chunk
+    if !imports.is_empty() {
+        chunks.push(SymbolChunk {
+            symbol_name: Some("__imports__".to_string()),
+            kind: "imports".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: 1,
+            end_line: 1,
+            metadata: Some(serde_json::json!(imports)),
+        });
+    }
+
     chunks
 }
 
@@ -45,14 +58,48 @@ fn walk_java_decls(
             "method_declaration" => extract_java_method(source, child, chunks),
             "constructor_declaration" => extract_java_constructor(source, child, chunks),
             "field_declaration" => extract_java_field(source, child, chunks),
-            "import_declaration" => {
-                // Defer to Phase 2.3 (MLLANG-1002.2003)
-            }
+            "import_declaration" => collect_java_import(source, child, imports),
             _ => {
                 // Recurse into other nodes
                 walk_java_decls(source, child, chunks, imports);
             }
         }
+    }
+}
+
+/// Collect import declaration metadata
+fn collect_java_import(source: &str, node: Node, imports: &mut Vec<serde_json::Value>) {
+    // Determine if static import
+    let is_static = node
+        .children(&mut node.walk())
+        .any(|child| child.kind() == "static");
+
+    // Extract import path and check for wildcard
+    let mut path = String::new();
+    let mut is_wildcard = false;
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        match child.kind() {
+            "scoped_identifier" | "identifier" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    path = text.to_string();
+                }
+            }
+            "asterisk" => {
+                is_wildcard = true;
+                path.push_str(".*");
+            }
+            _ => {}
+        }
+    }
+
+    if !path.is_empty() {
+        imports.push(serde_json::json!({
+            "path": path,
+            "is_static": is_static,
+            "is_wildcard": is_wildcard,
+        }));
     }
 }
 
@@ -646,5 +693,92 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
         visibility,
         modifiers,
         annotations,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_java_import_collection() {
+        let source = r#"
+import java.util.List;
+import java.util.*;
+import static java.lang.Math.PI;
+import static java.lang.System.*;
+
+public class TestImports {
+    public void testMethod() {
+        System.out.println("Hello");
+    }
+}
+"#;
+
+        let chunks = extract_java_chunks(source);
+
+        // Find the __imports__ chunk
+        let imports_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_deref() == Some("__imports__"));
+
+        assert!(imports_chunk.is_some(), "__imports__ chunk should exist");
+
+        let imports_chunk = imports_chunk.unwrap();
+        assert_eq!(imports_chunk.kind, "imports");
+        assert_eq!(imports_chunk.start_line, 1);
+        assert_eq!(imports_chunk.end_line, 1);
+
+        // Verify metadata contains array of imports
+        let metadata = imports_chunk.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+        assert_eq!(imports_array.len(), 4, "Should have 4 imports");
+
+        // Check regular import
+        let import1 = &imports_array[0];
+        assert_eq!(import1["path"], "java.util.List");
+        assert_eq!(import1["is_static"], false);
+        assert_eq!(import1["is_wildcard"], false);
+
+        // Check wildcard import
+        let import2 = &imports_array[1];
+        assert_eq!(import2["path"], "java.util.*");
+        assert_eq!(import2["is_static"], false);
+        assert_eq!(import2["is_wildcard"], true);
+
+        // Check static import
+        let import3 = &imports_array[2];
+        assert_eq!(import3["path"], "java.lang.Math.PI");
+        assert_eq!(import3["is_static"], true);
+        assert_eq!(import3["is_wildcard"], false);
+
+        // Check static wildcard import
+        let import4 = &imports_array[3];
+        assert_eq!(import4["path"], "java.lang.System.*");
+        assert_eq!(import4["is_static"], true);
+        assert_eq!(import4["is_wildcard"], true);
+    }
+
+    #[test]
+    fn test_java_no_imports() {
+        let source = r#"
+public class NoImports {
+    public void method() {
+        System.out.println("Hello");
+    }
+}
+"#;
+
+        let chunks = extract_java_chunks(source);
+
+        // Should not have __imports__ chunk
+        let imports_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_deref() == Some("__imports__"));
+
+        assert!(
+            imports_chunk.is_none(),
+            "__imports__ chunk should not exist when no imports"
+        );
     }
 }
