@@ -213,3 +213,320 @@ namespace MyNamespace
     assert!(metadata.is_array());
     assert!(metadata.as_array().unwrap().len() >= 3);
 }
+
+#[test]
+fn test_csharp_access_modifiers() {
+    let source = r#"
+public class PublicClass { }
+internal class InternalClass { }
+class DefaultClass { }  // Should be internal for top-level, private for nested
+
+public class Container
+{
+    public void PublicMethod() { }
+    private void PrivateMethod() { }
+    protected void ProtectedMethod() { }
+    internal void InternalMethod() { }
+    protected internal void ProtectedInternalMethod() { }
+    private protected void PrivateProtectedMethod() { }
+    void DefaultMethod() { }  // Should be private
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let public_class = chunks
+        .iter()
+        .find(|c| c.kind == "class" && c.symbol_name.as_ref().unwrap() == "PublicClass")
+        .unwrap();
+    assert_eq!(
+        public_class.metadata.as_ref().unwrap()["visibility"],
+        "public"
+    );
+
+    let public_method = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "PublicMethod")
+        .unwrap();
+    assert_eq!(
+        public_method.metadata.as_ref().unwrap()["visibility"],
+        "public"
+    );
+
+    let private_method = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "PrivateMethod")
+        .unwrap();
+    assert_eq!(
+        private_method.metadata.as_ref().unwrap()["visibility"],
+        "private"
+    );
+
+    let protected_internal_method = chunks
+        .iter()
+        .find(|c| {
+            c.kind == "method" && c.symbol_name.as_ref().unwrap() == "ProtectedInternalMethod"
+        })
+        .unwrap();
+    assert_eq!(
+        protected_internal_method.metadata.as_ref().unwrap()["visibility"],
+        "protected internal"
+    );
+}
+
+#[test]
+fn test_csharp_generics() {
+    let source = r#"
+public class GenericClass<T, U>
+{
+    public T GetValue<V>(V input)
+    {
+        return default(T);
+    }
+}
+
+public interface IGeneric<T> where T : class
+{
+    T Get();
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let generic_class = chunks
+        .iter()
+        .find(|c| c.kind == "class" && c.symbol_name.as_ref().unwrap() == "GenericClass")
+        .unwrap();
+    assert!(generic_class.signature.as_ref().unwrap().contains("<T, U>"));
+
+    let get_value = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "GetValue")
+        .unwrap();
+    assert!(get_value.signature.as_ref().unwrap().contains("<V>"));
+
+    let generic_interface = chunks
+        .iter()
+        .find(|c| c.kind == "interface" && c.symbol_name.as_ref().unwrap() == "IGeneric")
+        .unwrap();
+    assert!(generic_interface
+        .signature
+        .as_ref()
+        .unwrap()
+        .contains("<T>"));
+}
+
+#[test]
+fn test_csharp_generic_constraints() {
+    let source = r#"
+public class MyClass
+{
+    public T Process<T>(T input) where T : IComparable, ICloneable
+    {
+        return input;
+    }
+
+    public void MultiConstraint<T, U>(T t, U u)
+        where T : class, new()
+        where U : struct
+    {
+    }
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let process = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "Process")
+        .unwrap();
+    let sig = process.signature.as_ref().unwrap();
+    assert!(sig.contains("where T"));
+    assert!(sig.contains("IComparable"));
+
+    let multi = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "MultiConstraint")
+        .unwrap();
+    let multi_sig = multi.signature.as_ref().unwrap();
+    assert!(multi_sig.contains("where T"));
+    assert!(multi_sig.contains("where U"));
+}
+
+#[test]
+fn test_csharp_doc_comments() {
+    let source = r#"
+public class MyClass
+{
+    /// <summary>
+    /// This is a multi-line doc comment
+    /// with XML tags
+    /// </summary>
+    /// <param name="x">The X parameter</param>
+    /// <returns>The result</returns>
+    public int Calculate(int x)
+    {
+        return x;
+    }
+
+    // Regular comment - should NOT be captured
+    public void NotDocumented() { }
+
+    ///
+    /// Doc comment with blank line
+    ///
+    public void BlankLineDoc() { }
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let calculate = chunks
+        .iter()
+        .find(|c| c.symbol_name.as_ref().unwrap() == "Calculate")
+        .unwrap();
+    let docstring = calculate.docstring.as_ref().unwrap();
+    assert!(docstring.contains("<summary>"));
+    assert!(docstring.contains("multi-line"));
+    assert!(docstring.contains("<param"));
+    assert!(docstring.contains("<returns>"));
+
+    // Regular comments "//" should NOT be captured as docstrings
+    // The parser's backward walk stops at non-/// comments
+    let not_documented = chunks
+        .iter()
+        .find(|c| c.symbol_name.as_ref().unwrap() == "NotDocumented");
+    // Method may or may not be extracted, but if it is, docstring should be None
+    if let Some(nd) = not_documented {
+        assert!(nd.docstring.is_none());
+    }
+
+    let blank_line_doc = chunks
+        .iter()
+        .find(|c| c.symbol_name.as_ref().unwrap() == "BlankLineDoc")
+        .unwrap();
+    assert!(blank_line_doc.docstring.is_some());
+}
+
+#[test]
+fn test_csharp_nested_types() {
+    let source = r#"
+public class OuterClass
+{
+    public void OuterMethod() { }
+
+    public class InnerClass
+    {
+        public void InnerMethod() { }
+    }
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let outer = chunks
+        .iter()
+        .find(|c| c.kind == "class" && c.symbol_name.as_ref().unwrap() == "OuterClass")
+        .unwrap();
+    assert_eq!(outer.kind, "class");
+
+    let inner = chunks
+        .iter()
+        .find(|c| c.kind == "class" && c.symbol_name.as_ref().unwrap() == "InnerClass")
+        .unwrap();
+    assert_eq!(inner.kind, "class");
+
+    let outer_method = chunks
+        .iter()
+        .find(|c| c.symbol_name.as_ref().unwrap() == "OuterMethod")
+        .unwrap();
+    assert_eq!(outer_method.kind, "method");
+
+    let inner_method = chunks
+        .iter()
+        .find(|c| c.symbol_name.as_ref().unwrap() == "InnerMethod")
+        .unwrap();
+    assert_eq!(inner_method.kind, "method");
+}
+
+#[test]
+fn test_csharp_file_scoped_namespace() {
+    let source = r#"
+namespace MyNamespace;
+
+public class MyClass { }
+public interface IMyInterface { }
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let namespace = chunks.iter().find(|c| c.kind == "namespace").unwrap();
+    assert_eq!(namespace.symbol_name.as_ref().unwrap(), "MyNamespace");
+
+    let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+    assert_eq!(class.symbol_name.as_ref().unwrap(), "MyClass");
+
+    let interface = chunks.iter().find(|c| c.kind == "interface").unwrap();
+    assert_eq!(interface.symbol_name.as_ref().unwrap(), "IMyInterface");
+}
+
+#[test]
+fn test_csharp_expression_bodied_members() {
+    let source = r#"
+public class MyClass
+{
+    public int Calculate(int x) => x * 2;
+
+    public string Name => "DefaultName";
+
+    public int Count
+    {
+        get => _count;
+        set => _count = value;
+    }
+
+    private int _count;
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    let calculate = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "Calculate")
+        .unwrap();
+    assert!(calculate.signature.is_some());
+
+    let name = chunks
+        .iter()
+        .find(|c| c.kind == "property" && c.symbol_name.as_ref().unwrap() == "Name")
+        .unwrap();
+    assert!(name.signature.as_ref().unwrap().contains("=>"));
+
+    let count = chunks
+        .iter()
+        .find(|c| c.kind == "property" && c.symbol_name.as_ref().unwrap() == "Count")
+        .unwrap();
+    assert!(count.signature.is_some());
+}
+
+#[test]
+fn test_csharp_empty_file() {
+    let source = "";
+    let chunks = parser::extract_chunks(source, "cs");
+    assert!(chunks.is_empty());
+}
+
+#[test]
+fn test_csharp_syntax_error() {
+    let source = r#"
+public class Broken {
+    public void Method(
+    // Missing closing paren and brace
+"#;
+
+    // Should not panic
+    let _chunks = parser::extract_chunks(source, "cs");
+    // May return partial results or empty - either is acceptable
+    // Key assertion: no panic occurred
+}
