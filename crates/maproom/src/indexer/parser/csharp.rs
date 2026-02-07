@@ -1,4 +1,82 @@
-//! C# parser
+//! C# parser for extracting symbol chunks from C# source code.
+//!
+//! This module implements chunk extraction for C# using the tree-sitter-c-sharp grammar (version 0.21.3).
+//! It extracts 10 types of C# constructs: namespaces, classes, interfaces, structs, enums, methods,
+//! constructors, properties, events, and delegates.
+//!
+//! ## Extraction Scope
+//!
+//! **Container types (recursively extracted):**
+//! - `namespace` - Both block-scoped (`namespace Foo { }`) and file-scoped (`namespace Foo;`)
+//! - `class` - Including generic type parameters, base classes, and interfaces
+//! - `interface` - Including generic type parameters and base interfaces
+//! - `struct` - Including generic type parameters and interfaces
+//!
+//! **Type declarations (extracted, not recursed into):**
+//! - `enum` - Including base type (e.g., `enum Color : byte`)
+//! - `delegate` - Including generic type parameters and method signatures
+//!
+//! **Member declarations (extracted from within container types):**
+//! - `method` - Including generic type parameters, constraint clauses, expression-bodied methods
+//! - `constructor` - Including parameters and initializers
+//! - `property` - Including auto-properties, read-only properties, expression-bodied properties
+//! - `event` - Event declarations with explicit add/remove accessors
+//!
+//! ## NOT Extracted
+//!
+//! The following C# constructs are intentionally not extracted:
+//! - **Fields** - Too low-level for semantic search (local variable granularity)
+//! - **Indexers** - Special case of properties, deferred to future enhancement
+//! - **Operators** - Operator overloads, deferred to future enhancement
+//! - **Records** - C# 9+ feature, deferred to follow-up ticket
+//! - **Field-like events** - Events declared without explicit accessors (e.g., `public event EventHandler Click;`)
+//!
+//! ## Recursion Strategy
+//!
+//! The parser walks the AST recursively using `walk_csharp_decls()`:
+//! - **Container types** (namespace, class, interface, struct) recurse into their body declarations
+//! - **Member declarations** (method, constructor, property, event) do NOT recurse into their bodies
+//! - **Type declarations** (enum, delegate) are leaf nodes (no body to recurse into)
+//!
+//! This strategy ensures we extract the declaration signatures without descending into implementation details.
+//!
+//! ## Documentation Comments
+//!
+//! C# uses XML documentation comments with `///` syntax. The parser extracts these by walking
+//! backward from the declaration to collect all contiguous `///` lines, preserving XML tags for search.
+//! Blank lines between comment blocks are allowed.
+//!
+//! ## Import Aggregation
+//!
+//! All `using` directives in a file are aggregated into a single `__imports__` chunk with kind `"imports"`.
+//! This includes:
+//! - Regular using directives (`using System;`)
+//! - Static using directives (`using static System.Math;`)
+//! - Using aliases (`using Json = System.Text.Json;`)
+//! - Global using directives (`global using System;`)
+//!
+//! ## Grammar Compatibility
+//!
+//! This parser requires `tree-sitter-c-sharp = "0.21.3"` which is compatible with `tree-sitter = "0.22"`.
+//! The grammar version is pinned to ensure AST node structure stability. Field names like `name`, `body`,
+//! `parameters`, `type` are assumed to match the 0.21.3 grammar structure.
+//!
+//! ## Example
+//!
+//! ```csharp
+//! namespace MyApp {
+//!     /// <summary>Manages user authentication.</summary>
+//!     public class AuthService {
+//!         /// <summary>Authenticates a user.</summary>
+//!         public bool Login(string username, string password) { ... }
+//!     }
+//! }
+//! ```
+//!
+//! Extracts:
+//! - 1 namespace chunk: `MyApp`
+//! - 1 class chunk: `AuthService` with doc comment
+//! - 1 method chunk: `Login(string username, string password) : bool` with doc comment
 
 use tree_sitter::{Node, Parser};
 
