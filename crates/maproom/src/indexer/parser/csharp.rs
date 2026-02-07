@@ -19,7 +19,18 @@ pub(super) fn extract_csharp_chunks(source: &str) -> Vec<SymbolChunk> {
         let mut imports = Vec::new();
         walk_csharp_decls(source, root, &mut chunks, &mut imports);
 
-        // Import aggregation will be added in task 2003
+        // Create __imports__ chunk if we collected any imports
+        if !imports.is_empty() {
+            chunks.push(SymbolChunk {
+                symbol_name: Some("__imports__".to_string()),
+                kind: "imports".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: 1,
+                metadata: Some(serde_json::json!(imports)),
+            });
+        }
     }
 
     chunks
@@ -629,15 +640,17 @@ fn extract_csharp_event_field(source: &str, node: Node, chunks: &mut Vec<SymbolC
     let docstring = extract_csharp_doc_comment(source, node);
 
     // Extract type - it's in the variable_declaration child
-    let event_type =
-        if let Some(var_decl_node) = node.children(&mut node.walk()).find(|n| n.kind() == "variable_declaration") {
-            var_decl_node
-                .child_by_field_name("type")
-                .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        } else {
-            node.child_by_field_name("type")
-                .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        };
+    let event_type = if let Some(var_decl_node) = node
+        .children(&mut node.walk())
+        .find(|n| n.kind() == "variable_declaration")
+    {
+        var_decl_node
+            .child_by_field_name("type")
+            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+    } else {
+        node.child_by_field_name("type")
+            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+    };
 
     // Event fields can declare multiple events in one statement
     let mut cursor = node.walk();
@@ -673,19 +686,135 @@ fn extract_csharp_event_field(source: &str, node: Node, chunks: &mut Vec<SymbolC
     }
 }
 
-#[allow(unused_variables, clippy::ptr_arg)]
 fn extract_csharp_namespace(
     source: &str,
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
 ) {
-    // Stub - will be implemented in task 2003
+    // Extract qualified name (e.g., "MyCompany.MyProduct")
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    let docstring = extract_csharp_doc_comment(source, node);
+
+    if let Some(name) = name {
+        chunks.push(SymbolChunk {
+            symbol_name: Some(name),
+            kind: "namespace".to_string(),
+            signature: None,
+            docstring,
+            start_line: (node.start_position().row + 1) as i32,
+            end_line: (node.end_position().row + 1) as i32,
+            metadata: Some(serde_json::json!({})),
+        });
+    }
+
+    // Recurse into namespace body
+    if node.kind() == "namespace_declaration" {
+        // Block-scoped namespace: recurse into body
+        if let Some(body) = node.child_by_field_name("body") {
+            for child in body.children(&mut body.walk()) {
+                walk_csharp_decls(source, child, chunks, imports);
+            }
+        }
+    } else if node.kind() == "file_scoped_namespace_declaration" {
+        // File-scoped namespace: types are siblings, not children
+        // Walk all siblings following this namespace declaration
+        if let Some(parent) = node.parent() {
+            let mut start_walking = false;
+            for sibling in parent.children(&mut parent.walk()) {
+                if sibling.id() == node.id() {
+                    start_walking = true;
+                    continue;
+                }
+                if start_walking {
+                    walk_csharp_decls(source, sibling, chunks, imports);
+                }
+            }
+        }
+    }
 }
 
-#[allow(unused_variables, clippy::ptr_arg)]
 fn collect_csharp_using(source: &str, node: Node, imports: &mut Vec<serde_json::Value>) {
-    // Stub - will be implemented in task 2003
+    // Using directives can be:
+    // - Regular: using System.Collections.Generic;
+    // - Static: using static Math;
+    // - Global: global using System;
+    // - Alias: using Alias = Namespace.Type;
+
+    let mut using_type = "regular";
+    let mut target = String::new();
+
+    // Check for 'global' modifier
+    let has_global = node
+        .children(&mut node.walk())
+        .any(|c| c.kind() == "global");
+
+    if has_global {
+        using_type = "global";
+    }
+
+    // Check for 'static' keyword
+    let has_static = node
+        .children(&mut node.walk())
+        .any(|c| c.kind() == "static");
+
+    if has_static {
+        using_type = if has_global {
+            "global_static"
+        } else {
+            "static"
+        };
+    }
+
+    // Check for alias (presence of '=' child)
+    let has_equals = node.children(&mut node.walk()).any(|c| c.kind() == "=");
+
+    if has_equals {
+        using_type = "alias";
+        // Collect all identifier and qualified_name children
+        // First identifier is the alias, subsequent ones are the target
+        let mut found_alias = false;
+        for child in node.children(&mut node.walk()) {
+            if child.kind() == "identifier" && !found_alias {
+                // First identifier is the alias name
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    target.push_str(text);
+                    target.push_str(" = ");
+                    found_alias = true;
+                }
+            } else if child.kind() == "qualified_name"
+                || (child.kind() == "identifier" && found_alias)
+            {
+                // Target type
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    target.push_str(text);
+                    break;
+                }
+            }
+        }
+    } else {
+        // Extract target namespace/type
+        // The target is either an identifier or qualified_name child
+        for child in node.children(&mut node.walk()) {
+            if child.kind() == "identifier" || child.kind() == "qualified_name" {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    target.push_str(text);
+                    break;
+                }
+            }
+        }
+    }
+
+    if !target.is_empty() {
+        imports.push(serde_json::json!({
+            "type": using_type,
+            "target": target,
+        }));
+    }
 }
 
 #[allow(unused_variables)]
@@ -942,11 +1071,7 @@ class MyClass {
         let chunks = extract_csharp_chunks(source);
         let constructor = chunks.iter().find(|c| c.kind == "constructor").unwrap();
         assert_eq!(constructor.symbol_name.as_deref(), Some("MyClass"));
-        assert!(constructor
-            .signature
-            .as_ref()
-            .unwrap()
-            .contains("(int x)"));
+        assert!(constructor.signature.as_ref().unwrap().contains("(int x)"));
     }
 
     #[test]
@@ -1094,5 +1219,268 @@ class MyClass {
         assert!(chunks.iter().any(|c| c.kind == "method"));
         assert!(chunks.iter().any(|c| c.kind == "property"));
         assert!(chunks.iter().any(|c| c.kind == "event"));
+    }
+
+    // Namespace and using directive tests (task 2003)
+
+    #[test]
+    fn test_extract_block_scoped_namespace() {
+        let source = r#"
+namespace MyCompany.MyProduct {
+    public class MyClass {
+        public void Method() {}
+    }
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should have namespace + class + method
+        let namespace = chunks.iter().find(|c| c.kind == "namespace").unwrap();
+        assert_eq!(
+            namespace.symbol_name.as_deref(),
+            Some("MyCompany.MyProduct")
+        );
+        assert_eq!(namespace.kind, "namespace");
+
+        // Class should be extracted from namespace body
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        assert_eq!(class.symbol_name.as_deref(), Some("MyClass"));
+
+        // Method should be extracted from class body
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        assert_eq!(method.symbol_name.as_deref(), Some("Method"));
+    }
+
+    #[test]
+    fn test_extract_file_scoped_namespace() {
+        let source = r#"
+namespace MyCompany.MyProduct;
+
+public class MyClass {
+    public void Method() {}
+}
+
+public interface IMyInterface {
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should have namespace + class + method + interface
+        let namespace = chunks.iter().find(|c| c.kind == "namespace").unwrap();
+        assert_eq!(
+            namespace.symbol_name.as_deref(),
+            Some("MyCompany.MyProduct")
+        );
+        assert_eq!(namespace.kind, "namespace");
+
+        // Class should be extracted (sibling to namespace)
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        assert_eq!(class.symbol_name.as_deref(), Some("MyClass"));
+
+        // Interface should be extracted (sibling to namespace)
+        let interface = chunks.iter().find(|c| c.kind == "interface").unwrap();
+        assert_eq!(interface.symbol_name.as_deref(), Some("IMyInterface"));
+
+        // Method should be extracted from class body
+        let method = chunks.iter().find(|c| c.kind == "method").unwrap();
+        assert_eq!(method.symbol_name.as_deref(), Some("Method"));
+    }
+
+    #[test]
+    fn test_nested_namespaces() {
+        let source = r#"
+namespace Outer {
+    namespace Inner {
+        public class MyClass {}
+    }
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should extract both namespaces
+        let namespaces: Vec<_> = chunks.iter().filter(|c| c.kind == "namespace").collect();
+        assert_eq!(namespaces.len(), 2);
+
+        // Find outer namespace
+        let outer = namespaces
+            .iter()
+            .find(|n| n.symbol_name.as_deref() == Some("Outer"))
+            .unwrap();
+        assert_eq!(outer.kind, "namespace");
+
+        // Find inner namespace
+        let inner = namespaces
+            .iter()
+            .find(|n| n.symbol_name.as_deref() == Some("Inner"))
+            .unwrap();
+        assert_eq!(inner.kind, "namespace");
+
+        // Class should be extracted
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+        assert_eq!(class.symbol_name.as_deref(), Some("MyClass"));
+    }
+
+    #[test]
+    fn test_using_directive_regular() {
+        let source = r#"
+using System;
+using System.Collections.Generic;
+
+class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should have __imports__ chunk
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        assert_eq!(imports.symbol_name.as_deref(), Some("__imports__"));
+
+        let metadata = imports.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+        assert_eq!(imports_array.len(), 2);
+
+        // Check first using
+        assert_eq!(imports_array[0]["type"], "regular");
+        assert_eq!(imports_array[0]["target"], "System");
+
+        // Check second using
+        assert_eq!(imports_array[1]["type"], "regular");
+        assert_eq!(imports_array[1]["target"], "System.Collections.Generic");
+    }
+
+    #[test]
+    fn test_using_directive_static() {
+        let source = r#"
+using static System.Math;
+
+class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        let metadata = imports.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+
+        assert_eq!(imports_array.len(), 1);
+        assert_eq!(imports_array[0]["type"], "static");
+        assert_eq!(imports_array[0]["target"], "System.Math");
+    }
+
+    #[test]
+    fn test_using_directive_global() {
+        let source = r#"
+global using System;
+
+class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        let metadata = imports.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+
+        assert_eq!(imports_array.len(), 1);
+        assert_eq!(imports_array[0]["type"], "global");
+        assert_eq!(imports_array[0]["target"], "System");
+    }
+
+    #[test]
+    fn test_using_directive_global_static() {
+        let source = r#"
+global using static System.Math;
+
+class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        let metadata = imports.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+
+        assert_eq!(imports_array.len(), 1);
+        assert_eq!(imports_array[0]["type"], "global_static");
+        assert_eq!(imports_array[0]["target"], "System.Math");
+    }
+
+    #[test]
+    fn test_using_directive_alias() {
+        let source = r#"
+using StringList = System.Collections.Generic.List<string>;
+
+class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        let metadata = imports.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+
+        assert_eq!(imports_array.len(), 1);
+        assert_eq!(imports_array[0]["type"], "alias");
+        assert_eq!(
+            imports_array[0]["target"],
+            "StringList = System.Collections.Generic.List<string>"
+        );
+    }
+
+    #[test]
+    fn test_no_imports_chunk_when_empty() {
+        let source = r#"
+class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should NOT have __imports__ chunk
+        assert!(chunks.iter().all(|c| c.kind != "imports"));
+    }
+
+    #[test]
+    fn test_namespace_and_using_combined() {
+        let source = r#"
+using System;
+using System.Collections.Generic;
+
+namespace MyCompany.MyProduct {
+    public class MyClass {
+        public void Method() {}
+    }
+}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should have __imports__, namespace, class, and method
+        assert!(chunks.iter().any(|c| c.kind == "imports"));
+        assert!(chunks.iter().any(|c| c.kind == "namespace"));
+        assert!(chunks.iter().any(|c| c.kind == "class"));
+        assert!(chunks.iter().any(|c| c.kind == "method"));
+
+        // Verify imports
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        let metadata = imports.metadata.as_ref().unwrap();
+        let imports_array = metadata.as_array().unwrap();
+        assert_eq!(imports_array.len(), 2);
+    }
+
+    #[test]
+    fn test_file_scoped_namespace_with_using() {
+        let source = r#"
+using System;
+
+namespace MyCompany.MyProduct;
+
+public class MyClass {}
+"#;
+        let chunks = extract_csharp_chunks(source);
+
+        // Should have __imports__, namespace, and class
+        let imports = chunks.iter().find(|c| c.kind == "imports").unwrap();
+        let namespace = chunks.iter().find(|c| c.kind == "namespace").unwrap();
+        let class = chunks.iter().find(|c| c.kind == "class").unwrap();
+
+        assert_eq!(imports.symbol_name.as_deref(), Some("__imports__"));
+        assert_eq!(
+            namespace.symbol_name.as_deref(),
+            Some("MyCompany.MyProduct")
+        );
+        assert_eq!(class.symbol_name.as_deref(), Some("MyClass"));
     }
 }
