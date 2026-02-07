@@ -39,6 +39,11 @@ use tree_sitter::{Node, Parser};
 use super::common::lang_cpp;
 use crate::indexer::SymbolChunk;
 
+// Access specifier constants
+const ACCESS_PUBLIC: &str = "public";
+const ACCESS_PRIVATE: &str = "private";
+const ACCESS_PROTECTED: &str = "protected";
+
 pub(super) fn extract_cpp_chunks(source: &str) -> Vec<SymbolChunk> {
     let mut parser = Parser::new();
     parser
@@ -113,116 +118,66 @@ fn walk_cpp_decls(
     }
 }
 
-/// Extracts a class declaration, including inheritance and template parameters.
+/// Extracts a class declaration.
 ///
-/// Parses the base class list to populate `metadata.base_classes` with inheritance
-/// relationships. If the class is preceded by a template declaration, template parameters
-/// are extracted and included in the signature.
-///
-/// # Inheritance Extraction
-///
-/// The base class list is parsed to extract each base class name and access specifier
-/// (e.g., `public Base`, `private Impl`). Multiple inheritance is supported.
-///
-/// # Access Specifier Default
-///
-/// Classes default to `private` access for members (unless overridden by `public:` labels).
+/// Classes default to `private` access for members.
 fn extract_cpp_class(
     source: &str,
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     template_params: Option<String>,
 ) {
-    // Extract class name
-    let name = node
-        .child_by_field_name("name")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string());
-
-    if name.is_none() {
-        debug!(
-            node_kind = node.kind(),
-            line = node.start_position().row + 1,
-            "Failed to extract class name - identifier not found"
-        );
-    }
-
-    // Extract base classes
-    let mut base_classes = Vec::new();
-    if let Some(base_clause) = node.child_by_field_name("base_clause") {
-        let mut cursor = base_clause.walk();
-        for child in base_clause.children(&mut cursor) {
-            if child.kind() == "type_identifier" || child.kind() == "scoped_type_identifier" {
-                if let Ok(base_name) = child.utf8_text(source.as_bytes()) {
-                    base_classes.push(base_name.to_string());
-                }
-            }
-        }
-    }
-
-    // Build signature with base classes
-    let signature = if !base_classes.is_empty() {
-        Some(format!(": {}", base_classes.join(", ")))
-    } else {
-        None
-    };
-
-    // Extract doc comment
-    let docstring = extract_cpp_doc_comment(source, node);
-
-    // Build metadata
-    let mut metadata_obj = serde_json::Map::new();
-    metadata_obj.insert(
-        "access".to_string(),
-        serde_json::Value::String("private".to_string()), // Class default is private
+    extract_cpp_class_or_struct(
+        source,
+        node,
+        chunks,
+        template_params,
+        ACCESS_PRIVATE,
+        "class",
     );
-
-    if !base_classes.is_empty() {
-        metadata_obj.insert(
-            "base_classes".to_string(),
-            serde_json::Value::Array(
-                base_classes
-                    .iter()
-                    .map(|s| serde_json::Value::String(s.clone()))
-                    .collect(),
-            ),
-        );
-    }
-
-    if let Some(ref tp) = template_params {
-        metadata_obj.insert("is_template".to_string(), serde_json::Value::Bool(true));
-        metadata_obj.insert(
-            "template_params".to_string(),
-            serde_json::Value::String(tp.clone()),
-        );
-    }
-
-    let start = node.start_position();
-    let end = node.end_position();
-
-    chunks.push(SymbolChunk {
-        symbol_name: name,
-        kind: "class".to_string(),
-        signature,
-        docstring,
-        start_line: (start.row + 1) as i32,
-        end_line: (end.row + 1) as i32,
-        metadata: Some(serde_json::Value::Object(metadata_obj)),
-    });
-
-    // Walk class body with access specifier tracking
-    if let Some(body) = node.child_by_field_name("body") {
-        walk_cpp_class_body(source, body, chunks, "private"); // Class default is private
-    }
 }
 
+/// Extracts a struct declaration.
+///
+/// Structs default to `public` access for members.
 fn extract_cpp_struct(
     source: &str,
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     template_params: Option<String>,
 ) {
-    // Extract struct name
+    extract_cpp_class_or_struct(
+        source,
+        node,
+        chunks,
+        template_params,
+        ACCESS_PUBLIC,
+        "struct",
+    );
+}
+
+/// Shared helper for extracting class and struct declarations.
+///
+/// The only difference between classes and structs in C++ is the default access specifier:
+/// classes default to `private`, structs default to `public`.
+///
+/// # Parameters
+///
+/// - `source`: The full source text
+/// - `node`: The `class_specifier` or `struct_specifier` AST node
+/// - `chunks`: Accumulator for extracted symbol chunks
+/// - `template_params`: Template parameters if preceded by a template declaration
+/// - `default_access`: Default access level for members (`ACCESS_PRIVATE` or `ACCESS_PUBLIC`)
+/// - `kind`: The chunk kind (`"class"` or `"struct"`)
+fn extract_cpp_class_or_struct(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    template_params: Option<String>,
+    default_access: &str,
+    kind: &str,
+) {
+    // Extract name
     let name = node
         .child_by_field_name("name")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
@@ -232,11 +187,12 @@ fn extract_cpp_struct(
         debug!(
             node_kind = node.kind(),
             line = node.start_position().row + 1,
-            "Failed to extract struct name - identifier not found"
+            kind = kind,
+            "Failed to extract class/struct name - identifier not found"
         );
     }
 
-    // Extract base classes (structs can also have inheritance)
+    // Extract base classes (inheritance)
     let mut base_classes = Vec::new();
     if let Some(base_clause) = node.child_by_field_name("base_clause") {
         let mut cursor = base_clause.walk();
@@ -263,7 +219,7 @@ fn extract_cpp_struct(
     let mut metadata_obj = serde_json::Map::new();
     metadata_obj.insert(
         "access".to_string(),
-        serde_json::Value::String("public".to_string()), // Struct default is public
+        serde_json::Value::String(default_access.to_string()),
     );
 
     if !base_classes.is_empty() {
@@ -291,7 +247,7 @@ fn extract_cpp_struct(
 
     chunks.push(SymbolChunk {
         symbol_name: name,
-        kind: "struct".to_string(),
+        kind: kind.to_string(),
         signature,
         docstring,
         start_line: (start.row + 1) as i32,
@@ -299,9 +255,9 @@ fn extract_cpp_struct(
         metadata: Some(serde_json::Value::Object(metadata_obj)),
     });
 
-    // Walk struct body with access specifier tracking
+    // Walk class/struct body with access specifier tracking
     if let Some(body) = node.child_by_field_name("body") {
-        walk_cpp_class_body(source, body, chunks, "public"); // Struct default is public
+        walk_cpp_class_body(source, body, chunks, default_access);
     }
 }
 
@@ -316,7 +272,7 @@ fn extract_cpp_struct(
 /// - `body`: The `field_declaration_list` node from the class/struct declaration
 /// - `source`: The full source text
 /// - `chunks`: Accumulator for extracted symbol chunks
-/// - `default_access`: Starting access level (`"private"` for class, `"public"` for struct)
+/// - `default_access`: Starting access level (`ACCESS_PRIVATE` for class, `ACCESS_PUBLIC` for struct)
 fn walk_cpp_class_body(
     source: &str,
     body: Node,
@@ -333,9 +289,9 @@ fn walk_cpp_class_body(
                 if let Ok(text) = child.utf8_text(source.as_bytes()) {
                     let access = text.trim_end_matches(':').trim();
                     current_access = match access {
-                        "public" => "public",
-                        "private" => "private",
-                        "protected" => "protected",
+                        ACCESS_PUBLIC => ACCESS_PUBLIC,
+                        ACCESS_PRIVATE => ACCESS_PRIVATE,
+                        ACCESS_PROTECTED => ACCESS_PROTECTED,
                         _ => current_access, // Keep current if unknown
                     };
                 }
@@ -375,7 +331,7 @@ fn extract_cpp_function(
     }
 
     // Free function
-    extract_cpp_function_impl(source, node, chunks, template_params, "public", false);
+    extract_cpp_function_impl(source, node, chunks, template_params, ACCESS_PUBLIC, false);
 }
 
 fn extract_cpp_method(
