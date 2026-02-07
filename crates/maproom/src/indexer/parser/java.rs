@@ -116,11 +116,12 @@ fn extract_java_class(
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .unwrap_or("UnknownClass");
 
-    // Extract superclass
+    // Extract superclass (strip "extends " prefix)
     let superclass = node
         .child_by_field_name("superclass")
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string());
+        .and_then(|s| s.strip_prefix("extends "))
+        .map(|s| s.trim().to_string());
 
     // Extract interfaces
     let interfaces = extract_interfaces(source, node);
@@ -566,20 +567,48 @@ fn extract_java_parameters(source: &str, node: Node) -> Vec<String> {
 
 /// Extract throws clause from method or constructor
 fn extract_java_throws(source: &str, node: Node) -> Option<String> {
-    node.child_by_field_name("throws")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string())
+    // Try finding by field name first
+    if let Some(throws_node) = node.child_by_field_name("throws") {
+        if let Ok(text) = throws_node.utf8_text(source.as_bytes()) {
+            // Strip "throws " prefix if present
+            let cleaned = text.strip_prefix("throws ").unwrap_or(text).trim();
+            return Some(cleaned.to_string());
+        }
+    }
+
+    // Try finding by child node kind
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "throws" {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                // Strip "throws " keyword if present
+                let cleaned = text.strip_prefix("throws ").unwrap_or(text).trim();
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Extract interfaces from "implements" clause
 fn extract_interfaces(source: &str, node: Node) -> Vec<String> {
     let mut interfaces = Vec::new();
+
+    // The field name is "interfaces" for class implements clause
     if let Some(interfaces_node) = node.child_by_field_name("interfaces") {
+        // Look for type_list child
         let mut cursor = interfaces_node.walk();
         for child in interfaces_node.children(&mut cursor) {
-            if child.kind() == "type_identifier" || child.kind() == "generic_type" {
-                if let Ok(interface_text) = child.utf8_text(source.as_bytes()) {
-                    interfaces.push(interface_text.to_string());
+            if child.kind() == "type_list" {
+                // Extract all type identifiers from type_list
+                let mut type_cursor = child.walk();
+                for type_child in child.children(&mut type_cursor) {
+                    if type_child.kind() == "type_identifier" || type_child.kind() == "generic_type" {
+                        if let Ok(interface_text) = type_child.utf8_text(source.as_bytes()) {
+                            interfaces.push(interface_text.to_string());
+                        }
+                    }
                 }
             }
         }
@@ -590,16 +619,24 @@ fn extract_interfaces(source: &str, node: Node) -> Vec<String> {
 /// Extract extended interfaces from "extends" clause (for interfaces)
 fn extract_extends_interfaces(source: &str, node: Node) -> Vec<String> {
     let mut extends = Vec::new();
-    if let Some(extends_node) = node.child_by_field_name("interfaces") {
-        let mut cursor = extends_node.walk();
-        for child in extends_node.children(&mut cursor) {
-            if child.kind() == "type_identifier" || child.kind() == "generic_type" {
-                if let Ok(interface_text) = child.utf8_text(source.as_bytes()) {
-                    extends.push(interface_text.to_string());
+
+    // Find extends_interfaces child by kind (not by field name)
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "extends_interfaces" {
+            // The extends_interfaces text contains "extends InterfaceName"
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                // Strip "extends " prefix and parse interfaces
+                let cleaned = text.strip_prefix("extends ").unwrap_or(text).trim();
+                // Split by comma for multiple interfaces
+                for interface in cleaned.split(',') {
+                    extends.push(interface.trim().to_string());
                 }
             }
+            break;
         }
     }
+
     extends
 }
 
@@ -664,28 +701,50 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
     let mut modifiers = Vec::new();
     let mut annotations = Vec::new();
 
-    // Find modifiers child
-    if let Some(mods_node) = node.child_by_field_name("modifiers") {
-        let mut cursor = mods_node.walk();
-        for child in mods_node.children(&mut cursor) {
-            match child.kind() {
-                "public" | "private" | "protected" | "static" | "final" | "abstract"
-                | "synchronized" | "native" | "strictfp" | "transient" | "volatile" => {
-                    if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
-                        if modifier == "public" || modifier == "private" || modifier == "protected"
-                        {
-                            visibility = modifier.to_string();
+    // Find modifiers child by kind (not by field name)
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "modifiers" {
+            // The modifiers node's text contains space-separated modifiers
+            if let Ok(mods_text) = child.utf8_text(source.as_bytes()) {
+                for word in mods_text.split_whitespace() {
+                    match word {
+                        "public" => {
+                            visibility = "public".to_string();
+                            modifiers.push("public".to_string());
                         }
-                        modifiers.push(modifier.to_string());
+                        "private" => {
+                            visibility = "private".to_string();
+                            modifiers.push("private".to_string());
+                        }
+                        "protected" => {
+                            visibility = "protected".to_string();
+                            modifiers.push("protected".to_string());
+                        }
+                        "static" | "final" | "abstract" | "synchronized" | "native"
+                        | "strictfp" | "transient" | "volatile" | "default" => {
+                            modifiers.push(word.to_string());
+                        }
+                        _ if word.starts_with('@') => {
+                            annotations.push(word.to_string());
+                        }
+                        _ => {}
                     }
                 }
-                "marker_annotation" | "annotation" => {
-                    if let Ok(annotation_text) = child.utf8_text(source.as_bytes()) {
-                        annotations.push(annotation_text.to_string());
-                    }
-                }
-                _ => {}
             }
+
+            // Also check for annotation children
+            let mut mod_cursor = child.walk();
+            for mod_child in child.children(&mut mod_cursor) {
+                if mod_child.kind() == "marker_annotation" || mod_child.kind() == "annotation" {
+                    if let Ok(annotation_text) = mod_child.utf8_text(source.as_bytes()) {
+                        if !annotations.contains(&annotation_text.to_string()) {
+                            annotations.push(annotation_text.to_string());
+                        }
+                    }
+                }
+            }
+            break;
         }
     }
 
@@ -699,6 +758,115 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_java_modifiers_ast_debug() {
+        let source = "public class Test {}";
+        let mut parser = Parser::new();
+        parser.set_language(&lang_java()).unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let root = tree.root_node();
+
+        eprintln!("Root kind: {}", root.kind());
+
+        // Find class_declaration
+        let mut cursor = root.walk();
+        for child in root.children(&mut cursor) {
+            eprintln!("Top-level child: kind={}", child.kind());
+            if child.kind() == "class_declaration" {
+                eprintln!("Found class_declaration");
+                eprintln!("Class children:");
+                let mut class_cursor = child.walk();
+                for class_child in child.children(&mut class_cursor) {
+                    eprintln!("  Child: kind={}, text={:?}", class_child.kind(), class_child.utf8_text(source.as_bytes()).ok());
+                }
+
+                if let Some(modifiers) = child.child_by_field_name("modifiers") {
+                    eprintln!("\n=== modifiers node ===");
+                    eprintln!("  Kind: {}", modifiers.kind());
+                    eprintln!("  Child count: {}", modifiers.child_count());
+                    eprintln!("  Text: {:?}", modifiers.utf8_text(source.as_bytes()).ok());
+
+                    eprintln!("  All children:");
+                    let mut mod_cursor = modifiers.walk();
+                    for mod_child in modifiers.children(&mut mod_cursor) {
+                        eprintln!("    Child: kind='{}', is_named={}, text='{:?}'",
+                            mod_child.kind(),
+                            mod_child.is_named(),
+                            mod_child.utf8_text(source.as_bytes()).ok()
+                        );
+                    }
+                } else {
+                    eprintln!("\nNo modifiers field found!");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_java_ast_debug() {
+        let source = r#"
+public class UserService extends BaseService implements Serializable {
+}
+"#;
+        let mut parser = Parser::new();
+        parser.set_language(&lang_java()).unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let root = tree.root_node();
+
+        // Find class_declaration
+        let mut cursor = root.walk();
+        for child in root.children(&mut cursor) {
+            if child.kind() == "class_declaration" {
+                eprintln!("\n=== class_declaration node ===");
+                eprintln!("Node kind: {}", child.kind());
+                eprintln!("Node text: {:?}", child.utf8_text(source.as_bytes()).ok());
+
+                // Print all named children
+                let mut class_cursor = child.walk();
+                for class_child in child.named_children(&mut class_cursor) {
+                    eprintln!("  Child: kind='{}', text='{:?}'",
+                        class_child.kind(),
+                        class_child.utf8_text(source.as_bytes()).ok().and_then(|s| if s.len() < 50 { Some(s) } else { None })
+                    );
+                }
+
+                // Try specific fields
+                if let Some(modifiers) = child.child_by_field_name("modifiers") {
+                    eprintln!("\n  === modifiers node ===");
+                    eprintln!("    Modifiers text: {:?}", modifiers.utf8_text(source.as_bytes()).ok());
+                    eprintln!("    Modifiers kind: {}", modifiers.kind());
+                    eprintln!("    Modifiers child count: {}", modifiers.child_count());
+                    let mut mod_cursor = modifiers.walk();
+                    for mod_child in modifiers.children(&mut mod_cursor) {
+                        eprintln!("    Modifier child: kind='{}', text='{:?}'",
+                            mod_child.kind(),
+                            mod_child.utf8_text(source.as_bytes()).ok()
+                        );
+                    }
+                }
+
+                if let Some(superclass) = child.child_by_field_name("superclass") {
+                    eprintln!("\n  === superclass node ===");
+                    eprintln!("    Kind: {}", superclass.kind());
+                    eprintln!("    Text: {:?}", superclass.utf8_text(source.as_bytes()).ok());
+                }
+
+                if let Some(interfaces) = child.child_by_field_name("interfaces") {
+                    eprintln!("\n  === interfaces node ===");
+                    eprintln!("    Kind: {}", interfaces.kind());
+                    eprintln!("    Text: {:?}", interfaces.utf8_text(source.as_bytes()).ok());
+                    let mut int_cursor = interfaces.walk();
+                    for int_child in interfaces.children(&mut int_cursor) {
+                        eprintln!("    Interface child: kind='{}', text='{:?}'",
+                            int_child.kind(),
+                            int_child.utf8_text(source.as_bytes()).ok()
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_java_import_collection() {
@@ -780,5 +948,747 @@ public class NoImports {
             imports_chunk.is_none(),
             "__imports__ chunk should not exist when no imports"
         );
+    }
+
+    #[test]
+    fn test_java_class_with_methods() {
+        let source = r#"
+/**
+ * A service for managing users.
+ */
+public class UserService extends BaseService implements Serializable {
+    /**
+     * Find a user by name.
+     * @param name the user's name
+     * @return the user object
+     */
+    public User findUser(String name) {
+        return null;
+    }
+
+    private void deleteUser(int id) {
+        // implementation
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Assert chunk count
+        assert_eq!(chunks.len(), 3, "Expected 3 chunks: 1 class + 2 methods");
+
+        // Find chunks by name
+        let class_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "UserService")
+            .expect("UserService class not found");
+        let find_user_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "findUser")
+            .expect("findUser method not found");
+        let delete_user_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "deleteUser")
+            .expect("deleteUser method not found");
+
+        // Assert class chunk
+        assert_eq!(class_chunk.kind, "class");
+        assert!(class_chunk
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("extends BaseService"));
+        assert!(class_chunk
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("implements Serializable"));
+        assert!(class_chunk
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("service for managing users"));
+
+        // Assert class metadata
+        let class_metadata = class_chunk.metadata.as_ref().unwrap();
+        assert_eq!(class_metadata["visibility"], "public");
+        assert_eq!(class_metadata["superclass"], "BaseService");
+        assert_eq!(class_metadata["interfaces"][0], "Serializable");
+
+        // Assert findUser method
+        assert_eq!(find_user_method.kind, "method");
+        assert!(find_user_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("String name"));
+        assert!(find_user_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("User"));
+        assert!(find_user_method
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("@param name"));
+        assert_eq!(
+            find_user_method.metadata.as_ref().unwrap()["visibility"],
+            "public"
+        );
+
+        // Assert deleteUser method
+        assert_eq!(delete_user_method.kind, "method");
+        assert_eq!(
+            delete_user_method.metadata.as_ref().unwrap()["visibility"],
+            "private"
+        );
+    }
+
+    #[test]
+    fn test_java_interface_definition() {
+        let source = r#"
+/**
+ * Repository interface for data access.
+ */
+public interface Repository extends BaseRepository {
+    User findById(int id);
+
+    default void log(String message) {
+        System.out.println(message);
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find interface chunk
+        let interface_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Repository")
+            .expect("Repository interface not found");
+
+        assert_eq!(interface_chunk.kind, "interface");
+        assert!(interface_chunk
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("extends BaseRepository"));
+        assert!(interface_chunk
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("Repository interface"));
+
+        let metadata = interface_chunk.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "public");
+        assert_eq!(metadata["extends"][0], "BaseRepository");
+
+        // Check for abstract and default methods
+        let abstract_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "findById")
+            .expect("findById method not found");
+        let default_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "log")
+            .expect("log method not found");
+
+        assert_eq!(abstract_method.kind, "method");
+        assert_eq!(default_method.kind, "method");
+        assert!(default_method
+            .metadata
+            .as_ref()
+            .unwrap()["modifiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "default"));
+    }
+
+    #[test]
+    fn test_java_constructor() {
+        let source = r#"
+public class Connection {
+    /**
+     * Create a connection with default settings.
+     */
+    public Connection() {
+        this("localhost", 8080);
+    }
+
+    /**
+     * Create a connection with specific host and port.
+     * @param host the hostname
+     * @param port the port number
+     * @throws ConnectionException if connection fails
+     */
+    public Connection(String host, int port) throws ConnectionException {
+        // implementation
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find constructor chunks
+        let constructors: Vec<_> = chunks
+            .iter()
+            .filter(|c| c.kind == "constructor")
+            .collect();
+
+        assert_eq!(
+            constructors.len(),
+            2,
+            "Expected 2 constructor overloads"
+        );
+
+        // Find parameterless constructor
+        let default_constructor = constructors
+            .iter()
+            .find(|c| c.signature.as_ref().unwrap() == "()")
+            .expect("Default constructor not found");
+        assert!(default_constructor
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("default settings"));
+
+        // Find parameterized constructor
+        let param_constructor = constructors
+            .iter()
+            .find(|c| c.signature.as_ref().unwrap().contains("String host"))
+            .expect("Parameterized constructor not found");
+        assert!(param_constructor
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("int port"));
+        assert!(param_constructor
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("@param host"));
+
+        // Check throws clause
+        let metadata = param_constructor.metadata.as_ref().unwrap();
+        assert!(metadata["throws"]
+            .as_str()
+            .unwrap()
+            .contains("ConnectionException"));
+    }
+
+    #[test]
+    fn test_java_enum_declaration() {
+        let source = r#"
+/**
+ * HTTP status codes.
+ */
+public enum Status implements Comparable<Status> {
+    OK, NOT_FOUND, ERROR;
+
+    public String getMessage() {
+        return name().toLowerCase();
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find enum chunk
+        let enum_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Status")
+            .expect("Status enum not found");
+
+        assert_eq!(enum_chunk.kind, "enum");
+        assert!(enum_chunk
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("HTTP status"));
+
+        let metadata = enum_chunk.metadata.as_ref().unwrap();
+        assert_eq!(metadata["visibility"], "public");
+        assert_eq!(metadata["interfaces"][0], "Comparable<Status>");
+
+        // Check enum method
+        let method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "getMessage")
+            .expect("getMessage method not found");
+        assert_eq!(method.kind, "method");
+    }
+
+    #[test]
+    fn test_java_annotations() {
+        let source = r#"
+/**
+ * Custom annotation for validation.
+ */
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+public @interface Validate {
+    String value() default "";
+}
+
+public class Service {
+    @Override
+    @Validate("user-input")
+    public void processData(String data) {
+        // implementation
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find annotation type
+        let annotation_type = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Validate")
+            .expect("Validate annotation not found");
+
+        assert_eq!(annotation_type.kind, "annotation");
+        assert!(annotation_type
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("Custom annotation"));
+        assert_eq!(
+            annotation_type.metadata.as_ref().unwrap()["visibility"],
+            "public"
+        );
+
+        // Check applied annotations on method
+        let method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "processData")
+            .expect("processData method not found");
+
+        let annotations = method.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(annotations.iter().any(|a| a.as_str().unwrap() == "@Override"));
+        assert!(annotations
+            .iter()
+            .any(|a| a.as_str().unwrap().contains("@Validate")));
+    }
+
+    #[test]
+    fn test_java_field_declarations() {
+        let source = r#"
+public class Config {
+    /**
+     * Server hostname.
+     */
+    private String host = "localhost";
+
+    private final int timeout = 5000;
+
+    public static int x, y, z;
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find field chunks
+        let fields: Vec<_> = chunks.iter().filter(|c| c.kind == "field").collect();
+        assert!(
+            fields.len() >= 5,
+            "Expected at least 5 field chunks (host, timeout, x, y, z)"
+        );
+
+        // Check host field
+        let host_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "host")
+            .expect("host field not found");
+        assert_eq!(host_field.signature.as_ref().unwrap(), "String");
+        assert!(host_field
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("Server hostname"));
+        let host_metadata = host_field.metadata.as_ref().unwrap();
+        assert_eq!(host_metadata["visibility"], "private");
+        assert_eq!(host_metadata["initial_value"], "\"localhost\"");
+
+        // Check timeout field
+        let timeout_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "timeout")
+            .expect("timeout field not found");
+        let timeout_metadata = timeout_field.metadata.as_ref().unwrap();
+        assert!(timeout_metadata["modifiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "final"));
+
+        // Check multi-declarator fields (x, y, z)
+        let x_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "x")
+            .expect("x field not found");
+        let y_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "y")
+            .expect("y field not found");
+        let z_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "z")
+            .expect("z field not found");
+
+        for field in [x_field, y_field, z_field] {
+            assert_eq!(field.signature.as_ref().unwrap(), "int");
+            let metadata = field.metadata.as_ref().unwrap();
+            assert_eq!(metadata["visibility"], "public");
+            assert!(metadata["modifiers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m == "static"));
+        }
+    }
+
+    #[test]
+    fn test_java_javadoc_comments() {
+        let source = r#"
+/**
+ * Main service class.
+ * This is a multi-line Javadoc.
+ * @author John Doe
+ * @version 1.0
+ */
+public class Service {
+    /* This is a regular block comment, should NOT be captured */
+    public void method1() {
+        // regular line comment
+    }
+
+    /**
+     * Method with Javadoc.
+     * @param data the input data
+     * @return the result
+     * @throws Exception if processing fails
+     */
+    public String method2(String data) throws Exception {
+        return data;
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find class with Javadoc
+        let class_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Service")
+            .expect("Service class not found");
+        let docstring = class_chunk.docstring.as_ref().unwrap();
+        assert!(docstring.contains("Main service class"));
+        assert!(docstring.contains("@author John Doe"));
+        assert!(docstring.contains("@version 1.0"));
+
+        // Find method1 (should have NO docstring due to block comment)
+        let method1 = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "method1")
+            .expect("method1 not found");
+        assert!(
+            method1.docstring.is_none(),
+            "Regular block comment should not be captured as Javadoc"
+        );
+
+        // Find method2 with Javadoc
+        let method2 = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "method2")
+            .expect("method2 not found");
+        let method2_doc = method2.docstring.as_ref().unwrap();
+        assert!(method2_doc.contains("Method with Javadoc"));
+        assert!(method2_doc.contains("@param data"));
+        assert!(method2_doc.contains("@return the result"));
+        assert!(method2_doc.contains("@throws Exception"));
+    }
+
+    #[test]
+    fn test_java_nested_classes() {
+        let source = r#"
+public class Outer {
+    /**
+     * Inner class.
+     */
+    public class Inner {
+        public void innerMethod() {}
+    }
+
+    /**
+     * Static nested class.
+     */
+    public static class StaticNested {
+        public void staticMethod() {}
+    }
+
+    /**
+     * Nested interface.
+     */
+    public interface NestedInterface {
+        void interfaceMethod();
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find all class/interface chunks
+        let outer_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Outer")
+            .expect("Outer class not found");
+        let inner_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Inner")
+            .expect("Inner class not found");
+        let static_nested = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "StaticNested")
+            .expect("StaticNested class not found");
+        let nested_interface = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "NestedInterface")
+            .expect("NestedInterface not found");
+
+        assert_eq!(outer_class.kind, "class");
+        assert_eq!(inner_class.kind, "class");
+        assert_eq!(static_nested.kind, "class");
+        assert_eq!(nested_interface.kind, "interface");
+
+        // Check static modifier on StaticNested
+        let static_metadata = static_nested.metadata.as_ref().unwrap();
+        assert!(static_metadata["modifiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "static"));
+
+        // Check that nested classes have their own methods
+        assert!(chunks
+            .iter()
+            .any(|c| c.symbol_name.as_ref().unwrap() == "innerMethod"));
+        assert!(chunks
+            .iter()
+            .any(|c| c.symbol_name.as_ref().unwrap() == "staticMethod"));
+        assert!(chunks
+            .iter()
+            .any(|c| c.symbol_name.as_ref().unwrap() == "interfaceMethod"));
+    }
+
+    #[test]
+    fn test_java_modifiers() {
+        let source = r#"
+public abstract class AbstractService {
+    public static final int MAX_CONNECTIONS = 100;
+
+    protected volatile boolean flag;
+
+    private transient String tempData;
+
+    abstract void abstractMethod();
+
+    public synchronized void syncMethod() {}
+
+    // Package-private (no modifier)
+    void packagePrivateMethod() {}
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Check abstract class
+        let class_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "AbstractService")
+            .expect("AbstractService class not found");
+        let class_modifiers = class_chunk.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(class_modifiers.iter().any(|m| m == "abstract"));
+
+        // Check static final field
+        let max_conn_field = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "MAX_CONNECTIONS")
+            .expect("MAX_CONNECTIONS field not found");
+        let max_conn_modifiers = max_conn_field.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(max_conn_modifiers.iter().any(|m| m == "static"));
+        assert!(max_conn_modifiers.iter().any(|m| m == "final"));
+
+        // Check volatile field
+        let flag_field = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "flag")
+            .expect("flag field not found");
+        let flag_modifiers = flag_field.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(flag_modifiers.iter().any(|m| m == "volatile"));
+
+        // Check transient field
+        let temp_field = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "tempData")
+            .expect("tempData field not found");
+        let temp_modifiers = temp_field.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(temp_modifiers.iter().any(|m| m == "transient"));
+
+        // Check abstract method
+        let abstract_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "abstractMethod")
+            .expect("abstractMethod not found");
+        let abstract_modifiers = abstract_method.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(abstract_modifiers.iter().any(|m| m == "abstract"));
+
+        // Check synchronized method
+        let sync_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "syncMethod")
+            .expect("syncMethod not found");
+        let sync_modifiers = sync_method.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(sync_modifiers.iter().any(|m| m == "synchronized"));
+
+        // Check package-private method
+        let pkg_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "packagePrivateMethod")
+            .expect("packagePrivateMethod not found");
+        assert_eq!(
+            pkg_method.metadata.as_ref().unwrap()["visibility"],
+            "package-private"
+        );
+    }
+
+    #[test]
+    fn test_java_empty_file() {
+        let source = "";
+        let chunks = extract_java_chunks(source);
+        assert_eq!(chunks.len(), 0, "Empty source should produce no chunks");
+    }
+
+    #[test]
+    fn test_java_syntax_error() {
+        let source = r#"
+public class Broken { {{{{ }
+"#;
+        // Should not panic - tree-sitter is error-tolerant
+        let chunks = extract_java_chunks(source);
+        // May produce partial chunks or empty vector, both acceptable
+        // The key requirement is no panic
+        assert!(
+            true,
+            "Test passed - no panic on malformed source (chunks: {})",
+            chunks.len()
+        );
+    }
+
+    #[test]
+    fn test_java_record_declaration() {
+        let source = r#"
+/**
+ * A point in 2D space.
+ */
+public record Point(double x, double y) implements Serializable {
+    public double distance() {
+        return Math.sqrt(x * x + y * y);
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find record chunk
+        let record_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Point")
+            .expect("Point record not found");
+
+        // Records are stored as class with is_record=true
+        assert_eq!(record_chunk.kind, "class");
+        assert!(record_chunk
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("double x"));
+        assert!(record_chunk
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("double y"));
+        assert!(record_chunk
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("point in 2D"));
+
+        let metadata = record_chunk.metadata.as_ref().unwrap();
+        assert_eq!(metadata["is_record"], true);
+        assert_eq!(metadata["interfaces"][0], "Serializable");
+
+        // Check record method
+        let method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "distance")
+            .expect("distance method not found");
+        assert_eq!(method.kind, "method");
+    }
+
+    #[test]
+    fn test_java_generics() {
+        let source = r#"
+public class Container<T extends Comparable<T>> {
+    private List<T> items;
+
+    public void add(T item) {
+        items.add(item);
+    }
+
+    public <U> U transform(Function<T, U> mapper) {
+        return null;
+    }
+}
+"#;
+        let chunks = extract_java_chunks(source);
+
+        // Find class with generic parameter
+        let class_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Container")
+            .expect("Container class not found");
+        assert_eq!(class_chunk.kind, "class");
+
+        // Check field with generic type
+        let items_field = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "items")
+            .expect("items field not found");
+        assert_eq!(items_field.signature.as_ref().unwrap(), "List<T>");
+
+        // Check method with generic parameter
+        let add_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "add")
+            .expect("add method not found");
+        assert!(add_method.signature.as_ref().unwrap().contains("T item"));
+
+        // Check method with generic return type
+        let transform_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "transform")
+            .expect("transform method not found");
+        assert!(transform_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("Function<T, U>"));
     }
 }
