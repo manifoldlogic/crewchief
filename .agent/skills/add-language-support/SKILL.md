@@ -314,6 +314,8 @@ pub struct SymbolChunk {
 
 ### Standard Kind Values
 
+These kinds are used for programming language constructs. Additional kinds exist for configuration files (Markdown, JSON, TOML, YAML) but are not listed here as they fall outside the scope of adding programming language support.
+
 | Kind | Languages | Description |
 |------|-----------|-------------|
 | `func` | All | Free function (not inside a class) |
