@@ -1,10 +1,41 @@
-//! Java parser
+//! Java language parser for semantic code indexing.
+//!
+//! Extracts classes, interfaces, enums, records, annotation types, methods,
+//! constructors, fields, and import declarations from Java source code using
+//! the tree-sitter-java grammar. Each extracted element becomes a [`SymbolChunk`]
+//! with metadata capturing Java-specific details such as visibility modifiers,
+//! annotations, inheritance, and throws clauses.
 
 use tree_sitter::{Node, Parser};
 
 use super::common::lang_java;
 use crate::indexer::SymbolChunk;
 
+/// Extracts semantic chunks from Java source code.
+///
+/// Parses the given Java source using tree-sitter-java and walks the AST to
+/// extract classes, interfaces, enums, records, annotation types, methods,
+/// constructors, and fields as individual [`SymbolChunk`] values. Import
+/// declarations are aggregated into a single `__imports__` chunk with metadata
+/// containing the import paths, static/wildcard flags.
+///
+/// # Arguments
+///
+/// * `source` - Java source code to parse.
+///
+/// # Returns
+///
+/// A vector of [`SymbolChunk`] representing the extracted Java symbols. Returns
+/// an empty vector if the source cannot be parsed (e.g., completely invalid input).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crewchief_maproom::indexer::parser::java::extract_java_chunks;
+/// let source = "public class Foo { void bar() {} }";
+/// let chunks = extract_java_chunks(source);
+/// assert_eq!(chunks.len(), 2); // class + method
+/// ```
 pub(super) fn extract_java_chunks(source: &str) -> Vec<SymbolChunk> {
     let mut parser = Parser::new();
     parser
@@ -689,11 +720,23 @@ fn extract_java_doc_comment(source: &str, node: Node) -> Option<String> {
     None
 }
 
-/// Modifiers extracted from a Java declaration
+/// Modifiers and annotations extracted from a Java declaration node.
+///
+/// Captures the access level, modifier keywords (e.g., `static`, `final`,
+/// `abstract`, `synchronized`), and any annotations applied to a class,
+/// method, field, or other declaration. When no explicit access modifier is
+/// present, `visibility` defaults to `"package-private"`.
 struct JavaModifiers {
-    visibility: String,       // "public", "private", "protected", "package-private"
-    modifiers: Vec<String>,   // All modifier keywords
-    annotations: Vec<String>, // Annotation strings
+    /// Access modifier: `"public"`, `"protected"`, `"private"`, or
+    /// `"package-private"` (the default when no modifier is specified).
+    visibility: String,
+    /// All modifier keywords found on the declaration, including access
+    /// modifiers as well as `static`, `final`, `abstract`, `synchronized`,
+    /// `native`, `strictfp`, `transient`, `volatile`, and `default`.
+    modifiers: Vec<String>,
+    /// Annotation strings (e.g., `"@Override"`, `"@Deprecated"`) applied to
+    /// the declaration, preserving the source text of each annotation.
+    annotations: Vec<String>,
 }
 
 /// Extract modifiers and annotations from a declaration node
