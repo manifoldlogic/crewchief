@@ -86,6 +86,9 @@ fn lang_go() -> Language {
 fn lang_markdown() -> Language {
     tree_sitter_md::language()
 }
+fn lang_ruby() -> Language {
+    tree_sitter_ruby::language()
+}
 
 pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
     profile_scope!("extract_chunks");
@@ -98,6 +101,7 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
         "rs" => extract_rust_chunks(source),
         "go" => extract_go_chunks(source),
         "gomod" => extract_gomod_chunks(source),
+        "rb" => extract_ruby_chunks(source),
         _ => extract_code_chunks(source, language),
     }
 }
@@ -3651,4 +3655,14 @@ fn extract_gomod_chunks(source: &str) -> Vec<SymbolChunk> {
     }
 
     chunks
+}
+
+// Ruby-specific parsing functions
+fn extract_ruby_chunks(source: &str) -> Vec<SymbolChunk> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&lang_ruby())
+        .expect("Failed to set Ruby language");
+    let _tree = parser.parse(source, None);
+    Vec::new() // Stub - Phase 2 will implement extraction
 }
