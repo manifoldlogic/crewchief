@@ -3668,9 +3668,22 @@ fn extract_ruby_chunks(source: &str) -> Vec<SymbolChunk> {
 
     if let Some(tree) = tree {
         let root = tree.root_node();
-        let mut imports = Vec::new(); // For forward compatibility with task 2003
+        let mut imports = Vec::new();
         let mut visibility = "public"; // Ruby default visibility
         walk_ruby_decls(source, root, &mut chunks, &mut imports, &mut visibility);
+
+        // Create __imports__ chunk if we collected any imports
+        if !imports.is_empty() {
+            chunks.push(SymbolChunk {
+                symbol_name: Some("__imports__".to_string()),
+                kind: "imports".to_string(),
+                signature: None,
+                docstring: None,
+                start_line: 1,
+                end_line: 1,
+                metadata: Some(serde_json::json!(imports)),
+            });
+        }
     }
 
     chunks
@@ -3696,6 +3709,9 @@ fn walk_ruby_decls(
         "singleton_method" => {
             extract_ruby_singleton_method(source, node, chunks);
         }
+        "assignment" => {
+            extract_ruby_assignment(source, node, chunks);
+        }
         "call" => {
             // Check if this is a visibility modifier call
             if let Some(method) = node.child_by_field_name("method") {
@@ -3714,6 +3730,8 @@ fn walk_ruby_decls(
                     }
                 }
             }
+            // Also check for import calls
+            collect_ruby_import(source, node, imports);
         }
         _ => {}
     }
@@ -3723,6 +3741,75 @@ fn walk_ruby_decls(
     for child in node.children(&mut cursor) {
         walk_ruby_decls(source, child, chunks, imports, visibility);
     }
+}
+
+fn extract_ruby_assignment(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Get left side of assignment
+    let Some(left_node) = node.child_by_field_name("left") else {
+        return;
+    };
+
+    // Check if it's a constant (uppercase name)
+    if left_node.kind() != "constant" {
+        return; // Skip non-constant assignments
+    }
+
+    let Ok(name) = left_node.utf8_text(source.as_bytes()) else {
+        return;
+    };
+
+    // Get right side value for signature
+    let signature = node
+        .child_by_field_name("right")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract doc comment
+    let docstring = extract_ruby_doc_comment(source, node);
+
+    chunks.push(SymbolChunk {
+        symbol_name: Some(name.to_string()),
+        kind: "constant".to_string(),
+        signature,
+        docstring,
+        start_line: (node.start_position().row + 1) as i32,
+        end_line: (node.end_position().row + 1) as i32,
+        metadata: None,
+    });
+}
+
+fn collect_ruby_import(source: &str, node: Node, imports: &mut Vec<serde_json::Value>) {
+    let Some(method_node) = node.child_by_field_name("method") else {
+        return;
+    };
+    let Ok(method_text) = method_node.utf8_text(source.as_bytes()) else {
+        return;
+    };
+
+    let import_type = match method_text {
+        "require" => "require",
+        "require_relative" => "require_relative",
+        "include" => "include",
+        "extend" => "extend",
+        "prepend" => "prepend",
+        _ => return, // Not an import
+    };
+
+    // Extract argument (target)
+    let target = if let Some(arg_node) = node.child_by_field_name("arguments") {
+        arg_node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    imports.push(serde_json::json!({
+        "type": import_type,
+        "target": target
+    }));
 }
 
 fn extract_ruby_class(
