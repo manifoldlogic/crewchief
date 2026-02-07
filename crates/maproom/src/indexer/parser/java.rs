@@ -42,9 +42,9 @@ fn walk_java_decls(
             "enum_declaration" => extract_java_enum(source, child, chunks, imports),
             "record_declaration" => extract_java_record(source, child, chunks, imports),
             "annotation_type_declaration" => extract_java_annotation_type(source, child, chunks),
-            "method_declaration" | "constructor_declaration" | "field_declaration" => {
-                // Defer to Phase 2.2 (MLLANG-1002.2002)
-            }
+            "method_declaration" => extract_java_method(source, child, chunks),
+            "constructor_declaration" => extract_java_constructor(source, child, chunks),
+            "field_declaration" => extract_java_field(source, child, chunks),
             "import_declaration" => {
                 // Defer to Phase 2.3 (MLLANG-1002.2003)
             }
@@ -339,6 +339,189 @@ fn extract_java_annotation_type(source: &str, node: Node, chunks: &mut Vec<Symbo
         end_line: (node.end_position().row + 1) as i32,
         metadata: Some(metadata),
     });
+}
+
+/// Extract method declaration
+fn extract_java_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract method name
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("unknownMethod");
+
+    // Extract return type
+    let return_type = node
+        .child_by_field_name("type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("void");
+
+    // Extract parameters
+    let params = extract_java_parameters(source, node);
+
+    // Extract throws clause (optional)
+    let throws = extract_java_throws(source, node);
+
+    // Extract Javadoc
+    let docstring = extract_java_doc_comment(source, node);
+
+    // Extract modifiers
+    let modifiers = extract_java_modifiers(source, node);
+
+    // Build signature: "(Type1 param1, Type2 param2) -> ReturnType"
+    let signature = if params.is_empty() {
+        format!("() -> {}", return_type)
+    } else {
+        format!("({}) -> {}", params.join(", "), return_type)
+    };
+
+    // Build metadata
+    let mut metadata = serde_json::json!({
+        "visibility": modifiers.visibility,
+        "modifiers": modifiers.modifiers,
+        "annotations": modifiers.annotations,
+        "is_static": modifiers.modifiers.contains(&"static".to_string()),
+    });
+    if let Some(throws_clause) = throws {
+        metadata["throws"] = serde_json::Value::String(throws_clause);
+    }
+
+    // Determine kind: "method" (inside class) or "func" (top-level, rare)
+    // For Java, always use "method" since top-level methods don't exist
+    chunks.push(SymbolChunk {
+        symbol_name: Some(name.to_string()),
+        kind: "method".to_string(),
+        signature: Some(signature),
+        docstring,
+        start_line: (node.start_position().row + 1) as i32,
+        end_line: (node.end_position().row + 1) as i32,
+        metadata: Some(metadata),
+    });
+}
+
+/// Extract constructor declaration
+fn extract_java_constructor(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract constructor name (same as class name)
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("UnknownConstructor");
+
+    // Extract parameters
+    let params = extract_java_parameters(source, node);
+
+    // Extract throws clause
+    let throws = extract_java_throws(source, node);
+
+    // Extract Javadoc
+    let docstring = extract_java_doc_comment(source, node);
+
+    // Extract modifiers
+    let modifiers = extract_java_modifiers(source, node);
+
+    // Build signature: parameter list
+    let signature = if params.is_empty() {
+        "()".to_string()
+    } else {
+        format!("({})", params.join(", "))
+    };
+
+    // Build metadata
+    let mut metadata = serde_json::json!({
+        "visibility": modifiers.visibility,
+        "modifiers": modifiers.modifiers,
+        "annotations": modifiers.annotations,
+    });
+    if let Some(throws_clause) = throws {
+        metadata["throws"] = serde_json::Value::String(throws_clause);
+    }
+
+    chunks.push(SymbolChunk {
+        symbol_name: Some(name.to_string()),
+        kind: "constructor".to_string(),
+        signature: Some(signature),
+        docstring,
+        start_line: (node.start_position().row + 1) as i32,
+        end_line: (node.end_position().row + 1) as i32,
+        metadata: Some(metadata),
+    });
+}
+
+/// Extract field declaration (handles multi-declarator fields like `int x, y;`)
+fn extract_java_field(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract field type (applies to all declarators)
+    let field_type = node
+        .child_by_field_name("type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("unknown");
+
+    // Extract Javadoc (once for the entire field declaration)
+    let docstring = extract_java_doc_comment(source, node);
+
+    // Extract modifiers (once for the entire field declaration)
+    let modifiers = extract_java_modifiers(source, node);
+
+    // Iterate over declarators (e.g., "int x = 1, y = 2;" has two declarators)
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "variable_declarator" {
+            // Extract variable name
+            let var_name = child
+                .child_by_field_name("name")
+                .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                .unwrap_or("unknownField");
+
+            // Extract initial value (optional)
+            let initial_value = child
+                .child_by_field_name("value")
+                .and_then(|n| n.utf8_text(source.as_bytes()).ok());
+
+            // Build metadata
+            let mut metadata = serde_json::json!({
+                "visibility": modifiers.visibility.clone(),
+                "modifiers": modifiers.modifiers.clone(),
+                "annotations": modifiers.annotations.clone(),
+                "type": field_type,
+            });
+            if let Some(init_val) = initial_value {
+                metadata["initial_value"] = serde_json::Value::String(init_val.to_string());
+            }
+
+            // Push chunk for this variable
+            chunks.push(SymbolChunk {
+                symbol_name: Some(var_name.to_string()),
+                kind: "field".to_string(),
+                signature: Some(field_type.to_string()),
+                docstring: docstring.clone(),
+                start_line: (child.start_position().row + 1) as i32,
+                end_line: (child.end_position().row + 1) as i32,
+                metadata: Some(metadata),
+            });
+        }
+    }
+}
+
+/// Extract parameters from method or constructor
+fn extract_java_parameters(source: &str, node: Node) -> Vec<String> {
+    let mut params = Vec::new();
+    if let Some(params_node) = node.child_by_field_name("parameters") {
+        let mut cursor = params_node.walk();
+        for child in params_node.children(&mut cursor) {
+            if child.kind() == "formal_parameter" || child.kind() == "spread_parameter" {
+                // Extract "Type name" from parameter
+                if let Ok(param_text) = child.utf8_text(source.as_bytes()) {
+                    params.push(param_text.to_string());
+                }
+            }
+        }
+    }
+    params
+}
+
+/// Extract throws clause from method or constructor
+fn extract_java_throws(source: &str, node: Node) -> Option<String> {
+    node.child_by_field_name("throws")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string())
 }
 
 /// Extract interfaces from "implements" clause
