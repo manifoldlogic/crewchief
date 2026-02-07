@@ -604,7 +604,8 @@ fn extract_interfaces(source: &str, node: Node) -> Vec<String> {
                 // Extract all type identifiers from type_list
                 let mut type_cursor = child.walk();
                 for type_child in child.children(&mut type_cursor) {
-                    if type_child.kind() == "type_identifier" || type_child.kind() == "generic_type" {
+                    if type_child.kind() == "type_identifier" || type_child.kind() == "generic_type"
+                    {
                         if let Ok(interface_text) = type_child.utf8_text(source.as_bytes()) {
                             interfaces.push(interface_text.to_string());
                         }
@@ -778,7 +779,11 @@ mod tests {
                 eprintln!("Class children:");
                 let mut class_cursor = child.walk();
                 for class_child in child.children(&mut class_cursor) {
-                    eprintln!("  Child: kind={}, text={:?}", class_child.kind(), class_child.utf8_text(source.as_bytes()).ok());
+                    eprintln!(
+                        "  Child: kind={}, text={:?}",
+                        class_child.kind(),
+                        class_child.utf8_text(source.as_bytes()).ok()
+                    );
                 }
 
                 if let Some(modifiers) = child.child_by_field_name("modifiers") {
@@ -790,7 +795,8 @@ mod tests {
                     eprintln!("  All children:");
                     let mut mod_cursor = modifiers.walk();
                     for mod_child in modifiers.children(&mut mod_cursor) {
-                        eprintln!("    Child: kind='{}', is_named={}, text='{:?}'",
+                        eprintln!(
+                            "    Child: kind='{}', is_named={}, text='{:?}'",
                             mod_child.kind(),
                             mod_child.is_named(),
                             mod_child.utf8_text(source.as_bytes()).ok()
@@ -825,21 +831,32 @@ public class UserService extends BaseService implements Serializable {
                 // Print all named children
                 let mut class_cursor = child.walk();
                 for class_child in child.named_children(&mut class_cursor) {
-                    eprintln!("  Child: kind='{}', text='{:?}'",
+                    eprintln!(
+                        "  Child: kind='{}', text='{:?}'",
                         class_child.kind(),
-                        class_child.utf8_text(source.as_bytes()).ok().and_then(|s| if s.len() < 50 { Some(s) } else { None })
+                        class_child.utf8_text(source.as_bytes()).ok().and_then(|s| {
+                            if s.len() < 50 {
+                                Some(s)
+                            } else {
+                                None
+                            }
+                        })
                     );
                 }
 
                 // Try specific fields
                 if let Some(modifiers) = child.child_by_field_name("modifiers") {
                     eprintln!("\n  === modifiers node ===");
-                    eprintln!("    Modifiers text: {:?}", modifiers.utf8_text(source.as_bytes()).ok());
+                    eprintln!(
+                        "    Modifiers text: {:?}",
+                        modifiers.utf8_text(source.as_bytes()).ok()
+                    );
                     eprintln!("    Modifiers kind: {}", modifiers.kind());
                     eprintln!("    Modifiers child count: {}", modifiers.child_count());
                     let mut mod_cursor = modifiers.walk();
                     for mod_child in modifiers.children(&mut mod_cursor) {
-                        eprintln!("    Modifier child: kind='{}', text='{:?}'",
+                        eprintln!(
+                            "    Modifier child: kind='{}', text='{:?}'",
                             mod_child.kind(),
                             mod_child.utf8_text(source.as_bytes()).ok()
                         );
@@ -849,16 +866,23 @@ public class UserService extends BaseService implements Serializable {
                 if let Some(superclass) = child.child_by_field_name("superclass") {
                     eprintln!("\n  === superclass node ===");
                     eprintln!("    Kind: {}", superclass.kind());
-                    eprintln!("    Text: {:?}", superclass.utf8_text(source.as_bytes()).ok());
+                    eprintln!(
+                        "    Text: {:?}",
+                        superclass.utf8_text(source.as_bytes()).ok()
+                    );
                 }
 
                 if let Some(interfaces) = child.child_by_field_name("interfaces") {
                     eprintln!("\n  === interfaces node ===");
                     eprintln!("    Kind: {}", interfaces.kind());
-                    eprintln!("    Text: {:?}", interfaces.utf8_text(source.as_bytes()).ok());
+                    eprintln!(
+                        "    Text: {:?}",
+                        interfaces.utf8_text(source.as_bytes()).ok()
+                    );
                     let mut int_cursor = interfaces.walk();
                     for int_child in interfaces.children(&mut int_cursor) {
-                        eprintln!("    Interface child: kind='{}', text='{:?}'",
+                        eprintln!(
+                            "    Interface child: kind='{}', text='{:?}'",
                             int_child.kind(),
                             int_child.utf8_text(source.as_bytes()).ok()
                         );
@@ -1094,10 +1118,7 @@ public interface Repository extends BaseRepository {
 
         assert_eq!(abstract_method.kind, "method");
         assert_eq!(default_method.kind, "method");
-        assert!(default_method
-            .metadata
-            .as_ref()
-            .unwrap()["modifiers"]
+        assert!(default_method.metadata.as_ref().unwrap()["modifiers"]
             .as_array()
             .unwrap()
             .iter()
@@ -1129,16 +1150,9 @@ public class Connection {
         let chunks = extract_java_chunks(source);
 
         // Find constructor chunks
-        let constructors: Vec<_> = chunks
-            .iter()
-            .filter(|c| c.kind == "constructor")
-            .collect();
+        let constructors: Vec<_> = chunks.iter().filter(|c| c.kind == "constructor").collect();
 
-        assert_eq!(
-            constructors.len(),
-            2,
-            "Expected 2 constructor overloads"
-        );
+        assert_eq!(constructors.len(), 2, "Expected 2 constructor overloads");
 
         // Find parameterless constructor
         let default_constructor = constructors
@@ -1264,7 +1278,9 @@ public class Service {
         let annotations = method.metadata.as_ref().unwrap()["annotations"]
             .as_array()
             .unwrap();
-        assert!(annotations.iter().any(|a| a.as_str().unwrap() == "@Override"));
+        assert!(annotations
+            .iter()
+            .any(|a| a.as_str().unwrap() == "@Override"));
         assert!(annotations
             .iter()
             .any(|a| a.as_str().unwrap().contains("@Validate")));

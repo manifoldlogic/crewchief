@@ -160,7 +160,8 @@ impl LanguageDetector {
         match kind {
             "impl" | "trait" | "mod" => Language::Rust,
             "def" | "class" if kind.contains("py") => Language::Python,
-            "module" => Language::Ruby, // Ruby-specific
+            "module" => Language::Ruby,      // Ruby-specific
+            "constructor" => Language::Java, // Java-specific
             _ => Language::Unknown,
         }
     }
@@ -178,6 +179,15 @@ impl LanguageDetector {
     ///
     /// The detected language, or `Language::Unknown` if unable to detect.
     pub fn detect_from_content(&self, content: &str) -> Language {
+        // Java patterns (check early to avoid confusion with JavaScript)
+        // Note: We use highly specific patterns to avoid false positives
+        if content.contains("public class")
+            || content.contains("public interface")
+            || content.contains("import java.")
+        {
+            return Language::Java;
+        }
+
         // Ruby patterns (check before Python to avoid false positives)
         if content.contains("class") && content.contains("<") && content.contains("end") {
             return Language::Ruby;
@@ -416,5 +426,47 @@ mod tests {
 
         // Kind detection
         assert_eq!(detector.detect_from_kind("module"), Language::Ruby);
+    }
+
+    #[test]
+    fn test_java_content_detection() {
+        let detector = LanguageDetector::new();
+
+        // Test public class pattern
+        let java_class = r#"
+public class HelloWorld {
+    public static void main(String[] args) {
+        System.out.println("Hello");
+    }
+}
+"#;
+        assert_eq!(detector.detect_from_content(java_class), Language::Java);
+
+        // Test import java.* pattern
+        let java_import = r#"
+import java.util.List;
+import java.util.ArrayList;
+
+class MyClass {}
+"#;
+        assert_eq!(detector.detect_from_content(java_import), Language::Java);
+
+        // Test public interface pattern
+        let java_interface = r#"
+public interface Runnable {
+    void run();
+}
+"#;
+        assert_eq!(detector.detect_from_content(java_interface), Language::Java);
+
+        // Test class without public modifier should not match (avoids false positives)
+        let generic_class = "class Foo {}";
+        assert_ne!(detector.detect_from_content(generic_class), Language::Java);
+    }
+
+    #[test]
+    fn test_java_constructor_kind_detection() {
+        let detector = LanguageDetector::new();
+        assert_eq!(detector.detect_from_kind("constructor"), Language::Java);
     }
 }
