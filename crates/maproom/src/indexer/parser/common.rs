@@ -97,6 +97,10 @@ pub(crate) fn lang_ruby() -> Language {
     tree_sitter_ruby::language()
 }
 
+pub(crate) fn lang_cpp() -> Language {
+    tree_sitter_cpp::language()
+}
+
 /// Helper function to push a chunk with node position
 pub(crate) fn push_chunk(
     source: &str,
