@@ -16,6 +16,8 @@ pub enum Language {
     JavaScript,
     /// Python
     Python,
+    /// Ruby
+    Ruby,
     /// Rust
     Rust,
     /// Go
@@ -35,6 +37,7 @@ impl Language {
             Language::TypeScript => "typescript",
             Language::JavaScript => "javascript",
             Language::Python => "python",
+            Language::Ruby => "ruby",
             Language::Rust => "rust",
             Language::Go => "go",
             Language::Java => "java",
@@ -49,6 +52,7 @@ impl Language {
             "typescript" | "ts" => Language::TypeScript,
             "javascript" | "js" => Language::JavaScript,
             "python" | "py" => Language::Python,
+            "ruby" | "rb" => Language::Ruby,
             "rust" | "rs" => Language::Rust,
             "go" => Language::Go,
             "java" => Language::Java,
@@ -103,6 +107,7 @@ impl LanguageDetector {
             match ext.to_str() {
                 Some("rs") => Language::Rust,
                 Some("py") | Some("pyi") => Language::Python,
+                Some("rb") | Some("rake") => Language::Ruby,
                 Some("ts") | Some("mts") | Some("cts") => Language::TypeScript,
                 Some("tsx") => Language::TypeScript, // React TypeScript
                 Some("js") | Some("mjs") | Some("cjs") => Language::JavaScript,
@@ -155,6 +160,7 @@ impl LanguageDetector {
         match kind {
             "impl" | "trait" | "mod" => Language::Rust,
             "def" | "class" if kind.contains("py") => Language::Python,
+            "module" => Language::Ruby, // Ruby-specific
             _ => Language::Unknown,
         }
     }
@@ -172,6 +178,17 @@ impl LanguageDetector {
     ///
     /// The detected language, or `Language::Unknown` if unable to detect.
     pub fn detect_from_content(&self, content: &str) -> Language {
+        // Ruby patterns (check before Python to avoid false positives)
+        if content.contains("class") && content.contains("<") && content.contains("end") {
+            return Language::Ruby;
+        }
+        if content.contains("def") && content.contains("end") {
+            return Language::Ruby;
+        }
+        if content.contains("module") && content.contains("end") {
+            return Language::Ruby;
+        }
+
         // Python patterns
         if content.contains("def ") && content.contains("import ") {
             return Language::Python;
@@ -378,5 +395,26 @@ mod tests {
         let detector = LanguageDetector::new();
         let content = "package main\n\nfunc main() {}";
         assert_eq!(detector.detect_from_content(content), Language::Go);
+    }
+
+    #[test]
+    fn test_ruby_detection() {
+        let detector = LanguageDetector::new();
+
+        // Path detection
+        assert_eq!(detector.detect_from_path("app.rb"), Language::Ruby);
+        assert_eq!(detector.detect_from_path("tasks.rake"), Language::Ruby);
+
+        // String conversion
+        assert_eq!(Language::from_str("ruby"), Language::Ruby);
+        assert_eq!(Language::from_str("rb"), Language::Ruby);
+        assert_eq!(Language::Ruby.as_str(), "ruby");
+
+        // Content detection
+        let ruby_source = "class Greeter < Base\n  def greet\n  end\nend";
+        assert_eq!(detector.detect_from_content(ruby_source), Language::Ruby);
+
+        // Kind detection
+        assert_eq!(detector.detect_from_kind("module"), Language::Ruby);
     }
 }
