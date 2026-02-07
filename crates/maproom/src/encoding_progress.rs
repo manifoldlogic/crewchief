@@ -2509,3 +2509,259 @@ mod integration_tests {
         assert!((final_progress.percentage - 100.0).abs() < f64::EPSILON);
     }
 }
+
+/// Performance benchmark tests for encoding progress queries with large datasets.
+///
+/// These tests validate that progress queries complete in <500ms even with 100K chunks,
+/// confirming the "typical repository" performance assumption from the design plan.
+///
+/// Run with: cargo test --release -p crewchief-maproom -- --ignored --nocapture benchmark_large_repository
+#[cfg(test)]
+mod benchmark_tests {
+    use super::*;
+    use crate::db::sqlite::SqliteStore;
+    use rusqlite::params;
+    use std::sync::Arc;
+    use std::time::Instant;
+
+    const NUM_REPOS: usize = 10;
+    const CHUNKS_PER_REPO: usize = 10_000;
+    const TOTAL_CHUNKS: usize = NUM_REPOS * CHUNKS_PER_REPO; // 100,000
+    const TOTAL_EMBEDDINGS: usize = TOTAL_CHUNKS / 2; // 50,000 (50% coverage)
+    const QUERY_THRESHOLD_MS: u128 = 500;
+
+    /// Helper to create a test store with migrations applied.
+    async fn setup_test_store() -> Arc<SqliteStore> {
+        Arc::new(SqliteStore::connect(":memory:").await.unwrap())
+    }
+
+    /// Bulk-insert test data: 10 repos, 100K chunks, 50K embeddings.
+    ///
+    /// Uses direct SQL batch inserts inside a transaction for speed.
+    /// Returns the time taken for setup.
+    async fn setup_large_test_db(store: &Arc<SqliteStore>) -> std::time::Duration {
+        let start = Instant::now();
+
+        store
+            .run(move |conn| {
+                let tx = conn.transaction()?;
+
+                // 1. Create 10 repos and worktrees
+                for repo_idx in 0..NUM_REPOS {
+                    let repo_name = format!("bench-repo-{}", repo_idx);
+                    let repo_path = format!("/bench/path/{}", repo_idx);
+                    tx.execute(
+                        "INSERT INTO repos (name, root_path) VALUES (?1, ?2)",
+                        params![repo_name, repo_path],
+                    )?;
+                    let repo_id: i64 =
+                        tx.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+
+                    tx.execute(
+                        "INSERT INTO worktrees (repo_id, name, abs_path) VALUES (?1, ?2, ?3)",
+                        params![repo_id, "main", repo_path],
+                    )?;
+                    let worktree_id: i64 =
+                        tx.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+
+                    tx.execute(
+                        "INSERT INTO commits (repo_id, sha) VALUES (?1, ?2)",
+                        params![repo_id, format!("commit_{}", repo_idx)],
+                    )?;
+                    let commit_id: i64 =
+                        tx.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+
+                    tx.execute(
+                        "INSERT INTO files (repo_id, worktree_id, commit_id, relpath, language, content_hash, size_bytes)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![repo_id, worktree_id, commit_id, "bench.rs", "rust", format!("hash_{}", repo_idx), 1000],
+                    )?;
+                    let file_id: i64 =
+                        tx.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+
+                    // 2. Bulk-insert chunks for this repo (CHUNKS_PER_REPO each)
+                    {
+                        let mut chunk_stmt = tx.prepare(
+                            "INSERT INTO chunks (file_id, blob_sha, symbol_name, kind, start_line, end_line, preview, ts_doc_text, recency_score, churn_score, worktree_ids)
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        )?;
+
+                        let mut cw_stmt = tx.prepare(
+                            "INSERT INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
+                        )?;
+
+                        for chunk_idx in 0..CHUNKS_PER_REPO {
+                            let global_idx = repo_idx * CHUNKS_PER_REPO + chunk_idx;
+                            let blob_sha = format!("blob_{:08x}", global_idx);
+                            let sym = format!("fn_{}", chunk_idx);
+                            let line_start = (chunk_idx * 10 + 1) as i32;
+                            let line_end = (chunk_idx * 10 + 10) as i32;
+                            let preview = format!("fn fn_{}() {{}}", chunk_idx);
+                            let wt_json = format!("[{}]", worktree_id);
+
+                            chunk_stmt.execute(params![
+                                file_id, blob_sha, sym, "function",
+                                line_start, line_end, preview, "",
+                                1.0_f64, 0.5_f64, wt_json,
+                            ])?;
+                            let chunk_id: i64 =
+                                tx.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+
+                            cw_stmt.execute(params![chunk_id, worktree_id])?;
+                        }
+                    }
+
+                    // 3. Bulk-insert embeddings for 50% of chunks in this repo
+                    {
+                        let mut emb_stmt = tx.prepare(
+                            "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version)
+                             VALUES (?1, ?2, ?3, ?4)",
+                        )?;
+
+                        let dummy_embedding = vec![0u8; 64]; // Small dummy blob
+                        for chunk_idx in 0..CHUNKS_PER_REPO {
+                            if chunk_idx % 2 == 0 {
+                                let global_idx = repo_idx * CHUNKS_PER_REPO + chunk_idx;
+                                let blob_sha = format!("blob_{:08x}", global_idx);
+                                emb_stmt.execute(params![
+                                    blob_sha,
+                                    dummy_embedding,
+                                    768,
+                                    "bench-model",
+                                ])?;
+                            }
+                        }
+                    }
+                }
+
+                tx.commit()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        start.elapsed()
+    }
+
+    /// Performance benchmark: validates encoding progress queries complete in <500ms
+    /// with 100K chunks distributed across 10 repos.
+    ///
+    /// Run with: cargo test --release -p crewchief-maproom -- --ignored --nocapture benchmark_large_repository
+    #[tokio::test]
+    #[ignore]
+    async fn benchmark_large_repository() {
+        let store = setup_test_store().await;
+
+        // ---- Database Setup ----
+        let setup_duration = setup_large_test_db(&store).await;
+
+        println!();
+        println!("Benchmark: 100K chunks performance test");
+        println!("----------------------------------------");
+        println!(
+            "Database setup:        {}ms",
+            setup_duration.as_millis()
+        );
+
+        // ---- Warm-up query (not measured) ----
+        let _ = get_encoding_progress(store.clone(), None).await.unwrap();
+
+        // ---- Global progress query ----
+        let start = Instant::now();
+        let global_result = get_encoding_progress(store.clone(), None).await.unwrap();
+        let global_duration = start.elapsed();
+        println!(
+            "Global progress query: {}ms",
+            global_duration.as_millis()
+        );
+
+        // Sanity-check the data
+        assert_eq!(
+            global_result.total_chunks, TOTAL_CHUNKS as i64,
+            "Expected {} total chunks, got {}",
+            TOTAL_CHUNKS, global_result.total_chunks
+        );
+        assert_eq!(
+            global_result.total_embeddings, TOTAL_EMBEDDINGS as i64,
+            "Expected {} total embeddings, got {}",
+            TOTAL_EMBEDDINGS, global_result.total_embeddings
+        );
+        assert!(
+            (global_result.percentage - 50.0).abs() < 0.1,
+            "Expected ~50% coverage, got {}%",
+            global_result.percentage
+        );
+
+        // ---- Repo-filtered query ----
+        let start = Instant::now();
+        let repo_result = get_encoding_progress(store.clone(), Some("bench-repo-0".to_string()))
+            .await
+            .unwrap();
+        let repo_duration = start.elapsed();
+        println!(
+            "Repo filtered query:   {}ms",
+            repo_duration.as_millis()
+        );
+
+        assert_eq!(
+            repo_result.total_chunks, CHUNKS_PER_REPO as i64,
+            "Expected {} chunks for single repo, got {}",
+            CHUNKS_PER_REPO, repo_result.total_chunks
+        );
+
+        // ---- Query with active encoding run ----
+        store
+            .create_encoding_run(TOTAL_CHUNKS as i64, Some("bench-provider"), Some(768))
+            .await
+            .unwrap();
+
+        let start = Instant::now();
+        let run_result = get_encoding_progress(store.clone(), None).await.unwrap();
+        let run_duration = start.elapsed();
+        println!(
+            "With active run:       {}ms",
+            run_duration.as_millis()
+        );
+
+        assert!(
+            run_result.active_run.is_some(),
+            "Expected active run to be present"
+        );
+
+        // ---- Results ----
+        println!("----------------------------------------");
+
+        let all_pass = global_duration.as_millis() < QUERY_THRESHOLD_MS
+            && repo_duration.as_millis() < QUERY_THRESHOLD_MS
+            && run_duration.as_millis() < QUERY_THRESHOLD_MS;
+
+        if all_pass {
+            println!("\u{2713} All queries < {}ms threshold", QUERY_THRESHOLD_MS);
+        } else {
+            println!(
+                "\u{2717} FAILED: some queries exceeded {}ms threshold",
+                QUERY_THRESHOLD_MS
+            );
+        }
+        println!();
+
+        assert!(
+            global_duration.as_millis() < QUERY_THRESHOLD_MS,
+            "Global progress query took {}ms, exceeds {}ms threshold",
+            global_duration.as_millis(),
+            QUERY_THRESHOLD_MS
+        );
+        assert!(
+            repo_duration.as_millis() < QUERY_THRESHOLD_MS,
+            "Repo filtered query took {}ms, exceeds {}ms threshold",
+            repo_duration.as_millis(),
+            QUERY_THRESHOLD_MS
+        );
+        assert!(
+            run_duration.as_millis() < QUERY_THRESHOLD_MS,
+            "Query with active run took {}ms, exceeds {}ms threshold",
+            run_duration.as_millis(),
+            QUERY_THRESHOLD_MS
+        );
+    }
+}
