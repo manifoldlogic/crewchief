@@ -3690,6 +3690,12 @@ fn walk_ruby_decls(
         "module" => {
             extract_ruby_module(source, node, chunks, visibility);
         }
+        "method" => {
+            extract_ruby_method(source, node, chunks, visibility);
+        }
+        "singleton_method" => {
+            extract_ruby_singleton_method(source, node, chunks);
+        }
         "call" => {
             // Check if this is a visibility modifier call
             if let Some(method) = node.child_by_field_name("method") {
@@ -3859,4 +3865,100 @@ fn extract_ruby_doc_comment(source: &str, node: Node) -> Option<String> {
     } else {
         Some(doc_lines.join("\n"))
     }
+}
+
+fn is_inside_ruby_class(node: Node) -> bool {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        match parent.kind() {
+            "class" | "module" => return true,
+            _ => current = parent.parent(),
+        }
+    }
+    false
+}
+
+fn extract_ruby_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>, visibility: &str) {
+    // Extract name
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract parameters (may be "parameters" or "method_parameters" depending on tree-sitter version)
+    let signature = node
+        .child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract doc comment
+    let docstring = extract_ruby_doc_comment(source, node);
+
+    // Determine if inside class/module
+    let kind = if is_inside_ruby_class(node) {
+        "method"
+    } else {
+        "func"
+    };
+
+    // Build metadata
+    let metadata = serde_json::json!({
+        "visibility": visibility,
+        "is_class_method": false
+    });
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    // Push chunk
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: kind.to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(metadata),
+    });
+
+    // Do NOT recurse into method body - methods in Ruby don't typically contain other methods
+}
+
+fn extract_ruby_singleton_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    // Extract name
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract parameters
+    let signature = node
+        .child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .map(|s| s.to_string());
+
+    // Extract doc comment
+    let docstring = extract_ruby_doc_comment(source, node);
+
+    // Build metadata - class methods are always public and is_class_method is true
+    let metadata = serde_json::json!({
+        "visibility": "public",
+        "is_class_method": true
+    });
+
+    let start = node.start_position();
+    let end = node.end_position();
+
+    // Push chunk - kind is always "method" (class methods are only defined inside classes)
+    chunks.push(SymbolChunk {
+        symbol_name: name,
+        kind: "method".to_string(),
+        signature,
+        docstring,
+        start_line: (start.row + 1) as i32,
+        end_line: (end.row + 1) as i32,
+        metadata: Some(metadata),
+    });
+
+    // Do NOT recurse into method body
 }
