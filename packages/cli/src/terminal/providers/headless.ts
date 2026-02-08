@@ -17,7 +17,7 @@ interface LogStreams {
 interface HeadlessAgent {
   child: ChildProcess
   name: string
-  type: string
+  platform: string
   logStreams?: LogStreams
   runId?: string
 }
@@ -226,7 +226,7 @@ export class HeadlessProvider implements TerminalProvider {
       this.agents.set(paneId, {
         child,
         name: paneId,
-        type: this.parseAgentType(paneId),
+        platform: this.parseAgentPlatform(paneId),
         logStreams,
         runId,
       })
@@ -297,7 +297,7 @@ export class HeadlessProvider implements TerminalProvider {
     return Array.from(this.agents.entries()).map(([id, agent]) => ({
       id,
       name: agent.name,
-      type: agent.type,
+      platform: agent.platform,
       status: agent.child.exitCode === null ? 'running' : 'stopped',
     }))
   }
@@ -356,9 +356,9 @@ export class HeadlessProvider implements TerminalProvider {
   }
 
   /**
-   * Parse agent type from paneId (format: name__type or just name)
+   * Parse agent platform from paneId (format: name__platform or just name)
    */
-  private parseAgentType(paneId: string): string {
+  private parseAgentPlatform(paneId: string): string {
     const parts = paneId.split('__')
     return parts.length > 1 ? parts[parts.length - 1] : 'unknown'
   }
