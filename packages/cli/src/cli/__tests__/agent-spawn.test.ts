@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSchema } from '../../config/schema'
-import { Scheduler } from '../../orchestrator/scheduler'
+import { RunManager } from '../../orchestrator/runManager'
+import { Scheduler, SpawnOptions } from '../../orchestrator/scheduler'
 import { TerminalFactory } from '../../terminal/factory'
 import { validateBackend, VALID_BACKENDS } from '../agent'
 
 // Mock modules
 vi.mock('../../orchestrator/scheduler')
+vi.mock('../../orchestrator/runManager')
 
 vi.mock('../../terminal/factory', () => ({
   TerminalFactory: {
@@ -21,123 +23,191 @@ vi.mock('../../terminal/factory', () => ({
 }))
 
 /**
- * Helper to simulate the spawn action handler logic.
- * Mirrors the backend selection logic from agent.ts.
+ * Helper to simulate the new spawn action handler logic.
+ * Mirrors the platform-based spawning logic from agent.ts.
  */
 async function executeAgentSpawn(
-  agents: string,
+  platformsStr: string,
   task: string | undefined,
   options: {
-    name?: string
-    vertical?: boolean
+    worktree?: boolean
+    agent?: string
     args?: string
-    noLabel?: boolean
-    backend?: string
-    headless?: boolean
+    verbose?: boolean
   } = {},
 ) {
-  // Validate --backend option if provided
-  if (options.backend && !validateBackend(options.backend)) {
-    throw new Error(`Invalid backend: ${options.backend}\nValid options: ${VALID_BACKENDS.join(', ')}`)
-  }
-
-  // Determine terminal provider: --headless > --backend > auto-detect
-  let terminal
-  if (options.headless) {
-    terminal = TerminalFactory.getProvider('headless')
-  } else if (options.backend && options.backend !== 'auto') {
-    terminal = TerminalFactory.getProvider(options.backend as 'iterm' | 'tmux' | 'headless')
-  } else {
-    terminal = TerminalFactory.autoDetect()
-  }
-
-  await terminal.initialize()
-
-  const scheduler = new Scheduler(terminal)
-
-  const agentTypes = agents
+  // 1. Parse platforms
+  const platforms = platformsStr
     .split(',')
-    .map((a) => a.trim())
-    .filter((a) => a.length > 0)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
 
-  if (agentTypes.length === 0) {
-    throw new Error('No valid agent types specified')
+  if (platforms.length === 0) {
+    throw new Error('No valid platforms specified')
   }
 
-  const effectiveTask = task || options.name || `agent-${Date.now()}`
+  // 2. Generate task name if not provided
+  const effectiveTask = task || `task-${Date.now()}`
 
-  if (agentTypes.length === 1) {
-    const runId = await scheduler.assignSingleAgent(effectiveTask, agentTypes[0])
-    return { runId, agentTypes, effectiveTask }
-  } else {
-    const results = await Promise.allSettled(agentTypes.map((type) => scheduler.assignSingleAgent(effectiveTask, type)))
-    return { results, agentTypes, effectiveTask }
+  // 3. Create scheduler
+  const terminal = TerminalFactory.autoDetect()
+  const runManager = new RunManager()
+  const scheduler = new Scheduler(terminal, runManager)
+
+  // 4. Spawn each platform sequentially
+  const results: Array<{ platform: string; runId?: string; error?: string }> = []
+  for (const platform of platforms) {
+    try {
+      const spawnOptions: SpawnOptions = {
+        useWorktree: options.worktree ?? false,
+        agentName: options.agent,
+        verbose: options.verbose,
+        extraArgs: options.args,
+      }
+      const runId = await scheduler.spawnAgent(effectiveTask, platform, spawnOptions)
+      results.push({ platform, runId })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      results.push({ platform, error: message })
+    }
   }
+
+  return { results, platforms, effectiveTask }
 }
 
 describe('agent spawn', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(Scheduler.prototype.assignSingleAgent).mockResolvedValue('run-123')
+    vi.mocked(Scheduler.prototype.spawnAgent).mockResolvedValue('run-123')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('spawns single agent via scheduler', async () => {
+  it('spawns single platform via scheduler.spawnAgent()', async () => {
     const result = await executeAgentSpawn('claude', 'fix login bug')
 
     expect(TerminalFactory.autoDetect).toHaveBeenCalled()
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('fix login bug', 'claude')
-    expect(result.runId).toBe('run-123')
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith('fix login bug', 'claude', {
+      useWorktree: false,
+      agentName: undefined,
+      verbose: undefined,
+      extraArgs: undefined,
+    })
+    expect(result.results[0].runId).toBe('run-123')
   })
 
-  it('spawns multiple agents when comma-separated', async () => {
-    await executeAgentSpawn('claude,gemini', 'review code')
+  it('spawns multiple platforms sequentially', async () => {
+    const result = await executeAgentSpawn('claude,gemini', 'review code')
 
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledTimes(2)
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('review code', 'claude')
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('review code', 'gemini')
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledTimes(2)
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith(
+      'review code',
+      'claude',
+      expect.objectContaining({ useWorktree: false }),
+    )
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith(
+      'review code',
+      'gemini',
+      expect.objectContaining({ useWorktree: false }),
+    )
+    expect(result.results).toHaveLength(2)
+    expect(result.results[0].runId).toBe('run-123')
+    expect(result.results[1].runId).toBe('run-123')
   })
 
-  it('uses custom name as task when provided', async () => {
-    await executeAgentSpawn('claude', undefined, { name: 'my-custom-task' })
-
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('my-custom-task', 'claude')
-  })
-
-  it('generates default task name when none provided', async () => {
+  it('generates default task name with task- prefix when none provided', async () => {
     const before = Date.now()
     await executeAgentSpawn('claude', undefined)
     const after = Date.now()
 
-    const call = vi.mocked(Scheduler.prototype.assignSingleAgent).mock.calls[0]
+    const call = vi.mocked(Scheduler.prototype.spawnAgent).mock.calls[0]
     const taskName = call[0]
 
-    expect(taskName).toMatch(/^agent-\d+$/)
+    expect(taskName).toMatch(/^task-\d+$/)
     const timestamp = parseInt(taskName.split('-')[1])
     expect(timestamp).toBeGreaterThanOrEqual(before)
     expect(timestamp).toBeLessThanOrEqual(after)
   })
 
-  it('throws error when no valid agent types specified', async () => {
-    await expect(executeAgentSpawn('', undefined)).rejects.toThrow('No valid agent types specified')
+  it('throws error when no valid platforms specified', async () => {
+    await expect(executeAgentSpawn('', undefined)).rejects.toThrow('No valid platforms specified')
   })
 
-  it('trims whitespace from agent types', async () => {
+  it('trims whitespace from platform names', async () => {
     await executeAgentSpawn('  claude  ,  gemini  ', 'test task')
 
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('test task', 'claude')
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('test task', 'gemini')
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith('test task', 'claude', expect.any(Object))
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith('test task', 'gemini', expect.any(Object))
   })
 
-  it('filters empty agent types', async () => {
+  it('filters empty platform names', async () => {
     await executeAgentSpawn('claude,,gemini,', 'test task')
 
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledTimes(2)
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('test task', 'claude')
-    expect(Scheduler.prototype.assignSingleAgent).toHaveBeenCalledWith('test task', 'gemini')
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledTimes(2)
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith('test task', 'claude', expect.any(Object))
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith('test task', 'gemini', expect.any(Object))
+  })
+
+  it('passes --worktree flag as useWorktree option', async () => {
+    await executeAgentSpawn('claude', 'fix bug', { worktree: true })
+
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith(
+      'fix bug',
+      'claude',
+      expect.objectContaining({ useWorktree: true }),
+    )
+  })
+
+  it('passes --agent flag as agentName option', async () => {
+    await executeAgentSpawn('claude', 'fix bug', { agent: 'backend-developer' })
+
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith(
+      'fix bug',
+      'claude',
+      expect.objectContaining({ agentName: 'backend-developer' }),
+    )
+  })
+
+  it('passes --args flag as extraArgs option', async () => {
+    await executeAgentSpawn('claude', 'fix bug', { args: '--dangerously-skip-permissions' })
+
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith(
+      'fix bug',
+      'claude',
+      expect.objectContaining({ extraArgs: '--dangerously-skip-permissions' }),
+    )
+  })
+
+  it('passes --verbose flag', async () => {
+    await executeAgentSpawn('claude', 'fix bug', { verbose: true })
+
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledWith(
+      'fix bug',
+      'claude',
+      expect.objectContaining({ verbose: true }),
+    )
+  })
+
+  it('continues spawning remaining platforms when one fails', async () => {
+    vi.mocked(Scheduler.prototype.spawnAgent)
+      .mockRejectedValueOnce(new Error('platform not found'))
+      .mockResolvedValueOnce('run-456')
+
+    const result = await executeAgentSpawn('badplatform,claude', 'test task')
+
+    expect(Scheduler.prototype.spawnAgent).toHaveBeenCalledTimes(2)
+    expect(result.results[0].error).toBe('platform not found')
+    expect(result.results[1].runId).toBe('run-456')
+  })
+
+  it('always uses TerminalFactory.autoDetect()', async () => {
+    await executeAgentSpawn('claude', 'task')
+
+    expect(TerminalFactory.autoDetect).toHaveBeenCalled()
+    // No longer calls getProvider since --backend flag is removed
+    expect(TerminalFactory.getProvider).not.toHaveBeenCalled()
   })
 })
 
@@ -170,94 +240,6 @@ describe('backend validation', () => {
     it('has exactly 4 entries', () => {
       expect(VALID_BACKENDS).toHaveLength(4)
     })
-  })
-
-  describe('spawn with invalid backend', () => {
-    it('rejects unknown backend in executeAgentSpawn', async () => {
-      await expect(executeAgentSpawn('claude', 'task', { backend: 'screen' })).rejects.toThrow(
-        'Invalid backend: screen',
-      )
-    })
-
-    it('rejects wezterm backend', async () => {
-      await expect(executeAgentSpawn('claude', 'task', { backend: 'wezterm' })).rejects.toThrow(
-        'Invalid backend: wezterm',
-      )
-    })
-
-    it('error message includes valid options', async () => {
-      await expect(executeAgentSpawn('claude', 'task', { backend: 'bad' })).rejects.toThrow(
-        'Valid options: iterm, tmux, headless, auto',
-      )
-    })
-  })
-})
-
-describe('explicit backend selection', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(Scheduler.prototype.assignSingleAgent).mockResolvedValue('run-123')
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('uses getProvider when --backend tmux specified', async () => {
-    await executeAgentSpawn('claude', 'task', { backend: 'tmux' })
-
-    expect(TerminalFactory.getProvider).toHaveBeenCalledWith('tmux')
-    expect(TerminalFactory.autoDetect).not.toHaveBeenCalled()
-  })
-
-  it('uses getProvider when --backend iterm specified', async () => {
-    await executeAgentSpawn('claude', 'task', { backend: 'iterm' })
-
-    expect(TerminalFactory.getProvider).toHaveBeenCalledWith('iterm')
-    expect(TerminalFactory.autoDetect).not.toHaveBeenCalled()
-  })
-
-  it('uses getProvider when --backend headless specified', async () => {
-    await executeAgentSpawn('claude', 'task', { backend: 'headless' })
-
-    expect(TerminalFactory.getProvider).toHaveBeenCalledWith('headless')
-    expect(TerminalFactory.autoDetect).not.toHaveBeenCalled()
-  })
-
-  it('uses autoDetect when --backend auto specified', async () => {
-    await executeAgentSpawn('claude', 'task', { backend: 'auto' })
-
-    expect(TerminalFactory.autoDetect).toHaveBeenCalled()
-    expect(TerminalFactory.getProvider).not.toHaveBeenCalled()
-  })
-
-  it('uses autoDetect when no --backend specified', async () => {
-    await executeAgentSpawn('claude', 'task')
-
-    expect(TerminalFactory.autoDetect).toHaveBeenCalled()
-    expect(TerminalFactory.getProvider).not.toHaveBeenCalled()
-  })
-
-  it('--headless flag forces headless provider', async () => {
-    await executeAgentSpawn('claude', 'task', { headless: true })
-
-    expect(TerminalFactory.getProvider).toHaveBeenCalledWith('headless')
-    expect(TerminalFactory.autoDetect).not.toHaveBeenCalled()
-  })
-
-  it('--headless takes precedence over --backend tmux', async () => {
-    await executeAgentSpawn('claude', 'task', { headless: true, backend: 'tmux' })
-
-    expect(TerminalFactory.getProvider).toHaveBeenCalledWith('headless')
-    // getProvider should only have been called once (for headless, not tmux)
-    expect(TerminalFactory.getProvider).toHaveBeenCalledTimes(1)
-  })
-
-  it('--headless takes precedence over --backend iterm', async () => {
-    await executeAgentSpawn('claude', 'task', { headless: true, backend: 'iterm' })
-
-    expect(TerminalFactory.getProvider).toHaveBeenCalledWith('headless')
-    expect(TerminalFactory.getProvider).toHaveBeenCalledTimes(1)
   })
 })
 
