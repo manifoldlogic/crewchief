@@ -7,6 +7,7 @@ use crate::indexer::SymbolChunk;
 use crate::profile_scope;
 
 // Submodules for language-specific parsing
+pub(crate) mod c_lang;
 pub(crate) mod common;
 pub(crate) mod cpp;
 pub(crate) mod csharp;
@@ -35,6 +36,7 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
         "go" => go::extract_go_chunks(source),
         "gomod" => go::extract_gomod_chunks(source),
         "rb" => ruby::extract_ruby_chunks(source),
+        "c" => c_lang::extract_c_chunks(source),
         "cs" => csharp::extract_csharp_chunks(source),
         "java" => java::extract_java_chunks(source),
         "cpp" => cpp::extract_cpp_chunks(source),

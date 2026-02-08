@@ -409,3 +409,43 @@ Run benchmarks separately:
 ```bash
 cargo bench
 ```
+
+## Language Support
+
+Maproom indexes and extracts semantic information from the following languages:
+
+| Language | File Extensions | Extracted Constructs |
+|----------|----------------|---------------------|
+| TypeScript | `.ts`, `.tsx` | Functions, classes, interfaces, types, imports, exports |
+| JavaScript | `.js`, `.jsx` | Functions, classes, imports, exports |
+| Rust | `.rs` | Functions, structs, enums, traits, impls, modules |
+| Python | `.py` | Functions, classes, imports, decorators |
+| Go | `.go` | Functions, types, interfaces, structs |
+| Ruby | `.rb` | Methods, classes, modules, constants |
+| C | `.c` | Functions, structs, enums, typedefs, variables, `#include` directives |
+| Markdown | `.md` | Headings, sections |
+| JSON | `.json` | Keys, structure |
+| YAML | `.yml`, `.yaml` | Keys, structure |
+| TOML | `.toml` | Keys, structure |
+
+### C Language (MLLANG-1005)
+
+C language support indexes `.c` source files only. Supported constructs:
+- Functions (with parameters, return types, doc comments)
+- Structs (with field metadata)
+- Enums (with enumerator lists)
+- Typedefs
+- Global variables
+- `#include` directives (system and local headers, aggregated into imports)
+- Static function detection and storage class metadata
+
+**Current Limitation**: Header files (`.h`) are not indexed. The `.h` file extension is ambiguous between C and C++, and correctly handling headers requires content-based disambiguation. Header file support will be added in MLLANG-1004 (C++ language support), which will handle both C and C++ headers.
+
+**Workaround**: Focus searches on `.c` implementation files, which contain function definitions, struct definitions, and other constructs that Maproom extracts.
+
+## Known Limitations
+
+- Single-user only (no multi-process concurrent writes)
+- No database encryption
+- sqlite-vec extension must be compiled in (statically linked)
+- C header files (`.h`) are not indexed — header support deferred to MLLANG-1004 (C++ language support)

@@ -84,6 +84,10 @@ pub(crate) fn lang_ruby() -> Language {
     tree_sitter_ruby::language()
 }
 
+pub(crate) fn lang_c() -> Language {
+    tree_sitter_c::language()
+}
+
 pub(crate) fn lang_csharp() -> Language {
     tree_sitter_c_sharp::language()
 }

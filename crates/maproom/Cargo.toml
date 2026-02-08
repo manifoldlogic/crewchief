@@ -54,6 +54,7 @@ tree-sitter-python = "0.21"
 tree-sitter-rust = "0.21"
 tree-sitter-go = "0.21"
 tree-sitter-ruby = "0.21"
+tree-sitter-c = "0.21.4"
 tree-sitter-c-sharp = "0.21.3"
 tree-sitter-java = "0.21.0"
 tree-sitter-cpp = "0.21"
@@ -206,5 +207,9 @@ harness = false
 
 [[bench]]
 name = "graph_quality_benchmark"
+harness = false
+
+[[bench]]
+name = "c_parser_bench"
 harness = false
 
