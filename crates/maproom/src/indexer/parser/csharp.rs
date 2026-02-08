@@ -392,27 +392,11 @@ fn extract_csharp_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
     let visibility = extract_csharp_visibility(node, source);
     let modifiers = extract_csharp_modifiers(node, source);
 
-    // Extract return type - find type node (predefined_type, identifier, generic_name, etc.)
-    // The return type is the first type-like child before the method name
-    let return_type = {
-        let mut cursor = node.walk();
-        let mut found_type = None;
-        for child in node.children(&mut cursor) {
-            match child.kind() {
-                "predefined_type" | "identifier" | "generic_name" | "nullable_type"
-                | "array_type" | "qualified_name" => {
-                    if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                        found_type = Some(text);
-                        break;
-                    }
-                }
-                "modifier" => continue, // Skip modifiers
-                _ if child.kind() == name.as_deref().unwrap_or("") => break, // Stop at method name
-                _ => {}
-            }
-        }
-        found_type
-    };
+    // Extract return type using field access (O(1) lookup)
+    // tree-sitter-c-sharp grammar exposes return type as field('returns', $.type)
+    let return_type = node
+        .child_by_field_name("returns")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok());
 
     // Extract parameters
     let parameters = node
