@@ -105,6 +105,57 @@ pub(crate) fn lang_cpp() -> Language {
     tree_sitter_cpp::language()
 }
 
+/// Extract visibility modifier from a node's children.
+///
+/// Iterates through node children looking for nodes whose kind matches one of the
+/// provided `visibility_keywords`. Returns the first match found, or `default` if none found.
+///
+/// This is useful for C-family languages (C#, Java, C++) that use similar visibility systems.
+///
+/// # Arguments
+/// - `node` - The AST node to inspect (typically a declaration node)
+/// - `source` - The source code text
+/// - `visibility_keywords` - List of node kinds that represent visibility modifiers
+/// - `default` - Default visibility if no modifier found (e.g., "internal", "package", "private")
+///
+/// # Example
+/// ```rust,ignore
+/// // C# usage
+/// let vis = extract_visibility_from_modifiers(
+///     &node,
+///     source,
+///     &["public", "private", "protected", "internal"],
+///     "internal"
+/// );
+/// ```
+pub(crate) fn extract_visibility_from_modifiers(
+    node: &Node,
+    source: &str,
+    visibility_keywords: &[&str],
+    default: &str,
+) -> String {
+    let mut access_modifiers = Vec::new();
+
+    // Iterate through children looking for modifier nodes
+    for child in node.children(&mut node.walk()) {
+        if child.kind() == "modifier" {
+            if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
+                // Check if this modifier text is a visibility keyword
+                if visibility_keywords.contains(&modifier_text) {
+                    access_modifiers.push(modifier_text.to_string());
+                }
+            }
+        }
+    }
+
+    if access_modifiers.is_empty() {
+        default.to_string()
+    } else {
+        // Handle combined modifiers like "protected internal"
+        access_modifiers.join(" ")
+    }
+}
+
 /// Helper function to push a chunk with node position
 pub(crate) fn push_chunk(
     source: &str,

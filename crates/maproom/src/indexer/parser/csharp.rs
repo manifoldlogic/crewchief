@@ -80,7 +80,7 @@
 
 use tree_sitter::{Node, Parser};
 
-use super::common::lang_csharp;
+use super::common::{extract_visibility_from_modifiers, lang_csharp};
 use crate::indexer::SymbolChunk;
 
 pub(super) fn extract_csharp_chunks(source: &str) -> Vec<SymbolChunk> {
@@ -190,7 +190,12 @@ fn extract_type_declaration(
         .map(|s| s.to_string());
 
     // Extract visibility and modifiers
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
     let modifiers = extract_csharp_modifiers(node, source);
 
     // Extract generics from 'type_parameter_list'
@@ -301,7 +306,12 @@ fn extract_csharp_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) 
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
 
     // Extract underlying type from base_list (e.g., ": byte")
     let base_list =
@@ -334,7 +344,12 @@ fn extract_csharp_delegate(source: &str, node: Node, chunks: &mut Vec<SymbolChun
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
 
     // Extract return type
     let return_type = node
@@ -397,7 +412,12 @@ fn extract_csharp_method(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
     let modifiers = extract_csharp_modifiers(node, source);
 
     // Extract return type using field access (O(1) lookup)
@@ -482,7 +502,12 @@ fn extract_csharp_constructor(source: &str, node: Node, chunks: &mut Vec<SymbolC
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
 
     // Extract parameters
     let parameters = node
@@ -525,7 +550,12 @@ fn extract_csharp_property(source: &str, node: Node, chunks: &mut Vec<SymbolChun
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
 
     // Extract type
     let prop_type = node
@@ -586,7 +616,12 @@ fn extract_csharp_event(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
         .and_then(|n| n.utf8_text(source.as_bytes()).ok())
         .map(|s| s.to_string());
 
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
 
     // Extract type (event handler type)
     let event_type = node
@@ -617,7 +652,12 @@ fn extract_csharp_event(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>)
 
 fn extract_csharp_event_field(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Event field declarations can have multiple declarators
-    let visibility = extract_csharp_visibility(node, source);
+    let visibility = extract_visibility_from_modifiers(
+        &node,
+        source,
+        &["public", "private", "protected", "internal"],
+        "private",
+    );
     let docstring = extract_csharp_doc_comment(source, node);
 
     // Extract type - it's in the variable_declaration child
@@ -835,37 +875,6 @@ fn extract_csharp_doc_comment(source: &str, node: Node) -> Option<String> {
     // Reverse to get original order
     doc_lines.reverse();
     Some(doc_lines.join("\n"))
-}
-
-fn extract_csharp_visibility(node: Node, source: &str) -> String {
-    let mut access_modifiers = Vec::new();
-
-    // Iterate through modifier children
-    for child in node.children(&mut node.walk()) {
-        if child.kind() == "modifier" {
-            if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
-                // Access modifiers: public, private, protected, internal
-                match modifier_text {
-                    "public" | "private" | "protected" | "internal" => {
-                        access_modifiers.push(modifier_text.to_string());
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    if access_modifiers.is_empty() {
-        // Default visibility in C#:
-        // - Members: private
-        // - Top-level types: internal
-        // For simplicity, default to "private" here
-        // (top-level type detection would require parent context)
-        "private".to_string()
-    } else {
-        // Handle combined modifiers like "protected internal"
-        access_modifiers.join(" ")
-    }
 }
 
 fn extract_csharp_modifiers(node: Node, source: &str) -> Vec<String> {
