@@ -530,3 +530,41 @@ public class Broken {
     // May return partial results or empty - either is acceptable
     // Key assertion: no panic occurred
 }
+
+#[test]
+fn test_csharp_unicode_identifiers() {
+    // Test Unicode identifier support with Cyrillic characters
+    // Note: tree-sitter-c-sharp 0.21.3 has partial Unicode support
+    // - Cyrillic (Russian): Works correctly
+    // - Chinese/CJK: Grammar limitation (fails to parse)
+    // This validates UTF-8 handling and confirms partial Unicode support
+    let source = r#"
+namespace MyApp {
+    /// <summary>Russian capital city class.</summary>
+    public class Москва {
+        public void Привет(string имя) { }
+    }
+}
+"#;
+
+    let chunks = parser::extract_chunks(source, "cs");
+
+    // Verify namespace
+    assert!(chunks.iter().any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("MyApp")));
+
+    // Verify Cyrillic class name
+    let moscow_class = chunks.iter().find(|c| c.kind == "class" && c.symbol_name.as_deref() == Some("Москва"));
+    assert!(moscow_class.is_some(), "Cyrillic class name not found");
+    let moscow_class = moscow_class.unwrap();
+    assert_eq!(moscow_class.symbol_name.as_deref(), Some("Москва"));
+    assert!(moscow_class.docstring.is_some());
+    assert!(moscow_class.docstring.as_ref().unwrap().contains("Russian capital"));
+
+    // Verify Cyrillic method name
+    let hello_method = chunks.iter().find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("Привет"));
+    assert!(hello_method.is_some(), "Cyrillic method name not found");
+
+    // Verify Cyrillic parameter name in signature
+    let hello_method = hello_method.unwrap();
+    assert!(hello_method.signature.as_ref().unwrap().contains("имя"), "Cyrillic parameter not in signature");
+}
