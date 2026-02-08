@@ -157,9 +157,21 @@ fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
     None
 }
 
-fn extract_csharp_class(
+/// Helper function for extracting type declarations (class, interface, struct).
+///
+/// Handles common logic shared by class, interface, and struct extractors:
+/// name extraction, visibility, modifiers, generics, base list, doc comment,
+/// signature building, chunk creation, and body recursion.
+///
+/// The `kind` parameter determines the chunk kind ("class", "interface", "struct")
+/// and also controls which modifier flags are included in metadata:
+/// - `"class"`: `is_abstract`, `is_static`, `is_partial`
+/// - `"interface"`: `is_partial`
+/// - `"struct"`: `is_static`, `is_partial`
+fn extract_type_declaration(
     source: &str,
     node: Node,
+    kind: &str,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
 ) {
@@ -196,20 +208,37 @@ fn extract_csharp_class(
         signature.push_str(base_str);
     }
 
-    // Build metadata
-    let metadata = serde_json::json!({
-        "visibility": visibility,
-        "base_types": base_list,
-        "is_abstract": modifiers.contains(&"abstract".to_string()),
-        "is_static": modifiers.contains(&"static".to_string()),
-        "is_partial": modifiers.contains(&"partial".to_string()),
-    });
+    // Build metadata with kind-specific modifier flags
+    let metadata = match kind {
+        "class" => serde_json::json!({
+            "visibility": visibility,
+            "base_types": base_list,
+            "is_abstract": modifiers.contains(&"abstract".to_string()),
+            "is_static": modifiers.contains(&"static".to_string()),
+            "is_partial": modifiers.contains(&"partial".to_string()),
+        }),
+        "interface" => serde_json::json!({
+            "visibility": visibility,
+            "base_types": base_list,
+            "is_partial": modifiers.contains(&"partial".to_string()),
+        }),
+        "struct" => serde_json::json!({
+            "visibility": visibility,
+            "base_types": base_list,
+            "is_static": modifiers.contains(&"static".to_string()),
+            "is_partial": modifiers.contains(&"partial".to_string()),
+        }),
+        _ => serde_json::json!({
+            "visibility": visibility,
+            "base_types": base_list,
+        }),
+    };
 
     // Push chunk
     if let Some(name) = name {
         chunks.push(SymbolChunk {
             symbol_name: Some(name),
-            kind: "class".to_string(),
+            kind: kind.to_string(),
             signature: if signature.is_empty() {
                 None
             } else {
@@ -229,6 +258,15 @@ fn extract_csharp_class(
             walk_csharp_decls(source, child, chunks, imports);
         }
     }
+}
+
+fn extract_csharp_class(
+    source: &str,
+    node: Node,
+    chunks: &mut Vec<SymbolChunk>,
+    imports: &mut Vec<serde_json::Value>,
+) {
+    extract_type_declaration(source, node, "class", chunks, imports);
 }
 
 fn extract_csharp_interface(
@@ -237,70 +275,7 @@ fn extract_csharp_interface(
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
 ) {
-    // Extract name from 'name' field
-    let name = node
-        .child_by_field_name("name")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string());
-
-    // Extract visibility and modifiers
-    let visibility = extract_csharp_visibility(node, source);
-    let modifiers = extract_csharp_modifiers(node, source);
-
-    // Extract generics from 'type_parameter_list'
-    let generics = find_child_by_kind(node, "type_parameter_list")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok());
-
-    // Extract base interfaces from 'base_list'
-    let base_list =
-        find_child_by_kind(node, "base_list").and_then(|n| n.utf8_text(source.as_bytes()).ok());
-
-    // Extract doc comment
-    let docstring = extract_csharp_doc_comment(source, node);
-
-    // Build signature
-    let mut signature = String::new();
-    if let Some(generics_str) = generics {
-        signature.push_str(generics_str);
-    }
-    if let Some(base_str) = base_list {
-        if !signature.is_empty() {
-            signature.push(' ');
-        }
-        signature.push_str(base_str);
-    }
-
-    // Build metadata
-    let metadata = serde_json::json!({
-        "visibility": visibility,
-        "base_types": base_list,
-        "is_partial": modifiers.contains(&"partial".to_string()),
-    });
-
-    // Push chunk
-    if let Some(name) = name {
-        chunks.push(SymbolChunk {
-            symbol_name: Some(name),
-            kind: "interface".to_string(),
-            signature: if signature.is_empty() {
-                None
-            } else {
-                Some(signature)
-            },
-            docstring,
-            start_line: (node.start_position().row + 1) as i32,
-            end_line: (node.end_position().row + 1) as i32,
-            metadata: Some(metadata),
-        });
-    }
-
-    // Recurse into body for nested members
-    if let Some(body) = node.child_by_field_name("body") {
-        let mut cursor = body.walk();
-        for child in body.children(&mut cursor) {
-            walk_csharp_decls(source, child, chunks, imports);
-        }
-    }
+    extract_type_declaration(source, node, "interface", chunks, imports);
 }
 
 fn extract_csharp_struct(
@@ -309,71 +284,7 @@ fn extract_csharp_struct(
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
 ) {
-    // Extract name from 'name' field
-    let name = node
-        .child_by_field_name("name")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string());
-
-    // Extract visibility and modifiers
-    let visibility = extract_csharp_visibility(node, source);
-    let modifiers = extract_csharp_modifiers(node, source);
-
-    // Extract generics from 'type_parameter_list'
-    let generics = find_child_by_kind(node, "type_parameter_list")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok());
-
-    // Extract interfaces from 'base_list'
-    let base_list =
-        find_child_by_kind(node, "base_list").and_then(|n| n.utf8_text(source.as_bytes()).ok());
-
-    // Extract doc comment
-    let docstring = extract_csharp_doc_comment(source, node);
-
-    // Build signature
-    let mut signature = String::new();
-    if let Some(generics_str) = generics {
-        signature.push_str(generics_str);
-    }
-    if let Some(base_str) = base_list {
-        if !signature.is_empty() {
-            signature.push(' ');
-        }
-        signature.push_str(base_str);
-    }
-
-    // Build metadata
-    let metadata = serde_json::json!({
-        "visibility": visibility,
-        "base_types": base_list,
-        "is_static": modifiers.contains(&"static".to_string()),
-        "is_partial": modifiers.contains(&"partial".to_string()),
-    });
-
-    // Push chunk
-    if let Some(name) = name {
-        chunks.push(SymbolChunk {
-            symbol_name: Some(name),
-            kind: "struct".to_string(),
-            signature: if signature.is_empty() {
-                None
-            } else {
-                Some(signature)
-            },
-            docstring,
-            start_line: (node.start_position().row + 1) as i32,
-            end_line: (node.end_position().row + 1) as i32,
-            metadata: Some(metadata),
-        });
-    }
-
-    // Recurse into body for nested members
-    if let Some(body) = node.child_by_field_name("body") {
-        let mut cursor = body.walk();
-        for child in body.children(&mut cursor) {
-            walk_csharp_decls(source, child, chunks, imports);
-        }
-    }
+    extract_type_declaration(source, node, "struct", chunks, imports);
 }
 
 fn extract_csharp_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
