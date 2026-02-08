@@ -17,7 +17,7 @@ export function registerEvalCommands(program: Command): void {
         return
       }
       const runDir = rm.getRunDir(runId)
-      const summary = await runDefaultChecks(run.worktreePath, runDir)
+      const summary = await runDefaultChecks(run.workingDirectory, runDir)
       logger.info(`score: ${summary.score.toFixed(2)}`)
       for (const r of summary.results) {
         logger.info(`${r.passed ? 'PASS' : 'FAIL'} ${r.name}${r.details ? ` - ${r.details}` : ''}`)
