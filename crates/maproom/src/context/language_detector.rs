@@ -162,6 +162,7 @@ impl LanguageDetector {
             "def" | "class" if kind.contains("py") => Language::Python,
             "module" => Language::Ruby,      // Ruby-specific
             "constructor" => Language::Java, // Java-specific
+            "namespace" => Language::Cpp,    // C++ specific
             _ => Language::Unknown,
         }
     }
@@ -186,6 +187,17 @@ impl LanguageDetector {
             || content.contains("import java.")
         {
             return Language::Java;
+        }
+
+        // C++ patterns (check early to avoid false positives)
+        // Look for C++ specific keywords that indicate C++ vs C
+        if content.contains("#include") {
+            if content.contains("class ")
+                || content.contains("namespace ")
+                || content.contains("template<")
+            {
+                return Language::Cpp;
+            }
         }
 
         // Ruby patterns (check before Python to avoid false positives)
