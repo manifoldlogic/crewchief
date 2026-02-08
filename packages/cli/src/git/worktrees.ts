@@ -286,13 +286,13 @@ function safeRealpath(p: string): string {
   }
 }
 
-// Deterministic branch naming per spec: derive from agent id, optional task, and timestamp
+// Deterministic branch naming per spec: derive from platform, optional task, and timestamp
 export function buildDeterministicBranchName(params: {
-  agentTypeId: string
+  platform: string
   taskDescription?: string
   now?: Date
 }): string {
-  const safeId = slugify(params.agentTypeId)
+  const safeId = slugify(params.platform)
   const taskPart = params.taskDescription ? '-' + slugify(params.taskDescription).slice(0, 32) : ''
   const d = params.now ?? new Date()
   const ts =

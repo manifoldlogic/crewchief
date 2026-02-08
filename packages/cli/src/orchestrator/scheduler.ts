@@ -80,7 +80,7 @@ export class Scheduler {
       const wt = new WorktreeService()
       const label = slugify(task)
       branchName = buildDeterministicBranchName({
-        agentTypeId: platformName,
+        platform: platformName,
         taskDescription: label,
       })
       effectiveWorkingDir = await wt.createWorktree(
@@ -145,7 +145,7 @@ export class Scheduler {
     const wt = new WorktreeService()
 
     // Ensure branch name is unique if the task is generic, but deterministic if task is specific
-    const branchName = buildDeterministicBranchName({ agentTypeId, taskDescription: task })
+    const branchName = buildDeterministicBranchName({ platform: agentTypeId, taskDescription: task })
 
     // Create worktree first
     const worktreePath = await wt.createWorktree(
