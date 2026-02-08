@@ -108,15 +108,15 @@ Examples:
         // Send to each target agent
         let successCount = 0
         for (const agentName of targetAgents) {
-          // Parse agent type from name (format: name__type)
-          let agentType: string | undefined
+          // Parse platform from name (format: name__platform)
+          let platform: string | undefined
           if (agentName.includes('__')) {
             const parts = agentName.split('__')
-            agentType = parts[parts.length - 1]
+            platform = parts[parts.length - 1]
           }
 
-          // Use iTerm2 with agent-specific Enter key (chr(13) for Claude, etc.)
-          const success = iterm.sendKeys(agentName, textToSend, agentType)
+          // Use iTerm2 with platform-specific Enter key (chr(13) for Claude, etc.)
+          const success = iterm.sendKeys(agentName, textToSend, platform)
           if (success) {
             successCount++
             if (options.file) {
@@ -171,10 +171,10 @@ Examples:
         logger.info('Running agents:')
         agentPanes.forEach((pane, idx) => {
           const parts = pane.label.split('__')
-          const agentType = parts[parts.length - 1]
+          const platform = parts[parts.length - 1]
           const taskName = parts.slice(0, -1).join('__')
           logger.info(`  ${idx + 1}. ${pane.label}`)
-          logger.info(`     Type: ${agentType}, Task: ${taskName}`)
+          logger.info(`     Platform: ${platform}, Task: ${taskName}`)
           logger.info(`     Session: ${pane.sessionId.substring(0, 8)}...`)
         })
 
