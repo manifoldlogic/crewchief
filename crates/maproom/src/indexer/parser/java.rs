@@ -1750,4 +1750,514 @@ public class Container<T extends Comparable<T>> {
             .unwrap()
             .contains("Function<T, U>"));
     }
+
+    #[test]
+    fn test_java_real_world_spring_application() {
+        // Comprehensive integration test covering realistic Java patterns:
+        // - Spring annotations (@RestController, @RequestMapping, @Autowired, @GetMapping, @PostMapping, @PathVariable, @RequestBody)
+        // - JPA/Hibernate annotations (@Entity, @Table, @Column, @Id, @GeneratedValue)
+        // - Generic types (List<T>, Map<K,V>, Optional<T>)
+        // - Lambda-friendly interfaces (Predicate)
+        // - Builder pattern (nested static builder class)
+        // - Exception handling (throws clauses, custom exceptions)
+        // - Multiple nested classes (inner classes, builder)
+        let source = r#"
+package com.example.shop;
+
+import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import javax.persistence.*;
+import java.util.*;
+import java.util.function.Predicate;
+
+/**
+ * REST controller for managing products in the shop.
+ * Demonstrates Spring Boot best practices and common patterns.
+ */
+@RestController
+@RequestMapping("/api/products")
+public class ProductController {
+
+    @Autowired
+    private ProductService productService;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    /**
+     * Retrieve a product by ID.
+     * @param id the product identifier
+     * @return optional product if found
+     */
+    @GetMapping("/{id}")
+    public Optional<Product> getProduct(@PathVariable Long id) {
+        return productService.findById(id);
+    }
+
+    /**
+     * Create a new product.
+     * @param product the product data
+     * @return created product with ID
+     * @throws ValidationException if product data is invalid
+     */
+    @PostMapping
+    public Product createProduct(@RequestBody Product product) throws ValidationException {
+        if (product.getName() == null) {
+            throw new ValidationException("Product name is required");
+        }
+        return productService.save(product);
+    }
+
+    /**
+     * Search products by criteria.
+     * @param criteria search criteria map
+     * @return list of matching products
+     */
+    @PostMapping("/search")
+    public List<Product> searchProducts(@RequestBody Map<String, Object> criteria) {
+        Predicate<Product> filter = p -> {
+            if (criteria.containsKey("minPrice")) {
+                return p.getPrice() >= (Double) criteria.get("minPrice");
+            }
+            return true;
+        };
+        return productRepository.findAll().stream()
+            .filter(filter)
+            .toList();
+    }
+
+    /**
+     * Custom exception for validation errors.
+     */
+    public static class ValidationException extends Exception {
+        public ValidationException(String message) {
+            super(message);
+        }
+    }
+}
+
+/**
+ * JPA entity representing a product.
+ */
+@Entity
+@Table(name = "products")
+class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 255)
+    private String name;
+
+    @Column(nullable = false)
+    private Double price;
+
+    @Column(length = 500)
+    private String description;
+
+    /**
+     * Default constructor for JPA.
+     */
+    public Product() {
+    }
+
+    /**
+     * Private constructor for builder.
+     */
+    private Product(Builder builder) {
+        this.name = builder.name;
+        this.price = builder.price;
+        this.description = builder.description;
+    }
+
+    // Getters and setters
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Double getPrice() {
+        return price;
+    }
+
+    public void setPrice(Double price) {
+        this.price = price;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    /**
+     * Builder for fluent product creation.
+     */
+    public static class Builder {
+        private String name;
+        private Double price;
+        private String description;
+
+        public Builder withName(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder withPrice(Double price) {
+            this.price = price;
+            return this;
+        }
+
+        public Builder withDescription(String description) {
+            this.description = description;
+            return this;
+        }
+
+        /**
+         * Build the product instance.
+         * @return new product
+         * @throws IllegalStateException if required fields are missing
+         */
+        public Product build() throws IllegalStateException {
+            if (name == null || price == null) {
+                throw new IllegalStateException("Name and price are required");
+            }
+            return new Product(this);
+        }
+    }
+}
+
+/**
+ * Service interface for product operations.
+ */
+interface ProductService {
+    Optional<Product> findById(Long id);
+    Product save(Product product);
+    List<Product> findAll();
+}
+
+/**
+ * Repository interface for product data access.
+ */
+interface ProductRepository {
+    List<Product> findAll();
+    Optional<Product> findById(Long id);
+}
+"#;
+
+        let chunks = extract_java_chunks(source);
+
+        // Verify total chunk count (rough estimate)
+        // Expected: ProductController class, Product class, ValidationException nested class, Builder nested class,
+        //           ProductService interface, ProductRepository interface,
+        //           Multiple methods across all types, multiple fields
+        assert!(
+            chunks.len() >= 30,
+            "Expected at least 30 chunks from realistic Spring application, got {}",
+            chunks.len()
+        );
+
+        // Verify class chunks
+        let controller_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "ProductController")
+            .expect("ProductController class not found");
+        assert_eq!(controller_class.kind, "class");
+        assert!(controller_class
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("REST controller"));
+
+        let product_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Product")
+            .expect("Product class not found");
+        assert_eq!(product_class.kind, "class");
+
+        // Verify Spring annotations on controller class
+        let controller_annotations = controller_class.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            controller_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@RestController")),
+            "Should have @RestController annotation"
+        );
+        assert!(
+            controller_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@RequestMapping")),
+            "Should have @RequestMapping annotation"
+        );
+
+        // Verify JPA annotations on entity class
+        let product_annotations = product_class.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            product_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@Entity")),
+            "Should have @Entity annotation"
+        );
+        assert!(
+            product_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@Table")),
+            "Should have @Table annotation"
+        );
+
+        // Verify method chunks with Spring annotations
+        let get_product_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "getProduct")
+            .expect("getProduct method not found");
+        assert_eq!(get_product_method.kind, "method");
+        assert!(get_product_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("Optional<Product>"));
+        assert!(get_product_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("Long id"));
+
+        let get_annotations = get_product_method.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            get_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@GetMapping")),
+            "Should have @GetMapping annotation"
+        );
+
+        let create_product_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "createProduct")
+            .expect("createProduct method not found");
+        assert_eq!(create_product_method.kind, "method");
+        let create_annotations = create_product_method.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            create_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@PostMapping")),
+            "Should have @PostMapping annotation"
+        );
+
+        // Verify throws clause
+        let create_throws = create_product_method.metadata.as_ref().unwrap()["throws"]
+            .as_str()
+            .unwrap();
+        assert!(
+            create_throws.contains("ValidationException"),
+            "Should throw ValidationException"
+        );
+
+        // Verify generic types in method signature
+        let search_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "searchProducts")
+            .expect("searchProducts method not found");
+        assert!(search_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("Map<String, Object>"));
+        assert!(search_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("List<Product>"));
+
+        // Verify field chunks with annotations
+        let fields: Vec<_> = chunks.iter().filter(|c| c.kind == "field").collect();
+        assert!(fields.len() >= 6, "Expected at least 6 field chunks");
+
+        let service_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "productService")
+            .expect("productService field not found");
+        let service_annotations = service_field.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            service_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@Autowired")),
+            "Should have @Autowired annotation"
+        );
+
+        let id_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "id")
+            .expect("id field not found");
+        let id_annotations = id_field.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            id_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@Id")),
+            "Should have @Id annotation"
+        );
+        assert!(
+            id_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@GeneratedValue")),
+            "Should have @GeneratedValue annotation"
+        );
+
+        let name_field = fields
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "name")
+            .expect("name field not found");
+        let name_annotations = name_field.metadata.as_ref().unwrap()["annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            name_annotations
+                .iter()
+                .any(|a| a.as_str().unwrap().contains("@Column")),
+            "Should have @Column annotation"
+        );
+
+        // Verify nested classes
+        let validation_exception = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "ValidationException")
+            .expect("ValidationException nested class not found");
+        assert_eq!(validation_exception.kind, "class");
+        let validation_metadata = validation_exception.metadata.as_ref().unwrap();
+        assert!(validation_metadata["modifiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "static"));
+
+        let builder_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Builder")
+            .expect("Builder nested class not found");
+        assert_eq!(builder_class.kind, "class");
+        let builder_metadata = builder_class.metadata.as_ref().unwrap();
+        assert!(builder_metadata["modifiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "static"));
+
+        // Verify builder methods (fluent API)
+        let with_name_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "withName")
+            .expect("withName builder method not found");
+        assert_eq!(with_name_method.kind, "method");
+        assert!(with_name_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("Builder"));
+
+        let build_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "build")
+            .expect("build method not found");
+        assert_eq!(build_method.kind, "method");
+        let build_throws = build_method.metadata.as_ref().unwrap()["throws"]
+            .as_str()
+            .unwrap();
+        assert!(
+            build_throws.contains("IllegalStateException"),
+            "Should throw IllegalStateException"
+        );
+
+        // Verify interfaces
+        let interfaces: Vec<_> = chunks.iter().filter(|c| c.kind == "interface").collect();
+        assert_eq!(interfaces.len(), 2, "Expected 2 interface chunks");
+
+        let service_interface = interfaces
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "ProductService")
+            .expect("ProductService interface not found");
+        assert_eq!(service_interface.kind, "interface");
+
+        let repo_interface = interfaces
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "ProductRepository")
+            .expect("ProductRepository interface not found");
+        assert_eq!(repo_interface.kind, "interface");
+
+        // Verify constructors
+        let constructors: Vec<_> = chunks.iter().filter(|c| c.kind == "constructor").collect();
+        assert!(
+            constructors.len() >= 2,
+            "Expected at least 2 constructor chunks"
+        );
+
+        let default_constructor = constructors
+            .iter()
+            .find(|c| {
+                c.symbol_name.as_ref().unwrap() == "Product"
+                    && c.signature.as_ref().unwrap() == "()"
+            })
+            .expect("Default constructor not found");
+        assert!(default_constructor
+            .docstring
+            .as_ref()
+            .unwrap()
+            .contains("Default constructor"));
+
+        let validation_constructor = constructors
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "ValidationException")
+            .expect("ValidationException constructor not found");
+        assert!(validation_constructor
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("String message"));
+
+        // Verify imports chunk
+        let imports_chunk = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_deref() == Some("__imports__"))
+            .expect("__imports__ chunk not found");
+        assert_eq!(imports_chunk.kind, "imports");
+
+        let imports_metadata = imports_chunk.metadata.as_ref().unwrap();
+        let imports_array = imports_metadata.as_array().unwrap();
+        assert!(
+            imports_array.len() >= 3,
+            "Expected at least 3 import declarations"
+        );
+
+        // Verify some key imports
+        let has_spring_import = imports_array
+            .iter()
+            .any(|i| i["path"].as_str().unwrap().contains("springframework"));
+        assert!(has_spring_import, "Should have Spring import");
+
+        let has_jpa_import = imports_array
+            .iter()
+            .any(|i| i["path"].as_str().unwrap().contains("javax.persistence"));
+        assert!(has_jpa_import, "Should have JPA import");
+    }
 }
