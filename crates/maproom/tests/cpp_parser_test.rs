@@ -1041,3 +1041,71 @@ public:
     // May or may not extract correctly, but should not crash
     assert!(template_class.is_some() || chunks.is_empty());
 }
+
+// Test: Whitespace-only input (edge case)
+#[test]
+fn test_cpp_whitespace_only() {
+    let source = r#"
+
+
+    // Just a comment
+    /* Another comment */
+
+
+    "#;
+
+    let chunks = parser::extract_chunks(source, "cpp");
+
+    // Should return empty vector - no extractable symbols
+    assert_eq!(
+        chunks.len(),
+        0,
+        "Whitespace-only input should produce no chunks"
+    );
+}
+
+// Test: Unicode identifiers (edge case)
+#[test]
+fn test_cpp_unicode_identifiers() {
+    let source = r#"
+// Comment with unicode: 你好世界
+class MyClass {
+public:
+    void method() {
+        // Comment with emoji: 🚀
+        const char* str = "Unicode string: café";
+    }
+};
+    "#;
+
+    let chunks = parser::extract_chunks(source, "cpp");
+
+    // Should parse without panic and extract the class
+    assert!(!chunks.is_empty(), "Should extract at least the class");
+
+    let class_chunk = chunks.iter().find(|c| c.kind == "class");
+    assert!(
+        class_chunk.is_some(),
+        "Should extract class despite unicode in comments"
+    );
+    assert_eq!(
+        class_chunk.unwrap().symbol_name,
+        Some("MyClass".to_string())
+    );
+}
+
+// Test: Size guard (edge case - 10MB limit)
+#[test]
+fn test_cpp_size_guard() {
+    // Create a string exceeding 10MB (10 * 1024 * 1024 + 1 bytes)
+    let huge_source = "x".repeat(10 * 1024 * 1024 + 1);
+
+    let chunks = parser::extract_chunks(&huge_source, "cpp");
+
+    // Should return empty vector without attempting to parse
+    assert_eq!(
+        chunks.len(),
+        0,
+        "Huge input exceeding size limit should be rejected"
+    );
+}

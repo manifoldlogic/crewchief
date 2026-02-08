@@ -39,12 +39,26 @@ use tree_sitter::{Node, Parser};
 use super::common::lang_cpp;
 use crate::indexer::SymbolChunk;
 
+// Maximum source size to prevent resource exhaustion (10MB)
+const MAX_SOURCE_SIZE: usize = 10 * 1024 * 1024;
+
 // Access specifier constants
 const ACCESS_PUBLIC: &str = "public";
 const ACCESS_PRIVATE: &str = "private";
 const ACCESS_PROTECTED: &str = "protected";
 
 pub(super) fn extract_cpp_chunks(source: &str) -> Vec<SymbolChunk> {
+    // Guard against extremely large files
+    if source.len() > MAX_SOURCE_SIZE {
+        warn!(
+            language = "cpp",
+            source_length = source.len(),
+            max_size = MAX_SOURCE_SIZE,
+            "C++ source exceeds maximum size limit - skipping parse"
+        );
+        return vec![];
+    }
+
     let mut parser = Parser::new();
     parser
         .set_language(&lang_cpp())
