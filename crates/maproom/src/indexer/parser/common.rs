@@ -101,6 +101,10 @@ pub(crate) fn lang_csharp() -> Language {
     tree_sitter_c_sharp::language()
 }
 
+pub(crate) fn lang_cpp() -> Language {
+    tree_sitter_cpp::language()
+}
+
 /// Helper function to push a chunk with node position
 pub(crate) fn push_chunk(
     source: &str,

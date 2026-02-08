@@ -55,6 +55,7 @@ tree-sitter-rust = "0.21"
 tree-sitter-go = "0.21"
 tree-sitter-ruby = "0.21"
 tree-sitter-c-sharp = "0.21.3"
+tree-sitter-cpp = "0.21"
 tree-sitter-md = "0.2"
 
 # Embedding service dependencies
