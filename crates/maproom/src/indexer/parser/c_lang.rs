@@ -103,6 +103,11 @@ fn walk_c_decls(
 }
 
 fn extract_c_function(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
+    extract_c_function_common(source, node, chunks);
+}
+
+/// Common function extraction logic for both function_definition and declaration nodes
+fn extract_c_function_common(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
     // Extract return type
     let return_type = node
         .child_by_field_name("type")
@@ -224,71 +229,7 @@ fn is_function_declarator(node: &Node) -> bool {
 }
 
 fn extract_c_function_declaration(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
-    // Extract return type
-    let return_type = node
-        .child_by_field_name("type")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string());
-
-    // Extract declarator (contains function name and parameters)
-    let declarator = match node.child_by_field_name("declarator") {
-        Some(decl) => decl,
-        None => return,
-    };
-
-    // Navigate the declarator tree to find the function name and parameters
-    let (name, params) = extract_function_name_and_params(source, declarator);
-
-    let name = match name {
-        Some(n) => n,
-        None => return,
-    };
-
-    // Build signature with return type and parameters
-    let signature = match (&return_type, &params) {
-        (Some(ret), Some(par)) => Some(format!("{} {}", ret, par)),
-        (Some(ret), None) => Some(ret.clone()),
-        (None, Some(par)) => Some(par.clone()),
-        (None, None) => None,
-    };
-
-    // Extract doc comment
-    let docstring = extract_c_doc_comment(source, node);
-
-    // Check for storage class specifier (static, extern, etc.)
-    let storage_class = extract_storage_class(source, node);
-
-    // Build metadata
-    let mut metadata_obj = serde_json::Map::new();
-    if let Some(ref storage) = storage_class {
-        metadata_obj.insert(
-            "storage_class".to_string(),
-            serde_json::Value::String(storage.clone()),
-        );
-    }
-    if let Some(ref ret) = return_type {
-        metadata_obj.insert(
-            "return_type".to_string(),
-            serde_json::Value::String(ret.clone()),
-        );
-    }
-
-    let start = node.start_position();
-    let end = node.end_position();
-
-    chunks.push(SymbolChunk {
-        symbol_name: Some(name),
-        kind: "func".to_string(),
-        signature,
-        docstring,
-        start_line: (start.row + 1) as i32,
-        end_line: (end.row + 1) as i32,
-        metadata: if metadata_obj.is_empty() {
-            None
-        } else {
-            Some(serde_json::Value::Object(metadata_obj))
-        },
-    });
+    extract_c_function_common(source, node, chunks);
 }
 
 fn extract_c_struct(
