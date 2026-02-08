@@ -8,7 +8,9 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
-use crewchief_maproom::cli::format::{format_hits_agent, format_hits_json_search, OutputFormat};
+use crewchief_maproom::cli::format::{
+    format_hits_agent, format_hits_json_search, format_hits_json_vector, OutputFormat,
+};
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
 };
@@ -473,9 +475,13 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         preview: bool,
 
-        /// Maximum length of preview text in characters (default: 200)
-        #[arg(long, default_value_t = 200)]
-        preview_length: usize,
+        /// Maximum length of preview text in characters (default: 200, or 120 for agent format)
+        #[arg(long)]
+        preview_length: Option<usize>,
+
+        /// Output format: json (default, structured) or agent (compact, LLM-optimized)
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
     },
 
     /// Show status of indexed repositories and worktrees
@@ -1644,8 +1650,18 @@ async fn main() -> anyhow::Result<()> {
             lang,
             preview,
             preview_length,
+            format,
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
+
+            // MRIMP-5: Implicit preview enable for agent format (parameter preprocessing)
+            // Agent format always needs preview data; default length is 120 chars (token-optimized).
+            // Explicit --preview-length overrides the agent default.
+            let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+                (true, preview_length.unwrap_or(120))
+            } else {
+                (preview, preview_length.unwrap_or(200))
+            };
 
             let store = db::connect().await?;
 
@@ -1695,58 +1711,75 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            // Build hits with threshold filtering and preview processing
-            let mut hits = Vec::new();
-            for mut hit in search_hits {
-                // Apply threshold filter if specified
-                if let Some(thresh) = threshold {
-                    if hit.score < thresh as f64 {
-                        continue;
+            // Apply threshold filtering and preview processing on SearchHit objects
+            let hits: Vec<_> = search_hits
+                .into_iter()
+                .filter(|hit| {
+                    if let Some(thresh) = threshold {
+                        hit.score >= thresh as f64
+                    } else {
+                        true
+                    }
+                })
+                .map(|mut hit| {
+                    if preview_enabled {
+                        // Truncate preview to preview_len
+                        if let Some(preview_text) = hit.preview.take() {
+                            hit.preview = Some(db::truncate_preview(&preview_text, preview_len));
+                        }
+                    } else {
+                        // Strip preview if flag not set
+                        hit.preview = None;
+                    }
+                    hit
+                })
+                .collect();
+
+            // MRIMP-5: Route output through format module
+            match format {
+                OutputFormat::Json => {
+                    // Convert SearchHit objects to serde_json::Value for JSON format
+                    let json_hits: Vec<serde_json::Value> = hits
+                        .iter()
+                        .map(|hit| {
+                            let mut obj = serde_json::json!({
+                                "chunk_id": hit.chunk_id,
+                                "score": hit.score,
+                                "start_line": hit.start_line,
+                                "end_line": hit.end_line,
+                                "symbol_name": hit.symbol_name,
+                                "kind": hit.kind,
+                                "file_path": hit.file_relpath,
+                            });
+
+                            // Conditionally add preview if enabled and preview exists
+                            if let Some(ref preview_text) = hit.preview {
+                                obj.as_object_mut()
+                                    .unwrap()
+                                    .insert("preview".to_string(), serde_json::json!(preview_text));
+                            }
+
+                            obj
+                        })
+                        .collect();
+
+                    let output = format_hits_json_vector(
+                        &json_hits,
+                        json_hits.len(),
+                        &query,
+                        "vector",
+                        k,
+                        threshold,
+                    )?;
+                    println!("{}", output);
+                }
+                OutputFormat::Agent => {
+                    let output = format_hits_agent(&hits);
+                    if !output.is_empty() {
+                        println!("{}", output);
                     }
                 }
-
-                // Post-process preview field
-                let preview_value = if preview {
-                    // Truncate preview to preview_length
-                    hit.preview
-                        .take()
-                        .map(|p| db::truncate_preview(&p, preview_length))
-                } else {
-                    // Strip preview if flag not set
-                    None
-                };
-
-                let mut obj = serde_json::json!({
-                    "chunk_id": hit.chunk_id,
-                    "score": hit.score,
-                    "start_line": hit.start_line,
-                    "end_line": hit.end_line,
-                    "symbol_name": hit.symbol_name,
-                    "kind": hit.kind,
-                    "file_path": hit.file_relpath,
-                });
-
-                // Conditionally add preview if flag is set and preview exists
-                if let Some(preview_text) = preview_value {
-                    obj.as_object_mut()
-                        .unwrap()
-                        .insert("preview".to_string(), serde_json::json!(preview_text));
-                }
-
-                hits.push(obj);
             }
-
-            // Output JSON schema for MCP client consumption
-            let output = serde_json::json!({
-                "hits": hits,
-                "total": hits.len(),
-                "query": query,
-                "mode": "vector",
-                "k": k,
-                "threshold": threshold,
-            });
-
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
 
         Commands::Status {
@@ -2654,7 +2687,7 @@ mod tests {
         ]);
         match cli.command {
             Commands::VectorSearch { preview_length, .. } => {
-                assert_eq!(preview_length, 150);
+                assert_eq!(preview_length, Some(150));
             }
             _ => panic!("Expected VectorSearch command"),
         }
