@@ -81,15 +81,78 @@ fn walk_java_decls(
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         match child.kind() {
-            "class_declaration" => extract_java_class(source, child, chunks, imports),
-            "interface_declaration" => extract_java_interface(source, child, chunks, imports),
-            "enum_declaration" => extract_java_enum(source, child, chunks, imports),
-            "record_declaration" => extract_java_record(source, child, chunks, imports),
-            "annotation_type_declaration" => extract_java_annotation_type(source, child, chunks),
-            "method_declaration" => extract_java_method(source, child, chunks),
-            "constructor_declaration" => extract_java_constructor(source, child, chunks),
-            "field_declaration" => extract_java_field(source, child, chunks),
-            "import_declaration" => collect_java_import(source, child, imports),
+            "class_declaration" => {
+                tracing::debug!(
+                    node_kind = "class_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java class"
+                );
+                extract_java_class(source, child, chunks, imports);
+            }
+            "interface_declaration" => {
+                tracing::debug!(
+                    node_kind = "interface_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java interface"
+                );
+                extract_java_interface(source, child, chunks, imports);
+            }
+            "enum_declaration" => {
+                tracing::debug!(
+                    node_kind = "enum_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java enum"
+                );
+                extract_java_enum(source, child, chunks, imports);
+            }
+            "record_declaration" => {
+                tracing::debug!(
+                    node_kind = "record_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java record"
+                );
+                extract_java_record(source, child, chunks, imports);
+            }
+            "annotation_type_declaration" => {
+                tracing::debug!(
+                    node_kind = "annotation_type_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java annotation type"
+                );
+                extract_java_annotation_type(source, child, chunks);
+            }
+            "method_declaration" => {
+                tracing::debug!(
+                    node_kind = "method_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java method"
+                );
+                extract_java_method(source, child, chunks);
+            }
+            "constructor_declaration" => {
+                tracing::debug!(
+                    node_kind = "constructor_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java constructor"
+                );
+                extract_java_constructor(source, child, chunks);
+            }
+            "field_declaration" => {
+                tracing::debug!(
+                    node_kind = "field_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Extracting Java field"
+                );
+                extract_java_field(source, child, chunks);
+            }
+            "import_declaration" => {
+                tracing::debug!(
+                    node_kind = "import_declaration",
+                    start_line = child.start_position().row + 1,
+                    "Collecting Java import"
+                );
+                collect_java_import(source, child, imports);
+            }
             _ => {
                 // Recurse into other nodes
                 walk_java_decls(source, child, chunks, imports);
@@ -100,7 +163,7 @@ fn walk_java_decls(
 
 /// Collect import declaration metadata
 fn collect_java_import(source: &str, node: Node, imports: &mut Vec<serde_json::Value>) {
-    // Determine if static import
+    // Determine if static import (e.g. "import static java.lang.Math.PI;")
     let is_static = node
         .children(&mut node.walk())
         .any(|child| child.kind() == "static");
@@ -117,6 +180,7 @@ fn collect_java_import(source: &str, node: Node, imports: &mut Vec<serde_json::V
                     path = text.to_string();
                 }
             }
+            // Asterisk indicates wildcard import (e.g. "import java.util.*;")
             "asterisk" => {
                 is_wildcard = true;
                 path.push_str(".*");
@@ -749,7 +813,7 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "modifiers" {
-            // The modifiers node's text contains space-separated modifiers
+            // Parse modifier keywords from space-separated text
             if let Ok(mods_text) = child.utf8_text(source.as_bytes()) {
                 for word in mods_text.split_whitespace() {
                     match word {
@@ -769,6 +833,7 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
                         | "strictfp" | "transient" | "volatile" | "default" => {
                             modifiers.push(word.to_string());
                         }
+                        // Inline annotations like @Override appear as words in modifiers text
                         _ if word.starts_with('@') => {
                             annotations.push(word.to_string());
                         }
@@ -777,11 +842,12 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
                 }
             }
 
-            // Also check for annotation children
+            // Also check for annotation children (handles complex annotations with arguments)
             let mut mod_cursor = child.walk();
             for mod_child in child.children(&mut mod_cursor) {
                 if mod_child.kind() == "marker_annotation" || mod_child.kind() == "annotation" {
                     if let Ok(annotation_text) = mod_child.utf8_text(source.as_bytes()) {
+                        // Avoid duplicates from both text and node traversal
                         if !annotations.contains(&annotation_text.to_string()) {
                             annotations.push(annotation_text.to_string());
                         }
@@ -792,6 +858,7 @@ fn extract_java_modifiers(source: &str, node: Node) -> JavaModifiers {
         }
     }
 
+    // Java defaults to package-private visibility when no modifier is specified
     JavaModifiers {
         visibility,
         modifiers,
@@ -2259,5 +2326,537 @@ interface ProductRepository {
             .iter()
             .any(|i| i["path"].as_str().unwrap().contains("javax.persistence"));
         assert!(has_jpa_import, "Should have JPA import");
+    }
+
+    #[test]
+    fn test_java_unicode_identifiers() {
+        let source = r#"
+package com.example;
+
+public class 用户管理器 {
+    private String 用户名;
+    private int số_lượng;
+
+    public void 获取用户(String prénom) {
+        System.out.println(prénom);
+    }
+
+    public String get数据() {
+        return "データ";
+    }
+}
+"#;
+
+        let chunks = extract_java_chunks(source);
+
+        // Verify class chunk with Chinese characters
+        let class_chunk = chunks
+            .iter()
+            .find(|c| c.kind == "class")
+            .expect("Should extract class chunk");
+        assert_eq!(
+            class_chunk.symbol_name.as_ref().unwrap(),
+            "用户管理器"
+        );
+
+        // Verify field with Chinese characters
+        let username_field = chunks
+            .iter()
+            .find(|c| c.kind == "field" && c.symbol_name.as_ref().unwrap() == "用户名")
+            .expect("Should extract 用户名 field");
+        assert_eq!(username_field.symbol_name.as_ref().unwrap(), "用户名");
+
+        // Verify field with Vietnamese characters
+        let count_field = chunks
+            .iter()
+            .find(|c| c.kind == "field" && c.symbol_name.as_ref().unwrap() == "số_lượng")
+            .expect("Should extract số_lượng field");
+        assert_eq!(count_field.symbol_name.as_ref().unwrap(), "số_lượng");
+
+        // Verify method with Chinese characters
+        let get_user_method = chunks
+            .iter()
+            .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "获取用户")
+            .expect("Should extract 获取用户 method");
+        assert_eq!(
+            get_user_method.symbol_name.as_ref().unwrap(),
+            "获取用户"
+        );
+        assert!(get_user_method
+            .signature
+            .as_ref()
+            .unwrap()
+            .contains("prénom")); // French accented parameter
+
+        // Verify method with mixed Japanese/Chinese
+        let get_data_method = chunks
+            .iter()
+            .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "get数据")
+            .expect("Should extract get数据 method");
+        assert_eq!(get_data_method.symbol_name.as_ref().unwrap(), "get数据");
+    }
+
+    #[test]
+    fn test_java_whitespace_only() {
+        // Test empty string
+        let chunks = extract_java_chunks("");
+        assert_eq!(chunks.len(), 0, "Empty string should return no chunks");
+
+        // Test spaces only
+        let chunks = extract_java_chunks("    ");
+        assert_eq!(chunks.len(), 0, "Spaces-only should return no chunks");
+
+        // Test tabs only
+        let chunks = extract_java_chunks("\t\t\t");
+        assert_eq!(chunks.len(), 0, "Tabs-only should return no chunks");
+
+        // Test newlines only
+        let chunks = extract_java_chunks("\n\n\n");
+        assert_eq!(chunks.len(), 0, "Newlines-only should return no chunks");
+
+        // Test mixed whitespace
+        let chunks = extract_java_chunks("  \n\t  \n  ");
+        assert_eq!(
+            chunks.len(),
+            0,
+            "Mixed whitespace should return no chunks"
+        );
+
+        // Test file with only comments (edge case)
+        let chunks = extract_java_chunks("// Just a comment\n/* Block comment */");
+        assert_eq!(
+            chunks.len(),
+            0,
+            "Comments-only should return no chunks"
+        );
+    }
+
+    #[test]
+    fn test_java_multiple_top_level_classes() {
+        // Test file with multiple top-level classes
+        // (Discouraged in Java but legal)
+        let source = r#"
+package com.example;
+
+// Main public class
+public class MainClass {
+    void mainMethod() {}
+}
+
+// Helper class (package-private)
+class HelperClass {
+    void helperMethod() {}
+}
+
+// Another helper class
+class AnotherHelper {
+    private int field;
+
+    void anotherMethod() {}
+}
+"#;
+
+        let chunks = extract_java_chunks(source);
+
+        // Find all class chunks
+        let class_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "class").collect();
+
+        // Should extract all 3 top-level classes
+        assert_eq!(
+            class_chunks.len(),
+            3,
+            "Should extract all 3 top-level classes"
+        );
+
+        // Verify each class is present
+        let class_names: Vec<&str> = class_chunks
+            .iter()
+            .map(|c| c.symbol_name.as_ref().unwrap().as_str())
+            .collect();
+
+        assert!(
+            class_names.contains(&"MainClass"),
+            "Should extract MainClass"
+        );
+        assert!(
+            class_names.contains(&"HelperClass"),
+            "Should extract HelperClass"
+        );
+        assert!(
+            class_names.contains(&"AnotherHelper"),
+            "Should extract AnotherHelper"
+        );
+
+        // Verify methods are also extracted
+        let method_chunks: Vec<_> = chunks.iter().filter(|c| c.kind == "method").collect();
+
+        assert!(
+            method_chunks.len() >= 3,
+            "Should extract methods from all classes"
+        );
+    }
+
+    #[test]
+    fn test_java_large_corpus_validation() {
+        // Comprehensive test with diverse Java patterns
+        let source = r#"
+package com.example.test;
+
+import java.util.*;
+import java.util.function.*;
+import java.io.*;
+
+/**
+ * Abstract base service with complex patterns.
+ */
+public abstract class AbstractDataService<T extends Comparable<T>> {
+    // Static initializer
+    static {
+        System.setProperty("service.initialized", "true");
+    }
+
+    // Final class constants
+    public static final int MAX_RETRIES = 3;
+    private static final String DEFAULT_ENCODING = "UTF-8";
+
+    // Generic field with wildcards
+    private List<? extends Serializable> items;
+    private Map<String, ? super Number> cache;
+
+    /**
+     * Abstract method for data processing.
+     */
+    public abstract T process(T data) throws IOException;
+
+    /**
+     * Synchronized method with varargs.
+     */
+    public synchronized void updateAll(T... elements) {
+        for (T elem : elements) {
+            cache.put(elem.toString(), elem);
+        }
+    }
+
+    /**
+     * Native method declaration.
+     */
+    public native int nativeCompute(long value);
+
+    /**
+     * Final class with static nested enum.
+     */
+    public static final class Configuration {
+        private final String name;
+        private final int timeout;
+
+        public Configuration(String name, int timeout) {
+            this.name = name;
+            this.timeout = timeout;
+        }
+    }
+
+    /**
+     * Enum with abstract methods.
+     */
+    public enum Operation {
+        ADD {
+            @Override
+            public double apply(double a, double b) {
+                return a + b;
+            }
+        },
+        SUBTRACT {
+            @Override
+            public double apply(double a, double b) {
+                return a - b;
+            }
+        };
+
+        public abstract double apply(double a, double b);
+    }
+}
+
+/**
+ * Interface with default methods and generic bounds.
+ */
+interface DataRepository<T extends Comparable<? super T>> {
+    /**
+     * Default method implementation.
+     */
+    default Optional<T> findFirst() {
+        return findAll().stream().findFirst();
+    }
+
+    List<T> findAll();
+
+    /**
+     * Method with complex generic signature.
+     */
+    <U extends T> void save(U entity);
+}
+
+/**
+ * Sealed interface (Java 17+).
+ * Note: tree-sitter-java may not fully support sealed yet.
+ */
+interface Shape permits Circle, Rectangle {
+    double area();
+}
+
+/**
+ * Record with compact constructor (Java 17+).
+ */
+record Circle(double radius) implements Shape {
+    // Compact constructor
+    public Circle {
+        if (radius <= 0) {
+            throw new IllegalArgumentException("Radius must be positive");
+        }
+    }
+
+    @Override
+    public double area() {
+        return Math.PI * radius * radius;
+    }
+}
+
+/**
+ * Record implementing sealed interface.
+ */
+record Rectangle(double width, double height) implements Shape {
+    @Override
+    public double area() {
+        return width * height;
+    }
+}
+"#;
+
+        let chunks = extract_java_chunks(source);
+
+        // Should extract a substantial number of chunks
+        assert!(
+            chunks.len() >= 20,
+            "Large corpus should extract 20+ chunks, got {}",
+            chunks.len()
+        );
+
+        // Verify abstract class
+        let abstract_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "AbstractDataService")
+            .expect("Should extract AbstractDataService");
+        assert_eq!(abstract_class.kind, "class");
+        let class_modifiers = abstract_class.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(class_modifiers.iter().any(|m| m == "abstract"));
+
+        // Verify final nested class
+        let config_class = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Configuration")
+            .expect("Should extract Configuration class");
+        let config_modifiers = config_class.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(config_modifiers.iter().any(|m| m == "final"));
+        assert!(config_modifiers.iter().any(|m| m == "static"));
+
+        // Verify enum
+        let operation_enum = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Operation")
+            .expect("Should extract Operation enum");
+        assert_eq!(operation_enum.kind, "enum");
+
+        // Verify synchronized method
+        let update_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "updateAll")
+            .expect("Should extract updateAll method");
+        let update_modifiers = update_method.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(update_modifiers.iter().any(|m| m == "synchronized"));
+
+        // Verify native method
+        let native_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "nativeCompute")
+            .expect("Should extract nativeCompute method");
+        let native_modifiers = native_method.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(native_modifiers.iter().any(|m| m == "native"));
+
+        // Verify interface with default method
+        let repo_interface = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "DataRepository")
+            .expect("Should extract DataRepository interface");
+        assert_eq!(repo_interface.kind, "interface");
+
+        let default_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "findFirst")
+            .expect("Should extract findFirst default method");
+        let default_modifiers = default_method.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(default_modifiers.iter().any(|m| m == "default"));
+
+        // Verify records
+        let circle_record = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Circle")
+            .expect("Should extract Circle record");
+        assert_eq!(circle_record.kind, "class");
+        assert_eq!(circle_record.metadata.as_ref().unwrap()["is_record"], true);
+
+        let rectangle_record = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "Rectangle")
+            .expect("Should extract Rectangle record");
+        assert_eq!(rectangle_record.kind, "class");
+        assert_eq!(
+            rectangle_record.metadata.as_ref().unwrap()["is_record"],
+            true
+        );
+
+        // Verify static constants
+        let max_retries = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "MAX_RETRIES")
+            .expect("Should extract MAX_RETRIES field");
+        let retries_modifiers = max_retries.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(retries_modifiers.iter().any(|m| m == "static"));
+        assert!(retries_modifiers.iter().any(|m| m == "final"));
+
+        // Verify abstract method
+        let process_method = chunks
+            .iter()
+            .find(|c| c.symbol_name.as_ref().unwrap() == "process")
+            .expect("Should extract process method");
+        let process_modifiers = process_method.metadata.as_ref().unwrap()["modifiers"]
+            .as_array()
+            .unwrap();
+        assert!(process_modifiers.iter().any(|m| m == "abstract"));
+
+        // Verify throws clause
+        assert!(process_method.metadata.as_ref().unwrap()["throws"]
+            .as_str()
+            .unwrap()
+            .contains("IOException"));
+    }
+
+    #[test]
+    fn test_java_parser_performance_benchmark() {
+        // Simple benchmark test (not using criterion, just timing)
+        use std::time::Instant;
+
+        // Moderate-sized Java source (realistic Spring controller)
+        let source = r#"
+package com.example.controller;
+
+import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import java.util.*;
+
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    @Autowired
+    private UserService userService;
+
+    @GetMapping
+    public List<User> getAllUsers() {
+        return userService.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public Optional<User> getUser(@PathVariable Long id) {
+        return userService.findById(id);
+    }
+
+    @PostMapping
+    public User createUser(@RequestBody User user) {
+        return userService.save(user);
+    }
+
+    @PutMapping("/{id}")
+    public User updateUser(@PathVariable Long id, @RequestBody User user) {
+        return userService.update(id, user);
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteUser(@PathVariable Long id) {
+        userService.delete(id);
+    }
+}
+
+class User {
+    private Long id;
+    private String name;
+    private String email;
+
+    public User() {}
+
+    public User(String name, String email) {
+        this.name = name;
+        this.email = email;
+    }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+}
+
+interface UserService {
+    List<User> findAll();
+    Optional<User> findById(Long id);
+    User save(User user);
+    User update(Long id, User user);
+    void delete(Long id);
+}
+"#;
+
+        // Warm up
+        for _ in 0..5 {
+            let _ = extract_java_chunks(source);
+        }
+
+        // Benchmark
+        let iterations = 100;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let chunks = extract_java_chunks(source);
+            assert!(!chunks.is_empty());
+        }
+        let elapsed = start.elapsed();
+
+        let avg_micros = elapsed.as_micros() / iterations;
+        println!(
+            "Java parser benchmark: {} iterations in {:?} (avg: {} µs per parse)",
+            iterations, elapsed, avg_micros
+        );
+
+        // Sanity check - should complete in reasonable time
+        assert!(
+            avg_micros < 10000,
+            "Parser too slow: {} µs per iteration",
+            avg_micros
+        );
+
+        // Verify chunks extracted correctly
+        let chunks = extract_java_chunks(source);
+        assert!(
+            chunks.len() >= 15,
+            "Should extract at least 15 chunks from benchmark source"
+        );
     }
 }
