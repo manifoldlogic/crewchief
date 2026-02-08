@@ -350,4 +350,304 @@ mod tests {
         assert_eq!(sanitize_newlines("no newlines"), "no newlines");
         assert_eq!(sanitize_newlines(""), "");
     }
+
+    // ---------------------------------------------------------------
+    // Additional tests for format_hits_agent() per MRIMP-5.2001
+    // ---------------------------------------------------------------
+
+    /// Helper function to construct test SearchHit objects.
+    fn make_test_hit(
+        file: &str,
+        line: i32,
+        kind: &str,
+        symbol: Option<&str>,
+        score: f64,
+        preview: Option<&str>,
+    ) -> SearchHit {
+        SearchHit {
+            chunk_id: 1,
+            score,
+            file_relpath: file.to_string(),
+            symbol_name: symbol.map(|s| s.to_string()),
+            kind: kind.to_string(),
+            start_line: line,
+            end_line: line + 10,
+            base_score: None,
+            kind_mult: None,
+            exact_mult: None,
+            preview: preview.map(|s| s.to_string()),
+        }
+    }
+
+    // --- Normal output tests ---
+
+    #[test]
+    fn test_format_hits_agent_normal_all_fields() {
+        let hits = vec![make_test_hit(
+            "src/app.rs",
+            42,
+            "func",
+            Some("main"),
+            0.92,
+            Some("Entry point for the application"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(
+            output,
+            "src/app.rs:42 | func main | 0.92 | Entry point for the application"
+        );
+    }
+
+    #[test]
+    fn test_format_hits_agent_without_symbol_name() {
+        let hits = vec![make_test_hit(
+            "docs/api.md",
+            8,
+            "heading_2",
+            None,
+            0.73,
+            Some("Authentication API reference"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(
+            output,
+            "docs/api.md:8 | heading_2 | 0.73 | Authentication API reference"
+        );
+        // Must not contain "null" anywhere
+        assert!(!output.contains("null"));
+    }
+
+    #[test]
+    fn test_format_hits_agent_without_preview() {
+        let hits = vec![make_test_hit(
+            "src/lib.rs",
+            1,
+            "func",
+            Some("init"),
+            0.85,
+            None,
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(output, "src/lib.rs:1 | func init | 0.85 | -");
+    }
+
+    #[test]
+    fn test_format_hits_agent_empty_results() {
+        let hits: Vec<SearchHit> = vec![];
+        let output = format_hits_agent(&hits);
+        assert_eq!(output, "");
+    }
+
+    #[test]
+    fn test_format_hits_agent_multiple_results() {
+        let hits = vec![
+            make_test_hit(
+                "src/app.rs",
+                42,
+                "func",
+                Some("main"),
+                0.92,
+                Some("Entry point"),
+            ),
+            make_test_hit(
+                "docs/api.md",
+                8,
+                "heading_2",
+                None,
+                0.73,
+                Some("API reference"),
+            ),
+            make_test_hit(
+                "tests/test_app.rs",
+                100,
+                "func",
+                Some("test_main"),
+                0.55,
+                Some("Test case"),
+            ),
+        ];
+        let output = format_hits_agent(&hits);
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], "src/app.rs:42 | func main | 0.92 | Entry point");
+        assert_eq!(lines[1], "docs/api.md:8 | heading_2 | 0.73 | API reference");
+        assert_eq!(
+            lines[2],
+            "tests/test_app.rs:100 | func test_main | 0.55 | Test case"
+        );
+        // Verify newline separators between lines
+        assert_eq!(output.matches('\n').count(), 2);
+    }
+
+    // --- Score precision tests ---
+
+    #[test]
+    fn test_format_hits_agent_score_precision_point_nine() {
+        let hits = vec![make_test_hit(
+            "a.rs",
+            1,
+            "func",
+            Some("f"),
+            0.9,
+            Some("text"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(output, "a.rs:1 | func f | 0.90 | text");
+    }
+
+    #[test]
+    fn test_format_hits_agent_score_precision_zero() {
+        let hits = vec![make_test_hit(
+            "a.rs",
+            1,
+            "func",
+            Some("f"),
+            0.0,
+            Some("text"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(output, "a.rs:1 | func f | 0.00 | text");
+    }
+
+    #[test]
+    fn test_format_hits_agent_score_precision_high() {
+        let hits = vec![make_test_hit(
+            "a.rs",
+            1,
+            "func",
+            Some("f"),
+            17.5,
+            Some("text"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(output, "a.rs:1 | func f | 17.50 | text");
+    }
+
+    // --- Unicode tests ---
+
+    #[test]
+    fn test_format_hits_agent_unicode_file_path() {
+        let hits = vec![make_test_hit(
+            "src/\u{00e9}dit.rs",
+            42,
+            "func",
+            Some("main"),
+            0.92,
+            Some("Funci\u{00f3}n principal"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert!(output.contains("src/\u{00e9}dit.rs"));
+        assert_eq!(
+            output,
+            "src/\u{00e9}dit.rs:42 | func main | 0.92 | Funci\u{00f3}n principal"
+        );
+    }
+
+    #[test]
+    fn test_format_hits_agent_unicode_preview() {
+        let hits = vec![make_test_hit(
+            "src/main.rs",
+            1,
+            "func",
+            Some("greet"),
+            0.80,
+            Some("\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert!(output.contains("\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"));
+        assert_eq!(
+            output,
+            "src/main.rs:1 | func greet | 0.80 | \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"
+        );
+    }
+
+    // --- Edge case tests ---
+
+    #[test]
+    fn test_format_hits_agent_long_file_path() {
+        // 200-character file path: should not be truncated
+        let long_path = format!("src/{}/file.rs", "a".repeat(190));
+        assert!(long_path.len() >= 200);
+        let hits = vec![make_test_hit(
+            &long_path,
+            1,
+            "func",
+            Some("f"),
+            0.50,
+            Some("code"),
+        )];
+        let output = format_hits_agent(&hits);
+        // The full path must appear in the output, no truncation
+        assert!(output.contains(&long_path));
+        assert_eq!(output, format!("{}:1 | func f | 0.50 | code", long_path));
+    }
+
+    #[test]
+    fn test_format_hits_agent_empty_symbol_name_treated_as_none() {
+        // Some("") should produce the same output as None
+        let hits_empty = vec![make_test_hit(
+            "src/lib.rs",
+            1,
+            "module",
+            Some(""),
+            0.50,
+            Some("Module declarations"),
+        )];
+        let hits_none = vec![make_test_hit(
+            "src/lib.rs",
+            1,
+            "module",
+            None,
+            0.50,
+            Some("Module declarations"),
+        )];
+        let output_empty = format_hits_agent(&hits_empty);
+        let output_none = format_hits_agent(&hits_none);
+        assert_eq!(output_empty, output_none);
+        assert_eq!(
+            output_empty,
+            "src/lib.rs:1 | module | 0.50 | Module declarations"
+        );
+    }
+
+    #[test]
+    fn test_format_hits_agent_preview_with_newlines() {
+        let hits = vec![make_test_hit(
+            "src/main.rs",
+            10,
+            "func",
+            Some("run"),
+            0.60,
+            Some("Line one\nLine two"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(
+            output,
+            "src/main.rs:10 | func run | 0.60 | Line one Line two"
+        );
+        // Must be a single line (no newlines in the output for this hit)
+        assert_eq!(output.lines().count(), 1);
+    }
+
+    #[test]
+    fn test_format_hits_agent_preview_with_multiple_newline_types() {
+        let hits = vec![make_test_hit(
+            "src/main.rs",
+            10,
+            "func",
+            Some("run"),
+            0.60,
+            Some("Line one\nLine two\r\nLine three\rLine four"),
+        )];
+        let output = format_hits_agent(&hits);
+        assert_eq!(
+            output,
+            "src/main.rs:10 | func run | 0.60 | Line one Line two Line three Line four"
+        );
+        // Must be a single line
+        assert_eq!(output.lines().count(), 1);
+        // Must not contain any raw newline or carriage return characters
+        assert!(!output.contains('\n'));
+        assert!(!output.contains('\r'));
+    }
 }
