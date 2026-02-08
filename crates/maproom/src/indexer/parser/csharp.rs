@@ -83,6 +83,10 @@ use tree_sitter::{Node, Parser};
 use super::common::{extract_visibility_from_modifiers, lang_csharp};
 use crate::indexer::SymbolChunk;
 
+/// Maximum recursion depth for AST walking to prevent stack overflow.
+/// Real C# code rarely exceeds 10 nesting levels. 100 provides safety margin.
+const MAX_RECURSION_DEPTH: usize = 100;
+
 pub(super) fn extract_csharp_chunks(source: &str) -> Vec<SymbolChunk> {
     let mut parser = Parser::new();
     parser
@@ -103,7 +107,7 @@ pub(super) fn extract_csharp_chunks(source: &str) -> Vec<SymbolChunk> {
     if let Some(tree) = tree {
         let root = tree.root_node();
         let mut imports = Vec::new();
-        walk_csharp_decls(source, root, &mut chunks, &mut imports);
+        walk_csharp_decls(source, root, &mut chunks, &mut imports, 0);
 
         // Create __imports__ chunk if we collected any imports
         if !imports.is_empty() {
@@ -127,15 +131,25 @@ fn walk_csharp_decls(
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
+    depth: usize,
 ) {
+    // Prevent stack overflow on pathological input (deeply nested types)
+    if depth >= MAX_RECURSION_DEPTH {
+        tracing::debug!(
+            "Recursion depth limit ({}) reached, stopping AST walk",
+            MAX_RECURSION_DEPTH
+        );
+        return;
+    }
+
     match node.kind() {
-        "class_declaration" => extract_csharp_class(source, node, chunks, imports),
-        "interface_declaration" => extract_csharp_interface(source, node, chunks, imports),
-        "struct_declaration" => extract_csharp_struct(source, node, chunks, imports),
+        "class_declaration" => extract_csharp_class(source, node, chunks, imports, depth),
+        "interface_declaration" => extract_csharp_interface(source, node, chunks, imports, depth),
+        "struct_declaration" => extract_csharp_struct(source, node, chunks, imports, depth),
         "enum_declaration" => extract_csharp_enum(source, node, chunks),
         "delegate_declaration" => extract_csharp_delegate(source, node, chunks),
         "namespace_declaration" | "file_scoped_namespace_declaration" => {
-            extract_csharp_namespace(source, node, chunks, imports)
+            extract_csharp_namespace(source, node, chunks, imports, depth)
         }
         "method_declaration" => extract_csharp_method(source, node, chunks),
         "constructor_declaration" => extract_csharp_constructor(source, node, chunks),
@@ -147,7 +161,7 @@ fn walk_csharp_decls(
             // Recurse into children for unhandled node types
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                walk_csharp_decls(source, child, chunks, imports);
+                walk_csharp_decls(source, child, chunks, imports, depth + 1);
             }
         }
     }
@@ -182,6 +196,7 @@ fn extract_type_declaration(
     kind: &str,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
+    depth: usize,
 ) {
     // Extract name from 'name' field
     let name = node
@@ -268,7 +283,7 @@ fn extract_type_declaration(
     if let Some(body) = node.child_by_field_name("body") {
         let mut cursor = body.walk();
         for child in body.children(&mut cursor) {
-            walk_csharp_decls(source, child, chunks, imports);
+            walk_csharp_decls(source, child, chunks, imports, depth + 1);
         }
     }
 }
@@ -278,8 +293,9 @@ fn extract_csharp_class(
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
+    depth: usize,
 ) {
-    extract_type_declaration(source, node, "class", chunks, imports);
+    extract_type_declaration(source, node, "class", chunks, imports, depth);
 }
 
 fn extract_csharp_interface(
@@ -287,8 +303,9 @@ fn extract_csharp_interface(
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
+    depth: usize,
 ) {
-    extract_type_declaration(source, node, "interface", chunks, imports);
+    extract_type_declaration(source, node, "interface", chunks, imports, depth);
 }
 
 fn extract_csharp_struct(
@@ -296,8 +313,9 @@ fn extract_csharp_struct(
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
+    depth: usize,
 ) {
-    extract_type_declaration(source, node, "struct", chunks, imports);
+    extract_type_declaration(source, node, "struct", chunks, imports, depth);
 }
 
 fn extract_csharp_enum(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>) {
@@ -712,6 +730,7 @@ fn extract_csharp_namespace(
     node: Node,
     chunks: &mut Vec<SymbolChunk>,
     imports: &mut Vec<serde_json::Value>,
+    depth: usize,
 ) {
     // Extract qualified name (e.g., "MyCompany.MyProduct")
     let name = node
@@ -738,7 +757,7 @@ fn extract_csharp_namespace(
         // Block-scoped namespace: recurse into body
         if let Some(body) = node.child_by_field_name("body") {
             for child in body.children(&mut body.walk()) {
-                walk_csharp_decls(source, child, chunks, imports);
+                walk_csharp_decls(source, child, chunks, imports, depth + 1);
             }
         }
     } else if node.kind() == "file_scoped_namespace_declaration" {
@@ -752,7 +771,7 @@ fn extract_csharp_namespace(
                     continue;
                 }
                 if start_walking {
-                    walk_csharp_decls(source, sibling, chunks, imports);
+                    walk_csharp_decls(source, sibling, chunks, imports, depth + 1);
                 }
             }
         }

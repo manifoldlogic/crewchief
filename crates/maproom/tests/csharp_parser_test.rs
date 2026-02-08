@@ -568,3 +568,69 @@ namespace MyApp {
     let hello_method = hello_method.unwrap();
     assert!(hello_method.signature.as_ref().unwrap().contains("имя"), "Cyrillic parameter not in signature");
 }
+
+#[test]
+fn test_csharp_deep_nesting() {
+    // Generate 50 levels of nested classes (within limit)
+    let mut source = String::from("namespace Test {\n");
+    for i in 0..50 {
+        source.push_str(&format!("    public class Level{} {{\n", i));
+    }
+    // Close all classes
+    for _ in 0..50 {
+        source.push_str("    }\n");
+    }
+    source.push_str("}\n");
+
+    let chunks = parser::extract_chunks(&source, "cs");
+
+    // Verify namespace extracted
+    assert!(chunks.iter().any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("Test")));
+
+    // Verify all 50 class levels extracted
+    for i in 0..50 {
+        let class_name = format!("Level{}", i);
+        assert!(
+            chunks.iter().any(|c| c.kind == "class" && c.symbol_name.as_deref() == Some(&class_name)),
+            "Class {} not found (depth limit may be too low)",
+            class_name
+        );
+    }
+
+    // Total: 1 namespace + 50 classes
+    assert_eq!(chunks.len(), 51);
+}
+
+#[test]
+fn test_csharp_extreme_nesting() {
+    // Generate 105 levels of nested classes (exceeds limit of 100)
+    let mut source = String::from("namespace Test {\n");
+    for i in 0..105 {
+        source.push_str(&format!("    public class Level{} {{\n", i));
+    }
+    for _ in 0..105 {
+        source.push_str("    }\n");
+    }
+    source.push_str("}\n");
+
+    let chunks = parser::extract_chunks(&source, "cs");
+
+    // Verify namespace extracted
+    assert!(chunks.iter().any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("Test")));
+
+    // Verify first 99 levels extracted (depth 1-99, namespace is depth 0)
+    let extracted_classes: Vec<_> = chunks.iter().filter(|c| c.kind == "class").collect();
+
+    // Should extract up to depth limit, then stop
+    // Exact count depends on when limit is hit (may be ~100 classes)
+    assert!(
+        extracted_classes.len() < 105,
+        "Expected truncation at depth limit, but got {} classes",
+        extracted_classes.len()
+    );
+    assert!(
+        extracted_classes.len() >= 90,
+        "Expected at least 90 classes before limit, got {}",
+        extracted_classes.len()
+    );
+}
