@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
+import { listPlatforms, listAgentsForPlatform } from '../agents/platforms'
 import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { RunManager } from '../orchestrator/runManager'
 import { Scheduler, SpawnOptions } from '../orchestrator/scheduler'
@@ -199,6 +200,53 @@ Examples:
       rm.updateRun(run.id, { status: 'closed' })
       logger.success(`Marked agent ${agentId} as closed [run=${run.id}]`)
       logger.info('Please manually close the terminal pane')
+    })
+
+  agent
+    .command('platforms')
+    .description('List available platforms and named agents')
+    .addHelpText(
+      'after',
+      `
+This command shows:
+  - Built-in platforms (claude, gemini, codex, aider)
+  - Named agent definitions found in your project
+
+Use this to discover what's available before spawning.
+`,
+    )
+    .action(async () => {
+      const platforms = listPlatforms()
+      const projectDir = process.cwd()
+
+      console.log('\nAvailable Platforms:\n')
+
+      for (const platform of platforms) {
+        let agentsDisplay = 'N/A'
+
+        if (platform.agentDir) {
+          try {
+            const agents = listAgentsForPlatform(platform.name, projectDir)
+            if (agents.length > 0) {
+              const displayAgents = agents.sort().slice(0, 5)
+              agentsDisplay = displayAgents.join(', ')
+              if (agents.length > 5) {
+                agentsDisplay += ` ... (${agents.length - 5} more)`
+              }
+            } else {
+              agentsDisplay = '(none found)'
+            }
+          } catch {
+            agentsDisplay = '(error scanning)'
+          }
+        }
+
+        console.log(`Platform: ${platform.name}`)
+        console.log(`  Command: ${platform.command}`)
+        console.log(`  Agent Dir: ${platform.agentDir || 'N/A'}`)
+        console.log(`  Named Agents: ${agentsDisplay}`)
+        console.log('')
+      }
     })
 
   agent
