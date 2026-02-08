@@ -8,6 +8,7 @@ use crate::profile_scope;
 
 // Submodules for language-specific parsing
 pub(crate) mod common;
+pub(crate) mod cpp;
 pub(crate) mod data_formats;
 pub(crate) mod go;
 pub(crate) mod markdown;
@@ -32,6 +33,7 @@ pub fn extract_chunks(source: &str, language: &str) -> Vec<SymbolChunk> {
         "go" => go::extract_go_chunks(source),
         "gomod" => go::extract_gomod_chunks(source),
         "rb" => ruby::extract_ruby_chunks(source),
+        "cpp" => cpp::extract_cpp_chunks(source),
         _ => typescript::extract_code_chunks(source, language),
     }
 }
