@@ -3,6 +3,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BUILTIN_PLATFORMS,
+  MAX_NAME_LENGTH,
   listAgentsForPlatform,
   listPlatforms,
   resolveAgent,
@@ -463,6 +464,23 @@ describe('validatePlatformName', () => {
   it('rejects names starting with dot', () => {
     expect(() => validatePlatformName('.hidden')).toThrow('Invalid platform name')
   })
+
+  it('accepts name at MAX_NAME_LENGTH boundary', () => {
+    expect(() => validatePlatformName('a'.repeat(MAX_NAME_LENGTH))).not.toThrow()
+  })
+
+  it('rejects name exceeding MAX_NAME_LENGTH', () => {
+    expect(() => validatePlatformName('a'.repeat(MAX_NAME_LENGTH + 1))).toThrow('Input too long')
+  })
+
+  it('rejects extremely long input', () => {
+    expect(() => validatePlatformName('a'.repeat(10000))).toThrow('Input too long')
+  })
+
+  it('truncates long input in error message', () => {
+    const longName = 'a'.repeat(10000)
+    expect(() => validatePlatformName(longName)).toThrow('(10000 chars)')
+  })
 })
 
 describe('validateAgentName', () => {
@@ -501,6 +519,18 @@ describe('validateAgentName', () => {
 
   it('rejects names starting with hyphen', () => {
     expect(() => validateAgentName('-flag-inject')).toThrow('Invalid agent name')
+  })
+
+  it('accepts name at MAX_NAME_LENGTH boundary', () => {
+    expect(() => validateAgentName('a'.repeat(MAX_NAME_LENGTH))).not.toThrow()
+  })
+
+  it('rejects name exceeding MAX_NAME_LENGTH', () => {
+    expect(() => validateAgentName('a'.repeat(MAX_NAME_LENGTH + 1))).toThrow('Input too long')
+  })
+
+  it('rejects extremely long input', () => {
+    expect(() => validateAgentName('a'.repeat(10000))).toThrow('Input too long')
   })
 })
 

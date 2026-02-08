@@ -181,12 +181,20 @@ export function listAgentsForPlatform(platformName: string, projectDir: string):
  */
 const SAFE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/
 
+/** Maximum allowed length for platform and agent names (prevents DoS via large inputs). */
+export const MAX_NAME_LENGTH = 200
+
 /**
  * Validate a platform name to prevent shell injection.
  * Platform names are interpolated into shell commands, so they must not
  * contain shell metacharacters.
  */
 export function validatePlatformName(name: string): void {
+  if (name.length > MAX_NAME_LENGTH) {
+    throw new Error(
+      `Input too long: "${name.substring(0, 50)}..." (${name.length} chars). Maximum length is ${MAX_NAME_LENGTH} characters.`,
+    )
+  }
   if (!SAFE_NAME_PATTERN.test(name)) {
     throw new Error(
       `Invalid platform name: "${name}". Platform names must start with an alphanumeric character and contain only alphanumeric characters, dots, hyphens, and underscores.`,
@@ -200,6 +208,11 @@ export function validatePlatformName(name: string): void {
  * path separators or traversal sequences.
  */
 export function validateAgentName(name: string): void {
+  if (name.length > MAX_NAME_LENGTH) {
+    throw new Error(
+      `Input too long: "${name.substring(0, 50)}..." (${name.length} chars). Maximum length is ${MAX_NAME_LENGTH} characters.`,
+    )
+  }
   if (!SAFE_NAME_PATTERN.test(name)) {
     throw new Error(
       `Invalid agent name: "${name}". Agent names must start with an alphanumeric character and contain only alphanumeric characters, dots, hyphens, and underscores.`,
