@@ -64,18 +64,9 @@ impl HierarchyTracker {
     }
 }
 
-// Use the safe language providers exposed by the crates
-pub(crate) fn lang_typescript() -> Language {
-    tree_sitter_typescript::language_typescript()
-}
-
-pub(crate) fn lang_tsx() -> Language {
-    tree_sitter_typescript::language_tsx()
-}
-
-pub(crate) fn lang_javascript() -> Language {
-    tree_sitter_javascript::language()
-}
+// Language provider functions used by per-language parser modules.
+// Only include functions that are actually imported by a parser module.
+// TS/JS/Markdown parsers call tree-sitter crates directly.
 
 pub(crate) fn lang_python() -> Language {
     tree_sitter_python::language()
@@ -89,12 +80,12 @@ pub(crate) fn lang_go() -> Language {
     tree_sitter_go::language()
 }
 
-pub(crate) fn lang_markdown() -> Language {
-    tree_sitter_md::language()
-}
-
 pub(crate) fn lang_ruby() -> Language {
     tree_sitter_ruby::language()
+}
+
+pub(crate) fn lang_csharp() -> Language {
+    tree_sitter_c_sharp::language()
 }
 
 pub(crate) fn lang_java() -> Language {
@@ -103,6 +94,57 @@ pub(crate) fn lang_java() -> Language {
 
 pub(crate) fn lang_cpp() -> Language {
     tree_sitter_cpp::language()
+}
+
+/// Extract visibility modifier from a node's children.
+///
+/// Iterates through node children looking for nodes whose kind matches one of the
+/// provided `visibility_keywords`. Returns the first match found, or `default` if none found.
+///
+/// This is useful for C-family languages (C#, Java, C++) that use similar visibility systems.
+///
+/// # Arguments
+/// - `node` - The AST node to inspect (typically a declaration node)
+/// - `source` - The source code text
+/// - `visibility_keywords` - List of node kinds that represent visibility modifiers
+/// - `default` - Default visibility if no modifier found (e.g., "internal", "package", "private")
+///
+/// # Example
+/// ```rust,ignore
+/// // C# usage
+/// let vis = extract_visibility_from_modifiers(
+///     &node,
+///     source,
+///     &["public", "private", "protected", "internal"],
+///     "internal"
+/// );
+/// ```
+pub(crate) fn extract_visibility_from_modifiers(
+    node: &Node,
+    source: &str,
+    visibility_keywords: &[&str],
+    default: &str,
+) -> String {
+    let mut access_modifiers = Vec::new();
+
+    // Iterate through children looking for modifier nodes
+    for child in node.children(&mut node.walk()) {
+        if child.kind() == "modifier" {
+            if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
+                // Check if this modifier text is a visibility keyword
+                if visibility_keywords.contains(&modifier_text) {
+                    access_modifiers.push(modifier_text.to_string());
+                }
+            }
+        }
+    }
+
+    if access_modifiers.is_empty() {
+        default.to_string()
+    } else {
+        // Handle combined modifiers like "protected internal"
+        access_modifiers.join(" ")
+    }
 }
 
 /// Helper function to push a chunk with node position

@@ -26,6 +26,8 @@ pub enum Language {
     Java,
     /// C/C++
     Cpp,
+    /// C#
+    CSharp,
     /// Unknown or unsupported language
     Unknown,
 }
@@ -42,6 +44,7 @@ impl Language {
             Language::Go => "go",
             Language::Java => "java",
             Language::Cpp => "cpp",
+            Language::CSharp => "csharp",
             Language::Unknown => "unknown",
         }
     }
@@ -57,6 +60,7 @@ impl Language {
             "go" => Language::Go,
             "java" => Language::Java,
             "cpp" | "c++" | "c" => Language::Cpp,
+            "csharp" | "c#" | "cs" => Language::CSharp,
             _ => Language::Unknown,
         }
     }
@@ -117,6 +121,7 @@ impl LanguageDetector {
                 Some("c") | Some("cc") | Some("cpp") | Some("cxx") | Some("h") | Some("hpp") => {
                     Language::Cpp
                 }
+                Some("cs") => Language::CSharp,
                 _ => Language::Unknown,
             }
         } else {
@@ -180,11 +185,23 @@ impl LanguageDetector {
     ///
     /// The detected language, or `Language::Unknown` if unable to detect.
     pub fn detect_from_content(&self, content: &str) -> Language {
-        // Java patterns (check early to avoid confusion with JavaScript)
+        // C# detection patterns (check before Java - C# has unique markers like namespace+using System)
+        if content.contains("using System") || content.contains("using static") {
+            return Language::CSharp;
+        }
+        if content.contains("namespace ")
+            && (content.contains("class ") || content.contains("interface "))
+        {
+            return Language::CSharp;
+        }
+
+        // Java patterns (check after C# to avoid matching C# public classes as Java)
         // Note: We use highly specific patterns to avoid false positives
-        if content.contains("public class")
-            || content.contains("public interface")
-            || content.contains("import java.")
+        if content.contains("import java.") {
+            return Language::Java;
+        }
+        if (content.contains("public class") || content.contains("public interface"))
+            && !content.contains("namespace ")
         {
             return Language::Java;
         }
@@ -438,6 +455,92 @@ mod tests {
 
         // Kind detection
         assert_eq!(detector.detect_from_kind("module"), Language::Ruby);
+    }
+
+    #[test]
+    fn test_detect_csharp_from_path() {
+        let detector = LanguageDetector::new();
+        assert_eq!(detector.detect_from_path("MyClass.cs"), Language::CSharp);
+        assert_eq!(
+            detector.detect_from_path("src/Program.cs"),
+            Language::CSharp
+        );
+        assert_eq!(
+            detector.detect_from_path("Models/User.cs"),
+            Language::CSharp
+        );
+    }
+
+    #[test]
+    fn test_csharp_string_conversion() {
+        assert_eq!(Language::from_str("csharp"), Language::CSharp);
+        assert_eq!(Language::from_str("c#"), Language::CSharp);
+        assert_eq!(Language::from_str("cs"), Language::CSharp);
+        assert_eq!(Language::from_str("CSharp"), Language::CSharp);
+        assert_eq!(Language::from_str("C#"), Language::CSharp);
+        assert_eq!(Language::CSharp.as_str(), "csharp");
+    }
+
+    #[test]
+    fn test_detect_csharp_from_content() {
+        let detector = LanguageDetector::new();
+
+        // Test namespace + class pattern
+        let content = r#"
+using System;
+namespace MyNamespace
+{
+    public class MyClass { }
+}
+"#;
+        assert_eq!(detector.detect_from_content(content), Language::CSharp);
+
+        // Test using System pattern
+        let content2 = "using System.Collections.Generic;";
+        assert_eq!(detector.detect_from_content(content2), Language::CSharp);
+
+        // Test using static pattern (C# 6+ feature)
+        let content3 = "using static System.Math;";
+        assert_eq!(detector.detect_from_content(content3), Language::CSharp);
+
+        // Test namespace + interface pattern
+        let content4 = r#"
+namespace MyApp
+{
+    public interface IService { }
+}
+"#;
+        assert_eq!(detector.detect_from_content(content4), Language::CSharp);
+    }
+
+    #[test]
+    fn test_csharp_end_to_end() {
+        use crate::indexer::parser;
+        use std::path::Path;
+
+        // Detect language from path
+        let path = Path::new("Test.cs");
+        let detector = LanguageDetector::new();
+        let lang = detector.detect_from_path(path.to_str().unwrap());
+        assert_eq!(lang, Language::CSharp);
+
+        // Extract chunks
+        let source = r#"
+namespace Test
+{
+    public class Calculator
+    {
+        public int Add(int a, int b) => a + b;
+    }
+}
+"#;
+        let chunks = parser::extract_chunks(source, "cs");
+
+        // Verify extraction
+        assert!(!chunks.is_empty());
+        let class = chunks.iter().find(|c| c.kind == "class");
+        assert!(class.is_some());
+        assert_eq!(class.unwrap().symbol_name.as_ref().unwrap(), "Calculator");
     }
 
     #[test]
