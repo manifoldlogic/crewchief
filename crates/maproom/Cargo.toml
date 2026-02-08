@@ -55,6 +55,7 @@ tree-sitter-rust = "0.21"
 tree-sitter-go = "0.21"
 tree-sitter-ruby = "0.21"
 tree-sitter-c = "0.21.4"
+tree-sitter-java = "0.21.0"
 tree-sitter-cpp = "0.21"
 tree-sitter-md = "0.2"
 
