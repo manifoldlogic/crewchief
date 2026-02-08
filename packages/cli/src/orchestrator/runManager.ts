@@ -5,11 +5,13 @@ import { ensureDirSync, writeJsonSync, readJsonSync } from '../utils/fs'
 
 export interface PersistedRun {
   id: string
-  agentTypeId: string
+  platform: string
+  agentName: string | null
+  label: string
   task: string
   paneId: string
-  worktreePath: string
-  branchName?: string
+  workingDirectory: string
+  branchName: string | null
   status: 'running' | 'closed' | 'failed'
   startedAt: string
 }
@@ -37,18 +39,22 @@ export class RunManager {
   }
 
   createRun(
-    agentTypeId: string,
+    platform: string,
     task: string,
     paneId: string,
-    worktreePath: string,
-    branchName?: string,
+    workingDirectory: string,
+    branchName: string | null,
+    agentName: string | null,
+    label: string,
   ): PersistedRun {
     const run: PersistedRun = {
       id: randomUUID(),
-      agentTypeId,
+      platform,
+      agentName,
+      label,
       task,
       paneId,
-      worktreePath,
+      workingDirectory,
       branchName,
       status: 'running',
       startedAt: new Date().toISOString(),
@@ -68,9 +74,8 @@ export class RunManager {
     return this.loadAll().find((r) => r.id === runId)
   }
 
-  getRunByAgentType(agentTypeId: string): PersistedRun | undefined {
-    // Convenience for mock agent-id equal to type id
-    return this.loadAll().find((r) => r.agentTypeId === agentTypeId && r.status === 'running')
+  getRunByPlatform(platform: string): PersistedRun | undefined {
+    return this.loadAll().find((r) => r.platform === platform && r.status === 'running')
   }
 
   updateRun(runId: string, patch: Partial<PersistedRun>): PersistedRun | undefined {

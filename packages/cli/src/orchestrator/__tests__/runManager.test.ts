@@ -116,7 +116,7 @@ describe('getRunBusPath', () => {
 
   describe('integration with createRun', () => {
     it('getRunBusPath works with run created via createRun', () => {
-      const run = runManager.createRun('test-agent', 'test task', 'pane-1', '/path/to/worktree')
+      const run = runManager.createRun('claude', 'test task', 'pane-1', '/path/to/worktree', null, null, 'test-label')
       const busPath = runManager.getRunBusPath(run.id)
       const runDir = runManager.getRunDir(run.id)
       // createRun creates the run directory
