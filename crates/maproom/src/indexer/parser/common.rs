@@ -101,6 +101,10 @@ pub(crate) fn lang_csharp() -> Language {
     tree_sitter_c_sharp::language()
 }
 
+pub(crate) fn lang_java() -> Language {
+    tree_sitter_java::language()
+}
+
 pub(crate) fn lang_cpp() -> Language {
     tree_sitter_cpp::language()
 }
