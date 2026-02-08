@@ -160,7 +160,8 @@ impl LanguageDetector {
         match kind {
             "impl" | "trait" | "mod" => Language::Rust,
             "def" | "class" if kind.contains("py") => Language::Python,
-            "module" => Language::Ruby, // Ruby-specific
+            "module" => Language::Ruby,   // Ruby-specific
+            "namespace" => Language::Cpp, // C++ specific
             _ => Language::Unknown,
         }
     }
@@ -178,6 +179,17 @@ impl LanguageDetector {
     ///
     /// The detected language, or `Language::Unknown` if unable to detect.
     pub fn detect_from_content(&self, content: &str) -> Language {
+        // C++ patterns (check early to avoid false positives)
+        // Look for C++ specific keywords that indicate C++ vs C
+        if content.contains("#include") {
+            if content.contains("class ")
+                || content.contains("namespace ")
+                || content.contains("template<")
+            {
+                return Language::Cpp;
+            }
+        }
+
         // Ruby patterns (check before Python to avoid false positives)
         if content.contains("class") && content.contains("<") && content.contains("end") {
             return Language::Ruby;

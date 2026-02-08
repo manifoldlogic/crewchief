@@ -213,6 +213,9 @@ pub fn detect_language_from_path(path: &Path) -> Option<&'static str> {
         "go" => Some("go"),
         "rb" | "rake" => Some("rb"),
         "c" => Some("c"),
+        "cpp" | "cxx" | "cc" | "c++" => Some("cpp"),
+        "hpp" | "hxx" => Some("cpp"),
+        "h" => Some("cpp"), // Default .h to C++ (tree-sitter-cpp handles C too)
         "md" => Some("md"),
         "mdx" => Some("mdx"),
         "json" => Some("json"),
