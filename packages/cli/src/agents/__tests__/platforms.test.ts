@@ -1,9 +1,11 @@
+import child_process from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BUILTIN_PLATFORMS,
   MAX_NAME_LENGTH,
+  checkCommandExists,
   listAgentsForPlatform,
   listPlatforms,
   resolveAgent,
@@ -14,9 +16,19 @@ import {
 
 // Mock node:fs for filesystem-dependent tests
 vi.mock('node:fs')
+// Mock node:child_process for command existence checks
+vi.mock('node:child_process')
+
+// By default, make execSync succeed so custom platform resolution works in existing tests
+const mockExecSync = vi.mocked(child_process.execSync)
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+// Reset execSync mock before each test to default (command found)
+beforeEach(() => {
+  mockExecSync.mockReturnValue(Buffer.from(''))
 })
 
 // ---------------------------------------------------------------------------
@@ -596,5 +608,54 @@ describe('BUILTIN_PLATFORMS', () => {
         expect(ext).toMatch(/^\./)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Pre-flight command existence check
+// ---------------------------------------------------------------------------
+
+describe('checkCommandExists', () => {
+  it('returns true when command exists', () => {
+    mockExecSync.mockReturnValue(Buffer.from('/usr/bin/ls'))
+    expect(checkCommandExists('ls')).toBe(true)
+  })
+
+  it('returns false when command does not exist', () => {
+    mockExecSync.mockImplementation(() => {
+      throw new Error('command not found')
+    })
+    expect(checkCommandExists('nonexistent-tool-12345')).toBe(false)
+  })
+})
+
+describe('resolvePlatform pre-flight check', () => {
+  it('does not check command existence for built-in platforms', () => {
+    mockExecSync.mockClear()
+    resolvePlatform('claude')
+    resolvePlatform('gemini')
+    resolvePlatform('codex')
+    resolvePlatform('aider')
+    expect(mockExecSync).not.toHaveBeenCalled()
+  })
+
+  it('throws clear error for non-existent custom platform command', () => {
+    mockExecSync.mockImplementation(() => {
+      throw new Error('command not found')
+    })
+    expect(() => resolvePlatform('nonexistent-tool-12345')).toThrow(
+      "Command 'nonexistent-tool-12345' not found. Ensure it is installed and on your PATH.",
+    )
+  })
+
+  it('accepts custom platform when command exists on PATH', () => {
+    mockExecSync.mockReturnValue(Buffer.from('/usr/bin/my-custom-tool'))
+    const platform = resolvePlatform('my-custom-tool')
+    expect(platform).toEqual({
+      name: 'my-custom-tool',
+      command: 'my-custom-tool',
+      agentDir: null,
+      agentExtensions: [],
+    })
   })
 })

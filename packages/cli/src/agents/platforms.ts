@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -74,18 +75,23 @@ const PLATFORMS_WITH_AGENT_FLAG = new Set(['claude', 'gemini'])
 export function resolvePlatform(name: string): Platform {
   // Built-in platforms are trusted; only validate unknown/custom names
   // that would become shell commands directly
-  if (!BUILTIN_PLATFORMS[name]) {
-    validatePlatformName(name)
+  if (BUILTIN_PLATFORMS[name]) {
+    return BUILTIN_PLATFORMS[name]
   }
 
-  return (
-    BUILTIN_PLATFORMS[name] ?? {
-      name,
-      command: name,
-      agentDir: null,
-      agentExtensions: [],
-    }
-  )
+  validatePlatformName(name)
+
+  // Custom platform — verify the command exists on PATH
+  if (!checkCommandExists(name)) {
+    throw new Error(`Command '${name}' not found. Ensure it is installed and on your PATH.`)
+  }
+
+  return {
+    name,
+    command: name,
+    agentDir: null,
+    agentExtensions: [],
+  }
 }
 
 /**
@@ -217,6 +223,23 @@ export function validateAgentName(name: string): void {
     throw new Error(
       `Invalid agent name: "${name}". Agent names must start with an alphanumeric character and contain only alphanumeric characters, dots, hyphens, and underscores.`,
     )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Command existence check
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether a command exists on PATH using `command -v`.
+ * Used to provide clear errors for custom platforms before shell execution.
+ */
+export function checkCommandExists(command: string): boolean {
+  try {
+    execSync(`command -v ${command}`, { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
   }
 }
 
