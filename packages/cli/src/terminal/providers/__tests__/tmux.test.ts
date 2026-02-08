@@ -818,13 +818,13 @@ describe('TmuxProvider', () => {
       expect(agents[0]).toEqual({
         id: '%0',
         name: 'fix-bug__claude',
-        type: 'claude',
+        platform: 'claude',
         status: 'running',
       })
       expect(agents[1]).toEqual({
         id: '%1',
         name: 'task__gemini',
-        type: 'gemini',
+        platform: 'gemini',
         status: 'running',
       })
     })
@@ -922,10 +922,10 @@ describe('TmuxProvider', () => {
 
       expect(agents).toHaveLength(1)
       // split('__')[1] gets the part after the first __
-      expect(agents[0].type).toBe('name')
+      expect(agents[0].platform).toBe('name')
     })
 
-    it('sets type to "unknown" when __ is at end of name', async () => {
+    it('sets platform to "unknown" when __ is at end of name', async () => {
       mockSpawnSync.mockReturnValue({
         status: 0,
         stdout: Buffer.from('%0:task__\n'),
@@ -936,7 +936,7 @@ describe('TmuxProvider', () => {
 
       expect(agents).toHaveLength(1)
       // split('__')[1] is '' which is falsy, so 'unknown' is used
-      expect(agents[0].type).toBe('unknown')
+      expect(agents[0].platform).toBe('unknown')
     })
 
     it('handles single agent in output', async () => {
@@ -952,7 +952,7 @@ describe('TmuxProvider', () => {
       expect(agents[0]).toEqual({
         id: '%5',
         name: 'my-task__codex',
-        type: 'codex',
+        platform: 'codex',
         status: 'running',
       })
     })

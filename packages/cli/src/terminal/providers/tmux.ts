@@ -161,7 +161,7 @@ export class TmuxProvider implements TerminalProvider {
 
   /**
    * List all agents managed by this provider.
-   * Filters tmux panes for the task__agentType naming convention.
+   * Filters tmux panes for the task__platform naming convention.
    * @returns Array of agent information objects
    */
   async listAgents(): Promise<AgentInfo[]> {
@@ -182,8 +182,8 @@ export class TmuxProvider implements TerminalProvider {
       .filter((line: string) => line.includes('__')) // Filter for agent naming pattern
       .map((line: string) => {
         const [id, name] = line.split(':')
-        const type = name.split('__')[1] || 'unknown'
-        return { id, name, type, status: 'running' as const }
+        const platform = name.split('__')[1] || 'unknown'
+        return { id, name, platform, status: 'running' as const }
       })
   }
 

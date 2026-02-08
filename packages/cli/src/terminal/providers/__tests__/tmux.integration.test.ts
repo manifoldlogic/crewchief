@@ -94,11 +94,11 @@ describe.skipIf(!tmuxAvailable)('TmuxProvider Integration', () => {
     const geminiAgent = agents.find((a) => a.name === 'list-test2__gemini')
 
     expect(claudeAgent).toBeDefined()
-    expect(claudeAgent?.type).toBe('claude')
+    expect(claudeAgent?.platform).toBe('claude')
     expect(claudeAgent?.status).toBe('running')
 
     expect(geminiAgent).toBeDefined()
-    expect(geminiAgent?.type).toBe('gemini')
+    expect(geminiAgent?.platform).toBe('gemini')
   })
 
   it('filters out non-agent windows from listAgents', async () => {
