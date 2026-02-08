@@ -64,18 +64,9 @@ impl HierarchyTracker {
     }
 }
 
-// Use the safe language providers exposed by the crates
-pub(crate) fn lang_typescript() -> Language {
-    tree_sitter_typescript::language_typescript()
-}
-
-pub(crate) fn lang_tsx() -> Language {
-    tree_sitter_typescript::language_tsx()
-}
-
-pub(crate) fn lang_javascript() -> Language {
-    tree_sitter_javascript::language()
-}
+// Language provider functions used by per-language parser modules.
+// Only include functions that are actually imported by a parser module.
+// TS/JS/Markdown parsers call tree-sitter crates directly.
 
 pub(crate) fn lang_python() -> Language {
     tree_sitter_python::language()
@@ -87,10 +78,6 @@ pub(crate) fn lang_rust() -> Language {
 
 pub(crate) fn lang_go() -> Language {
     tree_sitter_go::language()
-}
-
-pub(crate) fn lang_markdown() -> Language {
-    tree_sitter_md::language()
 }
 
 pub(crate) fn lang_ruby() -> Language {
