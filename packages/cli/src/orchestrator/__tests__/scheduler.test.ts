@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveAgent, resolvePlatform } from '../../agents/platforms'
-import { getAgentType } from '../../agents/registry'
 import { busManager } from '../../bus'
 import { loadConfig } from '../../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../../git/worktrees'
@@ -14,10 +13,6 @@ import type { SpawnOptions } from '../scheduler'
 // ---------------------------------------------------------------------------
 vi.mock('../runManager', () => ({
   RunManager: vi.fn(),
-}))
-
-vi.mock('../../agents/registry', () => ({
-  getAgentType: vi.fn(),
 }))
 
 vi.mock('../../agents/platforms', () => ({
@@ -67,15 +62,6 @@ beforeEach(() => {
     },
   } as Awaited<ReturnType<typeof loadConfig>>)
 
-  vi.mocked(getAgentType).mockReturnValue({
-    id: 'claude',
-    name: 'Claude',
-    platform: 'claude',
-    capabilities: ['code-generation', 'code-review'],
-    agentDefinitionPath: '/path/to/agent.yaml',
-    executionCommand: 'claude --agent',
-  })
-
   // Mock resolveAgent - default returns bare claude command
   vi.mocked(resolveAgent).mockReturnValue({
     platform: { name: 'claude', command: 'claude', agentDir: '.claude/agents', agentExtensions: ['.md'] },
@@ -120,7 +106,6 @@ beforeEach(() => {
     getRunDir: vi.fn().mockImplementation((runId: string) => `/test/base/.crewchief/runs/${runId}`),
   }
 
-  // Also mock the RunManager constructor for assignSingleAgent tests
   vi.mocked(RunManager).mockImplementation(() => mockRunManager as unknown as InstanceType<typeof RunManager>)
 
   runCommandSpy = vi.fn<[string, string], Promise<void>>().mockResolvedValue(undefined)
@@ -470,80 +455,6 @@ describe('Scheduler.spawnAgent', () => {
 
       // RunManager constructor should have been called (fallback)
       expect(RunManager).toHaveBeenCalled()
-    })
-  })
-})
-
-// ---------------------------------------------------------------------------
-// assignSingleAgent (legacy) tests - verify backward compatibility
-// ---------------------------------------------------------------------------
-describe('Scheduler.assignSingleAgent (legacy)', () => {
-  describe('bus integration', () => {
-    it('calls busManager.startFollowing before terminal.runCommand', async () => {
-      const callOrder: string[] = []
-
-      vi.mocked(busManager.startFollowing).mockImplementation(() => {
-        callOrder.push('startFollowing')
-      })
-      runCommandSpy.mockImplementation(async () => {
-        callOrder.push('runCommand')
-      })
-
-      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      expect(callOrder).toEqual(['startFollowing', 'runCommand'])
-    })
-
-    it('passes correct runId and busPath to startFollowing', async () => {
-      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      expect(busManager.startFollowing).toHaveBeenCalledTimes(1)
-      expect(busManager.startFollowing).toHaveBeenCalledWith(
-        'test-run-uuid',
-        '/test/base/.crewchief/runs/test-run-uuid/bus.jsonl',
-      )
-    })
-
-    it('includes CREWCHIEF_BUS_PATH in command string', async () => {
-      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      expect(runCommandSpy).toHaveBeenCalledTimes(1)
-      const command = runCommandSpy.mock.calls[0][1] as string
-      expect(command).toContain('CREWCHIEF_BUS_PATH=')
-    })
-  })
-
-  describe('command construction', () => {
-    it('command includes cd to worktree path', async () => {
-      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      const command = runCommandSpy.mock.calls[0][1] as string
-      expect(command).toContain('cd "/path/to/worktree"')
-    })
-
-    it('command includes agent execution after bus path env var', async () => {
-      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      const command = runCommandSpy.mock.calls[0][1] as string
-      expect(command).toContain('claude --agent')
-
-      const busPathIndex = command.indexOf('CREWCHIEF_BUS_PATH=')
-      const execIndex = command.indexOf('claude --agent')
-      expect(busPathIndex).toBeLessThan(execIndex)
-    })
-  })
-
-  describe('return value', () => {
-    it('returns run id', async () => {
-      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
-      const runId = await scheduler.assignSingleAgent('test task', 'claude')
-
-      expect(runId).toBe('test-run-uuid')
     })
   })
 })

@@ -1,6 +1,5 @@
 import { RunManager } from './runManager'
 import { resolveAgent } from '../agents/platforms'
-import { getAgentType } from '../agents/registry'
 import { busManager } from '../bus'
 import { loadConfig } from '../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
@@ -127,59 +126,6 @@ export class Scheduler {
     await this.terminal.runCommand(
       paneId,
       `cd ${JSON.stringify(effectiveWorkingDir)} && CREWCHIEF_BUS_PATH=${JSON.stringify(busPath)} ${command}`,
-    )
-
-    return run.id
-  }
-
-  // -------------------------------------------------------------------------
-  // Legacy method: assignSingleAgent (kept for Phase 3 callers)
-  // -------------------------------------------------------------------------
-
-  /**
-   * @deprecated Use `spawnAgent()` instead. Retained for backward compatibility
-   * with `task.ts` and `agent.ts` until Phase 3 migration.
-   */
-  async assignSingleAgent(task: string, agentTypeId: string): Promise<string> {
-    const config = await loadConfig()
-    const wt = new WorktreeService()
-
-    // Ensure branch name is unique if the task is generic, but deterministic if task is specific
-    const branchName = buildDeterministicBranchName({ platform: agentTypeId, taskDescription: task })
-
-    // Create worktree first
-    const worktreePath = await wt.createWorktree(
-      branchName,
-      config.repository.mainBranch,
-      config.repository.worktreeBasePath,
-    )
-
-    // Create window/pane via provider
-    const paneId = await this.terminal.createWindow({
-      workingDirectory: worktreePath,
-      title: `${agentTypeId}: ${task.slice(0, 20)}...`,
-    })
-
-    const type = getAgentType(agentTypeId)
-    if (!type) throw new Error(`Unknown agent type: ${agentTypeId}`)
-
-    const rm = this.runManager ?? new RunManager()
-    const run = rm.createRun(agentTypeId, task, paneId, worktreePath, branchName, null, `${agentTypeId}__${task}`)
-
-    // Compute bus path for cross-process messaging
-    const busPath = rm.getRunBusPath(run.id)
-
-    // Start following BEFORE runCommand to avoid missing early messages
-    busManager.startFollowing(run.id, busPath)
-
-    // Determine execution command
-    const exec = type.executionCommand.includes('scripts/mock-agent.js')
-      ? `node ${JSON.stringify(process.cwd() + '/scripts/mock-agent.js')}`
-      : type.executionCommand
-
-    await this.terminal.runCommand(
-      paneId,
-      `cd ${JSON.stringify(worktreePath)} && CREWCHIEF_BUS_PATH=${JSON.stringify(busPath)} ${exec}`,
     )
 
     return run.id
