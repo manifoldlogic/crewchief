@@ -389,3 +389,84 @@ struct {{{{ invalid
     // The key is that we reach this line without panicking
     let _ = chunks.len();
 }
+
+#[test]
+fn test_c_whitespace_only_file() {
+    let source = "   \n\n\t\t\n    \n\t  \n\n";
+
+    let chunks = parser::extract_chunks(source, "c");
+
+    // File with only whitespace should produce no chunks
+    assert_eq!(
+        chunks.len(),
+        0,
+        "Whitespace-only file should produce no chunks"
+    );
+}
+
+#[test]
+fn test_c_comment_only_file() {
+    let source = r#"
+// This is a line comment
+// Another line comment
+
+/*
+ * This is a block comment
+ * with multiple lines
+ */
+
+// More line comments
+/* Single line block comment */
+"#;
+
+    let chunks = parser::extract_chunks(source, "c");
+
+    // File with only comments should produce no chunks
+    assert_eq!(
+        chunks.len(),
+        0,
+        "Comment-only file should produce no chunks"
+    );
+}
+
+#[test]
+fn test_c_mixed_whitespace_comments() {
+    let source = r#"
+
+    // Comment with leading whitespace
+
+        /* Block comment with spaces */
+
+// Another comment
+
+
+
+"#;
+
+    let chunks = parser::extract_chunks(source, "c");
+
+    // File with mixed whitespace and comments should produce no chunks
+    assert_eq!(
+        chunks.len(),
+        0,
+        "Mixed whitespace and comments should produce no chunks"
+    );
+}
+
+#[test]
+fn test_c_preprocessor_only_file() {
+    let source = r#"
+#ifndef MY_HEADER_H
+#define MY_HEADER_H
+
+#endif // MY_HEADER_H
+"#;
+
+    // Parser should not panic on preprocessor-only files
+    let chunks = parser::extract_chunks(source, "c");
+
+    // Header guard only - may be empty or may have imports chunk
+    // The key is that we don't panic and return a valid Vec
+    let _ = chunks.len();
+    // Note: This is valid C preprocessor code, not a syntax error
+}
