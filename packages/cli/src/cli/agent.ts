@@ -256,7 +256,10 @@ Use this to discover what's available before spawning.
     .argument('[task]', 'Task description (auto-generated if omitted)')
     .option('--worktree', 'Create isolated git worktree for this task', false)
     .option('--agent <name>', 'Use named agent definition (e.g., backend-developer)')
-    .option('--args <string>', 'Extra arguments to pass to platform CLI')
+    .option(
+      '--args <string>',
+      'Extra arguments to pass to platform CLI. WARNING: Values are passed directly to the shell. Use caution with untrusted input.',
+    )
     .option('-v, --verbose', 'Verbose logging')
     .addHelpText(
       'after',
