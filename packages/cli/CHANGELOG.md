@@ -28,3 +28,11 @@ export default {
 **Alternative**: Manually scan when needed: `crewchief maproom scan`
 
 **Impact**: Users relying on automatic indexing must update config or manually scan.
+
+### Security
+
+- Added input validation for platform names to prevent shell injection (`validatePlatformName`)
+- Added input validation for agent names to prevent path traversal (`validateAgentName`)
+- Implemented defense-in-depth: pattern validation + path containment checks
+- Added 25 security-focused unit tests covering shell injection and path traversal vectors
+- Commit: 52c2b9c4
