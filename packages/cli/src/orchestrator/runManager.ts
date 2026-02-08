@@ -3,6 +3,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ensureDirSync, writeJsonSync, readJsonSync } from '../utils/fs'
 
+/** Number of days to retain run entries before pruning. */
+export const RETENTION_DAYS = 30
+
 export interface PersistedRun {
   id: string
   platform: string
@@ -35,7 +38,18 @@ export class RunManager {
   }
 
   private saveAll(runs: PersistedRun[]): void {
-    writeJsonSync(this.stateFile, { runs })
+    const pruned = this.pruneOldRuns(runs)
+    writeJsonSync(this.stateFile, { runs: pruned })
+  }
+
+  private pruneOldRuns(runs: PersistedRun[]): PersistedRun[] {
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000
+    return runs.filter((run) => {
+      if (!run.startedAt) return true
+      const runTime = new Date(run.startedAt).getTime()
+      if (Number.isNaN(runTime)) return true
+      return runTime >= cutoff
+    })
   }
 
   createRun(
