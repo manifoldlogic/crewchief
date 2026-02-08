@@ -72,6 +72,12 @@ const PLATFORMS_WITH_AGENT_FLAG = new Set(['claude', 'gemini'])
  * otherwise creates a custom platform with no agent directory support.
  */
 export function resolvePlatform(name: string): Platform {
+  // Built-in platforms are trusted; only validate unknown/custom names
+  // that would become shell commands directly
+  if (!BUILTIN_PLATFORMS[name]) {
+    validatePlatformName(name)
+  }
+
   return (
     BUILTIN_PLATFORMS[name] ?? {
       name,
@@ -164,6 +170,44 @@ export function listAgentsForPlatform(platformName: string, projectDir: string):
 }
 
 // ---------------------------------------------------------------------------
+// Input validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Pattern for safe platform and agent names: must start with an alphanumeric
+ * character and contain only alphanumerics, dots, hyphens, and underscores.
+ * This prevents shell injection via metacharacters (;|&`$) and path traversal
+ * via sequences like `../`.
+ */
+const SAFE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/
+
+/**
+ * Validate a platform name to prevent shell injection.
+ * Platform names are interpolated into shell commands, so they must not
+ * contain shell metacharacters.
+ */
+export function validatePlatformName(name: string): void {
+  if (!SAFE_NAME_PATTERN.test(name)) {
+    throw new Error(
+      `Invalid platform name: "${name}". Platform names must start with an alphanumeric character and contain only alphanumeric characters, dots, hyphens, and underscores.`,
+    )
+  }
+}
+
+/**
+ * Validate an agent name to prevent path traversal.
+ * Agent names are used in path construction, so they must not contain
+ * path separators or traversal sequences.
+ */
+export function validateAgentName(name: string): void {
+  if (!SAFE_NAME_PATTERN.test(name)) {
+    throw new Error(
+      `Invalid agent name: "${name}". Agent names must start with an alphanumeric character and contain only alphanumeric characters, dots, hyphens, and underscores.`,
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
@@ -176,10 +220,18 @@ function findAgentFile(platform: Platform, agentName: string, projectDir?: strin
     return null
   }
 
+  validateAgentName(agentName)
+
   const dir = path.join(projectDir, platform.agentDir)
 
   for (const ext of platform.agentExtensions) {
     const candidate = path.join(dir, `${agentName}${ext}`)
+
+    // Path containment check: ensure the resolved candidate stays within the agent directory
+    if (!path.resolve(candidate).startsWith(path.resolve(dir))) {
+      throw new Error(`Agent name "${agentName}" resolves outside the agent directory.`)
+    }
+
     try {
       if (fs.existsSync(candidate)) {
         return candidate

@@ -1,7 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BUILTIN_PLATFORMS, listAgentsForPlatform, listPlatforms, resolveAgent, resolvePlatform } from '../platforms'
+import {
+  BUILTIN_PLATFORMS,
+  listAgentsForPlatform,
+  listPlatforms,
+  resolveAgent,
+  resolvePlatform,
+  validateAgentName,
+  validatePlatformName,
+} from '../platforms'
 
 // Mock node:fs for filesystem-dependent tests
 vi.mock('node:fs')
@@ -65,22 +73,12 @@ describe('resolvePlatform', () => {
     })
   })
 
-  it('handles empty string gracefully', () => {
-    const platform = resolvePlatform('')
-    expect(platform).toEqual({
-      name: '',
-      command: '',
-      agentDir: null,
-      agentExtensions: [],
-    })
+  it('rejects empty string platform name', () => {
+    expect(() => resolvePlatform('')).toThrow('Invalid platform name')
   })
 
-  it('returns custom platform for name with special characters', () => {
-    const platform = resolvePlatform('tool@2.0')
-    expect(platform.name).toBe('tool@2.0')
-    expect(platform.command).toBe('tool@2.0')
-    expect(platform.agentDir).toBeNull()
-    expect(platform.agentExtensions).toEqual([])
+  it('rejects platform name with shell metacharacters', () => {
+    expect(() => resolvePlatform('tool@2.0')).toThrow('Invalid platform name')
   })
 
   it('returns the exact built-in object (identity check)', () => {
@@ -410,6 +408,134 @@ describe('listAgentsForPlatform', () => {
     expect(fs.readdirSync).toHaveBeenCalledWith(path.join('/my/project', '.gemini/agents'), {
       withFileTypes: true,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// BUILTIN_PLATFORMS (structural assertions)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Security: input validation
+// ---------------------------------------------------------------------------
+
+describe('validatePlatformName', () => {
+  it('accepts valid alphanumeric names', () => {
+    expect(() => validatePlatformName('claude')).not.toThrow()
+    expect(() => validatePlatformName('my-tool')).not.toThrow()
+    expect(() => validatePlatformName('tool.v2')).not.toThrow()
+    expect(() => validatePlatformName('my_tool')).not.toThrow()
+    expect(() => validatePlatformName('Tool123')).not.toThrow()
+  })
+
+  it('rejects shell injection: semicolon', () => {
+    expect(() => validatePlatformName('foo;rm -rf /')).toThrow('Invalid platform name')
+  })
+
+  it('rejects shell injection: pipe', () => {
+    expect(() => validatePlatformName('foo|cat /etc/passwd')).toThrow('Invalid platform name')
+  })
+
+  it('rejects shell injection: ampersand', () => {
+    expect(() => validatePlatformName('foo&&evil')).toThrow('Invalid platform name')
+  })
+
+  it('rejects shell injection: backtick', () => {
+    expect(() => validatePlatformName('foo`evil`')).toThrow('Invalid platform name')
+  })
+
+  it('rejects shell injection: dollar sign', () => {
+    expect(() => validatePlatformName('foo$(evil)')).toThrow('Invalid platform name')
+  })
+
+  it('rejects shell injection: spaces', () => {
+    expect(() => validatePlatformName('foo bar')).toThrow('Invalid platform name')
+  })
+
+  it('rejects empty string', () => {
+    expect(() => validatePlatformName('')).toThrow('Invalid platform name')
+  })
+
+  it('rejects names starting with hyphen', () => {
+    expect(() => validatePlatformName('-flag')).toThrow('Invalid platform name')
+  })
+
+  it('rejects names starting with dot', () => {
+    expect(() => validatePlatformName('.hidden')).toThrow('Invalid platform name')
+  })
+})
+
+describe('validateAgentName', () => {
+  it('accepts valid alphanumeric names', () => {
+    expect(() => validateAgentName('backend-developer')).not.toThrow()
+    expect(() => validateAgentName('my.agent')).not.toThrow()
+    expect(() => validateAgentName('agent_v2')).not.toThrow()
+    expect(() => validateAgentName('Agent123')).not.toThrow()
+  })
+
+  it('rejects path traversal: ../', () => {
+    expect(() => validateAgentName('../../../etc/passwd')).toThrow('Invalid agent name')
+  })
+
+  it('rejects path traversal: embedded ..', () => {
+    expect(() => validateAgentName('foo/../bar')).toThrow('Invalid agent name')
+  })
+
+  it('rejects forward slashes', () => {
+    expect(() => validateAgentName('foo/bar')).toThrow('Invalid agent name')
+  })
+
+  it('rejects backslashes', () => {
+    expect(() => validateAgentName('foo\\bar')).toThrow('Invalid agent name')
+  })
+
+  it('rejects shell metacharacters', () => {
+    expect(() => validateAgentName('agent;rm -rf /')).toThrow('Invalid agent name')
+    expect(() => validateAgentName('agent|evil')).toThrow('Invalid agent name')
+    expect(() => validateAgentName('agent`evil`')).toThrow('Invalid agent name')
+  })
+
+  it('rejects empty string', () => {
+    expect(() => validateAgentName('')).toThrow('Invalid agent name')
+  })
+
+  it('rejects names starting with hyphen', () => {
+    expect(() => validateAgentName('-flag-inject')).toThrow('Invalid agent name')
+  })
+})
+
+describe('security: resolveAgent with malicious inputs', () => {
+  it('rejects shell injection in custom platform name', () => {
+    expect(() => resolveAgent(';rm -rf /')).toThrow('Invalid platform name')
+  })
+
+  it('rejects pipe injection in custom platform name', () => {
+    expect(() => resolveAgent('evil|cat /etc/passwd')).toThrow('Invalid platform name')
+  })
+
+  it('rejects path traversal in agent name', () => {
+    expect(() => resolveAgent('claude', '../../../etc/passwd', '/project')).toThrow('Invalid agent name')
+  })
+
+  it('rejects agent name with shell metacharacters', () => {
+    expect(() => resolveAgent('claude', 'agent;evil', '/project')).toThrow('Invalid agent name')
+  })
+
+  it('allows built-in platform names without validation error', () => {
+    // Built-in platforms are trusted and should not trigger validation
+    expect(() => resolveAgent('claude')).not.toThrow()
+    expect(() => resolveAgent('gemini')).not.toThrow()
+    expect(() => resolveAgent('codex')).not.toThrow()
+    expect(() => resolveAgent('aider')).not.toThrow()
+  })
+
+  it('allows valid custom platform names', () => {
+    expect(() => resolveAgent('my-custom-tool')).not.toThrow()
+  })
+
+  it('allows valid agent names on known platforms', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false)
+    expect(() => resolveAgent('claude', 'backend-developer', '/project')).not.toThrow()
   })
 })
 
