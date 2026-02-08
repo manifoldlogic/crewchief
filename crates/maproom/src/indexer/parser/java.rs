@@ -2354,10 +2354,7 @@ public class 用户管理器 {
             .iter()
             .find(|c| c.kind == "class")
             .expect("Should extract class chunk");
-        assert_eq!(
-            class_chunk.symbol_name.as_ref().unwrap(),
-            "用户管理器"
-        );
+        assert_eq!(class_chunk.symbol_name.as_ref().unwrap(), "用户管理器");
 
         // Verify field with Chinese characters
         let username_field = chunks
@@ -2378,10 +2375,7 @@ public class 用户管理器 {
             .iter()
             .find(|c| c.kind == "method" && c.symbol_name.as_ref().unwrap() == "获取用户")
             .expect("Should extract 获取用户 method");
-        assert_eq!(
-            get_user_method.symbol_name.as_ref().unwrap(),
-            "获取用户"
-        );
+        assert_eq!(get_user_method.symbol_name.as_ref().unwrap(), "获取用户");
         assert!(get_user_method
             .signature
             .as_ref()
@@ -2416,19 +2410,11 @@ public class 用户管理器 {
 
         // Test mixed whitespace
         let chunks = extract_java_chunks("  \n\t  \n  ");
-        assert_eq!(
-            chunks.len(),
-            0,
-            "Mixed whitespace should return no chunks"
-        );
+        assert_eq!(chunks.len(), 0, "Mixed whitespace should return no chunks");
 
         // Test file with only comments (edge case)
         let chunks = extract_java_chunks("// Just a comment\n/* Block comment */");
-        assert_eq!(
-            chunks.len(),
-            0,
-            "Comments-only should return no chunks"
-        );
+        assert_eq!(chunks.len(), 0, "Comments-only should return no chunks");
     }
 
     #[test]

@@ -18,7 +18,7 @@ use crate::db;
 ///
 /// Controls how search results are rendered to stdout.
 /// Used as a clap `ValueEnum` for the `--format` CLI flag.
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, PartialEq, ValueEnum)]
 pub enum OutputFormat {
     /// JSON output (default, backward compatible)
     Json,

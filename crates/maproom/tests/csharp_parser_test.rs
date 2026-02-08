@@ -550,23 +550,36 @@ namespace MyApp {
     let chunks = parser::extract_chunks(source, "cs");
 
     // Verify namespace
-    assert!(chunks.iter().any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("MyApp")));
+    assert!(chunks
+        .iter()
+        .any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("MyApp")));
 
     // Verify Cyrillic class name
-    let moscow_class = chunks.iter().find(|c| c.kind == "class" && c.symbol_name.as_deref() == Some("Москва"));
+    let moscow_class = chunks
+        .iter()
+        .find(|c| c.kind == "class" && c.symbol_name.as_deref() == Some("Москва"));
     assert!(moscow_class.is_some(), "Cyrillic class name not found");
     let moscow_class = moscow_class.unwrap();
     assert_eq!(moscow_class.symbol_name.as_deref(), Some("Москва"));
     assert!(moscow_class.docstring.is_some());
-    assert!(moscow_class.docstring.as_ref().unwrap().contains("Russian capital"));
+    assert!(moscow_class
+        .docstring
+        .as_ref()
+        .unwrap()
+        .contains("Russian capital"));
 
     // Verify Cyrillic method name
-    let hello_method = chunks.iter().find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("Привет"));
+    let hello_method = chunks
+        .iter()
+        .find(|c| c.kind == "method" && c.symbol_name.as_deref() == Some("Привет"));
     assert!(hello_method.is_some(), "Cyrillic method name not found");
 
     // Verify Cyrillic parameter name in signature
     let hello_method = hello_method.unwrap();
-    assert!(hello_method.signature.as_ref().unwrap().contains("имя"), "Cyrillic parameter not in signature");
+    assert!(
+        hello_method.signature.as_ref().unwrap().contains("имя"),
+        "Cyrillic parameter not in signature"
+    );
 }
 
 #[test]
@@ -585,13 +598,17 @@ fn test_csharp_deep_nesting() {
     let chunks = parser::extract_chunks(&source, "cs");
 
     // Verify namespace extracted
-    assert!(chunks.iter().any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("Test")));
+    assert!(chunks
+        .iter()
+        .any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("Test")));
 
     // Verify all 50 class levels extracted
     for i in 0..50 {
         let class_name = format!("Level{}", i);
         assert!(
-            chunks.iter().any(|c| c.kind == "class" && c.symbol_name.as_deref() == Some(&class_name)),
+            chunks
+                .iter()
+                .any(|c| c.kind == "class" && c.symbol_name.as_deref() == Some(&class_name)),
             "Class {} not found (depth limit may be too low)",
             class_name
         );
@@ -616,7 +633,9 @@ fn test_csharp_extreme_nesting() {
     let chunks = parser::extract_chunks(&source, "cs");
 
     // Verify namespace extracted
-    assert!(chunks.iter().any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("Test")));
+    assert!(chunks
+        .iter()
+        .any(|c| c.kind == "namespace" && c.symbol_name.as_deref() == Some("Test")));
 
     // Verify first 99 levels extracted (depth 1-99, namespace is depth 0)
     let extracted_classes: Vec<_> = chunks.iter().filter(|c| c.kind == "class").collect();

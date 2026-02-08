@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crewchief_maproom::cli::format::{format_hits_agent, format_hits_json_search, OutputFormat};
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
 };
@@ -422,9 +423,12 @@ enum Commands {
         /// Include content preview in search results
         #[arg(long, default_value_t = false)]
         preview: bool,
-        /// Maximum length of preview text in characters (default: 200)
-        #[arg(long, default_value_t = 200)]
-        preview_length: usize,
+        /// Maximum length of preview text in characters (default: 200, or 120 for agent format)
+        #[arg(long)]
+        preview_length: Option<usize>,
+        /// Output format: json (default, structured) or agent (compact, LLM-optimized)
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
     },
 
     /// Vector similarity search using embeddings
@@ -1565,7 +1569,17 @@ async fn main() -> anyhow::Result<()> {
             lang,
             preview,
             preview_length,
+            format,
         } => {
+            // MRIMP-5: Implicit preview enable for agent format (parameter preprocessing)
+            // Agent format always needs preview data; default length is 120 chars (token-optimized).
+            // Explicit --preview-length overrides the agent default.
+            let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+                (true, preview_length.unwrap_or(120))
+            } else {
+                (preview, preview_length.unwrap_or(200))
+            };
+
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
@@ -1592,10 +1606,10 @@ async fn main() -> anyhow::Result<()> {
             let hits: Vec<_> = hits
                 .into_iter()
                 .map(|mut hit| {
-                    if preview {
-                        // Truncate preview to preview_length
+                    if preview_enabled {
+                        // Truncate preview to preview_len
                         if let Some(preview_text) = hit.preview.take() {
-                            hit.preview = Some(db::truncate_preview(&preview_text, preview_length));
+                            hit.preview = Some(db::truncate_preview(&preview_text, preview_len));
                         }
                     } else {
                         // Strip preview if flag not set
@@ -1605,10 +1619,19 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect();
 
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
-            );
+            // MRIMP-5: Route output through format module
+            match format {
+                OutputFormat::Json => {
+                    let output = format_hits_json_search(&hits)?;
+                    println!("{}", output);
+                }
+                OutputFormat::Agent => {
+                    let output = format_hits_agent(&hits);
+                    if !output.is_empty() {
+                        println!("{}", output);
+                    }
+                }
+            }
         }
 
         Commands::VectorSearch {
@@ -2576,7 +2599,7 @@ mod tests {
         ]);
         match cli.command {
             Commands::Search { preview_length, .. } => {
-                assert_eq!(preview_length, 150);
+                assert_eq!(preview_length, Some(150));
             }
             _ => panic!("Expected Search command"),
         }
@@ -2592,7 +2615,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(preview, false);
-                assert_eq!(preview_length, 200);
+                assert_eq!(preview_length, None);
             }
             _ => panic!("Expected Search command"),
         }
@@ -2688,7 +2711,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(preview, false);
-                assert_eq!(preview_length, 150);
+                assert_eq!(preview_length, Some(150));
             }
             _ => panic!("Expected Search command"),
         }
