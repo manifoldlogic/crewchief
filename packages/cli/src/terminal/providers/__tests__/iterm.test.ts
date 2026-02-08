@@ -351,18 +351,18 @@ describe('ITermProvider', () => {
       provider = new ITermProvider()
       const agents = await provider.listAgents()
 
-      // Should only return panes with name__type format
+      // Should only return panes with name__platform format
       expect(agents).toHaveLength(2)
       expect(agents[0]).toEqual({
         id: '3C31E1FF-1234',
         name: 'fix-bug__claude',
-        type: 'claude',
+        platform: 'claude',
         status: 'running',
       })
       expect(agents[1]).toEqual({
         id: 'AB12CD34-5678',
         name: 'task__gemini',
-        type: 'gemini',
+        platform: 'gemini',
         status: 'running',
       })
     })
