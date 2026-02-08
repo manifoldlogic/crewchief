@@ -207,3 +207,7 @@ harness = false
 name = "graph_quality_benchmark"
 harness = false
 
+[[bench]]
+name = "c_parser_bench"
+harness = false
+
