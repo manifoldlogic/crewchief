@@ -90,6 +90,14 @@ pub(super) fn extract_csharp_chunks(source: &str) -> Vec<SymbolChunk> {
         .expect("Failed to set C# language");
 
     let tree = parser.parse(source, None);
+
+    // Debug logging for parse errors (helpful for troubleshooting)
+    if let Some(ref tree) = tree {
+        if tree.root_node().has_error() {
+            tracing::debug!("C# parse produced error nodes, extraction may be partial");
+        }
+    }
+
     let mut chunks = Vec::new();
 
     if let Some(tree) = tree {
@@ -1836,5 +1844,28 @@ class MyClass {
         assert!(docstring.contains("<param name=\"input\">"));
         assert!(docstring.contains("<returns>"));
         assert!(docstring.contains("<see cref=\"Result\"/>"));
+    }
+
+    #[test]
+    fn test_parse_error_detection() {
+        // Initialize tracing for this test (ignore if already initialized)
+        let _ = tracing_subscriber::fmt()
+            .with_test_writer()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive("crewchief_maproom::indexer::parser::csharp=debug".parse().unwrap())
+            )
+            .try_init();
+
+        let source = r#"
+public class Broken {
+    public void Method(
+    // Missing closing paren and brace
+"#;
+
+        // This should trigger the debug log
+        let _chunks = extract_csharp_chunks(source);
+        // The key is that the log appears when RUST_LOG=debug is set
+        // This test verifies the code doesn't panic on syntax errors
     }
 }
