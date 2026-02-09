@@ -380,11 +380,14 @@ fi
 # Restart pm2 watchers
 # ---------------------------------------------------------------------------
 
+_pm2_status="pm2-unavailable"
 if [ "$HAS_PM2" = "yes" ]; then
     if ! pm2 restart '/^maproom:/' >> "$LOG_FILE" 2>&1; then
         log_err "Warning: pm2 restart failed (see $LOG_FILE)"
+        _pm2_status="pm2-failed"
     else
         log "pm2 watchers restarted"
+        _pm2_status="success"
     fi
 fi
 
@@ -392,6 +395,6 @@ fi
 # Write completion marker
 # ---------------------------------------------------------------------------
 
-echo "success $(date -u +%Y-%m-%dT%H:%M:%SZ) elapsed=${_elapsed}s" > "$COMPLETION_MARKER"
+echo "success $(date -u +%Y-%m-%dT%H:%M:%SZ) elapsed=${_elapsed}s pm2=${_pm2_status}" > "$COMPLETION_MARKER"
 
 log "Rebuild complete (${_elapsed}s)"
