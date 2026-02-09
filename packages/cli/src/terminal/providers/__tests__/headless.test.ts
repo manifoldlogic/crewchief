@@ -117,10 +117,10 @@ describe('HeadlessProvider', () => {
 
       const agents = await provider.listAgents()
       const agent = agents.find((a) => a.name === paneId)
-      expect(agent?.type).toBe('gemini')
+      expect(agent?.platform).toBe('gemini')
     })
 
-    it('sets type to unknown for non-standard pane IDs', async () => {
+    it('sets platform to unknown for non-standard pane IDs', async () => {
       const paneId = 'simple-pane'
       // Use sleep to keep agent in map for verification
       await provider.runCommand(paneId, 'sleep 5')
@@ -128,7 +128,7 @@ describe('HeadlessProvider', () => {
 
       const agents = await provider.listAgents()
       const agent = agents.find((a) => a.name === paneId)
-      expect(agent?.type).toBe('unknown')
+      expect(agent?.platform).toBe('unknown')
     })
   })
 
@@ -182,7 +182,7 @@ describe('HeadlessProvider', () => {
       expect(agents[0]).toMatchObject({
         id: paneId,
         name: paneId,
-        type: 'claude',
+        platform: 'claude',
         status: 'running',
       })
     })
@@ -205,7 +205,7 @@ describe('HeadlessProvider', () => {
 
       const agents = await provider.listAgents()
       expect(agents.length).toBe(2)
-      expect(agents.map((a) => a.type).sort()).toEqual(['claude', 'gemini'])
+      expect(agents.map((a) => a.platform).sort()).toEqual(['claude', 'gemini'])
     })
   })
 

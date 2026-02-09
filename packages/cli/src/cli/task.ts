@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { Command } from 'commander'
+import { RunManager } from '../orchestrator/runManager'
 import { Scheduler } from '../orchestrator/scheduler'
 import { Task } from '../orchestrator/task.types'
+import { TerminalFactory } from '../terminal/factory'
 import { logger } from '../utils/logger'
 
 export function registerTaskCommands(program: Command): void {
@@ -9,19 +11,23 @@ export function registerTaskCommands(program: Command): void {
 
   taskCmd
     .command('assign')
-    .argument('<agentTypeId>')
+    .argument('<platform>')
     .argument('<description>')
-    .description('Assign a simple task to a single agent type')
-    .action(async (agentTypeId: string, description: string) => {
+    .description('Assign a simple task to a platform')
+    .action(async (platform: string, description: string) => {
       const task: Task = {
         id: randomUUID(),
         description,
         requirements: [],
         acceptanceCriteria: [],
       }
-      const scheduler = new Scheduler()
-      const assignment = await scheduler.assignSingleAgent(task, agentTypeId)
-      logger.success(`Assigned task ${task.id} to ${agentTypeId} run=${assignment.runId}`)
+      const terminal = TerminalFactory.autoDetect()
+      const runManager = new RunManager()
+      const scheduler = new Scheduler(terminal, runManager)
+      const runId = await scheduler.spawnAgent(task.description, platform, {
+        useWorktree: false,
+      })
+      logger.success(`Assigned task ${task.id} to ${platform} run=${runId}`)
     })
 
   program.addCommand(taskCmd)

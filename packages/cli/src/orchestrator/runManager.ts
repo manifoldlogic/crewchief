@@ -3,13 +3,18 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ensureDirSync, writeJsonSync, readJsonSync } from '../utils/fs'
 
+/** Number of days to retain run entries before pruning. */
+export const RETENTION_DAYS = 30
+
 export interface PersistedRun {
   id: string
-  agentTypeId: string
+  platform: string
+  agentName: string | null
+  label: string
   task: string
   paneId: string
-  worktreePath: string
-  branchName?: string
+  workingDirectory: string
+  branchName: string | null
   status: 'running' | 'closed' | 'failed'
   startedAt: string
 }
@@ -33,22 +38,37 @@ export class RunManager {
   }
 
   private saveAll(runs: PersistedRun[]): void {
-    writeJsonSync(this.stateFile, { runs })
+    const pruned = this.pruneOldRuns(runs)
+    writeJsonSync(this.stateFile, { runs: pruned })
+  }
+
+  private pruneOldRuns(runs: PersistedRun[]): PersistedRun[] {
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000
+    return runs.filter((run) => {
+      if (!run.startedAt) return true
+      const runTime = new Date(run.startedAt).getTime()
+      if (Number.isNaN(runTime)) return true
+      return runTime >= cutoff
+    })
   }
 
   createRun(
-    agentTypeId: string,
+    platform: string,
     task: string,
     paneId: string,
-    worktreePath: string,
-    branchName?: string,
+    workingDirectory: string,
+    branchName: string | null,
+    agentName: string | null,
+    label: string,
   ): PersistedRun {
     const run: PersistedRun = {
       id: randomUUID(),
-      agentTypeId,
+      platform,
+      agentName,
+      label,
       task,
       paneId,
-      worktreePath,
+      workingDirectory,
       branchName,
       status: 'running',
       startedAt: new Date().toISOString(),
@@ -68,9 +88,8 @@ export class RunManager {
     return this.loadAll().find((r) => r.id === runId)
   }
 
-  getRunByAgentType(agentTypeId: string): PersistedRun | undefined {
-    // Convenience for mock agent-id equal to type id
-    return this.loadAll().find((r) => r.agentTypeId === agentTypeId && r.status === 'running')
+  getRunByPlatform(platform: string): PersistedRun | undefined {
+    return this.loadAll().find((r) => r.platform === platform && r.status === 'running')
   }
 
   updateRun(runId: string, patch: Partial<PersistedRun>): PersistedRun | undefined {

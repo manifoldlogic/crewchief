@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAgentType } from '../../agents/registry'
+import { resolveAgent, resolvePlatform } from '../../agents/platforms'
 import { busManager } from '../../bus'
 import { loadConfig } from '../../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../../git/worktrees'
 import type { TerminalProvider } from '../../terminal/interface'
 import { RunManager } from '../runManager'
 import { Scheduler } from '../scheduler'
+import type { SpawnOptions } from '../scheduler'
 
 // ---------------------------------------------------------------------------
 // Module mocks - must be hoisted before imports
@@ -14,8 +15,9 @@ vi.mock('../runManager', () => ({
   RunManager: vi.fn(),
 }))
 
-vi.mock('../../agents/registry', () => ({
-  getAgentType: vi.fn(),
+vi.mock('../../agents/platforms', () => ({
+  resolvePlatform: vi.fn(),
+  resolveAgent: vi.fn(),
 }))
 
 vi.mock('../../config/loader', () => ({
@@ -42,6 +44,11 @@ vi.mock('../../bus', () => ({
 // Test setup
 // ---------------------------------------------------------------------------
 let mockTerminal: TerminalProvider
+let mockRunManager: {
+  createRun: ReturnType<typeof vi.fn>
+  getRunBusPath: ReturnType<typeof vi.fn>
+  getRunDir: ReturnType<typeof vi.fn>
+}
 let runCommandSpy: ReturnType<typeof vi.fn<[string, string], Promise<void>>>
 
 beforeEach(() => {
@@ -55,13 +62,20 @@ beforeEach(() => {
     },
   } as Awaited<ReturnType<typeof loadConfig>>)
 
-  vi.mocked(getAgentType).mockReturnValue({
-    id: 'claude',
-    name: 'Claude',
-    platform: 'claude',
-    capabilities: ['code-generation', 'code-review'],
-    agentDefinitionPath: '/path/to/agent.yaml',
-    executionCommand: 'claude --agent',
+  // Mock resolveAgent - default returns bare claude command
+  vi.mocked(resolveAgent).mockReturnValue({
+    platform: { name: 'claude', command: 'claude', agentDir: '.claude/agents', agentExtensions: ['.md'] },
+    agentName: null,
+    agentPath: null,
+    command: 'claude',
+  })
+
+  // Mock resolvePlatform
+  vi.mocked(resolvePlatform).mockReturnValue({
+    name: 'claude',
+    command: 'claude',
+    agentDir: '.claude/agents',
+    agentExtensions: ['.md'],
   })
 
   // Mock WorktreeService constructor
@@ -74,24 +88,25 @@ beforeEach(() => {
 
   vi.mocked(buildDeterministicBranchName).mockReturnValue('test-branch')
 
-  // Mock RunManager constructor
-  vi.mocked(RunManager).mockImplementation(
-    () =>
-      ({
-        createRun: vi.fn().mockReturnValue({
-          id: 'test-run-uuid',
-          agentTypeId: 'claude',
-          task: 'test task',
-          paneId: 'pane-1',
-          worktreePath: '/path/to/worktree',
-          branchName: 'test-branch',
-          status: 'running' as const,
-          startedAt: new Date().toISOString(),
-        }),
-        getRunBusPath: vi.fn().mockImplementation((runId: string) => `/test/base/.crewchief/runs/${runId}/bus.jsonl`),
-        getRunDir: vi.fn().mockImplementation((runId: string) => `/test/base/.crewchief/runs/${runId}`),
-      }) as unknown as InstanceType<typeof RunManager>,
-  )
+  // Create a mock RunManager instance directly (not via constructor)
+  mockRunManager = {
+    createRun: vi.fn().mockReturnValue({
+      id: 'test-run-uuid',
+      platform: 'claude',
+      agentName: null,
+      label: 'test-task__claude',
+      task: 'test task',
+      paneId: 'pane-1',
+      workingDirectory: '/current/dir',
+      branchName: null,
+      status: 'running' as const,
+      startedAt: new Date().toISOString(),
+    }),
+    getRunBusPath: vi.fn().mockImplementation((runId: string) => `/test/base/.crewchief/runs/${runId}/bus.jsonl`),
+    getRunDir: vi.fn().mockImplementation((runId: string) => `/test/base/.crewchief/runs/${runId}`),
+  }
+
+  vi.mocked(RunManager).mockImplementation(() => mockRunManager as unknown as InstanceType<typeof RunManager>)
 
   runCommandSpy = vi.fn<[string, string], Promise<void>>().mockResolvedValue(undefined)
 
@@ -112,14 +127,264 @@ afterEach(() => {
 })
 
 // ---------------------------------------------------------------------------
-// Bus integration tests
+// spawnAgent tests
 // ---------------------------------------------------------------------------
-describe('Scheduler', () => {
+describe('Scheduler.spawnAgent', () => {
+  describe('without worktree (default path)', () => {
+    const defaultOptions: SpawnOptions = { useWorktree: false }
+
+    it('uses process.cwd() as working directory', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', defaultOptions)
+
+      // createWindow should receive cwd
+      expect(mockTerminal.createWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workingDirectory: process.cwd(),
+        }),
+      )
+    })
+
+    it('does NOT call loadConfig', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', defaultOptions)
+
+      expect(loadConfig).not.toHaveBeenCalled()
+    })
+
+    it('does NOT create a WorktreeService', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', defaultOptions)
+
+      expect(WorktreeService).not.toHaveBeenCalled()
+    })
+
+    it('passes branchName: null to RunManager', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', defaultOptions)
+
+      expect(mockRunManager.createRun).toHaveBeenCalledWith(
+        'claude', // platform
+        'fix bug', // task
+        'pane-1', // paneId
+        process.cwd(), // workingDirectory
+        null, // branchName
+        null, // agentName
+        'fix-bug__claude', // label
+      )
+    })
+
+    it('calls resolveAgent with cwd as projectDir', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', defaultOptions)
+
+      expect(resolveAgent).toHaveBeenCalledWith('claude', undefined, process.cwd())
+    })
+
+    it('returns the run ID', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      const runId = await scheduler.spawnAgent('fix bug', 'claude', defaultOptions)
+
+      expect(runId).toBe('test-run-uuid')
+    })
+  })
+
+  describe('with worktree', () => {
+    const worktreeOptions: SpawnOptions = { useWorktree: true }
+
+    it('calls loadConfig', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', worktreeOptions)
+
+      expect(loadConfig).toHaveBeenCalledTimes(1)
+    })
+
+    it('creates a WorktreeService and calls createWorktree', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', worktreeOptions)
+
+      expect(WorktreeService).toHaveBeenCalled()
+      const wtInstance = vi.mocked(WorktreeService).mock.results[0].value
+      expect(wtInstance.createWorktree).toHaveBeenCalledWith('test-branch', 'main', '/worktrees')
+    })
+
+    it('passes branch name to RunManager', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', worktreeOptions)
+
+      expect(mockRunManager.createRun).toHaveBeenCalledWith(
+        'claude',
+        'fix bug',
+        'pane-1',
+        '/path/to/worktree',
+        'test-branch', // branchName from buildDeterministicBranchName
+        null,
+        'fix-bug__claude',
+      )
+    })
+
+    it('uses worktree path as workingDirectory for terminal', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', worktreeOptions)
+
+      expect(mockTerminal.createWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workingDirectory: '/path/to/worktree',
+        }),
+      )
+    })
+
+    it('calls resolveAgent without projectDir (worktree not yet created)', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('fix bug', 'claude', worktreeOptions)
+
+      expect(resolveAgent).toHaveBeenCalledWith('claude', undefined, undefined)
+    })
+
+    it('throws when loadConfig fails (missing config)', async () => {
+      vi.mocked(loadConfig).mockRejectedValue(new Error('Config file not found'))
+
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await expect(scheduler.spawnAgent('fix bug', 'claude', worktreeOptions)).rejects.toThrow('Config file not found')
+    })
+  })
+
+  describe('agent resolution', () => {
+    it('passes agentName to resolveAgent when provided', async () => {
+      vi.mocked(resolveAgent).mockReturnValue({
+        platform: { name: 'claude', command: 'claude', agentDir: '.claude/agents', agentExtensions: ['.md'] },
+        agentName: 'code-review',
+        agentPath: '/project/.claude/agents/code-review.md',
+        command: 'claude --agent /project/.claude/agents/code-review.md',
+      })
+
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('review PR', 'claude', { useWorktree: false, agentName: 'code-review' })
+
+      expect(resolveAgent).toHaveBeenCalledWith('claude', 'code-review', process.cwd())
+    })
+
+    it('records agentName in RunManager when provided', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('review PR', 'claude', { useWorktree: false, agentName: 'code-review' })
+
+      expect(mockRunManager.createRun).toHaveBeenCalledWith(
+        'claude',
+        'review PR',
+        'pane-1',
+        process.cwd(),
+        null,
+        'code-review', // agentName recorded
+        'review-pr__claude', // label
+      )
+    })
+
+    it('uses resolved command for execution', async () => {
+      vi.mocked(resolveAgent).mockReturnValue({
+        platform: { name: 'claude', command: 'claude', agentDir: '.claude/agents', agentExtensions: ['.md'] },
+        agentName: 'code-review',
+        agentPath: '/project/.claude/agents/code-review.md',
+        command: 'claude --agent /project/.claude/agents/code-review.md',
+      })
+
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('review PR', 'claude', { useWorktree: false, agentName: 'code-review' })
+
+      const command = runCommandSpy.mock.calls[0][1] as string
+      expect(command).toContain('claude --agent /project/.claude/agents/code-review.md')
+    })
+  })
+
+  describe('unknown platform (custom fallback)', () => {
+    it('resolveAgent handles unknown platforms gracefully', async () => {
+      vi.mocked(resolveAgent).mockReturnValue({
+        platform: { name: 'mycustomtool', command: 'mycustomtool', agentDir: null, agentExtensions: [] },
+        agentName: null,
+        agentPath: null,
+        command: 'mycustomtool',
+      })
+
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      const runId = await scheduler.spawnAgent('do stuff', 'mycustomtool', { useWorktree: false })
+
+      expect(runId).toBe('test-run-uuid')
+      expect(resolveAgent).toHaveBeenCalledWith('mycustomtool', undefined, process.cwd())
+
+      const command = runCommandSpy.mock.calls[0][1] as string
+      expect(command).toContain('mycustomtool')
+    })
+  })
+
+  describe('label generation', () => {
+    it('generates label as slugify(task) + "__" + platformName', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('Fix Login Bug!', 'claude', { useWorktree: false })
+
+      // slugify("Fix Login Bug!") => "fix-login-bug"
+      expect(mockTerminal.createWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'fix-login-bug__claude',
+        }),
+      )
+
+      expect(mockRunManager.createRun).toHaveBeenCalledWith(
+        'claude',
+        'Fix Login Bug!',
+        'pane-1',
+        process.cwd(),
+        null,
+        null,
+        'fix-login-bug__claude',
+      )
+    })
+  })
+
+  describe('terminal provider WindowOptions', () => {
+    it('passes platform in WindowOptions', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('task', 'gemini', { useWorktree: false })
+
+      expect(mockTerminal.createWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          platform: 'gemini',
+        }),
+      )
+    })
+
+    it('passes title (label) in WindowOptions', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('my task', 'claude', { useWorktree: false })
+
+      expect(mockTerminal.createWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'my-task__claude',
+        }),
+      )
+    })
+  })
+
+  describe('RunManager 7-param call', () => {
+    it('calls createRun with all 7 parameters', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('my task', 'claude', { useWorktree: false, agentName: 'reviewer' })
+
+      expect(mockRunManager.createRun).toHaveBeenCalledTimes(1)
+      const args = mockRunManager.createRun.mock.calls[0]
+      expect(args).toHaveLength(7)
+      expect(args[0]).toBe('claude') // platform
+      expect(args[1]).toBe('my task') // task
+      expect(args[2]).toBe('pane-1') // paneId
+      expect(args[3]).toBe(process.cwd()) // workingDirectory
+      expect(args[4]).toBeNull() // branchName (no worktree)
+      expect(args[5]).toBe('reviewer') // agentName
+      expect(args[6]).toBe('my-task__claude') // label
+    })
+  })
+
   describe('bus integration', () => {
     it('calls busManager.startFollowing before terminal.runCommand', async () => {
       const callOrder: string[] = []
 
-      // Track call order using the mocked busManager
       vi.mocked(busManager.startFollowing).mockImplementation(() => {
         callOrder.push('startFollowing')
       })
@@ -127,15 +392,15 @@ describe('Scheduler', () => {
         callOrder.push('runCommand')
       })
 
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('test task', 'claude', { useWorktree: false })
 
       expect(callOrder).toEqual(['startFollowing', 'runCommand'])
     })
 
     it('passes correct runId and busPath to startFollowing', async () => {
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('test task', 'claude', { useWorktree: false })
 
       expect(busManager.startFollowing).toHaveBeenCalledTimes(1)
       expect(busManager.startFollowing).toHaveBeenCalledWith(
@@ -145,91 +410,51 @@ describe('Scheduler', () => {
     })
 
     it('includes CREWCHIEF_BUS_PATH in command string', async () => {
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('test task', 'claude', { useWorktree: false })
 
-      expect(runCommandSpy).toHaveBeenCalledTimes(1)
       const command = runCommandSpy.mock.calls[0][1] as string
       expect(command).toContain('CREWCHIEF_BUS_PATH=')
     })
+  })
 
-    it('CREWCHIEF_BUS_PATH value matches getRunBusPath output', async () => {
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      const command = runCommandSpy.mock.calls[0][1] as string
-      const expectedBusPath = '/test/base/.crewchief/runs/test-run-uuid/bus.jsonl'
-
-      // The bus path should be JSON-escaped in the command
-      expect(command).toContain(`CREWCHIEF_BUS_PATH=${JSON.stringify(expectedBusPath)}`)
-    })
-
-    it('command string properly quotes/escapes bus path', async () => {
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
+  describe('extraArgs', () => {
+    it('appends extra args to the command', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('task', 'claude', { useWorktree: false, extraArgs: '--verbose --timeout 30' })
 
       const command = runCommandSpy.mock.calls[0][1] as string
-
-      // Should have the format: cd "..." && CREWCHIEF_BUS_PATH="..." exec
-      expect(command).toMatch(/cd\s+".+" && CREWCHIEF_BUS_PATH="[^"]+" .+/)
+      expect(command).toContain('claude --verbose --timeout 30')
     })
 
-    it('startFollowing is called after createRun', async () => {
-      // Import RunManager to check createRun was called
-      const { RunManager } = await import('../runManager')
+    it('does not append extra args when not provided', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('task', 'claude', { useWorktree: false })
 
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      // Both should have been called
-      const rmInstance = (RunManager as ReturnType<typeof vi.fn>).mock.results[0].value
-      expect(rmInstance.createRun).toHaveBeenCalledTimes(1)
-      expect(busManager.startFollowing).toHaveBeenCalledTimes(1)
-
-      // startFollowing uses the run ID from createRun
-      expect(busManager.startFollowing).toHaveBeenCalledWith('test-run-uuid', expect.stringContaining('test-run-uuid'))
+      const command = runCommandSpy.mock.calls[0][1] as string
+      // Command should just be 'claude' without trailing args
+      expect(command).toMatch(/CREWCHIEF_BUS_PATH="[^"]*" claude$/)
     })
   })
 
-  describe('command construction', () => {
-    it('command includes cd to worktree path', async () => {
+  describe('constructor', () => {
+    it('requires terminal provider', () => {
+      // Scheduler constructor requires terminal provider as first argument
       const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      const command = runCommandSpy.mock.calls[0][1] as string
-      expect(command).toContain('cd "/path/to/worktree"')
+      expect(scheduler).toBeDefined()
     })
 
-    it('command includes agent execution after bus path env var', async () => {
-      const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
-
-      const command = runCommandSpy.mock.calls[0][1] as string
-
-      // The command should end with the execution command
-      expect(command).toContain('claude --agent')
-
-      // Bus path should come before execution command
-      const busPathIndex = command.indexOf('CREWCHIEF_BUS_PATH=')
-      const execIndex = command.indexOf('claude --agent')
-      expect(busPathIndex).toBeLessThan(execIndex)
+    it('accepts optional RunManager', () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      expect(scheduler).toBeDefined()
     })
 
-    it('uses && to chain commands', async () => {
+    it('falls back to new RunManager() when not provided', async () => {
       const scheduler = new Scheduler(mockTerminal)
-      await scheduler.assignSingleAgent('test task', 'claude')
+      await scheduler.spawnAgent('task', 'claude', { useWorktree: false })
 
-      const command = runCommandSpy.mock.calls[0][1] as string
-      expect(command).toContain(' && ')
-    })
-  })
-
-  describe('return value', () => {
-    it('returns run id', async () => {
-      const scheduler = new Scheduler(mockTerminal)
-      const runId = await scheduler.assignSingleAgent('test task', 'claude')
-
-      expect(runId).toBe('test-run-uuid')
+      // RunManager constructor should have been called (fallback)
+      expect(RunManager).toHaveBeenCalled()
     })
   })
 })
@@ -253,10 +478,6 @@ describe('Scheduler bus integration (E2E)', () => {
   })
 
   it('end-to-end: messages written via helper are readable by BusManager', async () => {
-    // This test simulates the full flow:
-    // 1. Agent writes via CrossProcessBusWriter (what agentBusHelper uses)
-    // 2. BusManager reads via CrossProcessBusReader
-    // This validates the scheduler integration would work
     const { BusManager } = await import('../../bus/busManager')
     const { CrossProcessBusWriter } = await import('../../bus/crossProcessBusWriter')
     const path = await import('node:path')
@@ -269,10 +490,8 @@ describe('Scheduler bus integration (E2E)', () => {
       intervalMs: 25,
     })
 
-    // Simulate scheduler starting to follow BEFORE agent runs
     manager.startFollowing('test-run', busPath)
 
-    // Simulate agent writing immediately (as agentBusHelper would)
     const writer = new CrossProcessBusWriter(busPath)
     writer.write({
       type: 'status',
@@ -282,7 +501,6 @@ describe('Scheduler bus integration (E2E)', () => {
       timestamp: new Date(),
     })
 
-    // Wait for polling to pick up the message
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     manager.stopAll()
@@ -294,9 +512,6 @@ describe('Scheduler bus integration (E2E)', () => {
   })
 
   it('early messages not missed when following starts before write', async () => {
-    // This tests the critical timing requirement:
-    // busManager.startFollowing() is called BEFORE the agent writes
-    // The LogFollower handles file-not-yet-existing gracefully
     const { BusManager } = await import('../../bus/busManager')
     const { CrossProcessBusWriter } = await import('../../bus/crossProcessBusWriter')
     const path = await import('node:path')
@@ -309,13 +524,10 @@ describe('Scheduler bus integration (E2E)', () => {
       intervalMs: 25,
     })
 
-    // Start following BEFORE file exists (mimics scheduler behavior)
     manager.startFollowing('early-run', busPath)
 
-    // Small delay to ensure reader is polling
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    // Now agent writes immediately (simulating immediate write on spawn)
     const writer = new CrossProcessBusWriter(busPath)
     writer.write({
       type: 'status',
@@ -325,12 +537,10 @@ describe('Scheduler bus integration (E2E)', () => {
       timestamp: new Date(),
     })
 
-    // Wait for polling
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     manager.stopAll()
 
-    // Early message should have been captured
     expect(messages).toHaveLength(1)
     expect(messages[0].from).toBe('early-agent')
     expect((messages[0].payload as { activity: string }).activity).toBe('immediate write')

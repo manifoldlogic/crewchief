@@ -95,7 +95,7 @@ export function registerRunsCommands(program: Command): void {
         return
       }
       for (const run of list) {
-        logger.info(`${run.id} ${run.agentTypeId} [${run.status}] ${run.worktreePath} pane=${run.paneId}`)
+        logger.info(`${run.id} ${run.platform} [${run.status}] ${run.workingDirectory} pane=${run.paneId}`)
       }
     })
 

@@ -46,7 +46,8 @@ export class ITermProvider implements TerminalProvider {
       throw new Error('iTerm scripts not found')
     }
 
-    const args = [join(this.scriptsDir, 'spawn_agent.py'), 'claude']
+    const platform = options?.platform ?? 'claude'
+    const args = [join(this.scriptsDir, 'spawn_agent.py'), platform]
     if (options?.title) {
       args.push('--name', options.title)
     }
@@ -116,12 +117,12 @@ export class ITermProvider implements TerminalProvider {
   async sendMessage(paneId: string, message: string): Promise<boolean> {
     if (!this.scriptsDir) return false
 
-    // Extract agent type from paneId (format: name__type) for proper Enter key handling
-    const agentType = this.parseAgentType(paneId)
+    // Extract agent platform from paneId (format: name__platform) for proper Enter key handling
+    const agentPlatform = this.parseAgentPlatform(paneId)
 
     const args = [join(this.scriptsDir, 'send_to_pane.py'), '--to', paneId, '--text', message]
-    if (agentType && agentType !== 'unknown') {
-      args.push('--agent', agentType)
+    if (agentPlatform && agentPlatform !== 'unknown') {
+      args.push('--agent', agentPlatform)
     }
 
     const result = spawnSync('python3', args, { encoding: 'utf-8' })
@@ -153,13 +154,13 @@ export class ITermProvider implements TerminalProvider {
       const match = line.match(/\[([^\]]+)\].*ID:(\S+)/)
       if (match) {
         const [, label, sessionId] = match
-        // Filter for agent panes (name__type format)
+        // Filter for agent panes (name__platform format)
         if (label.includes('__')) {
           const parts = label.split('__')
           agents.push({
             id: sessionId,
             name: label,
-            type: parts[parts.length - 1],
+            platform: parts[parts.length - 1],
             status: 'running', // iTerm panes are always running (if they exist)
           })
         }
@@ -169,9 +170,9 @@ export class ITermProvider implements TerminalProvider {
   }
 
   /**
-   * Extract agent type from paneId (format: name__type)
+   * Extract agent platform from paneId (format: name__platform)
    */
-  private parseAgentType(paneId: string): string {
+  private parseAgentPlatform(paneId: string): string {
     const parts = paneId.split('__')
     return parts.length > 1 ? parts[parts.length - 1] : 'unknown'
   }

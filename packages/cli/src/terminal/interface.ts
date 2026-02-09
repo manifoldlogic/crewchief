@@ -2,6 +2,11 @@ export interface WindowOptions {
   title?: string
   profile?: string
   workingDirectory?: string
+  /**
+   * Platform name (e.g., 'claude', 'gemini', 'aider').
+   * If not provided, providers may fall back to a default platform.
+   */
+  platform?: string
 }
 
 export type SplitDirection = 'vertical' | 'horizontal'
@@ -12,10 +17,12 @@ export type SplitDirection = 'vertical' | 'horizontal'
 export interface AgentInfo {
   /** Pane ID or process ID */
   id: string
-  /** Human-readable name (typically task__type format) */
+  /** Human-readable name (typically task__platform format) */
   name: string
-  /** Agent type: claude, gemini, codex, etc. */
-  type: string
+  /**
+   * Platform name (e.g., 'claude', 'gemini', 'aider').
+   */
+  platform: string
   /** Current status */
   status: 'running' | 'stopped'
 }

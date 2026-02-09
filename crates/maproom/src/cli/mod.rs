@@ -5,5 +5,7 @@
 
 pub mod cache;
 pub mod clean_ignored;
+pub mod format;
 
 pub use cache::CacheCommand;
+pub use format::OutputFormat;

@@ -100,7 +100,7 @@ describe('CLI UX Integration', () => {
 
       expect(result.status).toBe(0)
       expect(result.stdout).toContain('spawn')
-      expect(result.stdout).toContain('--headless')
+      expect(result.stdout).toContain('--worktree')
     })
 
     it('agent --help shows spawn subcommand', () => {
@@ -154,12 +154,10 @@ describe('CLI UX Integration', () => {
         encoding: 'utf-8',
       })
 
-      expect(result.stdout).toContain('-n, --name')
-      expect(result.stdout).toContain('-v, --vertical')
-      expect(result.stdout).toContain('-a, --args')
-      expect(result.stdout).toContain('--no-label')
-      expect(result.stdout).toContain('--backend')
-      expect(result.stdout).toContain('--headless')
+      expect(result.stdout).toContain('--worktree')
+      expect(result.stdout).toContain('--agent <name>')
+      expect(result.stdout).toContain('--args <string>')
+      expect(result.stdout).toContain('-v, --verbose')
     })
   })
 })

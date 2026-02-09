@@ -1,62 +1,131 @@
 import { RunManager } from './runManager'
-import { getAgentType } from '../agents/registry'
+import { resolveAgent } from '../agents/platforms'
 import { busManager } from '../bus'
 import { loadConfig } from '../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
 import { TerminalProvider } from '../terminal/interface'
 
+// ---------------------------------------------------------------------------
+// SpawnOptions - configuration for the new spawnAgent() method
+// ---------------------------------------------------------------------------
+
+/**
+ * Options controlling how an agent is spawned.
+ *
+ * By default (`useWorktree: false`), the agent runs in `process.cwd()` with
+ * no configuration file required. Setting `useWorktree: true` loads the
+ * CrewChief config and creates a dedicated git worktree for the agent.
+ */
+export interface SpawnOptions {
+  /** When true, create a git worktree and load config. Default: false */
+  useWorktree: boolean
+  /** Agent name passed via --agent flag (e.g., 'code-review'). Optional. */
+  agentName?: string
+  /** Enable verbose logging. Optional. */
+  verbose?: boolean
+  /** Extra CLI arguments appended to the agent command. Optional. */
+  extraArgs?: string
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert an arbitrary string to a URL/branch-safe slug.
+ */
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+}
+
+// ---------------------------------------------------------------------------
+// Scheduler
+// ---------------------------------------------------------------------------
+
 export class Scheduler {
-  constructor(private terminal: TerminalProvider) {}
+  constructor(
+    private terminal: TerminalProvider,
+    private runManager?: RunManager,
+  ) {}
 
-  async assignSingleAgent(task: string, agentTypeId: string): Promise<string> {
-    const config = await loadConfig()
-    const wt = new WorktreeService()
+  // -------------------------------------------------------------------------
+  // New method: spawnAgent (config-free by default)
+  // -------------------------------------------------------------------------
 
-    // Ensure branch name is unique if the task is generic, but deterministic if task is specific
-    const branchName = buildDeterministicBranchName({ agentTypeId, taskDescription: task })
+  /**
+   * Spawn an agent to work on a task.
+   *
+   * Branching logic:
+   * - `useWorktree: false` (default) -- uses `process.cwd()`, no config needed
+   * - `useWorktree: true` -- loads config, creates a git worktree
+   *
+   * @returns The run ID
+   */
+  async spawnAgent(task: string, platformName: string, options: SpawnOptions): Promise<string> {
+    // 1. Resolve platform and agent
+    const workingDirForAgentLookup = options.useWorktree ? undefined : process.cwd()
+    const resolvedAgent = resolveAgent(platformName, options.agentName, workingDirForAgentLookup)
 
-    // Create worktree first
-    const worktreePath = await wt.createWorktree(
-      branchName,
-      config.repository.mainBranch,
-      config.repository.worktreeBasePath,
-    )
+    // 2. Determine working directory (branch logic)
+    let effectiveWorkingDir: string
+    let branchName: string | null = null
 
-    // Create window/pane via provider
-    // We use the provider to create a window/pane. For iTerm this makes a visual pane.
-    // For headless this spawns a process logically.
+    if (options.useWorktree) {
+      const config = await loadConfig() // May throw if missing -- intentional
+      const wt = new WorktreeService()
+      const label = slugify(task)
+      branchName = buildDeterministicBranchName({
+        platform: platformName,
+        taskDescription: label,
+      })
+      effectiveWorkingDir = await wt.createWorktree(
+        branchName,
+        config.repository.mainBranch,
+        config.repository.worktreeBasePath,
+      )
+    } else {
+      effectiveWorkingDir = process.cwd()
+    }
+
+    // 3. Generate label and create terminal window
+    const label = `${slugify(task)}__${platformName}`
     const paneId = await this.terminal.createWindow({
-      workingDirectory: worktreePath,
-      title: `${agentTypeId}: ${task.slice(0, 20)}...`,
+      workingDirectory: effectiveWorkingDir,
+      title: label,
+      platform: platformName,
     })
 
-    const type = getAgentType(agentTypeId)
-    if (!type) throw new Error(`Unknown agent type: ${agentTypeId}`)
+    // 4. Record run with RunManager (7-param signature from AGENTDX.2005)
+    const rm = this.runManager ?? new RunManager()
+    const run = rm.createRun(
+      platformName,
+      task,
+      paneId,
+      effectiveWorkingDir,
+      branchName,
+      options.agentName || null,
+      label,
+    )
 
-    const rm = new RunManager()
-    const run = rm.createRun(agentTypeId, task, paneId, worktreePath, branchName)
-
-    // Compute bus path for cross-process messaging
+    // 5. Compute bus path for cross-process messaging
     const busPath = rm.getRunBusPath(run.id)
 
     // Start following BEFORE runCommand to avoid missing early messages
-    // LogFollower handles file-not-yet-existing gracefully
     busManager.startFollowing(run.id, busPath)
 
-    // Determine execution command
-    const exec = type.executionCommand.includes('scripts/mock-agent.js')
-      ? `node ${JSON.stringify(process.cwd() + '/scripts/mock-agent.js')}`
-      : type.executionCommand
+    // 6. Build and execute agent command
+    let command = resolvedAgent.command
+    if (options.extraArgs) {
+      command = `${command} ${options.extraArgs}`
+    }
 
-    // Run the agent in the terminal pane/process
-    // Note: HeadlessProvider runCommand spawns a process. ITermProvider sends keys to running shell.
-    // For iTerm, we need to cd first if not already in cwd (createWindow might handle it)
-    // But let's be safe and chain it.
-    // Headless provider's runCommand uses `child_process.spawn(cmd, {shell: true})`, so chaining works there too.
-    // Pass CREWCHIEF_BUS_PATH to agent environment for cross-process messaging
     await this.terminal.runCommand(
       paneId,
-      `cd ${JSON.stringify(worktreePath)} && CREWCHIEF_BUS_PATH=${JSON.stringify(busPath)} ${exec}`,
+      `cd ${JSON.stringify(effectiveWorkingDir)} && CREWCHIEF_BUS_PATH=${JSON.stringify(busPath)} ${command}`,
     )
 
     return run.id

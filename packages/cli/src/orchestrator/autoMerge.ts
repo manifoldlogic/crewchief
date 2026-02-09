@@ -10,7 +10,7 @@ export async function evaluateAndMaybeMerge(
   const run = rm.getRun(runId)
   if (!run) throw new Error('Run not found')
   const runDir = rm.getRunDir(runId)
-  const summary = await runDefaultChecks(run.worktreePath, runDir)
+  const summary = await runDefaultChecks(run.workingDirectory, runDir)
 
   const config = await loadConfig()
   const threshold = config.evaluation.autoMergeThreshold ?? 0.95

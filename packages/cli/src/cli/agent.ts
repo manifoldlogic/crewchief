@@ -1,21 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import chalk from 'chalk'
 import { Command } from 'commander'
+import { listPlatforms, listAgentsForPlatform } from '../agents/platforms'
 import { ITermSimpleService } from '../iterm/iterm-simple.service'
 import { RunManager } from '../orchestrator/runManager'
-import { Scheduler } from '../orchestrator/scheduler'
+import { Scheduler, SpawnOptions } from '../orchestrator/scheduler'
 import { TerminalFactory } from '../terminal/factory'
 import { logger } from '../utils/logger'
-
-interface SpawnOptions {
-  name?: string
-  vertical?: boolean
-  args?: string
-  noLabel?: boolean
-  backend?: string
-  headless?: boolean
-}
 
 /** Known backend identifiers accepted by --backend */
 export const VALID_BACKENDS = ['iterm', 'tmux', 'headless', 'auto'] as const
@@ -117,15 +108,15 @@ Examples:
         // Send to each target agent
         let successCount = 0
         for (const agentName of targetAgents) {
-          // Parse agent type from name (format: name__type)
-          let agentType: string | undefined
+          // Parse platform from name (format: name__platform)
+          let platform: string | undefined
           if (agentName.includes('__')) {
             const parts = agentName.split('__')
-            agentType = parts[parts.length - 1]
+            platform = parts[parts.length - 1]
           }
 
-          // Use iTerm2 with agent-specific Enter key (chr(13) for Claude, etc.)
-          const success = iterm.sendKeys(agentName, textToSend, agentType)
+          // Use iTerm2 with platform-specific Enter key (chr(13) for Claude, etc.)
+          const success = iterm.sendKeys(agentName, textToSend, platform)
           if (success) {
             successCount++
             if (options.file) {
@@ -180,10 +171,10 @@ Examples:
         logger.info('Running agents:')
         agentPanes.forEach((pane, idx) => {
           const parts = pane.label.split('__')
-          const agentType = parts[parts.length - 1]
+          const platform = parts[parts.length - 1]
           const taskName = parts.slice(0, -1).join('__')
           logger.info(`  ${idx + 1}. ${pane.label}`)
-          logger.info(`     Type: ${agentType}, Task: ${taskName}`)
+          logger.info(`     Platform: ${platform}, Task: ${taskName}`)
           logger.info(`     Session: ${pane.sessionId.substring(0, 8)}...`)
         })
 
@@ -201,7 +192,7 @@ Examples:
     .description('Close an agent (requires manual pane closure)')
     .action(async (agentId: string) => {
       const rm = new RunManager()
-      const run = rm.getRunByAgentType(agentId)
+      const run = rm.getRunByPlatform(agentId)
       if (!run) {
         logger.warn(`Agent ${agentId} not running`)
         return
@@ -212,171 +203,140 @@ Examples:
     })
 
   agent
-    .command('spawn')
-    .description('Spawn AI agent(s) in dedicated terminal pane(s)')
-    .argument('<agents>', 'Agent type(s) - single or comma-separated (e.g., claude or claude,gemini)')
-    .argument('[task]', 'Optional task description to include in agent name(s)')
-    .option('-n, --name <name>', 'Custom name for the agent')
-    .option('-v, --vertical', 'Split pane vertically instead of horizontally')
-    .option('-a, --args <args>', 'Additional arguments to pass to the agent command')
-    .option('--no-label', 'Skip labeling the pane')
-    .option('--backend <backend>', 'Terminal backend (iterm|tmux|headless|auto, default: auto)')
-    .option('--headless', 'Force headless mode (no terminal UI)')
+    .command('platforms')
+    .description('List available platforms and named agents')
     .addHelpText(
       'after',
       `
-Examples:
-  Spawn a Claude agent:
-    crewchief agent spawn claude "fix login bug"
+This command shows:
+  - Built-in platforms (claude, gemini, codex, aider)
+  - Named agent definitions found in your project
 
-  Spawn in vertical split:
-    crewchief agent spawn claude -v "add tests"
-
-  Spawn in headless mode:
-    crewchief agent spawn gemini --headless "refactor module"
-
-  Spawn multiple agents:
-    crewchief agent spawn claude,gemini "review code"
-
-  Spawn with explicit tmux backend (Linux/server):
-    crewchief agent spawn claude "fix bug" --backend tmux
-
-  Spawn with explicit iTerm2 backend (macOS):
-    crewchief agent spawn claude "add tests" --backend iterm
-
-  Spawn with explicit headless backend:
-    crewchief agent spawn claude "refactor" --backend headless
-
-  Auto-detect backend (default):
-    crewchief agent spawn claude "implement feature" --backend auto
-
-Backend Options:
-  iterm    - iTerm2 terminal (macOS only, requires iTerm.app)
-  tmux     - tmux multiplexer (Linux/macOS, requires tmux >= 2.1)
-  headless - Background process (no terminal UI, logs to files)
-  auto     - Auto-detect based on environment (default)
+Use this to discover what's available before spawning.
 `,
     )
-    .action(async (agents: string, task: string | undefined, options: SpawnOptions) => {
-      try {
-        // Validate --backend option if provided
-        if (options.backend && !validateBackend(options.backend)) {
-          logger.error(`Invalid backend: ${options.backend}\n` + `Valid options: ${VALID_BACKENDS.join(', ')}`)
-          process.exit(1)
-        }
+    .action(async () => {
+      const platforms = listPlatforms()
+      const projectDir = process.cwd()
 
-        // Warn if both --headless and --backend are specified (--headless takes precedence)
-        if (options.headless && options.backend && options.backend !== 'headless' && options.backend !== 'auto') {
-          logger.warn(`Both --headless and --backend ${options.backend} specified. ` + '--headless takes precedence.')
-        }
+      console.log('\nAvailable Platforms:\n')
 
-        // Determine terminal provider: --headless > --backend > auto-detect
-        let terminal
-        if (options.headless) {
-          terminal = TerminalFactory.getProvider('headless')
-        } else if (options.backend && options.backend !== 'auto') {
-          terminal = TerminalFactory.getProvider(options.backend as 'iterm' | 'tmux' | 'headless')
-        } else {
-          terminal = TerminalFactory.autoDetect()
-        }
+      for (const platform of platforms) {
+        let agentsDisplay = 'N/A'
 
-        // Initialize with helpful error messages on failure
-        try {
-          await terminal.initialize()
-        } catch (initErr: unknown) {
-          const initMessage = initErr instanceof Error ? initErr.message : String(initErr)
-          logger.error(`Failed to initialize ${options.backend || 'auto-detected'} backend: ${initMessage}`)
-
-          if (initMessage.includes('tmux not found') || initMessage.includes('tmux: not found')) {
-            logger.info(
-              'Install tmux:\n' +
-                '  Ubuntu/Debian: sudo apt install tmux\n' +
-                '  macOS: brew install tmux\n' +
-                '  Or use --backend headless for non-terminal operation',
-            )
-          } else if (initMessage.includes('iTerm') || initMessage.includes('iterm')) {
-            logger.info(
-              'iTerm2 is macOS-only. On Linux, use:\n' +
-                '  --backend tmux   (terminal multiplexer)\n' +
-                '  --backend headless (background process)',
-            )
-          } else if (initMessage.includes('too old') || initMessage.includes('version')) {
-            logger.info(
-              'Upgrade tmux:\n' +
-                '  Ubuntu/Debian: sudo apt update && sudo apt install tmux\n' +
-                '  macOS: brew upgrade tmux',
-            )
-          } else {
-            logger.info('Try --backend headless for non-terminal operation')
-          }
-
-          process.exit(1)
-        }
-
-        // Use the Scheduler architecture
-        const scheduler = new Scheduler(terminal)
-
-        // Parse comma-separated agent types
-        const agentTypes = agents
-          .split(',')
-          .map((a) => a.trim())
-          .filter((a) => a.length > 0)
-
-        if (agentTypes.length === 0) {
-          console.error(chalk.red('No valid agent types specified'))
-          process.exit(1)
-        }
-
-        // Determine effective task name/description
-        const effectiveTask = task || options.name || `agent-${Date.now()}`
-
-        if (agentTypes.length === 1) {
-          // Single agent - existing logic
-          console.log(chalk.cyan(`Spawning agent ${agentTypes[0]} via ${terminal.id}...`))
-
-          const runId = await scheduler.assignSingleAgent(effectiveTask, agentTypes[0])
-
-          console.log(chalk.green(`Agent spawned successfully [Run ID: ${runId}]`))
-        } else {
-          // Multi-agent spawn
-          console.log(chalk.cyan(`Spawning ${agentTypes.length} agents via ${terminal.id}...`))
-
-          const results = await Promise.allSettled(
-            agentTypes.map((type) => scheduler.assignSingleAgent(effectiveTask, type)),
-          )
-
-          // Report results for each agent
-          let successCount = 0
-          results.forEach((result, i) => {
-            if (result.status === 'fulfilled') {
-              console.log(chalk.green(`${agentTypes[i]}: spawned [Run ID: ${result.value}]`))
-              successCount++
+        if (platform.agentDir) {
+          try {
+            const agents = listAgentsForPlatform(platform.name, projectDir)
+            if (agents.length > 0) {
+              const displayAgents = agents.sort().slice(0, 5)
+              agentsDisplay = displayAgents.join(', ')
+              if (agents.length > 5) {
+                agentsDisplay += ` ... (${agents.length - 5} more)`
+              }
             } else {
-              console.log(chalk.red(`${agentTypes[i]}: ${result.reason?.message || result.reason}`))
+              agentsDisplay = '(none found)'
             }
-          })
-
-          console.log(chalk.cyan(`\nSummary: ${successCount}/${agentTypes.length} agents spawned successfully`))
-
-          if (successCount === 0) {
-            process.exit(1)
+          } catch {
+            agentsDisplay = '(error scanning)'
           }
         }
 
-        if (terminal.id === 'headless') {
-          console.log(chalk.blue('Running in headless mode. Press Ctrl+C to stop all agents.'))
-          // Keep the process alive to stream logs and manage child processes
-          await new Promise(() => {})
-        } else {
-          // For iTerm, we can exit, the window is independent
-          process.exit(0)
-        }
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
-        console.error(chalk.red('Error spawning agent:'), message)
-        process.exit(1)
+        console.log(`Platform: ${platform.name}`)
+        console.log(`  Command: ${platform.command}`)
+        console.log(`  Agent Dir: ${platform.agentDir || 'N/A'}`)
+        console.log(`  Named Agents: ${agentsDisplay}`)
+        console.log('')
       }
     })
+
+  agent
+    .command('spawn')
+    .description('Spawn an AI coding agent on a task')
+    .argument('<platforms>', 'Platform(s) - single or comma-separated (e.g., claude or claude,gemini)')
+    .argument('[task]', 'Task description (auto-generated if omitted)')
+    .option('--worktree', 'Create isolated git worktree for this task', false)
+    .option('--agent <name>', 'Use named agent definition (e.g., backend-developer)')
+    .option(
+      '--args <string>',
+      'Extra arguments to pass to platform CLI. WARNING: Values are passed directly to the shell. Use caution with untrusted input.',
+    )
+    .option('-v, --verbose', 'Verbose logging')
+    .addHelpText(
+      'after',
+      `
+QUICK START:
+  crewchief agent spawn claude "fix the login bug"
+
+WHAT HAPPENS:
+  1. Resolves the platform (claude, gemini, aider, codex, or any command)
+  2. Opens a terminal pane labeled <task>__<platform>
+  3. Runs the platform command in that pane
+
+EXAMPLES:
+  # Simplest: spawn Claude on a task
+  crewchief agent spawn claude "fix the login bug"
+
+  # Use a named agent definition
+  crewchief agent spawn claude --agent backend-developer "fix the login bug"
+
+  # Spawn in an isolated git worktree
+  crewchief agent spawn claude --worktree "fix the login bug"
+
+  # Spawn multiple platforms at once
+  crewchief agent spawn claude,gemini "review the code"
+
+  # Pass extra flags to the platform CLI
+  crewchief agent spawn claude --args "--dangerously-skip-permissions" "fix bug"
+
+SEE ALSO:
+  crewchief agent platforms    List available platforms and named agents
+  crewchief agent list         List running agents
+  crewchief agent message      Send a message to a running agent
+`,
+    )
+    .action(
+      async (
+        platformsStr: string,
+        task: string | undefined,
+        options: { worktree: boolean; agent?: string; args?: string; verbose?: boolean },
+      ) => {
+        // 1. Parse platforms
+        const platforms = platformsStr
+          .split(',')
+          .map((p) => p.trim())
+          .filter((p) => p.length > 0)
+
+        if (platforms.length === 0) {
+          console.error('Error: No valid platforms specified')
+          process.exit(1)
+        }
+
+        // 2. Generate task name if not provided
+        const effectiveTask = task || `task-${Date.now()}`
+
+        // 3. Create scheduler
+        const terminal = TerminalFactory.autoDetect()
+        const runManager = new RunManager()
+        const scheduler = new Scheduler(terminal, runManager)
+
+        // 4. Spawn each platform sequentially
+        for (const platform of platforms) {
+          try {
+            const spawnOptions: SpawnOptions = {
+              useWorktree: options.worktree,
+              agentName: options.agent,
+              verbose: options.verbose,
+              extraArgs: options.args,
+            }
+            const runId = await scheduler.spawnAgent(effectiveTask, platform, spawnOptions)
+            console.log(`Spawned ${platform} agent: ${runId}`)
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error)
+            console.error(`Failed to spawn ${platform}: ${message}`)
+          }
+        }
+      },
+    )
 
   program.addCommand(agent)
 }

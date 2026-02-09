@@ -139,10 +139,10 @@ Examples:
           return
         }
         for (const item of list) {
-          const run = runs.find((r) => r.worktreePath === item.path && r.status === 'running')
+          const run = runs.find((r) => r.workingDirectory === item.path && r.status === 'running')
           const suffix = [
             item.branch ? `[${item.branch}]` : undefined,
-            run ? `agent=${run.agentTypeId}` : undefined,
+            run ? `platform=${run.platform}` : undefined,
             run ? `status=${run.status}` : undefined,
           ]
             .filter(Boolean)

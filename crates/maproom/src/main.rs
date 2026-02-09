@@ -8,6 +8,9 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crewchief_maproom::cli::format::{
+    format_hits_agent, format_hits_json_search, format_hits_json_vector, OutputFormat,
+};
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
 };
@@ -422,9 +425,25 @@ enum Commands {
         /// Include content preview in search results
         #[arg(long, default_value_t = false)]
         preview: bool,
-        /// Maximum length of preview text in characters (default: 200)
-        #[arg(long, default_value_t = 200)]
-        preview_length: usize,
+        /// Maximum length of preview text in characters (default: 200, or 120 for agent format)
+        #[arg(long)]
+        preview_length: Option<usize>,
+        /// Output format for search results
+        ///
+        /// Available formats:
+        /// - json: Full JSON output (default, backward compatible)
+        /// - agent: Compact one-line-per-result for LLM agents
+        ///
+        /// The agent format implicitly enables preview with 120-char default.
+        /// Use --preview-length to customize the preview length.
+        ///
+        /// Examples:
+        ///   maproom search --repo myrepo --query "auth" --format agent
+        ///   maproom search --repo myrepo --query "auth" --format agent --preview-length 50
+        ///   maproom search --repo myrepo --query "auth" --format json
+        ///   maproom search --repo myrepo --query "auth" --format agent --kind func
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
     },
 
     /// Vector similarity search using embeddings
@@ -469,9 +488,26 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         preview: bool,
 
-        /// Maximum length of preview text in characters (default: 200)
-        #[arg(long, default_value_t = 200)]
-        preview_length: usize,
+        /// Maximum length of preview text in characters (default: 200, or 120 for agent format)
+        #[arg(long)]
+        preview_length: Option<usize>,
+
+        /// Output format for search results
+        ///
+        /// Available formats:
+        /// - json: Full JSON output with metadata (default, backward compatible)
+        /// - agent: Compact one-line-per-result for LLM agents
+        ///
+        /// The agent format implicitly enables preview with 120-char default.
+        /// Use --preview-length to customize the preview length.
+        ///
+        /// Examples:
+        ///   maproom vector-search --repo myrepo --query "auth" --format agent
+        ///   maproom vector-search --repo myrepo --query "auth" --format agent --preview-length 50
+        ///   maproom vector-search --repo myrepo --query "auth" --format json
+        ///   maproom vector-search --repo myrepo --query "auth" --format agent --lang py
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
     },
 
     /// Show status of indexed repositories and worktrees
@@ -1565,7 +1601,17 @@ async fn main() -> anyhow::Result<()> {
             lang,
             preview,
             preview_length,
+            format,
         } => {
+            // MRIMP-5: Implicit preview enable for agent format (parameter preprocessing)
+            // Agent format always needs preview data; default length is 120 chars (token-optimized).
+            // Explicit --preview-length overrides the agent default.
+            let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+                (true, preview_length.unwrap_or(120))
+            } else {
+                (preview, preview_length.unwrap_or(200))
+            };
+
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
@@ -1592,10 +1638,10 @@ async fn main() -> anyhow::Result<()> {
             let hits: Vec<_> = hits
                 .into_iter()
                 .map(|mut hit| {
-                    if preview {
-                        // Truncate preview to preview_length
+                    if preview_enabled {
+                        // Truncate preview to preview_len
                         if let Some(preview_text) = hit.preview.take() {
-                            hit.preview = Some(db::truncate_preview(&preview_text, preview_length));
+                            hit.preview = Some(db::truncate_preview(&preview_text, preview_len));
                         }
                     } else {
                         // Strip preview if flag not set
@@ -1605,10 +1651,19 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect();
 
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))?
-            );
+            // MRIMP-5: Route output through format module
+            match format {
+                OutputFormat::Json => {
+                    let output = format_hits_json_search(&hits)?;
+                    println!("{}", output);
+                }
+                OutputFormat::Agent => {
+                    let output = format_hits_agent(&hits);
+                    if !output.is_empty() {
+                        println!("{}", output);
+                    }
+                }
+            }
         }
 
         Commands::VectorSearch {
@@ -1621,8 +1676,18 @@ async fn main() -> anyhow::Result<()> {
             lang,
             preview,
             preview_length,
+            format,
         } => {
             use crewchief_maproom::embedding::EmbeddingService;
+
+            // MRIMP-5: Implicit preview enable for agent format (parameter preprocessing)
+            // Agent format always needs preview data; default length is 120 chars (token-optimized).
+            // Explicit --preview-length overrides the agent default.
+            let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+                (true, preview_length.unwrap_or(120))
+            } else {
+                (preview, preview_length.unwrap_or(200))
+            };
 
             let store = db::connect().await?;
 
@@ -1672,58 +1737,75 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            // Build hits with threshold filtering and preview processing
-            let mut hits = Vec::new();
-            for mut hit in search_hits {
-                // Apply threshold filter if specified
-                if let Some(thresh) = threshold {
-                    if hit.score < thresh as f64 {
-                        continue;
+            // Apply threshold filtering and preview processing on SearchHit objects
+            let hits: Vec<_> = search_hits
+                .into_iter()
+                .filter(|hit| {
+                    if let Some(thresh) = threshold {
+                        hit.score >= thresh as f64
+                    } else {
+                        true
+                    }
+                })
+                .map(|mut hit| {
+                    if preview_enabled {
+                        // Truncate preview to preview_len
+                        if let Some(preview_text) = hit.preview.take() {
+                            hit.preview = Some(db::truncate_preview(&preview_text, preview_len));
+                        }
+                    } else {
+                        // Strip preview if flag not set
+                        hit.preview = None;
+                    }
+                    hit
+                })
+                .collect();
+
+            // MRIMP-5: Route output through format module
+            match format {
+                OutputFormat::Json => {
+                    // Convert SearchHit objects to serde_json::Value for JSON format
+                    let json_hits: Vec<serde_json::Value> = hits
+                        .iter()
+                        .map(|hit| {
+                            let mut obj = serde_json::json!({
+                                "chunk_id": hit.chunk_id,
+                                "score": hit.score,
+                                "start_line": hit.start_line,
+                                "end_line": hit.end_line,
+                                "symbol_name": hit.symbol_name,
+                                "kind": hit.kind,
+                                "file_path": hit.file_relpath,
+                            });
+
+                            // Conditionally add preview if enabled and preview exists
+                            if let Some(ref preview_text) = hit.preview {
+                                obj.as_object_mut()
+                                    .unwrap()
+                                    .insert("preview".to_string(), serde_json::json!(preview_text));
+                            }
+
+                            obj
+                        })
+                        .collect();
+
+                    let output = format_hits_json_vector(
+                        &json_hits,
+                        json_hits.len(),
+                        &query,
+                        "vector",
+                        k,
+                        threshold,
+                    )?;
+                    println!("{}", output);
+                }
+                OutputFormat::Agent => {
+                    let output = format_hits_agent(&hits);
+                    if !output.is_empty() {
+                        println!("{}", output);
                     }
                 }
-
-                // Post-process preview field
-                let preview_value = if preview {
-                    // Truncate preview to preview_length
-                    hit.preview
-                        .take()
-                        .map(|p| db::truncate_preview(&p, preview_length))
-                } else {
-                    // Strip preview if flag not set
-                    None
-                };
-
-                let mut obj = serde_json::json!({
-                    "chunk_id": hit.chunk_id,
-                    "score": hit.score,
-                    "start_line": hit.start_line,
-                    "end_line": hit.end_line,
-                    "symbol_name": hit.symbol_name,
-                    "kind": hit.kind,
-                    "file_path": hit.file_relpath,
-                });
-
-                // Conditionally add preview if flag is set and preview exists
-                if let Some(preview_text) = preview_value {
-                    obj.as_object_mut()
-                        .unwrap()
-                        .insert("preview".to_string(), serde_json::json!(preview_text));
-                }
-
-                hits.push(obj);
             }
-
-            // Output JSON schema for MCP client consumption
-            let output = serde_json::json!({
-                "hits": hits,
-                "total": hits.len(),
-                "query": query,
-                "mode": "vector",
-                "k": k,
-                "threshold": threshold,
-            });
-
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
 
         Commands::Status {
@@ -2576,7 +2658,7 @@ mod tests {
         ]);
         match cli.command {
             Commands::Search { preview_length, .. } => {
-                assert_eq!(preview_length, 150);
+                assert_eq!(preview_length, Some(150));
             }
             _ => panic!("Expected Search command"),
         }
@@ -2592,7 +2674,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(preview, false);
-                assert_eq!(preview_length, 200);
+                assert_eq!(preview_length, None);
             }
             _ => panic!("Expected Search command"),
         }
@@ -2631,7 +2713,7 @@ mod tests {
         ]);
         match cli.command {
             Commands::VectorSearch { preview_length, .. } => {
-                assert_eq!(preview_length, 150);
+                assert_eq!(preview_length, Some(150));
             }
             _ => panic!("Expected VectorSearch command"),
         }
@@ -2688,7 +2770,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(preview, false);
-                assert_eq!(preview_length, 150);
+                assert_eq!(preview_length, Some(150));
             }
             _ => panic!("Expected Search command"),
         }
@@ -2746,5 +2828,316 @@ mod tests {
             }
             _ => panic!("Expected EncodingProgress command"),
         }
+    }
+
+    // ==================== Format Flag CLI Parsing Tests (MRIMP-5.2002) ====================
+
+    #[test]
+    fn test_search_format_agent() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "agent",
+        ]);
+        match cli.command {
+            Commands::Search { format, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_json() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "json",
+        ]);
+        match cli.command {
+            Commands::Search { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_default_is_json() {
+        // No --format flag should default to OutputFormat::Json
+        let cli = Cli::parse_from(&["maproom", "search", "--repo", "test", "--query", "foo"]);
+        match cli.command {
+            Commands::Search { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_invalid_produces_error() {
+        // --format invalid should cause a clap parse error
+        let result = Cli::try_parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "invalid",
+        ]);
+        assert!(
+            result.is_err(),
+            "Expected clap error for invalid format value"
+        );
+    }
+
+    #[test]
+    fn test_vector_search_format_agent() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "auth logic",
+            "--format",
+            "agent",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { format, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_format_default_is_json() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "auth logic",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    // ==================== Format + Flag Interaction Tests (MRIMP-5.2002) ====================
+
+    #[test]
+    fn test_search_format_agent_with_preview() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--format",
+            "agent",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::Search {
+                format, preview, ..
+            } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert!(preview);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_agent_with_preview_length() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--format",
+            "agent",
+            "--preview-length",
+            "50",
+        ]);
+        match cli.command {
+            Commands::Search {
+                format,
+                preview_length,
+                ..
+            } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert_eq!(preview_length, Some(50));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_json_with_preview() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--format",
+            "json",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::Search {
+                format, preview, ..
+            } => {
+                assert_eq!(format, OutputFormat::Json);
+                assert!(preview);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_agent_with_kind() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "agent", "--kind",
+            "func",
+        ]);
+        match cli.command {
+            Commands::Search { format, kind, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert_eq!(kind, Some(vec!["func".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_agent_with_lang() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "agent", "--lang",
+            "py",
+        ]);
+        match cli.command {
+            Commands::Search { format, lang, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert_eq!(lang, Some(vec!["py".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    // ==================== Implicit Preview Enable Tests (MRIMP-5.2002) ====================
+
+    #[test]
+    fn test_agent_format_implicit_preview_enabled() {
+        // Agent format should implicitly enable preview with default length 120
+        let format = OutputFormat::Agent;
+        let preview = false; // Not explicitly set
+        let preview_length: Option<usize> = None;
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            preview_enabled,
+            "Agent format must implicitly enable preview"
+        );
+        assert_eq!(
+            preview_len, 120,
+            "Agent format default preview length must be 120"
+        );
+    }
+
+    #[test]
+    fn test_agent_format_explicit_preview_length_override() {
+        // Agent format with explicit --preview-length should use that length
+        let format = OutputFormat::Agent;
+        let preview = false;
+        let preview_length: Option<usize> = Some(50);
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            preview_enabled,
+            "Agent format must implicitly enable preview"
+        );
+        assert_eq!(
+            preview_len, 50,
+            "Explicit preview-length must override agent default"
+        );
+    }
+
+    #[test]
+    fn test_json_format_no_implicit_preview() {
+        // JSON format without --preview should NOT enable preview
+        let format = OutputFormat::Json;
+        let preview = false;
+        let preview_length: Option<usize> = None;
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            !preview_enabled,
+            "JSON format must NOT implicitly enable preview"
+        );
+        assert_eq!(
+            preview_len, 200,
+            "JSON format default preview length must be 200"
+        );
+    }
+
+    #[test]
+    fn test_json_format_with_explicit_preview() {
+        // JSON format with --preview should enable preview with default 200
+        let format = OutputFormat::Json;
+        let preview = true;
+        let preview_length: Option<usize> = None;
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            preview_enabled,
+            "JSON format with --preview must enable preview"
+        );
+        assert_eq!(
+            preview_len, 200,
+            "JSON format default preview length must be 200"
+        );
+    }
+
+    #[test]
+    fn test_json_format_explicit_preview_length_override() {
+        // JSON format with explicit --preview-length should use that length
+        let format = OutputFormat::Json;
+        let preview = true;
+        let preview_length: Option<usize> = Some(300);
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(preview_enabled);
+        assert_eq!(
+            preview_len, 300,
+            "Explicit preview-length must override JSON default"
+        );
     }
 }
