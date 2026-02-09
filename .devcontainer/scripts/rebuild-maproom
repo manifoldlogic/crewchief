@@ -61,6 +61,19 @@ Paths:
   Lock file:  /workspace/.local/bin/.crewchief-maproom.build.lock
   Log file:   /workspace/.local/bin/.crewchief-maproom.build.log
   Marker:     /workspace/.local/bin/.crewchief-maproom.build-complete
+
+Debugging:
+  Watch build progress:
+    tail -f /workspace/.local/bin/.crewchief-maproom.build.log
+
+  Check build status:
+    cat /workspace/.local/bin/.crewchief-maproom.build-complete
+
+  Check if build is running:
+    fuser /workspace/.local/bin/.crewchief-maproom.build.lock 2>/dev/null
+
+  Force rebuild:
+    rebuild-maproom --force
 HELPTEXT
 }
 
