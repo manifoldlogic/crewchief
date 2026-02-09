@@ -65,12 +65,12 @@ HELPTEXT
 
 log() {
     if [ "$QUIET" != "yes" ]; then
-        echo "$@"
+        printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"
     fi
 }
 
 log_err() {
-    echo "$@" >&2
+    printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" >&2
 }
 
 system_message() {
