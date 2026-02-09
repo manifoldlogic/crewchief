@@ -217,6 +217,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Acquire lock before staleness check (skip for --check mode)
+# ---------------------------------------------------------------------------
+
+if [ "$CHECK_ONLY" != "yes" ]; then
+    mkdir -p "$(dirname "$LOCK_FILE")"
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+        log "Rebuild already in progress, skipping"
+        exit 0
+    fi
+fi
+# Lock is held until script exits (fd 9 closes automatically)
+
+# ---------------------------------------------------------------------------
 # Read stored hash and determine staleness
 # ---------------------------------------------------------------------------
 
@@ -287,17 +301,6 @@ fi
 # ---------------------------------------------------------------------------
 
 mkdir -p "$(dirname "$BINARY_DEST")"
-
-# ---------------------------------------------------------------------------
-# Acquire lock (non-blocking)
-# ---------------------------------------------------------------------------
-
-exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    log "Rebuild already in progress, skipping"
-    exit 0
-fi
-# Lock is held until script exits (fd 9 closes automatically)
 
 # ---------------------------------------------------------------------------
 # Truncate log file and start build
