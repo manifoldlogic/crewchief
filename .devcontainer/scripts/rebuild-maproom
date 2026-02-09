@@ -198,6 +198,17 @@ if [ -f "$_git_dir/MERGE_HEAD" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Check for previous build failure
+# ---------------------------------------------------------------------------
+
+if [ -f "$COMPLETION_MARKER" ]; then
+    _prev_status="$(head -n1 "$COMPLETION_MARKER" | cut -d' ' -f1)"
+    if [ "$_prev_status" = "failure" ]; then
+        system_message "Previous maproom rebuild failed - check $LOG_FILE"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Compute staleness hash
 # ---------------------------------------------------------------------------
 
