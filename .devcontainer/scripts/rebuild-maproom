@@ -1,0 +1,383 @@
+#!/bin/sh
+# rebuild-maproom - Build, install, and manage the crewchief-maproom binary
+#
+# Central rebuild script for crewchief-maproom. All triggers (SessionStart hook,
+# git hooks, manual invocation) call this script with different flags.
+#
+# Staleness is detected by comparing git tree hashes of crates/maproom and
+# Cargo.lock against a stored build hash. Only committed changes are detected;
+# use --force for uncommitted work.
+
+set -e
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+BINARY_DEST="/workspace/.local/bin/crewchief-maproom"
+STATE_FILE="/workspace/.local/bin/.crewchief-maproom.build-hash"
+LOCK_FILE="/workspace/.local/bin/.crewchief-maproom.build.lock"
+LOG_FILE="/workspace/.local/bin/.crewchief-maproom.build.log"
+COMPLETION_MARKER="/workspace/.local/bin/.crewchief-maproom.build-complete"
+BINARY_TMP="/workspace/.local/bin/.crewchief-maproom.tmp"
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+CHECK_ONLY="no"
+BACKGROUND="no"
+FORCE="no"
+QUIET="no"
+REPO_ROOT=""
+
+# ---------------------------------------------------------------------------
+# Functions
+# ---------------------------------------------------------------------------
+
+usage() {
+    cat <<'HELPTEXT'
+Usage: rebuild-maproom [options]
+
+Build and install the crewchief-maproom binary with staleness detection,
+lock file management, and process restart.
+
+Options:
+  --check         Only check if rebuild is needed.
+                  Exit 0 if stale (rebuild needed), exit 1 if up-to-date.
+  --background    Fork the build to a background process after staleness check.
+  --force         Skip staleness check and always rebuild.
+  --quiet         Suppress stdout output (useful for git hooks).
+  --repo-root PATH  Override repo root detection (default: git rev-parse --show-toplevel).
+  --help          Show this help text.
+
+Notes:
+  Staleness detection uses git tree hashes of committed changes only.
+  Uncommitted modifications to crate source files will NOT trigger a rebuild.
+  Use --force to rebuild from uncommitted work.
+
+Paths:
+  Binary:     /workspace/.local/bin/crewchief-maproom
+  State file: /workspace/.local/bin/.crewchief-maproom.build-hash
+  Lock file:  /workspace/.local/bin/.crewchief-maproom.build.lock
+  Log file:   /workspace/.local/bin/.crewchief-maproom.build.log
+  Marker:     /workspace/.local/bin/.crewchief-maproom.build-complete
+HELPTEXT
+}
+
+log() {
+    if [ "$QUIET" != "yes" ]; then
+        echo "$@"
+    fi
+}
+
+log_err() {
+    echo "$@" >&2
+}
+
+system_message() {
+    _msg="$1"
+    printf '{"type":"systemMessage","content":"%s"}\n' "$_msg"
+}
+
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --check)
+            CHECK_ONLY="yes"
+            shift
+            ;;
+        --background)
+            BACKGROUND="yes"
+            shift
+            ;;
+        --force)
+            FORCE="yes"
+            shift
+            ;;
+        --quiet)
+            QUIET="yes"
+            shift
+            ;;
+        --repo-root)
+            if [ -z "$2" ]; then
+                log_err "Error: --repo-root requires a PATH argument"
+                exit 1
+            fi
+            REPO_ROOT="$2"
+            shift 2
+            ;;
+        --help)
+            usage
+            exit 0
+            ;;
+        *)
+            log_err "Error: unknown option: $1"
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Check required commands
+# ---------------------------------------------------------------------------
+
+if ! command -v git > /dev/null 2>&1; then
+    log_err "Error: git command not found"
+    exit 1
+fi
+
+if ! command -v cargo > /dev/null 2>&1; then
+    log_err "Error: cargo command not found"
+    exit 1
+fi
+
+if ! command -v flock > /dev/null 2>&1; then
+    log_err "Error: flock command not found"
+    exit 1
+fi
+
+# Check optional commands
+HAS_PM2="no"
+if command -v pm2 > /dev/null 2>&1; then
+    HAS_PM2="yes"
+else
+    log_err "Warning: pm2 not found, skipping watcher restart"
+fi
+
+HAS_PKILL="no"
+if command -v pkill > /dev/null 2>&1; then
+    HAS_PKILL="yes"
+else
+    log_err "Warning: pkill not found, skipping daemon kill"
+fi
+
+# ---------------------------------------------------------------------------
+# Determine repo root
+# ---------------------------------------------------------------------------
+
+if [ -z "$REPO_ROOT" ]; then
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || true
+    if [ -z "$REPO_ROOT" ]; then
+        log_err "Error: not inside a git repository and --repo-root not specified"
+        exit 1
+    fi
+fi
+
+if [ ! -d "$REPO_ROOT/.git" ] && [ ! -f "$REPO_ROOT/.git" ]; then
+    log_err "Error: $REPO_ROOT does not appear to be a git repository"
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Git intermediate state detection
+# ---------------------------------------------------------------------------
+
+_git_dir="$REPO_ROOT/.git"
+
+# Handle worktrees where .git is a file pointing to the real git dir
+if [ -f "$_git_dir" ]; then
+    _git_dir="$(sed 's/^gitdir: //' "$_git_dir")"
+fi
+
+if [ -d "$_git_dir/rebase-merge" ]; then
+    log "Git intermediate state detected (rebase/merge), skipping rebuild"
+    exit 0
+fi
+
+if [ -d "$_git_dir/rebase-apply" ]; then
+    log "Git intermediate state detected (rebase/merge), skipping rebuild"
+    exit 0
+fi
+
+if [ -f "$_git_dir/MERGE_HEAD" ]; then
+    log "Git intermediate state detected (rebase/merge), skipping rebuild"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Compute staleness hash
+# ---------------------------------------------------------------------------
+
+_crate_hash="$(git -C "$REPO_ROOT" rev-parse HEAD:crates/maproom 2>/dev/null)" || true
+_lock_hash="$(git -C "$REPO_ROOT" rev-parse HEAD:Cargo.lock 2>/dev/null)" || true
+
+if [ -z "$_crate_hash" ] || [ -z "$_lock_hash" ]; then
+    if [ "$FORCE" = "yes" ]; then
+        log "Warning: unable to compute git hashes; proceeding with --force"
+        _current_hash="force-rebuild"
+    else
+        log_err "Error: unable to compute git tree hashes (detached HEAD with no crates/maproom?)"
+        exit 1
+    fi
+else
+    _current_hash="${_crate_hash}${_lock_hash}"
+fi
+
+# ---------------------------------------------------------------------------
+# Read stored hash and determine staleness
+# ---------------------------------------------------------------------------
+
+_stored_hash=""
+if [ -f "$STATE_FILE" ]; then
+    _stored_hash="$(cat "$STATE_FILE")"
+fi
+
+_is_stale="no"
+
+if [ "$FORCE" = "yes" ]; then
+    _is_stale="yes"
+elif [ -z "$_stored_hash" ]; then
+    # First-time install: no stored hash
+    _is_stale="yes"
+elif [ ! -f "$BINARY_DEST" ]; then
+    # Binary missing
+    _is_stale="yes"
+elif [ "$_current_hash" != "$_stored_hash" ]; then
+    _is_stale="yes"
+fi
+
+# ---------------------------------------------------------------------------
+# --check mode: report staleness and exit
+# ---------------------------------------------------------------------------
+
+if [ "$CHECK_ONLY" = "yes" ] && [ "$BACKGROUND" != "yes" ]; then
+    if [ "$_is_stale" = "yes" ]; then
+        log "Stale: rebuild needed"
+        exit 0
+    else
+        log "Up-to-date: no rebuild needed"
+        exit 1
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# If up-to-date (and not --force), exit
+# ---------------------------------------------------------------------------
+
+if [ "$_is_stale" != "yes" ]; then
+    log "Up-to-date: no rebuild needed"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# --background mode with --check: report and fork
+# ---------------------------------------------------------------------------
+
+if [ "$CHECK_ONLY" = "yes" ] && [ "$BACKGROUND" = "yes" ]; then
+    system_message "crewchief-maproom binary is stale, rebuilding in background..."
+    nohup nice -n 10 "$0" --force --quiet --repo-root "$REPO_ROOT" > /dev/null 2>&1 &
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# --background mode without --check: fork the build
+# ---------------------------------------------------------------------------
+
+if [ "$BACKGROUND" = "yes" ]; then
+    system_message "crewchief-maproom rebuild started in background..."
+    nohup nice -n 10 "$0" --force --quiet --repo-root "$REPO_ROOT" > /dev/null 2>&1 &
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Ensure destination directory exists
+# ---------------------------------------------------------------------------
+
+mkdir -p "$(dirname "$BINARY_DEST")"
+
+# ---------------------------------------------------------------------------
+# Acquire lock (non-blocking)
+# ---------------------------------------------------------------------------
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    log "Rebuild already in progress, skipping"
+    exit 0
+fi
+# Lock is held until script exits (fd 9 closes automatically)
+
+# ---------------------------------------------------------------------------
+# Truncate log file and start build
+# ---------------------------------------------------------------------------
+
+: > "$LOG_FILE"
+
+log "Building crewchief-maproom (release)..."
+
+_build_start="$(date +%s)"
+
+if ! (cd "$REPO_ROOT" && cargo build --release -p crewchief-maproom) >> "$LOG_FILE" 2>&1; then
+    _build_end="$(date +%s)"
+    _elapsed="$((_build_end - _build_start))"
+    log_err "Error: cargo build failed after ${_elapsed}s (see $LOG_FILE)"
+    echo "failure $(date -u +%Y-%m-%dT%H:%M:%SZ) elapsed=${_elapsed}s" > "$COMPLETION_MARKER"
+    exit 1
+fi
+
+_build_end="$(date +%s)"
+_elapsed="$((_build_end - _build_start))"
+
+log "Build completed in ${_elapsed}s"
+
+# ---------------------------------------------------------------------------
+# Kill daemon before binary replacement
+# ---------------------------------------------------------------------------
+
+if [ "$HAS_PKILL" = "yes" ]; then
+    pkill -f "crewchief-maproom serve" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Atomic binary replacement
+# ---------------------------------------------------------------------------
+
+_src_binary="$REPO_ROOT/target/release/crewchief-maproom"
+
+if [ ! -f "$_src_binary" ]; then
+    log_err "Error: built binary not found at $_src_binary"
+    echo "failure $(date -u +%Y-%m-%dT%H:%M:%SZ) binary-not-found" > "$COMPLETION_MARKER"
+    exit 1
+fi
+
+cp "$_src_binary" "$BINARY_TMP"
+mv "$BINARY_TMP" "$BINARY_DEST"
+
+log "Binary installed to $BINARY_DEST"
+
+# ---------------------------------------------------------------------------
+# Update state file with new hash
+# ---------------------------------------------------------------------------
+
+if [ "$_current_hash" != "force-rebuild" ]; then
+    echo "$_current_hash" > "$STATE_FILE"
+else
+    # Recompute hash after force rebuild so future checks work
+    _crate_hash="$(git -C "$REPO_ROOT" rev-parse HEAD:crates/maproom 2>/dev/null)" || true
+    _lock_hash="$(git -C "$REPO_ROOT" rev-parse HEAD:Cargo.lock 2>/dev/null)" || true
+    if [ -n "$_crate_hash" ] && [ -n "$_lock_hash" ]; then
+        echo "${_crate_hash}${_lock_hash}" > "$STATE_FILE"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Restart pm2 watchers
+# ---------------------------------------------------------------------------
+
+if [ "$HAS_PM2" = "yes" ]; then
+    if ! pm2 restart '/^maproom:/' >> "$LOG_FILE" 2>&1; then
+        log_err "Warning: pm2 restart failed (see $LOG_FILE)"
+    else
+        log "pm2 watchers restarted"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Write completion marker
+# ---------------------------------------------------------------------------
+
+echo "success $(date -u +%Y-%m-%dT%H:%M:%SZ) elapsed=${_elapsed}s" > "$COMPLETION_MARKER"
+
+log "Rebuild complete (${_elapsed}s)"
