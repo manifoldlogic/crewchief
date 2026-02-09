@@ -19,6 +19,7 @@ LOCK_FILE="/workspace/.local/bin/.crewchief-maproom.build.lock"
 LOG_FILE="/workspace/.local/bin/.crewchief-maproom.build.log"
 COMPLETION_MARKER="/workspace/.local/bin/.crewchief-maproom.build-complete"
 BINARY_TMP="/workspace/.local/bin/.crewchief-maproom.tmp"
+BACKGROUND_NICE_PRIORITY=10
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -302,7 +303,7 @@ fi
 
 if [ "$CHECK_ONLY" = "yes" ] && [ "$BACKGROUND" = "yes" ]; then
     system_message "crewchief-maproom binary is stale, rebuilding in background..."
-    nohup nice -n 10 "$0" --force --quiet --repo-root "$REPO_ROOT" > /dev/null 2>&1 &
+    nohup nice -n "$BACKGROUND_NICE_PRIORITY" "$0" --force --quiet --repo-root "$REPO_ROOT" > /dev/null 2>&1 &
     exit 0
 fi
 
@@ -312,7 +313,7 @@ fi
 
 if [ "$BACKGROUND" = "yes" ]; then
     system_message "crewchief-maproom rebuild started in background..."
-    nohup nice -n 10 "$0" --force --quiet --repo-root "$REPO_ROOT" > /dev/null 2>&1 &
+    nohup nice -n "$BACKGROUND_NICE_PRIORITY" "$0" --force --quiet --repo-root "$REPO_ROOT" > /dev/null 2>&1 &
     exit 0
 fi
 
