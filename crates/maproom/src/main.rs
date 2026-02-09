@@ -428,7 +428,20 @@ enum Commands {
         /// Maximum length of preview text in characters (default: 200, or 120 for agent format)
         #[arg(long)]
         preview_length: Option<usize>,
-        /// Output format: json (default, structured) or agent (compact, LLM-optimized)
+        /// Output format for search results
+        ///
+        /// Available formats:
+        /// - json: Full JSON output (default, backward compatible)
+        /// - agent: Compact one-line-per-result for LLM agents
+        ///
+        /// The agent format implicitly enables preview with 120-char default.
+        /// Use --preview-length to customize the preview length.
+        ///
+        /// Examples:
+        ///   maproom search --repo myrepo --query "auth" --format agent
+        ///   maproom search --repo myrepo --query "auth" --format agent --preview-length 50
+        ///   maproom search --repo myrepo --query "auth" --format json
+        ///   maproom search --repo myrepo --query "auth" --format agent --kind func
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
@@ -479,7 +492,20 @@ enum Commands {
         #[arg(long)]
         preview_length: Option<usize>,
 
-        /// Output format: json (default, structured) or agent (compact, LLM-optimized)
+        /// Output format for search results
+        ///
+        /// Available formats:
+        /// - json: Full JSON output with metadata (default, backward compatible)
+        /// - agent: Compact one-line-per-result for LLM agents
+        ///
+        /// The agent format implicitly enables preview with 120-char default.
+        /// Use --preview-length to customize the preview length.
+        ///
+        /// Examples:
+        ///   maproom vector-search --repo myrepo --query "auth" --format agent
+        ///   maproom vector-search --repo myrepo --query "auth" --format agent --preview-length 50
+        ///   maproom vector-search --repo myrepo --query "auth" --format json
+        ///   maproom vector-search --repo myrepo --query "auth" --format agent --lang py
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
