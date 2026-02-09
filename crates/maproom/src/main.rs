@@ -2803,4 +2803,315 @@ mod tests {
             _ => panic!("Expected EncodingProgress command"),
         }
     }
+
+    // ==================== Format Flag CLI Parsing Tests (MRIMP-5.2002) ====================
+
+    #[test]
+    fn test_search_format_agent() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "agent",
+        ]);
+        match cli.command {
+            Commands::Search { format, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_json() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "json",
+        ]);
+        match cli.command {
+            Commands::Search { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_default_is_json() {
+        // No --format flag should default to OutputFormat::Json
+        let cli = Cli::parse_from(&["maproom", "search", "--repo", "test", "--query", "foo"]);
+        match cli.command {
+            Commands::Search { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_invalid_produces_error() {
+        // --format invalid should cause a clap parse error
+        let result = Cli::try_parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "invalid",
+        ]);
+        assert!(
+            result.is_err(),
+            "Expected clap error for invalid format value"
+        );
+    }
+
+    #[test]
+    fn test_vector_search_format_agent() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "auth logic",
+            "--format",
+            "agent",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { format, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    #[test]
+    fn test_vector_search_format_default_is_json() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "vector-search",
+            "--repo",
+            "test",
+            "--query",
+            "auth logic",
+        ]);
+        match cli.command {
+            Commands::VectorSearch { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected VectorSearch command"),
+        }
+    }
+
+    // ==================== Format + Flag Interaction Tests (MRIMP-5.2002) ====================
+
+    #[test]
+    fn test_search_format_agent_with_preview() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--format",
+            "agent",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::Search {
+                format, preview, ..
+            } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert!(preview);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_agent_with_preview_length() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--format",
+            "agent",
+            "--preview-length",
+            "50",
+        ]);
+        match cli.command {
+            Commands::Search {
+                format,
+                preview_length,
+                ..
+            } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert_eq!(preview_length, Some(50));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_json_with_preview() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "search",
+            "--repo",
+            "test",
+            "--query",
+            "foo",
+            "--format",
+            "json",
+            "--preview",
+        ]);
+        match cli.command {
+            Commands::Search {
+                format, preview, ..
+            } => {
+                assert_eq!(format, OutputFormat::Json);
+                assert!(preview);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_agent_with_kind() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "agent", "--kind",
+            "func",
+        ]);
+        match cli.command {
+            Commands::Search { format, kind, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert_eq!(kind, Some(vec!["func".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_format_agent_with_lang() {
+        let cli = Cli::parse_from(&[
+            "maproom", "search", "--repo", "test", "--query", "foo", "--format", "agent", "--lang",
+            "py",
+        ]);
+        match cli.command {
+            Commands::Search { format, lang, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+                assert_eq!(lang, Some(vec!["py".to_string()]));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    // ==================== Implicit Preview Enable Tests (MRIMP-5.2002) ====================
+
+    #[test]
+    fn test_agent_format_implicit_preview_enabled() {
+        // Agent format should implicitly enable preview with default length 120
+        let format = OutputFormat::Agent;
+        let preview = false; // Not explicitly set
+        let preview_length: Option<usize> = None;
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            preview_enabled,
+            "Agent format must implicitly enable preview"
+        );
+        assert_eq!(
+            preview_len, 120,
+            "Agent format default preview length must be 120"
+        );
+    }
+
+    #[test]
+    fn test_agent_format_explicit_preview_length_override() {
+        // Agent format with explicit --preview-length should use that length
+        let format = OutputFormat::Agent;
+        let preview = false;
+        let preview_length: Option<usize> = Some(50);
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            preview_enabled,
+            "Agent format must implicitly enable preview"
+        );
+        assert_eq!(
+            preview_len, 50,
+            "Explicit preview-length must override agent default"
+        );
+    }
+
+    #[test]
+    fn test_json_format_no_implicit_preview() {
+        // JSON format without --preview should NOT enable preview
+        let format = OutputFormat::Json;
+        let preview = false;
+        let preview_length: Option<usize> = None;
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            !preview_enabled,
+            "JSON format must NOT implicitly enable preview"
+        );
+        assert_eq!(
+            preview_len, 200,
+            "JSON format default preview length must be 200"
+        );
+    }
+
+    #[test]
+    fn test_json_format_with_explicit_preview() {
+        // JSON format with --preview should enable preview with default 200
+        let format = OutputFormat::Json;
+        let preview = true;
+        let preview_length: Option<usize> = None;
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(
+            preview_enabled,
+            "JSON format with --preview must enable preview"
+        );
+        assert_eq!(
+            preview_len, 200,
+            "JSON format default preview length must be 200"
+        );
+    }
+
+    #[test]
+    fn test_json_format_explicit_preview_length_override() {
+        // JSON format with explicit --preview-length should use that length
+        let format = OutputFormat::Json;
+        let preview = true;
+        let preview_length: Option<usize> = Some(300);
+
+        let (preview_enabled, preview_len) = if format == OutputFormat::Agent {
+            (true, preview_length.unwrap_or(120))
+        } else {
+            (preview, preview_length.unwrap_or(200))
+        };
+
+        assert!(preview_enabled);
+        assert_eq!(
+            preview_len, 300,
+            "Explicit preview-length must override JSON default"
+        );
+    }
 }

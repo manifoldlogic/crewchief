@@ -650,4 +650,124 @@ mod tests {
         assert!(!output.contains('\n'));
         assert!(!output.contains('\r'));
     }
+
+    // ---------------------------------------------------------------
+    // JSON formatter backward compatibility tests per MRIMP-5.2002
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_json_search_hits_array_structure() {
+        // Verify Search JSON has correct top-level key and hit structure
+        let hits = vec![
+            make_test_hit(
+                "src/app.rs",
+                42,
+                "func",
+                Some("main"),
+                0.92,
+                Some("Entry point"),
+            ),
+            make_test_hit("src/lib.rs", 10, "module", None, 0.75, None),
+        ];
+        let output = format_hits_json_search(&hits).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        // Top-level must have "hits" key only
+        assert!(parsed.is_object());
+        assert!(parsed["hits"].is_array());
+
+        // Verify hits array length
+        let hits_arr = parsed["hits"].as_array().unwrap();
+        assert_eq!(hits_arr.len(), 2);
+
+        // Verify first hit has required fields
+        let hit0 = &hits_arr[0];
+        assert_eq!(hit0["file_relpath"], "src/app.rs");
+        assert_eq!(hit0["start_line"], 42);
+        assert_eq!(hit0["kind"], "func");
+        assert_eq!(hit0["symbol_name"], "main");
+        assert_eq!(hit0["score"], 0.92);
+        assert_eq!(hit0["chunk_id"], 1);
+        assert_eq!(hit0["preview"], "Entry point");
+
+        // Verify second hit with None fields
+        let hit1 = &hits_arr[1];
+        assert_eq!(hit1["file_relpath"], "src/lib.rs");
+        assert!(hit1["symbol_name"].is_null());
+        // preview is None, so it should not appear (skip_serializing_if)
+        assert!(hit1.get("preview").is_none() || hit1["preview"].is_null());
+    }
+
+    #[test]
+    fn test_json_vector_search_metadata_structure() {
+        // Verify VectorSearch JSON has correct top-level keys and metadata
+        let hits = vec![
+            serde_json::json!({
+                "chunk_id": 101,
+                "score": 0.95,
+                "file_path": "src/auth.rs",
+                "symbol_name": "authenticate",
+                "kind": "func",
+                "start_line": 15,
+                "end_line": 45,
+            }),
+            serde_json::json!({
+                "chunk_id": 202,
+                "score": 0.82,
+                "file_path": "src/session.rs",
+                "symbol_name": "create_session",
+                "kind": "func",
+                "start_line": 5,
+                "end_line": 20,
+            }),
+        ];
+        let output =
+            format_hits_json_vector(&hits, 2, "auth logic", "vector", 10, Some(0.75)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        // Verify all required top-level keys
+        assert!(parsed["hits"].is_array());
+        assert_eq!(parsed["total"], 2);
+        assert_eq!(parsed["query"], "auth logic");
+        assert_eq!(parsed["mode"], "vector");
+        assert_eq!(parsed["k"], 10);
+        // Use f32-exact value (0.75 has exact binary representation)
+        assert_eq!(parsed["threshold"], 0.75);
+
+        // Verify hits array structure
+        let hits_arr = parsed["hits"].as_array().unwrap();
+        assert_eq!(hits_arr.len(), 2);
+        assert_eq!(hits_arr[0]["file_path"], "src/auth.rs");
+        assert_eq!(hits_arr[0]["score"], 0.95);
+        assert_eq!(hits_arr[1]["file_path"], "src/session.rs");
+    }
+
+    #[test]
+    fn test_json_search_empty_hits_array() {
+        // Verify empty hits produces valid JSON with empty array
+        let hits: Vec<SearchHit> = vec![];
+        let output = format_hits_json_search(&hits).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert!(parsed["hits"].is_array());
+        assert_eq!(parsed["hits"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_json_vector_search_empty_hits_array() {
+        // Verify empty VectorSearch hits produces valid JSON with all metadata
+        let hits: Vec<serde_json::Value> = vec![];
+        // Use 0.5 which has exact f32 binary representation
+        let output =
+            format_hits_json_vector(&hits, 0, "empty query", "vector", 5, Some(0.5)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert!(parsed["hits"].is_array());
+        assert_eq!(parsed["hits"].as_array().unwrap().len(), 0);
+        assert_eq!(parsed["total"], 0);
+        assert_eq!(parsed["query"], "empty query");
+        assert_eq!(parsed["mode"], "vector");
+        assert_eq!(parsed["k"], 5);
+        assert_eq!(parsed["threshold"], 0.5);
+    }
 }
