@@ -8,6 +8,7 @@
 
 use crewchief_maproom::db::sqlite::hybrid::HybridWeights;
 use crewchief_maproom::db::sqlite::SqliteStore;
+use crewchief_maproom::db::traits::StoreCore;
 use crewchief_maproom::db::{ChunkRecord, FileRecord};
 use rusqlite::Connection;
 

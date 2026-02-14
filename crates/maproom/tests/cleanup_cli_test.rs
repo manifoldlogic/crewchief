@@ -8,6 +8,7 @@
 use anyhow::Result;
 use crewchief_maproom::db::cleanup::{StaleWorktreeDetector, WorktreeCleaner};
 use crewchief_maproom::db::sqlite::SqliteStore;
+use crewchief_maproom::db::StoreCore;
 use crewchief_maproom::db::{ChunkRecord, FileRecord};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;

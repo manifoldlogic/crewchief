@@ -7,6 +7,7 @@ pub mod schema;
 pub mod vector;
 
 use anyhow::Context;
+use async_trait::async_trait;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
 use crate::config::{EdgeQualityWeights, SqliteConfig};
+use crate::db::traits::StoreCore;
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
 use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
@@ -172,11 +174,6 @@ impl SqliteStore {
         .await?
     }
 
-    /// Check if sqlite-vec extension is available
-    pub fn has_vec_extension(&self) -> bool {
-        self.vec_available.load(Ordering::Relaxed)
-    }
-
     /// Execute a write operation with automatic retry on SQLITE_BUSY errors.
     ///
     /// Uses exponential backoff: 50ms → 100ms → 200ms → 400ms → 800ms
@@ -318,9 +315,17 @@ pub fn resolve_repo_id(conn: &Connection, repo: &str) -> anyhow::Result<i64> {
     }
 }
 
-// Database operations - these were previously in VectorStore trait
-impl SqliteStore {
-    pub async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
+// =============================================================================
+// StoreCore trait implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreCore for SqliteStore {
+    fn has_vec_extension(&self) -> bool {
+        self.vec_available.load(Ordering::Relaxed)
+    }
+
+    async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let name = name.to_string();
         let root_path = root_path.to_string();
         self.write_with_retry(move |conn| {
@@ -346,7 +351,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn get_or_create_worktree(
+    async fn get_or_create_worktree(
         &self,
         repo_id: i64,
         name: &str,
@@ -375,7 +380,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn get_or_create_commit(
+    async fn get_or_create_commit(
         &self,
         repo_id: i64,
         sha: &str,
@@ -404,10 +409,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn get_repo_by_name(
-        &self,
-        name: &str,
-    ) -> anyhow::Result<Option<crate::db::RepoInfo>> {
+    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
         let name = name.to_string();
         self.run(move |conn| {
             let result = conn
@@ -428,7 +430,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn get_worktree_by_name(
+    async fn get_worktree_by_name(
         &self,
         repo_id: i64,
         name: &str,
@@ -449,7 +451,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
+    async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, name, root_path FROM repos ORDER BY name")?;
             let repos = stmt
@@ -466,10 +468,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn list_worktrees(
-        &self,
-        repo_id: i64,
-    ) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
+    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees WHERE repo_id = ?1 ORDER BY name")?;
             let worktrees = stmt.query_map(params![repo_id], |row| {
@@ -485,83 +484,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            // SQLite: count chunks via chunk_worktrees junction table
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT chunk_id) FROM chunk_worktrees WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_file_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT cw.chunk_id)
-                 FROM chunk_worktrees cw
-                 JOIN chunks c ON c.id = cw.chunk_id
-                 WHERE cw.worktree_id = ?1
-                   AND c.blob_sha IN (SELECT blob_sha FROM code_embeddings)",
-                params![worktree_id],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_language_breakdown(
-        &self,
-        worktree_id: i64,
-    ) -> anyhow::Result<Vec<(String, i64)>> {
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT COALESCE(f.language, 'unknown') as lang, COUNT(*) as file_count
-                 FROM files f
-                 WHERE f.worktree_id = ?1
-                 GROUP BY f.language
-                 ORDER BY file_count DESC",
-            )?;
-            let rows = stmt.query_map(params![worktree_id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            })?;
-            let results: Vec<(String, i64)> = rows.collect::<Result<_, _>>()?;
-            Ok(results)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_last_scan(&self, worktree_id: i64) -> anyhow::Result<Option<String>> {
-        self.run(move |conn| {
-            let result = conn
-                .query_row(
-                    "SELECT last_indexed FROM index_state WHERE worktree_id = ?1",
-                    params![worktree_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()?;
-            Ok(result)
-        })
-        .await
-    }
-
-    pub async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
+    async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
         self.write_with_retry(move |conn| {
             conn.execute(
@@ -592,6 +515,181 @@ impl SqliteStore {
         }).await
     }
 
+    async fn delete_file(&self, file_id: i64) -> anyhow::Result<bool> {
+        self.run(move |conn| {
+            let rows_deleted = conn.execute("DELETE FROM files WHERE id = ?1", params![file_id])?;
+            Ok(rows_deleted > 0)
+        })
+        .await
+    }
+
+    async fn get_file_id_by_relpath(
+        &self,
+        relpath: &str,
+        worktree_id: i64,
+    ) -> anyhow::Result<Option<i64>> {
+        let relpath = relpath.to_string();
+        self.run(move |conn| {
+            let result: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2",
+                    params![relpath, worktree_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            // SQLite: count chunks via chunk_worktrees junction table
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT chunk_id) FROM chunk_worktrees WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_file_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT cw.chunk_id)
+                 FROM chunk_worktrees cw
+                 JOIN chunks c ON c.id = cw.chunk_id
+                 WHERE cw.worktree_id = ?1
+                   AND c.blob_sha IN (SELECT blob_sha FROM code_embeddings)",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_language_breakdown(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(String, i64)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT COALESCE(f.language, 'unknown') as lang, COUNT(*) as file_count
+                 FROM files f
+                 WHERE f.worktree_id = ?1
+                 GROUP BY f.language
+                 ORDER BY file_count DESC",
+            )?;
+            let rows = stmt.query_map(params![worktree_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            let results: Vec<(String, i64)> = rows.collect::<Result<_, _>>()?;
+            Ok(results)
+        })
+        .await
+    }
+
+    async fn get_worktree_last_scan(&self, worktree_id: i64) -> anyhow::Result<Option<String>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT last_indexed FROM index_state WHERE worktree_id = ?1",
+                    params![worktree_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn get_global_chunk_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 =
+                conn.query_row("SELECT COUNT(DISTINCT blob_sha) FROM chunks", [], |row| {
+                    row.get(0)
+                })?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the global count of embeddings.
+    async fn get_global_embedding_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM code_embeddings", [], |row| row.get(0))?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the count of distinct chunks (by blob_sha) for a specific repo.
+    ///
+    /// Uses chunk_worktrees junction table to filter by repo via worktrees.
+    /// Returns 0 if the repo does not exist.
+    async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        let repo_name = repo_name.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT c.blob_sha)
+                 FROM chunks c
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                 JOIN worktrees w ON w.id = cw.worktree_id
+                 JOIN repos r ON r.id = w.repo_id
+                 WHERE r.name = ?1",
+                params![repo_name],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the count of embeddings for a specific repo.
+    ///
+    /// Counts embeddings whose blob_sha matches chunks in the specified repo.
+    /// Returns 0 if the repo does not exist.
+    async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        let repo_name = repo_name.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT ce.id)
+                 FROM code_embeddings ce
+                 WHERE ce.blob_sha IN (
+                     SELECT DISTINCT c.blob_sha
+                     FROM chunks c
+                     JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                     JOIN worktrees w ON w.id = cw.worktree_id
+                     JOIN repos r ON r.id = w.repo_id
+                     WHERE r.name = ?1
+                 )",
+                params![repo_name],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+}
+
+// Database operations - remaining inherent methods
+impl SqliteStore {
     pub async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
         self.write_with_retry(move |conn| {
@@ -2013,53 +2111,6 @@ impl SqliteStore {
         .await
     }
 
-    /// Look up a file ID by its relative path and worktree ID.
-    ///
-    /// # Arguments
-    /// * `relpath` - Relative path of the file
-    /// * `worktree_id` - Worktree ID
-    ///
-    /// # Returns
-    /// * `Ok(Some(file_id))` - File found
-    /// * `Ok(None)` - File not found
-    pub async fn get_file_id_by_relpath(
-        &self,
-        relpath: &str,
-        worktree_id: i64,
-    ) -> anyhow::Result<Option<i64>> {
-        let relpath = relpath.to_string();
-        self.run(move |conn| {
-            let result: Option<i64> = conn
-                .query_row(
-                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2",
-                    params![relpath, worktree_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            Ok(result)
-        })
-        .await
-    }
-
-    /// Delete a file record from the database.
-    ///
-    /// Note: This only deletes the file record. Use `delete_chunks_by_file` first
-    /// to delete associated chunks, edges, and embeddings.
-    ///
-    /// # Arguments
-    /// * `file_id` - Database ID of the file to delete
-    ///
-    /// # Returns
-    /// * `Ok(true)` - File was deleted
-    /// * `Ok(false)` - File was not found
-    pub async fn delete_file(&self, file_id: i64) -> anyhow::Result<bool> {
-        self.run(move |conn| {
-            let rows_deleted = conn.execute("DELETE FROM files WHERE id = ?1", params![file_id])?;
-            Ok(rows_deleted > 0)
-        })
-        .await
-    }
-
     pub async fn get_chunks_by_blob_sha(
         &self,
         blob_sha: &str,
@@ -3394,76 +3445,6 @@ impl SqliteStore {
     }
 
     // ==================== Encoding Progress Methods ====================
-
-    /// Get the global count of distinct chunks (by blob_sha) across all repos.
-    pub async fn get_global_chunk_count(&self) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 =
-                conn.query_row("SELECT COUNT(DISTINCT blob_sha) FROM chunks", [], |row| {
-                    row.get(0)
-                })?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Get the global count of embeddings.
-    pub async fn get_global_embedding_count(&self) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 =
-                conn.query_row("SELECT COUNT(*) FROM code_embeddings", [], |row| row.get(0))?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Get the count of distinct chunks (by blob_sha) for a specific repo.
-    ///
-    /// Uses chunk_worktrees junction table to filter by repo via worktrees.
-    /// Returns 0 if the repo does not exist.
-    pub async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
-        let repo_name = repo_name.to_string();
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT c.blob_sha)
-                 FROM chunks c
-                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                 JOIN worktrees w ON w.id = cw.worktree_id
-                 JOIN repos r ON r.id = w.repo_id
-                 WHERE r.name = ?1",
-                params![repo_name],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Get the count of embeddings for a specific repo.
-    ///
-    /// Counts embeddings whose blob_sha matches chunks in the specified repo.
-    /// Returns 0 if the repo does not exist.
-    pub async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
-        let repo_name = repo_name.to_string();
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT ce.id)
-                 FROM code_embeddings ce
-                 WHERE ce.blob_sha IN (
-                     SELECT DISTINCT c.blob_sha
-                     FROM chunks c
-                     JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                     JOIN worktrees w ON w.id = cw.worktree_id
-                     JOIN repos r ON r.id = w.repo_id
-                     WHERE r.name = ?1
-                 )",
-                params![repo_name],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
 
     /// Create a new encoding run record. Returns the run ID.
     pub async fn create_encoding_run(

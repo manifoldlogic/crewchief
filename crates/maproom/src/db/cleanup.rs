@@ -5,6 +5,7 @@
 //!
 //! IDXCLEAN-1001: Foundational component for cleanup system.
 
+use crate::db::traits::StoreCore;
 use crate::db::SqliteStore;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

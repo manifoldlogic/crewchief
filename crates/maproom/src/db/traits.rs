@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 use async_trait::async_trait;
 
 use crate::config::EdgeQualityWeights;
+use crate::db::index_state::UpdateStats;
 use crate::db::types::{
     ChunkMetadata, EmbeddingRecord, EncodingRunRow, GraphResult, HybridResult, HybridWeights,
     ImportDirection, RankedSearchHit, SemanticRanking,
@@ -29,7 +30,6 @@ use crate::db::{
     ChunkContext, ChunkForEmbedding, ChunkFull, ChunkRecord, ChunkSummary, FileRecord, RepoInfo,
     SearchHit, StaleWorktree, WorktreeCleanupResult, WorktreeInfo,
 };
-use crate::db::index_state::UpdateStats;
 
 // =============================================================================
 // StoreCore - Repository, worktree, commit, file CRUD and stats
@@ -173,20 +173,14 @@ pub trait StoreChunks: Send + Sync {
 
     /// Get all chunks for a worktree with their file paths.
     /// Returns (chunk_id, file_relpath) tuples.
-    async fn get_chunks_for_worktree(
-        &self,
-        worktree_id: i64,
-    ) -> anyhow::Result<Vec<(i64, String)>>;
+    async fn get_chunks_for_worktree(&self, worktree_id: i64)
+        -> anyhow::Result<Vec<(i64, String)>>;
 
     /// Get chunks by blob SHA.
     async fn get_chunks_by_blob_sha(&self, blob_sha: &str) -> anyhow::Result<Vec<ChunkSummary>>;
 
     /// Add a chunk to an additional worktree.
-    async fn add_chunk_to_worktree(
-        &self,
-        chunk_id: i64,
-        worktree_id: i64,
-    ) -> anyhow::Result<()>;
+    async fn add_chunk_to_worktree(&self, chunk_id: i64, worktree_id: i64) -> anyhow::Result<()>;
 
     /// Get all worktree IDs containing a chunk.
     async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>>;
@@ -440,10 +434,8 @@ pub trait StoreCleanup: Send + Sync {
     async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<StaleWorktree>>;
 
     /// Delete all data associated with a worktree.
-    async fn delete_worktree_data(
-        &self,
-        worktree_id: i64,
-    ) -> anyhow::Result<WorktreeCleanupResult>;
+    async fn delete_worktree_data(&self, worktree_id: i64)
+        -> anyhow::Result<WorktreeCleanupResult>;
 }
 
 // =============================================================================

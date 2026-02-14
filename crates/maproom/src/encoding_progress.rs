@@ -8,6 +8,7 @@ use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::db::traits::StoreCore;
 use crate::db::SqliteStore;
 
 /// Response struct for encoding progress queries.
