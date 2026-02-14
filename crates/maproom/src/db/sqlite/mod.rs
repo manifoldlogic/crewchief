@@ -20,6 +20,7 @@ use crate::db::traits::StoreCleanup;
 use crate::db::traits::StoreCore;
 use crate::db::traits::StoreEmbeddings;
 use crate::db::traits::StoreGraph;
+use crate::db::traits::StoreIndexState;
 use crate::db::traits::StoreMigration;
 use crate::db::traits::StoreSearch;
 
@@ -3029,9 +3030,13 @@ impl StoreCleanup for SqliteStore {
     }
 }
 
-// Database operations - remaining inherent methods
-impl SqliteStore {
-    pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
+// =============================================================================
+// StoreIndexState implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreIndexState for SqliteStore {
+    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
         self.run(move |conn| {
             let result = conn.query_row(
                 "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
@@ -3048,7 +3053,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn update_index_state(
+    async fn update_index_state(
         &self,
         worktree_id: i64,
         tree_sha: &str,
@@ -3071,7 +3076,10 @@ impl SqliteStore {
             Ok(())
         }).await
     }
+}
 
+// Database operations - remaining inherent methods
+impl SqliteStore {
     /// Search for similar chunks by embedding (SQLite-specific)
     ///
     /// Returns empty Vec (not error) when extension is not available.
