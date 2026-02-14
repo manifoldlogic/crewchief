@@ -1,20 +1,12 @@
 {
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  },
   "env": {
     "SDD_ROOT_DIR": "/workspace/_SPECS/crewchief",
     "MAPROOM_DB_ROOT": "/home/vscode/.maproom",
     "MAPROOM_EMBEDDING_PROVIDER": "google",
     "GOOGLE_PROJECT_ID": "crewchief-476600"
   },
-  "extraKnownMarketplaces": {
-    "crewchief": {
-      "source": {
-        "source": "directory",
-        "path": "/workspace/repos/claude-code-plugins/claude-code-plugins"
-      }
-    }
+  "permissions": {
+    "defaultMode": "bypassPermissions"
   },
   "hooks": {
     "SessionStart": [
@@ -47,5 +39,16 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "rust-analyzer-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "crewchief": {
+      "source": {
+        "source": "directory",
+        "path": "/workspace/repos/claude-code-plugins/claude-code-plugins"
+      }
+    }
   }
 }
