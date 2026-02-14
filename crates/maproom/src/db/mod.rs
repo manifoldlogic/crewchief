@@ -8,6 +8,7 @@ pub mod columns;
 pub mod connection;
 pub mod index_state;
 pub mod sqlite;
+pub mod traits;
 pub mod types;
 
 // Re-export SqliteStore as the primary store type
