@@ -19,6 +19,7 @@ use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCleanup;
 use crate::db::traits::StoreCore;
 use crate::db::traits::StoreEmbeddings;
+use crate::db::traits::StoreEncoding;
 use crate::db::traits::StoreGraph;
 use crate::db::traits::StoreIndexState;
 use crate::db::traits::StoreMigration;
@@ -3485,10 +3486,16 @@ impl SqliteStore {
         .await
     }
 
-    // ==================== Encoding Progress Methods ====================
+}
 
+// =============================================================================
+// StoreEncoding implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreEncoding for SqliteStore {
     /// Create a new encoding run record. Returns the run ID.
-    pub async fn create_encoding_run(
+    async fn create_encoding_run(
         &self,
         total_chunks: i64,
         provider: Option<&str>,
@@ -3508,7 +3515,7 @@ impl SqliteStore {
     }
 
     /// Update the progress of an encoding run.
-    pub async fn update_encoding_run_progress(
+    async fn update_encoding_run_progress(
         &self,
         run_id: i64,
         chunks_completed: i64,
@@ -3529,7 +3536,7 @@ impl SqliteStore {
     }
 
     /// Complete an encoding run, setting its final status and finished_at timestamp.
-    pub async fn complete_encoding_run(&self, run_id: i64, status: &str) -> anyhow::Result<()> {
+    async fn complete_encoding_run(&self, run_id: i64, status: &str) -> anyhow::Result<()> {
         let status = status.to_string();
         self.write_with_retry(move |conn| {
             conn.execute(
@@ -3547,7 +3554,7 @@ impl SqliteStore {
     /// Mark all encoding runs with status='running' as 'failed'.
     ///
     /// This is used on startup to clean up stale runs from previous crashes.
-    pub async fn mark_stale_runs_as_failed(&self) -> anyhow::Result<()> {
+    async fn mark_stale_runs_as_failed(&self) -> anyhow::Result<()> {
         self.write_with_retry(move |conn| {
             conn.execute(
                 "UPDATE encoding_runs SET status = ?1, finished_at = datetime('now') WHERE status = ?2",
@@ -3561,7 +3568,7 @@ impl SqliteStore {
     /// Get the currently active (running) encoding run, if any.
     ///
     /// Returns the most recently started running run.
-    pub async fn get_active_encoding_run(&self) -> anyhow::Result<Option<EncodingRunRow>> {
+    async fn get_active_encoding_run(&self) -> anyhow::Result<Option<EncodingRunRow>> {
         self.run(move |conn| {
             let result = conn
                 .query_row(

@@ -7,6 +7,7 @@
 //! - Handles errors and rate limiting gracefully
 
 use crate::db::traits::StoreEmbeddings;
+use crate::db::traits::StoreEncoding;
 use crate::db::SqliteStore;
 use crate::embedding::service::EmbeddingService;
 use anyhow::{Context, Result};
@@ -968,6 +969,7 @@ mod tests {
     use crate::db::sqlite::SqliteStore;
     use crate::db::traits::StoreChunks;
     use crate::db::traits::StoreCore;
+    use crate::db::traits::StoreEncoding;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
 

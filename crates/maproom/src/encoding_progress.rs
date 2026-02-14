@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::db::traits::StoreCore;
+use crate::db::traits::StoreEncoding;
 use crate::db::SqliteStore;
 
 /// Response struct for encoding progress queries.
@@ -285,6 +286,7 @@ mod tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
     use crate::db::traits::StoreChunks;
+    use crate::db::traits::StoreEncoding;
     use crate::db::traits::StoreMigration;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
