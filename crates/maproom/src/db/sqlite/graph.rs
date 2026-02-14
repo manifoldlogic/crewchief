@@ -17,27 +17,8 @@ pub const DEFAULT_MAX_DEPTH: usize = 3;
 /// Hard maximum depth to prevent runaway recursion
 pub const HARD_MAX_DEPTH: usize = 10;
 
-/// Result from graph traversal
-#[derive(Debug, Clone)]
-pub struct GraphResult {
-    /// Target chunk ID found in traversal
-    pub chunk_id: i64,
-    /// Depth from source (1 = direct relationship)
-    pub depth: usize,
-    /// Path from source to this chunk (list of chunk IDs)
-    pub path: Vec<i64>,
-    /// Type of relationship (calls, imports, extends)
-    pub edge_type: String,
-}
-
-/// Direction for import relationship queries
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ImportDirection {
-    /// Find chunks that import the target (who imports this?)
-    Incoming,
-    /// Find chunks that the source imports (what does this import?)
-    Outgoing,
-}
+pub use crate::db::types::GraphResult;
+pub use crate::db::types::ImportDirection;
 
 /// Parse path string into vector of chunk IDs
 ///

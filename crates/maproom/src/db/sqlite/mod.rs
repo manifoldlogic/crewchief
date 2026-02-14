@@ -3573,20 +3573,7 @@ impl SqliteStore {
     }
 }
 
-/// Row data from the encoding_runs table.
-#[derive(Debug, Clone)]
-pub struct EncodingRunRow {
-    pub id: i64,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub status: String,
-    pub total_chunks: i64,
-    pub chunks_completed: i64,
-    pub chunks_per_second: Option<f64>,
-    pub last_batch_at: Option<String>,
-    pub provider: Option<String>,
-    pub dimension: Option<i32>,
-}
+pub use crate::db::types::EncodingRunRow;
 
 #[cfg(test)]
 mod tests {
