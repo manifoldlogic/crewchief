@@ -16,6 +16,7 @@ use tokio::task::spawn_blocking;
 
 use crate::config::{EdgeQualityWeights, SqliteConfig};
 use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreCleanup;
 use crate::db::traits::StoreCore;
 use crate::db::traits::StoreEmbeddings;
 use crate::db::traits::StoreGraph;
@@ -2875,50 +2876,13 @@ impl StoreMigration for SqliteStore {
     }
 }
 
-// Database operations - remaining inherent methods
-impl SqliteStore {
-    pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
-        self.run(move |conn| {
-            let result = conn.query_row(
-                "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            );
+// =============================================================================
+// StoreCleanup implementation
+// =============================================================================
 
-            match result {
-                Ok(sha) => Ok(sha),
-                Err(rusqlite::Error::QueryReturnedNoRows) => Ok("init".to_string()),
-                Err(e) => Err(e.into()),
-            }
-        })
-        .await
-    }
-
-    pub async fn update_index_state(
-        &self,
-        worktree_id: i64,
-        tree_sha: &str,
-        stats: &crate::db::UpdateStats,
-    ) -> anyhow::Result<()> {
-        let tree_sha = tree_sha.to_string();
-        let chunks_processed = stats.chunks_processed;
-        let embeddings_generated = stats.embeddings_generated;
-        self.write_with_retry(move |conn| {
-            conn.execute(
-                "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
-                 VALUES (?1, ?2, ?3, ?4, datetime('now'))
-                 ON CONFLICT(worktree_id) DO UPDATE SET
-                     tree_sha = excluded.tree_sha,
-                     chunks_processed = excluded.chunks_processed,
-                     embeddings_generated = excluded.embeddings_generated,
-                     last_indexed = datetime('now')",
-                params![worktree_id, tree_sha, chunks_processed, embeddings_generated],
-            )?;
-            Ok(())
-        }).await
-    }
-
-    pub async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
+#[async_trait]
+impl StoreCleanup for SqliteStore {
+    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT w.id, w.repo_id, w.name, w.abs_path FROM worktrees w ORDER BY w.id",
@@ -2967,7 +2931,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn delete_worktree_data(
+    async fn delete_worktree_data(
         &self,
         worktree_id: i64,
     ) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
@@ -3062,6 +3026,50 @@ impl SqliteStore {
             })
         })
         .await
+    }
+}
+
+// Database operations - remaining inherent methods
+impl SqliteStore {
+    pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
+        self.run(move |conn| {
+            let result = conn.query_row(
+                "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            );
+
+            match result {
+                Ok(sha) => Ok(sha),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok("init".to_string()),
+                Err(e) => Err(e.into()),
+            }
+        })
+        .await
+    }
+
+    pub async fn update_index_state(
+        &self,
+        worktree_id: i64,
+        tree_sha: &str,
+        stats: &crate::db::UpdateStats,
+    ) -> anyhow::Result<()> {
+        let tree_sha = tree_sha.to_string();
+        let chunks_processed = stats.chunks_processed;
+        let embeddings_generated = stats.embeddings_generated;
+        self.write_with_retry(move |conn| {
+            conn.execute(
+                "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'))
+                 ON CONFLICT(worktree_id) DO UPDATE SET
+                     tree_sha = excluded.tree_sha,
+                     chunks_processed = excluded.chunks_processed,
+                     embeddings_generated = excluded.embeddings_generated,
+                     last_indexed = datetime('now')",
+                params![worktree_id, tree_sha, chunks_processed, embeddings_generated],
+            )?;
+            Ok(())
+        }).await
     }
 
     /// Search for similar chunks by embedding (SQLite-specific)
