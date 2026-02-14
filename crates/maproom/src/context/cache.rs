@@ -547,6 +547,7 @@ pub struct DbCacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::StoreMigration;
 
     #[test]
     fn test_hash_options_deterministic() {

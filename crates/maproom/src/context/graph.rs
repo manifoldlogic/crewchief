@@ -360,6 +360,7 @@ pub async fn load_relationships_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::StoreMigration;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]

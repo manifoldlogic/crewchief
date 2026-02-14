@@ -7,6 +7,7 @@
 //! - Edge data is accurate and queryable
 
 use crewchief_maproom::db::SqliteStore;
+use crewchief_maproom::db::StoreMigration;
 use crewchief_maproom::indexer::scan_worktree;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};

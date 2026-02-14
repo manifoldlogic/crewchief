@@ -253,6 +253,7 @@ mod tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
     use crate::db::traits::StoreChunks;
+    use crate::db::traits::StoreMigration;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
 

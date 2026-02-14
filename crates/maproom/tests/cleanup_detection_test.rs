@@ -13,6 +13,7 @@ use crewchief_maproom::db::cleanup::StaleWorktreeDetector;
 use crewchief_maproom::db::sqlite::SqliteStore;
 use crewchief_maproom::db::StoreChunks;
 use crewchief_maproom::db::StoreCore;
+use crewchief_maproom::db::StoreMigration;
 use crewchief_maproom::db::{ChunkRecord, FileRecord};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;

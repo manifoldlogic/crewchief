@@ -19,6 +19,7 @@ use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
 use crate::db::traits::StoreEmbeddings;
 use crate::db::traits::StoreGraph;
+use crate::db::traits::StoreMigration;
 use crate::db::traits::StoreSearch;
 
 use crate::db::{ChunkForEmbedding, ChunkRecord, EmbeddingRecord, FileRecord, SearchHit};
@@ -2817,6 +2818,63 @@ impl StoreEmbeddings for SqliteStore {
     }
 }
 
+// =============================================================================
+// StoreMigration implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreMigration for SqliteStore {
+    async fn migrate(&self) -> anyhow::Result<()> {
+        self.run(move |conn| {
+            let mut runner = MigrationRunner::new(conn);
+            runner.migrate()
+        })
+        .await?;
+
+        // Check extension availability after migration
+        self.run(|conn| {
+            let available = verify_vec_extension(conn);
+            Ok(available)
+        })
+        .await
+        .map(|available| {
+            self.vec_available.store(available, Ordering::Relaxed);
+            self.vec_checked.store(true, Ordering::Relaxed);
+            if !available {
+                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
+            }
+        })?;
+
+        Ok(())
+    }
+
+    async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
+        self.run(move |conn| {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+                    [],
+                    |_| Ok(true),
+                )
+                .unwrap_or(false);
+
+            if !exists {
+                return Ok(HashSet::new());
+            }
+
+            let mut stmt = conn.prepare("SELECT version FROM schema_migrations")?;
+            let rows = stmt.query_map([], |row| row.get(0))?;
+
+            let mut versions = HashSet::new();
+            for version in rows {
+                versions.insert(version?);
+            }
+            Ok(versions)
+        })
+        .await
+    }
+}
+
 // Database operations - remaining inherent methods
 impl SqliteStore {
     pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
@@ -3002,56 +3060,6 @@ impl SqliteStore {
                 files_deleted: files_deleted as u64,
                 embeddings_deleted: embeddings_deleted as u64,
             })
-        })
-        .await
-    }
-
-    pub async fn migrate(&self) -> anyhow::Result<()> {
-        self.run(move |conn| {
-            let mut runner = MigrationRunner::new(conn);
-            runner.migrate()
-        })
-        .await?;
-
-        // Check extension availability after migration
-        self.run(|conn| {
-            let available = verify_vec_extension(conn);
-            Ok(available)
-        })
-        .await
-        .map(|available| {
-            self.vec_available.store(available, Ordering::Relaxed);
-            self.vec_checked.store(true, Ordering::Relaxed);
-            if !available {
-                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
-            }
-        })?;
-
-        Ok(())
-    }
-
-    pub async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
-        self.run(move |conn| {
-            let exists: bool = conn
-                .query_row(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
-                    [],
-                    |_| Ok(true),
-                )
-                .unwrap_or(false);
-
-            if !exists {
-                return Ok(HashSet::new());
-            }
-
-            let mut stmt = conn.prepare("SELECT version FROM schema_migrations")?;
-            let rows = stmt.query_map([], |row| row.get(0))?;
-
-            let mut versions = HashSet::new();
-            for version in rows {
-                versions.insert(version?);
-            }
-            Ok(versions)
         })
         .await
     }
