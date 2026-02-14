@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use tracing::{debug, info, warn};
 
+use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
 use crate::db::{ChunkRecord, FileRecord, SqliteStore};
 use crate::incremental::edge_updater::Edge;

@@ -11,6 +11,7 @@
 
 use super::graph::RelatedChunk;
 use crate::db::sqlite::graph::ImportDirection;
+use crate::db::traits::StoreChunks;
 use crate::db::SqliteStore;
 use anyhow::{Context as AnyhowContext, Result};
 

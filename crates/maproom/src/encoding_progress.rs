@@ -284,6 +284,7 @@ pub fn format_json(response: &EncodingProgressResponse) -> Result<String> {
 mod tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1555,6 +1556,7 @@ mod tests {
 mod integration_tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
     use crate::db::{ChunkRecord, FileRecord};
     use crate::embedding::cache::EmbeddingCache;
     use crate::embedding::config::CacheConfig;

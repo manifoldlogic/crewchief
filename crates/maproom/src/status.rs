@@ -252,6 +252,7 @@ pub fn format_json(status: &StatusResponse) -> Result<String> {
 mod tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
 

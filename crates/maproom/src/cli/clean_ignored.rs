@@ -4,6 +4,7 @@
 //! matching patterns in `.maproomignore`. This provides a way to remove noise from search
 //! results after adding patterns to `.maproomignore`, without requiring a full rescan.
 
+use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
 use crate::db::SqliteStore;
 use crate::incremental::ignore::{load_ignore_patterns, IgnorePatternMatcher};

@@ -9,6 +9,7 @@
 //! This is the core implementation of BLOBSHA Phase 3 (planning/plan.md lines 331-439).
 
 use crate::content_hash::compute_blob_sha;
+use crate::db::traits::StoreChunks;
 use crate::db::{ChunkRecord, SqliteStore};
 use crate::metrics::CacheMetrics;
 use anyhow::{Context, Result};

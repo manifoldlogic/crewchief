@@ -8,6 +8,7 @@
 //! - Multiple relationship types filtering
 
 use crate::db::sqlite::graph::{GraphResult, ImportDirection};
+use crate::db::traits::StoreChunks;
 use crate::db::SqliteStore;
 use anyhow::Result;
 

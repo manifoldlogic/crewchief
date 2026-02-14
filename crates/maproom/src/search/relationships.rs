@@ -5,6 +5,7 @@
 //! the top N most relevant chunks.
 
 use crate::context::graph::find_related_chunks;
+use crate::db::traits::StoreChunks;
 use crate::db::SqliteStore;
 use crate::search::results::RelatedChunkResult;
 use anyhow::Result;

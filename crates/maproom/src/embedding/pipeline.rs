@@ -965,6 +965,7 @@ mod tests {
     // ========================================================================
 
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
     use crate::db::traits::StoreCore;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;

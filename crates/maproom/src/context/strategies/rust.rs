@@ -18,6 +18,7 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
+use crate::db::traits::StoreChunks;
 use crate::db::SqliteStore;
 use std::sync::Arc;
 

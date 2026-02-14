@@ -5,6 +5,7 @@
 //! - Custom hooks (use* naming convention)
 //! - Hook dependencies and relationships
 
+use crate::db::traits::StoreChunks;
 use crate::db::SqliteStore;
 use anyhow::Result;
 use regex::Regex;

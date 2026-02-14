@@ -15,7 +15,9 @@ use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
 use crate::config::{EdgeQualityWeights, SqliteConfig};
+use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
+
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
 use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
@@ -688,9 +690,13 @@ impl StoreCore for SqliteStore {
     }
 }
 
-// Database operations - remaining inherent methods
-impl SqliteStore {
-    pub async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
+// =============================================================================
+// StoreChunks trait implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreChunks for SqliteStore {
+    async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
         self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
@@ -758,7 +764,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
+    async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
         let chunks = chunks.to_vec();
         self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
@@ -823,7 +829,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn insert_chunk_edge(
+    async fn insert_chunk_edge(
         &self,
         src_chunk_id: i64,
         dst_chunk_id: i64,
@@ -839,6 +845,431 @@ impl SqliteStore {
         }).await
     }
 
+    async fn find_chunk_by_symbol(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        symbol_name: &str,
+        relpath: Option<&str>,
+    ) -> anyhow::Result<Option<i64>> {
+        let symbol_name = symbol_name.to_string();
+        let relpath = relpath.map(|s| s.to_string());
+        self.run(move |conn| {
+            // Use reference to avoid move of relpath
+            let relpath_ref = relpath.as_deref();
+
+            // Similar to Postgres logic
+            let sql = if relpath_ref.is_some() {
+                if worktree_id.is_some() {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2
+                       AND f.relpath = ?3 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                } else {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1
+                       AND f.relpath = ?3 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                }
+            } else {
+                if worktree_id.is_some() {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                } else {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                }
+            };
+
+            let id: Option<i64> = if let Some(path) = relpath_ref {
+                if let Some(wid) = worktree_id {
+                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| {
+                        row.get(0)
+                    })
+                    .optional()?
+                } else {
+                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
+                        .optional()?
+                }
+            } else {
+                if let Some(wid) = worktree_id {
+                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
+                        .optional()?
+                } else {
+                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
+                        .optional()?
+                }
+            };
+
+            Ok(id)
+        })
+        .await
+    }
+
+    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id = ?1",
+                    params![chunk_id],
+                    |row| {
+                        Ok(crate::db::ChunkFull {
+                            id: row.get(0)?,
+                            file_id: row.get(1)?,
+                            blob_sha: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            signature: row.get(5)?,
+                            docstring: row.get(6)?,
+                            start_line: row.get(7)?,
+                            end_line: row.get(8)?,
+                            preview: row.get(9)?,
+                            file_path: row.get(10)?,
+                        })
+                    },
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.file_id = ?1
+                 ORDER BY c.start_line ASC",
+            )?;
+
+            let rows = stmt.query_map(params![file_id], |row| {
+                Ok(crate::db::ChunkSummary {
+                    id: row.get(0)?,
+                    symbol_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    file_path: row.get(5)?,
+                })
+            })?;
+
+            let mut chunks = Vec::new();
+            for chunk_result in rows {
+                chunks.push(chunk_result?);
+            }
+            Ok(chunks)
+        })
+        .await
+    }
+
+    async fn get_chunk_context(
+        &self,
+        chunk_id: i64,
+        surrounding: usize,
+    ) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+        self.run(move |conn| {
+            // First, get the target chunk
+            let chunk = conn
+                .query_row(
+                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id = ?1",
+                    params![chunk_id],
+                    |row| {
+                        Ok(crate::db::ChunkFull {
+                            id: row.get(0)?,
+                            file_id: row.get(1)?,
+                            blob_sha: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            signature: row.get(5)?,
+                            docstring: row.get(6)?,
+                            start_line: row.get(7)?,
+                            end_line: row.get(8)?,
+                            preview: row.get(9)?,
+                            file_path: row.get(10)?,
+                        })
+                    },
+                )
+                .optional()?;
+
+            let chunk = match chunk {
+                Some(c) => c,
+                None => return Ok(None),
+            };
+
+            // Get surrounding chunks from the same file, ordered by line proximity
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.file_id = ?1 AND c.id != ?2
+                 ORDER BY ABS(c.start_line - ?3)
+                 LIMIT ?4",
+            )?;
+
+            let rows = stmt.query_map(
+                params![
+                    chunk.file_id,
+                    chunk_id,
+                    chunk.start_line,
+                    (surrounding as i64 * 2)
+                ],
+                |row| {
+                    Ok(crate::db::ChunkSummary {
+                        id: row.get(0)?,
+                        symbol_name: row.get(1)?,
+                        kind: row.get(2)?,
+                        start_line: row.get(3)?,
+                        end_line: row.get(4)?,
+                        file_path: row.get(5)?,
+                    })
+                },
+            )?;
+
+            let mut surrounding_chunks = Vec::new();
+            for chunk_result in rows {
+                surrounding_chunks.push(chunk_result?);
+            }
+
+            Ok(Some(crate::db::ChunkContext {
+                file_path: chunk.file_path.clone(),
+                chunk,
+                surrounding_chunks,
+            }))
+        })
+        .await
+    }
+
+    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
+        self.write_with_retry(move |conn| {
+            // Get count of chunks to delete
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
+                    params![file_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            // Delete embeddings for chunks in this file
+            conn.execute(
+                "DELETE FROM code_embeddings WHERE blob_sha IN (
+                     SELECT blob_sha FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunk_worktrees entries
+            conn.execute(
+                "DELETE FROM chunk_worktrees WHERE chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunk edges
+            conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 ) OR dst_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunks
+            conn.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])?;
+
+            Ok(count as u64)
+        })
+        .await
+    }
+
+    /// Get all chunks for a worktree with their file paths.
+    ///
+    /// Returns chunk ID and file relative path for all chunks in the specified worktree.
+    /// Used by clean-ignored command to identify chunks matching ignore patterns.
+    ///
+    /// # Arguments
+    /// * `worktree_id` - Worktree ID
+    ///
+    /// # Returns
+    /// * `Ok(Vec<(chunk_id, file_relpath)>)` - List of chunks with their file paths
+    async fn get_chunks_for_worktree(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i64, String)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, f.relpath
+                 FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE f.worktree_id = ?1",
+            )?;
+
+            let chunks = stmt
+                .query_map(params![worktree_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(chunks)
+        })
+        .await
+    }
+
+    /// Delete chunks by their IDs.
+    ///
+    /// Deletes specified chunks and cleans up related data (edges, embeddings, junction table).
+    /// Used by clean-ignored command to remove chunks matching ignore patterns.
+    ///
+    /// # Arguments
+    /// * `_worktree_id` - Worktree ID (reserved for future validation/context)
+    /// * `chunk_ids` - List of chunk IDs to delete
+    ///
+    /// # Returns
+    /// * `Ok(usize)` - Number of chunks deleted
+    async fn delete_chunks_by_ids(
+        &self,
+        _worktree_id: i64,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<usize> {
+        if chunk_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // SQLite has a limit of 32766 SQL variables (SQLITE_MAX_VARIABLE_NUMBER).
+        // To avoid "too many SQL variables" errors, batch deletions into chunks of 500.
+        // This allows deleting large numbers of chunks (e.g., 10,000+) without hitting limits.
+        const BATCH_SIZE: usize = 500;
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            let mut total_deleted = 0;
+
+            // Process chunks in batches
+            for batch in chunk_ids.chunks(BATCH_SIZE) {
+                // Create placeholders for SQL IN clause
+                let placeholders = batch.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+                // Delete embeddings for these chunks
+                let embeddings_query = format!(
+                    "DELETE FROM code_embeddings WHERE blob_sha IN (
+                         SELECT blob_sha FROM chunks WHERE id IN ({})
+                     )",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&embeddings_query)?;
+                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+
+                // Delete chunk_worktrees junction entries
+                let junction_query = format!(
+                    "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&junction_query)?;
+                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+
+                // Delete chunk_edges
+                let edges_query = format!(
+                    "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
+                    placeholders, placeholders
+                );
+                let mut stmt = conn.prepare(&edges_query)?;
+                let mut params: Vec<i64> = Vec::new();
+                params.extend_from_slice(batch);
+                params.extend_from_slice(batch);
+                stmt.execute(rusqlite::params_from_iter(params.iter()))?;
+
+                // Delete chunks themselves and accumulate count
+                let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
+                let mut stmt = conn.prepare(&chunks_query)?;
+                let rows_affected = stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+                total_deleted += rows_affected;
+            }
+
+            Ok(total_deleted)
+        })
+        .await
+    }
+
+    async fn get_chunks_by_blob_sha(
+        &self,
+        blob_sha: &str,
+    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        let blob_sha = blob_sha.to_string();
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE c.blob_sha = ?1
+                 ORDER BY c.start_line",
+            )?;
+
+            let rows = stmt.query_map(params![blob_sha], |row| {
+                Ok(crate::db::ChunkSummary {
+                    id: row.get(0)?,
+                    symbol_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    file_path: row.get(5)?,
+                })
+            })?;
+
+            let mut chunks = Vec::new();
+            for chunk_result in rows {
+                chunks.push(chunk_result?);
+            }
+            Ok(chunks)
+        })
+        .await
+    }
+
+    /// Add chunk to additional worktree
+    async fn add_chunk_to_worktree(&self, chunk_id: i64, worktree_id: i64) -> anyhow::Result<()> {
+        self.run(move |conn| {
+            conn.execute(
+                "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
+                params![chunk_id, worktree_id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Get all worktrees containing this chunk
+    async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>> {
+        self.run(move |conn| {
+            let mut stmt =
+                conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
+            let rows = stmt.query_map(params![chunk_id], |row| row.get(0))?;
+            let mut ids = Vec::new();
+            for id in rows {
+                ids.push(id?);
+            }
+            Ok(ids)
+        })
+        .await
+    }
+}
+
+// Database operations - remaining inherent methods
+impl SqliteStore {
     #[allow(clippy::too_many_arguments)]
     pub async fn search_chunks_fts(
         &self,
@@ -1557,222 +1988,6 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn find_chunk_by_symbol(
-        &self,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        symbol_name: &str,
-        relpath: Option<&str>,
-    ) -> anyhow::Result<Option<i64>> {
-        let symbol_name = symbol_name.to_string();
-        let relpath = relpath.map(|s| s.to_string());
-        self.run(move |conn| {
-            // Use reference to avoid move of relpath
-            let relpath_ref = relpath.as_deref();
-
-            // Similar to Postgres logic
-            let sql = if relpath_ref.is_some() {
-                if worktree_id.is_some() {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2
-                       AND f.relpath = ?3 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                } else {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1
-                       AND f.relpath = ?3 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                }
-            } else {
-                if worktree_id.is_some() {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                } else {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                }
-            };
-
-            let id: Option<i64> = if let Some(path) = relpath_ref {
-                if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| {
-                        row.get(0)
-                    })
-                    .optional()?
-                } else {
-                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
-                        .optional()?
-                }
-            } else {
-                if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
-                        .optional()?
-                } else {
-                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
-                        .optional()?
-                }
-            };
-
-            Ok(id)
-        })
-        .await
-    }
-
-    pub async fn get_chunk_by_id(
-        &self,
-        chunk_id: i64,
-    ) -> anyhow::Result<Option<crate::db::ChunkFull>> {
-        self.run(move |conn| {
-            let result = conn
-                .query_row(
-                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
-                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.id = ?1",
-                    params![chunk_id],
-                    |row| {
-                        Ok(crate::db::ChunkFull {
-                            id: row.get(0)?,
-                            file_id: row.get(1)?,
-                            blob_sha: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            signature: row.get(5)?,
-                            docstring: row.get(6)?,
-                            start_line: row.get(7)?,
-                            end_line: row.get(8)?,
-                            preview: row.get(9)?,
-                            file_path: row.get(10)?,
-                        })
-                    },
-                )
-                .optional()?;
-            Ok(result)
-        })
-        .await
-    }
-
-    pub async fn get_file_chunks(
-        &self,
-        file_id: i64,
-    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.file_id = ?1
-                 ORDER BY c.start_line ASC",
-            )?;
-
-            let rows = stmt.query_map(params![file_id], |row| {
-                Ok(crate::db::ChunkSummary {
-                    id: row.get(0)?,
-                    symbol_name: row.get(1)?,
-                    kind: row.get(2)?,
-                    start_line: row.get(3)?,
-                    end_line: row.get(4)?,
-                    file_path: row.get(5)?,
-                })
-            })?;
-
-            let mut chunks = Vec::new();
-            for chunk_result in rows {
-                chunks.push(chunk_result?);
-            }
-            Ok(chunks)
-        })
-        .await
-    }
-
-    pub async fn get_chunk_context(
-        &self,
-        chunk_id: i64,
-        surrounding: usize,
-    ) -> anyhow::Result<Option<crate::db::ChunkContext>> {
-        self.run(move |conn| {
-            // First, get the target chunk
-            let chunk = conn
-                .query_row(
-                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
-                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.id = ?1",
-                    params![chunk_id],
-                    |row| {
-                        Ok(crate::db::ChunkFull {
-                            id: row.get(0)?,
-                            file_id: row.get(1)?,
-                            blob_sha: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            signature: row.get(5)?,
-                            docstring: row.get(6)?,
-                            start_line: row.get(7)?,
-                            end_line: row.get(8)?,
-                            preview: row.get(9)?,
-                            file_path: row.get(10)?,
-                        })
-                    },
-                )
-                .optional()?;
-
-            let chunk = match chunk {
-                Some(c) => c,
-                None => return Ok(None),
-            };
-
-            // Get surrounding chunks from the same file, ordered by line proximity
-            let mut stmt = conn.prepare(
-                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.file_id = ?1 AND c.id != ?2
-                 ORDER BY ABS(c.start_line - ?3)
-                 LIMIT ?4",
-            )?;
-
-            let rows = stmt.query_map(
-                params![
-                    chunk.file_id,
-                    chunk_id,
-                    chunk.start_line,
-                    (surrounding as i64 * 2)
-                ],
-                |row| {
-                    Ok(crate::db::ChunkSummary {
-                        id: row.get(0)?,
-                        symbol_name: row.get(1)?,
-                        kind: row.get(2)?,
-                        start_line: row.get(3)?,
-                        end_line: row.get(4)?,
-                        file_path: row.get(5)?,
-                    })
-                },
-            )?;
-
-            let mut surrounding_chunks = Vec::new();
-            for chunk_result in rows {
-                surrounding_chunks.push(chunk_result?);
-            }
-
-            Ok(Some(crate::db::ChunkContext {
-                file_path: chunk.file_path.clone(),
-                chunk,
-                surrounding_chunks,
-            }))
-        })
-        .await
-    }
-
     pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
         self.run(move |conn| {
             let result = conn.query_row(
@@ -1960,191 +2175,6 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
-        self.write_with_retry(move |conn| {
-            // Get count of chunks to delete
-            let count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
-                    params![file_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-
-            // Delete embeddings for chunks in this file
-            conn.execute(
-                "DELETE FROM code_embeddings WHERE blob_sha IN (
-                     SELECT blob_sha FROM chunks WHERE file_id = ?1
-                 )",
-                params![file_id],
-            )?;
-
-            // Delete chunk_worktrees entries
-            conn.execute(
-                "DELETE FROM chunk_worktrees WHERE chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 )",
-                params![file_id],
-            )?;
-
-            // Delete chunk edges
-            conn.execute(
-                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 ) OR dst_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 )",
-                params![file_id],
-            )?;
-
-            // Delete chunks
-            conn.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])?;
-
-            Ok(count as u64)
-        })
-        .await
-    }
-
-    /// Get all chunks for a worktree with their file paths.
-    ///
-    /// Returns chunk ID and file relative path for all chunks in the specified worktree.
-    /// Used by clean-ignored command to identify chunks matching ignore patterns.
-    ///
-    /// # Arguments
-    /// * `worktree_id` - Worktree ID
-    ///
-    /// # Returns
-    /// * `Ok(Vec<(chunk_id, file_relpath)>)` - List of chunks with their file paths
-    pub async fn get_chunks_for_worktree(
-        &self,
-        worktree_id: i64,
-    ) -> anyhow::Result<Vec<(i64, String)>> {
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT c.id, f.relpath
-                 FROM chunks c
-                 JOIN files f ON c.file_id = f.id
-                 WHERE f.worktree_id = ?1",
-            )?;
-
-            let chunks = stmt
-                .query_map(params![worktree_id], |row| Ok((row.get(0)?, row.get(1)?)))?
-                .collect::<Result<Vec<_>, _>>()?;
-
-            Ok(chunks)
-        })
-        .await
-    }
-
-    /// Delete chunks by their IDs.
-    ///
-    /// Deletes specified chunks and cleans up related data (edges, embeddings, junction table).
-    /// Used by clean-ignored command to remove chunks matching ignore patterns.
-    ///
-    /// # Arguments
-    /// * `_worktree_id` - Worktree ID (reserved for future validation/context)
-    /// * `chunk_ids` - List of chunk IDs to delete
-    ///
-    /// # Returns
-    /// * `Ok(usize)` - Number of chunks deleted
-    pub async fn delete_chunks_by_ids(
-        &self,
-        _worktree_id: i64,
-        chunk_ids: &[i64],
-    ) -> anyhow::Result<usize> {
-        if chunk_ids.is_empty() {
-            return Ok(0);
-        }
-
-        // SQLite has a limit of 32766 SQL variables (SQLITE_MAX_VARIABLE_NUMBER).
-        // To avoid "too many SQL variables" errors, batch deletions into chunks of 500.
-        // This allows deleting large numbers of chunks (e.g., 10,000+) without hitting limits.
-        const BATCH_SIZE: usize = 500;
-
-        let chunk_ids = chunk_ids.to_vec();
-        self.run(move |conn| {
-            let mut total_deleted = 0;
-
-            // Process chunks in batches
-            for batch in chunk_ids.chunks(BATCH_SIZE) {
-                // Create placeholders for SQL IN clause
-                let placeholders = batch.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-                // Delete embeddings for these chunks
-                let embeddings_query = format!(
-                    "DELETE FROM code_embeddings WHERE blob_sha IN (
-                         SELECT blob_sha FROM chunks WHERE id IN ({})
-                     )",
-                    placeholders
-                );
-                let mut stmt = conn.prepare(&embeddings_query)?;
-                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
-
-                // Delete chunk_worktrees junction entries
-                let junction_query = format!(
-                    "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
-                    placeholders
-                );
-                let mut stmt = conn.prepare(&junction_query)?;
-                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
-
-                // Delete chunk_edges
-                let edges_query = format!(
-                    "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
-                    placeholders, placeholders
-                );
-                let mut stmt = conn.prepare(&edges_query)?;
-                let mut params: Vec<i64> = Vec::new();
-                params.extend_from_slice(batch);
-                params.extend_from_slice(batch);
-                stmt.execute(rusqlite::params_from_iter(params.iter()))?;
-
-                // Delete chunks themselves and accumulate count
-                let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
-                let mut stmt = conn.prepare(&chunks_query)?;
-                let rows_affected = stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
-                total_deleted += rows_affected;
-            }
-
-            Ok(total_deleted)
-        })
-        .await
-    }
-
-    pub async fn get_chunks_by_blob_sha(
-        &self,
-        blob_sha: &str,
-    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
-        let blob_sha = blob_sha.to_string();
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
-                 FROM chunks c
-                 JOIN files f ON c.file_id = f.id
-                 WHERE c.blob_sha = ?1
-                 ORDER BY c.start_line",
-            )?;
-
-            let rows = stmt.query_map(params![blob_sha], |row| {
-                Ok(crate::db::ChunkSummary {
-                    id: row.get(0)?,
-                    symbol_name: row.get(1)?,
-                    kind: row.get(2)?,
-                    start_line: row.get(3)?,
-                    end_line: row.get(4)?,
-                    file_path: row.get(5)?,
-                })
-            })?;
-
-            let mut chunks = Vec::new();
-            for chunk_result in rows {
-                chunks.push(chunk_result?);
-            }
-            Ok(chunks)
-        })
-        .await
-    }
-
     pub async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
             let mut runner = MigrationRunner::new(conn);
@@ -2191,39 +2221,6 @@ impl SqliteStore {
                 versions.insert(version?);
             }
             Ok(versions)
-        })
-        .await
-    }
-
-    // Additional SQLite-specific methods
-
-    /// Add chunk to additional worktree
-    pub async fn add_chunk_to_worktree(
-        &self,
-        chunk_id: i64,
-        worktree_id: i64,
-    ) -> anyhow::Result<()> {
-        self.run(move |conn| {
-            conn.execute(
-                "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
-                params![chunk_id, worktree_id],
-            )?;
-            Ok(())
-        })
-        .await
-    }
-
-    /// Get all worktrees containing this chunk
-    pub async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>> {
-        self.run(move |conn| {
-            let mut stmt =
-                conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
-            let rows = stmt.query_map(params![chunk_id], |row| row.get(0))?;
-            let mut ids = Vec::new();
-            for id in rows {
-                ids.push(id?);
-            }
-            Ok(ids)
         })
         .await
     }
