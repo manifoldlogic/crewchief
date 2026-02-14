@@ -17,6 +17,7 @@ use tokio::task::spawn_blocking;
 use crate::config::{EdgeQualityWeights, SqliteConfig};
 use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
+use crate::db::traits::StoreSearch;
 
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
 use fts::sanitize_fts_term;
@@ -1268,10 +1269,14 @@ impl StoreChunks for SqliteStore {
     }
 }
 
-// Database operations - remaining inherent methods
-impl SqliteStore {
+// =============================================================================
+// StoreSearch - FTS, vector, and hybrid search
+// =============================================================================
+
+#[async_trait]
+impl StoreSearch for SqliteStore {
     #[allow(clippy::too_many_arguments)]
-    pub async fn search_chunks_fts(
+    async fn search_chunks_fts(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -1466,7 +1471,7 @@ impl SqliteStore {
     }
 
     /// FTS search by repo_id and worktree_id (for use by search executors)
-    pub async fn search_fts_by_id(
+    async fn search_fts_by_id(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
@@ -1604,7 +1609,7 @@ impl SqliteStore {
     }
 
     /// Vector search by repo_id and worktree_id (for use by search executors)
-    pub async fn search_vector_by_id(
+    async fn search_vector_by_id(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
@@ -1714,7 +1719,7 @@ impl SqliteStore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn search_chunks_vector(
+    async fn search_chunks_vector(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -1842,7 +1847,7 @@ impl SqliteStore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn search_chunks_hybrid(
+    async fn search_chunks_hybrid(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -1988,6 +1993,167 @@ impl SqliteStore {
         .await
     }
 
+    /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
+    ///
+    /// Combines keyword matching (FTS5) with semantic similarity (vectors) to provide
+    /// comprehensive search results. Falls back to FTS-only when vector search is
+    /// unavailable or returns no results.
+    ///
+    /// # Arguments
+    /// * `repo` - Repository name to filter by
+    /// * `worktree` - Optional worktree name to filter by
+    /// * `query` - User's search query (for FTS)
+    /// * `query_embedding` - Query embedding vector (for semantic search)
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Weights for combining FTS and vector contributions
+    async fn search_hybrid(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        weights: hybrid::HybridWeights,
+    ) -> anyhow::Result<Vec<hybrid::HybridResult>> {
+        // Over-fetch from each source for better fusion coverage
+        let fetch_limit = limit * 3;
+
+        // Run FTS and vector search in parallel
+        let (fts_results, vec_results) = tokio::join!(
+            self.search_fts(repo, worktree, query, fetch_limit),
+            self.search_vector(repo, worktree, query_embedding, fetch_limit),
+        );
+
+        let fts_results = fts_results?;
+        let vec_results = vec_results?;
+
+        // Combine results using RRF
+        let results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
+
+        Ok(results)
+    }
+
+    /// Get metadata for multiple chunks (batch query for semantic ranking)
+    ///
+    /// Returns a map of chunk_id -> ChunkMetadata with kind, symbol_name, and recency_score.
+    async fn get_chunks_metadata(
+        &self,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<std::collections::HashMap<i64, hybrid::ChunkMetadata>> {
+        if chunk_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+
+        self.run(move |conn| {
+            let placeholders: Vec<String> =
+                (1..=chunk_ids.len()).map(|i| format!("?{}", i)).collect();
+            let sql = format!(
+                "SELECT id, kind, symbol_name, recency_score FROM chunks WHERE id IN ({})",
+                placeholders.join(", ")
+            );
+
+            let mut stmt = conn.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::ToSql> = chunk_ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::ToSql)
+                .collect();
+
+            let rows = stmt.query_map(params.as_slice(), |row| {
+                let id: i64 = row.get(0)?;
+                let kind: String = row.get(1)?;
+                let symbol_name: Option<String> = row.get(2)?;
+                let recency_score: f64 = row.get(3)?;
+                Ok((
+                    id,
+                    hybrid::ChunkMetadata {
+                        kind,
+                        symbol_name,
+                        recency_score,
+                    },
+                ))
+            })?;
+
+            let mut map = std::collections::HashMap::new();
+            for result in rows {
+                let (id, metadata) = result?;
+                map.insert(id, metadata);
+            }
+            Ok(map)
+        })
+        .await
+    }
+
+    /// Hybrid search with semantic ranking applied
+    ///
+    /// Combines FTS5 and vector search using RRF, then applies semantic ranking
+    /// based on chunk kind, symbol name matching, and recency.
+    ///
+    /// # Arguments
+    /// * `repo` - Repository name to filter by
+    /// * `worktree` - Optional worktree name to filter by
+    /// * `query` - User's search query (for FTS and exact match detection)
+    /// * `query_embedding` - Query embedding vector (for semantic search)
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Weights for combining FTS and vector contributions
+    /// * `ranking` - Semantic ranking configuration
+    async fn search_hybrid_ranked(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        weights: hybrid::HybridWeights,
+        ranking: hybrid::SemanticRanking,
+    ) -> anyhow::Result<Vec<hybrid::RankedSearchHit>> {
+        // Over-fetch by 2x before ranking to ensure good results after re-ordering
+        let fetch_limit = limit * 2;
+
+        // Get base hybrid results
+        let hits = self
+            .search_hybrid(repo, worktree, query, query_embedding, fetch_limit, weights)
+            .await?;
+
+        if hits.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Fetch chunk metadata for all results
+        let chunk_ids: Vec<i64> = hits.iter().map(|h| h.chunk_id).collect();
+        let metadata = self.get_chunks_metadata(&chunk_ids).await?;
+
+        // Build ranked hits with metadata
+        let mut ranked: Vec<hybrid::RankedSearchHit> = hits
+            .into_iter()
+            .filter_map(|h| {
+                let meta = metadata.get(&h.chunk_id)?;
+                Some(hybrid::RankedSearchHit {
+                    chunk_id: h.chunk_id,
+                    score: h.score,
+                    fts_rank: h.fts_rank,
+                    vector_rank: h.vector_rank,
+                    kind: meta.kind.clone(),
+                    symbol_name: meta.symbol_name.clone(),
+                    recency_score: meta.recency_score,
+                    source: h.source,
+                })
+            })
+            .collect();
+
+        // Apply semantic ranking
+        hybrid::apply_semantic_ranking(&mut ranked, query, &ranking);
+
+        // Take top N after re-ranking
+        ranked.truncate(limit);
+
+        Ok(ranked)
+    }
+}
+
+// Database operations - remaining inherent methods
+impl SqliteStore {
     pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
         self.run(move |conn| {
             let result = conn.query_row(
@@ -2367,164 +2533,6 @@ impl SqliteStore {
             fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit, None, None)
         })
         .await
-    }
-
-    /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
-    ///
-    /// Combines keyword matching (FTS5) with semantic similarity (vectors) to provide
-    /// comprehensive search results. Falls back to FTS-only when vector search is
-    /// unavailable or returns no results.
-    ///
-    /// # Arguments
-    /// * `repo` - Repository name to filter by
-    /// * `worktree` - Optional worktree name to filter by
-    /// * `query` - User's search query (for FTS)
-    /// * `query_embedding` - Query embedding vector (for semantic search)
-    /// * `limit` - Maximum number of results to return
-    /// * `weights` - Weights for combining FTS and vector contributions
-    pub async fn search_hybrid(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        query: &str,
-        query_embedding: &[f32],
-        limit: usize,
-        weights: hybrid::HybridWeights,
-    ) -> anyhow::Result<Vec<hybrid::HybridResult>> {
-        // Over-fetch from each source for better fusion coverage
-        let fetch_limit = limit * 3;
-
-        // Run FTS and vector search in parallel
-        let (fts_results, vec_results) = tokio::join!(
-            self.search_fts(repo, worktree, query, fetch_limit),
-            self.search_vector(repo, worktree, query_embedding, fetch_limit),
-        );
-
-        let fts_results = fts_results?;
-        let vec_results = vec_results?;
-
-        // Combine results using RRF
-        let results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
-
-        Ok(results)
-    }
-
-    /// Get metadata for multiple chunks (batch query for semantic ranking)
-    ///
-    /// Returns a map of chunk_id -> ChunkMetadata with kind, symbol_name, and recency_score.
-    pub async fn get_chunks_metadata(
-        &self,
-        chunk_ids: &[i64],
-    ) -> anyhow::Result<std::collections::HashMap<i64, hybrid::ChunkMetadata>> {
-        if chunk_ids.is_empty() {
-            return Ok(std::collections::HashMap::new());
-        }
-
-        let chunk_ids = chunk_ids.to_vec();
-
-        self.run(move |conn| {
-            let placeholders: Vec<String> =
-                (1..=chunk_ids.len()).map(|i| format!("?{}", i)).collect();
-            let sql = format!(
-                "SELECT id, kind, symbol_name, recency_score FROM chunks WHERE id IN ({})",
-                placeholders.join(", ")
-            );
-
-            let mut stmt = conn.prepare(&sql)?;
-            let params: Vec<&dyn rusqlite::ToSql> = chunk_ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::ToSql)
-                .collect();
-
-            let rows = stmt.query_map(params.as_slice(), |row| {
-                let id: i64 = row.get(0)?;
-                let kind: String = row.get(1)?;
-                let symbol_name: Option<String> = row.get(2)?;
-                let recency_score: f64 = row.get(3)?;
-                Ok((
-                    id,
-                    hybrid::ChunkMetadata {
-                        kind,
-                        symbol_name,
-                        recency_score,
-                    },
-                ))
-            })?;
-
-            let mut map = std::collections::HashMap::new();
-            for result in rows {
-                let (id, metadata) = result?;
-                map.insert(id, metadata);
-            }
-            Ok(map)
-        })
-        .await
-    }
-
-    /// Hybrid search with semantic ranking applied
-    ///
-    /// Combines FTS5 and vector search using RRF, then applies semantic ranking
-    /// based on chunk kind, symbol name matching, and recency.
-    ///
-    /// # Arguments
-    /// * `repo` - Repository name to filter by
-    /// * `worktree` - Optional worktree name to filter by
-    /// * `query` - User's search query (for FTS and exact match detection)
-    /// * `query_embedding` - Query embedding vector (for semantic search)
-    /// * `limit` - Maximum number of results to return
-    /// * `weights` - Weights for combining FTS and vector contributions
-    /// * `ranking` - Semantic ranking configuration
-    pub async fn search_hybrid_ranked(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        query: &str,
-        query_embedding: &[f32],
-        limit: usize,
-        weights: hybrid::HybridWeights,
-        ranking: hybrid::SemanticRanking,
-    ) -> anyhow::Result<Vec<hybrid::RankedSearchHit>> {
-        // Over-fetch by 2x before ranking to ensure good results after re-ordering
-        let fetch_limit = limit * 2;
-
-        // Get base hybrid results
-        let hits = self
-            .search_hybrid(repo, worktree, query, query_embedding, fetch_limit, weights)
-            .await?;
-
-        if hits.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Fetch chunk metadata for all results
-        let chunk_ids: Vec<i64> = hits.iter().map(|h| h.chunk_id).collect();
-        let metadata = self.get_chunks_metadata(&chunk_ids).await?;
-
-        // Build ranked hits with metadata
-        let mut ranked: Vec<hybrid::RankedSearchHit> = hits
-            .into_iter()
-            .filter_map(|h| {
-                let meta = metadata.get(&h.chunk_id)?;
-                Some(hybrid::RankedSearchHit {
-                    chunk_id: h.chunk_id,
-                    score: h.score,
-                    fts_rank: h.fts_rank,
-                    vector_rank: h.vector_rank,
-                    kind: meta.kind.clone(),
-                    symbol_name: meta.symbol_name.clone(),
-                    recency_score: meta.recency_score,
-                    source: h.source,
-                })
-            })
-            .collect();
-
-        // Apply semantic ranking
-        hybrid::apply_semantic_ranking(&mut ranked, query, &ranking);
-
-        // Take top N after re-ranking
-        ranked.truncate(limit);
-
-        Ok(ranked)
     }
 
     // ========================================================================

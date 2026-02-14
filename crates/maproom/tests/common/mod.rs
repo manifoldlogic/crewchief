@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use crewchief_maproom::db::sqlite::SqliteStore;
 use crewchief_maproom::db::StoreChunks;
 use crewchief_maproom::db::StoreCore;
+use crewchief_maproom::db::StoreSearch;
 use crewchief_maproom::db::{ChunkRecord, FileRecord};
 
 // Re-export for test convenience

@@ -41,6 +41,7 @@
 //! - Smaller index footprint due to deduplication
 //! - Query performance equal or better than direct embedding access
 
+use crate::db::traits::StoreSearch;
 use crate::db::SqliteStore;
 use crate::embedding::cache::Vector;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
