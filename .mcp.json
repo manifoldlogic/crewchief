@@ -4,26 +4,6 @@
       "type": "http",
       "url": "https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa,crawling_exa"
     },
-    "rust-language-server": {
-      "command": "mcp-language-server",
-      "args": [
-        "--workspace",
-        "/workspace",
-        "--lsp",
-        "rust-analyzer"
-      ]
-    },
-    "ts-language-server": {
-      "command": "mcp-language-server",
-      "args": [
-        "--workspace",
-        "/workspace",
-        "--lsp",
-        "vtsls",
-        "--",
-        "--stdio"
-      ]
-    },
     "Ref": {
       "type": "http",
       "url": "https://api.ref.tools/mcp",
