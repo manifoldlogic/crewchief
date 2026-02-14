@@ -3,6 +3,7 @@
 //! This module retrieves recency and churn scores from the chunks table
 //! and combines them into a unified signal score.
 
+use crate::db::traits::StoreGraph;
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use tracing::{debug, instrument};

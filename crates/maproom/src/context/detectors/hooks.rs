@@ -6,6 +6,7 @@
 //! - Hook dependencies and relationships
 
 use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreGraph;
 use crate::db::traits::StoreSearch;
 use crate::db::SqliteStore;
 use anyhow::Result;

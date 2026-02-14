@@ -430,7 +430,7 @@ enum Commands {
         /// Maximum length of preview text in characters (default: 200, or 120 for agent format)
         #[arg(long)]
         preview_length: Option<usize>,
-        /// Output format for search results
+        /// Output format: json (default, backward compatible) or agent (compact, LLM-optimized)
         ///
         /// Available formats:
         /// - json: Full JSON output (default, backward compatible)
@@ -440,10 +440,17 @@ enum Commands {
         /// Use --preview-length to customize the preview length.
         ///
         /// Examples:
-        ///   maproom search --repo myrepo --query "auth" --format agent
-        ///   maproom search --repo myrepo --query "auth" --format agent --preview-length 50
-        ///   maproom search --repo myrepo --query "auth" --format json
-        ///   maproom search --repo myrepo --query "auth" --format agent --kind func
+        ///   # Agent format with default preview (120 chars)
+        ///   maproom search --repo X --query Y --format agent
+        ///
+        ///   # Agent format with custom preview length
+        ///   maproom search --repo X --query Y --format agent --preview-length 50
+        ///
+        ///   # JSON format (explicit, same as default)
+        ///   maproom search --repo X --query Y --format json
+        ///
+        ///   # Agent format filtered by kind
+        ///   maproom search --repo X --query Y --format agent --kind func
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
@@ -494,20 +501,27 @@ enum Commands {
         #[arg(long)]
         preview_length: Option<usize>,
 
-        /// Output format for search results
+        /// Output format: json (default, backward compatible) or agent (compact, LLM-optimized)
         ///
         /// Available formats:
-        /// - json: Full JSON output with metadata (default, backward compatible)
+        /// - json: Full JSON output (default, backward compatible)
         /// - agent: Compact one-line-per-result for LLM agents
         ///
         /// The agent format implicitly enables preview with 120-char default.
         /// Use --preview-length to customize the preview length.
         ///
         /// Examples:
-        ///   maproom vector-search --repo myrepo --query "auth" --format agent
-        ///   maproom vector-search --repo myrepo --query "auth" --format agent --preview-length 50
-        ///   maproom vector-search --repo myrepo --query "auth" --format json
-        ///   maproom vector-search --repo myrepo --query "auth" --format agent --lang py
+        ///   # Agent format with default preview (120 chars)
+        ///   maproom vector-search --repo X --query Y --format agent
+        ///
+        ///   # Agent format with custom preview length
+        ///   maproom vector-search --repo X --query Y --format agent --preview-length 50
+        ///
+        ///   # JSON format (explicit, same as default)
+        ///   maproom vector-search --repo X --query Y --format json
+        ///
+        ///   # Agent format filtered by kind
+        ///   maproom vector-search --repo X --query Y --format agent --kind func
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },

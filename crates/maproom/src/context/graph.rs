@@ -9,6 +9,7 @@
 
 use crate::db::sqlite::graph::{GraphResult, ImportDirection};
 use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreGraph;
 use crate::db::SqliteStore;
 use anyhow::Result;
 

@@ -17,6 +17,7 @@ use tokio::task::spawn_blocking;
 use crate::config::{EdgeQualityWeights, SqliteConfig};
 use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
+use crate::db::traits::StoreGraph;
 use crate::db::traits::StoreSearch;
 
 use crate::db::{ChunkRecord, FileRecord, SearchHit};
@@ -2152,6 +2153,485 @@ impl StoreSearch for SqliteStore {
     }
 }
 
+// =============================================================================
+// StoreGraph - Graph traversal and importance scoring
+// =============================================================================
+
+#[async_trait]
+impl StoreGraph for SqliteStore {
+    /// Find all chunks that call the target chunk (directly or transitively)
+    ///
+    /// # Arguments
+    /// * `target_chunk_id` - The chunk to find callers for
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_callers(
+        &self,
+        target_chunk_id: i64,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_callers(conn, target_chunk_id, max_depth))
+            .await
+    }
+
+    /// Find all chunks called by the source chunk (directly or transitively)
+    ///
+    /// # Arguments
+    /// * `source_chunk_id` - The chunk to find callees for
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_callees(
+        &self,
+        source_chunk_id: i64,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_callees(conn, source_chunk_id, max_depth))
+            .await
+    }
+
+    /// Find import relationships for a chunk
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find imports for
+    /// * `direction` - Incoming (who imports this) or Outgoing (what this imports)
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_imports(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_imports(conn, chunk_id, direction, max_depth))
+            .await
+    }
+
+    /// Find extension/inheritance relationships for a chunk
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find extensions for
+    /// * `direction` - Incoming (what extends this) or Outgoing (what this extends)
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_extensions(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_extensions(conn, chunk_id, direction, max_depth))
+            .await
+    }
+
+    /// Get all direct edges from or to a chunk (without recursion)
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find edges for
+    /// * `direction` - Incoming (edges pointing to chunk) or Outgoing (edges from chunk)
+    ///
+    /// # Returns
+    /// Vector of GraphResult with depth=1 for all direct relationships
+    async fn get_direct_edges(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
+            .await
+    }
+
+    /// Calculate graph importance scores for chunks in a repo/worktree
+    ///
+    /// Uses edge counts (callers, importers, tests) to calculate PageRank-like scores.
+    ///
+    /// When `enable_quality` is false: uses legacy edge counting with hardcoded weights
+    /// (calls=0.3, imports=0.2, tests=0.1, logarithmic scaling).
+    ///
+    /// When `enable_quality` is true: uses quality-weighted edge scoring with test detection
+    /// using configurable weights from EdgeQualityWeights.
+    ///
+    /// # Arguments
+    /// * `repo_id` - Repository ID to query
+    /// * `worktree_id` - Optional worktree ID to filter by
+    /// * `limit` - Maximum number of results
+    /// * `enable_quality` - If true, use quality-weighted scoring; if false, use legacy scoring
+    /// * `weights` - Edge quality weights (production_code, test_code, calls)
+    async fn calculate_graph_importance(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        limit: usize,
+        enable_quality: bool,
+        weights: &EdgeQualityWeights,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        tracing::debug!(
+            repo_id = repo_id,
+            worktree_id = ?worktree_id,
+            limit = limit,
+            enable_quality = enable_quality,
+            production_code_weight = weights.production_code,
+            test_code_weight = weights.test_code,
+            calls_weight = weights.calls,
+            "Calculating graph importance"
+        );
+
+        if !enable_quality {
+            // Call legacy implementation
+            return self
+                .calculate_graph_importance_legacy(repo_id, worktree_id, limit)
+                .await;
+        }
+
+        // New quality-weighted implementation with configurable weights
+        self.calculate_graph_importance_quality(repo_id, worktree_id, limit, weights)
+            .await
+    }
+
+    /// Calculate graph importance for specific chunk IDs
+    ///
+    /// Uses edge counts to calculate PageRank-like scores for the given chunks.
+    async fn calculate_graph_importance_for_chunks(
+        &self,
+        chunk_ids: &[i64],
+        repo_id: i64,
+        worktree_id: Option<i64>,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if chunk_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            // Build placeholders for IN clause
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    WITH edge_counts AS (
+                        SELECT
+                            dst_chunk_id as chunk_id,
+                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                        FROM chunk_edges
+                        WHERE dst_chunk_id IN ({})
+                        GROUP BY dst_chunk_id
+                    )
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        COALESCE(
+                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                            0
+                        ) as graph_score
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
+                    ORDER BY graph_score DESC
+                    "#,
+                    placeholders, placeholders
+                )
+            } else {
+                format!(
+                    r#"
+                    WITH edge_counts AS (
+                        SELECT
+                            dst_chunk_id as chunk_id,
+                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                        FROM chunk_edges
+                        WHERE dst_chunk_id IN ({})
+                        GROUP BY dst_chunk_id
+                    )
+                    SELECT DISTINCT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        COALESCE(
+                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                            0
+                        ) as graph_score
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ?
+                    ORDER BY graph_score DESC
+                    "#,
+                    placeholders, placeholders
+                )
+            };
+
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
+
+            // Build parameter list
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
+                .iter()
+                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+                .collect();
+
+            // Duplicate chunk_ids for the second IN clause
+            for id in &chunk_ids {
+                param_values.push(Box::new(*id));
+            }
+
+            // Add repo_id
+            param_values.push(Box::new(repo_id));
+
+            // Add worktree_id if present
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
+
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: row.get(6)?,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                    preview: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
+            }
+            Ok(hits)
+        })
+        .await
+    }
+
+    /// Calculate signal scores (recency + churn) for chunks in a repo/worktree
+    ///
+    /// Combines recency_score and churn_score from chunks table with configurable weights.
+    async fn calculate_signal_scores(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        recency_weight: f32,
+        churn_weight: f32,
+        limit: usize,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        self.run(move |conn| {
+            let sql = if worktree_id.is_some() {
+                r#"
+                SELECT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    (c.recency_score * ?3 + c.churn_score * ?4) as combined_signal
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                WHERE f.repo_id = ?1 AND cw.worktree_id = ?2
+                ORDER BY combined_signal DESC
+                LIMIT ?5
+                "#
+            } else {
+                r#"
+                SELECT DISTINCT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    (c.recency_score * ?2 + c.churn_score * ?3) as combined_signal
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                WHERE f.repo_id = ?1
+                ORDER BY combined_signal DESC
+                LIMIT ?4
+                "#
+            };
+
+            let mut stmt = conn.prepare(sql)?;
+            let mut hits = Vec::new();
+
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(
+                    params![repo_id, wid, recency_weight, churn_weight, limit as i64],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                            preview: None,
+                        })
+                    },
+                )?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(
+                    params![repo_id, recency_weight, churn_weight, limit as i64],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                            preview: None,
+                        })
+                    },
+                )?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            }
+            Ok(hits)
+        })
+        .await
+    }
+
+    /// Calculate signal scores for specific chunk IDs
+    ///
+    /// Combines recency_score and churn_score for the given chunks.
+    async fn calculate_signal_scores_for_chunks(
+        &self,
+        chunk_ids: &[i64],
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        recency_weight: f32,
+        churn_weight: f32,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if chunk_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
+                    ORDER BY combined_signal DESC
+                    "#,
+                    placeholders
+                )
+            } else {
+                format!(
+                    r#"
+                    SELECT DISTINCT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    WHERE c.id IN ({}) AND f.repo_id = ?
+                    ORDER BY combined_signal DESC
+                    "#,
+                    placeholders
+                )
+            };
+
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
+
+            // Build parameters: recency_weight, churn_weight, chunk_ids..., repo_id, [worktree_id]
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            param_values.push(Box::new(recency_weight));
+            param_values.push(Box::new(churn_weight));
+            for id in &chunk_ids {
+                param_values.push(Box::new(*id));
+            }
+            param_values.push(Box::new(repo_id));
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
+
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: row.get(6)?,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                    preview: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
+            }
+            Ok(hits)
+        })
+        .await
+    }
+}
+
 // Database operations - remaining inherent methods
 impl SqliteStore {
     pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
@@ -2535,146 +3015,6 @@ impl SqliteStore {
         .await
     }
 
-    // ========================================================================
-    // Graph Traversal Methods
-    // ========================================================================
-
-    /// Find all chunks that call the target chunk (directly or transitively)
-    ///
-    /// # Arguments
-    /// * `target_chunk_id` - The chunk to find callers for
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_callers(
-        &self,
-        target_chunk_id: i64,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_callers(conn, target_chunk_id, max_depth))
-            .await
-    }
-
-    /// Find all chunks called by the source chunk (directly or transitively)
-    ///
-    /// # Arguments
-    /// * `source_chunk_id` - The chunk to find callees for
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_callees(
-        &self,
-        source_chunk_id: i64,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_callees(conn, source_chunk_id, max_depth))
-            .await
-    }
-
-    /// Find import relationships for a chunk
-    ///
-    /// # Arguments
-    /// * `chunk_id` - The chunk to find imports for
-    /// * `direction` - Incoming (who imports this) or Outgoing (what this imports)
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_imports(
-        &self,
-        chunk_id: i64,
-        direction: graph::ImportDirection,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_imports(conn, chunk_id, direction, max_depth))
-            .await
-    }
-
-    /// Find extension/inheritance relationships for a chunk
-    ///
-    /// # Arguments
-    /// * `chunk_id` - The chunk to find extensions for
-    /// * `direction` - Incoming (what extends this) or Outgoing (what this extends)
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_extensions(
-        &self,
-        chunk_id: i64,
-        direction: graph::ImportDirection,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_extensions(conn, chunk_id, direction, max_depth))
-            .await
-    }
-
-    /// Get all direct edges from or to a chunk (without recursion)
-    ///
-    /// # Arguments
-    /// * `chunk_id` - The chunk to find edges for
-    /// * `direction` - Incoming (edges pointing to chunk) or Outgoing (edges from chunk)
-    ///
-    /// # Returns
-    /// Vector of GraphResult with depth=1 for all direct relationships
-    pub async fn get_direct_edges(
-        &self,
-        chunk_id: i64,
-        direction: graph::ImportDirection,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
-            .await
-    }
-
-    /// Calculate graph importance scores for chunks in a repo/worktree
-    ///
-    /// Uses edge counts (callers, importers, tests) to calculate PageRank-like scores.
-    ///
-    /// When `enable_quality` is false: uses legacy edge counting with hardcoded weights
-    /// (calls=0.3, imports=0.2, tests=0.1, logarithmic scaling).
-    ///
-    /// When `enable_quality` is true: uses quality-weighted edge scoring with test detection
-    /// using configurable weights from EdgeQualityWeights.
-    ///
-    /// # Arguments
-    /// * `repo_id` - Repository ID to query
-    /// * `worktree_id` - Optional worktree ID to filter by
-    /// * `limit` - Maximum number of results
-    /// * `enable_quality` - If true, use quality-weighted scoring; if false, use legacy scoring
-    /// * `weights` - Edge quality weights (production_code, test_code, calls)
-    pub async fn calculate_graph_importance(
-        &self,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        limit: usize,
-        enable_quality: bool,
-        weights: &EdgeQualityWeights,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        tracing::debug!(
-            repo_id = repo_id,
-            worktree_id = ?worktree_id,
-            limit = limit,
-            enable_quality = enable_quality,
-            production_code_weight = weights.production_code,
-            test_code_weight = weights.test_code,
-            calls_weight = weights.calls,
-            "Calculating graph importance"
-        );
-
-        if !enable_quality {
-            // Call legacy implementation
-            return self
-                .calculate_graph_importance_legacy(repo_id, worktree_id, limit)
-                .await;
-        }
-
-        // New quality-weighted implementation with configurable weights
-        self.calculate_graph_importance_quality(repo_id, worktree_id, limit, weights)
-            .await
-    }
-
     /// Legacy graph importance calculation (pre-quality weights)
     ///
     /// Uses simple edge counting with hardcoded type weights.
@@ -3022,342 +3362,6 @@ impl SqliteStore {
                 "Quality-weighted graph importance query completed"
             );
 
-            Ok(hits)
-        })
-        .await
-    }
-
-    /// Calculate graph importance for specific chunk IDs
-    ///
-    /// Uses edge counts to calculate PageRank-like scores for the given chunks.
-    pub async fn calculate_graph_importance_for_chunks(
-        &self,
-        chunk_ids: &[i64],
-        repo_id: i64,
-        worktree_id: Option<i64>,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        if chunk_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let chunk_ids = chunk_ids.to_vec();
-        self.run(move |conn| {
-            // Build placeholders for IN clause
-            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-            let sql = if worktree_id.is_some() {
-                format!(
-                    r#"
-                    WITH edge_counts AS (
-                        SELECT
-                            dst_chunk_id as chunk_id,
-                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
-                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
-                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
-                        FROM chunk_edges
-                        WHERE dst_chunk_id IN ({})
-                        GROUP BY dst_chunk_id
-                    )
-                    SELECT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        COALESCE(
-                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
-                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
-                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
-                            0
-                        ) as graph_score
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
-                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
-                    ORDER BY graph_score DESC
-                    "#,
-                    placeholders, placeholders
-                )
-            } else {
-                format!(
-                    r#"
-                    WITH edge_counts AS (
-                        SELECT
-                            dst_chunk_id as chunk_id,
-                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
-                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
-                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
-                        FROM chunk_edges
-                        WHERE dst_chunk_id IN ({})
-                        GROUP BY dst_chunk_id
-                    )
-                    SELECT DISTINCT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        COALESCE(
-                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
-                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
-                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
-                            0
-                        ) as graph_score
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
-                    WHERE c.id IN ({}) AND f.repo_id = ?
-                    ORDER BY graph_score DESC
-                    "#,
-                    placeholders, placeholders
-                )
-            };
-
-            let mut stmt = conn.prepare(&sql)?;
-            let mut hits = Vec::new();
-
-            // Build parameter list
-            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
-                .iter()
-                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
-                .collect();
-
-            // Duplicate chunk_ids for the second IN clause
-            for id in &chunk_ids {
-                param_values.push(Box::new(*id));
-            }
-
-            // Add repo_id
-            param_values.push(Box::new(repo_id));
-
-            // Add worktree_id if present
-            if let Some(wid) = worktree_id {
-                param_values.push(Box::new(wid));
-            }
-
-            let params_refs: Vec<&dyn rusqlite::ToSql> =
-                param_values.iter().map(|p| p.as_ref()).collect();
-
-            let rows = stmt.query_map(params_refs.as_slice(), |row| {
-                Ok(SearchHit {
-                    chunk_id: row.get(0)?,
-                    start_line: row.get(1)?,
-                    end_line: row.get(2)?,
-                    symbol_name: row.get(3)?,
-                    kind: row.get(4)?,
-                    file_relpath: row.get(5)?,
-                    score: row.get(6)?,
-                    base_score: None,
-                    kind_mult: None,
-                    exact_mult: None,
-                    preview: None,
-                })
-            })?;
-            for row in rows {
-                hits.push(row?);
-            }
-            Ok(hits)
-        })
-        .await
-    }
-
-    /// Calculate signal scores (recency + churn) for chunks in a repo/worktree
-    ///
-    /// Combines recency_score and churn_score from chunks table with configurable weights.
-    pub async fn calculate_signal_scores(
-        &self,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        recency_weight: f32,
-        churn_weight: f32,
-        limit: usize,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        self.run(move |conn| {
-            let sql = if worktree_id.is_some() {
-                r#"
-                SELECT
-                    c.id,
-                    c.start_line,
-                    c.end_line,
-                    c.symbol_name,
-                    c.kind,
-                    f.relpath,
-                    (c.recency_score * ?3 + c.churn_score * ?4) as combined_signal
-                FROM chunks c
-                JOIN files f ON f.id = c.file_id
-                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                WHERE f.repo_id = ?1 AND cw.worktree_id = ?2
-                ORDER BY combined_signal DESC
-                LIMIT ?5
-                "#
-            } else {
-                r#"
-                SELECT DISTINCT
-                    c.id,
-                    c.start_line,
-                    c.end_line,
-                    c.symbol_name,
-                    c.kind,
-                    f.relpath,
-                    (c.recency_score * ?2 + c.churn_score * ?3) as combined_signal
-                FROM chunks c
-                JOIN files f ON f.id = c.file_id
-                WHERE f.repo_id = ?1
-                ORDER BY combined_signal DESC
-                LIMIT ?4
-                "#
-            };
-
-            let mut stmt = conn.prepare(sql)?;
-            let mut hits = Vec::new();
-
-            if let Some(wid) = worktree_id {
-                let rows = stmt.query_map(
-                    params![repo_id, wid, recency_weight, churn_weight, limit as i64],
-                    |row| {
-                        Ok(SearchHit {
-                            chunk_id: row.get(0)?,
-                            start_line: row.get(1)?,
-                            end_line: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            file_relpath: row.get(5)?,
-                            score: row.get(6)?,
-                            base_score: None,
-                            kind_mult: None,
-                            exact_mult: None,
-                            preview: None,
-                        })
-                    },
-                )?;
-                for row in rows {
-                    hits.push(row?);
-                }
-            } else {
-                let rows = stmt.query_map(
-                    params![repo_id, recency_weight, churn_weight, limit as i64],
-                    |row| {
-                        Ok(SearchHit {
-                            chunk_id: row.get(0)?,
-                            start_line: row.get(1)?,
-                            end_line: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            file_relpath: row.get(5)?,
-                            score: row.get(6)?,
-                            base_score: None,
-                            kind_mult: None,
-                            exact_mult: None,
-                            preview: None,
-                        })
-                    },
-                )?;
-                for row in rows {
-                    hits.push(row?);
-                }
-            }
-            Ok(hits)
-        })
-        .await
-    }
-
-    /// Calculate signal scores for specific chunk IDs
-    ///
-    /// Combines recency_score and churn_score for the given chunks.
-    pub async fn calculate_signal_scores_for_chunks(
-        &self,
-        chunk_ids: &[i64],
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        recency_weight: f32,
-        churn_weight: f32,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        if chunk_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let chunk_ids = chunk_ids.to_vec();
-        self.run(move |conn| {
-            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-            let sql = if worktree_id.is_some() {
-                format!(
-                    r#"
-                    SELECT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
-                    ORDER BY combined_signal DESC
-                    "#,
-                    placeholders
-                )
-            } else {
-                format!(
-                    r#"
-                    SELECT DISTINCT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    WHERE c.id IN ({}) AND f.repo_id = ?
-                    ORDER BY combined_signal DESC
-                    "#,
-                    placeholders
-                )
-            };
-
-            let mut stmt = conn.prepare(&sql)?;
-            let mut hits = Vec::new();
-
-            // Build parameters: recency_weight, churn_weight, chunk_ids..., repo_id, [worktree_id]
-            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-            param_values.push(Box::new(recency_weight));
-            param_values.push(Box::new(churn_weight));
-            for id in &chunk_ids {
-                param_values.push(Box::new(*id));
-            }
-            param_values.push(Box::new(repo_id));
-            if let Some(wid) = worktree_id {
-                param_values.push(Box::new(wid));
-            }
-
-            let params_refs: Vec<&dyn rusqlite::ToSql> =
-                param_values.iter().map(|p| p.as_ref()).collect();
-
-            let rows = stmt.query_map(params_refs.as_slice(), |row| {
-                Ok(SearchHit {
-                    chunk_id: row.get(0)?,
-                    start_line: row.get(1)?,
-                    end_line: row.get(2)?,
-                    symbol_name: row.get(3)?,
-                    kind: row.get(4)?,
-                    file_relpath: row.get(5)?,
-                    score: row.get(6)?,
-                    base_score: None,
-                    kind_mult: None,
-                    exact_mult: None,
-                    preview: None,
-                })
-            })?;
-            for row in rows {
-                hits.push(row?);
-            }
             Ok(hits)
         })
         .await
