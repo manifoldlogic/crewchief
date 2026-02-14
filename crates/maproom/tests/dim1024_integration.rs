@@ -11,6 +11,7 @@ use crewchief_maproom::db::sqlite::SqliteStore;
 use crewchief_maproom::db::traits::StoreChunks;
 use crewchief_maproom::db::traits::StoreCore;
 use crewchief_maproom::db::traits::StoreSearch;
+use crewchief_maproom::db::StoreEmbeddings;
 use crewchief_maproom::db::{ChunkRecord, FileRecord};
 use rusqlite::Connection;
 

@@ -6,6 +6,7 @@
 //! - Provides progress reporting and cost tracking
 //! - Handles errors and rate limiting gracefully
 
+use crate::db::traits::StoreEmbeddings;
 use crate::db::SqliteStore;
 use crate::embedding::service::EmbeddingService;
 use anyhow::{Context, Result};

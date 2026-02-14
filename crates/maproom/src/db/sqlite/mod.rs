@@ -17,10 +17,11 @@ use tokio::task::spawn_blocking;
 use crate::config::{EdgeQualityWeights, SqliteConfig};
 use crate::db::traits::StoreChunks;
 use crate::db::traits::StoreCore;
+use crate::db::traits::StoreEmbeddings;
 use crate::db::traits::StoreGraph;
 use crate::db::traits::StoreSearch;
 
-use crate::db::{ChunkRecord, FileRecord, SearchHit};
+use crate::db::{ChunkForEmbedding, ChunkRecord, EmbeddingRecord, FileRecord, SearchHit};
 use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
 
@@ -2632,6 +2633,190 @@ impl StoreGraph for SqliteStore {
     }
 }
 
+// =============================================================================
+// StoreEmbeddings - Embedding storage and retrieval
+// =============================================================================
+
+#[async_trait]
+impl StoreEmbeddings for SqliteStore {
+    /// Store or update embedding by content hash
+    async fn upsert_embedding(
+        &self,
+        blob_sha: &str,
+        embedding: &[f32],
+        model_version: &str,
+    ) -> anyhow::Result<i64> {
+        let blob_sha = blob_sha.to_string();
+        let embedding_vec = embedding.to_vec();
+        let model_version = model_version.to_string();
+
+        let embedding_id = self
+            .run(move |conn| {
+                embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
+            })
+            .await?;
+
+        // Sync to vec_code table
+        self.sync_embedding_to_vec(embedding_id, embedding).await?;
+
+        Ok(embedding_id)
+    }
+
+    /// Batch upsert embeddings with deduplication
+    async fn upsert_embeddings_batch_new(
+        &self,
+        embeddings: &[EmbeddingRecord],
+    ) -> anyhow::Result<()> {
+        let embeddings_vec = embeddings.to_vec();
+
+        let id_embedding_pairs = self
+            .run(move |conn| embeddings::upsert_embeddings_batch(conn, &embeddings_vec))
+            .await?;
+
+        // Sync all embeddings to vec_code
+        if self.has_vec_extension() {
+            for (embedding_id, embedding) in id_embedding_pairs {
+                self.sync_embedding_to_vec(embedding_id, &embedding).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if embedding exists for blob_sha
+    async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
+        let blob_sha = blob_sha.to_string();
+
+        self.run(move |conn| embeddings::has_embedding(conn, &blob_sha))
+            .await
+    }
+
+    /// Get embedding by blob_sha
+    async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
+        let blob_sha = blob_sha.to_string();
+
+        self.run(move |conn| embeddings::get_embedding(conn, &blob_sha))
+            .await
+    }
+
+    /// Sync embedding to vec_code table (skips if extension not available)
+    ///
+    /// This method syncs a single embedding from code_embeddings to the vec_code virtual table.
+    /// The rowid in vec_code matches the embedding_id to enable joining search results.
+    async fn sync_embedding_to_vec(
+        &self,
+        embedding_id: i64,
+        embedding: &[f32],
+    ) -> anyhow::Result<()> {
+        if !self.has_vec_extension() {
+            return Ok(()); // Skip silently if extension not available
+        }
+
+        let embedding = embedding.to_vec();
+        self.run(move |conn| embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding))
+            .await
+    }
+
+    /// Sync all embeddings to vec_code table
+    ///
+    /// This method finds all embeddings in code_embeddings that don't have a corresponding
+    /// entry in vec_code and syncs them. Returns the number of embeddings synced.
+    async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
+        if !self.has_vec_extension() {
+            return Ok(0); // Skip if extension not available
+        }
+
+        self.run(move |conn| embeddings::sync_all_embeddings_to_vec(conn))
+            .await
+    }
+
+    /// Count chunks where blob_sha is NOT in code_embeddings table
+    ///
+    /// This returns the count of chunks that need embeddings generated.
+    /// In SQLite, embeddings are stored by blob_sha in the code_embeddings table,
+    /// so a chunk needs embedding if its blob_sha doesn't exist in that table.
+    async fn get_chunks_needing_embeddings_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                r#"
+                SELECT COUNT(DISTINCT c.blob_sha)
+                FROM chunks c
+                WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)
+                "#,
+                [],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Copy embeddings from code_embeddings cache table to chunks
+    ///
+    /// This is a no-op for SQLite since embeddings are already accessible
+    /// via the blob_sha key. This method exists for API compatibility with
+    /// the PostgreSQL implementation but doesn't need to do anything in SQLite.
+    ///
+    /// Returns the count of chunks that would have been updated (0).
+    async fn copy_existing_embeddings_from_cache(&self) -> anyhow::Result<i64> {
+        // In SQLite, embeddings are stored by blob_sha and accessed via joins.
+        // There's no "copying" needed - chunks reference embeddings via blob_sha.
+        // This method exists for API compatibility but is effectively a no-op.
+        Ok(0)
+    }
+
+    /// Fetch chunks that need embeddings generated
+    ///
+    /// Returns chunks where the blob_sha is not in the code_embeddings table.
+    ///
+    /// # Arguments
+    /// * `incremental` - If true, only return chunks without embeddings (always respected)
+    /// * `sample_size` - Optional limit on number of chunks to return
+    async fn fetch_chunks_needing_embeddings(
+        &self,
+        incremental: bool,
+        sample_size: Option<usize>,
+    ) -> anyhow::Result<Vec<ChunkForEmbedding>> {
+        self.run(move |conn| {
+            // Build query based on parameters
+            let mut query = String::from(
+                r#"
+                SELECT c.id, c.blob_sha, c.signature, c.docstring, c.preview
+                FROM chunks c
+                "#,
+            );
+
+            // In SQLite, we only fetch chunks where blob_sha is not in code_embeddings
+            // The incremental parameter doesn't change this since we always check blob_sha
+            if incremental {
+                query.push_str("WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)\n");
+            }
+
+            query.push_str("ORDER BY c.id\n");
+
+            // Add LIMIT if sample_size is specified
+            if let Some(limit) = sample_size {
+                query.push_str(&format!("LIMIT {}", limit));
+            }
+
+            let mut stmt = conn.prepare(&query)?;
+            let rows = stmt.query_map([], |row| {
+                Ok(ChunkForEmbedding {
+                    id: row.get(0)?,
+                    blob_sha: row.get(1)?,
+                    signature: row.get(2)?,
+                    docstring: row.get(3)?,
+                    preview: row.get(4)?,
+                })
+            })?;
+
+            let chunks: Result<Vec<_>, _> = rows.collect();
+            Ok(chunks?)
+        })
+        .await
+    }
+}
+
 // Database operations - remaining inherent methods
 impl SqliteStore {
     pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
@@ -2869,97 +3054,6 @@ impl SqliteStore {
             Ok(versions)
         })
         .await
-    }
-
-    /// Store or update embedding by content hash
-    pub async fn upsert_embedding(
-        &self,
-        blob_sha: &str,
-        embedding: &[f32],
-        model_version: &str,
-    ) -> anyhow::Result<i64> {
-        let blob_sha = blob_sha.to_string();
-        let embedding_vec = embedding.to_vec();
-        let model_version = model_version.to_string();
-
-        let embedding_id = self
-            .run(move |conn| {
-                embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
-            })
-            .await?;
-
-        // Sync to vec_code table
-        self.sync_embedding_to_vec(embedding_id, embedding).await?;
-
-        Ok(embedding_id)
-    }
-
-    /// Batch upsert embeddings with deduplication
-    pub async fn upsert_embeddings_batch_new(
-        &self,
-        embeddings_vec: &[embeddings::EmbeddingRecord],
-    ) -> anyhow::Result<()> {
-        let embeddings_vec = embeddings_vec.to_vec();
-
-        let id_embedding_pairs = self
-            .run(move |conn| embeddings::upsert_embeddings_batch(conn, &embeddings_vec))
-            .await?;
-
-        // Sync all embeddings to vec_code
-        if self.has_vec_extension() {
-            for (embedding_id, embedding) in id_embedding_pairs {
-                self.sync_embedding_to_vec(embedding_id, &embedding).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Check if embedding exists for blob_sha
-    pub async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
-        let blob_sha = blob_sha.to_string();
-
-        self.run(move |conn| embeddings::has_embedding(conn, &blob_sha))
-            .await
-    }
-
-    /// Get embedding by blob_sha
-    pub async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
-        let blob_sha = blob_sha.to_string();
-
-        self.run(move |conn| embeddings::get_embedding(conn, &blob_sha))
-            .await
-    }
-
-    /// Sync embedding to vec_code table (skips if extension not available)
-    ///
-    /// This method syncs a single embedding from code_embeddings to the vec_code virtual table.
-    /// The rowid in vec_code matches the embedding_id to enable joining search results.
-    pub async fn sync_embedding_to_vec(
-        &self,
-        embedding_id: i64,
-        embedding: &[f32],
-    ) -> anyhow::Result<()> {
-        if !self.has_vec_extension() {
-            return Ok(()); // Skip silently if extension not available
-        }
-
-        let embedding = embedding.to_vec();
-        self.run(move |conn| embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding))
-            .await
-    }
-
-    /// Sync all embeddings to vec_code table
-    ///
-    /// This method finds all embeddings in code_embeddings that don't have a corresponding
-    /// entry in vec_code and syncs them. Returns the number of embeddings synced.
-    pub async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
-        if !self.has_vec_extension() {
-            return Ok(0); // Skip if extension not available
-        }
-
-        self.run(move |conn| embeddings::sync_all_embeddings_to_vec(conn))
-            .await
     }
 
     /// Search for similar chunks by embedding (SQLite-specific)
@@ -3363,92 +3457,6 @@ impl SqliteStore {
             );
 
             Ok(hits)
-        })
-        .await
-    }
-
-    /// Count chunks where blob_sha is NOT in code_embeddings table
-    ///
-    /// This returns the count of chunks that need embeddings generated.
-    /// In SQLite, embeddings are stored by blob_sha in the code_embeddings table,
-    /// so a chunk needs embedding if its blob_sha doesn't exist in that table.
-    pub async fn get_chunks_needing_embeddings_count(&self) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                r#"
-                SELECT COUNT(DISTINCT c.blob_sha)
-                FROM chunks c
-                WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)
-                "#,
-                [],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Copy embeddings from code_embeddings cache table to chunks
-    ///
-    /// This is a no-op for SQLite since embeddings are already accessible
-    /// via the blob_sha key. This method exists for API compatibility with
-    /// the PostgreSQL implementation but doesn't need to do anything in SQLite.
-    ///
-    /// Returns the count of chunks that would have been updated (0).
-    pub async fn copy_existing_embeddings_from_cache(&self) -> anyhow::Result<i64> {
-        // In SQLite, embeddings are stored by blob_sha and accessed via joins.
-        // There's no "copying" needed - chunks reference embeddings via blob_sha.
-        // This method exists for API compatibility but is effectively a no-op.
-        Ok(0)
-    }
-
-    /// Fetch chunks that need embeddings generated
-    ///
-    /// Returns chunks where the blob_sha is not in the code_embeddings table.
-    ///
-    /// # Arguments
-    /// * `incremental` - If true, only return chunks without embeddings (always respected)
-    /// * `sample_size` - Optional limit on number of chunks to return
-    pub async fn fetch_chunks_needing_embeddings(
-        &self,
-        incremental: bool,
-        sample_size: Option<usize>,
-    ) -> anyhow::Result<Vec<crate::db::ChunkForEmbedding>> {
-        self.run(move |conn| {
-            // Build query based on parameters
-            let mut query = String::from(
-                r#"
-                SELECT c.id, c.blob_sha, c.signature, c.docstring, c.preview
-                FROM chunks c
-                "#,
-            );
-
-            // In SQLite, we only fetch chunks where blob_sha is not in code_embeddings
-            // The incremental parameter doesn't change this since we always check blob_sha
-            if incremental {
-                query.push_str("WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)\n");
-            }
-
-            query.push_str("ORDER BY c.id\n");
-
-            // Add LIMIT if sample_size is specified
-            if let Some(limit) = sample_size {
-                query.push_str(&format!("LIMIT {}", limit));
-            }
-
-            let mut stmt = conn.prepare(&query)?;
-            let rows = stmt.query_map([], |row| {
-                Ok(crate::db::ChunkForEmbedding {
-                    id: row.get(0)?,
-                    blob_sha: row.get(1)?,
-                    signature: row.get(2)?,
-                    docstring: row.get(3)?,
-                    preview: row.get(4)?,
-                })
-            })?;
-
-            let chunks: Result<Vec<_>, _> = rows.collect();
-            Ok(chunks?)
         })
         .await
     }

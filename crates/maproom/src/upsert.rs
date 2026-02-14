@@ -10,6 +10,7 @@
 
 use crate::content_hash::compute_blob_sha;
 use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreEmbeddings;
 use crate::db::{ChunkRecord, SqliteStore};
 use crate::metrics::CacheMetrics;
 use anyhow::{Context, Result};

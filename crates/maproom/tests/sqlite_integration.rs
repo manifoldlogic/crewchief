@@ -18,6 +18,7 @@ mod filter_integration_tests {
     use crewchief_maproom::db::sqlite::SqliteStore;
     use crewchief_maproom::db::StoreChunks;
     use crewchief_maproom::db::StoreCore;
+    use crewchief_maproom::db::StoreEmbeddings;
     use crewchief_maproom::db::StoreSearch;
     use crewchief_maproom::db::{ChunkRecord, FileRecord};
     use std::collections::HashSet;

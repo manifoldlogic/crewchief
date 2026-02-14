@@ -15,6 +15,7 @@ use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
 };
 use crewchief_maproom::db::StoreCore;
+use crewchief_maproom::db::StoreEmbeddings;
 use crewchief_maproom::db::StoreSearch;
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{daemon, db, indexer};
