@@ -395,6 +395,10 @@ When confidence is disabled, response structure is unchanged:
 
 **No breaking changes**: Existing clients see the same response structure they always have.
 
+### Field Naming: `file_relpath` vs `file_path`
+
+As of AFM-02, the canonical field name for file paths in search results is `file_relpath`. The deprecated `file_path` field is retained for backward compatibility and contains the same value. New code should prefer `file_relpath`; existing code using `file_path` continues to work without changes.
+
 ## Related Documentation
 
 - [Semantic Entry Point Ranking](./search-ranking.md) - How search results are ranked
