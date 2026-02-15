@@ -265,8 +265,8 @@ export async function cleanMaproomRecords(config?: CrewChiefConfig): Promise<voi
     stdio: ['pipe', 'pipe', 'pipe'],
   })
 
-  if (cleanupResult.status !== 0 && cleanupResult.status !== 2) {
-    // Exit code 2 means "no stale worktrees", which is fine
+  if (cleanupResult.status !== 0) {
+    // Success: exit code 0 for all success cases (including "no stale worktrees")
     const errorMsg = cleanupResult.stderr || cleanupResult.stdout || 'Unknown error'
     throw new Error(errorMsg.split('\n')[0])
   }

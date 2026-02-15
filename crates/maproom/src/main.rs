@@ -22,6 +22,11 @@ use crewchief_maproom::db::StoreSearch;
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{daemon, db, indexer};
 
+/// Exit code for runtime errors (transient, may retry).
+const EXIT_RUNTIME_ERROR: i32 = 1;
+/// Exit code for configuration errors (persistent, do not retry).
+const EXIT_CONFIG_ERROR: i32 = 2;
+
 /// Validate provider name against supported providers.
 ///
 /// Returns the provider name if valid, or an error message if invalid.
@@ -1024,14 +1029,14 @@ async fn main() -> anyhow::Result<()> {
                     Ok(worktrees) => worktrees,
                     Err(e) => {
                         eprintln!("❌ Error detecting stale worktrees: {}", e);
-                        std::process::exit(1);
+                        std::process::exit(EXIT_RUNTIME_ERROR);
                     }
                 };
 
                 // Phase 2: Report
                 if stale.is_empty() {
                     println!("✅ No stale worktrees found!");
-                    std::process::exit(2); // Informational exit code
+                    return Ok(()); // Success: no stale worktrees is a valid result
                 }
 
                 println!("📊 Found {} stale worktree(s):", stale.len());
@@ -1712,9 +1717,17 @@ async fn main() -> anyhow::Result<()> {
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
-            let embedding_service = EmbeddingService::from_env()
-                .await
-                .context("Failed to create embedding service")?;
+            let embedding_service = match EmbeddingService::from_env().await {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Configuration error: {}. Ensure embedding provider and API keys are configured.", e);
+                    eprintln!("Set MAPROOM_EMBEDDING_PROVIDER and corresponding API key (OPENAI_API_KEY, etc.)");
+                    std::process::exit(EXIT_CONFIG_ERROR);
+                }
+            };
+            // NOTE: EmbeddingService::from_env() failures are configuration errors (missing provider/API keys)
+            // not runtime errors (network failures). Invalid API keys fail at network call time (runtime),
+            // not at service creation (config).
 
             let query_embedding = embedding_service
                 .embed_text(&query)
@@ -1748,10 +1761,12 @@ async fn main() -> anyhow::Result<()> {
                         || err_str.contains("vector")
                         || err_str.contains("not available")
                     {
-                        eprintln!("Vector search unavailable: {}", e);
-                        eprintln!("Tip: Use 'search' command for full-text search instead");
-                        std::process::exit(1);
+                        eprintln!("Configuration error: Vector search unavailable (sqlite-vec extension not compiled in)");
+                        eprintln!("This binary was built without vector search support.");
+                        eprintln!("Tip: Use 'search --mode fts' for full-text search instead");
+                        std::process::exit(EXIT_CONFIG_ERROR);
                     }
+                    // NOTE: sqlite-vec not available is a configuration issue (binary build configuration)
                     return Err(e);
                 }
             };
@@ -1846,21 +1861,16 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("status: connected, querying status...");
 
-            match status::get_status(Arc::new(store), repo, worktree, verbose).await {
-                Ok(status_data) => {
-                    tracing::debug!("status: query complete, formatting output...");
-                    if json {
-                        let output = status::format_json(&status_data)?;
-                        println!("{}", output);
-                    } else {
-                        let output = status::format_text(&status_data, verbose);
-                        print!("{}", output);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error querying status: {}", e);
-                    std::process::exit(1);
-                }
+            let status_data = status::get_status(Arc::new(store), repo, worktree, verbose)
+                .await
+                .context("Error querying status")?;
+            tracing::debug!("status: query complete, formatting output...");
+            if json {
+                let output = status::format_json(&status_data)?;
+                println!("{}", output);
+            } else {
+                let output = status::format_text(&status_data, verbose);
+                print!("{}", output);
             }
         }
 
@@ -1871,21 +1881,16 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("encoding-progress: connected, querying progress...");
 
-            match encoding_progress::get_encoding_progress(Arc::new(store), repo).await {
-                Ok(progress_data) => {
-                    tracing::debug!("encoding-progress: query complete, formatting output...");
-                    if json {
-                        let output = encoding_progress::format_json(&progress_data)?;
-                        println!("{}", output);
-                    } else {
-                        let output = encoding_progress::format_text(&progress_data);
-                        print!("{}", output);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error querying encoding progress: {}", e);
-                    std::process::exit(1);
-                }
+            let progress_data = encoding_progress::get_encoding_progress(Arc::new(store), repo)
+                .await
+                .context("Error querying encoding progress")?;
+            tracing::debug!("encoding-progress: query complete, formatting output...");
+            if json {
+                let output = encoding_progress::format_json(&progress_data)?;
+                println!("{}", output);
+            } else {
+                let output = encoding_progress::format_text(&progress_data);
+                print!("{}", output);
             }
         }
 
@@ -1905,9 +1910,16 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Initializing embedding generation pipeline");
 
             // Create embedding service from environment
-            let service = EmbeddingService::from_env()
-                .await
-                .context("Failed to create embedding service")?;
+            let service = match EmbeddingService::from_env().await {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Configuration error: {}. Ensure embedding provider and API keys are configured.", e);
+                    eprintln!("Set MAPROOM_EMBEDDING_PROVIDER and corresponding API key (OPENAI_API_KEY, etc.)");
+                    std::process::exit(EXIT_CONFIG_ERROR);
+                }
+            };
+            // NOTE: EmbeddingService::from_env() failures are configuration errors (missing provider/API keys)
+            // not runtime errors (network failures).
 
             // Configure pipeline
             let config = PipelineConfig {
