@@ -1632,10 +1632,17 @@ async fn main() -> anyhow::Result<()> {
                 (preview, preview_length.unwrap_or(200))
             };
 
-            let store = db::connect().await?;
+            let store = match db::connect().await {
+                Ok(s) => s,
+                Err(e) if format == OutputFormat::Agent => {
+                    let (error_type, suggestion, exit_code) = classify_error(&e);
+                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
+                }
+                Err(e) => return Err(e),
+            };
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let hits = store
+            let hits = match store
                 .search_chunks_fts(
                     &repo,
                     worktree.as_deref(),
@@ -1645,7 +1652,15 @@ async fn main() -> anyhow::Result<()> {
                     kind.as_deref(),
                     lang.as_deref(),
                 )
-                .await?;
+                .await
+            {
+                Ok(r) => r,
+                Err(e) if format == OutputFormat::Agent => {
+                    let (error_type, suggestion, exit_code) = classify_error(&e);
+                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
+                }
+                Err(e) => return Err(e),
+            };
 
             // Apply deduplication if enabled
             let hits = if deduplicate {
