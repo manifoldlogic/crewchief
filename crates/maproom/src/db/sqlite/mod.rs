@@ -1291,7 +1291,7 @@ impl StoreSearch for SqliteStore {
         _debug: bool,
         kind_filter: Option<&[String]>,
         lang_filter: Option<&[String]>,
-    ) -> anyhow::Result<Vec<SearchHit>> {
+    ) -> anyhow::Result<(Vec<SearchHit>, usize)> {
         let repo = repo.to_string();
         let worktree = worktree.map(|s| s.to_string());
         let query = query.to_string();
@@ -1330,6 +1330,11 @@ impl StoreSearch for SqliteStore {
                 .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()
                 .join(" OR "); // Use OR for broader matching
+
+            // Early return for empty query
+            if fts_query.is_empty() {
+                return Ok((vec![], 0));
+            }
 
             // SQL query with ranking
             // SQLite FTS5 rank is built-in function 'bm25' or 'rank'
@@ -1424,7 +1429,7 @@ impl StoreSearch for SqliteStore {
 
             // Build dynamic parameter list
             let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-            param_values.push(Box::new(fts_query));
+            param_values.push(Box::new(fts_query.clone()));
             param_values.push(Box::new(repo_id));
 
             if let Some(wid) = worktree_id {
@@ -1471,7 +1476,76 @@ impl StoreSearch for SqliteStore {
             for row in rows {
                 hits.push(row?);
             }
-            Ok(hits)
+
+            // Execute COUNT query with same WHERE clause (no LIMIT/ORDER BY)
+            // to get total match count before k truncation.
+            // COUNT query assumes <10ms overhead on typical indexes.
+            // If production profiling shows significant overhead, add opt-out flag
+            // to skip COUNT and set total_estimate = hits.len() as fallback.
+            let count_sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                SELECT COUNT(*)
+                FROM fts_chunks
+                JOIN chunks c ON c.id = fts_chunks.rowid
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                WHERE fts_chunks MATCH ?1
+                  AND f.repo_id = ?2
+                  AND cw.worktree_id = ?3
+                  {}
+                "#,
+                    filter_clause
+                )
+            } else {
+                format!(
+                    r#"
+                SELECT COUNT(DISTINCT c.id)
+                FROM fts_chunks
+                JOIN chunks c ON c.id = fts_chunks.rowid
+                JOIN files f ON f.id = c.file_id
+                WHERE fts_chunks MATCH ?1
+                  AND f.repo_id = ?2
+                  {}
+                "#,
+                    filter_clause
+                )
+            };
+
+            // Build count params (same as main query but without the LIMIT param)
+            let mut count_param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            count_param_values.push(Box::new(fts_query));
+            count_param_values.push(Box::new(repo_id));
+
+            if let Some(wid) = worktree_id {
+                count_param_values.push(Box::new(wid));
+            }
+
+            if let Some(ref kinds) = kind_filter {
+                for kind in kinds {
+                    count_param_values.push(Box::new(kind.clone()));
+                }
+            }
+
+            if let Some(ref langs) = lang_filter {
+                for lang in langs {
+                    count_param_values.push(Box::new(lang.clone()));
+                }
+            }
+
+            let count_params_refs: Vec<&dyn rusqlite::ToSql> =
+                count_param_values.iter().map(|p| p.as_ref()).collect();
+
+            let count_start = std::time::Instant::now();
+            let total_count: i64 =
+                conn.query_row(&count_sql, count_params_refs.as_slice(), |row| row.get(0))?;
+            tracing::debug!(
+                "COUNT query returned {} in {:?}",
+                total_count,
+                count_start.elapsed()
+            );
+
+            Ok((hits, total_count as usize))
         })
         .await
     }

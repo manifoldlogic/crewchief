@@ -306,7 +306,7 @@ mod tests {
             .expect("Failed to insert test data");
 
         // Verify data was inserted by searching
-        let results = test_db
+        let (results, _total_count) = test_db
             .store
             .search_chunks_fts(
                 "test-repo",
