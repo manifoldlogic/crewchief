@@ -74,3 +74,16 @@ DEVELOPMENT SETUP:
 
     Or in .claude/settings.json:
         { "env": { "CREWCHIEF_MAPROOM_BIN": "./target/release/..." } }
+
+EXIT CODES:
+    0   Success. Command completed successfully. Parse stdout for results.
+        An empty result set (e.g., no search hits, no stale worktrees) is
+        still exit code 0.
+
+    1   Runtime error. A transient error occurred (database lock, network
+        timeout, file not found). The command may succeed if retried.
+
+    2   Configuration error. A persistent error due to missing or invalid
+        configuration (no API key, invalid provider, missing extension).
+        The command will not succeed until configuration is fixed.
+        Also used by clap for argument parsing errors.
