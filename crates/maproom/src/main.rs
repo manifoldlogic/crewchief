@@ -9,7 +9,8 @@ use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crewchief_maproom::cli::format::{
-    format_hits_agent, format_hits_json_search, format_hits_json_vector, OutputFormat,
+    format_context_agent, format_hits_agent, format_hits_json_search, format_hits_json_vector,
+    OutputFormat,
 };
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
@@ -255,6 +256,7 @@ enum Commands {
     ///   maproom context --chunk-id 12345 --callers         # Include caller functions
     ///   maproom context --chunk-id 12345 --budget 4000     # Custom token budget
     ///   maproom context --chunk-id 12345 --json            # Output as JSON
+    ///   maproom context --chunk-id 12345 --format agent     # Compact agent output
     Context {
         /// Chunk ID to retrieve context for
         #[arg(long)]
@@ -288,8 +290,12 @@ enum Commands {
         #[arg(long, default_value_t = 2)]
         max_depth: i32,
 
-        /// Output as JSON instead of human-readable
-        #[arg(long)]
+        /// Output format: json (default) or agent (compact)
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+
+        /// DEPRECATED: Use --format json instead. Hidden from help.
+        #[arg(long, hide = true)]
         json: bool,
     },
 
@@ -2098,7 +2104,8 @@ async fn main() -> anyhow::Result<()> {
             docs,
             config,
             max_depth,
-            json,
+            format,
+            json: _,
         } => {
             // Connect to database
             let store = db::connect().await.context("Database connection failed")?;
@@ -2124,10 +2131,16 @@ async fn main() -> anyhow::Result<()> {
                 .with_context(|| format!("Failed to assemble context for chunk {}", chunk_id))?;
 
             // Output
-            if json {
-                println!("{}", serde_json::to_string_pretty(&bundle)?);
-            } else {
-                print!("{}", format_context_bundle(&bundle, chunk_id, budget));
+            match format {
+                OutputFormat::Json => {
+                    println!("{}", serde_json::to_string_pretty(&bundle)?);
+                }
+                OutputFormat::Agent => {
+                    let output = format_context_agent(&bundle, chunk_id, budget);
+                    if !output.is_empty() {
+                        println!("{}", output);
+                    }
+                }
             }
         }
     }
@@ -2210,6 +2223,7 @@ mod tests {
             docs,
             config,
             max_depth,
+            format,
             json,
         } = cli.command
         {
@@ -2221,6 +2235,7 @@ mod tests {
             assert_eq!(docs, false);
             assert_eq!(config, false);
             assert_eq!(max_depth, 2); // default
+            assert_eq!(format, OutputFormat::Json); // default
             assert_eq!(json, false);
         } else {
             panic!("Expected Context command");
@@ -2251,6 +2266,7 @@ mod tests {
             docs,
             config,
             max_depth,
+            format,
             json,
         } = cli.command
         {
@@ -2262,6 +2278,7 @@ mod tests {
             assert_eq!(docs, false); // not specified
             assert_eq!(config, false); // not specified
             assert_eq!(max_depth, 5);
+            assert_eq!(format, OutputFormat::Json); // default
             assert_eq!(json, false);
         } else {
             panic!("Expected Context command");
@@ -2295,6 +2312,7 @@ mod tests {
             docs,
             config,
             max_depth,
+            format,
             json,
         } = cli.command
         {
@@ -2306,9 +2324,71 @@ mod tests {
             assert_eq!(docs, true);
             assert_eq!(config, true);
             assert_eq!(max_depth, 3);
-            assert_eq!(json, true);
+            assert_eq!(format, OutputFormat::Json); // default (--json is separate flag)
+            assert_eq!(json, true); // backward compat: --json still parsed
         } else {
             panic!("Expected Context command");
+        }
+    }
+
+    #[test]
+    fn test_context_command_parsing_format_agent() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "context",
+            "--chunk-id",
+            "100",
+            "--format",
+            "agent",
+        ]);
+        match cli.command {
+            Commands::Context { format, .. } => {
+                assert_eq!(format, OutputFormat::Agent);
+            }
+            _ => panic!("Expected Context command"),
+        }
+    }
+
+    #[test]
+    fn test_context_command_parsing_format_json() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "context",
+            "--chunk-id",
+            "100",
+            "--format",
+            "json",
+        ]);
+        match cli.command {
+            Commands::Context { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected Context command"),
+        }
+    }
+
+    #[test]
+    fn test_context_command_default_format_is_json() {
+        // No --format flag should default to OutputFormat::Json
+        let cli = Cli::parse_from(&["maproom", "context", "--chunk-id", "100"]);
+        match cli.command {
+            Commands::Context { format, .. } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("Expected Context command"),
+        }
+    }
+
+    #[test]
+    fn test_context_command_json_backward_compat() {
+        // --json flag should still parse without error (backward compatibility)
+        let cli = Cli::parse_from(&["maproom", "context", "--chunk-id", "100", "--json"]);
+        match cli.command {
+            Commands::Context { json, format, .. } => {
+                assert_eq!(json, true);
+                assert_eq!(format, OutputFormat::Json); // default unchanged
+            }
+            _ => panic!("Expected Context command"),
         }
     }
 

@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 
 use clap::ValueEnum;
 
+use crate::context::types::ContextBundle;
 use crate::db;
 
 /// Output format for search results.
@@ -118,6 +119,28 @@ pub fn format_hits_json_vector(
         "threshold": threshold,
     });
     serde_json::to_string_pretty(&output)
+}
+
+/// Format a context bundle as compact agent-friendly output.
+///
+/// Produces a header line followed by one line per context item:
+///
+/// ```text
+/// CONTEXT chunk_id=N | tokens=T/B | items=I | truncated=yes/no
+/// role | relpath:start-end | tokens | reason
+/// role | relpath:start-end | tokens | reason | content_preview  (primary only)
+/// ```
+///
+/// STUB: Currently returns placeholder output. Full implementation in Phase 2.
+pub fn format_context_agent(
+    _bundle: &ContextBundle,
+    chunk_id: i64,
+    budget: usize,
+) -> String {
+    format!(
+        "CONTEXT chunk_id={} | tokens=0/{} | items=0 | truncated=no\n(agent format not yet implemented)",
+        chunk_id, budget
+    )
 }
 
 /// Replace newline characters with spaces to maintain one-line-per-result format.
