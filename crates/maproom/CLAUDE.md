@@ -104,9 +104,8 @@ cargo run --bin crewchief-maproom -- db cleanup-stale --verbose
 ```
 
 **Exit codes:**
-- `0` - Success (cleanup completed or dry-run)
-- `1` - Error (database connection failed)
-- `2` - No stale worktrees found
+- `0` - Success (stale worktrees deleted or none found)
+- `1` - Error during detection or cleanup
 
 ## Clean Ignored Chunks
 
@@ -277,6 +276,22 @@ cargo run --bin crewchief-maproom -- search --query "authentication" --repo myre
 # 7. Get context for a code chunk
 cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --json
 ```
+
+## Exit Codes
+
+All commands follow this exit code contract:
+
+| Code | Meaning | Agent Action |
+|------|---------|-------------|
+| 0 | Success (with or without results) | Parse stdout |
+| 1 | Runtime error (transient) | May retry |
+| 2 | Configuration error (persistent) | Do not retry |
+
+**Configuration errors (exit 2):** Missing embedding provider, missing API keys,
+sqlite-vec extension not available, clap argument parsing errors.
+
+**Runtime errors (exit 1):** Database operation failure, scan/search failure,
+network errors, git command failures, runtime argument validation errors.
 
 ## Context Command
 
