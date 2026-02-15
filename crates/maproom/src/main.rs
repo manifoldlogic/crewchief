@@ -2467,6 +2467,24 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         );
     }
 
+    // Heuristic: Database file not found (repo not indexed) -> exit code 2
+    // Must come BEFORE general database pattern to prioritize config error
+    if (error_lower.contains("database") || error_lower.contains("connection"))
+        && (error_lower.contains("no such file") || error_lower.contains("not found"))
+    {
+        tracing::info!(
+            error_type = "config_error",
+            exit_code = 2,
+            classification_method = "heuristic",
+            "Error classified"
+        );
+        return (
+            "config_error".to_string(),
+            "Repository not indexed. Run scan command first.".to_string(),
+            2,
+        );
+    }
+
     // Heuristic: Database errors
     if error_lower.contains("database") || error_lower.contains("connection") {
         tracing::info!(
@@ -3580,6 +3598,43 @@ mod tests {
         assert_eq!(error_type, "database");
         assert!(suggestion.contains("database") || suggestion.contains("connectivity"));
         assert_eq!(exit_code, 1);
+    }
+
+    /// Test classification of database file not found -> exit code 2 (config error)
+    /// Missing database file means repo not indexed - agents should suggest scanning
+    #[test]
+    fn test_classify_database_file_not_found() {
+        let error = anyhow::anyhow!(
+            "SQLite error: unable to open database file: No such file or directory"
+        );
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(exit_code, 2, "Missing database file is a config error");
+        assert_eq!(error_type, "config_error");
+        assert!(
+            suggestion.contains("scan"),
+            "Suggestion should mention running scan command"
+        );
+    }
+
+    /// Test that general database runtime errors still produce exit code 1
+    /// Connection failures, query errors, etc. are transient and should be retried
+    #[test]
+    fn test_classify_database_runtime_error_unchanged() {
+        let error = anyhow::anyhow!("Database query failed: syntax error");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 1,
+            "Database runtime errors should remain exit code 1"
+        );
+        assert_eq!(error_type, "database");
+        assert!(
+            suggestion.contains("database") || suggestion.contains("connectivity"),
+            "Suggestion should be about database connectivity"
+        );
     }
 
     /// Test classification of sqlite-vec unavailable -> exit code 2 (config error)
