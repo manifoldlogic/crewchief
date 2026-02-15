@@ -2250,6 +2250,16 @@ fn handle_agent_error(
     suggestion: &str,
     exit_code: i32,
 ) -> ! {
+    // Log error handling event
+    let error_message: String = error.to_string().chars().take(100).collect();
+    tracing::error!(
+        error_type = error_type,
+        exit_code = exit_code,
+        format = ?format,
+        error_message = %error_message,
+        "Agent error handled"
+    );
+
     // If agent format, print structured error to stdout
     if matches!(format, OutputFormat::Agent) {
         let error_msg = error.to_string();
@@ -2349,6 +2359,13 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
             details.suggestions.join("; ")
         };
 
+        tracing::info!(
+            error_type = error_type_str,
+            exit_code = exit_code,
+            classification_method = "downcast:PipelineError",
+            "Error classified"
+        );
+
         return (error_type_str.to_string(), suggestion, exit_code);
     }
 
@@ -2363,6 +2380,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
                 api_error,
                 ApiError::Authentication(_) | ApiError::QuotaExceeded(_)
             ) {
+                tracing::info!(
+                    error_type = "config_error",
+                    exit_code = 2,
+                    classification_method = "downcast:EmbeddingError",
+                    "Error classified"
+                );
                 return (
                     "config_error".to_string(),
                     "Invalid or expired API key. Check your API key configuration.".to_string(),
@@ -2378,6 +2401,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
                 || api_error_lower.contains("forbidden")
                 || api_error_lower.contains("authentication")
             {
+                tracing::info!(
+                    error_type = "config_error",
+                    exit_code = 2,
+                    classification_method = "downcast:EmbeddingError",
+                    "Error classified"
+                );
                 return (
                     "config_error".to_string(),
                     "Invalid or expired API key. Check your API key configuration.".to_string(),
@@ -2391,6 +2420,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
             embedding_error,
             EmbeddingError::Config(_) | EmbeddingError::InvalidInput(_)
         ) {
+            tracing::info!(
+                error_type = "embedding_provider",
+                exit_code = 2,
+                classification_method = "downcast:EmbeddingError",
+                "Error classified"
+            );
             return (
                 "embedding_provider".to_string(),
                 "Check your embedding provider configuration".to_string(),
@@ -2399,6 +2434,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         }
 
         // Runtime errors (API failures, network issues)
+        tracing::info!(
+            error_type = "embedding_provider",
+            exit_code = 1,
+            classification_method = "downcast:EmbeddingError",
+            "Error classified"
+        );
         return (
             "embedding_provider".to_string(),
             format!("Embedding provider error: {}", error_str),
@@ -2410,6 +2451,14 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
     let error_str = error.to_string();
     let error_lower = error_str.to_lowercase();
 
+    // Warn when heuristic classification is used (downcast failed)
+    let error_preview: String = error_str.chars().take(100).collect();
+    tracing::warn!(
+        error_preview = %error_preview,
+        classification_method = "heuristic",
+        "Error classification using heuristic fallback (downcast failed)"
+    );
+
     // Heuristic: Config errors (exit code 2)
     if error_lower.contains("config")
         || error_lower.contains("api_key")
@@ -2417,6 +2466,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         || (error_lower.contains("sqlite-vec") && error_lower.contains("not available"))
         || (error_lower.contains("vector") && error_lower.contains("not available"))
     {
+        tracing::info!(
+            error_type = "config_error",
+            exit_code = 2,
+            classification_method = "heuristic",
+            "Error classified"
+        );
         return (
             "config_error".to_string(),
             "Check your configuration and environment variables".to_string(),
@@ -2426,6 +2481,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
 
     // Heuristic: Database errors
     if error_lower.contains("database") || error_lower.contains("connection") {
+        tracing::info!(
+            error_type = "database",
+            exit_code = 1,
+            classification_method = "heuristic",
+            "Error classified"
+        );
         return (
             "database".to_string(),
             "Check database connectivity and permissions".to_string(),
@@ -2435,6 +2496,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
 
     // Heuristic: Not found errors
     if error_lower.contains("chunk") && error_lower.contains("not found") {
+        tracing::info!(
+            error_type = "not_found",
+            exit_code = 1,
+            classification_method = "heuristic",
+            "Error classified"
+        );
         return (
             "not_found".to_string(),
             "The requested chunk may not be indexed".to_string(),
@@ -2443,6 +2510,12 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
     }
 
     // Default: Unknown error (exit code 1)
+    tracing::info!(
+        error_type = "unknown",
+        exit_code = 1,
+        classification_method = "heuristic",
+        "Error classified"
+    );
     (
         "unknown".to_string(),
         "Please report this error with full details".to_string(),

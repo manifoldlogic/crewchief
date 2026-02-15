@@ -136,6 +136,23 @@ pub fn sanitize_newlines(text: &str) -> String {
         .replace('\r', " ")
 }
 
+/// Known valid error types returned by `classify_error()`.
+///
+/// Used to validate error types at runtime and emit warnings when an unknown
+/// error type is encountered. This helps catch typos and ensures the error
+/// type taxonomy stays consistent.
+///
+/// If you add a new error type to `classify_error()`, add it here too.
+pub const KNOWN_ERROR_TYPES: &[&str] = &[
+    "database",
+    "embedding_provider",
+    "config_error",
+    "not_found",
+    "validation",
+    "timeout",
+    "unknown",
+];
+
 /// Format a structured agent error line.
 ///
 /// Produces: `ERROR | type=<error_type> | message=<msg> | suggestion=<suggestion>`
@@ -143,7 +160,18 @@ pub fn sanitize_newlines(text: &str) -> String {
 /// Pipe characters in message and suggestion are replaced with dashes.
 /// Newlines are replaced with spaces.
 /// error_type is not sanitized (controlled values only).
+///
+/// Emits a `tracing::warn!` if `error_type` is not in `KNOWN_ERROR_TYPES`.
 pub fn format_agent_error(error_type: &str, message: &str, suggestion: &str) -> String {
+    // Validate error type against known types
+    if !KNOWN_ERROR_TYPES.contains(&error_type) {
+        let message_preview: String = message.chars().take(50).collect();
+        tracing::warn!(
+            error_type = error_type,
+            message_preview = %message_preview,
+            "Unknown error type used in format_agent_error"
+        );
+    }
     // Sanitize message: pipes first, then newlines
     let sanitized_message = sanitize_newlines(&message.replace('|', "-"));
 
