@@ -950,6 +950,13 @@ mod tests {
         }
     }
 
+    /// Validates that Google provider errors do not contain OpenAI-specific error context.
+    ///
+    /// Context: AFM-01 fix replaced hardcoded "Ensure OPENAI_API_KEY is set" context strings
+    /// in main.rs that masked provider-specific errors. This test prevents regression by
+    /// verifying that Google provider initialization failures surface correct provider-specific
+    /// error messages without OpenAI terminology. Created after 15 competition test failures
+    /// revealed the cross-provider error masking issue.
     #[tokio::test]
     #[serial]
     async fn test_google_provider_error_does_not_mention_openai() {
