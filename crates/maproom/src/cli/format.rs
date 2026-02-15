@@ -144,6 +144,54 @@ pub fn format_hits_json_vector(
 ///   sanitized of newlines, capped at 200 characters.
 /// - Empty bundles produce the header line only with `items=0`.
 /// - Multiple primary items all receive content previews (FR-8).
+///
+/// # Examples
+///
+/// ```
+/// use crewchief_maproom::cli::format::format_context_agent;
+/// use crewchief_maproom::context::types::{ContextBundle, ContextItem, LineRange};
+///
+/// let bundle = ContextBundle {
+///     items: vec![
+///         ContextItem {
+///             role: "primary".to_string(),
+///             relpath: "src/auth.rs".to_string(),
+///             range: LineRange { start: 42, end: 68 },
+///             tokens: 450,
+///             reason: "Target function".to_string(),
+///             content: "fn authenticate(user: &str) {\n    let db = connect();\n    verify(user)\n}".to_string(),
+///         },
+///         ContextItem {
+///             role: "caller".to_string(),
+///             relpath: "src/api.rs".to_string(),
+///             range: LineRange { start: 100, end: 120 },
+///             tokens: 300,
+///             reason: "Calls authenticate".to_string(),
+///             content: "// caller content...".to_string(),
+///         },
+///     ],
+///     total_tokens: 750,
+///     truncated: false,
+/// };
+///
+/// let output = format_context_agent(&bundle, 12345, 6000);
+///
+/// // Expected output format:
+/// // CONTEXT chunk_id=12345 | tokens=750/6000 | items=2 | truncated=no
+/// // primary | src/auth.rs:42-68 | 450 | Target function | fn authenticate(user: &str) {     let db = connect();     verify(user)
+/// // caller | src/api.rs:100-120 | 300 | Calls authenticate
+///
+/// let lines: Vec<&str> = output.lines().collect();
+/// assert_eq!(lines.len(), 3);
+/// assert_eq!(
+///     lines[0],
+///     "CONTEXT chunk_id=12345 | tokens=750/6000 | items=2 | truncated=no"
+/// );
+/// // Primary item includes a content preview (first 3 lines joined with spaces)
+/// assert!(lines[1].starts_with("primary | src/auth.rs:42-68 | 450 | Target function | "));
+/// // Non-primary item omits content
+/// assert_eq!(lines[2], "caller | src/api.rs:100-120 | 300 | Calls authenticate");
+/// ```
 pub fn format_context_agent(bundle: &ContextBundle, chunk_id: i64, budget: usize) -> String {
     let mut output = String::new();
 
