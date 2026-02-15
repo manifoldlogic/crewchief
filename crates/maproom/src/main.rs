@@ -9,6 +9,27 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
+/// Macro to handle errors with structured output when using agent format.
+///
+/// Usage: `let value = handle_agent_error!(result_expr, format);`
+///
+/// If the result is `Ok`, returns the unwrapped value.
+/// If the result is `Err` and format is `OutputFormat::Agent`, classifies the error
+/// and calls `handle_agent_error()` (which exits the process).
+/// If the result is `Err` and format is not Agent, returns early with the error.
+macro_rules! handle_agent_error {
+    ($result:expr, $format:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(e) if $format == OutputFormat::Agent => {
+                let (error_type, suggestion, exit_code) = classify_error(&e);
+                handle_agent_error(&e, &$format, &error_type, &suggestion, exit_code);
+            }
+            Err(e) => return Err(e),
+        }
+    };
+}
+
 use crewchief_maproom::cli::format::{
     format_agent_error, format_hits_agent, format_hits_json_search, format_hits_json_vector,
     sanitize_newlines, OutputFormat,
@@ -1633,35 +1654,23 @@ async fn main() -> anyhow::Result<()> {
                 (preview, preview_length.unwrap_or(200))
             };
 
-            let store = match db::connect().await {
-                Ok(s) => s,
-                Err(e) if format == OutputFormat::Agent => {
-                    let (error_type, suggestion, exit_code) = classify_error(&e);
-                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
-                }
-                Err(e) => return Err(e),
-            };
+            let store = handle_agent_error!(db::connect().await, format);
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let hits = match store
-                .search_chunks_fts(
-                    &repo,
-                    worktree.as_deref(),
-                    &query,
-                    fetch_k,
-                    debug,
-                    kind.as_deref(),
-                    lang.as_deref(),
-                )
-                .await
-            {
-                Ok(r) => r,
-                Err(e) if format == OutputFormat::Agent => {
-                    let (error_type, suggestion, exit_code) = classify_error(&e);
-                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
-                }
-                Err(e) => return Err(e),
-            };
+            let hits = handle_agent_error!(
+                store
+                    .search_chunks_fts(
+                        &repo,
+                        worktree.as_deref(),
+                        &query,
+                        fetch_k,
+                        debug,
+                        kind.as_deref(),
+                        lang.as_deref(),
+                    )
+                    .await,
+                format
+            );
 
             // Apply deduplication if enabled
             let hits = if deduplicate {
@@ -1726,44 +1735,23 @@ async fn main() -> anyhow::Result<()> {
             };
 
             // Connect to database with error handling
-            let store = match db::connect().await {
-                Ok(s) => s,
-                Err(e) if format == OutputFormat::Agent => {
-                    let (error_type, suggestion, exit_code) = classify_error(&e);
-                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
-                }
-                Err(e) => return Err(e),
-            };
+            let store = handle_agent_error!(db::connect().await, format);
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
-            let embedding_service = match EmbeddingService::from_env().await {
-                Ok(s) => s,
-                Err(e) if format == OutputFormat::Agent => {
-                    let e: anyhow::Error = e.into();
-                    let e = e.context("Failed to create embedding service");
-                    let (error_type, suggestion, exit_code) = classify_error(&e);
-                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
-                }
-                Err(e) => {
-                    let e: anyhow::Error = e.into();
-                    return Err(e.context("Failed to create embedding service"));
-                }
-            };
+            let embedding_service = handle_agent_error!(
+                EmbeddingService::from_env().await.map_err(
+                    |e| anyhow::Error::from(e).context("Failed to create embedding service")
+                ),
+                format
+            );
 
-            let query_embedding = match embedding_service.embed_text(&query).await {
-                Ok(emb) => emb,
-                Err(e) if format == OutputFormat::Agent => {
-                    let e: anyhow::Error = e.into();
-                    let e = e.context("Failed to generate query embedding");
-                    let (error_type, suggestion, exit_code) = classify_error(&e);
-                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
-                }
-                Err(e) => {
-                    let e: anyhow::Error = e.into();
-                    return Err(e.context("Failed to generate query embedding"));
-                }
-            };
+            let query_embedding = handle_agent_error!(
+                embedding_service.embed_text(&query).await.map_err(
+                    |e| anyhow::Error::from(e).context("Failed to generate query embedding")
+                ),
+                format
+            );
 
             tracing::info!(
                 "Executing vector search (k={}, threshold={:?})",
