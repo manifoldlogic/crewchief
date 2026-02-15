@@ -1800,6 +1800,8 @@ async fn main() -> anyhow::Result<()> {
                                 "end_line": hit.end_line,
                                 "symbol_name": hit.symbol_name,
                                 "kind": hit.kind,
+                                "file_relpath": hit.file_relpath,
+                                // DEPRECATED(AFM-02): Use file_relpath. Retained for backward compatibility.
                                 "file_path": hit.file_relpath,
                             });
 

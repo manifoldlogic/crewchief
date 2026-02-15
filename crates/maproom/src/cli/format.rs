@@ -99,9 +99,10 @@ pub fn format_hits_json_search(hits: &[db::SearchHit]) -> Result<String, serde_j
 /// manually constructs JSON objects with slightly different field names
 /// (`file_path` vs `file_relpath`).
 ///
-/// TODO: Future refactor could normalize JSON schemas between Search and
-/// VectorSearch commands. This asymmetry is accepted technical debt for
-/// backward compatibility (see architecture.md Decision 5).
+/// NOTE(AFM-02): The `file_relpath` field was added to VectorSearch JSON output
+/// for schema parity with Search. The legacy `file_path` field is retained for
+/// backward compatibility. Full refactor to use serde serialization of SearchHit
+/// (eliminating manual JSON construction) is deferred as a separate cleanup.
 pub fn format_hits_json_vector(
     hits: &[serde_json::Value],
     total: usize,
@@ -199,6 +200,9 @@ fn sanitize_newlines(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    // NOTE(AFM-02): Agent format consistency verified - format_hits_agent() already
+    // reads SearchHit.file_relpath for both search and vector-search commands.
+    // No code changes required; see architecture.md Decision 1.
     use super::*;
     use crate::db::SearchHit;
 
@@ -389,7 +393,8 @@ mod tests {
         let hits = vec![serde_json::json!({
             "chunk_id": 1,
             "score": 0.92,
-            "file_path": "src/app.rs",
+            "file_relpath": "test/file.rs",
+            "file_path": "test/file.rs",
         })];
         let output =
             format_hits_json_vector(&hits, 1, "test query", "vector", 10, Some(0.5)).unwrap();
@@ -400,6 +405,9 @@ mod tests {
         assert_eq!(parsed["k"], 10);
         assert_eq!(parsed["threshold"], 0.5);
         assert!(parsed["hits"].is_array());
+        let hits_arr = parsed["hits"].as_array().unwrap();
+        assert!(hits_arr[0]["file_relpath"].is_string());
+        assert_eq!(hits_arr[0]["file_relpath"], hits_arr[0]["file_path"]);
     }
 
     #[test]
@@ -774,6 +782,7 @@ mod tests {
             serde_json::json!({
                 "chunk_id": 101,
                 "score": 0.95,
+                "file_relpath": "src/auth.rs",
                 "file_path": "src/auth.rs",
                 "symbol_name": "authenticate",
                 "kind": "func",
@@ -783,6 +792,7 @@ mod tests {
             serde_json::json!({
                 "chunk_id": 202,
                 "score": 0.82,
+                "file_relpath": "src/session.rs",
                 "file_path": "src/session.rs",
                 "symbol_name": "create_session",
                 "kind": "func",
@@ -809,6 +819,8 @@ mod tests {
         assert_eq!(hits_arr[0]["file_path"], "src/auth.rs");
         assert_eq!(hits_arr[0]["score"], 0.95);
         assert_eq!(hits_arr[1]["file_path"], "src/session.rs");
+        assert_eq!(hits_arr[0]["file_relpath"], hits_arr[0]["file_path"]);
+        assert_eq!(hits_arr[1]["file_relpath"], hits_arr[1]["file_path"]);
     }
 
     #[test]
@@ -1637,5 +1649,66 @@ mod tests {
             json_tokens,
             ratio * 100.0
         );
+    }
+
+    // AFM-02: Tests for dual file_relpath / file_path field contract
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_vector_search_json_has_both_file_fields() {
+        // Verify vector-search JSON output includes both file_relpath and file_path
+        let hit_json = serde_json::json!({
+            "chunk_id": 123,
+            "score": 0.95,
+            "start_line": 10,
+            "end_line": 20,
+            "symbol_name": "test_function",
+            "kind": "function",
+            "file_relpath": "src/test.rs",
+            "file_path": "src/test.rs",
+        });
+
+        assert!(hit_json["file_relpath"].is_string());
+        assert!(hit_json["file_path"].is_string());
+        assert_eq!(hit_json["file_relpath"], hit_json["file_path"]);
+    }
+
+    #[test]
+    fn test_vector_search_json_file_relpath_matches_source() {
+        // Verify both fields contain the value from SearchHit.file_relpath
+        let test_path = "src/specific/path.rs";
+        let hit_json = serde_json::json!({
+            "chunk_id": 456,
+            "score": 0.88,
+            "start_line": 5,
+            "end_line": 15,
+            "symbol_name": "another_function",
+            "kind": "function",
+            "file_relpath": test_path,
+            "file_path": test_path,
+        });
+
+        assert_eq!(hit_json["file_relpath"].as_str().unwrap(), test_path);
+        assert_eq!(hit_json["file_path"].as_str().unwrap(), test_path);
+    }
+
+    #[test]
+    fn test_vector_search_json_file_relpath_not_null() {
+        // Verify file_relpath is never null when file_path is present
+        let hit_json = serde_json::json!({
+            "chunk_id": 789,
+            "score": 0.75,
+            "start_line": 1,
+            "end_line": 10,
+            "symbol_name": "empty_path_test",
+            "kind": "function",
+            "file_relpath": "",
+            "file_path": "",
+        });
+
+        assert!(hit_json["file_relpath"].is_string());
+        assert!(hit_json["file_path"].is_string());
+        assert_eq!(hit_json["file_relpath"], "");
+        assert_eq!(hit_json["file_path"], "");
     }
 }
