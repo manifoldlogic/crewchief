@@ -1478,7 +1478,10 @@ impl StoreSearch for SqliteStore {
             }
 
             // Execute COUNT query with same WHERE clause (no LIMIT/ORDER BY)
-            // to get total match count before k truncation
+            // to get total match count before k truncation.
+            // COUNT query assumes <10ms overhead on typical indexes.
+            // If production profiling shows significant overhead, add opt-out flag
+            // to skip COUNT and set total_estimate = hits.len() as fallback.
             let count_sql = if worktree_id.is_some() {
                 format!(
                     r#"
@@ -1533,8 +1536,14 @@ impl StoreSearch for SqliteStore {
             let count_params_refs: Vec<&dyn rusqlite::ToSql> =
                 count_param_values.iter().map(|p| p.as_ref()).collect();
 
+            let count_start = std::time::Instant::now();
             let total_count: i64 =
                 conn.query_row(&count_sql, count_params_refs.as_slice(), |row| row.get(0))?;
+            tracing::debug!(
+                "COUNT query returned {} in {:?}",
+                total_count,
+                count_start.elapsed()
+            );
 
             Ok((hits, total_count as usize))
         })

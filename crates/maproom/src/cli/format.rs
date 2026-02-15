@@ -1104,6 +1104,25 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_header_long_query() {
+        // Test header formatting with very long query (>1000 chars)
+        let long_query = "x".repeat(1500);
+        let meta = SearchMetadata {
+            query: long_query.clone(),
+            mode: "fts".to_string(),
+            hits: 5,
+            total_estimate: 10,
+        };
+
+        let result = format_hits_agent(&[], &meta);
+
+        // Header should still format correctly without truncation
+        assert!(result.contains(&long_query));
+        assert!(result.contains("hits=5"));
+        assert!(result.contains("total_estimate=10"));
+    }
+
+    #[test]
     fn test_json_empty_hits_with_metadata() {
         // JSON with empty hits still includes all metadata fields
         let hits: Vec<SearchHit> = vec![];

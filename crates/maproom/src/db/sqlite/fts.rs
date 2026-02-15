@@ -1398,6 +1398,24 @@ mod tests {
     }
 
     #[test]
+    fn test_count_with_zero_k() {
+        // Test FTS search with k=0 (should return empty Vec but count may be non-zero)
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let hits = search_fts(&conn, "test-repo", None, "authenticate", 0, None, None).unwrap();
+        assert_eq!(hits.len(), 0, "k=0 should return empty results");
+
+        // total_count may be > 0 if matches exist
+        let total_count =
+            count_fts_matches(&conn, "test-repo", None, "authenticate", None, None).unwrap();
+        assert!(
+            total_count > 0,
+            "COUNT should find matches even when k=0, got {}",
+            total_count
+        );
+    }
+
+    #[test]
     fn test_count_empty_query_returns_zero() {
         let (conn, _, _, _) = setup_filter_test_data();
 
