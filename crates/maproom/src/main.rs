@@ -1634,7 +1634,7 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let hits = store
+            let (hits, _total_count) = store
                 .search_chunks_fts(
                     &repo,
                     worktree.as_deref(),

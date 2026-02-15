@@ -252,6 +252,132 @@ pub fn search_fts(
     Ok(results)
 }
 
+/// Count the total number of FTS matches without the LIMIT constraint.
+///
+/// Executes a COUNT query using the same WHERE clause (MATCH, repo_id, worktree_id,
+/// kind_filter, lang_filter) as [`search_fts`] but without LIMIT or ORDER BY.
+/// The no-worktree path uses `COUNT(DISTINCT c.id)` to match the main query's
+/// `SELECT DISTINCT`.
+///
+/// Returns 0 for empty queries.
+pub fn count_fts_matches(
+    conn: &Connection,
+    repo: &str,
+    worktree: Option<&str>,
+    query: &str,
+    kind_filter: Option<&[String]>,
+    lang_filter: Option<&[String]>,
+) -> Result<usize> {
+    let fts_query = build_fts_query(query);
+    if fts_query.is_empty() {
+        return Ok(0);
+    }
+
+    // Resolve repo_id with fuzzy matching
+    let repo_id = resolve_repo_id(conn, repo)?;
+
+    // Resolve worktree_id if specified
+    let worktree_id: Option<i64> = if let Some(w) = worktree {
+        conn.query_row(
+            "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+            params![repo_id, w],
+            |row| row.get(0),
+        )
+        .optional()?
+    } else {
+        None
+    };
+
+    // Build dynamic filter conditions (same logic as search_fts)
+    let mut param_idx: usize = if worktree_id.is_some() { 4 } else { 3 };
+    let mut filter_conditions = Vec::new();
+
+    if let Some(kinds) = kind_filter {
+        if !kinds.is_empty() {
+            let placeholders = (0..kinds.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("c.kind IN ({})", placeholders));
+            param_idx += kinds.len();
+        }
+    }
+
+    if let Some(langs) = lang_filter {
+        if !langs.is_empty() {
+            let placeholders = (0..langs.len())
+                .map(|i| format!("?{}", param_idx + i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            filter_conditions.push(format!("f.language IN ({})", placeholders));
+            let _ = param_idx; // suppress unused assignment warning
+        }
+    }
+
+    let filter_clause = if filter_conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", filter_conditions.join(" AND "))
+    };
+
+    let count_sql = if worktree_id.is_some() {
+        format!(
+            r#"
+            SELECT COUNT(*)
+            FROM fts_chunks
+            JOIN chunks c ON c.id = fts_chunks.rowid
+            JOIN files f ON f.id = c.file_id
+            JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+            WHERE fts_chunks MATCH ?1
+              AND f.repo_id = ?2
+              AND cw.worktree_id = ?3
+              {}
+            "#,
+            filter_clause
+        )
+    } else {
+        format!(
+            r#"
+            SELECT COUNT(DISTINCT c.id)
+            FROM fts_chunks
+            JOIN chunks c ON c.id = fts_chunks.rowid
+            JOIN files f ON f.id = c.file_id
+            WHERE fts_chunks MATCH ?1
+              AND f.repo_id = ?2
+              {}
+            "#,
+            filter_clause
+        )
+    };
+
+    // Build parameter list (same as search_fts but without LIMIT)
+    let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    param_values.push(Box::new(fts_query));
+    param_values.push(Box::new(repo_id));
+
+    if let Some(wid) = worktree_id {
+        param_values.push(Box::new(wid));
+    }
+
+    if let Some(kinds) = kind_filter {
+        for kind in kinds {
+            param_values.push(Box::new(kind.clone()));
+        }
+    }
+
+    if let Some(langs) = lang_filter {
+        for lang in langs {
+            param_values.push(Box::new(lang.clone()));
+        }
+    }
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+
+    let total_count: i64 = conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?;
+
+    Ok(total_count as usize)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1035,5 +1161,250 @@ mod tests {
             !results.is_empty(),
             "Long kind list should still return results"
         );
+    }
+
+    // ==================== count_fts_matches Tests ====================
+
+    #[test]
+    fn test_count_matches_actual_when_k_exceeds_results() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // Use a large limit (k=100) so all results are returned
+        let results =
+            search_fts(&conn, "test-repo", None, "authenticate", 100, None, None).unwrap();
+        let count =
+            count_fts_matches(&conn, "test-repo", None, "authenticate", None, None).unwrap();
+
+        // When k > total matches, count should equal results.len()
+        assert_eq!(
+            count,
+            results.len(),
+            "Count ({}) should match actual results ({}) when k > total matches",
+            count,
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_count_exceeds_k_when_truncated() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // First, get total count with no limit
+        let total_count =
+            count_fts_matches(&conn, "test-repo", None, "authenticate", None, None).unwrap();
+        assert!(
+            total_count > 2,
+            "Need more than 2 results for this test, got {}",
+            total_count
+        );
+
+        // Now search with k=2 to force truncation
+        let results = search_fts(&conn, "test-repo", None, "authenticate", 2, None, None).unwrap();
+
+        assert_eq!(results.len(), 2, "Should return exactly k=2 results");
+        assert!(
+            total_count > results.len(),
+            "Total count ({}) should exceed truncated results ({})",
+            total_count,
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_count_respects_kind_filter() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // Get unfiltered count
+        let unfiltered_count =
+            count_fts_matches(&conn, "test-repo", None, "authenticate", None, None).unwrap();
+
+        // Get count with kind=["func"] filter
+        let kind_filter = vec!["func".to_string()];
+        let filtered_count = count_fts_matches(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            Some(&kind_filter),
+            None,
+        )
+        .unwrap();
+
+        // Filtered count should be less than unfiltered (we have classes, imports, etc.)
+        assert!(
+            filtered_count < unfiltered_count,
+            "Kind-filtered count ({}) should be less than unfiltered count ({})",
+            filtered_count,
+            unfiltered_count
+        );
+        assert!(
+            filtered_count > 0,
+            "Kind-filtered count should be > 0 (we have func chunks)"
+        );
+
+        // Verify count matches actual search results
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            100,
+            Some(&kind_filter),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            filtered_count,
+            results.len(),
+            "Filtered count ({}) should match filtered results ({})",
+            filtered_count,
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_count_respects_lang_filter() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        // Get unfiltered count
+        let unfiltered_count =
+            count_fts_matches(&conn, "test-repo", None, "authenticate", None, None).unwrap();
+
+        // Get count with lang=["py"] filter
+        let lang_filter = vec!["py".to_string()];
+        let filtered_count = count_fts_matches(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            None,
+            Some(&lang_filter),
+        )
+        .unwrap();
+
+        // Filtered count should be less than unfiltered (we have ts, rs, md chunks)
+        assert!(
+            filtered_count < unfiltered_count,
+            "Lang-filtered count ({}) should be less than unfiltered count ({})",
+            filtered_count,
+            unfiltered_count
+        );
+        assert!(
+            filtered_count > 0,
+            "Lang-filtered count should be > 0 (we have py chunks)"
+        );
+
+        // Verify count matches actual search results
+        let results = search_fts(
+            &conn,
+            "test-repo",
+            None,
+            "authenticate",
+            100,
+            None,
+            Some(&lang_filter),
+        )
+        .unwrap();
+        assert_eq!(
+            filtered_count,
+            results.len(),
+            "Filtered count ({}) should match filtered results ({})",
+            filtered_count,
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_count_respects_worktree_filter() {
+        let conn = setup_fts_test_db();
+
+        // Create repo with two worktrees
+        conn.execute(
+            "INSERT INTO repos (name, root_path) VALUES ('wt-repo', '/tmp/wt')",
+            [],
+        )
+        .unwrap();
+        let repo_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO worktrees (repo_id, name, abs_path) VALUES (?1, 'main', '/tmp/wt/main')",
+            params![repo_id],
+        )
+        .unwrap();
+        let wt_main: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO worktrees (repo_id, name, abs_path) VALUES (?1, 'feature', '/tmp/wt/feature')",
+            params![repo_id],
+        )
+        .unwrap();
+        let wt_feature: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO commits (repo_id, sha) VALUES (?1, 'sha1')",
+            params![repo_id],
+        )
+        .unwrap();
+        let commit_id: i64 = conn.last_insert_rowid();
+
+        // Insert 3 chunks in main worktree
+        for i in 0..3 {
+            insert_test_chunk(
+                &conn,
+                repo_id,
+                wt_main,
+                commit_id,
+                &format!("main_{}.rs", i),
+                "rs",
+                "func",
+                &format!("main_fn_{}", i),
+                "searchable main function",
+                i * 20,
+            );
+        }
+
+        // Insert 1 chunk in feature worktree
+        insert_test_chunk(
+            &conn,
+            repo_id,
+            wt_feature,
+            commit_id,
+            "feature_0.rs",
+            "rs",
+            "func",
+            "feature_fn_0",
+            "searchable feature function",
+            0,
+        );
+
+        // Count for main worktree should be 3
+        let main_count =
+            count_fts_matches(&conn, "wt-repo", Some("main"), "searchable", None, None).unwrap();
+        assert_eq!(main_count, 3, "Main worktree should have 3 matches");
+
+        // Count for feature worktree should be 1
+        let feature_count =
+            count_fts_matches(&conn, "wt-repo", Some("feature"), "searchable", None, None).unwrap();
+        assert_eq!(feature_count, 1, "Feature worktree should have 1 match");
+
+        // Count without worktree should be >= 4 (all chunks across worktrees)
+        let all_count =
+            count_fts_matches(&conn, "wt-repo", None, "searchable", None, None).unwrap();
+        assert!(
+            all_count >= 4,
+            "All worktrees count ({}) should be >= 4",
+            all_count
+        );
+    }
+
+    #[test]
+    fn test_count_empty_query_returns_zero() {
+        let (conn, _, _, _) = setup_filter_test_data();
+
+        let count = count_fts_matches(&conn, "test-repo", None, "", None, None).unwrap();
+        assert_eq!(count, 0, "Empty query should return count of 0");
+
+        let count = count_fts_matches(&conn, "test-repo", None, "   ", None, None).unwrap();
+        assert_eq!(count, 0, "Whitespace-only query should return count of 0");
     }
 }

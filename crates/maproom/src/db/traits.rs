@@ -318,13 +318,19 @@ pub trait StoreSearch: Send + Sync {
     /// * `kind_filter` - Optional filter to restrict chunk kinds (e.g., `["function", "method"]`)
     /// * `lang_filter` - Optional filter to restrict languages (e.g., `["rust", "typescript"]`)
     ///
+    /// # Returns
+    ///
+    /// A tuple of `(hits, total_count)` where `total_count` is the total number
+    /// of matching chunks before the `k` limit is applied. This allows callers
+    /// to distinguish "all results shown" from "results truncated by k limit."
+    ///
     /// # Example
     ///
     /// ```no_run
     /// use crewchief_maproom::db::Store;
     ///
     /// async fn find_functions(store: &dyn Store) -> anyhow::Result<()> {
-    ///     let hits = store.search_chunks_fts(
+    ///     let (hits, total_count) = store.search_chunks_fts(
     ///         "my-project",
     ///         Some("main"),
     ///         "authentication",
@@ -334,6 +340,7 @@ pub trait StoreSearch: Send + Sync {
     ///         None,
     ///     ).await?;
     ///
+    ///     println!("Showing {} of {} total matches", hits.len(), total_count);
     ///     for hit in &hits {
     ///         println!("{} ({}) score={:.3}", hit.file_relpath, hit.kind, hit.score);
     ///     }
@@ -349,7 +356,7 @@ pub trait StoreSearch: Send + Sync {
         debug: bool,
         kind_filter: Option<&[String]>,
         lang_filter: Option<&[String]>,
-    ) -> anyhow::Result<Vec<SearchHit>>;
+    ) -> anyhow::Result<(Vec<SearchHit>, usize)>;
 
     /// FTS search by repo_id and worktree_id (for search executors).
     async fn search_fts_by_id(
