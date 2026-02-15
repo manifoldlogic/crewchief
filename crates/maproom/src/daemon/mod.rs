@@ -394,7 +394,7 @@ async fn execute_search(
     let raw_hits: Vec<SearchHit> = match mode {
         "fts" => {
             // FTS mode: Full-text search only (no embeddings required)
-            state
+            let (hits, _total_count) = state
                 .store
                 .search_chunks_fts(
                     &params.repo,
@@ -406,7 +406,8 @@ async fn execute_search(
                     params.lang.as_deref(),
                 )
                 .await
-                .context("FTS search execution failed")?
+                .context("FTS search execution failed")?;
+            hits
         }
         "vector" => {
             // Vector mode: Semantic search using embeddings
@@ -458,7 +459,7 @@ async fn execute_search(
                 }
                 Err(_) => {
                     // No embeddings available, use FTS directly
-                    state
+                    let (hits, _total_count) = state
                         .store
                         .search_chunks_fts(
                             &params.repo,
@@ -470,7 +471,8 @@ async fn execute_search(
                             params.lang.as_deref(),
                         )
                         .await
-                        .context("FTS search execution failed")?
+                        .context("FTS search execution failed")?;
+                    hits
                 }
             }
         }
