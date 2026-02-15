@@ -2166,6 +2166,12 @@ async fn main() -> anyhow::Result<()> {
             max_depth,
             json,
         } => {
+            // TODO(AFM-04): Context structured error handling awaits AFM-03 --format flag.
+            // When AFM-03 lands and adds OutputFormat to Context, add structured error handling
+            // here following the pattern used in search and vector-search commands:
+            //   match db::connect().await { Ok(s) => s, Err(e) if format == Agent => handle_agent_error(...), ... }
+            //   match assembler.assemble() { Ok(ctx) => ctx, Err(e) if format == Agent => ... }
+
             // Connect to database
             let store = db::connect().await.context("Database connection failed")?;
 
