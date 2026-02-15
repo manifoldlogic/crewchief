@@ -3,7 +3,8 @@
     "SDD_ROOT_DIR": "/workspace/_SPECS/crewchief",
     "MAPROOM_DB_ROOT": "/home/vscode/.maproom",
     "MAPROOM_EMBEDDING_PROVIDER": "google",
-    "GOOGLE_PROJECT_ID": "crewchief-476600"
+    "GOOGLE_PROJECT_ID": "crewchief-476600",
+    "ENABLE_LSP_TOOL": "1"
   },
   "permissions": {
     "defaultMode": "bypassPermissions"
