@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 
 use clap::ValueEnum;
 
+use crate::context::types::ContextBundle;
 use crate::db;
 
 /// Metadata about a search operation, passed to format functions.
@@ -30,14 +31,21 @@ pub struct SearchMetadata {
     pub total_estimate: usize,
 }
 
-/// Output format for search results.
+/// Output format for search and context results.
 ///
-/// Controls how search results are rendered to stdout.
+/// Controls how search/context results are rendered to stdout.
 /// Used as a clap `ValueEnum` for the `--format` CLI flag.
 ///
 /// - **Json**: Full structured JSON output, backward compatible with existing tooling.
 /// - **Agent**: Compact one-line-per-result output optimized for LLM agents.
 ///   Implicitly enables preview (default 120 chars) to keep output token-efficient.
+///
+/// NOTE(AFM-03): For the `context` command, the default was changed from human-readable
+/// output (via `format_context_bundle()`) to Json. The previous `--json` bool flag
+/// defaulted to false, producing human-readable output. All programmatic consumers
+/// (daemon, MCP server, VSCode extension) use JSON-RPC and are unaffected. The old
+/// human-readable format is preserved in `format_context_bundle()` but no longer
+/// reachable via CLI flags; use `--format agent` for compact interactive output.
 #[derive(Clone, Debug, PartialEq, ValueEnum)]
 pub enum OutputFormat {
     /// JSON output (default, backward compatible)
@@ -148,6 +156,124 @@ pub fn format_hits_json_vector(
         "threshold": threshold,
     });
     serde_json::to_string_pretty(&output)
+}
+
+/// Format a context bundle as compact agent-friendly output.
+///
+/// Produces a header line followed by one line per context item:
+///
+/// ```text
+/// CONTEXT chunk_id=N | tokens=T/B | items=I | truncated=yes/no
+/// role | relpath:start-end | tokens | reason
+/// role | relpath:start-end | tokens | reason | content_preview  (primary only)
+/// ```
+///
+/// - Non-primary items omit content (agents can read files if needed).
+/// - Primary items include a preview: first 3 lines joined with spaces,
+///   sanitized of newlines, capped at 200 characters.
+/// - Empty bundles produce the header line only with `items=0`.
+/// - Multiple primary items all receive content previews (FR-8).
+///
+/// # Examples
+///
+/// ```
+/// use crewchief_maproom::cli::format::format_context_agent;
+/// use crewchief_maproom::context::types::{ContextBundle, ContextItem, LineRange};
+///
+/// let bundle = ContextBundle {
+///     items: vec![
+///         ContextItem {
+///             role: "primary".to_string(),
+///             relpath: "src/auth.rs".to_string(),
+///             range: LineRange { start: 42, end: 68 },
+///             tokens: 450,
+///             reason: "Target function".to_string(),
+///             content: "fn authenticate(user: &str) {\n    let db = connect();\n    verify(user)\n}".to_string(),
+///         },
+///         ContextItem {
+///             role: "caller".to_string(),
+///             relpath: "src/api.rs".to_string(),
+///             range: LineRange { start: 100, end: 120 },
+///             tokens: 300,
+///             reason: "Calls authenticate".to_string(),
+///             content: "// caller content...".to_string(),
+///         },
+///     ],
+///     total_tokens: 750,
+///     truncated: false,
+/// };
+///
+/// let output = format_context_agent(&bundle, 12345, 6000);
+///
+/// // Expected output format:
+/// // CONTEXT chunk_id=12345 | tokens=750/6000 | items=2 | truncated=no
+/// // primary | src/auth.rs:42-68 | 450 | Target function | fn authenticate(user: &str) {     let db = connect();     verify(user)
+/// // caller | src/api.rs:100-120 | 300 | Calls authenticate
+///
+/// let lines: Vec<&str> = output.lines().collect();
+/// assert_eq!(lines.len(), 3);
+/// assert_eq!(
+///     lines[0],
+///     "CONTEXT chunk_id=12345 | tokens=750/6000 | items=2 | truncated=no"
+/// );
+/// // Primary item includes a content preview (first 3 lines joined with spaces)
+/// assert!(lines[1].starts_with("primary | src/auth.rs:42-68 | 450 | Target function | "));
+/// // Non-primary item omits content
+/// assert_eq!(lines[2], "caller | src/api.rs:100-120 | 300 | Calls authenticate");
+/// ```
+pub fn format_context_agent(bundle: &ContextBundle, chunk_id: i64, budget: usize) -> String {
+    let mut output = String::new();
+
+    // Header line
+    let total_tokens: usize = bundle.items.iter().map(|i| i.tokens).sum();
+    let truncated_flag = if bundle.truncated { "yes" } else { "no" };
+    let _ = writeln!(
+        output,
+        "CONTEXT chunk_id={} | tokens={}/{} | items={} | truncated={}",
+        chunk_id,
+        total_tokens,
+        budget,
+        bundle.items.len(),
+        truncated_flag
+    );
+
+    // Item lines
+    for item in &bundle.items {
+        // Sanitize fields that could corrupt the pipe-delimited format:
+        // - Pipe chars in reason/relpath would create extra segments
+        // - Null bytes in content could corrupt text-based output
+        let safe_reason = item.reason.replace('|', " ");
+        let safe_relpath = item.relpath.replace('|', " ");
+        let location = format!("{}:{}-{}", safe_relpath, item.range.start, item.range.end);
+
+        if item.role == "primary" {
+            // Content preview: first 3 lines, sanitized, capped at 200 chars
+            let safe_content = item.content.replace('\0', "");
+            let preview_lines: Vec<&str> = safe_content.lines().take(3).collect();
+            let preview_joined = preview_lines.join(" ");
+            let preview_sanitized = sanitize_newlines(&preview_joined);
+            let preview_capped: String = preview_sanitized.chars().take(200).collect();
+
+            let _ = writeln!(
+                output,
+                "{} | {} | {} | {} | {}",
+                item.role, location, item.tokens, safe_reason, preview_capped
+            );
+        } else {
+            let _ = writeln!(
+                output,
+                "{} | {} | {} | {}",
+                item.role, location, item.tokens, safe_reason
+            );
+        }
+    }
+
+    // Remove trailing newline for clean output
+    if output.ends_with('\n') {
+        output.pop();
+    }
+
+    output
 }
 
 /// Replace newline characters with spaces to maintain one-line-per-result format.
@@ -904,6 +1030,804 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
+    // Tests for format_context_agent() per AFM-03.2001
+    // ---------------------------------------------------------------
+
+    use crate::context::types::{ContextBundle, ContextItem, LineRange};
+
+    /// Helper to create a ContextItem for testing.
+    fn make_context_item(
+        relpath: &str,
+        start: i32,
+        end: i32,
+        role: &str,
+        reason: &str,
+        content: &str,
+        tokens: usize,
+    ) -> ContextItem {
+        ContextItem {
+            relpath: relpath.to_string(),
+            range: LineRange::new(start, end),
+            role: role.to_string(),
+            reason: reason.to_string(),
+            content: content.to_string(),
+            tokens,
+        }
+    }
+
+    #[test]
+    fn test_context_agent_empty_bundle() {
+        let bundle = ContextBundle::new();
+        let output = format_context_agent(&bundle, 42, 6000);
+        assert_eq!(
+            output,
+            "CONTEXT chunk_id=42 | tokens=0/6000 | items=0 | truncated=no"
+        );
+    }
+
+    #[test]
+    fn test_context_agent_single_primary() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/auth.rs",
+            10,
+            30,
+            "primary",
+            "Target chunk",
+            "fn authenticate(user: &str) -> bool {\n    // Check credentials\n    true\n}",
+            150,
+        ));
+
+        let output = format_context_agent(&bundle, 12345, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            lines[0],
+            "CONTEXT chunk_id=12345 | tokens=150/6000 | items=1 | truncated=no"
+        );
+        assert_eq!(
+            lines[1],
+            "primary | src/auth.rs:10-30 | 150 | Target chunk | fn authenticate(user: &str) -> bool {     // Check credentials     true"
+        );
+    }
+
+    #[test]
+    fn test_context_agent_non_primary_no_preview() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/caller.rs",
+            5,
+            15,
+            "caller",
+            "Calls authenticate()",
+            "fn login() {\n    authenticate(\"admin\");\n}",
+            80,
+        ));
+
+        let output = format_context_agent(&bundle, 99, 4000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            lines[0],
+            "CONTEXT chunk_id=99 | tokens=80/4000 | items=1 | truncated=no"
+        );
+        // Non-primary: no preview segment
+        assert_eq!(
+            lines[1],
+            "caller | src/caller.rs:5-15 | 80 | Calls authenticate()"
+        );
+    }
+
+    #[test]
+    fn test_context_agent_multi_item() {
+        // primary + 3 supporting items
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/auth.rs",
+            10,
+            30,
+            "primary",
+            "Target chunk",
+            "fn authenticate() {}",
+            150,
+        ));
+        bundle.add_item(make_context_item(
+            "src/caller.rs",
+            5,
+            15,
+            "caller",
+            "Calls authenticate()",
+            "fn login() { authenticate(); }",
+            80,
+        ));
+        bundle.add_item(make_context_item(
+            "src/callee.rs",
+            20,
+            40,
+            "callee",
+            "Called by authenticate()",
+            "fn verify_token() {}",
+            90,
+        ));
+        bundle.add_item(make_context_item(
+            "tests/auth_test.rs",
+            1,
+            25,
+            "test",
+            "Tests authenticate()",
+            "#[test]\nfn test_auth() { assert!(authenticate()); }",
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 555, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert_eq!(lines.len(), 5); // header + 4 items
+                                    // Header: total tokens = 150 + 80 + 90 + 100 = 420
+        assert_eq!(
+            lines[0],
+            "CONTEXT chunk_id=555 | tokens=420/6000 | items=4 | truncated=no"
+        );
+        // Primary has preview
+        assert!(lines[1].starts_with("primary | src/auth.rs:10-30 | 150 | Target chunk | "));
+        // Non-primary items have no preview
+        assert_eq!(
+            lines[2],
+            "caller | src/caller.rs:5-15 | 80 | Calls authenticate()"
+        );
+        assert_eq!(
+            lines[3],
+            "callee | src/callee.rs:20-40 | 90 | Called by authenticate()"
+        );
+        assert_eq!(
+            lines[4],
+            "test | tests/auth_test.rs:1-25 | 100 | Tests authenticate()"
+        );
+    }
+
+    #[test]
+    fn test_context_agent_truncated_bundle() {
+        let mut bundle = ContextBundle::new();
+        bundle.truncated = true;
+        bundle.add_item(make_context_item(
+            "src/big.rs",
+            1,
+            500,
+            "primary",
+            "Large chunk",
+            "fn big() {}",
+            5500,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert!(lines[0].contains("truncated=yes"));
+        assert_eq!(
+            lines[0],
+            "CONTEXT chunk_id=1 | tokens=5500/6000 | items=1 | truncated=yes"
+        );
+    }
+
+    #[test]
+    fn test_preview_length_cap() {
+        // Create content with lines that join to more than 200 chars
+        let long_line = "x".repeat(250);
+        let content = format!("{}\nsecond line\nthird line", long_line);
+
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/long.rs",
+            1,
+            10,
+            "primary",
+            "Long content",
+            &content,
+            200,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Extract the preview from the primary line (after the 4th pipe)
+        let primary_line = lines[1];
+        let segments: Vec<&str> = primary_line.splitn(5, " | ").collect();
+        assert_eq!(segments.len(), 5);
+        let preview = segments[4];
+        // Preview must be at most 200 characters
+        assert!(
+            preview.chars().count() <= 200,
+            "Preview should be capped at 200 chars, got {}",
+            preview.chars().count()
+        );
+    }
+
+    #[test]
+    fn test_preview_first_three_lines() {
+        let content = "line1\nline2\nline3\nline4\nline5";
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/multi.rs",
+            1,
+            5,
+            "primary",
+            "Multi-line",
+            content,
+            50,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let primary_line = lines[1];
+        let segments: Vec<&str> = primary_line.splitn(5, " | ").collect();
+        let preview = segments[4];
+
+        // Should contain lines 1-3 but not 4-5
+        assert!(preview.contains("line1"));
+        assert!(preview.contains("line2"));
+        assert!(preview.contains("line3"));
+        assert!(!preview.contains("line4"));
+        assert!(!preview.contains("line5"));
+        assert_eq!(preview, "line1 line2 line3");
+    }
+
+    #[test]
+    fn test_context_agent_empty_content() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/empty.rs",
+            1,
+            1,
+            "primary",
+            "Empty content",
+            "",
+            0,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let primary_line = lines[1];
+        // Should end with empty preview after the last pipe
+        assert!(primary_line.ends_with("| Empty content | "));
+    }
+
+    #[test]
+    fn test_context_agent_multiple_primaries() {
+        // FR-8: Multiple primary chunks all get previews
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/a.rs",
+            1,
+            10,
+            "primary",
+            "First primary",
+            "fn first() {}",
+            100,
+        ));
+        bundle.add_item(make_context_item(
+            "src/b.rs",
+            20,
+            30,
+            "primary",
+            "Second primary",
+            "fn second() {}",
+            120,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert_eq!(lines.len(), 3);
+        // Both primaries should have 5 segments (including preview)
+        let segments_a: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        let segments_b: Vec<&str> = lines[2].splitn(5, " | ").collect();
+        assert_eq!(segments_a.len(), 5, "First primary should have preview");
+        assert_eq!(segments_b.len(), 5, "Second primary should have preview");
+        assert!(segments_a[4].contains("fn first()"));
+        assert!(segments_b[4].contains("fn second()"));
+    }
+
+    #[test]
+    fn test_context_agent_unicode_content() {
+        // Ensure unicode chars are not split when capping at 200 characters
+        // Each CJK char is 1 char but 3 bytes in UTF-8
+        let unicode_content = "\u{4e16}\u{754c}".repeat(150); // 300 CJK chars
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/unicode.rs",
+            1,
+            10,
+            "primary",
+            "Unicode content",
+            &unicode_content,
+            500,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let primary_line = lines[1];
+        let segments: Vec<&str> = primary_line.splitn(5, " | ").collect();
+        let preview = segments[4];
+
+        // Preview should be exactly 200 chars (capped from 300)
+        assert_eq!(
+            preview.chars().count(),
+            200,
+            "Unicode preview should be capped at exactly 200 chars"
+        );
+        // Should be valid UTF-8 (would have panicked already if not)
+        assert!(std::str::from_utf8(preview.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_context_agent_zero_tokens() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/zero.rs",
+            1,
+            1,
+            "caller",
+            "Zero tokens",
+            "",
+            0,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        assert!(output.contains("tokens=0/6000"));
+        assert!(output.contains("| 0 |"));
+    }
+
+    #[test]
+    fn test_context_agent_single_line_content() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/one.rs",
+            1,
+            1,
+            "primary",
+            "One liner",
+            "fn one_liner() {}",
+            10,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        assert_eq!(segments[4], "fn one_liner() {}");
+    }
+
+    #[test]
+    fn test_context_agent_all_roles() {
+        // Test every known role type: primary, caller, callee, test, doc, config, hook, jsx_parent, jsx_child
+        let mut bundle = ContextBundle::new();
+        let roles = [
+            "primary",
+            "caller",
+            "callee",
+            "test",
+            "doc",
+            "config",
+            "hook",
+            "jsx_parent",
+            "jsx_child",
+        ];
+        for (i, role) in roles.iter().enumerate() {
+            bundle.add_item(make_context_item(
+                &format!("src/{}.rs", role),
+                (i as i32) + 1,
+                (i as i32) + 10,
+                role,
+                &format!("Role: {}", role),
+                &format!("fn {}() {{}}", role),
+                50,
+            ));
+        }
+
+        let output = format_context_agent(&bundle, 42, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Header + 9 items = 10 lines
+        assert_eq!(lines.len(), 10);
+        assert!(lines[0].contains("items=9"));
+        // Verify each role appears in the output
+        for role in &roles {
+            assert!(
+                output.contains(&format!("{} | src/{}.rs:", role, role)),
+                "Missing role: {}",
+                role
+            );
+        }
+        // Only primary should have content preview (5 segments)
+        let primary_segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        assert_eq!(primary_segments.len(), 5, "Primary should have preview");
+        // Non-primary items should have 4 segments
+        for line in &lines[2..] {
+            let segments: Vec<&str> = line.splitn(5, " | ").collect();
+            assert_eq!(
+                segments.len(),
+                4,
+                "Non-primary should have no preview: {}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_context_agent_header_format() {
+        // Validate exact header line structure
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/main.rs",
+            1,
+            50,
+            "primary",
+            "Target",
+            "fn main() {}",
+            200,
+        ));
+        bundle.add_item(make_context_item(
+            "src/lib.rs",
+            1,
+            10,
+            "caller",
+            "Calls main",
+            "use main;",
+            50,
+        ));
+
+        let output = format_context_agent(&bundle, 99999, 8000);
+        let header = output.lines().next().unwrap();
+
+        // Verify exact header format
+        assert_eq!(
+            header,
+            "CONTEXT chunk_id=99999 | tokens=250/8000 | items=2 | truncated=no"
+        );
+
+        // Verify header components are pipe-delimited
+        let segments: Vec<&str> = header.split(" | ").collect();
+        assert_eq!(segments.len(), 4);
+        assert!(segments[0].starts_with("CONTEXT chunk_id="));
+        assert!(segments[1].starts_with("tokens="));
+        assert!(segments[2].starts_with("items="));
+        assert!(segments[3].starts_with("truncated="));
+    }
+
+    #[test]
+    fn test_context_agent_large_budget() {
+        // Large numbers formatted correctly
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/big.rs",
+            1,
+            10000,
+            "primary",
+            "Huge file",
+            "fn big() {}",
+            999999,
+        ));
+
+        let output = format_context_agent(&bundle, 1000000, 1000000);
+        let header = output.lines().next().unwrap();
+        assert_eq!(
+            header,
+            "CONTEXT chunk_id=1000000 | tokens=999999/1000000 | items=1 | truncated=no"
+        );
+    }
+
+    #[test]
+    fn test_context_agent_unicode_path() {
+        // Multi-byte unicode characters in file paths
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/\u{65e5}\u{672c}\u{8a9e}.rs",
+            1,
+            10,
+            "primary",
+            "Japanese path",
+            "fn greet() {}",
+            30,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[1].contains("src/\u{65e5}\u{672c}\u{8a9e}.rs:1-10"));
+    }
+
+    #[test]
+    fn test_context_agent_empty_reason() {
+        // Empty reason string
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/noreason.rs",
+            1,
+            5,
+            "caller",
+            "",
+            "fn call() {}",
+            20,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        // The reason field should be empty but the format still works
+        assert_eq!(lines[1], "caller | src/noreason.rs:1-5 | 20 | ");
+    }
+
+    #[test]
+    fn test_preview_newline_sanitization() {
+        // All newline types: \n, \r\n, \r should be replaced with spaces
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/newlines.rs",
+            1,
+            5,
+            "primary",
+            "Newline test",
+            "line_unix\nline_windows\r\nline_mac\rline_end",
+            40,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        let preview = segments[4];
+
+        // All newline types should be replaced with spaces
+        assert!(!preview.contains('\n'));
+        assert!(!preview.contains('\r'));
+        assert_eq!(preview, "line_unix line_windows line_mac line_end");
+    }
+
+    #[test]
+    fn test_preview_exact_200_char_boundary() {
+        // Create content that results in exactly 200 characters after sanitization
+        // Use a string of exactly 200 'a' characters on one line
+        let exact_200 = "a".repeat(200);
+        let content = format!("{}\nextra line", exact_200);
+
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/boundary.rs",
+            1,
+            5,
+            "primary",
+            "Boundary test",
+            &content,
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        let preview = segments[4];
+
+        // After joining first 3 lines: "aaa...aaa extra line" (200 + 1 space + 10 = 211 chars)
+        // Should be capped at exactly 200 chars
+        assert_eq!(
+            preview.chars().count(),
+            200,
+            "Preview should be exactly 200 chars at the boundary, got {}",
+            preview.chars().count()
+        );
+    }
+
+    #[test]
+    fn test_preview_only_for_primary() {
+        // Non-primary items should never have content preview
+        let mut bundle = ContextBundle::new();
+        let non_primary_roles = [
+            "caller",
+            "callee",
+            "test",
+            "doc",
+            "config",
+            "hook",
+            "jsx_parent",
+            "jsx_child",
+        ];
+        for role in &non_primary_roles {
+            bundle.add_item(make_context_item(
+                &format!("src/{}.rs", role),
+                1,
+                10,
+                role,
+                &format!("{} item", role),
+                "fn content_that_should_not_appear() {}",
+                50,
+            ));
+        }
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        // The actual content should not appear in output for non-primary items
+        assert!(
+            !output.contains("content_that_should_not_appear"),
+            "Non-primary items should not include content preview"
+        );
+        // Each non-primary line should have exactly 4 pipe-delimited segments
+        for line in output.lines().skip(1) {
+            let segments: Vec<&str> = line.splitn(5, " | ").collect();
+            assert_eq!(
+                segments.len(),
+                4,
+                "Non-primary item should have 4 segments: {}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_context_agent_no_primary() {
+        // Bundle with no primary items - all items are supporting roles
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/caller.rs",
+            1,
+            10,
+            "caller",
+            "Caller item",
+            "fn call() {}",
+            50,
+        ));
+        bundle.add_item(make_context_item(
+            "tests/test.rs",
+            1,
+            5,
+            "test",
+            "Test item",
+            "#[test] fn t() {}",
+            30,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert_eq!(lines.len(), 3); // header + 2 items
+        assert!(lines[0].contains("items=2"));
+        // No item should have a preview (no primary)
+        assert!(!output.contains("fn call()"));
+        assert!(!output.contains("#[test] fn t()"));
+    }
+
+    // ---------------------------------------------------------------
+    // Token efficiency benchmark test per AFM-03.2001
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_token_efficiency_benchmark() {
+        // Build a realistic 5-item test bundle:
+        // 1 primary (~800 tokens worth of content)
+        // 2 callers (~400 tokens each)
+        // 1 test (~300 tokens)
+        // 1 doc (~200 tokens)
+
+        // Generate realistic Rust code content
+        let primary_content = (0..50)
+            .map(|i| format!("    let var_{} = compute_value({}, &config);", i, i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let primary_content = format!(
+            "pub fn authenticate(user: &str, password: &str, config: &AuthConfig) -> Result<Session, AuthError> {{\n{}\n    Ok(Session::new(user))\n}}",
+            primary_content
+        );
+
+        let caller1_content = (0..30)
+            .map(|i| format!("    let step_{} = process_request({}, &ctx);", i, i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let caller1_content = format!(
+            "pub fn login_handler(req: &Request) -> Response {{\n{}\n    Response::ok()\n}}",
+            caller1_content
+        );
+
+        let caller2_content = (0..30)
+            .map(|i| format!("    let check_{} = validate_input({}, &rules);", i, i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let caller2_content = format!(
+            "pub fn api_middleware(req: &Request, next: &Handler) -> Response {{\n{}\n    next.call(req)\n}}",
+            caller2_content
+        );
+
+        let test_content = (0..25)
+            .map(|i| {
+                format!(
+                    "    assert_eq!(authenticate(\"user_{}\", \"pass_{}\", &config), expected_{});",
+                    i, i, i
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let test_content = format!(
+            "#[test]\nfn test_authenticate() {{\n    let config = AuthConfig::default();\n{}\n}}",
+            test_content
+        );
+
+        let doc_content = (0..20)
+            .map(|i| format!("/// Parameter {}: Description of parameter {} and its usage in the authentication flow.", i, i))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Count tokens for each content piece
+        let counter = crate::context::TokenCounter::new();
+        let primary_tokens = counter.count(&primary_content).unwrap();
+        let caller1_tokens = counter.count(&caller1_content).unwrap();
+        let caller2_tokens = counter.count(&caller2_content).unwrap();
+        let test_tokens = counter.count(&test_content).unwrap();
+        let doc_tokens = counter.count(&doc_content).unwrap();
+
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/auth.rs",
+            10,
+            60,
+            "primary",
+            "Target function: authenticate()",
+            &primary_content,
+            primary_tokens,
+        ));
+        bundle.add_item(make_context_item(
+            "src/handlers/login.rs",
+            25,
+            55,
+            "caller",
+            "Calls authenticate() in login flow",
+            &caller1_content,
+            caller1_tokens,
+        ));
+        bundle.add_item(make_context_item(
+            "src/middleware/api.rs",
+            100,
+            130,
+            "caller",
+            "Calls authenticate() in API middleware",
+            &caller2_content,
+            caller2_tokens,
+        ));
+        bundle.add_item(make_context_item(
+            "tests/auth_test.rs",
+            1,
+            25,
+            "test",
+            "Unit tests for authenticate()",
+            &test_content,
+            test_tokens,
+        ));
+        bundle.add_item(make_context_item(
+            "docs/auth.rs",
+            1,
+            20,
+            "doc",
+            "Documentation for authentication module",
+            &doc_content,
+            doc_tokens,
+        ));
+
+        let budget = 6000;
+        let chunk_id = 12345;
+
+        // Render both formats
+        let agent_output = format_context_agent(&bundle, chunk_id, budget);
+        let json_output = serde_json::to_string_pretty(&bundle).unwrap();
+
+        // Count tokens using tiktoken cl100k_base
+        let agent_tokens = counter.count(&agent_output).unwrap();
+        let json_tokens = counter.count(&json_output).unwrap();
+
+        // Assert: agent format must use at most 60% of JSON tokens
+        let ratio = agent_tokens as f64 / json_tokens as f64;
+        assert!(
+            agent_tokens <= (json_tokens as f64 * 0.60) as usize,
+            "Agent format ({} tokens) should be <= 60% of JSON format ({} tokens). Ratio: {:.2}%",
+            agent_tokens,
+            json_tokens,
+            ratio * 100.0
+        );
+    }
+
     // AFM-02: Tests for dual file_relpath / file_path field contract
     // ---------------------------------------------------------------
 
@@ -971,7 +1895,6 @@ mod tests {
 
     #[test]
     fn test_agent_header_with_results() {
-        // Header with hits > 0, total_estimate > hits
         let hits = vec![make_hit(
             "src/app.rs",
             42,
@@ -992,13 +1915,11 @@ mod tests {
             header,
             "SEARCH query=\"authentication\" | hits=1 | total_estimate=25 | mode=fts"
         );
-        // Also verify hit line is present
         assert_eq!(agent_hit_lines(&output).len(), 1);
     }
 
     #[test]
     fn test_agent_header_without_results() {
-        // Header with hits = 0, total_estimate = 0
         let hits: Vec<SearchHit> = vec![];
         let meta = SearchMetadata {
             query: "nonexistent".to_string(),
@@ -1017,7 +1938,6 @@ mod tests {
 
     #[test]
     fn test_agent_header_query_with_double_quotes() {
-        // Query containing double quotes must be escaped
         let hits: Vec<SearchHit> = vec![];
         let meta = SearchMetadata {
             query: "user \"name\" field".to_string(),
@@ -1035,7 +1955,6 @@ mod tests {
 
     #[test]
     fn test_agent_header_query_with_special_characters() {
-        // Query with pipes, equals, spaces - should be passed through literally
         let hits: Vec<SearchHit> = vec![];
         let meta = SearchMetadata {
             query: "key=value | pipe | another=test spaces".to_string(),
@@ -1055,7 +1974,6 @@ mod tests {
     fn test_agent_header_mode_fts_vs_vector() {
         let hits: Vec<SearchHit> = vec![];
 
-        // FTS mode
         let meta_fts = SearchMetadata {
             query: "test".to_string(),
             mode: "fts".to_string(),
@@ -1065,7 +1983,6 @@ mod tests {
         let output_fts = format_hits_agent(&hits, &meta_fts);
         assert!(output_fts.contains("| mode=fts"));
 
-        // Vector mode
         let meta_vector = SearchMetadata {
             query: "test".to_string(),
             mode: "vector".to_string(),
@@ -1078,7 +1995,6 @@ mod tests {
 
     #[test]
     fn test_json_envelope_includes_all_metadata_fields() {
-        // JSON output must include total_matches, query, mode at top level
         let hits = vec![make_hit(
             "src/app.rs",
             42,
@@ -1105,7 +2021,6 @@ mod tests {
 
     #[test]
     fn test_agent_header_long_query() {
-        // Test header formatting with very long query (>1000 chars)
         let long_query = "x".repeat(1500);
         let meta = SearchMetadata {
             query: long_query.clone(),
@@ -1116,7 +2031,6 @@ mod tests {
 
         let result = format_hits_agent(&[], &meta);
 
-        // Header should still format correctly without truncation
         assert!(result.contains(&long_query));
         assert!(result.contains("hits=5"));
         assert!(result.contains("total_estimate=10"));
@@ -1124,7 +2038,6 @@ mod tests {
 
     #[test]
     fn test_json_empty_hits_with_metadata() {
-        // JSON with empty hits still includes all metadata fields
         let hits: Vec<SearchHit> = vec![];
         let meta = SearchMetadata {
             query: "nonexistent query".to_string(),
@@ -1140,5 +2053,107 @@ mod tests {
         assert_eq!(parsed["mode"], "vector");
         assert!(parsed["hits"].is_array());
         assert_eq!(parsed["hits"].as_array().unwrap().len(), 0);
+    }
+
+    // ---------------------------------------------------------------
+    // Defensive edge case tests per AFM-03.4002
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_agent_format_budget_zero() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/main.rs",
+            1,
+            10,
+            "primary",
+            "Target",
+            "fn main() {\n    println!(\"test\");\n}",
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 1001, 0);
+
+        assert!(output.starts_with("CONTEXT chunk_id=1001 | tokens=100/0"));
+        assert!(output.contains("primary | src/main.rs:1-10"));
+        assert!(output.lines().count() >= 2);
+    }
+
+    #[test]
+    fn test_agent_format_null_bytes_in_content() {
+        let content_with_nulls = "fn test() {\n    let x\0 = 5;\n    println!(\"test\0\");\n}";
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/test.rs",
+            1,
+            5,
+            "primary",
+            "Target",
+            content_with_nulls,
+            50,
+        ));
+
+        let output = format_context_agent(&bundle, 1002, 1000);
+
+        assert!(!output.contains('\0'), "Output contains null bytes");
+
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn test_agent_format_pipe_in_reason() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/core.rs",
+            10,
+            20,
+            "primary",
+            "Reason with | pipe character",
+            "fn process() {}",
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 1003, 1000);
+
+        assert!(output.contains("src/core.rs:10-20"));
+
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+
+        let segments: Vec<&str> = lines[1].splitn(6, " | ").collect();
+        assert_eq!(
+            segments.len(),
+            5,
+            "Primary line should have exactly 5 segments (role, location, tokens, reason, preview), got {}",
+            segments.len()
+        );
+    }
+
+    #[test]
+    fn test_agent_format_pipe_in_relpath() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/weird|name.rs",
+            5,
+            15,
+            "primary",
+            "Target",
+            "fn test() {}",
+            80,
+        ));
+
+        let output = format_context_agent(&bundle, 1004, 1000);
+
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+
+        let segments: Vec<&str> = lines[1].splitn(6, " | ").collect();
+        assert_eq!(
+            segments.len(),
+            5,
+            "Primary line should have exactly 5 segments even with pipe in relpath, got {}",
+            segments.len()
+        );
     }
 }
