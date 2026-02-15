@@ -9,7 +9,8 @@ use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crewchief_maproom::cli::format::{
-    format_hits_agent, format_hits_json_search, format_hits_json_vector, OutputFormat,
+    format_agent_error, format_hits_agent, format_hits_json_search, format_hits_json_vector,
+    sanitize_newlines, OutputFormat,
 };
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
@@ -2137,6 +2138,214 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// Error Classification and Handling Infrastructure (AFM-04.2001)
+// ============================================================================
+
+/// Handle agent errors with dual output: structured format to stdout, human-readable to stderr.
+///
+/// This function provides the routing layer for error output in agent mode:
+/// - If format is Agent: prints structured error line to stdout using `format_agent_error()`
+/// - Always prints human-readable error chain to stderr via `eprintln!`
+/// - Calls `std::process::exit(exit_code)` after output
+///
+/// # Investigation Notes (AFM-04.2001)
+///
+/// The `src/context/` module was investigated for structured error types. No error enums
+/// or structured error definitions were found in the context assembly module. The context
+/// module focuses on assembly logic (budget, graph traversal, truncation) rather than
+/// defining its own error taxonomy.
+///
+/// Error classification relies on:
+/// 1. Structured types from search pipeline: `PipelineError` (src/search/pipeline.rs)
+/// 2. Structured types from embedding: `EmbeddingError` (src/embedding/error.rs)
+/// 3. Helper: `SearchErrorDetails::from_pipeline_error()` (src/search/errors.rs)
+/// 4. Fallback: String-based heuristics for anyhow-wrapped errors
+///
+/// # Arguments
+///
+/// * `error` - The anyhow error to handle
+/// * `format` - Output format (Agent vs Json)
+/// * `error_type` - Error type string from classification (e.g., "database", "config_error")
+/// * `suggestion` - Actionable suggestion string from classification
+/// * `exit_code` - Exit code to use (2 for config errors, 1 for runtime errors)
+///
+/// # Exit Behavior
+///
+/// This function NEVER returns - it always calls `std::process::exit(exit_code)`.
+fn handle_agent_error(
+    error: &anyhow::Error,
+    format: &OutputFormat,
+    error_type: &str,
+    suggestion: &str,
+    exit_code: i32,
+) -> ! {
+    // If agent format, print structured error to stdout
+    if matches!(format, OutputFormat::Agent) {
+        let error_msg = error.to_string();
+        let structured = format_agent_error(error_type, &error_msg, suggestion);
+        println!("{}", structured);
+    }
+
+    // Always print human-readable error to stderr
+    // Use Debug formatting to show error chain
+    let error_display = format!("{:?}", error);
+    let sanitized = sanitize_newlines(&error_display);
+    eprintln!("Error: {}", sanitized);
+
+    // Exit with appropriate code
+    std::process::exit(exit_code)
+}
+
+/// Classify an anyhow error into (error_type, suggestion, exit_code).
+///
+/// Classification strategy (priority order):
+/// 1. Attempt downcast to `PipelineError` -> use SearchErrorDetails for structured classification
+/// 2. Attempt downcast to `EmbeddingError` -> use SearchErrorDetails for structured classification
+/// 3. Fall back to string-based heuristics on `error.to_string()`
+///
+/// # Error Type Taxonomy
+///
+/// - **config_error**: Missing API keys, sqlite-vec unavailable, provider misconfiguration (exit code 2)
+/// - **database**: Database connection, timeout, corruption (exit code 1)
+/// - **not_found**: Chunk not found, repository not indexed (exit code 1)
+/// - **validation**: Empty query, invalid input (exit code 1)
+/// - **timeout**: Search execution timeout (exit code 1)
+/// - **embedding_provider**: OpenAI/Ollama/Google API errors (exit code 1 for runtime, 2 for config)
+/// - **unknown**: Unclassified errors (exit code 1)
+///
+/// # Heuristic Patterns
+///
+/// When structured types are unavailable, errors are classified by string matching:
+/// - Contains "config" or "API_KEY" or "provider" -> config_error (exit 2)
+/// - Contains "sqlite-vec" or "vector" and "not available" -> config_error (exit 2)
+/// - Contains "database" or "connection" -> database (exit 1)
+/// - Contains "chunk" and "not found" -> not_found (exit 1)
+/// - Otherwise -> unknown (exit 1)
+///
+/// # Returns
+///
+/// Tuple of `(error_type: String, suggestion: String, exit_code: i32)`
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let error = anyhow::anyhow!("Missing OPENAI_API_KEY");
+/// let (error_type, suggestion, exit_code) = classify_error(&error);
+/// assert_eq!(error_type, "config_error");
+/// assert_eq!(exit_code, 2);
+/// ```
+fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
+    use crewchief_maproom::embedding::error::EmbeddingError;
+    use crewchief_maproom::search::errors::SearchErrorDetails;
+    use crewchief_maproom::search::pipeline::PipelineError;
+
+    // Priority 1: Try to downcast to PipelineError (structured search errors)
+    if let Some(pipeline_error) = error.downcast_ref::<PipelineError>() {
+        let details = SearchErrorDetails::from_pipeline_error(pipeline_error);
+
+        // Map ErrorType to string and exit code
+        let (error_type_str, exit_code) = match details.error_type {
+            crewchief_maproom::search::errors::ErrorType::EmbeddingProvider => {
+                // Check if it's a config error (exit 2) or runtime error (exit 1)
+                if details.context.contains_key("provider")
+                    && details.suggestions.iter().any(|s| {
+                        s.contains("API_KEY")
+                            || s.contains("credentials")
+                            || s.contains("environment variable")
+                    })
+                {
+                    ("embedding_provider", 2)
+                } else {
+                    ("embedding_provider", 1)
+                }
+            }
+            crewchief_maproom::search::errors::ErrorType::Database => ("database", 1),
+            crewchief_maproom::search::errors::ErrorType::Validation => ("validation", 1),
+            crewchief_maproom::search::errors::ErrorType::Timeout => ("timeout", 1),
+            crewchief_maproom::search::errors::ErrorType::NotFound => ("not_found", 1),
+            crewchief_maproom::search::errors::ErrorType::Unknown => ("unknown", 1),
+        };
+
+        // Combine suggestions into a single string
+        let suggestion = if details.suggestions.is_empty() {
+            "Check logs for details".to_string()
+        } else {
+            details.suggestions.join("; ")
+        };
+
+        return (error_type_str.to_string(), suggestion, exit_code);
+    }
+
+    // Priority 2: Try to downcast to EmbeddingError (structured embedding errors)
+    if let Some(embedding_error) = error.downcast_ref::<EmbeddingError>() {
+        // Use the embedding module's error handling
+        let error_str = embedding_error.to_string();
+
+        // Check if it's a config error (missing API key, etc.)
+        if matches!(
+            embedding_error,
+            EmbeddingError::Config(_) | EmbeddingError::InvalidInput(_)
+        ) {
+            return (
+                "embedding_provider".to_string(),
+                "Check your embedding provider configuration".to_string(),
+                2,
+            );
+        }
+
+        // Runtime errors (API failures, network issues)
+        return (
+            "embedding_provider".to_string(),
+            format!("Embedding provider error: {}", error_str),
+            1,
+        );
+    }
+
+    // Priority 3: Fallback to string-based heuristics
+    let error_str = error.to_string();
+    let error_lower = error_str.to_lowercase();
+
+    // Heuristic: Config errors (exit code 2)
+    if error_lower.contains("config")
+        || error_lower.contains("api_key")
+        || error_lower.contains("provider")
+        || (error_lower.contains("sqlite-vec") && error_lower.contains("not available"))
+        || (error_lower.contains("vector") && error_lower.contains("not available"))
+    {
+        return (
+            "config_error".to_string(),
+            "Check your configuration and environment variables".to_string(),
+            2,
+        );
+    }
+
+    // Heuristic: Database errors
+    if error_lower.contains("database") || error_lower.contains("connection") {
+        return (
+            "database".to_string(),
+            "Check database connectivity and permissions".to_string(),
+            1,
+        );
+    }
+
+    // Heuristic: Not found errors
+    if error_lower.contains("chunk") && error_lower.contains("not found") {
+        return (
+            "not_found".to_string(),
+            "The requested chunk may not be indexed".to_string(),
+            1,
+        );
+    }
+
+    // Default: Unknown error (exit code 1)
+    (
+        "unknown".to_string(),
+        "Please report this error with full details".to_string(),
+        1,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3160,5 +3369,106 @@ mod tests {
             preview_len, 300,
             "Explicit preview-length must override JSON default"
         );
+    }
+
+    // ==================== Error Classification Tests (AFM-04.2001) ====================
+
+    /// Test classification of embedding config error (missing API key) -> exit code 2
+    #[test]
+    fn test_classify_embedding_config_error() {
+        use crewchief_maproom::embedding::error::{ConfigError, EmbeddingError};
+
+        let config_error = ConfigError::MissingConfig("OPENAI_API_KEY".to_string());
+        let embedding_error = EmbeddingError::Config(config_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "embedding_provider");
+        assert!(suggestion.contains("configuration"));
+        assert_eq!(exit_code, 2, "Config errors should exit with code 2");
+    }
+
+    /// Test classification of embedding API error (timeout) -> exit code 1
+    #[test]
+    fn test_classify_embedding_api_error() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let api_error = ApiError::RateLimit {
+            retry_after_ms: 5000,
+        };
+        let embedding_error = EmbeddingError::Api(api_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "embedding_provider");
+        assert_eq!(exit_code, 1, "Runtime API errors should exit with code 1");
+    }
+
+    /// Test classification of database error -> exit code 1
+    #[test]
+    fn test_classify_database_error() {
+        let error = anyhow::anyhow!("Database connection failed");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "database");
+        assert!(suggestion.contains("database") || suggestion.contains("connectivity"));
+        assert_eq!(exit_code, 1);
+    }
+
+    /// Test classification of sqlite-vec unavailable -> exit code 2 (config error)
+    #[test]
+    fn test_classify_sqlite_vec_error() {
+        let error = anyhow::anyhow!("sqlite-vec extension not available");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "config_error");
+        assert!(suggestion.contains("configuration"));
+        assert_eq!(exit_code, 2, "Missing extension is a config error");
+    }
+
+    /// Test classification of unknown error -> exit code 1
+    #[test]
+    fn test_classify_unknown_error() {
+        let error = anyhow::anyhow!("Something unexpected happened");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "unknown");
+        assert!(suggestion.contains("report") || suggestion.contains("details"));
+        assert_eq!(exit_code, 1);
+    }
+
+    /// Test classification of error wrapped in anyhow context
+    #[test]
+    fn test_classify_error_with_anyhow_context() {
+        use crewchief_maproom::embedding::error::{ConfigError, EmbeddingError};
+
+        let config_error = ConfigError::EnvVarNotFound("GOOGLE_API_KEY".to_string());
+        let embedding_error = EmbeddingError::Config(config_error);
+        let error: anyhow::Error = embedding_error.into();
+        let wrapped = error.context("Failed to generate embeddings");
+
+        let (error_type, suggestion, exit_code) = classify_error(&wrapped);
+
+        assert_eq!(error_type, "embedding_provider");
+        assert_eq!(exit_code, 2, "Config errors should exit with code 2");
+    }
+
+    /// Test heuristic fallback for unrecognized error patterns
+    #[test]
+    fn test_classify_heuristic_fallback() {
+        let error = anyhow::anyhow!("Mysterious error from unknown source");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            error_type, "unknown",
+            "Unrecognized errors should fall back to unknown type"
+        );
+        assert_eq!(exit_code, 1);
     }
 }

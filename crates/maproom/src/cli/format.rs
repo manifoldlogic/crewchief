@@ -124,8 +124,11 @@ pub fn format_hits_json_vector(
 /// Replace newline characters with spaces to maintain one-line-per-result format.
 ///
 /// Handles `\r\n` (Windows), `\n` (Unix), and `\r` (legacy Mac) line endings.
+///
+/// This function is made public for use in error handling (main.rs) to sanitize
+/// error messages before printing to stderr.
 #[allow(clippy::collapsible_str_replace)]
-fn sanitize_newlines(text: &str) -> String {
+pub fn sanitize_newlines(text: &str) -> String {
     // Replace \r\n first (before individual \r or \n) to produce a single space
     // per Windows line ending rather than two spaces.
     text.replace("\r\n", " ")
@@ -993,6 +996,5 @@ mod tests {
             "Output with empty fields does not match relaxed pattern: {}",
             output_empty
         );
-    }
     }
 }
