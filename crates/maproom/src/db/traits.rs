@@ -38,9 +38,49 @@ use crate::db::{
 #[async_trait]
 pub trait StoreCore: Send + Sync {
     /// Check if sqlite-vec (or equivalent vector extension) is available.
+    ///
+    /// Returns `true` if the backend supports vector similarity search. When
+    /// `false`, vector search degrades gracefully (FTS-only results).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// fn choose_search_mode(store: &dyn Store) -> &'static str {
+    ///     if store.has_vec_extension() {
+    ///         "hybrid"
+    ///     } else {
+    ///         "fts"
+    ///     }
+    /// }
+    /// ```
     fn has_vec_extension(&self) -> bool;
 
     /// Get or create a repository by name and root path. Returns repo ID.
+    ///
+    /// If a repository with the given name already exists, its ID is returned
+    /// without creating a duplicate. This is the standard entry point for
+    /// registering a repo before indexing.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Short name for the repository (e.g., `"crewchief"`)
+    /// * `root_path` - Absolute filesystem path to the repository root
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// async fn setup_repo(store: &dyn Store) -> anyhow::Result<i64> {
+    ///     let repo_id = store
+    ///         .get_or_create_repo("my-project", "/home/user/repos/my-project")
+    ///         .await?;
+    ///     // repo_id can now be used with get_or_create_worktree, etc.
+    ///     Ok(repo_id)
+    /// }
+    /// ```
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64>;
 
     /// Get or create a worktree for a repository. Returns worktree ID.
@@ -126,6 +166,45 @@ pub trait StoreCore: Send + Sync {
 #[async_trait]
 pub trait StoreChunks: Send + Sync {
     /// Insert a single chunk. Returns chunk ID.
+    ///
+    /// Stores a parsed code chunk (function, class, etc.) extracted by
+    /// tree-sitter. The chunk is associated with a file via `chunk.file_id`
+    /// and a worktree via `chunk.worktree_id`.
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk` - The chunk record containing symbol metadata, line range,
+    ///   preview text, and content hash (`blob_sha`)
+    ///
+    /// # Returns
+    ///
+    /// The database ID of the inserted chunk.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::{ChunkRecord, Store};
+    ///
+    /// async fn index_chunk(store: &dyn Store, file_id: i64, worktree_id: i64) -> anyhow::Result<i64> {
+    ///     let chunk = ChunkRecord {
+    ///         file_id,
+    ///         blob_sha: "abc123".to_string(),
+    ///         symbol_name: Some("process_request".to_string()),
+    ///         kind: "function".to_string(),
+    ///         signature: Some("fn process_request(req: Request) -> Response".to_string()),
+    ///         docstring: None,
+    ///         start_line: 10,
+    ///         end_line: 25,
+    ///         preview: "fn process_request(req: Request) -> Response { ... }".to_string(),
+    ///         ts_doc_text: "process_request function request response".to_string(),
+    ///         recency_score: 1.0,
+    ///         churn_score: 0.5,
+    ///         metadata: None,
+    ///         worktree_id,
+    ///     };
+    ///     store.insert_chunk(&chunk).await
+    /// }
+    /// ```
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64>;
 
     /// Insert multiple chunks in a batch. Returns chunk IDs.
@@ -146,6 +225,37 @@ pub trait StoreChunks: Send + Sync {
     async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<ChunkSummary>>;
 
     /// Get a chunk with surrounding context.
+    ///
+    /// Returns the full chunk data along with neighboring chunks from the
+    /// same file. The `surrounding` parameter controls how many chunks
+    /// before and after are included, providing spatial context for code
+    /// navigation and LLM context assembly.
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk_id` - The database ID of the target chunk
+    /// * `surrounding` - Number of neighboring chunks to include on each side
+    ///
+    /// # Returns
+    ///
+    /// `None` if the chunk ID does not exist; otherwise a [`ChunkContext`]
+    /// containing the chunk and its neighbors.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// async fn show_context(store: &dyn Store, chunk_id: i64) -> anyhow::Result<()> {
+    ///     if let Some(ctx) = store.get_chunk_context(chunk_id, 2).await? {
+    ///         println!("File: {}", ctx.file_path);
+    ///         println!("Chunk: {} (lines {}-{})",
+    ///             ctx.chunk.kind, ctx.chunk.start_line, ctx.chunk.end_line);
+    ///         println!("Surrounding chunks: {}", ctx.surrounding_chunks.len());
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     async fn get_chunk_context(
         &self,
         chunk_id: i64,
@@ -193,6 +303,43 @@ pub trait StoreChunks: Send + Sync {
 #[async_trait]
 pub trait StoreSearch: Send + Sync {
     /// Full-text search for chunks, resolving repo/worktree by name.
+    ///
+    /// Performs FTS5 keyword search across indexed chunks in the specified
+    /// repository and optional worktree. Results are ranked by BM25 with
+    /// optional semantic ranking adjustments.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo` - Repository name (e.g., `"crewchief"`)
+    /// * `worktree` - Optional worktree name to scope the search
+    /// * `query` - FTS query string (supports SQLite FTS5 syntax)
+    /// * `k` - Maximum number of results to return
+    /// * `debug` - If `true`, populate debug fields (`base_score`, `kind_mult`, etc.)
+    /// * `kind_filter` - Optional filter to restrict chunk kinds (e.g., `["function", "method"]`)
+    /// * `lang_filter` - Optional filter to restrict languages (e.g., `["rust", "typescript"]`)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// async fn find_functions(store: &dyn Store) -> anyhow::Result<()> {
+    ///     let hits = store.search_chunks_fts(
+    ///         "my-project",
+    ///         Some("main"),
+    ///         "authentication",
+    ///         10,
+    ///         false,
+    ///         Some(&["function".to_string(), "method".to_string()]),
+    ///         None,
+    ///     ).await?;
+    ///
+    ///     for hit in &hits {
+    ///         println!("{} ({}) score={:.3}", hit.file_relpath, hit.kind, hit.score);
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     async fn search_chunks_fts(
         &self,
         repo: &str,
@@ -249,6 +396,45 @@ pub trait StoreSearch: Send + Sync {
     ) -> anyhow::Result<Vec<SearchHit>>;
 
     /// Hybrid search using RRF to combine FTS and vector results.
+    ///
+    /// Executes both FTS and vector searches, then merges them using
+    /// Reciprocal Rank Fusion (RRF). Each result's final score blends
+    /// keyword relevance and semantic similarity according to `weights`.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo` - Repository name
+    /// * `worktree` - Optional worktree name to scope the search
+    /// * `query` - FTS query string for the keyword component
+    /// * `query_embedding` - Pre-computed embedding vector for the semantic component
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Relative importance of FTS vs. vector scores
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::{HybridWeights, Store};
+    ///
+    /// async fn hybrid_search(
+    ///     store: &dyn Store,
+    ///     query: &str,
+    ///     embedding: &[f32],
+    /// ) -> anyhow::Result<()> {
+    ///     let results = store.search_hybrid(
+    ///         "my-project",
+    ///         Some("main"),
+    ///         query,
+    ///         embedding,
+    ///         20,
+    ///         HybridWeights::default(), // 0.3 FTS, 0.7 vector
+    ///     ).await?;
+    ///
+    ///     for r in &results {
+    ///         println!("chunk {} score={:.3} source={}", r.chunk_id, r.score, r.source);
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     async fn search_hybrid(
         &self,
         repo: &str,
@@ -285,6 +471,37 @@ pub trait StoreSearch: Send + Sync {
 #[async_trait]
 pub trait StoreGraph: Send + Sync {
     /// Find all chunks that call the target chunk (directly or transitively).
+    ///
+    /// Performs a recursive graph traversal following incoming "calls" edges
+    /// to discover callers up to `max_depth` levels. Uses cycle detection to
+    /// avoid infinite loops. Default depth is 3; hard maximum is 10.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_chunk_id` - The chunk whose callers to find
+    /// * `max_depth` - Maximum traversal depth (`None` for default of 3)
+    ///
+    /// # Returns
+    ///
+    /// A list of [`GraphResult`] entries, each containing the caller's chunk ID,
+    /// traversal depth, and the edge path from source to target.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// async fn who_calls(store: &dyn Store, chunk_id: i64) -> anyhow::Result<()> {
+    ///     let callers = store.find_callers(chunk_id, Some(2)).await?;
+    ///     for caller in &callers {
+    ///         println!(
+    ///             "chunk {} at depth {} via {:?}",
+    ///             caller.chunk_id, caller.depth, caller.path
+    ///         );
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     async fn find_callers(
         &self,
         target_chunk_id: i64,
@@ -315,6 +532,30 @@ pub trait StoreGraph: Send + Sync {
     ) -> anyhow::Result<Vec<GraphResult>>;
 
     /// Get all direct edges from or to a chunk (without recursion).
+    ///
+    /// Returns only depth-1 relationships (no transitive traversal). Useful
+    /// for building local dependency views or populating UI adjacency lists.
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk_id` - The chunk to query edges for
+    /// * `direction` - [`ImportDirection::Outgoing`] for edges leaving the chunk,
+    ///   [`ImportDirection::Incoming`] for edges arriving at the chunk
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::{ImportDirection, Store};
+    ///
+    /// async fn list_dependencies(store: &dyn Store, chunk_id: i64) -> anyhow::Result<()> {
+    ///     let outgoing = store.get_direct_edges(chunk_id, ImportDirection::Outgoing).await?;
+    ///     println!("Chunk {} has {} outgoing edges", chunk_id, outgoing.len());
+    ///
+    ///     let incoming = store.get_direct_edges(chunk_id, ImportDirection::Incoming).await?;
+    ///     println!("Chunk {} has {} incoming edges", chunk_id, incoming.len());
+    ///     Ok(())
+    /// }
+    /// ```
     async fn get_direct_edges(
         &self,
         chunk_id: i64,
@@ -367,6 +608,35 @@ pub trait StoreGraph: Send + Sync {
 #[async_trait]
 pub trait StoreEmbeddings: Send + Sync {
     /// Store or update an embedding by content hash. Returns embedding ID.
+    ///
+    /// Embeddings are deduplicated by `blob_sha` -- if the same content hash
+    /// already has an embedding, it is updated in place. This avoids
+    /// redundant storage when the same chunk appears in multiple worktrees.
+    ///
+    /// # Arguments
+    ///
+    /// * `blob_sha` - Content hash identifying the chunk text
+    /// * `embedding` - The embedding vector (dimension must match the configured table)
+    /// * `model_version` - Identifier for the model that produced the embedding
+    ///   (e.g., `"mxbai-embed-large"`)
+    ///
+    /// # Returns
+    ///
+    /// The database ID of the upserted embedding row.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// async fn store_embedding(
+    ///     store: &dyn Store,
+    ///     blob_sha: &str,
+    ///     vector: &[f32],
+    /// ) -> anyhow::Result<i64> {
+    ///     store.upsert_embedding(blob_sha, vector, "mxbai-embed-large").await
+    /// }
+    /// ```
     async fn upsert_embedding(
         &self,
         blob_sha: &str,
@@ -404,6 +674,33 @@ pub trait StoreEmbeddings: Send + Sync {
     async fn copy_existing_embeddings_from_cache(&self) -> anyhow::Result<i64>;
 
     /// Fetch chunks that need embeddings generated.
+    ///
+    /// Returns chunks whose `blob_sha` does not yet have a corresponding
+    /// embedding record. Used by the embedding pipeline to discover work.
+    ///
+    /// # Arguments
+    ///
+    /// * `incremental` - If `true`, only return chunks added since the last
+    ///   encoding run; if `false`, return all chunks without embeddings
+    /// * `sample_size` - Optional cap on the number of chunks returned
+    ///   (useful for batched processing)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use crewchief_maproom::db::Store;
+    ///
+    /// async fn embedding_pipeline(store: &dyn Store) -> anyhow::Result<()> {
+    ///     let chunks = store.fetch_chunks_needing_embeddings(true, Some(500)).await?;
+    ///     println!("{} chunks need embeddings", chunks.len());
+    ///
+    ///     for chunk in &chunks {
+    ///         // Generate embedding for chunk.preview + chunk.signature ...
+    ///         println!("chunk {} blob_sha={}", chunk.id, chunk.blob_sha);
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     async fn fetch_chunks_needing_embeddings(
         &self,
         incremental: bool,
