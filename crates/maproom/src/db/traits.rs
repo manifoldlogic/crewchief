@@ -48,14 +48,14 @@ pub trait StoreCore: Send + Sync {
     /// use crewchief_maproom::db::Store;
     ///
     /// fn choose_search_mode(store: &dyn Store) -> &'static str {
-    ///     if store.has_vec_extension() {
+    ///     if store.has_vector_extension() {
     ///         "hybrid"
     ///     } else {
     ///         "fts"
     ///     }
     /// }
     /// ```
-    fn has_vec_extension(&self) -> bool;
+    fn has_vector_extension(&self) -> bool;
 
     /// Get or create a repository by name and root path. Returns repo ID.
     ///
@@ -712,6 +712,20 @@ pub trait StoreEmbeddings: Send + Sync {
 // StoreMigration - Schema migration management
 // =============================================================================
 
+/// Migration management for database schema versioning.
+///
+/// # Version-Based Migration Tracking
+///
+/// This trait uses integer-based migration versions (`i32`) for tracking
+/// applied migrations. This design aligns with SQLite's simple migration
+/// system where migrations are ordered by version number.
+///
+/// # PostgreSQL Compatibility Note
+///
+/// PostgreSQL's `sqlx` uses string-based migration identifiers (e.g.,
+/// `"20240101_initial_schema.sql"`). Future `PostgresStore` implementations
+/// may need an adapter layer to convert between string-based sqlx migration
+/// names and integer-based version numbers used by this trait.
 #[async_trait]
 pub trait StoreMigration: Send + Sync {
     /// Run all pending database migrations.

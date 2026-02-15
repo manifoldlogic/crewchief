@@ -330,7 +330,7 @@ pub fn resolve_repo_id(conn: &Connection, repo: &str) -> anyhow::Result<i64> {
 
 #[async_trait]
 impl StoreCore for SqliteStore {
-    fn has_vec_extension(&self) -> bool {
+    fn has_vector_extension(&self) -> bool {
         self.vec_available.load(Ordering::Relaxed)
     }
 
@@ -1623,7 +1623,7 @@ impl StoreSearch for SqliteStore {
         k: i64,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Graceful degradation if sqlite-vec not available
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(vec![]);
         }
 
@@ -1736,7 +1736,7 @@ impl StoreSearch for SqliteStore {
         lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Graceful degradation if sqlite-vec not available
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(vec![]);
         }
 
@@ -1865,7 +1865,7 @@ impl StoreSearch for SqliteStore {
         lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Check vec extension availability before entering blocking closure
-        let has_vec = self.has_vec_extension();
+        let has_vec = self.has_vector_extension();
 
         let repo = repo.to_string();
         let worktree = worktree.map(|s| s.to_string());
@@ -2678,7 +2678,7 @@ impl StoreEmbeddings for SqliteStore {
             .await?;
 
         // Sync all embeddings to vec_code
-        if self.has_vec_extension() {
+        if self.has_vector_extension() {
             for (embedding_id, embedding) in id_embedding_pairs {
                 self.sync_embedding_to_vec(embedding_id, &embedding).await?;
             }
@@ -2712,7 +2712,7 @@ impl StoreEmbeddings for SqliteStore {
         embedding_id: i64,
         embedding: &[f32],
     ) -> anyhow::Result<()> {
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(()); // Skip silently if extension not available
         }
 
@@ -2726,7 +2726,7 @@ impl StoreEmbeddings for SqliteStore {
     /// This method finds all embeddings in code_embeddings that don't have a corresponding
     /// entry in vec_code and syncs them. Returns the number of embeddings synced.
     async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(0); // Skip if extension not available
         }
 
@@ -3091,7 +3091,7 @@ impl SqliteStore {
         query_embedding: &[f32],
         limit: usize,
     ) -> anyhow::Result<Vec<vector::VectorResult>> {
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(vec![]);
         }
 
@@ -4307,10 +4307,10 @@ mod tests {
             "Should return empty results when extension not available"
         );
 
-        // has_vec_extension should return false
+        // has_vector_extension should return false
         assert!(
-            !store.has_vec_extension(),
-            "has_vec_extension should return false"
+            !store.has_vector_extension(),
+            "has_vector_extension should return false"
         );
     }
 
