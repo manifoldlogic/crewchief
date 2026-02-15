@@ -23,8 +23,11 @@ use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{daemon, db, indexer};
 
 /// Exit code for runtime errors (transient, may retry).
+/// Documented in: docs/cli-help-after.md, CLAUDE.md
 const EXIT_RUNTIME_ERROR: i32 = 1;
+
 /// Exit code for configuration errors (persistent, do not retry).
+/// Documented in: docs/cli-help-after.md, CLAUDE.md
 const EXIT_CONFIG_ERROR: i32 = 2;
 
 /// Validate provider name against supported providers.
