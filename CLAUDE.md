@@ -65,6 +65,20 @@ git rebase origin/main  # Before any commit
 
 This prevents divergent branches when CI pushes between your changes.
 
+## LSP Tools
+
+Prefer the LSP tool over Grep/Glob for semantic code navigation in Rust files:
+
+- **Refactoring**: Use `LSP findReferences` instead of Grep — returns only real usages, no false positives from comments or strings
+- **Trait/interface work**: Use `LSP goToImplementation` to find all trait impls — Grep cannot do this reliably
+- **Type inspection**: Use `LSP hover` to check resolved types and docs without reading surrounding code
+- **File overview**: Use `LSP documentSymbol` to list all symbols in a file instead of skimming manually
+- **Definition lookup**: Use `LSP goToDefinition` for precise navigation to where a symbol is defined
+
+LSP requires file + line + column. Typical flow: use Grep to locate a symbol, then use LSP for semantic queries about it.
+
+**Known limitations**: `incomingCalls` and `outgoingCalls` do not return data with rust-analyzer. Use `findReferences` as the alternative for finding callers.
+
 ## Safety Rules
 
 **File operations must stay within current worktree.**
