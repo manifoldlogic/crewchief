@@ -274,8 +274,11 @@ cargo run --bin crewchief-maproom -- generate-embeddings --repo myrepo
 # 6. Hybrid search (FTS + vector)
 cargo run --bin crewchief-maproom -- search --query "authentication" --repo myrepo --mode hybrid
 
-# 7. Get context for a code chunk
-cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --json
+# 7. Get context for a code chunk (agent format for LLMs)
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --format agent
+
+# Or JSON format for programmatic use
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --format json
 ```
 
 ## Context Command
@@ -288,27 +291,68 @@ Retrieve contextually relevant code around a specific chunk (callers, callees, t
 # Get context for chunk ID from search results
 cargo run --bin crewchief-maproom -- context --chunk-id 12345
 
-# Output as JSON
+# Agent format (compact, optimized for LLM consumption)
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --format agent
+
+# JSON format (default, structured output)
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --format json
+```
+
+### Output Formats
+
+The context command supports two output formats:
+
+**Agent format** (optimized for Claude Code):
+- Pipe-delimited format achieving ~40% token reduction vs JSON
+- Easy to parse for LLMs
+- Best for: Claude Code consumption, MCP tools, VSCode extension
+
+**JSON format** (default, structured data):
+- Standard JSON output with full metadata
+- Best for: Programmatic processing, human inspection, debugging
+
+```bash
+# Agent format (compact, for LLM consumption)
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --format agent
+
+# JSON format (default, structured output)
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --format json
+
+# Legacy --json flag (deprecated, equivalent to --format json)
 cargo run --bin crewchief-maproom -- context --chunk-id 12345 --json
 ```
+
+**Agent format example output:**
+```
+CONTEXT chunk_id=12345 | tokens=750/6000 | items=2 | truncated=no
+primary | src/auth.rs:42-68 | 450 | Target function | fn authenticate(user: &str) {     let db = connect();     verify(user)
+caller | src/api.rs:100-120 | 300 | Calls authenticate
+```
+
+Format specification:
+- **Header line**: `CONTEXT chunk_id=<id> | tokens=<used>/<budget> | items=<count> | truncated=<yes|no>`
+- **Item lines (primary)**: `<role> | <relpath>:<start>-<end> | <tokens> | <reason> | <preview>`
+- **Item lines (supporting)**: `<role> | <relpath>:<start>-<end> | <tokens> | <reason>`
+
+See rustdoc in `src/cli/format.rs::format_context_agent()` for full specification.
 
 ### Expand Options
 
 ```bash
-# Include callers and callees
-cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees
+# Include callers and callees (agent format)
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --format agent
 
 # Include tests and documentation
-cargo run --bin crewchief-maproom -- context --chunk-id 12345 --tests --docs
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --tests --docs --format agent
 
 # Custom budget and depth
-cargo run --bin crewchief-maproom -- context --chunk-id 12345 --budget 4000 --max-depth 3
+cargo run --bin crewchief-maproom -- context --chunk-id 12345 --budget 4000 --max-depth 3 --format agent
 
-# All options
+# All options (JSON format for debugging)
 cargo run --bin crewchief-maproom -- context --chunk-id 12345 \
   --callers --callees --tests --docs --config \
   --routes --hooks --jsx-parents --jsx-children \
-  --budget 6000 --max-depth 2 --json
+  --budget 6000 --max-depth 2 --format json
 ```
 
 ### Daemon Context Method
