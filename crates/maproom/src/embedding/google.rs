@@ -515,11 +515,18 @@ impl GoogleProvider {
         // Don't set GOOGLE_APPLICATION_CREDENTIALS - let gcp_auth auto-discover ADC
         // This supports: ~/.config/gcloud/application_default_credentials.json,
         // GCE metadata server, and Workload Identity Federation
+        // MissingConfig is the correct error here: no credentials were found at all.
+        // The factory already checked for GOOGLE_APPLICATION_CREDENTIALS (service account file)
+        // and fell back to ADC. If ADC also fails, the root cause is missing credentials.
         let token_provider = gcp_auth::provider().await.map_err(|e| {
-            EmbeddingError::Config(ConfigError::InvalidValue {
-                field: "credentials".to_string(),
-                reason: format!("Failed to create token provider from ADC: {}", e),
-            })
+            EmbeddingError::Config(ConfigError::MissingConfig(format!(
+                "No Google credentials found. Tried Application Default Credentials (ADC) but failed: {}\n\
+                 Configure credentials using one of:\n\
+                 1. Set GOOGLE_APPLICATION_CREDENTIALS to your service account JSON key file path\n\
+                 2. Run: gcloud auth application-default login\n\
+                 3. Use GCE metadata server or Workload Identity Federation",
+                e
+            )))
         })?;
 
         let client = Client::builder()

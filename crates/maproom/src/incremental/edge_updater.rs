@@ -34,6 +34,7 @@
 use anyhow::{Context, Result};
 use tracing::debug;
 
+use crate::db::traits::StoreChunks;
 use crate::db::SqliteStore;
 use std::sync::Arc;
 

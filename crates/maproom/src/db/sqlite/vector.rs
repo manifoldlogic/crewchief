@@ -43,7 +43,7 @@ pub fn distance_to_similarity(distance: f64) -> f64 {
 /// Returns empty Vec (not error) when:
 /// - No results found
 /// - Query embedding dimension mismatch (after validation)
-/// - Extension not loaded (caller should check has_vec_extension first)
+/// - Extension not loaded (caller should check has_vector_extension first)
 pub fn search_vector(
     conn: &Connection,
     repo: &str,

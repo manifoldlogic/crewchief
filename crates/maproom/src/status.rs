@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::db::traits::StoreCore;
 use crate::db::SqliteStore;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -251,6 +252,8 @@ pub fn format_json(status: &StatusResponse) -> Result<String> {
 mod tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
+    use crate::db::traits::StoreMigration;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
 

@@ -34,6 +34,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
+use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreCore;
 use crate::db::SqliteStore;
 use crate::indexer::SymbolChunk;
 use std::sync::Arc;

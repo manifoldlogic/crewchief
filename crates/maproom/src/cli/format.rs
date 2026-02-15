@@ -18,6 +18,10 @@ use crate::db;
 ///
 /// Controls how search results are rendered to stdout.
 /// Used as a clap `ValueEnum` for the `--format` CLI flag.
+///
+/// - **Json**: Full structured JSON output, backward compatible with existing tooling.
+/// - **Agent**: Compact one-line-per-result output optimized for LLM agents.
+///   Implicitly enables preview (default 120 chars) to keep output token-efficient.
 #[derive(Clone, Debug, PartialEq, ValueEnum)]
 pub enum OutputFormat {
     /// JSON output (default, backward compatible)

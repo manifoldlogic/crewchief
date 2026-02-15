@@ -7,6 +7,7 @@ pub mod schema;
 pub mod vector;
 
 use anyhow::Context;
+use async_trait::async_trait;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,7 +15,17 @@ use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
 use crate::config::{EdgeQualityWeights, SqliteConfig};
-use crate::db::{ChunkRecord, FileRecord, SearchHit};
+use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreCleanup;
+use crate::db::traits::StoreCore;
+use crate::db::traits::StoreEmbeddings;
+use crate::db::traits::StoreEncoding;
+use crate::db::traits::StoreGraph;
+use crate::db::traits::StoreIndexState;
+use crate::db::traits::StoreMigration;
+use crate::db::traits::StoreSearch;
+
+use crate::db::{ChunkForEmbedding, ChunkRecord, EmbeddingRecord, FileRecord, SearchHit};
 use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
 
@@ -172,11 +183,6 @@ impl SqliteStore {
         .await?
     }
 
-    /// Check if sqlite-vec extension is available
-    pub fn has_vec_extension(&self) -> bool {
-        self.vec_available.load(Ordering::Relaxed)
-    }
-
     /// Execute a write operation with automatic retry on SQLITE_BUSY errors.
     ///
     /// Uses exponential backoff: 50ms → 100ms → 200ms → 400ms → 800ms
@@ -318,9 +324,17 @@ pub fn resolve_repo_id(conn: &Connection, repo: &str) -> anyhow::Result<i64> {
     }
 }
 
-// Database operations - these were previously in VectorStore trait
-impl SqliteStore {
-    pub async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
+// =============================================================================
+// StoreCore trait implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreCore for SqliteStore {
+    fn has_vector_extension(&self) -> bool {
+        self.vec_available.load(Ordering::Relaxed)
+    }
+
+    async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let name = name.to_string();
         let root_path = root_path.to_string();
         self.write_with_retry(move |conn| {
@@ -346,7 +360,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn get_or_create_worktree(
+    async fn get_or_create_worktree(
         &self,
         repo_id: i64,
         name: &str,
@@ -375,7 +389,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn get_or_create_commit(
+    async fn get_or_create_commit(
         &self,
         repo_id: i64,
         sha: &str,
@@ -404,10 +418,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn get_repo_by_name(
-        &self,
-        name: &str,
-    ) -> anyhow::Result<Option<crate::db::RepoInfo>> {
+    async fn get_repo_by_name(&self, name: &str) -> anyhow::Result<Option<crate::db::RepoInfo>> {
         let name = name.to_string();
         self.run(move |conn| {
             let result = conn
@@ -428,7 +439,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn get_worktree_by_name(
+    async fn get_worktree_by_name(
         &self,
         repo_id: i64,
         name: &str,
@@ -449,7 +460,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
+    async fn list_repos(&self) -> anyhow::Result<Vec<crate::db::RepoInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, name, root_path FROM repos ORDER BY name")?;
             let repos = stmt
@@ -466,10 +477,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn list_worktrees(
-        &self,
-        repo_id: i64,
-    ) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
+    async fn list_worktrees(&self, repo_id: i64) -> anyhow::Result<Vec<crate::db::WorktreeInfo>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees WHERE repo_id = ?1 ORDER BY name")?;
             let worktrees = stmt.query_map(params![repo_id], |row| {
@@ -485,83 +493,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            // SQLite: count chunks via chunk_worktrees junction table
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT chunk_id) FROM chunk_worktrees WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_file_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT cw.chunk_id)
-                 FROM chunk_worktrees cw
-                 JOIN chunks c ON c.id = cw.chunk_id
-                 WHERE cw.worktree_id = ?1
-                   AND c.blob_sha IN (SELECT blob_sha FROM code_embeddings)",
-                params![worktree_id],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_language_breakdown(
-        &self,
-        worktree_id: i64,
-    ) -> anyhow::Result<Vec<(String, i64)>> {
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT COALESCE(f.language, 'unknown') as lang, COUNT(*) as file_count
-                 FROM files f
-                 WHERE f.worktree_id = ?1
-                 GROUP BY f.language
-                 ORDER BY file_count DESC",
-            )?;
-            let rows = stmt.query_map(params![worktree_id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            })?;
-            let results: Vec<(String, i64)> = rows.collect::<Result<_, _>>()?;
-            Ok(results)
-        })
-        .await
-    }
-
-    pub async fn get_worktree_last_scan(&self, worktree_id: i64) -> anyhow::Result<Option<String>> {
-        self.run(move |conn| {
-            let result = conn
-                .query_row(
-                    "SELECT last_indexed FROM index_state WHERE worktree_id = ?1",
-                    params![worktree_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()?;
-            Ok(result)
-        })
-        .await
-    }
-
-    pub async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
+    async fn upsert_file(&self, file: &FileRecord) -> anyhow::Result<i64> {
         let file = file.clone();
         self.write_with_retry(move |conn| {
             conn.execute(
@@ -592,7 +524,186 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
+    async fn delete_file(&self, file_id: i64) -> anyhow::Result<bool> {
+        self.run(move |conn| {
+            let rows_deleted = conn.execute("DELETE FROM files WHERE id = ?1", params![file_id])?;
+            Ok(rows_deleted > 0)
+        })
+        .await
+    }
+
+    async fn get_file_id_by_relpath(
+        &self,
+        relpath: &str,
+        worktree_id: i64,
+    ) -> anyhow::Result<Option<i64>> {
+        let relpath = relpath.to_string();
+        self.run(move |conn| {
+            let result: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2",
+                    params![relpath, worktree_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            // SQLite: count chunks via chunk_worktrees junction table
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT chunk_id) FROM chunk_worktrees WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_file_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT cw.chunk_id)
+                 FROM chunk_worktrees cw
+                 JOIN chunks c ON c.id = cw.chunk_id
+                 WHERE cw.worktree_id = ?1
+                   AND c.blob_sha IN (SELECT blob_sha FROM code_embeddings)",
+                params![worktree_id],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_language_breakdown(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(String, i64)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT COALESCE(f.language, 'unknown') as lang, COUNT(*) as file_count
+                 FROM files f
+                 WHERE f.worktree_id = ?1
+                 GROUP BY f.language
+                 ORDER BY file_count DESC",
+            )?;
+            let rows = stmt.query_map(params![worktree_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            let results: Vec<(String, i64)> = rows.collect::<Result<_, _>>()?;
+            Ok(results)
+        })
+        .await
+    }
+
+    async fn get_worktree_last_scan(&self, worktree_id: i64) -> anyhow::Result<Option<String>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT last_indexed FROM index_state WHERE worktree_id = ?1",
+                    params![worktree_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn get_global_chunk_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 =
+                conn.query_row("SELECT COUNT(DISTINCT blob_sha) FROM chunks", [], |row| {
+                    row.get(0)
+                })?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the global count of embeddings.
+    async fn get_global_embedding_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM code_embeddings", [], |row| row.get(0))?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the count of distinct chunks (by blob_sha) for a specific repo.
+    ///
+    /// Uses chunk_worktrees junction table to filter by repo via worktrees.
+    /// Returns 0 if the repo does not exist.
+    async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        let repo_name = repo_name.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT c.blob_sha)
+                 FROM chunks c
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                 JOIN worktrees w ON w.id = cw.worktree_id
+                 JOIN repos r ON r.id = w.repo_id
+                 WHERE r.name = ?1",
+                params![repo_name],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Get the count of embeddings for a specific repo.
+    ///
+    /// Counts embeddings whose blob_sha matches chunks in the specified repo.
+    /// Returns 0 if the repo does not exist.
+    async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        let repo_name = repo_name.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(DISTINCT ce.id)
+                 FROM code_embeddings ce
+                 WHERE ce.blob_sha IN (
+                     SELECT DISTINCT c.blob_sha
+                     FROM chunks c
+                     JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                     JOIN worktrees w ON w.id = cw.worktree_id
+                     JOIN repos r ON r.id = w.repo_id
+                     WHERE r.name = ?1
+                 )",
+                params![repo_name],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+}
+
+// =============================================================================
+// StoreChunks trait implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreChunks for SqliteStore {
+    async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
         self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
@@ -660,7 +771,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
+    async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
         let chunks = chunks.to_vec();
         self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
@@ -725,7 +836,7 @@ impl SqliteStore {
         }).await
     }
 
-    pub async fn insert_chunk_edge(
+    async fn insert_chunk_edge(
         &self,
         src_chunk_id: i64,
         dst_chunk_id: i64,
@@ -741,8 +852,437 @@ impl SqliteStore {
         }).await
     }
 
+    async fn find_chunk_by_symbol(
+        &self,
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        symbol_name: &str,
+        relpath: Option<&str>,
+    ) -> anyhow::Result<Option<i64>> {
+        let symbol_name = symbol_name.to_string();
+        let relpath = relpath.map(|s| s.to_string());
+        self.run(move |conn| {
+            // Use reference to avoid move of relpath
+            let relpath_ref = relpath.as_deref();
+
+            // Similar to Postgres logic
+            let sql = if relpath_ref.is_some() {
+                if worktree_id.is_some() {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2
+                       AND f.relpath = ?3 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                } else {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1
+                       AND f.relpath = ?3 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                }
+            } else {
+                if worktree_id.is_some() {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                } else {
+                    "SELECT c.id FROM chunks c
+                     JOIN files f ON f.id = c.file_id
+                     WHERE f.repo_id = ?1 AND c.symbol_name = ?4
+                     ORDER BY c.id DESC LIMIT 1"
+                }
+            };
+
+            let id: Option<i64> = if let Some(path) = relpath_ref {
+                if let Some(wid) = worktree_id {
+                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| {
+                        row.get(0)
+                    })
+                    .optional()?
+                } else {
+                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
+                        .optional()?
+                }
+            } else {
+                if let Some(wid) = worktree_id {
+                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
+                        .optional()?
+                } else {
+                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
+                        .optional()?
+                }
+            };
+
+            Ok(id)
+        })
+        .await
+    }
+
+    async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id = ?1",
+                    params![chunk_id],
+                    |row| {
+                        Ok(crate::db::ChunkFull {
+                            id: row.get(0)?,
+                            file_id: row.get(1)?,
+                            blob_sha: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            signature: row.get(5)?,
+                            docstring: row.get(6)?,
+                            start_line: row.get(7)?,
+                            end_line: row.get(8)?,
+                            preview: row.get(9)?,
+                            file_path: row.get(10)?,
+                        })
+                    },
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.file_id = ?1
+                 ORDER BY c.start_line ASC",
+            )?;
+
+            let rows = stmt.query_map(params![file_id], |row| {
+                Ok(crate::db::ChunkSummary {
+                    id: row.get(0)?,
+                    symbol_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    file_path: row.get(5)?,
+                })
+            })?;
+
+            let mut chunks = Vec::new();
+            for chunk_result in rows {
+                chunks.push(chunk_result?);
+            }
+            Ok(chunks)
+        })
+        .await
+    }
+
+    async fn get_chunk_context(
+        &self,
+        chunk_id: i64,
+        surrounding: usize,
+    ) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+        self.run(move |conn| {
+            // First, get the target chunk
+            let chunk = conn
+                .query_row(
+                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id = ?1",
+                    params![chunk_id],
+                    |row| {
+                        Ok(crate::db::ChunkFull {
+                            id: row.get(0)?,
+                            file_id: row.get(1)?,
+                            blob_sha: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            signature: row.get(5)?,
+                            docstring: row.get(6)?,
+                            start_line: row.get(7)?,
+                            end_line: row.get(8)?,
+                            preview: row.get(9)?,
+                            file_path: row.get(10)?,
+                        })
+                    },
+                )
+                .optional()?;
+
+            let chunk = match chunk {
+                Some(c) => c,
+                None => return Ok(None),
+            };
+
+            // Get surrounding chunks from the same file, ordered by line proximity
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.file_id = ?1 AND c.id != ?2
+                 ORDER BY ABS(c.start_line - ?3)
+                 LIMIT ?4",
+            )?;
+
+            let rows = stmt.query_map(
+                params![
+                    chunk.file_id,
+                    chunk_id,
+                    chunk.start_line,
+                    (surrounding as i64 * 2)
+                ],
+                |row| {
+                    Ok(crate::db::ChunkSummary {
+                        id: row.get(0)?,
+                        symbol_name: row.get(1)?,
+                        kind: row.get(2)?,
+                        start_line: row.get(3)?,
+                        end_line: row.get(4)?,
+                        file_path: row.get(5)?,
+                    })
+                },
+            )?;
+
+            let mut surrounding_chunks = Vec::new();
+            for chunk_result in rows {
+                surrounding_chunks.push(chunk_result?);
+            }
+
+            Ok(Some(crate::db::ChunkContext {
+                file_path: chunk.file_path.clone(),
+                chunk,
+                surrounding_chunks,
+            }))
+        })
+        .await
+    }
+
+    async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
+        self.write_with_retry(move |conn| {
+            // Get count of chunks to delete
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
+                    params![file_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            // Delete embeddings for chunks in this file
+            conn.execute(
+                "DELETE FROM code_embeddings WHERE blob_sha IN (
+                     SELECT blob_sha FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunk_worktrees entries
+            conn.execute(
+                "DELETE FROM chunk_worktrees WHERE chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunk edges
+            conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 ) OR dst_chunk_id IN (
+                     SELECT id FROM chunks WHERE file_id = ?1
+                 )",
+                params![file_id],
+            )?;
+
+            // Delete chunks
+            conn.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])?;
+
+            Ok(count as u64)
+        })
+        .await
+    }
+
+    /// Get all chunks for a worktree with their file paths.
+    ///
+    /// Returns chunk ID and file relative path for all chunks in the specified worktree.
+    /// Used by clean-ignored command to identify chunks matching ignore patterns.
+    ///
+    /// # Arguments
+    /// * `worktree_id` - Worktree ID
+    ///
+    /// # Returns
+    /// * `Ok(Vec<(chunk_id, file_relpath)>)` - List of chunks with their file paths
+    async fn get_chunks_for_worktree(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i64, String)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, f.relpath
+                 FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE f.worktree_id = ?1",
+            )?;
+
+            let chunks = stmt
+                .query_map(params![worktree_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(chunks)
+        })
+        .await
+    }
+
+    /// Delete chunks by their IDs.
+    ///
+    /// Deletes specified chunks and cleans up related data (edges, embeddings, junction table).
+    /// Used by clean-ignored command to remove chunks matching ignore patterns.
+    ///
+    /// # Arguments
+    /// * `_worktree_id` - Worktree ID (reserved for future validation/context)
+    /// * `chunk_ids` - List of chunk IDs to delete
+    ///
+    /// # Returns
+    /// * `Ok(usize)` - Number of chunks deleted
+    async fn delete_chunks_by_ids(
+        &self,
+        _worktree_id: i64,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<usize> {
+        if chunk_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // SQLite has a limit of 32766 SQL variables (SQLITE_MAX_VARIABLE_NUMBER).
+        // To avoid "too many SQL variables" errors, batch deletions into chunks of 500.
+        // This allows deleting large numbers of chunks (e.g., 10,000+) without hitting limits.
+        const BATCH_SIZE: usize = 500;
+
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            let mut total_deleted = 0;
+
+            // Process chunks in batches
+            for batch in chunk_ids.chunks(BATCH_SIZE) {
+                // Create placeholders for SQL IN clause
+                let placeholders = batch.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+                // Delete embeddings for these chunks
+                let embeddings_query = format!(
+                    "DELETE FROM code_embeddings WHERE blob_sha IN (
+                         SELECT blob_sha FROM chunks WHERE id IN ({})
+                     )",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&embeddings_query)?;
+                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+
+                // Delete chunk_worktrees junction entries
+                let junction_query = format!(
+                    "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&junction_query)?;
+                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+
+                // Delete chunk_edges
+                let edges_query = format!(
+                    "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
+                    placeholders, placeholders
+                );
+                let mut stmt = conn.prepare(&edges_query)?;
+                let mut params: Vec<i64> = Vec::new();
+                params.extend_from_slice(batch);
+                params.extend_from_slice(batch);
+                stmt.execute(rusqlite::params_from_iter(params.iter()))?;
+
+                // Delete chunks themselves and accumulate count
+                let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
+                let mut stmt = conn.prepare(&chunks_query)?;
+                let rows_affected = stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
+                total_deleted += rows_affected;
+            }
+
+            Ok(total_deleted)
+        })
+        .await
+    }
+
+    async fn get_chunks_by_blob_sha(
+        &self,
+        blob_sha: &str,
+    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
+        let blob_sha = blob_sha.to_string();
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
+                 FROM chunks c
+                 JOIN files f ON c.file_id = f.id
+                 WHERE c.blob_sha = ?1
+                 ORDER BY c.start_line",
+            )?;
+
+            let rows = stmt.query_map(params![blob_sha], |row| {
+                Ok(crate::db::ChunkSummary {
+                    id: row.get(0)?,
+                    symbol_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    file_path: row.get(5)?,
+                })
+            })?;
+
+            let mut chunks = Vec::new();
+            for chunk_result in rows {
+                chunks.push(chunk_result?);
+            }
+            Ok(chunks)
+        })
+        .await
+    }
+
+    /// Add chunk to additional worktree
+    async fn add_chunk_to_worktree(&self, chunk_id: i64, worktree_id: i64) -> anyhow::Result<()> {
+        self.run(move |conn| {
+            conn.execute(
+                "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
+                params![chunk_id, worktree_id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Get all worktrees containing this chunk
+    async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>> {
+        self.run(move |conn| {
+            let mut stmt =
+                conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
+            let rows = stmt.query_map(params![chunk_id], |row| row.get(0))?;
+            let mut ids = Vec::new();
+            for id in rows {
+                ids.push(id?);
+            }
+            Ok(ids)
+        })
+        .await
+    }
+}
+
+// =============================================================================
+// StoreSearch - FTS, vector, and hybrid search
+// =============================================================================
+
+#[async_trait]
+impl StoreSearch for SqliteStore {
     #[allow(clippy::too_many_arguments)]
-    pub async fn search_chunks_fts(
+    async fn search_chunks_fts(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -937,7 +1477,7 @@ impl SqliteStore {
     }
 
     /// FTS search by repo_id and worktree_id (for use by search executors)
-    pub async fn search_fts_by_id(
+    async fn search_fts_by_id(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
@@ -1075,7 +1615,7 @@ impl SqliteStore {
     }
 
     /// Vector search by repo_id and worktree_id (for use by search executors)
-    pub async fn search_vector_by_id(
+    async fn search_vector_by_id(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
@@ -1083,7 +1623,7 @@ impl SqliteStore {
         k: i64,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Graceful degradation if sqlite-vec not available
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(vec![]);
         }
 
@@ -1185,7 +1725,7 @@ impl SqliteStore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn search_chunks_vector(
+    async fn search_chunks_vector(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -1196,7 +1736,7 @@ impl SqliteStore {
         lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Graceful degradation if sqlite-vec not available
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(vec![]);
         }
 
@@ -1313,7 +1853,7 @@ impl SqliteStore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn search_chunks_hybrid(
+    async fn search_chunks_hybrid(
         &self,
         repo: &str,
         worktree: Option<&str>,
@@ -1325,7 +1865,7 @@ impl SqliteStore {
         lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
         // Check vec extension availability before entering blocking closure
-        let has_vec = self.has_vec_extension();
+        let has_vec = self.has_vector_extension();
 
         let repo = repo.to_string();
         let worktree = worktree.map(|s| s.to_string());
@@ -1459,264 +1999,892 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn find_chunk_by_symbol(
+    /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
+    ///
+    /// Combines keyword matching (FTS5) with semantic similarity (vectors) to provide
+    /// comprehensive search results. Falls back to FTS-only when vector search is
+    /// unavailable or returns no results.
+    ///
+    /// # Arguments
+    /// * `repo` - Repository name to filter by
+    /// * `worktree` - Optional worktree name to filter by
+    /// * `query` - User's search query (for FTS)
+    /// * `query_embedding` - Query embedding vector (for semantic search)
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Weights for combining FTS and vector contributions
+    async fn search_hybrid(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        weights: hybrid::HybridWeights,
+    ) -> anyhow::Result<Vec<hybrid::HybridResult>> {
+        // Over-fetch from each source for better fusion coverage
+        let fetch_limit = limit * 3;
+
+        // Run FTS and vector search in parallel
+        let (fts_results, vec_results) = tokio::join!(
+            self.search_fts(repo, worktree, query, fetch_limit),
+            self.search_vector(repo, worktree, query_embedding, fetch_limit),
+        );
+
+        let fts_results = fts_results?;
+        let vec_results = vec_results?;
+
+        // Combine results using RRF
+        let results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
+
+        Ok(results)
+    }
+
+    /// Get metadata for multiple chunks (batch query for semantic ranking)
+    ///
+    /// Returns a map of chunk_id -> ChunkMetadata with kind, symbol_name, and recency_score.
+    async fn get_chunks_metadata(
+        &self,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<std::collections::HashMap<i64, hybrid::ChunkMetadata>> {
+        if chunk_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
+
+        self.run(move |conn| {
+            let placeholders: Vec<String> =
+                (1..=chunk_ids.len()).map(|i| format!("?{}", i)).collect();
+            let sql = format!(
+                "SELECT id, kind, symbol_name, recency_score FROM chunks WHERE id IN ({})",
+                placeholders.join(", ")
+            );
+
+            let mut stmt = conn.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::ToSql> = chunk_ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::ToSql)
+                .collect();
+
+            let rows = stmt.query_map(params.as_slice(), |row| {
+                let id: i64 = row.get(0)?;
+                let kind: String = row.get(1)?;
+                let symbol_name: Option<String> = row.get(2)?;
+                let recency_score: f64 = row.get(3)?;
+                Ok((
+                    id,
+                    hybrid::ChunkMetadata {
+                        kind,
+                        symbol_name,
+                        recency_score,
+                    },
+                ))
+            })?;
+
+            let mut map = std::collections::HashMap::new();
+            for result in rows {
+                let (id, metadata) = result?;
+                map.insert(id, metadata);
+            }
+            Ok(map)
+        })
+        .await
+    }
+
+    /// Hybrid search with semantic ranking applied
+    ///
+    /// Combines FTS5 and vector search using RRF, then applies semantic ranking
+    /// based on chunk kind, symbol name matching, and recency.
+    ///
+    /// # Arguments
+    /// * `repo` - Repository name to filter by
+    /// * `worktree` - Optional worktree name to filter by
+    /// * `query` - User's search query (for FTS and exact match detection)
+    /// * `query_embedding` - Query embedding vector (for semantic search)
+    /// * `limit` - Maximum number of results to return
+    /// * `weights` - Weights for combining FTS and vector contributions
+    /// * `ranking` - Semantic ranking configuration
+    async fn search_hybrid_ranked(
+        &self,
+        repo: &str,
+        worktree: Option<&str>,
+        query: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        weights: hybrid::HybridWeights,
+        ranking: hybrid::SemanticRanking,
+    ) -> anyhow::Result<Vec<hybrid::RankedSearchHit>> {
+        // Over-fetch by 2x before ranking to ensure good results after re-ordering
+        let fetch_limit = limit * 2;
+
+        // Get base hybrid results
+        let hits = self
+            .search_hybrid(repo, worktree, query, query_embedding, fetch_limit, weights)
+            .await?;
+
+        if hits.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Fetch chunk metadata for all results
+        let chunk_ids: Vec<i64> = hits.iter().map(|h| h.chunk_id).collect();
+        let metadata = self.get_chunks_metadata(&chunk_ids).await?;
+
+        // Build ranked hits with metadata
+        let mut ranked: Vec<hybrid::RankedSearchHit> = hits
+            .into_iter()
+            .filter_map(|h| {
+                let meta = metadata.get(&h.chunk_id)?;
+                Some(hybrid::RankedSearchHit {
+                    chunk_id: h.chunk_id,
+                    score: h.score,
+                    fts_rank: h.fts_rank,
+                    vector_rank: h.vector_rank,
+                    kind: meta.kind.clone(),
+                    symbol_name: meta.symbol_name.clone(),
+                    recency_score: meta.recency_score,
+                    source: h.source,
+                })
+            })
+            .collect();
+
+        // Apply semantic ranking
+        hybrid::apply_semantic_ranking(&mut ranked, query, &ranking);
+
+        // Take top N after re-ranking
+        ranked.truncate(limit);
+
+        Ok(ranked)
+    }
+}
+
+// =============================================================================
+// StoreGraph - Graph traversal and importance scoring
+// =============================================================================
+
+#[async_trait]
+impl StoreGraph for SqliteStore {
+    /// Find all chunks that call the target chunk (directly or transitively)
+    ///
+    /// # Arguments
+    /// * `target_chunk_id` - The chunk to find callers for
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_callers(
+        &self,
+        target_chunk_id: i64,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_callers(conn, target_chunk_id, max_depth))
+            .await
+    }
+
+    /// Find all chunks called by the source chunk (directly or transitively)
+    ///
+    /// # Arguments
+    /// * `source_chunk_id` - The chunk to find callees for
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_callees(
+        &self,
+        source_chunk_id: i64,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_callees(conn, source_chunk_id, max_depth))
+            .await
+    }
+
+    /// Find import relationships for a chunk
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find imports for
+    /// * `direction` - Incoming (who imports this) or Outgoing (what this imports)
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_imports(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_imports(conn, chunk_id, direction, max_depth))
+            .await
+    }
+
+    /// Find extension/inheritance relationships for a chunk
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find extensions for
+    /// * `direction` - Incoming (what extends this) or Outgoing (what this extends)
+    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
+    ///
+    /// # Returns
+    /// Vector of GraphResult ordered by depth (closest first)
+    async fn find_extensions(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+        max_depth: Option<usize>,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::find_extensions(conn, chunk_id, direction, max_depth))
+            .await
+    }
+
+    /// Get all direct edges from or to a chunk (without recursion)
+    ///
+    /// # Arguments
+    /// * `chunk_id` - The chunk to find edges for
+    /// * `direction` - Incoming (edges pointing to chunk) or Outgoing (edges from chunk)
+    ///
+    /// # Returns
+    /// Vector of GraphResult with depth=1 for all direct relationships
+    async fn get_direct_edges(
+        &self,
+        chunk_id: i64,
+        direction: graph::ImportDirection,
+    ) -> anyhow::Result<Vec<graph::GraphResult>> {
+        self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
+            .await
+    }
+
+    /// Calculate graph importance scores for chunks in a repo/worktree
+    ///
+    /// Uses edge counts (callers, importers, tests) to calculate PageRank-like scores.
+    ///
+    /// When `enable_quality` is false: uses legacy edge counting with hardcoded weights
+    /// (calls=0.3, imports=0.2, tests=0.1, logarithmic scaling).
+    ///
+    /// When `enable_quality` is true: uses quality-weighted edge scoring with test detection
+    /// using configurable weights from EdgeQualityWeights.
+    ///
+    /// # Arguments
+    /// * `repo_id` - Repository ID to query
+    /// * `worktree_id` - Optional worktree ID to filter by
+    /// * `limit` - Maximum number of results
+    /// * `enable_quality` - If true, use quality-weighted scoring; if false, use legacy scoring
+    /// * `weights` - Edge quality weights (production_code, test_code, calls)
+    async fn calculate_graph_importance(
         &self,
         repo_id: i64,
         worktree_id: Option<i64>,
-        symbol_name: &str,
-        relpath: Option<&str>,
-    ) -> anyhow::Result<Option<i64>> {
-        let symbol_name = symbol_name.to_string();
-        let relpath = relpath.map(|s| s.to_string());
+        limit: usize,
+        enable_quality: bool,
+        weights: &EdgeQualityWeights,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        tracing::debug!(
+            repo_id = repo_id,
+            worktree_id = ?worktree_id,
+            limit = limit,
+            enable_quality = enable_quality,
+            production_code_weight = weights.production_code,
+            test_code_weight = weights.test_code,
+            calls_weight = weights.calls,
+            "Calculating graph importance"
+        );
+
+        if !enable_quality {
+            // Call legacy implementation
+            return self
+                .calculate_graph_importance_legacy(repo_id, worktree_id, limit)
+                .await;
+        }
+
+        // New quality-weighted implementation with configurable weights
+        self.calculate_graph_importance_quality(repo_id, worktree_id, limit, weights)
+            .await
+    }
+
+    /// Calculate graph importance for specific chunk IDs
+    ///
+    /// Uses edge counts to calculate PageRank-like scores for the given chunks.
+    async fn calculate_graph_importance_for_chunks(
+        &self,
+        chunk_ids: &[i64],
+        repo_id: i64,
+        worktree_id: Option<i64>,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if chunk_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let chunk_ids = chunk_ids.to_vec();
         self.run(move |conn| {
-            // Use reference to avoid move of relpath
-            let relpath_ref = relpath.as_deref();
+            // Build placeholders for IN clause
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
-            // Similar to Postgres logic
-            let sql = if relpath_ref.is_some() {
-                if worktree_id.is_some() {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2
-                       AND f.relpath = ?3 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                } else {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1
-                       AND f.relpath = ?3 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                }
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    WITH edge_counts AS (
+                        SELECT
+                            dst_chunk_id as chunk_id,
+                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                        FROM chunk_edges
+                        WHERE dst_chunk_id IN ({})
+                        GROUP BY dst_chunk_id
+                    )
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        COALESCE(
+                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                            0
+                        ) as graph_score
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
+                    ORDER BY graph_score DESC
+                    "#,
+                    placeholders, placeholders
+                )
             } else {
-                if worktree_id.is_some() {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                } else {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                }
+                format!(
+                    r#"
+                    WITH edge_counts AS (
+                        SELECT
+                            dst_chunk_id as chunk_id,
+                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
+                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
+                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
+                        FROM chunk_edges
+                        WHERE dst_chunk_id IN ({})
+                        GROUP BY dst_chunk_id
+                    )
+                    SELECT DISTINCT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        COALESCE(
+                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
+                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
+                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
+                            0
+                        ) as graph_score
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ?
+                    ORDER BY graph_score DESC
+                    "#,
+                    placeholders, placeholders
+                )
             };
 
-            let id: Option<i64> = if let Some(path) = relpath_ref {
-                if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| {
-                        row.get(0)
-                    })
-                    .optional()?
-                } else {
-                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
-                        .optional()?
-                }
-            } else {
-                if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
-                        .optional()?
-                } else {
-                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
-                        .optional()?
-                }
-            };
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
 
-            Ok(id)
+            // Build parameter list
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
+                .iter()
+                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+                .collect();
+
+            // Duplicate chunk_ids for the second IN clause
+            for id in &chunk_ids {
+                param_values.push(Box::new(*id));
+            }
+
+            // Add repo_id
+            param_values.push(Box::new(repo_id));
+
+            // Add worktree_id if present
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
+
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: row.get(6)?,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                    preview: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
+            }
+            Ok(hits)
         })
         .await
     }
 
-    pub async fn get_chunk_by_id(
+    /// Calculate signal scores (recency + churn) for chunks in a repo/worktree
+    ///
+    /// Combines recency_score and churn_score from chunks table with configurable weights.
+    async fn calculate_signal_scores(
         &self,
-        chunk_id: i64,
-    ) -> anyhow::Result<Option<crate::db::ChunkFull>> {
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        recency_weight: f32,
+        churn_weight: f32,
+        limit: usize,
+    ) -> anyhow::Result<Vec<SearchHit>> {
         self.run(move |conn| {
-            let result = conn
-                .query_row(
-                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
-                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.id = ?1",
-                    params![chunk_id],
+            let sql = if worktree_id.is_some() {
+                r#"
+                SELECT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    (c.recency_score * ?3 + c.churn_score * ?4) as combined_signal
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                WHERE f.repo_id = ?1 AND cw.worktree_id = ?2
+                ORDER BY combined_signal DESC
+                LIMIT ?5
+                "#
+            } else {
+                r#"
+                SELECT DISTINCT
+                    c.id,
+                    c.start_line,
+                    c.end_line,
+                    c.symbol_name,
+                    c.kind,
+                    f.relpath,
+                    (c.recency_score * ?2 + c.churn_score * ?3) as combined_signal
+                FROM chunks c
+                JOIN files f ON f.id = c.file_id
+                WHERE f.repo_id = ?1
+                ORDER BY combined_signal DESC
+                LIMIT ?4
+                "#
+            };
+
+            let mut stmt = conn.prepare(sql)?;
+            let mut hits = Vec::new();
+
+            if let Some(wid) = worktree_id {
+                let rows = stmt.query_map(
+                    params![repo_id, wid, recency_weight, churn_weight, limit as i64],
                     |row| {
-                        Ok(crate::db::ChunkFull {
-                            id: row.get(0)?,
-                            file_id: row.get(1)?,
-                            blob_sha: row.get(2)?,
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
                             symbol_name: row.get(3)?,
                             kind: row.get(4)?,
-                            signature: row.get(5)?,
-                            docstring: row.get(6)?,
-                            start_line: row.get(7)?,
-                            end_line: row.get(8)?,
-                            preview: row.get(9)?,
-                            file_path: row.get(10)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                            preview: None,
                         })
                     },
-                )
-                .optional()?;
-            Ok(result)
+                )?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            } else {
+                let rows = stmt.query_map(
+                    params![repo_id, recency_weight, churn_weight, limit as i64],
+                    |row| {
+                        Ok(SearchHit {
+                            chunk_id: row.get(0)?,
+                            start_line: row.get(1)?,
+                            end_line: row.get(2)?,
+                            symbol_name: row.get(3)?,
+                            kind: row.get(4)?,
+                            file_relpath: row.get(5)?,
+                            score: row.get(6)?,
+                            base_score: None,
+                            kind_mult: None,
+                            exact_mult: None,
+                            preview: None,
+                        })
+                    },
+                )?;
+                for row in rows {
+                    hits.push(row?);
+                }
+            }
+            Ok(hits)
         })
         .await
     }
 
-    pub async fn get_file_chunks(
+    /// Calculate signal scores for specific chunk IDs
+    ///
+    /// Combines recency_score and churn_score for the given chunks.
+    async fn calculate_signal_scores_for_chunks(
         &self,
-        file_id: i64,
-    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.file_id = ?1
-                 ORDER BY c.start_line ASC",
-            )?;
+        chunk_ids: &[i64],
+        repo_id: i64,
+        worktree_id: Option<i64>,
+        recency_weight: f32,
+        churn_weight: f32,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if chunk_ids.is_empty() {
+            return Ok(vec![]);
+        }
 
-            let rows = stmt.query_map(params![file_id], |row| {
-                Ok(crate::db::ChunkSummary {
+        let chunk_ids = chunk_ids.to_vec();
+        self.run(move |conn| {
+            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            let sql = if worktree_id.is_some() {
+                format!(
+                    r#"
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
+                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
+                    ORDER BY combined_signal DESC
+                    "#,
+                    placeholders
+                )
+            } else {
+                format!(
+                    r#"
+                    SELECT DISTINCT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
+                    FROM chunks c
+                    JOIN files f ON f.id = c.file_id
+                    WHERE c.id IN ({}) AND f.repo_id = ?
+                    ORDER BY combined_signal DESC
+                    "#,
+                    placeholders
+                )
+            };
+
+            let mut stmt = conn.prepare(&sql)?;
+            let mut hits = Vec::new();
+
+            // Build parameters: recency_weight, churn_weight, chunk_ids..., repo_id, [worktree_id]
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            param_values.push(Box::new(recency_weight));
+            param_values.push(Box::new(churn_weight));
+            for id in &chunk_ids {
+                param_values.push(Box::new(*id));
+            }
+            param_values.push(Box::new(repo_id));
+            if let Some(wid) = worktree_id {
+                param_values.push(Box::new(wid));
+            }
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
+
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    score: row.get(6)?,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                    preview: None,
+                })
+            })?;
+            for row in rows {
+                hits.push(row?);
+            }
+            Ok(hits)
+        })
+        .await
+    }
+}
+
+// =============================================================================
+// StoreEmbeddings - Embedding storage and retrieval
+// =============================================================================
+
+#[async_trait]
+impl StoreEmbeddings for SqliteStore {
+    /// Store or update embedding by content hash
+    async fn upsert_embedding(
+        &self,
+        blob_sha: &str,
+        embedding: &[f32],
+        model_version: &str,
+    ) -> anyhow::Result<i64> {
+        let blob_sha = blob_sha.to_string();
+        let embedding_vec = embedding.to_vec();
+        let model_version = model_version.to_string();
+
+        let embedding_id = self
+            .run(move |conn| {
+                embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
+            })
+            .await?;
+
+        // Sync to vec_code table
+        self.sync_embedding_to_vec(embedding_id, embedding).await?;
+
+        Ok(embedding_id)
+    }
+
+    /// Batch upsert embeddings with deduplication
+    async fn upsert_embeddings_batch_new(
+        &self,
+        embeddings: &[EmbeddingRecord],
+    ) -> anyhow::Result<()> {
+        let embeddings_vec = embeddings.to_vec();
+
+        let id_embedding_pairs = self
+            .run(move |conn| embeddings::upsert_embeddings_batch(conn, &embeddings_vec))
+            .await?;
+
+        // Sync all embeddings to vec_code
+        if self.has_vector_extension() {
+            for (embedding_id, embedding) in id_embedding_pairs {
+                self.sync_embedding_to_vec(embedding_id, &embedding).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if embedding exists for blob_sha
+    async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
+        let blob_sha = blob_sha.to_string();
+
+        self.run(move |conn| embeddings::has_embedding(conn, &blob_sha))
+            .await
+    }
+
+    /// Get embedding by blob_sha
+    async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
+        let blob_sha = blob_sha.to_string();
+
+        self.run(move |conn| embeddings::get_embedding(conn, &blob_sha))
+            .await
+    }
+
+    /// Sync embedding to vec_code table (skips if extension not available)
+    ///
+    /// This method syncs a single embedding from code_embeddings to the vec_code virtual table.
+    /// The rowid in vec_code matches the embedding_id to enable joining search results.
+    async fn sync_embedding_to_vec(
+        &self,
+        embedding_id: i64,
+        embedding: &[f32],
+    ) -> anyhow::Result<()> {
+        if !self.has_vector_extension() {
+            return Ok(()); // Skip silently if extension not available
+        }
+
+        let embedding = embedding.to_vec();
+        self.run(move |conn| embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding))
+            .await
+    }
+
+    /// Sync all embeddings to vec_code table
+    ///
+    /// This method finds all embeddings in code_embeddings that don't have a corresponding
+    /// entry in vec_code and syncs them. Returns the number of embeddings synced.
+    async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
+        if !self.has_vector_extension() {
+            return Ok(0); // Skip if extension not available
+        }
+
+        self.run(move |conn| embeddings::sync_all_embeddings_to_vec(conn))
+            .await
+    }
+
+    /// Count chunks where blob_sha is NOT in code_embeddings table
+    ///
+    /// This returns the count of chunks that need embeddings generated.
+    /// In SQLite, embeddings are stored by blob_sha in the code_embeddings table,
+    /// so a chunk needs embedding if its blob_sha doesn't exist in that table.
+    async fn get_chunks_needing_embeddings_count(&self) -> anyhow::Result<i64> {
+        self.run(move |conn| {
+            let count: i64 = conn.query_row(
+                r#"
+                SELECT COUNT(DISTINCT c.blob_sha)
+                FROM chunks c
+                WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)
+                "#,
+                [],
+                |row| row.get(0),
+            )?;
+            Ok(count)
+        })
+        .await
+    }
+
+    /// Copy embeddings from code_embeddings cache table to chunks
+    ///
+    /// This is a no-op for SQLite since embeddings are already accessible
+    /// via the blob_sha key. This method exists for API compatibility with
+    /// the PostgreSQL implementation but doesn't need to do anything in SQLite.
+    ///
+    /// Returns the count of chunks that would have been updated (0).
+    async fn copy_existing_embeddings_from_cache(&self) -> anyhow::Result<i64> {
+        // In SQLite, embeddings are stored by blob_sha and accessed via joins.
+        // There's no "copying" needed - chunks reference embeddings via blob_sha.
+        // This method exists for API compatibility but is effectively a no-op.
+        Ok(0)
+    }
+
+    /// Fetch chunks that need embeddings generated
+    ///
+    /// Returns chunks where the blob_sha is not in the code_embeddings table.
+    ///
+    /// # Arguments
+    /// * `incremental` - If true, only return chunks without embeddings (always respected)
+    /// * `sample_size` - Optional limit on number of chunks to return
+    async fn fetch_chunks_needing_embeddings(
+        &self,
+        incremental: bool,
+        sample_size: Option<usize>,
+    ) -> anyhow::Result<Vec<ChunkForEmbedding>> {
+        self.run(move |conn| {
+            // Build query based on parameters
+            let mut query = String::from(
+                r#"
+                SELECT c.id, c.blob_sha, c.signature, c.docstring, c.preview
+                FROM chunks c
+                "#,
+            );
+
+            // In SQLite, we only fetch chunks where blob_sha is not in code_embeddings
+            // The incremental parameter doesn't change this since we always check blob_sha
+            if incremental {
+                query.push_str("WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)\n");
+            }
+
+            query.push_str("ORDER BY c.id\n");
+
+            // Add LIMIT if sample_size is specified
+            if let Some(limit) = sample_size {
+                query.push_str(&format!("LIMIT {}", limit));
+            }
+
+            let mut stmt = conn.prepare(&query)?;
+            let rows = stmt.query_map([], |row| {
+                Ok(ChunkForEmbedding {
                     id: row.get(0)?,
-                    symbol_name: row.get(1)?,
-                    kind: row.get(2)?,
-                    start_line: row.get(3)?,
-                    end_line: row.get(4)?,
-                    file_path: row.get(5)?,
+                    blob_sha: row.get(1)?,
+                    signature: row.get(2)?,
+                    docstring: row.get(3)?,
+                    preview: row.get(4)?,
                 })
             })?;
 
-            let mut chunks = Vec::new();
-            for chunk_result in rows {
-                chunks.push(chunk_result?);
-            }
-            Ok(chunks)
+            let chunks: Result<Vec<_>, _> = rows.collect();
+            Ok(chunks?)
         })
         .await
     }
+}
 
-    pub async fn get_chunk_context(
-        &self,
-        chunk_id: i64,
-        surrounding: usize,
-    ) -> anyhow::Result<Option<crate::db::ChunkContext>> {
+// =============================================================================
+// StoreMigration implementation
+// =============================================================================
+
+#[async_trait]
+impl StoreMigration for SqliteStore {
+    async fn migrate(&self) -> anyhow::Result<()> {
         self.run(move |conn| {
-            // First, get the target chunk
-            let chunk = conn
+            let mut runner = MigrationRunner::new(conn);
+            runner.migrate()
+        })
+        .await?;
+
+        // Check extension availability after migration
+        self.run(|conn| {
+            let available = verify_vec_extension(conn);
+            Ok(available)
+        })
+        .await
+        .map(|available| {
+            self.vec_available.store(available, Ordering::Relaxed);
+            self.vec_checked.store(true, Ordering::Relaxed);
+            if !available {
+                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
+            }
+        })?;
+
+        Ok(())
+    }
+
+    async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
+        self.run(move |conn| {
+            let exists: bool = conn
                 .query_row(
-                    "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
-                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.id = ?1",
-                    params![chunk_id],
-                    |row| {
-                        Ok(crate::db::ChunkFull {
-                            id: row.get(0)?,
-                            file_id: row.get(1)?,
-                            blob_sha: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            signature: row.get(5)?,
-                            docstring: row.get(6)?,
-                            start_line: row.get(7)?,
-                            end_line: row.get(8)?,
-                            preview: row.get(9)?,
-                            file_path: row.get(10)?,
-                        })
-                    },
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+                    [],
+                    |_| Ok(true),
                 )
-                .optional()?;
+                .unwrap_or(false);
 
-            let chunk = match chunk {
-                Some(c) => c,
-                None => return Ok(None),
-            };
-
-            // Get surrounding chunks from the same file, ordered by line proximity
-            let mut stmt = conn.prepare(
-                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
-                 FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE c.file_id = ?1 AND c.id != ?2
-                 ORDER BY ABS(c.start_line - ?3)
-                 LIMIT ?4",
-            )?;
-
-            let rows = stmt.query_map(
-                params![
-                    chunk.file_id,
-                    chunk_id,
-                    chunk.start_line,
-                    (surrounding as i64 * 2)
-                ],
-                |row| {
-                    Ok(crate::db::ChunkSummary {
-                        id: row.get(0)?,
-                        symbol_name: row.get(1)?,
-                        kind: row.get(2)?,
-                        start_line: row.get(3)?,
-                        end_line: row.get(4)?,
-                        file_path: row.get(5)?,
-                    })
-                },
-            )?;
-
-            let mut surrounding_chunks = Vec::new();
-            for chunk_result in rows {
-                surrounding_chunks.push(chunk_result?);
+            if !exists {
+                return Ok(HashSet::new());
             }
 
-            Ok(Some(crate::db::ChunkContext {
-                file_path: chunk.file_path.clone(),
-                chunk,
-                surrounding_chunks,
-            }))
+            let mut stmt = conn.prepare("SELECT version FROM schema_migrations")?;
+            let rows = stmt.query_map([], |row| row.get(0))?;
+
+            let mut versions = HashSet::new();
+            for version in rows {
+                versions.insert(version?);
+            }
+            Ok(versions)
         })
         .await
     }
+}
 
-    pub async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
-        self.run(move |conn| {
-            let result = conn.query_row(
-                "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
-                params![worktree_id],
-                |row| row.get(0),
-            );
+// =============================================================================
+// StoreCleanup implementation
+// =============================================================================
 
-            match result {
-                Ok(sha) => Ok(sha),
-                Err(rusqlite::Error::QueryReturnedNoRows) => Ok("init".to_string()),
-                Err(e) => Err(e.into()),
-            }
-        })
-        .await
-    }
-
-    pub async fn update_index_state(
-        &self,
-        worktree_id: i64,
-        tree_sha: &str,
-        stats: &crate::db::UpdateStats,
-    ) -> anyhow::Result<()> {
-        let tree_sha = tree_sha.to_string();
-        let chunks_processed = stats.chunks_processed;
-        let embeddings_generated = stats.embeddings_generated;
-        self.write_with_retry(move |conn| {
-            conn.execute(
-                "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
-                 VALUES (?1, ?2, ?3, ?4, datetime('now'))
-                 ON CONFLICT(worktree_id) DO UPDATE SET
-                     tree_sha = excluded.tree_sha,
-                     chunks_processed = excluded.chunks_processed,
-                     embeddings_generated = excluded.embeddings_generated,
-                     last_indexed = datetime('now')",
-                params![worktree_id, tree_sha, chunks_processed, embeddings_generated],
-            )?;
-            Ok(())
-        }).await
-    }
-
-    pub async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
+#[async_trait]
+impl StoreCleanup for SqliteStore {
+    async fn detect_stale_worktrees(&self) -> anyhow::Result<Vec<crate::db::StaleWorktree>> {
         self.run(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT w.id, w.repo_id, w.name, w.abs_path FROM worktrees w ORDER BY w.id",
@@ -1765,7 +2933,7 @@ impl SqliteStore {
         .await
     }
 
-    pub async fn delete_worktree_data(
+    async fn delete_worktree_data(
         &self,
         worktree_id: i64,
     ) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
@@ -1861,413 +3029,58 @@ impl SqliteStore {
         })
         .await
     }
+}
 
-    pub async fn delete_chunks_by_file(&self, file_id: i64) -> anyhow::Result<u64> {
-        self.write_with_retry(move |conn| {
-            // Get count of chunks to delete
-            let count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM chunks WHERE file_id = ?1",
-                    params![file_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
+// =============================================================================
+// StoreIndexState implementation
+// =============================================================================
 
-            // Delete embeddings for chunks in this file
-            conn.execute(
-                "DELETE FROM code_embeddings WHERE blob_sha IN (
-                     SELECT blob_sha FROM chunks WHERE file_id = ?1
-                 )",
-                params![file_id],
-            )?;
+#[async_trait]
+impl StoreIndexState for SqliteStore {
+    async fn get_last_indexed_tree(&self, worktree_id: i64) -> anyhow::Result<String> {
+        self.run(move |conn| {
+            let result = conn.query_row(
+                "SELECT tree_sha FROM index_state WHERE worktree_id = ?1",
+                params![worktree_id],
+                |row| row.get(0),
+            );
 
-            // Delete chunk_worktrees entries
-            conn.execute(
-                "DELETE FROM chunk_worktrees WHERE chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 )",
-                params![file_id],
-            )?;
-
-            // Delete chunk edges
-            conn.execute(
-                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 ) OR dst_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 )",
-                params![file_id],
-            )?;
-
-            // Delete chunks
-            conn.execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])?;
-
-            Ok(count as u64)
+            match result {
+                Ok(sha) => Ok(sha),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok("init".to_string()),
+                Err(e) => Err(e.into()),
+            }
         })
         .await
     }
 
-    /// Get all chunks for a worktree with their file paths.
-    ///
-    /// Returns chunk ID and file relative path for all chunks in the specified worktree.
-    /// Used by clean-ignored command to identify chunks matching ignore patterns.
-    ///
-    /// # Arguments
-    /// * `worktree_id` - Worktree ID
-    ///
-    /// # Returns
-    /// * `Ok(Vec<(chunk_id, file_relpath)>)` - List of chunks with their file paths
-    pub async fn get_chunks_for_worktree(
+    async fn update_index_state(
         &self,
         worktree_id: i64,
-    ) -> anyhow::Result<Vec<(i64, String)>> {
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT c.id, f.relpath
-                 FROM chunks c
-                 JOIN files f ON c.file_id = f.id
-                 WHERE f.worktree_id = ?1",
-            )?;
-
-            let chunks = stmt
-                .query_map(params![worktree_id], |row| Ok((row.get(0)?, row.get(1)?)))?
-                .collect::<Result<Vec<_>, _>>()?;
-
-            Ok(chunks)
-        })
-        .await
-    }
-
-    /// Delete chunks by their IDs.
-    ///
-    /// Deletes specified chunks and cleans up related data (edges, embeddings, junction table).
-    /// Used by clean-ignored command to remove chunks matching ignore patterns.
-    ///
-    /// # Arguments
-    /// * `_worktree_id` - Worktree ID (reserved for future validation/context)
-    /// * `chunk_ids` - List of chunk IDs to delete
-    ///
-    /// # Returns
-    /// * `Ok(usize)` - Number of chunks deleted
-    pub async fn delete_chunks_by_ids(
-        &self,
-        _worktree_id: i64,
-        chunk_ids: &[i64],
-    ) -> anyhow::Result<usize> {
-        if chunk_ids.is_empty() {
-            return Ok(0);
-        }
-
-        // SQLite has a limit of 32766 SQL variables (SQLITE_MAX_VARIABLE_NUMBER).
-        // To avoid "too many SQL variables" errors, batch deletions into chunks of 500.
-        // This allows deleting large numbers of chunks (e.g., 10,000+) without hitting limits.
-        const BATCH_SIZE: usize = 500;
-
-        let chunk_ids = chunk_ids.to_vec();
-        self.run(move |conn| {
-            let mut total_deleted = 0;
-
-            // Process chunks in batches
-            for batch in chunk_ids.chunks(BATCH_SIZE) {
-                // Create placeholders for SQL IN clause
-                let placeholders = batch.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-                // Delete embeddings for these chunks
-                let embeddings_query = format!(
-                    "DELETE FROM code_embeddings WHERE blob_sha IN (
-                         SELECT blob_sha FROM chunks WHERE id IN ({})
-                     )",
-                    placeholders
-                );
-                let mut stmt = conn.prepare(&embeddings_query)?;
-                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
-
-                // Delete chunk_worktrees junction entries
-                let junction_query = format!(
-                    "DELETE FROM chunk_worktrees WHERE chunk_id IN ({})",
-                    placeholders
-                );
-                let mut stmt = conn.prepare(&junction_query)?;
-                stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
-
-                // Delete chunk_edges
-                let edges_query = format!(
-                    "DELETE FROM chunk_edges WHERE src_chunk_id IN ({}) OR dst_chunk_id IN ({})",
-                    placeholders, placeholders
-                );
-                let mut stmt = conn.prepare(&edges_query)?;
-                let mut params: Vec<i64> = Vec::new();
-                params.extend_from_slice(batch);
-                params.extend_from_slice(batch);
-                stmt.execute(rusqlite::params_from_iter(params.iter()))?;
-
-                // Delete chunks themselves and accumulate count
-                let chunks_query = format!("DELETE FROM chunks WHERE id IN ({})", placeholders);
-                let mut stmt = conn.prepare(&chunks_query)?;
-                let rows_affected = stmt.execute(rusqlite::params_from_iter(batch.iter()))?;
-                total_deleted += rows_affected;
-            }
-
-            Ok(total_deleted)
-        })
-        .await
-    }
-
-    /// Look up a file ID by its relative path and worktree ID.
-    ///
-    /// # Arguments
-    /// * `relpath` - Relative path of the file
-    /// * `worktree_id` - Worktree ID
-    ///
-    /// # Returns
-    /// * `Ok(Some(file_id))` - File found
-    /// * `Ok(None)` - File not found
-    pub async fn get_file_id_by_relpath(
-        &self,
-        relpath: &str,
-        worktree_id: i64,
-    ) -> anyhow::Result<Option<i64>> {
-        let relpath = relpath.to_string();
-        self.run(move |conn| {
-            let result: Option<i64> = conn
-                .query_row(
-                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2",
-                    params![relpath, worktree_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            Ok(result)
-        })
-        .await
-    }
-
-    /// Delete a file record from the database.
-    ///
-    /// Note: This only deletes the file record. Use `delete_chunks_by_file` first
-    /// to delete associated chunks, edges, and embeddings.
-    ///
-    /// # Arguments
-    /// * `file_id` - Database ID of the file to delete
-    ///
-    /// # Returns
-    /// * `Ok(true)` - File was deleted
-    /// * `Ok(false)` - File was not found
-    pub async fn delete_file(&self, file_id: i64) -> anyhow::Result<bool> {
-        self.run(move |conn| {
-            let rows_deleted = conn.execute("DELETE FROM files WHERE id = ?1", params![file_id])?;
-            Ok(rows_deleted > 0)
-        })
-        .await
-    }
-
-    pub async fn get_chunks_by_blob_sha(
-        &self,
-        blob_sha: &str,
-    ) -> anyhow::Result<Vec<crate::db::ChunkSummary>> {
-        let blob_sha = blob_sha.to_string();
-        self.run(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
-                 FROM chunks c
-                 JOIN files f ON c.file_id = f.id
-                 WHERE c.blob_sha = ?1
-                 ORDER BY c.start_line",
-            )?;
-
-            let rows = stmt.query_map(params![blob_sha], |row| {
-                Ok(crate::db::ChunkSummary {
-                    id: row.get(0)?,
-                    symbol_name: row.get(1)?,
-                    kind: row.get(2)?,
-                    start_line: row.get(3)?,
-                    end_line: row.get(4)?,
-                    file_path: row.get(5)?,
-                })
-            })?;
-
-            let mut chunks = Vec::new();
-            for chunk_result in rows {
-                chunks.push(chunk_result?);
-            }
-            Ok(chunks)
-        })
-        .await
-    }
-
-    pub async fn migrate(&self) -> anyhow::Result<()> {
-        self.run(move |conn| {
-            let mut runner = MigrationRunner::new(conn);
-            runner.migrate()
-        })
-        .await?;
-
-        // Check extension availability after migration
-        self.run(|conn| {
-            let available = verify_vec_extension(conn);
-            Ok(available)
-        })
-        .await
-        .map(|available| {
-            self.vec_available.store(available, Ordering::Relaxed);
-            self.vec_checked.store(true, Ordering::Relaxed);
-            if !available {
-                tracing::warn!("sqlite-vec extension not loaded - vector search disabled");
-            }
-        })?;
-
-        Ok(())
-    }
-
-    pub async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {
-        self.run(move |conn| {
-            let exists: bool = conn
-                .query_row(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
-                    [],
-                    |_| Ok(true),
-                )
-                .unwrap_or(false);
-
-            if !exists {
-                return Ok(HashSet::new());
-            }
-
-            let mut stmt = conn.prepare("SELECT version FROM schema_migrations")?;
-            let rows = stmt.query_map([], |row| row.get(0))?;
-
-            let mut versions = HashSet::new();
-            for version in rows {
-                versions.insert(version?);
-            }
-            Ok(versions)
-        })
-        .await
-    }
-
-    // Additional SQLite-specific methods
-
-    /// Add chunk to additional worktree
-    pub async fn add_chunk_to_worktree(
-        &self,
-        chunk_id: i64,
-        worktree_id: i64,
+        tree_sha: &str,
+        stats: &crate::db::UpdateStats,
     ) -> anyhow::Result<()> {
-        self.run(move |conn| {
+        let tree_sha = tree_sha.to_string();
+        let chunks_processed = stats.chunks_processed;
+        let embeddings_generated = stats.embeddings_generated;
+        self.write_with_retry(move |conn| {
             conn.execute(
-                "INSERT OR IGNORE INTO chunk_worktrees (chunk_id, worktree_id) VALUES (?1, ?2)",
-                params![chunk_id, worktree_id],
+                "INSERT INTO index_state (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'))
+                 ON CONFLICT(worktree_id) DO UPDATE SET
+                     tree_sha = excluded.tree_sha,
+                     chunks_processed = excluded.chunks_processed,
+                     embeddings_generated = excluded.embeddings_generated,
+                     last_indexed = datetime('now')",
+                params![worktree_id, tree_sha, chunks_processed, embeddings_generated],
             )?;
             Ok(())
-        })
-        .await
+        }).await
     }
+}
 
-    /// Get all worktrees containing this chunk
-    pub async fn get_chunk_worktrees(&self, chunk_id: i64) -> anyhow::Result<Vec<i64>> {
-        self.run(move |conn| {
-            let mut stmt =
-                conn.prepare("SELECT worktree_id FROM chunk_worktrees WHERE chunk_id = ?1")?;
-            let rows = stmt.query_map(params![chunk_id], |row| row.get(0))?;
-            let mut ids = Vec::new();
-            for id in rows {
-                ids.push(id?);
-            }
-            Ok(ids)
-        })
-        .await
-    }
-
-    /// Store or update embedding by content hash
-    pub async fn upsert_embedding(
-        &self,
-        blob_sha: &str,
-        embedding: &[f32],
-        model_version: &str,
-    ) -> anyhow::Result<i64> {
-        let blob_sha = blob_sha.to_string();
-        let embedding_vec = embedding.to_vec();
-        let model_version = model_version.to_string();
-
-        let embedding_id = self
-            .run(move |conn| {
-                embeddings::upsert_embedding(conn, &blob_sha, &embedding_vec, &model_version)
-            })
-            .await?;
-
-        // Sync to vec_code table
-        self.sync_embedding_to_vec(embedding_id, embedding).await?;
-
-        Ok(embedding_id)
-    }
-
-    /// Batch upsert embeddings with deduplication
-    pub async fn upsert_embeddings_batch_new(
-        &self,
-        embeddings_vec: &[embeddings::EmbeddingRecord],
-    ) -> anyhow::Result<()> {
-        let embeddings_vec = embeddings_vec.to_vec();
-
-        let id_embedding_pairs = self
-            .run(move |conn| embeddings::upsert_embeddings_batch(conn, &embeddings_vec))
-            .await?;
-
-        // Sync all embeddings to vec_code
-        if self.has_vec_extension() {
-            for (embedding_id, embedding) in id_embedding_pairs {
-                self.sync_embedding_to_vec(embedding_id, &embedding).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Check if embedding exists for blob_sha
-    pub async fn has_embedding(&self, blob_sha: &str) -> anyhow::Result<bool> {
-        let blob_sha = blob_sha.to_string();
-
-        self.run(move |conn| embeddings::has_embedding(conn, &blob_sha))
-            .await
-    }
-
-    /// Get embedding by blob_sha
-    pub async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
-        let blob_sha = blob_sha.to_string();
-
-        self.run(move |conn| embeddings::get_embedding(conn, &blob_sha))
-            .await
-    }
-
-    /// Sync embedding to vec_code table (skips if extension not available)
-    ///
-    /// This method syncs a single embedding from code_embeddings to the vec_code virtual table.
-    /// The rowid in vec_code matches the embedding_id to enable joining search results.
-    pub async fn sync_embedding_to_vec(
-        &self,
-        embedding_id: i64,
-        embedding: &[f32],
-    ) -> anyhow::Result<()> {
-        if !self.has_vec_extension() {
-            return Ok(()); // Skip silently if extension not available
-        }
-
-        let embedding = embedding.to_vec();
-        self.run(move |conn| embeddings::sync_embedding_to_vec(conn, embedding_id, &embedding))
-            .await
-    }
-
-    /// Sync all embeddings to vec_code table
-    ///
-    /// This method finds all embeddings in code_embeddings that don't have a corresponding
-    /// entry in vec_code and syncs them. Returns the number of embeddings synced.
-    pub async fn sync_all_embeddings_to_vec(&self) -> anyhow::Result<usize> {
-        if !self.has_vec_extension() {
-            return Ok(0); // Skip if extension not available
-        }
-
-        self.run(move |conn| embeddings::sync_all_embeddings_to_vec(conn))
-            .await
-    }
-
+// Database operations - remaining inherent methods
+impl SqliteStore {
     /// Search for similar chunks by embedding (SQLite-specific)
     ///
     /// Returns empty Vec (not error) when extension is not available.
@@ -2278,7 +3091,7 @@ impl SqliteStore {
         query_embedding: &[f32],
         limit: usize,
     ) -> anyhow::Result<Vec<vector::VectorResult>> {
-        if !self.has_vec_extension() {
+        if !self.has_vector_extension() {
             return Ok(vec![]);
         }
 
@@ -2319,304 +3132,6 @@ impl SqliteStore {
             fts::search_fts(conn, &repo, worktree.as_deref(), &query, limit, None, None)
         })
         .await
-    }
-
-    /// Hybrid search combining FTS5 and vector search using Reciprocal Rank Fusion
-    ///
-    /// Combines keyword matching (FTS5) with semantic similarity (vectors) to provide
-    /// comprehensive search results. Falls back to FTS-only when vector search is
-    /// unavailable or returns no results.
-    ///
-    /// # Arguments
-    /// * `repo` - Repository name to filter by
-    /// * `worktree` - Optional worktree name to filter by
-    /// * `query` - User's search query (for FTS)
-    /// * `query_embedding` - Query embedding vector (for semantic search)
-    /// * `limit` - Maximum number of results to return
-    /// * `weights` - Weights for combining FTS and vector contributions
-    pub async fn search_hybrid(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        query: &str,
-        query_embedding: &[f32],
-        limit: usize,
-        weights: hybrid::HybridWeights,
-    ) -> anyhow::Result<Vec<hybrid::HybridResult>> {
-        // Over-fetch from each source for better fusion coverage
-        let fetch_limit = limit * 3;
-
-        // Run FTS and vector search in parallel
-        let (fts_results, vec_results) = tokio::join!(
-            self.search_fts(repo, worktree, query, fetch_limit),
-            self.search_vector(repo, worktree, query_embedding, fetch_limit),
-        );
-
-        let fts_results = fts_results?;
-        let vec_results = vec_results?;
-
-        // Combine results using RRF
-        let results = hybrid::combine_results(&fts_results, &vec_results, &weights, limit);
-
-        Ok(results)
-    }
-
-    /// Get metadata for multiple chunks (batch query for semantic ranking)
-    ///
-    /// Returns a map of chunk_id -> ChunkMetadata with kind, symbol_name, and recency_score.
-    pub async fn get_chunks_metadata(
-        &self,
-        chunk_ids: &[i64],
-    ) -> anyhow::Result<std::collections::HashMap<i64, hybrid::ChunkMetadata>> {
-        if chunk_ids.is_empty() {
-            return Ok(std::collections::HashMap::new());
-        }
-
-        let chunk_ids = chunk_ids.to_vec();
-
-        self.run(move |conn| {
-            let placeholders: Vec<String> =
-                (1..=chunk_ids.len()).map(|i| format!("?{}", i)).collect();
-            let sql = format!(
-                "SELECT id, kind, symbol_name, recency_score FROM chunks WHERE id IN ({})",
-                placeholders.join(", ")
-            );
-
-            let mut stmt = conn.prepare(&sql)?;
-            let params: Vec<&dyn rusqlite::ToSql> = chunk_ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::ToSql)
-                .collect();
-
-            let rows = stmt.query_map(params.as_slice(), |row| {
-                let id: i64 = row.get(0)?;
-                let kind: String = row.get(1)?;
-                let symbol_name: Option<String> = row.get(2)?;
-                let recency_score: f64 = row.get(3)?;
-                Ok((
-                    id,
-                    hybrid::ChunkMetadata {
-                        kind,
-                        symbol_name,
-                        recency_score,
-                    },
-                ))
-            })?;
-
-            let mut map = std::collections::HashMap::new();
-            for result in rows {
-                let (id, metadata) = result?;
-                map.insert(id, metadata);
-            }
-            Ok(map)
-        })
-        .await
-    }
-
-    /// Hybrid search with semantic ranking applied
-    ///
-    /// Combines FTS5 and vector search using RRF, then applies semantic ranking
-    /// based on chunk kind, symbol name matching, and recency.
-    ///
-    /// # Arguments
-    /// * `repo` - Repository name to filter by
-    /// * `worktree` - Optional worktree name to filter by
-    /// * `query` - User's search query (for FTS and exact match detection)
-    /// * `query_embedding` - Query embedding vector (for semantic search)
-    /// * `limit` - Maximum number of results to return
-    /// * `weights` - Weights for combining FTS and vector contributions
-    /// * `ranking` - Semantic ranking configuration
-    pub async fn search_hybrid_ranked(
-        &self,
-        repo: &str,
-        worktree: Option<&str>,
-        query: &str,
-        query_embedding: &[f32],
-        limit: usize,
-        weights: hybrid::HybridWeights,
-        ranking: hybrid::SemanticRanking,
-    ) -> anyhow::Result<Vec<hybrid::RankedSearchHit>> {
-        // Over-fetch by 2x before ranking to ensure good results after re-ordering
-        let fetch_limit = limit * 2;
-
-        // Get base hybrid results
-        let hits = self
-            .search_hybrid(repo, worktree, query, query_embedding, fetch_limit, weights)
-            .await?;
-
-        if hits.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Fetch chunk metadata for all results
-        let chunk_ids: Vec<i64> = hits.iter().map(|h| h.chunk_id).collect();
-        let metadata = self.get_chunks_metadata(&chunk_ids).await?;
-
-        // Build ranked hits with metadata
-        let mut ranked: Vec<hybrid::RankedSearchHit> = hits
-            .into_iter()
-            .filter_map(|h| {
-                let meta = metadata.get(&h.chunk_id)?;
-                Some(hybrid::RankedSearchHit {
-                    chunk_id: h.chunk_id,
-                    score: h.score,
-                    fts_rank: h.fts_rank,
-                    vector_rank: h.vector_rank,
-                    kind: meta.kind.clone(),
-                    symbol_name: meta.symbol_name.clone(),
-                    recency_score: meta.recency_score,
-                    source: h.source,
-                })
-            })
-            .collect();
-
-        // Apply semantic ranking
-        hybrid::apply_semantic_ranking(&mut ranked, query, &ranking);
-
-        // Take top N after re-ranking
-        ranked.truncate(limit);
-
-        Ok(ranked)
-    }
-
-    // ========================================================================
-    // Graph Traversal Methods
-    // ========================================================================
-
-    /// Find all chunks that call the target chunk (directly or transitively)
-    ///
-    /// # Arguments
-    /// * `target_chunk_id` - The chunk to find callers for
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_callers(
-        &self,
-        target_chunk_id: i64,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_callers(conn, target_chunk_id, max_depth))
-            .await
-    }
-
-    /// Find all chunks called by the source chunk (directly or transitively)
-    ///
-    /// # Arguments
-    /// * `source_chunk_id` - The chunk to find callees for
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_callees(
-        &self,
-        source_chunk_id: i64,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_callees(conn, source_chunk_id, max_depth))
-            .await
-    }
-
-    /// Find import relationships for a chunk
-    ///
-    /// # Arguments
-    /// * `chunk_id` - The chunk to find imports for
-    /// * `direction` - Incoming (who imports this) or Outgoing (what this imports)
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_imports(
-        &self,
-        chunk_id: i64,
-        direction: graph::ImportDirection,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_imports(conn, chunk_id, direction, max_depth))
-            .await
-    }
-
-    /// Find extension/inheritance relationships for a chunk
-    ///
-    /// # Arguments
-    /// * `chunk_id` - The chunk to find extensions for
-    /// * `direction` - Incoming (what extends this) or Outgoing (what this extends)
-    /// * `max_depth` - Maximum traversal depth (default 3, max 10)
-    ///
-    /// # Returns
-    /// Vector of GraphResult ordered by depth (closest first)
-    pub async fn find_extensions(
-        &self,
-        chunk_id: i64,
-        direction: graph::ImportDirection,
-        max_depth: Option<usize>,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::find_extensions(conn, chunk_id, direction, max_depth))
-            .await
-    }
-
-    /// Get all direct edges from or to a chunk (without recursion)
-    ///
-    /// # Arguments
-    /// * `chunk_id` - The chunk to find edges for
-    /// * `direction` - Incoming (edges pointing to chunk) or Outgoing (edges from chunk)
-    ///
-    /// # Returns
-    /// Vector of GraphResult with depth=1 for all direct relationships
-    pub async fn get_direct_edges(
-        &self,
-        chunk_id: i64,
-        direction: graph::ImportDirection,
-    ) -> anyhow::Result<Vec<graph::GraphResult>> {
-        self.run(move |conn| graph::get_direct_edges(conn, chunk_id, direction))
-            .await
-    }
-
-    /// Calculate graph importance scores for chunks in a repo/worktree
-    ///
-    /// Uses edge counts (callers, importers, tests) to calculate PageRank-like scores.
-    ///
-    /// When `enable_quality` is false: uses legacy edge counting with hardcoded weights
-    /// (calls=0.3, imports=0.2, tests=0.1, logarithmic scaling).
-    ///
-    /// When `enable_quality` is true: uses quality-weighted edge scoring with test detection
-    /// using configurable weights from EdgeQualityWeights.
-    ///
-    /// # Arguments
-    /// * `repo_id` - Repository ID to query
-    /// * `worktree_id` - Optional worktree ID to filter by
-    /// * `limit` - Maximum number of results
-    /// * `enable_quality` - If true, use quality-weighted scoring; if false, use legacy scoring
-    /// * `weights` - Edge quality weights (production_code, test_code, calls)
-    pub async fn calculate_graph_importance(
-        &self,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        limit: usize,
-        enable_quality: bool,
-        weights: &EdgeQualityWeights,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        tracing::debug!(
-            repo_id = repo_id,
-            worktree_id = ?worktree_id,
-            limit = limit,
-            enable_quality = enable_quality,
-            production_code_weight = weights.production_code,
-            test_code_weight = weights.test_code,
-            calls_weight = weights.calls,
-            "Calculating graph importance"
-        );
-
-        if !enable_quality {
-            // Call legacy implementation
-            return self
-                .calculate_graph_importance_legacy(repo_id, worktree_id, limit)
-                .await;
-        }
-
-        // New quality-weighted implementation with configurable weights
-        self.calculate_graph_importance_quality(repo_id, worktree_id, limit, weights)
-            .await
     }
 
     /// Legacy graph importance calculation (pre-quality weights)
@@ -2970,503 +3485,16 @@ impl SqliteStore {
         })
         .await
     }
+}
 
-    /// Calculate graph importance for specific chunk IDs
-    ///
-    /// Uses edge counts to calculate PageRank-like scores for the given chunks.
-    pub async fn calculate_graph_importance_for_chunks(
-        &self,
-        chunk_ids: &[i64],
-        repo_id: i64,
-        worktree_id: Option<i64>,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        if chunk_ids.is_empty() {
-            return Ok(vec![]);
-        }
+// =============================================================================
+// StoreEncoding implementation
+// =============================================================================
 
-        let chunk_ids = chunk_ids.to_vec();
-        self.run(move |conn| {
-            // Build placeholders for IN clause
-            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-            let sql = if worktree_id.is_some() {
-                format!(
-                    r#"
-                    WITH edge_counts AS (
-                        SELECT
-                            dst_chunk_id as chunk_id,
-                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
-                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
-                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
-                        FROM chunk_edges
-                        WHERE dst_chunk_id IN ({})
-                        GROUP BY dst_chunk_id
-                    )
-                    SELECT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        COALESCE(
-                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
-                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
-                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
-                            0
-                        ) as graph_score
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
-                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
-                    ORDER BY graph_score DESC
-                    "#,
-                    placeholders, placeholders
-                )
-            } else {
-                format!(
-                    r#"
-                    WITH edge_counts AS (
-                        SELECT
-                            dst_chunk_id as chunk_id,
-                            SUM(CASE WHEN type = 'calls' THEN 1 ELSE 0 END) as callers,
-                            SUM(CASE WHEN type = 'imports' THEN 1 ELSE 0 END) as importers,
-                            SUM(CASE WHEN type = 'test_of' THEN 1 ELSE 0 END) as tests
-                        FROM chunk_edges
-                        WHERE dst_chunk_id IN ({})
-                        GROUP BY dst_chunk_id
-                    )
-                    SELECT DISTINCT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        COALESCE(
-                            (ln(2 + COALESCE(e.callers, 0)) * 0.3 +
-                             ln(2 + COALESCE(e.importers, 0)) * 0.2 +
-                             ln(2 + COALESCE(e.tests, 0)) * 0.1),
-                            0
-                        ) as graph_score
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    LEFT JOIN edge_counts e ON e.chunk_id = c.id
-                    WHERE c.id IN ({}) AND f.repo_id = ?
-                    ORDER BY graph_score DESC
-                    "#,
-                    placeholders, placeholders
-                )
-            };
-
-            let mut stmt = conn.prepare(&sql)?;
-            let mut hits = Vec::new();
-
-            // Build parameter list
-            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
-                .iter()
-                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
-                .collect();
-
-            // Duplicate chunk_ids for the second IN clause
-            for id in &chunk_ids {
-                param_values.push(Box::new(*id));
-            }
-
-            // Add repo_id
-            param_values.push(Box::new(repo_id));
-
-            // Add worktree_id if present
-            if let Some(wid) = worktree_id {
-                param_values.push(Box::new(wid));
-            }
-
-            let params_refs: Vec<&dyn rusqlite::ToSql> =
-                param_values.iter().map(|p| p.as_ref()).collect();
-
-            let rows = stmt.query_map(params_refs.as_slice(), |row| {
-                Ok(SearchHit {
-                    chunk_id: row.get(0)?,
-                    start_line: row.get(1)?,
-                    end_line: row.get(2)?,
-                    symbol_name: row.get(3)?,
-                    kind: row.get(4)?,
-                    file_relpath: row.get(5)?,
-                    score: row.get(6)?,
-                    base_score: None,
-                    kind_mult: None,
-                    exact_mult: None,
-                    preview: None,
-                })
-            })?;
-            for row in rows {
-                hits.push(row?);
-            }
-            Ok(hits)
-        })
-        .await
-    }
-
-    /// Calculate signal scores (recency + churn) for chunks in a repo/worktree
-    ///
-    /// Combines recency_score and churn_score from chunks table with configurable weights.
-    pub async fn calculate_signal_scores(
-        &self,
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        recency_weight: f32,
-        churn_weight: f32,
-        limit: usize,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        self.run(move |conn| {
-            let sql = if worktree_id.is_some() {
-                r#"
-                SELECT
-                    c.id,
-                    c.start_line,
-                    c.end_line,
-                    c.symbol_name,
-                    c.kind,
-                    f.relpath,
-                    (c.recency_score * ?3 + c.churn_score * ?4) as combined_signal
-                FROM chunks c
-                JOIN files f ON f.id = c.file_id
-                JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                WHERE f.repo_id = ?1 AND cw.worktree_id = ?2
-                ORDER BY combined_signal DESC
-                LIMIT ?5
-                "#
-            } else {
-                r#"
-                SELECT DISTINCT
-                    c.id,
-                    c.start_line,
-                    c.end_line,
-                    c.symbol_name,
-                    c.kind,
-                    f.relpath,
-                    (c.recency_score * ?2 + c.churn_score * ?3) as combined_signal
-                FROM chunks c
-                JOIN files f ON f.id = c.file_id
-                WHERE f.repo_id = ?1
-                ORDER BY combined_signal DESC
-                LIMIT ?4
-                "#
-            };
-
-            let mut stmt = conn.prepare(sql)?;
-            let mut hits = Vec::new();
-
-            if let Some(wid) = worktree_id {
-                let rows = stmt.query_map(
-                    params![repo_id, wid, recency_weight, churn_weight, limit as i64],
-                    |row| {
-                        Ok(SearchHit {
-                            chunk_id: row.get(0)?,
-                            start_line: row.get(1)?,
-                            end_line: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            file_relpath: row.get(5)?,
-                            score: row.get(6)?,
-                            base_score: None,
-                            kind_mult: None,
-                            exact_mult: None,
-                            preview: None,
-                        })
-                    },
-                )?;
-                for row in rows {
-                    hits.push(row?);
-                }
-            } else {
-                let rows = stmt.query_map(
-                    params![repo_id, recency_weight, churn_weight, limit as i64],
-                    |row| {
-                        Ok(SearchHit {
-                            chunk_id: row.get(0)?,
-                            start_line: row.get(1)?,
-                            end_line: row.get(2)?,
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            file_relpath: row.get(5)?,
-                            score: row.get(6)?,
-                            base_score: None,
-                            kind_mult: None,
-                            exact_mult: None,
-                            preview: None,
-                        })
-                    },
-                )?;
-                for row in rows {
-                    hits.push(row?);
-                }
-            }
-            Ok(hits)
-        })
-        .await
-    }
-
-    /// Calculate signal scores for specific chunk IDs
-    ///
-    /// Combines recency_score and churn_score for the given chunks.
-    pub async fn calculate_signal_scores_for_chunks(
-        &self,
-        chunk_ids: &[i64],
-        repo_id: i64,
-        worktree_id: Option<i64>,
-        recency_weight: f32,
-        churn_weight: f32,
-    ) -> anyhow::Result<Vec<SearchHit>> {
-        if chunk_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let chunk_ids = chunk_ids.to_vec();
-        self.run(move |conn| {
-            let placeholders = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-            let sql = if worktree_id.is_some() {
-                format!(
-                    r#"
-                    SELECT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                    WHERE c.id IN ({}) AND f.repo_id = ? AND cw.worktree_id = ?
-                    ORDER BY combined_signal DESC
-                    "#,
-                    placeholders
-                )
-            } else {
-                format!(
-                    r#"
-                    SELECT DISTINCT
-                        c.id,
-                        c.start_line,
-                        c.end_line,
-                        c.symbol_name,
-                        c.kind,
-                        f.relpath,
-                        (c.recency_score * ? + c.churn_score * ?) as combined_signal
-                    FROM chunks c
-                    JOIN files f ON f.id = c.file_id
-                    WHERE c.id IN ({}) AND f.repo_id = ?
-                    ORDER BY combined_signal DESC
-                    "#,
-                    placeholders
-                )
-            };
-
-            let mut stmt = conn.prepare(&sql)?;
-            let mut hits = Vec::new();
-
-            // Build parameters: recency_weight, churn_weight, chunk_ids..., repo_id, [worktree_id]
-            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-            param_values.push(Box::new(recency_weight));
-            param_values.push(Box::new(churn_weight));
-            for id in &chunk_ids {
-                param_values.push(Box::new(*id));
-            }
-            param_values.push(Box::new(repo_id));
-            if let Some(wid) = worktree_id {
-                param_values.push(Box::new(wid));
-            }
-
-            let params_refs: Vec<&dyn rusqlite::ToSql> =
-                param_values.iter().map(|p| p.as_ref()).collect();
-
-            let rows = stmt.query_map(params_refs.as_slice(), |row| {
-                Ok(SearchHit {
-                    chunk_id: row.get(0)?,
-                    start_line: row.get(1)?,
-                    end_line: row.get(2)?,
-                    symbol_name: row.get(3)?,
-                    kind: row.get(4)?,
-                    file_relpath: row.get(5)?,
-                    score: row.get(6)?,
-                    base_score: None,
-                    kind_mult: None,
-                    exact_mult: None,
-                    preview: None,
-                })
-            })?;
-            for row in rows {
-                hits.push(row?);
-            }
-            Ok(hits)
-        })
-        .await
-    }
-
-    /// Count chunks where blob_sha is NOT in code_embeddings table
-    ///
-    /// This returns the count of chunks that need embeddings generated.
-    /// In SQLite, embeddings are stored by blob_sha in the code_embeddings table,
-    /// so a chunk needs embedding if its blob_sha doesn't exist in that table.
-    pub async fn get_chunks_needing_embeddings_count(&self) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                r#"
-                SELECT COUNT(DISTINCT c.blob_sha)
-                FROM chunks c
-                WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)
-                "#,
-                [],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Copy embeddings from code_embeddings cache table to chunks
-    ///
-    /// This is a no-op for SQLite since embeddings are already accessible
-    /// via the blob_sha key. This method exists for API compatibility with
-    /// the PostgreSQL implementation but doesn't need to do anything in SQLite.
-    ///
-    /// Returns the count of chunks that would have been updated (0).
-    pub async fn copy_existing_embeddings_from_cache(&self) -> anyhow::Result<i64> {
-        // In SQLite, embeddings are stored by blob_sha and accessed via joins.
-        // There's no "copying" needed - chunks reference embeddings via blob_sha.
-        // This method exists for API compatibility but is effectively a no-op.
-        Ok(0)
-    }
-
-    /// Fetch chunks that need embeddings generated
-    ///
-    /// Returns chunks where the blob_sha is not in the code_embeddings table.
-    ///
-    /// # Arguments
-    /// * `incremental` - If true, only return chunks without embeddings (always respected)
-    /// * `sample_size` - Optional limit on number of chunks to return
-    pub async fn fetch_chunks_needing_embeddings(
-        &self,
-        incremental: bool,
-        sample_size: Option<usize>,
-    ) -> anyhow::Result<Vec<crate::db::ChunkForEmbedding>> {
-        self.run(move |conn| {
-            // Build query based on parameters
-            let mut query = String::from(
-                r#"
-                SELECT c.id, c.blob_sha, c.signature, c.docstring, c.preview
-                FROM chunks c
-                "#,
-            );
-
-            // In SQLite, we only fetch chunks where blob_sha is not in code_embeddings
-            // The incremental parameter doesn't change this since we always check blob_sha
-            if incremental {
-                query.push_str("WHERE c.blob_sha NOT IN (SELECT blob_sha FROM code_embeddings)\n");
-            }
-
-            query.push_str("ORDER BY c.id\n");
-
-            // Add LIMIT if sample_size is specified
-            if let Some(limit) = sample_size {
-                query.push_str(&format!("LIMIT {}", limit));
-            }
-
-            let mut stmt = conn.prepare(&query)?;
-            let rows = stmt.query_map([], |row| {
-                Ok(crate::db::ChunkForEmbedding {
-                    id: row.get(0)?,
-                    blob_sha: row.get(1)?,
-                    signature: row.get(2)?,
-                    docstring: row.get(3)?,
-                    preview: row.get(4)?,
-                })
-            })?;
-
-            let chunks: Result<Vec<_>, _> = rows.collect();
-            Ok(chunks?)
-        })
-        .await
-    }
-
-    // ==================== Encoding Progress Methods ====================
-
-    /// Get the global count of distinct chunks (by blob_sha) across all repos.
-    pub async fn get_global_chunk_count(&self) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 =
-                conn.query_row("SELECT COUNT(DISTINCT blob_sha) FROM chunks", [], |row| {
-                    row.get(0)
-                })?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Get the global count of embeddings.
-    pub async fn get_global_embedding_count(&self) -> anyhow::Result<i64> {
-        self.run(move |conn| {
-            let count: i64 =
-                conn.query_row("SELECT COUNT(*) FROM code_embeddings", [], |row| row.get(0))?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Get the count of distinct chunks (by blob_sha) for a specific repo.
-    ///
-    /// Uses chunk_worktrees junction table to filter by repo via worktrees.
-    /// Returns 0 if the repo does not exist.
-    pub async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
-        let repo_name = repo_name.to_string();
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT c.blob_sha)
-                 FROM chunks c
-                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                 JOIN worktrees w ON w.id = cw.worktree_id
-                 JOIN repos r ON r.id = w.repo_id
-                 WHERE r.name = ?1",
-                params![repo_name],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
-    /// Get the count of embeddings for a specific repo.
-    ///
-    /// Counts embeddings whose blob_sha matches chunks in the specified repo.
-    /// Returns 0 if the repo does not exist.
-    pub async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
-        let repo_name = repo_name.to_string();
-        self.run(move |conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(DISTINCT ce.id)
-                 FROM code_embeddings ce
-                 WHERE ce.blob_sha IN (
-                     SELECT DISTINCT c.blob_sha
-                     FROM chunks c
-                     JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                     JOIN worktrees w ON w.id = cw.worktree_id
-                     JOIN repos r ON r.id = w.repo_id
-                     WHERE r.name = ?1
-                 )",
-                params![repo_name],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-        .await
-    }
-
+#[async_trait]
+impl StoreEncoding for SqliteStore {
     /// Create a new encoding run record. Returns the run ID.
-    pub async fn create_encoding_run(
+    async fn create_encoding_run(
         &self,
         total_chunks: i64,
         provider: Option<&str>,
@@ -3486,7 +3514,7 @@ impl SqliteStore {
     }
 
     /// Update the progress of an encoding run.
-    pub async fn update_encoding_run_progress(
+    async fn update_encoding_run_progress(
         &self,
         run_id: i64,
         chunks_completed: i64,
@@ -3507,7 +3535,7 @@ impl SqliteStore {
     }
 
     /// Complete an encoding run, setting its final status and finished_at timestamp.
-    pub async fn complete_encoding_run(&self, run_id: i64, status: &str) -> anyhow::Result<()> {
+    async fn complete_encoding_run(&self, run_id: i64, status: &str) -> anyhow::Result<()> {
         let status = status.to_string();
         self.write_with_retry(move |conn| {
             conn.execute(
@@ -3525,7 +3553,7 @@ impl SqliteStore {
     /// Mark all encoding runs with status='running' as 'failed'.
     ///
     /// This is used on startup to clean up stale runs from previous crashes.
-    pub async fn mark_stale_runs_as_failed(&self) -> anyhow::Result<()> {
+    async fn mark_stale_runs_as_failed(&self) -> anyhow::Result<()> {
         self.write_with_retry(move |conn| {
             conn.execute(
                 "UPDATE encoding_runs SET status = ?1, finished_at = datetime('now') WHERE status = ?2",
@@ -3539,7 +3567,7 @@ impl SqliteStore {
     /// Get the currently active (running) encoding run, if any.
     ///
     /// Returns the most recently started running run.
-    pub async fn get_active_encoding_run(&self) -> anyhow::Result<Option<EncodingRunRow>> {
+    async fn get_active_encoding_run(&self) -> anyhow::Result<Option<EncodingRunRow>> {
         self.run(move |conn| {
             let result = conn
                 .query_row(
@@ -3573,20 +3601,7 @@ impl SqliteStore {
     }
 }
 
-/// Row data from the encoding_runs table.
-#[derive(Debug, Clone)]
-pub struct EncodingRunRow {
-    pub id: i64,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub status: String,
-    pub total_chunks: i64,
-    pub chunks_completed: i64,
-    pub chunks_per_second: Option<f64>,
-    pub last_batch_at: Option<String>,
-    pub provider: Option<String>,
-    pub dimension: Option<i32>,
-}
+pub use crate::db::types::EncodingRunRow;
 
 #[cfg(test)]
 mod tests {
@@ -4292,10 +4307,10 @@ mod tests {
             "Should return empty results when extension not available"
         );
 
-        // has_vec_extension should return false
+        // has_vector_extension should return false
         assert!(
-            !store.has_vec_extension(),
-            "has_vec_extension should return false"
+            !store.has_vector_extension(),
+            "has_vector_extension should return false"
         );
     }
 

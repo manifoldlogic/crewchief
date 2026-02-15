@@ -33,6 +33,7 @@
 //!
 //! All edge cases validated in tests/integration/semrank-edge-cases.test.ts
 
+use crate::db::traits::StoreSearch;
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use regex::Regex;

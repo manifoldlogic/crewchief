@@ -10,6 +10,8 @@
 
 use anyhow::Result;
 use crewchief_maproom::db::sqlite::SqliteStore;
+use crewchief_maproom::db::StoreCore;
+use crewchief_maproom::db::StoreMigration;
 use crewchief_maproom::incremental::events::FileEvent;
 use crewchief_maproom::incremental::watcher::{FileWatcher, WatcherConfig};
 use crewchief_maproom::indexer::scan_worktree;

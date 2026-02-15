@@ -15,6 +15,8 @@
 mod common;
 
 use common::TestDb;
+use crewchief_maproom::db::StoreChunks;
+use crewchief_maproom::db::StoreCore;
 use crewchief_maproom::db::{ChunkRecord, FileRecord};
 
 /// Helper to create a file record for a given path

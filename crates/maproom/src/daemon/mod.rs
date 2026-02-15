@@ -10,6 +10,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
 use crate::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
+use crate::db::traits::StoreCore;
+use crate::db::traits::StoreSearch;
 use crate::db::{connect, SearchHit, SqliteStore};
 use crate::embedding::EmbeddingService;
 use crate::search::confidence::compute_result_confidence;

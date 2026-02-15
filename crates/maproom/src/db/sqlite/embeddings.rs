@@ -18,13 +18,7 @@ pub fn vec_to_sqlite_param(vec: &[f32]) -> Vec<u8> {
     vec_to_blob(vec) // sqlite-vec accepts raw bytes
 }
 
-/// Record for batch embedding operations
-#[derive(Clone)]
-pub struct EmbeddingRecord {
-    pub blob_sha: String,
-    pub embedding: Vec<f32>,
-    pub model_version: String,
-}
+pub use crate::db::types::EmbeddingRecord;
 
 /// Supported embedding dimensions
 const SUPPORTED_DIMENSIONS: &[usize] = &[768, 1024, 1536];

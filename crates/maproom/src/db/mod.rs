@@ -8,6 +8,8 @@ pub mod columns;
 pub mod connection;
 pub mod index_state;
 pub mod sqlite;
+pub mod traits;
+pub mod types;
 
 // Re-export SqliteStore as the primary store type
 pub use sqlite::SqliteStore;
@@ -25,6 +27,18 @@ pub use index_state::{get_last_indexed_tree, update_index_state, UpdateStats};
 
 // Re-export connection utilities
 pub use connection::get_database_url;
+
+// Re-export Store trait hierarchy
+pub use traits::{
+    Store, StoreChunks, StoreCleanup, StoreCore, StoreEmbeddings, StoreEncoding, StoreGraph,
+    StoreIndexState, StoreMigration, StoreSearch,
+};
+
+// Re-export promoted types from types module
+pub use types::{
+    ChunkMetadata, EmbeddingRecord, EncodingRunRow, GraphResult, HybridResult, HybridWeights,
+    ImportDirection, RankedSearchHit, SemanticRanking,
+};
 
 use serde::Serialize;
 

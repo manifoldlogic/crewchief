@@ -5,6 +5,7 @@
 //! contribute different weights to the importance score.
 
 use crate::config::SearchConfig;
+use crate::db::traits::StoreGraph;
 use crate::db::SqliteStore;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use tracing::{debug, instrument};

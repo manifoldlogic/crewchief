@@ -8,6 +8,8 @@ use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::db::traits::StoreCore;
+use crate::db::traits::StoreEncoding;
 use crate::db::SqliteStore;
 
 /// Response struct for encoding progress queries.
@@ -283,6 +285,9 @@ pub fn format_json(response: &EncodingProgressResponse) -> Result<String> {
 mod tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
+    use crate::db::traits::StoreEncoding;
+    use crate::db::traits::StoreMigration;
     use crate::db::{ChunkRecord, FileRecord};
     use rusqlite::params;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1554,6 +1559,7 @@ mod tests {
 mod integration_tests {
     use super::*;
     use crate::db::sqlite::SqliteStore;
+    use crate::db::traits::StoreChunks;
     use crate::db::{ChunkRecord, FileRecord};
     use crate::embedding::cache::EmbeddingCache;
     use crate::embedding::config::CacheConfig;

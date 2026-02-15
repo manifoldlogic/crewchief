@@ -8,6 +8,8 @@
 //! - Multiple relationship types filtering
 
 use crate::db::sqlite::graph::{GraphResult, ImportDirection};
+use crate::db::traits::StoreChunks;
+use crate::db::traits::StoreGraph;
 use crate::db::SqliteStore;
 use anyhow::Result;
 
@@ -358,6 +360,7 @@ pub async fn load_relationships_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::StoreMigration;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
