@@ -1717,6 +1717,18 @@ async fn main() -> anyhow::Result<()> {
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
+
+            // Validate embedding provider is configured (not empty or whitespace)
+            let provider = std::env::var("MAPROOM_EMBEDDING_PROVIDER")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if provider.is_empty() {
+                eprintln!("Configuration error: MAPROOM_EMBEDDING_PROVIDER not set or empty");
+                eprintln!("Set MAPROOM_EMBEDDING_PROVIDER to 'openai', 'voyage', or another supported provider");
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+
             let embedding_service = match EmbeddingService::from_env().await {
                 Ok(s) => s,
                 Err(e) => {
@@ -1908,6 +1920,17 @@ async fn main() -> anyhow::Result<()> {
             };
 
             tracing::info!("Initializing embedding generation pipeline");
+
+            // Validate embedding provider is configured (not empty or whitespace)
+            let provider = std::env::var("MAPROOM_EMBEDDING_PROVIDER")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if provider.is_empty() {
+                eprintln!("Configuration error: MAPROOM_EMBEDDING_PROVIDER not set or empty");
+                eprintln!("Set MAPROOM_EMBEDDING_PROVIDER to 'openai', 'voyage', or another supported provider");
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
 
             // Create embedding service from environment
             let service = match EmbeddingService::from_env().await {
