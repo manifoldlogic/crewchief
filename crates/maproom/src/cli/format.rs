@@ -133,6 +133,27 @@ fn sanitize_newlines(text: &str) -> String {
         .replace('\r', " ")
 }
 
+/// Format a structured agent error line.
+///
+/// Produces: `ERROR | type=<error_type> | message=<msg> | suggestion=<suggestion>`
+///
+/// Pipe characters in message and suggestion are replaced with dashes.
+/// Newlines are replaced with spaces.
+/// error_type is not sanitized (controlled values only).
+pub fn format_agent_error(error_type: &str, message: &str, suggestion: &str) -> String {
+    // Sanitize message: pipes first, then newlines
+    let sanitized_message = sanitize_newlines(&message.replace('|', "-"));
+
+    // Sanitize suggestion: pipes first, then newlines
+    let sanitized_suggestion = sanitize_newlines(&suggestion.replace('|', "-"));
+
+    // Format output line with sanitized values
+    format!(
+        "ERROR | type={} | message={} | suggestion={}",
+        error_type, sanitized_message, sanitized_suggestion
+    )
+}
+
 #[cfg(test)]
 mod tests {
     // NOTE(AFM-02): Agent format consistency verified - format_hits_agent() already
@@ -847,5 +868,131 @@ mod tests {
         assert!(hit_json["file_path"].is_string());
         assert_eq!(hit_json["file_relpath"], "");
         assert_eq!(hit_json["file_path"], "");
+    }
+
+    // ---------------------------------------------------------------
+    // format_agent_error() tests per AFM-04.1001
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_format_agent_error_basic() {
+        let output = format_agent_error(
+            "database_error",
+            "Failed to connect to database",
+            "Check database connection settings",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=database_error | message=Failed to connect to database | suggestion=Check database connection settings"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_pipe_sanitization() {
+        let output = format_agent_error(
+            "parse_error",
+            "Failed to parse config | invalid syntax",
+            "Fix the | characters in config",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=parse_error | message=Failed to parse config - invalid syntax | suggestion=Fix the - characters in config"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_multiple_consecutive_pipes() {
+        let output = format_agent_error(
+            "validation_error",
+            "Field validation failed||missing required field",
+            "Provide||check the field",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=validation_error | message=Field validation failed--missing required field | suggestion=Provide--check the field"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_newline_sanitization() {
+        let output = format_agent_error(
+            "runtime_error",
+            "Error occurred\nLine two\r\nLine three\rLine four",
+            "Try restarting\nCheck logs\r\nVerify config\rContact support",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=runtime_error | message=Error occurred Line two Line three Line four | suggestion=Try restarting Check logs Verify config Contact support"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_empty_message() {
+        let output = format_agent_error("unknown_error", "", "Check system logs");
+        assert_eq!(
+            output,
+            "ERROR | type=unknown_error | message= | suggestion=Check system logs"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_empty_suggestion() {
+        let output = format_agent_error("timeout_error", "Request timed out", "");
+        assert_eq!(
+            output,
+            "ERROR | type=timeout_error | message=Request timed out | suggestion="
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_unicode() {
+        let output = format_agent_error(
+            "encoding_error",
+            "Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc}",
+            "Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=encoding_error | message=Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc} | suggestion=Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_long_message() {
+        // Create a message over 1000 characters
+        let long_message = "Error: ".to_string() + &"x".repeat(1200);
+        assert!(long_message.len() > 1000);
+
+        let output = format_agent_error("overflow_error", &long_message, "Reduce input size");
+
+        // Verify the full message appears in output (no truncation)
+        assert!(output.contains(&long_message));
+        // Verify output length is at least as long as the message
+        assert!(output.len() >= long_message.len());
+    }
+
+    #[test]
+    fn test_format_agent_error_format_regex() {
+        let output = format_agent_error("test_error", "Test message", "Test suggestion");
+
+        // Verify output matches expected regex pattern
+        let re = regex::Regex::new(r"^ERROR \| type=.+ \| message=.+ \| suggestion=.+$").unwrap();
+        assert!(
+            re.is_match(&output),
+            "Output does not match expected pattern: {}",
+            output
+        );
+
+        // Empty fields produce valid format but don't match the .+ regex (which requires 1+ chars).
+        // That's correct — the regex validates non-empty output. Empty fields are tested separately.
+        let output_empty = format_agent_error("test_error", "", "");
+        let re_empty =
+            regex::Regex::new(r"^ERROR \| type=.+ \| message=.* \| suggestion=.*$").unwrap();
+        assert!(
+            re_empty.is_match(&output_empty),
+            "Output with empty fields does not match relaxed pattern: {}",
+            output_empty
+        );
+    }
     }
 }
