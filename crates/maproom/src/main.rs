@@ -1720,7 +1720,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Generating embedding for query: {}", query);
             let embedding_service = EmbeddingService::from_env()
                 .await
-                .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
+                .context("Failed to create embedding service")?;
 
             let query_embedding = embedding_service
                 .embed_text(&query)
@@ -1911,7 +1911,7 @@ async fn main() -> anyhow::Result<()> {
             // Create embedding service from environment
             let service = EmbeddingService::from_env()
                 .await
-                .context("Failed to create embedding service. Ensure OPENAI_API_KEY is set.")?;
+                .context("Failed to create embedding service")?;
 
             // Configure pipeline
             let config = PipelineConfig {
