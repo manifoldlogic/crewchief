@@ -15,14 +15,21 @@ use clap::ValueEnum;
 use crate::context::types::ContextBundle;
 use crate::db;
 
-/// Output format for search results.
+/// Output format for search and context results.
 ///
-/// Controls how search results are rendered to stdout.
+/// Controls how search/context results are rendered to stdout.
 /// Used as a clap `ValueEnum` for the `--format` CLI flag.
 ///
 /// - **Json**: Full structured JSON output, backward compatible with existing tooling.
 /// - **Agent**: Compact one-line-per-result output optimized for LLM agents.
 ///   Implicitly enables preview (default 120 chars) to keep output token-efficient.
+///
+/// NOTE(AFM-03): For the `context` command, the default was changed from human-readable
+/// output (via `format_context_bundle()`) to Json. The previous `--json` bool flag
+/// defaulted to false, producing human-readable output. All programmatic consumers
+/// (daemon, MCP server, VSCode extension) use JSON-RPC and are unaffected. The old
+/// human-readable format is preserved in `format_context_bundle()` but no longer
+/// reachable via CLI flags; use `--format agent` for compact interactive output.
 #[derive(Clone, Debug, PartialEq, ValueEnum)]
 pub enum OutputFormat {
     /// JSON output (default, backward compatible)

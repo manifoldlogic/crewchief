@@ -290,11 +290,20 @@ enum Commands {
         #[arg(long, default_value_t = 2)]
         max_depth: i32,
 
-        /// Output format: json (default) or agent (compact)
+        /// Output format: json (default) or agent (compact).
+        ///
+        /// NOTE(AFM-03): Default changed from human-readable to Json. The previous
+        /// `--json` bool flag (default false) produced human-readable output by default
+        /// via `format_context_bundle()`. This was replaced with `--format` enum
+        /// defaulting to Json to align with daemon/MCP usage (all programmatic consumers
+        /// already use JSON via JSON-RPC). Use `--format agent` for compact CLI output.
+        /// No external consumers (daemon, MCP server, VSCode extension) are affected
+        /// because they communicate via the daemon's JSON-RPC interface, not the CLI.
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
 
         /// DEPRECATED: Use --format json instead. Hidden from help.
+        /// Retained for backward compatibility with existing scripts.
         #[arg(long, hide = true)]
         json: bool,
     },
