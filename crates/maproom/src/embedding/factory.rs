@@ -978,6 +978,10 @@ mod tests {
             "Expected error when GOOGLE_APPLICATION_CREDENTIALS is missing"
         );
         if let Err(err) = result {
+            // After commit 52991e99, when GOOGLE_APPLICATION_CREDENTIALS is not set,
+            // the factory falls back to ADC (Application Default Credentials) via
+            // GoogleProvider::from_adc(). When ADC also fails (no gcloud login, no
+            // metadata server), we get MissingConfig — credentials are genuinely missing.
             assert!(
                 matches!(err, EmbeddingError::Config(ConfigError::MissingConfig(_))),
                 "Expected MissingConfig error, got: {:?}",
