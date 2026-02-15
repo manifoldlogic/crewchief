@@ -932,7 +932,8 @@ mod tests {
     }
 
     #[test]
-    fn test_context_agent_mixed_items() {
+    fn test_context_agent_multi_item() {
+        // primary + 3 supporting items
         let mut bundle = ContextBundle::new();
         bundle.add_item(make_context_item(
             "src/auth.rs",
@@ -953,6 +954,15 @@ mod tests {
             80,
         ));
         bundle.add_item(make_context_item(
+            "src/callee.rs",
+            20,
+            40,
+            "callee",
+            "Called by authenticate()",
+            "fn verify_token() {}",
+            90,
+        ));
+        bundle.add_item(make_context_item(
             "tests/auth_test.rs",
             1,
             25,
@@ -965,11 +975,11 @@ mod tests {
         let output = format_context_agent(&bundle, 555, 6000);
         let lines: Vec<&str> = output.lines().collect();
 
-        assert_eq!(lines.len(), 4);
-        // Header: total tokens = 150 + 80 + 100 = 330
+        assert_eq!(lines.len(), 5); // header + 4 items
+                                    // Header: total tokens = 150 + 80 + 90 + 100 = 420
         assert_eq!(
             lines[0],
-            "CONTEXT chunk_id=555 | tokens=330/6000 | items=3 | truncated=no"
+            "CONTEXT chunk_id=555 | tokens=420/6000 | items=4 | truncated=no"
         );
         // Primary has preview
         assert!(lines[1].starts_with("primary | src/auth.rs:10-30 | 150 | Target chunk | "));
@@ -980,12 +990,16 @@ mod tests {
         );
         assert_eq!(
             lines[3],
+            "callee | src/callee.rs:20-40 | 90 | Called by authenticate()"
+        );
+        assert_eq!(
+            lines[4],
             "test | tests/auth_test.rs:1-25 | 100 | Tests authenticate()"
         );
     }
 
     #[test]
-    fn test_context_agent_truncated_flag() {
+    fn test_context_agent_truncated_bundle() {
         let mut bundle = ContextBundle::new();
         bundle.truncated = true;
         bundle.add_item(make_context_item(
@@ -1009,7 +1023,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_agent_preview_capped_at_200_chars() {
+    fn test_preview_length_cap() {
         // Create content with lines that join to more than 200 chars
         let long_line = "x".repeat(250);
         let content = format!("{}\nsecond line\nthird line", long_line);
@@ -1042,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_agent_preview_three_lines_only() {
+    fn test_preview_first_three_lines() {
         let content = "line1\nline2\nline3\nline4\nline5";
         let mut bundle = ContextBundle::new();
         bundle.add_item(make_context_item(
@@ -1071,7 +1085,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_agent_empty_content_preview() {
+    fn test_context_agent_empty_content() {
         let mut bundle = ContextBundle::new();
         bundle.add_item(make_context_item(
             "src/empty.rs",
@@ -1091,7 +1105,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_agent_multiple_primaries_fr8() {
+    fn test_context_agent_multiple_primaries() {
         // FR-8: Multiple primary chunks all get previews
         let mut bundle = ContextBundle::new();
         bundle.add_item(make_context_item(
@@ -1127,7 +1141,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_agent_unicode_preview_cap() {
+    fn test_context_agent_unicode_content() {
         // Ensure unicode chars are not split when capping at 200 characters
         // Each CJK char is 1 char but 3 bytes in UTF-8
         let unicode_content = "\u{4e16}\u{754c}".repeat(150); // 300 CJK chars
@@ -1193,6 +1207,300 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         let segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
         assert_eq!(segments[4], "fn one_liner() {}");
+    }
+
+    #[test]
+    fn test_context_agent_all_roles() {
+        // Test every known role type: primary, caller, callee, test, doc, config, hook, jsx_parent, jsx_child
+        let mut bundle = ContextBundle::new();
+        let roles = [
+            "primary",
+            "caller",
+            "callee",
+            "test",
+            "doc",
+            "config",
+            "hook",
+            "jsx_parent",
+            "jsx_child",
+        ];
+        for (i, role) in roles.iter().enumerate() {
+            bundle.add_item(make_context_item(
+                &format!("src/{}.rs", role),
+                (i as i32) + 1,
+                (i as i32) + 10,
+                role,
+                &format!("Role: {}", role),
+                &format!("fn {}() {{}}", role),
+                50,
+            ));
+        }
+
+        let output = format_context_agent(&bundle, 42, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Header + 9 items = 10 lines
+        assert_eq!(lines.len(), 10);
+        assert!(lines[0].contains("items=9"));
+        // Verify each role appears in the output
+        for role in &roles {
+            assert!(
+                output.contains(&format!("{} | src/{}.rs:", role, role)),
+                "Missing role: {}",
+                role
+            );
+        }
+        // Only primary should have content preview (5 segments)
+        let primary_segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        assert_eq!(primary_segments.len(), 5, "Primary should have preview");
+        // Non-primary items should have 4 segments
+        for line in &lines[2..] {
+            let segments: Vec<&str> = line.splitn(5, " | ").collect();
+            assert_eq!(
+                segments.len(),
+                4,
+                "Non-primary should have no preview: {}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_context_agent_header_format() {
+        // Validate exact header line structure
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/main.rs",
+            1,
+            50,
+            "primary",
+            "Target",
+            "fn main() {}",
+            200,
+        ));
+        bundle.add_item(make_context_item(
+            "src/lib.rs",
+            1,
+            10,
+            "caller",
+            "Calls main",
+            "use main;",
+            50,
+        ));
+
+        let output = format_context_agent(&bundle, 99999, 8000);
+        let header = output.lines().next().unwrap();
+
+        // Verify exact header format
+        assert_eq!(
+            header,
+            "CONTEXT chunk_id=99999 | tokens=250/8000 | items=2 | truncated=no"
+        );
+
+        // Verify header components are pipe-delimited
+        let segments: Vec<&str> = header.split(" | ").collect();
+        assert_eq!(segments.len(), 4);
+        assert!(segments[0].starts_with("CONTEXT chunk_id="));
+        assert!(segments[1].starts_with("tokens="));
+        assert!(segments[2].starts_with("items="));
+        assert!(segments[3].starts_with("truncated="));
+    }
+
+    #[test]
+    fn test_context_agent_large_budget() {
+        // Large numbers formatted correctly
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/big.rs",
+            1,
+            10000,
+            "primary",
+            "Huge file",
+            "fn big() {}",
+            999999,
+        ));
+
+        let output = format_context_agent(&bundle, 1000000, 1000000);
+        let header = output.lines().next().unwrap();
+        assert_eq!(
+            header,
+            "CONTEXT chunk_id=1000000 | tokens=999999/1000000 | items=1 | truncated=no"
+        );
+    }
+
+    #[test]
+    fn test_context_agent_unicode_path() {
+        // Multi-byte unicode characters in file paths
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/\u{65e5}\u{672c}\u{8a9e}.rs",
+            1,
+            10,
+            "primary",
+            "Japanese path",
+            "fn greet() {}",
+            30,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[1].contains("src/\u{65e5}\u{672c}\u{8a9e}.rs:1-10"));
+    }
+
+    #[test]
+    fn test_context_agent_empty_reason() {
+        // Empty reason string
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/noreason.rs",
+            1,
+            5,
+            "caller",
+            "",
+            "fn call() {}",
+            20,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        // The reason field should be empty but the format still works
+        assert_eq!(lines[1], "caller | src/noreason.rs:1-5 | 20 | ");
+    }
+
+    #[test]
+    fn test_preview_newline_sanitization() {
+        // All newline types: \n, \r\n, \r should be replaced with spaces
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/newlines.rs",
+            1,
+            5,
+            "primary",
+            "Newline test",
+            "line_unix\nline_windows\r\nline_mac\rline_end",
+            40,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        let preview = segments[4];
+
+        // All newline types should be replaced with spaces
+        assert!(!preview.contains('\n'));
+        assert!(!preview.contains('\r'));
+        assert_eq!(preview, "line_unix line_windows line_mac line_end");
+    }
+
+    #[test]
+    fn test_preview_exact_200_char_boundary() {
+        // Create content that results in exactly 200 characters after sanitization
+        // Use a string of exactly 200 'a' characters on one line
+        let exact_200 = "a".repeat(200);
+        let content = format!("{}\nextra line", exact_200);
+
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/boundary.rs",
+            1,
+            5,
+            "primary",
+            "Boundary test",
+            &content,
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+        let segments: Vec<&str> = lines[1].splitn(5, " | ").collect();
+        let preview = segments[4];
+
+        // After joining first 3 lines: "aaa...aaa extra line" (200 + 1 space + 10 = 211 chars)
+        // Should be capped at exactly 200 chars
+        assert_eq!(
+            preview.chars().count(),
+            200,
+            "Preview should be exactly 200 chars at the boundary, got {}",
+            preview.chars().count()
+        );
+    }
+
+    #[test]
+    fn test_preview_only_for_primary() {
+        // Non-primary items should never have content preview
+        let mut bundle = ContextBundle::new();
+        let non_primary_roles = [
+            "caller",
+            "callee",
+            "test",
+            "doc",
+            "config",
+            "hook",
+            "jsx_parent",
+            "jsx_child",
+        ];
+        for role in &non_primary_roles {
+            bundle.add_item(make_context_item(
+                &format!("src/{}.rs", role),
+                1,
+                10,
+                role,
+                &format!("{} item", role),
+                "fn content_that_should_not_appear() {}",
+                50,
+            ));
+        }
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        // The actual content should not appear in output for non-primary items
+        assert!(
+            !output.contains("content_that_should_not_appear"),
+            "Non-primary items should not include content preview"
+        );
+        // Each non-primary line should have exactly 4 pipe-delimited segments
+        for line in output.lines().skip(1) {
+            let segments: Vec<&str> = line.splitn(5, " | ").collect();
+            assert_eq!(
+                segments.len(),
+                4,
+                "Non-primary item should have 4 segments: {}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_context_agent_no_primary() {
+        // Bundle with no primary items - all items are supporting roles
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/caller.rs",
+            1,
+            10,
+            "caller",
+            "Caller item",
+            "fn call() {}",
+            50,
+        ));
+        bundle.add_item(make_context_item(
+            "tests/test.rs",
+            1,
+            5,
+            "test",
+            "Test item",
+            "#[test] fn t() {}",
+            30,
+        ));
+
+        let output = format_context_agent(&bundle, 1, 6000);
+        let lines: Vec<&str> = output.lines().collect();
+
+        assert_eq!(lines.len(), 3); // header + 2 items
+        assert!(lines[0].contains("items=2"));
+        // No item should have a preview (no primary)
+        assert!(!output.contains("fn call()"));
+        assert!(!output.contains("#[test] fn t()"));
     }
 
     // ---------------------------------------------------------------

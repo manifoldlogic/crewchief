@@ -2332,7 +2332,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_command_parsing_format_agent() {
+    fn test_context_format_agent() {
         let cli = Cli::parse_from(&[
             "maproom",
             "context",
@@ -2350,7 +2350,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_command_parsing_format_json() {
+    fn test_context_format_json() {
         let cli = Cli::parse_from(&[
             "maproom",
             "context",
@@ -2368,7 +2368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_command_default_format_is_json() {
+    fn test_context_format_default_is_json() {
         // No --format flag should default to OutputFormat::Json
         let cli = Cli::parse_from(&["maproom", "context", "--chunk-id", "100"]);
         match cli.command {
@@ -2380,7 +2380,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_command_json_backward_compat() {
+    fn test_context_json_flag_backward_compat() {
         // --json flag should still parse without error (backward compatibility)
         let cli = Cli::parse_from(&["maproom", "context", "--chunk-id", "100", "--json"]);
         match cli.command {
