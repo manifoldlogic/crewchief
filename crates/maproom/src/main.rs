@@ -1724,18 +1724,45 @@ async fn main() -> anyhow::Result<()> {
                 (preview, preview_length.unwrap_or(200))
             };
 
-            let store = db::connect().await?;
+            // Connect to database with error handling
+            let store = match db::connect().await {
+                Ok(s) => s,
+                Err(e) if format == OutputFormat::Agent => {
+                    let (error_type, suggestion, exit_code) = classify_error(&e);
+                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
+                }
+                Err(e) => return Err(e),
+            };
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
-            let embedding_service = EmbeddingService::from_env()
-                .await
-                .context("Failed to create embedding service")?;
+            let embedding_service = match EmbeddingService::from_env().await {
+                Ok(s) => s,
+                Err(e) if format == OutputFormat::Agent => {
+                    let e: anyhow::Error = e.into();
+                    let e = e.context("Failed to create embedding service");
+                    let (error_type, suggestion, exit_code) = classify_error(&e);
+                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
+                }
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    return Err(e.context("Failed to create embedding service"));
+                }
+            };
 
-            let query_embedding = embedding_service
-                .embed_text(&query)
-                .await
-                .context("Failed to generate query embedding")?;
+            let query_embedding = match embedding_service.embed_text(&query).await {
+                Ok(emb) => emb,
+                Err(e) if format == OutputFormat::Agent => {
+                    let e: anyhow::Error = e.into();
+                    let e = e.context("Failed to generate query embedding");
+                    let (error_type, suggestion, exit_code) = classify_error(&e);
+                    handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
+                }
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    return Err(e.context("Failed to generate query embedding"));
+                }
+            };
 
             tracing::info!(
                 "Executing vector search (k={}, threshold={:?})",
@@ -1764,9 +1791,30 @@ async fn main() -> anyhow::Result<()> {
                         || err_str.contains("vector")
                         || err_str.contains("not available")
                     {
-                        eprintln!("Vector search unavailable: {}", e);
-                        eprintln!("Tip: Use 'search' command for full-text search instead");
-                        std::process::exit(1);
+                        let error_msg = format!("Vector search unavailable: {}", e);
+                        let suggestion = "Use search command for full-text search instead";
+
+                        if format == OutputFormat::Agent {
+                            // Human-readable to stderr
+                            eprintln!("{}", error_msg);
+                            eprintln!("Tip: {}", suggestion);
+                            // Structured to stdout
+                            println!(
+                                "{}",
+                                format_agent_error("config_error", &error_msg, suggestion)
+                            );
+                        } else {
+                            // Existing behavior for default format
+                            eprintln!("{}", error_msg);
+                            eprintln!("Tip: {}", suggestion);
+                        }
+                        std::process::exit(2); // EXIT CODE 2 (config error, not runtime)
+                    }
+
+                    // Other database errors
+                    if format == OutputFormat::Agent {
+                        let (error_type, suggestion, exit_code) = classify_error(&e);
+                        handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
                     }
                     return Err(e);
                 }
