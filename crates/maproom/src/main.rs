@@ -1,4 +1,5 @@
 use std::fmt::Write as _;
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
@@ -2262,6 +2263,11 @@ fn handle_agent_error(
     let sanitized = sanitize_newlines(&error_display);
     eprintln!("Error: {}", sanitized);
 
+    // Flush both streams before exit to prevent buffered output loss
+    // (process::exit bypasses normal cleanup/Drop implementations)
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+
     // Exit with appropriate code
     std::process::exit(exit_code)
 }
@@ -2305,7 +2311,7 @@ fn handle_agent_error(
 /// assert_eq!(exit_code, 2);
 /// ```
 fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
-    use crewchief_maproom::embedding::error::EmbeddingError;
+    use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
     use crewchief_maproom::search::errors::SearchErrorDetails;
     use crewchief_maproom::search::pipeline::PipelineError;
 
@@ -2350,6 +2356,35 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
     if let Some(embedding_error) = error.downcast_ref::<EmbeddingError>() {
         // Use the embedding module's error handling
         let error_str = embedding_error.to_string();
+
+        // Check for authentication/authorization errors (401/403) -> config error (exit 2)
+        if let EmbeddingError::Api(api_error) = embedding_error {
+            if matches!(
+                api_error,
+                ApiError::Authentication(_) | ApiError::QuotaExceeded(_)
+            ) {
+                return (
+                    "config_error".to_string(),
+                    "Invalid or expired API key. Check your API key configuration.".to_string(),
+                    2,
+                );
+            }
+
+            // Heuristic: check error message for auth-related patterns (e.g., 403 Forbidden)
+            let api_error_lower = api_error.to_string().to_lowercase();
+            if api_error_lower.contains("401")
+                || api_error_lower.contains("403")
+                || api_error_lower.contains("unauthorized")
+                || api_error_lower.contains("forbidden")
+                || api_error_lower.contains("authentication")
+            {
+                return (
+                    "config_error".to_string(),
+                    "Invalid or expired API key. Check your API key configuration.".to_string(),
+                    2,
+                );
+            }
+        }
 
         // Check if it's a config error (missing API key, etc.)
         if matches!(
@@ -3538,6 +3573,116 @@ mod tests {
             "Unrecognized errors should fall back to unknown type"
         );
         assert_eq!(exit_code, 1);
+    }
+
+    // ==================== Auth Error Classification Tests (AFM-04.5001) ====================
+
+    /// Test: 401 Authentication error produces exit code 2 (config error)
+    #[test]
+    fn test_classify_auth_error_exit_code_2() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let auth_error = ApiError::Authentication("Invalid API key".to_string());
+        let embedding_error = EmbeddingError::Api(auth_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 2,
+            "Auth errors should be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+        assert!(
+            suggestion.contains("API key"),
+            "Suggestion should mention API key, got: {}",
+            suggestion
+        );
+    }
+
+    /// Test: QuotaExceeded error produces exit code 2 (config error)
+    #[test]
+    fn test_classify_quota_exceeded_exit_code_2() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let quota_error = ApiError::QuotaExceeded("Rate limit exceeded for account".to_string());
+        let embedding_error = EmbeddingError::Api(quota_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 2,
+            "Quota exceeded errors should be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+        assert!(
+            suggestion.contains("API key"),
+            "Suggestion should mention API key, got: {}",
+            suggestion
+        );
+    }
+
+    /// Test: API error with 403/forbidden in message produces exit code 2 via heuristic
+    #[test]
+    fn test_classify_forbidden_api_error_heuristic() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        // ServerError with 403 status containing "forbidden" in message
+        let forbidden_error = ApiError::ServerError {
+            status: 403,
+            message: "Forbidden: insufficient permissions".to_string(),
+        };
+        let embedding_error = EmbeddingError::Api(forbidden_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 2,
+            "403 Forbidden errors should be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+    }
+
+    /// Test: Non-auth API errors (e.g., rate limit, server error) still produce exit code 1
+    #[test]
+    fn test_classify_non_auth_api_error_exit_code_1() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let rate_limit_error = ApiError::RateLimit {
+            retry_after_ms: 5000,
+        };
+        let embedding_error = EmbeddingError::Api(rate_limit_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 1,
+            "Rate limit errors should be runtime errors (exit code 1)"
+        );
+        assert_eq!(error_type, "embedding_provider");
+    }
+
+    /// Test: Auth error with anyhow context still produces exit code 2
+    #[test]
+    fn test_classify_auth_error_with_context() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let auth_error = ApiError::Authentication("Invalid key provided".to_string());
+        let embedding_error = EmbeddingError::Api(auth_error);
+        let error: anyhow::Error = embedding_error.into();
+        let wrapped = error.context("Failed during vector search");
+
+        let (error_type, suggestion, exit_code) = classify_error(&wrapped);
+
+        assert_eq!(
+            exit_code, 2,
+            "Auth errors wrapped in context should still be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+        assert!(suggestion.contains("API key"));
     }
 
     // ==================== Integration Testing (AFM-04.4001) ====================
