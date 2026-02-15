@@ -162,11 +162,17 @@ pub fn format_context_agent(bundle: &ContextBundle, chunk_id: i64, budget: usize
 
     // Item lines
     for item in &bundle.items {
-        let location = format!("{}:{}-{}", item.relpath, item.range.start, item.range.end);
+        // Sanitize fields that could corrupt the pipe-delimited format:
+        // - Pipe chars in reason/relpath would create extra segments
+        // - Null bytes in content could corrupt text-based output
+        let safe_reason = item.reason.replace('|', " ");
+        let safe_relpath = item.relpath.replace('|', " ");
+        let location = format!("{}:{}-{}", safe_relpath, item.range.start, item.range.end);
 
         if item.role == "primary" {
             // Content preview: first 3 lines, sanitized, capped at 200 chars
-            let preview_lines: Vec<&str> = item.content.lines().take(3).collect();
+            let safe_content = item.content.replace('\0', "");
+            let preview_lines: Vec<&str> = safe_content.lines().take(3).collect();
             let preview_joined = preview_lines.join(" ");
             let preview_sanitized = sanitize_newlines(&preview_joined);
             let preview_capped: String = preview_sanitized.chars().take(200).collect();
@@ -174,13 +180,13 @@ pub fn format_context_agent(bundle: &ContextBundle, chunk_id: i64, budget: usize
             let _ = writeln!(
                 output,
                 "{} | {} | {} | {} | {}",
-                item.role, location, item.tokens, item.reason, preview_capped
+                item.role, location, item.tokens, safe_reason, preview_capped
             );
         } else {
             let _ = writeln!(
                 output,
                 "{} | {} | {} | {}",
-                item.role, location, item.tokens, item.reason
+                item.role, location, item.tokens, safe_reason
             );
         }
     }
@@ -1717,5 +1723,121 @@ mod tests {
         assert!(hit_json["file_path"].is_string());
         assert_eq!(hit_json["file_relpath"], "");
         assert_eq!(hit_json["file_path"], "");
+    }
+
+    // ---------------------------------------------------------------
+    // Defensive edge case tests per AFM-03.4002
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_agent_format_budget_zero() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/main.rs",
+            1,
+            10,
+            "primary",
+            "Target",
+            "fn main() {\n    println!(\"test\");\n}",
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 1001, 0);
+
+        // Verify output is valid (header + item line)
+        assert!(output.starts_with("CONTEXT chunk_id=1001 | tokens=100/0"));
+        assert!(output.contains("primary | src/main.rs:1-10"));
+
+        // No panic, no corruption
+        assert!(output.lines().count() >= 2);
+    }
+
+    #[test]
+    fn test_agent_format_null_bytes_in_content() {
+        let content_with_nulls = "fn test() {\n    let x\0 = 5;\n    println!(\"test\0\");\n}";
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/test.rs",
+            1,
+            5,
+            "primary",
+            "Target",
+            content_with_nulls,
+            50,
+        ));
+
+        let output = format_context_agent(&bundle, 1002, 1000);
+
+        // Verify output doesn't contain null bytes (replaced or stripped)
+        assert!(!output.contains('\0'), "Output contains null bytes");
+
+        // Verify output is still parseable
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2); // Header + 1 item
+    }
+
+    #[test]
+    fn test_agent_format_pipe_in_reason() {
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/core.rs",
+            10,
+            20,
+            "primary",
+            "Reason with | pipe character",
+            "fn process() {}",
+            100,
+        ));
+
+        let output = format_context_agent(&bundle, 1003, 1000);
+
+        // Verify output handles pipe in reason field
+        assert!(output.contains("src/core.rs:10-20"));
+
+        // Pipe in reason must be sanitized so line remains parseable
+        // After sanitization, reason should not contain raw pipe
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+
+        // Verify the reason field does not contain a raw pipe character
+        // by checking that the primary line has exactly 5 pipe-delimited segments
+        let segments: Vec<&str> = lines[1].splitn(6, " | ").collect();
+        assert_eq!(
+            segments.len(),
+            5,
+            "Primary line should have exactly 5 segments (role, location, tokens, reason, preview), got {}",
+            segments.len()
+        );
+    }
+
+    #[test]
+    fn test_agent_format_pipe_in_relpath() {
+        // Edge case: file path contains pipe (unlikely but possible on some filesystems)
+        let mut bundle = ContextBundle::new();
+        bundle.add_item(make_context_item(
+            "src/weird|name.rs",
+            5,
+            15,
+            "primary",
+            "Target",
+            "fn test() {}",
+            80,
+        ));
+
+        let output = format_context_agent(&bundle, 1004, 1000);
+
+        // Pipe in relpath must be sanitized so line remains parseable
+        // The sanitized path should not contain a raw pipe
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 2);
+
+        // Verify the primary line has exactly 5 pipe-delimited segments
+        let segments: Vec<&str> = lines[1].splitn(6, " | ").collect();
+        assert_eq!(
+            segments.len(),
+            5,
+            "Primary line should have exactly 5 segments even with pipe in relpath, got {}",
+            segments.len()
+        );
     }
 }
