@@ -952,6 +952,51 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn test_google_provider_error_does_not_mention_openai() {
+        // Clean up all environment variables
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        env::remove_var("MAPROOM_EMBEDDING_API_ENDPOINT");
+        env::remove_var("OPENAI_API_KEY");
+        env::remove_var("MAPROOM_OPENAI_API_KEY");
+        env::remove_var("GOOGLE_PROJECT_ID");
+        env::remove_var("MAPROOM_GOOGLE_PROJECT_ID");
+        env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+        env::remove_var("MAPROOM_GOOGLE_APPLICATION_CREDENTIALS");
+
+        // Configure Google provider without project ID
+        env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
+
+        let result = create_provider_from_env().await;
+
+        // Clean up
+        env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+
+        assert!(
+            result.is_err(),
+            "Expected error when GOOGLE_PROJECT_ID is missing"
+        );
+
+        if let Err(err) = result {
+            let err_msg = err.to_string();
+
+            // Verify Google-specific error surfaces
+            assert!(
+                err_msg.contains("GOOGLE_PROJECT_ID") || err_msg.contains("Google project ID"),
+                "Error should mention Google project ID, got: {}",
+                err_msg
+            );
+
+            // Verify OpenAI is NOT mentioned in the error
+            assert!(
+                !err_msg.contains("OPENAI_API_KEY"),
+                "Google provider error must NOT mention OPENAI_API_KEY, got: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn test_create_provider_google_missing_credentials() {
         // Clean up all environment variables first (including MAPROOM_ prefixed variants)
         env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
