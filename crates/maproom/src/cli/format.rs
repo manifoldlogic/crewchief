@@ -14,6 +14,22 @@ use clap::ValueEnum;
 
 use crate::db;
 
+/// Metadata about a search operation, passed to format functions.
+///
+/// Carries query context from command handlers to format functions so that
+/// output can include information about result completeness.
+#[derive(Debug, Clone)]
+pub struct SearchMetadata {
+    /// The original search query string.
+    pub query: String,
+    /// Search mode: `"fts"` or `"vector"`.
+    pub mode: String,
+    /// Number of hits returned in this response.
+    pub hits: usize,
+    /// Estimated total number of matches in the database.
+    pub total_estimate: usize,
+}
+
 /// Output format for search results.
 ///
 /// Controls how search results are rendered to stdout.
@@ -32,24 +48,29 @@ pub enum OutputFormat {
 
 /// Format search hits as compact agent-friendly output.
 ///
-/// Each result is a single line with pipe-delimited segments:
+/// Output begins with a metadata header line:
+///   `SEARCH query="<escaped_query>" | hits=N | total_estimate=M | mode=...`
+///
+/// Followed by one line per result with pipe-delimited segments:
 ///   `<file>:<start_line> | <kind> [<symbol>] | <score> | <preview>`
 ///
-/// - Empty results produce an empty string.
+/// - The header line is always present, even when hits are empty.
 /// - Missing `symbol_name` is omitted (shows just the kind, not "null").
 /// - Missing `preview` shows a `-` placeholder.
 /// - Newlines in preview text are replaced with spaces.
 /// - Score is formatted to exactly 2 decimal places.
-pub fn format_hits_agent(hits: &[db::SearchHit]) -> String {
-    if hits.is_empty() {
-        return String::new();
-    }
-
+pub fn format_hits_agent(hits: &[db::SearchHit], meta: &SearchMetadata) -> String {
     let mut output = String::new();
-    for (i, hit) in hits.iter().enumerate() {
-        if i > 0 {
-            output.push('\n');
-        }
+
+    // Header line (always present, even for 0 hits)
+    let escaped_query = meta.query.replace('"', "\\\"");
+    let _ = write!(
+        output,
+        "SEARCH query=\"{}\" | hits={} | total_estimate={} | mode={}",
+        escaped_query, meta.hits, meta.total_estimate, meta.mode
+    );
+    for hit in hits.iter() {
+        output.push('\n');
 
         // Segment 1: file:line
         let _ = write!(output, "{}:{}", hit.file_relpath, hit.start_line);
@@ -79,12 +100,20 @@ pub fn format_hits_agent(hits: &[db::SearchHit]) -> String {
 
 /// Format search hits as JSON for the Search command.
 ///
-/// Produces: `{"hits": [...]}`
+/// Produces: `{"hits": [...], "total_matches": M, "query": "...", "mode": "..."}`
 ///
-/// This is a direct extraction of the existing Search command JSON output
-/// logic to preserve exact backward compatibility.
-pub fn format_hits_json_search(hits: &[db::SearchHit]) -> Result<String, serde_json::Error> {
-    serde_json::to_string_pretty(&serde_json::json!({"hits": hits}))
+/// The `hits` array structure is unchanged from the original format.
+/// Metadata fields are added at the top level alongside the existing `hits` key.
+pub fn format_hits_json_search(
+    hits: &[db::SearchHit],
+    meta: &SearchMetadata,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "hits": hits,
+        "total_matches": meta.total_estimate,
+        "query": meta.query,
+        "mode": meta.mode,
+    }))
 }
 
 /// Format search hits as JSON for the VectorSearch command.
@@ -216,6 +245,26 @@ mod tests {
         }
     }
 
+    /// Default test metadata to minimize test churn when updating call sites.
+    fn make_test_metadata() -> SearchMetadata {
+        SearchMetadata {
+            query: "test".to_string(),
+            mode: "fts".to_string(),
+            hits: 5,
+            total_estimate: 10,
+        }
+    }
+
+    /// Extract hit lines from agent format output (skipping the header line).
+    fn agent_hit_lines(output: &str) -> Vec<&str> {
+        let lines: Vec<&str> = output.lines().collect();
+        if lines.len() > 1 {
+            lines[1..].to_vec()
+        } else {
+            vec![]
+        }
+    }
+
     #[test]
     fn test_agent_format_basic() {
         let hits = vec![make_hit(
@@ -226,9 +275,12 @@ mod tests {
             0.92,
             Some("Entry point for the application"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines.len(), 1);
         assert_eq!(
-            output,
+            lines[0],
             "src/app.rs:42 | func main | 0.92 | Entry point for the application"
         );
     }
@@ -243,9 +295,11 @@ mod tests {
             0.73,
             Some("Authentication API reference"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(
-            output,
+            lines[0],
             "docs/api.md:8 | heading_2 | 0.73 | Authentication API reference"
         );
     }
@@ -260,15 +314,22 @@ mod tests {
             0.50,
             Some("Module declarations"),
         )];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "src/lib.rs:1 | module | 0.50 | Module declarations");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(
+            lines[0],
+            "src/lib.rs:1 | module | 0.50 | Module declarations"
+        );
     }
 
     #[test]
     fn test_agent_format_missing_preview() {
         let hits = vec![make_hit("src/lib.rs", 1, "func", Some("init"), 0.85, None)];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "src/lib.rs:1 | func init | 0.85 | -");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines[0], "src/lib.rs:1 | func init | 0.85 | -");
     }
 
     #[test]
@@ -281,8 +342,10 @@ mod tests {
             0.85,
             Some(""),
         )];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "src/lib.rs:1 | func init | 0.85 | -");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines[0], "src/lib.rs:1 | func init | 0.85 | -");
     }
 
     #[test]
@@ -295,9 +358,11 @@ mod tests {
             0.60,
             Some("Line one\nLine two\r\nLine three\rLine four"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(
-            output,
+            lines[0],
             "src/main.rs:10 | func run | 0.60 | Line one Line two Line three Line four"
         );
     }
@@ -305,8 +370,16 @@ mod tests {
     #[test]
     fn test_agent_format_empty_hits() {
         let hits: Vec<SearchHit> = vec![];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "");
+        let meta = SearchMetadata {
+            query: "test".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_agent(&hits, &meta);
+        // Header line is still present even with 0 hits
+        assert!(output.starts_with("SEARCH query="));
+        assert_eq!(agent_hit_lines(&output).len(), 0);
     }
 
     #[test]
@@ -329,8 +402,9 @@ mod tests {
                 Some("API reference"),
             ),
         ];
-        let output = format_hits_agent(&hits);
-        let lines: Vec<&str> = output.lines().collect();
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], "src/app.rs:42 | func main | 0.92 | Entry point");
         assert_eq!(lines[1], "docs/api.md:8 | heading_2 | 0.73 | API reference");
@@ -338,12 +412,14 @@ mod tests {
 
     #[test]
     fn test_agent_format_score_precision() {
+        let meta = make_test_metadata();
+
         let hits = vec![make_hit("a.rs", 1, "func", Some("f"), 1.0, Some("text"))];
-        let output = format_hits_agent(&hits);
+        let output = format_hits_agent(&hits, &meta);
         assert!(output.contains("| 1.00 |"));
 
         let hits = vec![make_hit("a.rs", 1, "func", Some("f"), 0.1, Some("text"))];
-        let output = format_hits_agent(&hits);
+        let output = format_hits_agent(&hits, &meta);
         assert!(output.contains("| 0.10 |"));
 
         let hits = vec![make_hit(
@@ -354,7 +430,7 @@ mod tests {
             0.123456,
             Some("text"),
         )];
-        let output = format_hits_agent(&hits);
+        let output = format_hits_agent(&hits, &meta);
         assert!(output.contains("| 0.12 |"));
     }
 
@@ -368,7 +444,8 @@ mod tests {
             0.92,
             Some("Entry point"),
         )];
-        let output = format_hits_json_search(&hits).unwrap();
+        let meta = make_test_metadata();
+        let output = format_hits_json_search(&hits, &meta).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert!(parsed["hits"].is_array());
         assert_eq!(parsed["hits"].as_array().unwrap().len(), 1);
@@ -455,9 +532,11 @@ mod tests {
             0.92,
             Some("Entry point for the application"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(
-            output,
+            lines[0],
             "src/app.rs:42 | func main | 0.92 | Entry point for the application"
         );
     }
@@ -472,13 +551,17 @@ mod tests {
             0.73,
             Some("Authentication API reference"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(
-            output,
+            lines[0],
             "docs/api.md:8 | heading_2 | 0.73 | Authentication API reference"
         );
-        // Must not contain "null" anywhere
-        assert!(!output.contains("null"));
+        // Must not contain "null" in hit lines
+        for line in &lines {
+            assert!(!line.contains("null"));
+        }
     }
 
     #[test]
@@ -491,15 +574,25 @@ mod tests {
             0.85,
             None,
         )];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "src/lib.rs:1 | func init | 0.85 | -");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines[0], "src/lib.rs:1 | func init | 0.85 | -");
     }
 
     #[test]
     fn test_format_hits_agent_empty_results() {
         let hits: Vec<SearchHit> = vec![];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "");
+        let meta = SearchMetadata {
+            query: "test".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_agent(&hits, &meta);
+        // Header still present
+        assert!(output.starts_with("SEARCH query="));
+        assert_eq!(agent_hit_lines(&output).len(), 0);
     }
 
     #[test]
@@ -530,8 +623,9 @@ mod tests {
                 Some("Test case"),
             ),
         ];
-        let output = format_hits_agent(&hits);
-        let lines: Vec<&str> = output.lines().collect();
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[0], "src/app.rs:42 | func main | 0.92 | Entry point");
         assert_eq!(lines[1], "docs/api.md:8 | heading_2 | 0.73 | API reference");
@@ -539,8 +633,6 @@ mod tests {
             lines[2],
             "tests/test_app.rs:100 | func test_main | 0.55 | Test case"
         );
-        // Verify newline separators between lines
-        assert_eq!(output.matches('\n').count(), 2);
     }
 
     // --- Score precision tests ---
@@ -555,8 +647,10 @@ mod tests {
             0.9,
             Some("text"),
         )];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "a.rs:1 | func f | 0.90 | text");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines[0], "a.rs:1 | func f | 0.90 | text");
     }
 
     #[test]
@@ -569,8 +663,10 @@ mod tests {
             0.0,
             Some("text"),
         )];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "a.rs:1 | func f | 0.00 | text");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines[0], "a.rs:1 | func f | 0.00 | text");
     }
 
     #[test]
@@ -583,8 +679,10 @@ mod tests {
             17.5,
             Some("text"),
         )];
-        let output = format_hits_agent(&hits);
-        assert_eq!(output, "a.rs:1 | func f | 17.50 | text");
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert_eq!(lines[0], "a.rs:1 | func f | 17.50 | text");
     }
 
     // --- Unicode tests ---
@@ -599,10 +697,12 @@ mod tests {
             0.92,
             Some("Funci\u{00f3}n principal"),
         )];
-        let output = format_hits_agent(&hits);
-        assert!(output.contains("src/\u{00e9}dit.rs"));
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert!(lines[0].contains("src/\u{00e9}dit.rs"));
         assert_eq!(
-            output,
+            lines[0],
             "src/\u{00e9}dit.rs:42 | func main | 0.92 | Funci\u{00f3}n principal"
         );
     }
@@ -617,10 +717,12 @@ mod tests {
             0.80,
             Some("\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"),
         )];
-        let output = format_hits_agent(&hits);
-        assert!(output.contains("\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"));
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
+        assert!(lines[0].contains("\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"));
         assert_eq!(
-            output,
+            lines[0],
             "src/main.rs:1 | func greet | 0.80 | \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}\u{4e16}\u{754c}"
         );
     }
@@ -640,14 +742,17 @@ mod tests {
             0.50,
             Some("code"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         // The full path must appear in the output, no truncation
-        assert!(output.contains(&long_path));
-        assert_eq!(output, format!("{}:1 | func f | 0.50 | code", long_path));
+        assert!(lines[0].contains(&long_path));
+        assert_eq!(lines[0], format!("{}:1 | func f | 0.50 | code", long_path));
     }
 
     #[test]
     fn test_format_hits_agent_empty_symbol_name_treated_as_none() {
+        let meta = make_test_metadata();
         // Some("") should produce the same output as None
         let hits_empty = vec![make_test_hit(
             "src/lib.rs",
@@ -665,11 +770,13 @@ mod tests {
             0.50,
             Some("Module declarations"),
         )];
-        let output_empty = format_hits_agent(&hits_empty);
-        let output_none = format_hits_agent(&hits_none);
-        assert_eq!(output_empty, output_none);
+        let output_empty = format_hits_agent(&hits_empty, &meta);
+        let output_none = format_hits_agent(&hits_none, &meta);
+        let lines_empty = agent_hit_lines(&output_empty);
+        let lines_none = agent_hit_lines(&output_none);
+        assert_eq!(lines_empty[0], lines_none[0]);
         assert_eq!(
-            output_empty,
+            lines_empty[0],
             "src/lib.rs:1 | module | 0.50 | Module declarations"
         );
     }
@@ -684,13 +791,15 @@ mod tests {
             0.60,
             Some("Line one\nLine two"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(
-            output,
+            lines[0],
             "src/main.rs:10 | func run | 0.60 | Line one Line two"
         );
-        // Must be a single line (no newlines in the output for this hit)
-        assert_eq!(output.lines().count(), 1);
+        // Hit line must be a single line (no newlines)
+        assert!(!lines[0].contains('\n'));
     }
 
     #[test]
@@ -703,16 +812,16 @@ mod tests {
             0.60,
             Some("Line one\nLine two\r\nLine three\rLine four"),
         )];
-        let output = format_hits_agent(&hits);
+        let meta = make_test_metadata();
+        let output = format_hits_agent(&hits, &meta);
+        let lines = agent_hit_lines(&output);
         assert_eq!(
-            output,
+            lines[0],
             "src/main.rs:10 | func run | 0.60 | Line one Line two Line three Line four"
         );
-        // Must be a single line
-        assert_eq!(output.lines().count(), 1);
-        // Must not contain any raw newline or carriage return characters
-        assert!(!output.contains('\n'));
-        assert!(!output.contains('\r'));
+        // Hit line must not contain any raw newline or carriage return characters
+        assert!(!lines[0].contains('\n'));
+        assert!(!lines[0].contains('\r'));
     }
 
     // ---------------------------------------------------------------
@@ -721,7 +830,7 @@ mod tests {
 
     #[test]
     fn test_json_search_hits_array_structure() {
-        // Verify Search JSON has correct top-level key and hit structure
+        // Verify Search JSON has correct top-level keys and hit structure
         let hits = vec![
             make_test_hit(
                 "src/app.rs",
@@ -733,10 +842,11 @@ mod tests {
             ),
             make_test_hit("src/lib.rs", 10, "module", None, 0.75, None),
         ];
-        let output = format_hits_json_search(&hits).unwrap();
+        let meta = make_test_metadata();
+        let output = format_hits_json_search(&hits, &meta).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
-        // Top-level must have "hits" key only
+        // Top-level must have "hits" key
         assert!(parsed.is_object());
         assert!(parsed["hits"].is_array());
 
@@ -812,9 +922,15 @@ mod tests {
 
     #[test]
     fn test_json_search_empty_hits_array() {
-        // Verify empty hits produces valid JSON with empty array
+        // Verify empty hits produces valid JSON with empty array and metadata
         let hits: Vec<SearchHit> = vec![];
-        let output = format_hits_json_search(&hits).unwrap();
+        let meta = SearchMetadata {
+            query: "empty".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_json_search(&hits, &meta).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
         assert!(parsed["hits"].is_array());
@@ -902,89 +1018,266 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
+    // AFM-05.2001: SearchMetadata header and JSON envelope tests
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_agent_header_with_results() {
+        // Header with hits > 0, total_estimate > hits
+        let hits = vec![make_hit(
+            "src/app.rs",
+            42,
+            "func",
+            Some("main"),
+            0.92,
+            Some("Entry point"),
+        )];
+        let meta = SearchMetadata {
+            query: "authentication".to_string(),
+            mode: "fts".to_string(),
+            hits: 1,
+            total_estimate: 25,
+        };
+        let output = format_hits_agent(&hits, &meta);
+        let header = output.lines().next().unwrap();
+        assert_eq!(
+            header,
+            "SEARCH query=\"authentication\" | hits=1 | total_estimate=25 | mode=fts"
+        );
+        // Also verify hit line is present
+        assert_eq!(agent_hit_lines(&output).len(), 1);
+    }
+
+    #[test]
+    fn test_agent_header_without_results() {
+        // Header with hits = 0, total_estimate = 0
+        let hits: Vec<SearchHit> = vec![];
+        let meta = SearchMetadata {
+            query: "nonexistent".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_agent(&hits, &meta);
+        let header = output.lines().next().unwrap();
+        assert_eq!(
+            header,
+            "SEARCH query=\"nonexistent\" | hits=0 | total_estimate=0 | mode=fts"
+        );
+        assert_eq!(agent_hit_lines(&output).len(), 0);
+    }
+
+    #[test]
+    fn test_agent_header_query_with_double_quotes() {
+        // Query containing double quotes must be escaped
+        let hits: Vec<SearchHit> = vec![];
+        let meta = SearchMetadata {
+            query: "user \"name\" field".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_agent(&hits, &meta);
+        let header = output.lines().next().unwrap();
+        assert_eq!(
+            header,
+            "SEARCH query=\"user \\\"name\\\" field\" | hits=0 | total_estimate=0 | mode=fts"
+        );
+    }
+
+    #[test]
+    fn test_agent_header_query_with_special_characters() {
+        // Query with pipes, equals, spaces - should be passed through literally
+        let hits: Vec<SearchHit> = vec![];
+        let meta = SearchMetadata {
+            query: "key=value | pipe | another=test spaces".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_agent(&hits, &meta);
+        let header = output.lines().next().unwrap();
+        assert_eq!(
+            header,
+            "SEARCH query=\"key=value | pipe | another=test spaces\" | hits=0 | total_estimate=0 | mode=fts"
+        );
+    }
+
+    #[test]
+    fn test_agent_header_mode_fts_vs_vector() {
+        let hits: Vec<SearchHit> = vec![];
+
+        // FTS mode
+        let meta_fts = SearchMetadata {
+            query: "test".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output_fts = format_hits_agent(&hits, &meta_fts);
+        assert!(output_fts.contains("| mode=fts"));
+
+        // Vector mode
+        let meta_vector = SearchMetadata {
+            query: "test".to_string(),
+            mode: "vector".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output_vector = format_hits_agent(&hits, &meta_vector);
+        assert!(output_vector.contains("| mode=vector"));
+    }
+
+    #[test]
+    fn test_json_envelope_includes_all_metadata_fields() {
+        // JSON output must include total_matches, query, mode at top level
+        let hits = vec![make_hit(
+            "src/app.rs",
+            42,
+            "func",
+            Some("main"),
+            0.92,
+            Some("Entry point"),
+        )];
+        let meta = SearchMetadata {
+            query: "authentication".to_string(),
+            mode: "fts".to_string(),
+            hits: 1,
+            total_estimate: 50,
+        };
+        let output = format_hits_json_search(&hits, &meta).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["total_matches"], 50);
+        assert_eq!(parsed["query"], "authentication");
+        assert_eq!(parsed["mode"], "fts");
+        assert!(parsed["hits"].is_array());
+        assert_eq!(parsed["hits"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_agent_header_long_query() {
+        // Test header formatting with very long query (>1000 chars)
+        let long_query = "x".repeat(1500);
+        let meta = SearchMetadata {
+            query: long_query.clone(),
+            mode: "fts".to_string(),
+            hits: 5,
+            total_estimate: 10,
+        };
+
+        let result = format_hits_agent(&[], &meta);
+
+        // Header should still format correctly without truncation
+        assert!(result.contains(&long_query));
+        assert!(result.contains("hits=5"));
+        assert!(result.contains("total_estimate=10"));
+    }
+
+    #[test]
+    fn test_json_empty_hits_with_metadata() {
+        // JSON with empty hits still includes all metadata fields
+        let hits: Vec<SearchHit> = vec![];
+        let meta = SearchMetadata {
+            query: "nonexistent query".to_string(),
+            mode: "vector".to_string(),
+            hits: 0,
+            total_estimate: 0,
+        };
+        let output = format_hits_json_search(&hits, &meta).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["total_matches"], 0);
+        assert_eq!(parsed["query"], "nonexistent query");
+        assert_eq!(parsed["mode"], "vector");
+        assert!(parsed["hits"].is_array());
+        assert_eq!(parsed["hits"].as_array().unwrap().len(), 0);
+    }
+
+    // ---------------------------------------------------------------
     // format_agent_error() tests per AFM-04.1001
     // ---------------------------------------------------------------
 
     #[test]
     fn test_format_agent_error_basic() {
         let output = format_agent_error(
-            "database_error",
+            "database",
             "Failed to connect to database",
             "Check database connection settings",
         );
         assert_eq!(
             output,
-            "ERROR | type=database_error | message=Failed to connect to database | suggestion=Check database connection settings"
+            "ERROR | type=database | message=Failed to connect to database | suggestion=Check database connection settings"
         );
     }
 
     #[test]
     fn test_format_agent_error_pipe_sanitization() {
         let output = format_agent_error(
-            "parse_error",
+            "unknown",
             "Failed to parse config | invalid syntax",
             "Fix the | characters in config",
         );
         assert_eq!(
             output,
-            "ERROR | type=parse_error | message=Failed to parse config - invalid syntax | suggestion=Fix the - characters in config"
+            "ERROR | type=unknown | message=Failed to parse config - invalid syntax | suggestion=Fix the - characters in config"
         );
     }
 
     #[test]
     fn test_format_agent_error_multiple_consecutive_pipes() {
         let output = format_agent_error(
-            "validation_error",
+            "validation",
             "Field validation failed||missing required field",
             "Provide||check the field",
         );
         assert_eq!(
             output,
-            "ERROR | type=validation_error | message=Field validation failed--missing required field | suggestion=Provide--check the field"
+            "ERROR | type=validation | message=Field validation failed--missing required field | suggestion=Provide--check the field"
         );
     }
 
     #[test]
     fn test_format_agent_error_newline_sanitization() {
         let output = format_agent_error(
-            "runtime_error",
+            "unknown",
             "Error occurred\nLine two\r\nLine three\rLine four",
             "Try restarting\nCheck logs\r\nVerify config\rContact support",
         );
         assert_eq!(
             output,
-            "ERROR | type=runtime_error | message=Error occurred Line two Line three Line four | suggestion=Try restarting Check logs Verify config Contact support"
+            "ERROR | type=unknown | message=Error occurred Line two Line three Line four | suggestion=Try restarting Check logs Verify config Contact support"
         );
     }
 
     #[test]
     fn test_format_agent_error_empty_message() {
-        let output = format_agent_error("unknown_error", "", "Check system logs");
+        let output = format_agent_error("unknown", "", "Check system logs");
         assert_eq!(
             output,
-            "ERROR | type=unknown_error | message= | suggestion=Check system logs"
+            "ERROR | type=unknown | message= | suggestion=Check system logs"
         );
     }
 
     #[test]
     fn test_format_agent_error_empty_suggestion() {
-        let output = format_agent_error("timeout_error", "Request timed out", "");
+        let output = format_agent_error("timeout", "Request timed out", "");
         assert_eq!(
             output,
-            "ERROR | type=timeout_error | message=Request timed out | suggestion="
+            "ERROR | type=timeout | message=Request timed out | suggestion="
         );
     }
 
     #[test]
     fn test_format_agent_error_unicode() {
         let output = format_agent_error(
-            "encoding_error",
+            "unknown",
             "Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc}",
             "Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}",
         );
         assert_eq!(
             output,
-            "ERROR | type=encoding_error | message=Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc} | suggestion=Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}"
+            "ERROR | type=unknown | message=Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc} | suggestion=Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}"
         );
     }
 
@@ -994,7 +1287,7 @@ mod tests {
         let long_message = "Error: ".to_string() + &"x".repeat(1200);
         assert!(long_message.len() > 1000);
 
-        let output = format_agent_error("overflow_error", &long_message, "Reduce input size");
+        let output = format_agent_error("unknown", &long_message, "Reduce input size");
 
         // Verify the full message appears in output (no truncation)
         assert!(output.contains(&long_message));
@@ -1004,7 +1297,7 @@ mod tests {
 
     #[test]
     fn test_format_agent_error_format_regex() {
-        let output = format_agent_error("test_error", "Test message", "Test suggestion");
+        let output = format_agent_error("unknown", "Test message", "Test suggestion");
 
         // Verify output matches expected regex pattern
         let re = regex::Regex::new(r"^ERROR \| type=.+ \| message=.+ \| suggestion=.+$").unwrap();
@@ -1016,7 +1309,7 @@ mod tests {
 
         // Empty fields produce valid format but don't match the .+ regex (which requires 1+ chars).
         // That's correct — the regex validates non-empty output. Empty fields are tested separately.
-        let output_empty = format_agent_error("test_error", "", "");
+        let output_empty = format_agent_error("unknown", "", "");
         let re_empty =
             regex::Regex::new(r"^ERROR \| type=.+ \| message=.* \| suggestion=.*$").unwrap();
         assert!(

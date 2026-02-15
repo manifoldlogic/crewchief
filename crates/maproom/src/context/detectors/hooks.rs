@@ -191,7 +191,7 @@ impl HookDetector {
     ) -> Result<Vec<HookInfo>> {
         // Use FTS search to find functions with "use" prefix
         // Search for "use" in all repos, then filter to custom hooks
-        let search_results = store
+        let (search_results, _total_count) = store
             .search_chunks_fts(
                 "*",  // All repos
                 None, // All worktrees initially
@@ -247,7 +247,7 @@ impl HookDetector {
         }
 
         // Search for the specific hook name
-        let search_results = store
+        let (search_results, _total_count) = store
             .search_chunks_fts(
                 "*",  // All repos
                 None, // All worktrees

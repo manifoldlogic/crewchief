@@ -177,7 +177,7 @@ mod sqlite_tests {
         store.insert_chunk(&chunk).await.unwrap();
 
         // Search should find the chunk
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 "test-repo",
                 Some("main"),
@@ -271,7 +271,7 @@ mod sqlite_tests {
             .unwrap();
 
         // Search in empty repo should return empty, not error
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts("empty-repo", None, "nonexistent", 10, false, None, None)
             .await
             .unwrap();
@@ -533,7 +533,7 @@ mod sqlite_tests {
         let (store, repo) = setup_filter_test_store().await;
 
         let kind_filter = vec!["func".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -561,7 +561,7 @@ mod sqlite_tests {
         let (store, repo) = setup_filter_test_store().await;
 
         let lang_filter = vec!["py".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -590,7 +590,7 @@ mod sqlite_tests {
 
         let kind_filter = vec!["func".to_string()];
         let lang_filter = vec!["py".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -705,7 +705,7 @@ mod sqlite_tests {
         let (store, repo) = setup_filter_test_store().await;
 
         // Results with None filters
-        let results_none = store
+        let (results_none, _) = store
             .search_chunks_fts(repo, None, "searchable", 50, false, None, None)
             .await
             .unwrap();
@@ -713,7 +713,7 @@ mod sqlite_tests {
         // Results with empty filter arrays
         let empty_kind: Vec<String> = vec![];
         let empty_lang: Vec<String> = vec![];
-        let results_empty = store
+        let (results_empty, _) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -738,7 +738,7 @@ mod sqlite_tests {
         let (store, repo) = setup_filter_test_store().await;
 
         let kind_filter = vec!["nonexistent_kind_xyz".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,

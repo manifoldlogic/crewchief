@@ -32,7 +32,7 @@ macro_rules! handle_agent_error {
 
 use crewchief_maproom::cli::format::{
     format_agent_error, format_hits_agent, format_hits_json_search, format_hits_json_vector,
-    sanitize_newlines, OutputFormat,
+    sanitize_newlines, OutputFormat, SearchMetadata,
 };
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
@@ -1657,7 +1657,7 @@ async fn main() -> anyhow::Result<()> {
             let store = handle_agent_error!(db::connect().await, format);
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let hits = handle_agent_error!(
+            let (hits, total_count) = handle_agent_error!(
                 store
                     .search_chunks_fts(
                         &repo,
@@ -1697,16 +1697,20 @@ async fn main() -> anyhow::Result<()> {
                 .collect();
 
             // MRIMP-5: Route output through format module
+            let meta = SearchMetadata {
+                query: query.clone(),
+                mode: "fts".to_string(),
+                hits: hits.len(),
+                total_estimate: total_count,
+            };
             match format {
                 OutputFormat::Json => {
-                    let output = format_hits_json_search(&hits)?;
+                    let output = format_hits_json_search(&hits, &meta)?;
                     println!("{}", output);
                 }
                 OutputFormat::Agent => {
-                    let output = format_hits_agent(&hits);
-                    if !output.is_empty() {
-                        println!("{}", output);
-                    }
+                    let output = format_hits_agent(&hits, &meta);
+                    println!("{}", output);
                 }
             }
         }
@@ -1874,10 +1878,14 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", output);
                 }
                 OutputFormat::Agent => {
-                    let output = format_hits_agent(&hits);
-                    if !output.is_empty() {
-                        println!("{}", output);
-                    }
+                    let meta = SearchMetadata {
+                        query: query.clone(),
+                        mode: "vector".to_string(),
+                        hits: hits.len(),
+                        total_estimate: hits.len(),
+                    };
+                    let output = format_hits_agent(&hits, &meta);
+                    println!("{}", output);
                 }
             }
         }

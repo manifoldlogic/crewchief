@@ -441,7 +441,7 @@ mod filter_integration_tests {
 
         // Search with kind=["func"] filter
         let kind_filter = vec!["func".to_string()];
-        let filtered = store
+        let (filtered, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -472,7 +472,7 @@ mod filter_integration_tests {
         );
 
         // Count should be less than unfiltered total
-        let unfiltered = store
+        let (unfiltered, _) = store
             .search_chunks_fts(repo, None, "filterable", 50, false, None, None)
             .await
             .unwrap();
@@ -494,7 +494,7 @@ mod filter_integration_tests {
 
         // Search with lang=["py"] filter
         let lang_filter = vec!["py".to_string()];
-        let filtered = store
+        let (filtered, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -524,7 +524,7 @@ mod filter_integration_tests {
         assert_eq!(filtered.len(), 6, "Should find all 6 Python chunks");
 
         // Count should be less than unfiltered total
-        let unfiltered = store
+        let (unfiltered, _) = store
             .search_chunks_fts(repo, None, "filterable", 50, false, None, None)
             .await
             .unwrap();
@@ -547,7 +547,7 @@ mod filter_integration_tests {
         // Search with kind=["func"] AND lang=["py"]
         let kind_filter = vec!["func".to_string()];
         let lang_filter = vec!["py".to_string()];
-        let filtered = store
+        let (filtered, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -583,7 +583,7 @@ mod filter_integration_tests {
 
         // Verify AND semantics: results exclude TypeScript funcs and Python classes
         let kind_only = vec!["func".to_string()];
-        let kind_only_results = store
+        let (kind_only_results, _) = store
             .search_chunks_fts(repo, None, "filterable", 50, false, Some(&kind_only), None)
             .await
             .unwrap();
@@ -595,7 +595,7 @@ mod filter_integration_tests {
         );
 
         let lang_only = vec!["py".to_string()];
-        let lang_only_results = store
+        let (lang_only_results, _) = store
             .search_chunks_fts(repo, None, "filterable", 50, false, None, Some(&lang_only))
             .await
             .unwrap();
@@ -722,7 +722,7 @@ mod filter_integration_tests {
 
         // Search with a kind that does not exist in our test data
         let kind_filter = vec!["nonexistent_kind_xyz".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -744,7 +744,7 @@ mod filter_integration_tests {
 
         // Also test with nonexistent lang
         let lang_filter = vec!["nonexistent_lang_xyz".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -766,7 +766,7 @@ mod filter_integration_tests {
         // Test with both nonexistent filters
         let kind_filter = vec!["nonexistent_kind_xyz".to_string()];
         let lang_filter = vec!["nonexistent_lang_xyz".to_string()];
-        let results = store
+        let (results, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -796,7 +796,7 @@ mod filter_integration_tests {
 
         // Search with kind=["func", "class"] -- should return both kinds (OR)
         let kind_filter = vec!["func".to_string(), "class".to_string()];
-        let filtered = store
+        let (filtered, _total_count) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -853,7 +853,7 @@ mod filter_integration_tests {
 
         // Also test OR with lang: lang=["py", "ts"]
         let lang_filter = vec!["py".to_string(), "ts".to_string()];
-        let lang_filtered = store
+        let (lang_filtered, _) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -902,7 +902,7 @@ mod filter_integration_tests {
         let (store, repo) = setup_diverse_store().await;
 
         // Run the same query with explicit None filters
-        let results_with_none = store
+        let (results_with_none, _) = store
             .search_chunks_fts(repo, None, "filterable", 50, false, None, None)
             .await
             .unwrap();
@@ -910,7 +910,7 @@ mod filter_integration_tests {
         // Run with empty filter arrays (should behave identically)
         let empty_kind: Vec<String> = vec![];
         let empty_lang: Vec<String> = vec![];
-        let results_with_empty = store
+        let (results_with_empty, _) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -949,7 +949,7 @@ mod filter_integration_tests {
 
         // Now verify that filtering reduces the count
         let kind_filter = vec!["func".to_string()];
-        let filtered = store
+        let (filtered, _) = store
             .search_chunks_fts(
                 repo,
                 None,
@@ -1006,7 +1006,7 @@ mod filter_integration_tests {
         store.insert_chunk(&chunk).await.unwrap();
 
         // Search - preview is always populated by database query
-        let hits = store
+        let (hits, _total_count) = store
             .search_chunks_fts(repo, None, "filterable", 10, false, None, None)
             .await
             .unwrap();
@@ -1060,7 +1060,7 @@ mod filter_integration_tests {
         store.insert_chunk(&chunk).await.unwrap();
 
         // Search - get results with preview populated
-        let hits = store
+        let (hits, _total_count) = store
             .search_chunks_fts(repo, None, "filterable", 10, false, None, None)
             .await
             .unwrap();
