@@ -104,9 +104,8 @@ cargo run --bin crewchief-maproom -- db cleanup-stale --verbose
 ```
 
 **Exit codes:**
-- `0` - Success (cleanup completed or dry-run)
-- `1` - Error (database connection failed)
-- `2` - No stale worktrees found
+- `0` - Success (stale worktrees deleted or none found)
+- `1` - Error during detection or cleanup
 
 ## Clean Ignored Chunks
 
