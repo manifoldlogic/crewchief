@@ -278,6 +278,21 @@ cargo run --bin crewchief-maproom -- search --query "authentication" --repo myre
 cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --json
 ```
 
+## Exit Codes (Agent Format)
+
+When using `--format agent`, commands follow a consistent exit code contract:
+
+- **0**: Success (with or without results)
+- **1**: Runtime error (transient failures, database errors, network issues)
+- **2**: Configuration error (missing env vars, invalid provider, missing sqlite-vec)
+
+This contract enables agents to make programmatic decisions:
+- Exit 0: Process results
+- Exit 1: Report error or retry
+- Exit 2: Fall back to alternative approach (e.g., use FTS instead of vector search)
+
+**Note**: Default format (`--format json`) exit codes may differ. The 0/1/2 contract applies specifically to `--format agent`.
+
 ## Context Command
 
 Retrieve contextually relevant code around a specific chunk (callers, callees, tests, imports).
