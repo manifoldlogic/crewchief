@@ -73,18 +73,18 @@ describe('cleanMaproomRecords', () => {
     })
   })
 
-  it('succeeds with exit code 2 (no stale worktrees)', async () => {
+  it('throws error with exit code 2 (configuration error)', async () => {
     vi.mocked(spawnSync).mockReturnValue({
       status: 2,
-      stdout: 'No stale worktrees found',
-      stderr: '',
+      stdout: '',
+      stderr: 'Configuration error: missing database',
       pid: 0,
       output: [],
       signal: null,
     })
 
-    // Exit code 2 should NOT throw - it means no stale records
-    await expect(cleanMaproomRecords()).resolves.toBeUndefined()
+    // Exit code 2 is now a configuration error (AFM-06: 0=success, 1=runtime, 2=config)
+    await expect(cleanMaproomRecords()).rejects.toThrow('Configuration error: missing database')
 
     expect(spawnSync).toHaveBeenCalled()
   })
@@ -114,7 +114,7 @@ describe('cleanMaproomRecords', () => {
       signal: null,
     })
 
-    // Any exit code other than 0 or 2 should throw
+    // Any non-zero exit code should throw
     await expect(cleanMaproomRecords()).rejects.toThrow('Invalid argument')
   })
 
@@ -248,7 +248,7 @@ describe('cleanMaproomRecords', () => {
     expect(logger.info).toHaveBeenCalledWith('Cleaned maproom database records')
   })
 
-  it('does not log when exit code is 2 even if output contains "Deleted"', async () => {
+  it('throws when exit code is 2 even if output contains "Deleted"', async () => {
     vi.mocked(spawnSync).mockReturnValue({
       status: 2,
       stdout: 'Previously Deleted records: 0',
@@ -258,10 +258,8 @@ describe('cleanMaproomRecords', () => {
       signal: null,
     })
 
-    await cleanMaproomRecords()
-
-    // Logger should still be called if "Deleted" is in the output
-    expect(logger.info).toHaveBeenCalledWith('Cleaned maproom database records')
+    // Exit code 2 is now a configuration error (AFM-06), should throw regardless of output
+    await expect(cleanMaproomRecords()).rejects.toThrow('Previously Deleted records: 0')
   })
 
   // ===== COMMAND INVOCATION TESTS =====
@@ -326,7 +324,7 @@ describe('cleanMaproomRecords', () => {
       signal: null,
     })
 
-    // null status should be treated as an error (not 0 or 2)
+    // null status should be treated as an error (not 0)
     await expect(cleanMaproomRecords()).rejects.toThrow('Process terminated abnormally')
   })
 
