@@ -104,9 +104,8 @@ cargo run --bin crewchief-maproom -- db cleanup-stale --verbose
 ```
 
 **Exit codes:**
-- `0` - Success (cleanup completed or dry-run)
-- `1` - Error (database connection failed)
-- `2` - No stale worktrees found
+- `0` - Success (stale worktrees deleted or none found)
+- `1` - Error during detection or cleanup
 
 ## Clean Ignored Chunks
 
@@ -280,6 +279,21 @@ cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callee
 # Or JSON format for programmatic use
 cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --format json
 ```
+
+## Exit Codes (Agent Format)
+
+When using `--format agent`, commands follow a consistent exit code contract:
+
+- **0**: Success (with or without results)
+- **1**: Runtime error (transient failures, database errors, network issues)
+- **2**: Configuration error (missing env vars, invalid provider, missing sqlite-vec)
+
+This contract enables agents to make programmatic decisions:
+- Exit 0: Process results
+- Exit 1: Report error or retry
+- Exit 2: Fall back to alternative approach (e.g., use FTS instead of vector search)
+
+**Note**: Default format (`--format json`) exit codes may differ. The 0/1/2 contract applies specifically to `--format agent`.
 
 ## Context Command
 

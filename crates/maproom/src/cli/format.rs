@@ -279,13 +279,65 @@ pub fn format_context_agent(bundle: &ContextBundle, chunk_id: i64, budget: usize
 /// Replace newline characters with spaces to maintain one-line-per-result format.
 ///
 /// Handles `\r\n` (Windows), `\n` (Unix), and `\r` (legacy Mac) line endings.
+///
+/// This function is made public for use in error handling (main.rs) to sanitize
+/// error messages before printing to stderr.
 #[allow(clippy::collapsible_str_replace)]
-fn sanitize_newlines(text: &str) -> String {
+pub fn sanitize_newlines(text: &str) -> String {
     // Replace \r\n first (before individual \r or \n) to produce a single space
     // per Windows line ending rather than two spaces.
     text.replace("\r\n", " ")
         .replace('\n', " ")
         .replace('\r', " ")
+}
+
+/// Known valid error types returned by `classify_error()`.
+///
+/// Used to validate error types at runtime and emit warnings when an unknown
+/// error type is encountered. This helps catch typos and ensures the error
+/// type taxonomy stays consistent.
+///
+/// If you add a new error type to `classify_error()`, add it here too.
+pub const KNOWN_ERROR_TYPES: &[&str] = &[
+    "database",
+    "embedding_provider",
+    "config_error",
+    "not_found",
+    "validation",
+    "timeout",
+    "unknown",
+];
+
+/// Format a structured agent error line.
+///
+/// Produces: `ERROR | type=<error_type> | message=<msg> | suggestion=<suggestion>`
+///
+/// Pipe characters in message and suggestion are replaced with dashes.
+/// Newlines are replaced with spaces.
+/// error_type is not sanitized (controlled values only).
+///
+/// Emits a `tracing::warn!` if `error_type` is not in `KNOWN_ERROR_TYPES`.
+pub fn format_agent_error(error_type: &str, message: &str, suggestion: &str) -> String {
+    // Validate error type against known types
+    if !KNOWN_ERROR_TYPES.contains(&error_type) {
+        let message_preview: String = message.chars().take(50).collect();
+        tracing::warn!(
+            error_type = error_type,
+            message_preview = %message_preview,
+            "Unknown error type used in format_agent_error"
+        );
+    }
+    // Sanitize message: pipes first, then newlines
+    let sanitized_message = sanitize_newlines(&message.replace('|', "-"));
+
+    // Sanitize suggestion: pipes first, then newlines
+    let sanitized_suggestion = sanitize_newlines(&suggestion.replace('|', "-"));
+
+    // Format output line with sanitized values
+    format!(
+        "ERROR | type={} | message={} | suggestion={}",
+        error_type, sanitized_message, sanitized_suggestion
+    )
 }
 
 #[cfg(test)]
@@ -2130,6 +2182,23 @@ mod tests {
         );
     }
 
+    // ---------------------------------------------------------------
+    // format_agent_error() tests per AFM-04.1001
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_format_agent_error_basic() {
+        let output = format_agent_error(
+            "database",
+            "Failed to connect to database",
+            "Check database connection settings",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=database | message=Failed to connect to database | suggestion=Check database connection settings"
+        );
+    }
+
     #[test]
     fn test_agent_format_pipe_in_relpath() {
         let mut bundle = ContextBundle::new();
@@ -2154,6 +2223,114 @@ mod tests {
             5,
             "Primary line should have exactly 5 segments even with pipe in relpath, got {}",
             segments.len()
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_pipe_sanitization() {
+        let output = format_agent_error(
+            "unknown",
+            "Failed to parse config | invalid syntax",
+            "Fix the | characters in config",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=unknown | message=Failed to parse config - invalid syntax | suggestion=Fix the - characters in config"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_multiple_consecutive_pipes() {
+        let output = format_agent_error(
+            "validation",
+            "Field validation failed||missing required field",
+            "Provide||check the field",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=validation | message=Field validation failed--missing required field | suggestion=Provide--check the field"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_newline_sanitization() {
+        let output = format_agent_error(
+            "unknown",
+            "Error occurred\nLine two\r\nLine three\rLine four",
+            "Try restarting\nCheck logs\r\nVerify config\rContact support",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=unknown | message=Error occurred Line two Line three Line four | suggestion=Try restarting Check logs Verify config Contact support"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_empty_message() {
+        let output = format_agent_error("unknown", "", "Check system logs");
+        assert_eq!(
+            output,
+            "ERROR | type=unknown | message= | suggestion=Check system logs"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_empty_suggestion() {
+        let output = format_agent_error("timeout", "Request timed out", "");
+        assert_eq!(
+            output,
+            "ERROR | type=timeout | message=Request timed out | suggestion="
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_unicode() {
+        let output = format_agent_error(
+            "unknown",
+            "Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc}",
+            "Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}",
+        );
+        assert_eq!(
+            output,
+            "ERROR | type=unknown | message=Failed to decode UTF-8: \u{00e9}\u{00f1}\u{00fc} | suggestion=Use UTF-8 encoding: \u{3053}\u{3093}\u{306b}\u{3061}\u{306f}"
+        );
+    }
+
+    #[test]
+    fn test_format_agent_error_long_message() {
+        // Create a message over 1000 characters
+        let long_message = "Error: ".to_string() + &"x".repeat(1200);
+        assert!(long_message.len() > 1000);
+
+        let output = format_agent_error("unknown", &long_message, "Reduce input size");
+
+        // Verify the full message appears in output (no truncation)
+        assert!(output.contains(&long_message));
+        // Verify output length is at least as long as the message
+        assert!(output.len() >= long_message.len());
+    }
+
+    #[test]
+    fn test_format_agent_error_format_regex() {
+        let output = format_agent_error("unknown", "Test message", "Test suggestion");
+
+        // Verify output matches expected regex pattern
+        let re = regex::Regex::new(r"^ERROR \| type=.+ \| message=.+ \| suggestion=.+$").unwrap();
+        assert!(
+            re.is_match(&output),
+            "Output does not match expected pattern: {}",
+            output
+        );
+
+        // Empty fields produce valid format but don't match the .+ regex (which requires 1+ chars).
+        // That's correct — the regex validates non-empty output. Empty fields are tested separately.
+        let output_empty = format_agent_error("unknown", "", "");
+        let re_empty =
+            regex::Regex::new(r"^ERROR \| type=.+ \| message=.* \| suggestion=.*$").unwrap();
+        assert!(
+            re_empty.is_match(&output_empty),
+            "Output with empty fields does not match relaxed pattern: {}",
+            output_empty
         );
     }
 }

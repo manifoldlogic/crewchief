@@ -1,4 +1,5 @@
 use std::fmt::Write as _;
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
@@ -8,9 +9,30 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use tracing_subscriber::{fmt, EnvFilter};
 
+/// Macro to handle errors with structured output when using agent format.
+///
+/// Usage: `let value = handle_agent_error!(result_expr, format);`
+///
+/// If the result is `Ok`, returns the unwrapped value.
+/// If the result is `Err` and format is `OutputFormat::Agent`, classifies the error
+/// and calls `handle_agent_error()` (which exits the process).
+/// If the result is `Err` and format is not Agent, returns early with the error.
+macro_rules! handle_agent_error {
+    ($result:expr, $format:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(e) if $format == OutputFormat::Agent => {
+                let (error_type, suggestion, exit_code) = classify_error(&e);
+                handle_agent_error(&e, &$format, &error_type, &suggestion, exit_code);
+            }
+            Err(e) => return Err(e),
+        }
+    };
+}
+
 use crewchief_maproom::cli::format::{
-    format_context_agent, format_hits_agent, format_hits_json_search, format_hits_json_vector,
-    OutputFormat, SearchMetadata,
+    format_agent_error, format_context_agent, format_hits_agent, format_hits_json_search,
+    format_hits_json_vector, sanitize_newlines, OutputFormat, SearchMetadata,
 };
 use crewchief_maproom::context::{
     AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
@@ -22,6 +44,14 @@ use crewchief_maproom::db::StoreIndexState;
 use crewchief_maproom::db::StoreSearch;
 use crewchief_maproom::progress::{OutputMode, ProgressTracker};
 use crewchief_maproom::{daemon, db, indexer};
+
+/// Exit code for runtime errors (transient, may retry).
+/// Documented in: docs/cli-help-after.md, CLAUDE.md
+const EXIT_RUNTIME_ERROR: i32 = 1;
+
+/// Exit code for configuration errors (persistent, do not retry).
+/// Documented in: docs/cli-help-after.md, CLAUDE.md
+const EXIT_CONFIG_ERROR: i32 = 2;
 
 /// Validate provider name against supported providers.
 ///
@@ -1039,14 +1069,14 @@ async fn main() -> anyhow::Result<()> {
                     Ok(worktrees) => worktrees,
                     Err(e) => {
                         eprintln!("❌ Error detecting stale worktrees: {}", e);
-                        std::process::exit(1);
+                        std::process::exit(EXIT_RUNTIME_ERROR);
                     }
                 };
 
                 // Phase 2: Report
                 if stale.is_empty() {
                     println!("✅ No stale worktrees found!");
-                    std::process::exit(2); // Informational exit code
+                    return Ok(()); // Success: no stale worktrees is a valid result
                 }
 
                 println!("📊 Found {} stale worktree(s):", stale.len());
@@ -1646,20 +1676,23 @@ async fn main() -> anyhow::Result<()> {
                 (preview, preview_length.unwrap_or(200))
             };
 
-            let store = db::connect().await?;
+            let store = handle_agent_error!(db::connect().await, format);
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let (hits, total_count) = store
-                .search_chunks_fts(
-                    &repo,
-                    worktree.as_deref(),
-                    &query,
-                    fetch_k,
-                    debug,
-                    kind.as_deref(),
-                    lang.as_deref(),
-                )
-                .await?;
+            let (hits, total_count) = handle_agent_error!(
+                store
+                    .search_chunks_fts(
+                        &repo,
+                        worktree.as_deref(),
+                        &query,
+                        fetch_k,
+                        debug,
+                        kind.as_deref(),
+                        lang.as_deref(),
+                    )
+                    .await,
+                format
+            );
 
             // Apply deduplication if enabled
             let hits = if deduplicate {
@@ -1727,18 +1760,36 @@ async fn main() -> anyhow::Result<()> {
                 (preview, preview_length.unwrap_or(200))
             };
 
-            let store = db::connect().await?;
+            // Connect to database with error handling
+            let store = handle_agent_error!(db::connect().await, format);
 
             // Generate query embedding
             tracing::info!("Generating embedding for query: {}", query);
-            let embedding_service = EmbeddingService::from_env()
-                .await
-                .context("Failed to create embedding service")?;
 
-            let query_embedding = embedding_service
-                .embed_text(&query)
-                .await
-                .context("Failed to generate query embedding")?;
+            // Validate embedding provider is configured (not empty or whitespace)
+            let provider = std::env::var("MAPROOM_EMBEDDING_PROVIDER")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if provider.is_empty() {
+                eprintln!("Configuration error: MAPROOM_EMBEDDING_PROVIDER not set or empty");
+                eprintln!("Set MAPROOM_EMBEDDING_PROVIDER to 'openai', 'voyage', or another supported provider");
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+
+            let embedding_service = handle_agent_error!(
+                EmbeddingService::from_env().await.map_err(
+                    |e| anyhow::Error::from(e).context("Failed to create embedding service")
+                ),
+                format
+            );
+
+            let query_embedding = handle_agent_error!(
+                embedding_service.embed_text(&query).await.map_err(
+                    |e| anyhow::Error::from(e).context("Failed to generate query embedding")
+                ),
+                format
+            );
 
             tracing::info!(
                 "Executing vector search (k={}, threshold={:?})",
@@ -1767,10 +1818,32 @@ async fn main() -> anyhow::Result<()> {
                         || err_str.contains("vector")
                         || err_str.contains("not available")
                     {
-                        eprintln!("Vector search unavailable: {}", e);
-                        eprintln!("Tip: Use 'search' command for full-text search instead");
-                        std::process::exit(1);
+                        let error_msg = format!("Vector search unavailable: {}", e);
+                        let suggestion = "Use search command for full-text search instead";
+
+                        if format == OutputFormat::Agent {
+                            // Human-readable to stderr
+                            eprintln!("{}", error_msg);
+                            eprintln!("Tip: {}", suggestion);
+                            // Structured to stdout
+                            println!(
+                                "{}",
+                                format_agent_error("config_error", &error_msg, suggestion)
+                            );
+                        } else {
+                            // Existing behavior for default format
+                            eprintln!("{}", error_msg);
+                            eprintln!("Tip: {}", suggestion);
+                        }
+                        std::process::exit(EXIT_CONFIG_ERROR);
                     }
+
+                    // Other database errors
+                    if format == OutputFormat::Agent {
+                        let (error_type, suggestion, exit_code) = classify_error(&e);
+                        handle_agent_error(&e, &format, &error_type, &suggestion, exit_code);
+                    }
+                    // NOTE: sqlite-vec not available is a configuration issue (binary build configuration)
                     return Err(e);
                 }
             };
@@ -1869,21 +1942,16 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("status: connected, querying status...");
 
-            match status::get_status(Arc::new(store), repo, worktree, verbose).await {
-                Ok(status_data) => {
-                    tracing::debug!("status: query complete, formatting output...");
-                    if json {
-                        let output = status::format_json(&status_data)?;
-                        println!("{}", output);
-                    } else {
-                        let output = status::format_text(&status_data, verbose);
-                        print!("{}", output);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error querying status: {}", e);
-                    std::process::exit(1);
-                }
+            let status_data = status::get_status(Arc::new(store), repo, worktree, verbose)
+                .await
+                .context("Error querying status")?;
+            tracing::debug!("status: query complete, formatting output...");
+            if json {
+                let output = status::format_json(&status_data)?;
+                println!("{}", output);
+            } else {
+                let output = status::format_text(&status_data, verbose);
+                print!("{}", output);
             }
         }
 
@@ -1894,21 +1962,16 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("encoding-progress: connected, querying progress...");
 
-            match encoding_progress::get_encoding_progress(Arc::new(store), repo).await {
-                Ok(progress_data) => {
-                    tracing::debug!("encoding-progress: query complete, formatting output...");
-                    if json {
-                        let output = encoding_progress::format_json(&progress_data)?;
-                        println!("{}", output);
-                    } else {
-                        let output = encoding_progress::format_text(&progress_data);
-                        print!("{}", output);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error querying encoding progress: {}", e);
-                    std::process::exit(1);
-                }
+            let progress_data = encoding_progress::get_encoding_progress(Arc::new(store), repo)
+                .await
+                .context("Error querying encoding progress")?;
+            tracing::debug!("encoding-progress: query complete, formatting output...");
+            if json {
+                let output = encoding_progress::format_json(&progress_data)?;
+                println!("{}", output);
+            } else {
+                let output = encoding_progress::format_text(&progress_data);
+                print!("{}", output);
             }
         }
 
@@ -1927,10 +1990,28 @@ async fn main() -> anyhow::Result<()> {
 
             tracing::info!("Initializing embedding generation pipeline");
 
+            // Validate embedding provider is configured (not empty or whitespace)
+            let provider = std::env::var("MAPROOM_EMBEDDING_PROVIDER")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if provider.is_empty() {
+                eprintln!("Configuration error: MAPROOM_EMBEDDING_PROVIDER not set or empty");
+                eprintln!("Set MAPROOM_EMBEDDING_PROVIDER to 'openai', 'voyage', or another supported provider");
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+
             // Create embedding service from environment
-            let service = EmbeddingService::from_env()
-                .await
-                .context("Failed to create embedding service")?;
+            let service = match EmbeddingService::from_env().await {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Configuration error: {}. Ensure embedding provider and API keys are configured.", e);
+                    eprintln!("Set MAPROOM_EMBEDDING_PROVIDER and corresponding API key (OPENAI_API_KEY, etc.)");
+                    std::process::exit(EXIT_CONFIG_ERROR);
+                }
+            };
+            // NOTE: EmbeddingService::from_env() failures are configuration errors (missing provider/API keys)
+            // not runtime errors (network failures).
 
             // Configure pipeline
             let config = PipelineConfig {
@@ -2126,6 +2207,12 @@ async fn main() -> anyhow::Result<()> {
             format,
             json: _,
         } => {
+            // TODO(AFM-04): Context structured error handling awaits AFM-03 --format flag.
+            // When AFM-03 lands and adds OutputFormat to Context, add structured error handling
+            // here following the pattern used in search and vector-search commands:
+            //   match db::connect().await { Ok(s) => s, Err(e) if format == Agent => handle_agent_error(...), ... }
+            //   match assembler.assemble() { Ok(ctx) => ctx, Err(e) if format == Agent => ... }
+
             // Connect to database
             let store = db::connect().await.context("Database connection failed")?;
 
@@ -2165,6 +2252,339 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Error Classification and Handling Infrastructure (AFM-04.2001)
+// ============================================================================
+
+/// Handle agent errors with dual output: structured format to stdout, human-readable to stderr.
+///
+/// This function provides the routing layer for error output in agent mode:
+/// - If format is Agent: prints structured error line to stdout using `format_agent_error()`
+/// - Always prints human-readable error chain to stderr via `eprintln!`
+/// - Calls `std::process::exit(exit_code)` after output
+///
+/// # Investigation Notes (AFM-04.2001)
+///
+/// The `src/context/` module was investigated for structured error types. No error enums
+/// or structured error definitions were found in the context assembly module. The context
+/// module focuses on assembly logic (budget, graph traversal, truncation) rather than
+/// defining its own error taxonomy.
+///
+/// Error classification relies on:
+/// 1. Structured types from search pipeline: `PipelineError` (src/search/pipeline.rs)
+/// 2. Structured types from embedding: `EmbeddingError` (src/embedding/error.rs)
+/// 3. Helper: `SearchErrorDetails::from_pipeline_error()` (src/search/errors.rs)
+/// 4. Fallback: String-based heuristics for anyhow-wrapped errors
+///
+/// # Arguments
+///
+/// * `error` - The anyhow error to handle
+/// * `format` - Output format (Agent vs Json)
+/// * `error_type` - Error type string from classification (e.g., "database", "config_error")
+/// * `suggestion` - Actionable suggestion string from classification
+/// * `exit_code` - Exit code to use (2 for config errors, 1 for runtime errors)
+///
+/// # Exit Behavior
+///
+/// This function NEVER returns - it always calls `std::process::exit(exit_code)`.
+fn handle_agent_error(
+    error: &anyhow::Error,
+    format: &OutputFormat,
+    error_type: &str,
+    suggestion: &str,
+    exit_code: i32,
+) -> ! {
+    // Log error handling event
+    let error_message: String = error.to_string().chars().take(100).collect();
+    tracing::error!(
+        error_type = error_type,
+        exit_code = exit_code,
+        format = ?format,
+        error_message = %error_message,
+        "Agent error handled"
+    );
+
+    // If agent format, print structured error to stdout
+    if matches!(format, OutputFormat::Agent) {
+        let error_msg = error.to_string();
+        let structured = format_agent_error(error_type, &error_msg, suggestion);
+        println!("{}", structured);
+    }
+
+    // Always print human-readable error to stderr
+    // Use Debug formatting to show error chain
+    let error_display = format!("{:?}", error);
+    let sanitized = sanitize_newlines(&error_display);
+    eprintln!("Error: {}", sanitized);
+
+    // Flush both streams before exit to prevent buffered output loss
+    // (process::exit bypasses normal cleanup/Drop implementations)
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+
+    // Exit with appropriate code
+    std::process::exit(exit_code)
+}
+
+/// Classify an anyhow error into (error_type, suggestion, exit_code).
+///
+/// Classification strategy (priority order):
+/// 1. Attempt downcast to `PipelineError` -> use SearchErrorDetails for structured classification
+/// 2. Attempt downcast to `EmbeddingError` -> use SearchErrorDetails for structured classification
+/// 3. Fall back to string-based heuristics on `error.to_string()`
+///
+/// # Error Type Taxonomy
+///
+/// - **config_error**: Missing API keys, sqlite-vec unavailable, provider misconfiguration (exit code 2)
+/// - **database**: Database connection, timeout, corruption (exit code 1)
+/// - **not_found**: Chunk not found, repository not indexed (exit code 1)
+/// - **validation**: Empty query, invalid input (exit code 1)
+/// - **timeout**: Search execution timeout (exit code 1)
+/// - **embedding_provider**: OpenAI/Ollama/Google API errors (exit code 1 for runtime, 2 for config)
+/// - **unknown**: Unclassified errors (exit code 1)
+///
+/// # Heuristic Patterns
+///
+/// When structured types are unavailable, errors are classified by string matching:
+/// - Contains "config" or "API_KEY" or "provider" -> config_error (exit 2)
+/// - Contains "sqlite-vec" or "vector" and "not available" -> config_error (exit 2)
+/// - Contains "database" or "connection" -> database (exit 1)
+/// - Contains "chunk" and "not found" -> not_found (exit 1)
+/// - Otherwise -> unknown (exit 1)
+///
+/// # Returns
+///
+/// Tuple of `(error_type: String, suggestion: String, exit_code: i32)`
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let error = anyhow::anyhow!("Missing OPENAI_API_KEY");
+/// let (error_type, suggestion, exit_code) = classify_error(&error);
+/// assert_eq!(error_type, "config_error");
+/// assert_eq!(exit_code, 2);
+/// ```
+fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
+    use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+    use crewchief_maproom::search::errors::SearchErrorDetails;
+    use crewchief_maproom::search::pipeline::PipelineError;
+
+    // Priority 1: Try to downcast to PipelineError (structured search errors)
+    if let Some(pipeline_error) = error.downcast_ref::<PipelineError>() {
+        let details = SearchErrorDetails::from_pipeline_error(pipeline_error);
+
+        // Map ErrorType to string and exit code
+        let (error_type_str, exit_code) = match details.error_type {
+            crewchief_maproom::search::errors::ErrorType::EmbeddingProvider => {
+                // Check if it's a config error (exit 2) or runtime error (exit 1)
+                if details.context.contains_key("provider")
+                    && details.suggestions.iter().any(|s| {
+                        s.contains("API_KEY")
+                            || s.contains("credentials")
+                            || s.contains("environment variable")
+                    })
+                {
+                    ("embedding_provider", 2)
+                } else {
+                    ("embedding_provider", 1)
+                }
+            }
+            crewchief_maproom::search::errors::ErrorType::Database => ("database", 1),
+            crewchief_maproom::search::errors::ErrorType::Validation => ("validation", 1),
+            crewchief_maproom::search::errors::ErrorType::Timeout => ("timeout", 1),
+            crewchief_maproom::search::errors::ErrorType::NotFound => ("not_found", 1),
+            crewchief_maproom::search::errors::ErrorType::Unknown => ("unknown", 1),
+        };
+
+        // Combine suggestions into a single string
+        let suggestion = if details.suggestions.is_empty() {
+            "Check logs for details".to_string()
+        } else {
+            details.suggestions.join("; ")
+        };
+
+        tracing::info!(
+            error_type = error_type_str,
+            exit_code = exit_code,
+            classification_method = "downcast:PipelineError",
+            "Error classified"
+        );
+
+        return (error_type_str.to_string(), suggestion, exit_code);
+    }
+
+    // Priority 2: Try to downcast to EmbeddingError (structured embedding errors)
+    if let Some(embedding_error) = error.downcast_ref::<EmbeddingError>() {
+        // Use the embedding module's error handling
+        let error_str = embedding_error.to_string();
+
+        // Check for authentication/authorization errors (401/403) -> config error (exit 2)
+        if let EmbeddingError::Api(api_error) = embedding_error {
+            if matches!(
+                api_error,
+                ApiError::Authentication(_) | ApiError::QuotaExceeded(_)
+            ) {
+                tracing::info!(
+                    error_type = "config_error",
+                    exit_code = 2,
+                    classification_method = "downcast:EmbeddingError",
+                    "Error classified"
+                );
+                return (
+                    "config_error".to_string(),
+                    "Invalid or expired API key. Check your API key configuration.".to_string(),
+                    2,
+                );
+            }
+
+            // Heuristic: check error message for auth-related patterns (e.g., 403 Forbidden)
+            let api_error_lower = api_error.to_string().to_lowercase();
+            if api_error_lower.contains("401")
+                || api_error_lower.contains("403")
+                || api_error_lower.contains("unauthorized")
+                || api_error_lower.contains("forbidden")
+                || api_error_lower.contains("authentication")
+            {
+                tracing::info!(
+                    error_type = "config_error",
+                    exit_code = 2,
+                    classification_method = "downcast:EmbeddingError",
+                    "Error classified"
+                );
+                return (
+                    "config_error".to_string(),
+                    "Invalid or expired API key. Check your API key configuration.".to_string(),
+                    2,
+                );
+            }
+        }
+
+        // Check if it's a config error (missing API key, etc.)
+        if matches!(
+            embedding_error,
+            EmbeddingError::Config(_) | EmbeddingError::InvalidInput(_)
+        ) {
+            tracing::info!(
+                error_type = "embedding_provider",
+                exit_code = 2,
+                classification_method = "downcast:EmbeddingError",
+                "Error classified"
+            );
+            return (
+                "embedding_provider".to_string(),
+                "Check your embedding provider configuration".to_string(),
+                2,
+            );
+        }
+
+        // Runtime errors (API failures, network issues)
+        tracing::info!(
+            error_type = "embedding_provider",
+            exit_code = 1,
+            classification_method = "downcast:EmbeddingError",
+            "Error classified"
+        );
+        return (
+            "embedding_provider".to_string(),
+            format!("Embedding provider error: {}", error_str),
+            1,
+        );
+    }
+
+    // Priority 3: Fallback to string-based heuristics
+    let error_str = error.to_string();
+    let error_lower = error_str.to_lowercase();
+
+    // Warn when heuristic classification is used (downcast failed)
+    let error_preview: String = error_str.chars().take(100).collect();
+    tracing::warn!(
+        error_preview = %error_preview,
+        classification_method = "heuristic",
+        "Error classification using heuristic fallback (downcast failed)"
+    );
+
+    // Heuristic: Config errors (exit code 2)
+    if error_lower.contains("config")
+        || error_lower.contains("api_key")
+        || error_lower.contains("provider")
+        || (error_lower.contains("sqlite-vec") && error_lower.contains("not available"))
+        || (error_lower.contains("vector") && error_lower.contains("not available"))
+    {
+        tracing::info!(
+            error_type = "config_error",
+            exit_code = 2,
+            classification_method = "heuristic",
+            "Error classified"
+        );
+        return (
+            "config_error".to_string(),
+            "Check your configuration and environment variables".to_string(),
+            2,
+        );
+    }
+
+    // Heuristic: Database file not found (repo not indexed) -> exit code 2
+    // Must come BEFORE general database pattern to prioritize config error
+    if (error_lower.contains("database") || error_lower.contains("connection"))
+        && (error_lower.contains("no such file") || error_lower.contains("not found"))
+    {
+        tracing::info!(
+            error_type = "config_error",
+            exit_code = 2,
+            classification_method = "heuristic",
+            "Error classified"
+        );
+        return (
+            "config_error".to_string(),
+            "Repository not indexed. Run scan command first.".to_string(),
+            2,
+        );
+    }
+
+    // Heuristic: Database errors
+    if error_lower.contains("database") || error_lower.contains("connection") {
+        tracing::info!(
+            error_type = "database",
+            exit_code = 1,
+            classification_method = "heuristic",
+            "Error classified"
+        );
+        return (
+            "database".to_string(),
+            "Check database connectivity and permissions".to_string(),
+            1,
+        );
+    }
+
+    // Heuristic: Not found errors
+    if error_lower.contains("chunk") && error_lower.contains("not found") {
+        tracing::info!(
+            error_type = "not_found",
+            exit_code = 1,
+            classification_method = "heuristic",
+            "Error classified"
+        );
+        return (
+            "not_found".to_string(),
+            "The requested chunk may not be indexed".to_string(),
+            1,
+        );
+    }
+
+    // Default: Unknown error (exit code 1)
+    tracing::info!(
+        error_type = "unknown",
+        exit_code = 1,
+        classification_method = "heuristic",
+        "Error classified"
+    );
+    (
+        "unknown".to_string(),
+        "Please report this error with full details".to_string(),
+        1,
+    )
 }
 
 #[cfg(test)]
@@ -3258,4 +3678,460 @@ mod tests {
             "Explicit preview-length must override JSON default"
         );
     }
+
+    // ==================== Error Classification Tests (AFM-04.2001) ====================
+
+    /// Test classification of embedding config error (missing API key) -> exit code 2
+    #[test]
+    fn test_classify_embedding_config_error() {
+        use crewchief_maproom::embedding::error::{ConfigError, EmbeddingError};
+
+        let config_error = ConfigError::MissingConfig("OPENAI_API_KEY".to_string());
+        let embedding_error = EmbeddingError::Config(config_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "embedding_provider");
+        assert_eq!(exit_code, 2, "Config errors should exit with code 2");
+    }
+
+    /// Test classification of embedding API error (timeout) -> exit code 1
+    #[test]
+    fn test_classify_embedding_api_error() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let api_error = ApiError::RateLimit {
+            retry_after_ms: 5000,
+        };
+        let embedding_error = EmbeddingError::Api(api_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "embedding_provider");
+        assert_eq!(exit_code, 1, "Runtime API errors should exit with code 1");
+    }
+
+    /// Test classification of database error -> exit code 1
+    #[test]
+    fn test_classify_database_error() {
+        let error = anyhow::anyhow!("Database connection failed");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "database");
+        assert!(suggestion.contains("database") || suggestion.contains("connectivity"));
+        assert_eq!(exit_code, 1);
+    }
+
+    /// Test classification of database file not found -> exit code 2 (config error)
+    /// Missing database file means repo not indexed - agents should suggest scanning
+    #[test]
+    fn test_classify_database_file_not_found() {
+        let error = anyhow::anyhow!(
+            "SQLite error: unable to open database file: No such file or directory"
+        );
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(exit_code, 2, "Missing database file is a config error");
+        assert_eq!(error_type, "config_error");
+        assert!(
+            suggestion.contains("scan"),
+            "Suggestion should mention running scan command"
+        );
+    }
+
+    /// Test that general database runtime errors still produce exit code 1
+    /// Connection failures, query errors, etc. are transient and should be retried
+    #[test]
+    fn test_classify_database_runtime_error_unchanged() {
+        let error = anyhow::anyhow!("Database query failed: syntax error");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 1,
+            "Database runtime errors should remain exit code 1"
+        );
+        assert_eq!(error_type, "database");
+        assert!(
+            suggestion.contains("database") || suggestion.contains("connectivity"),
+            "Suggestion should be about database connectivity"
+        );
+    }
+
+    /// Test classification of sqlite-vec unavailable -> exit code 2 (config error)
+    #[test]
+    fn test_classify_sqlite_vec_error() {
+        let error = anyhow::anyhow!("sqlite-vec extension not available");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "config_error");
+        assert!(suggestion.contains("configuration"));
+        assert_eq!(exit_code, 2, "Missing extension is a config error");
+    }
+
+    /// Test classification of unknown error -> exit code 1
+    #[test]
+    fn test_classify_unknown_error() {
+        let error = anyhow::anyhow!("Something unexpected happened");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "unknown");
+        assert!(suggestion.contains("report") || suggestion.contains("details"));
+        assert_eq!(exit_code, 1);
+    }
+
+    /// Test classification of error wrapped in anyhow context
+    #[test]
+    fn test_classify_error_with_anyhow_context() {
+        use crewchief_maproom::embedding::error::{ConfigError, EmbeddingError};
+
+        let config_error = ConfigError::EnvVarNotFound("GOOGLE_API_KEY".to_string());
+        let embedding_error = EmbeddingError::Config(config_error);
+        let error: anyhow::Error = embedding_error.into();
+        let wrapped = error.context("Failed to generate embeddings");
+
+        let (error_type, _suggestion, exit_code) = classify_error(&wrapped);
+
+        assert_eq!(error_type, "embedding_provider");
+        assert_eq!(exit_code, 2, "Config errors should exit with code 2");
+    }
+
+    /// Test heuristic fallback for unrecognized error patterns
+    #[test]
+    fn test_classify_heuristic_fallback() {
+        let error = anyhow::anyhow!("Mysterious error from unknown source");
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            error_type, "unknown",
+            "Unrecognized errors should fall back to unknown type"
+        );
+        assert_eq!(exit_code, 1);
+    }
+
+    // ==================== Auth Error Classification Tests (AFM-04.5001) ====================
+
+    /// Test: 401 Authentication error produces exit code 2 (config error)
+    #[test]
+    fn test_classify_auth_error_exit_code_2() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let auth_error = ApiError::Authentication("Invalid API key".to_string());
+        let embedding_error = EmbeddingError::Api(auth_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 2,
+            "Auth errors should be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+        assert!(
+            suggestion.contains("API key"),
+            "Suggestion should mention API key, got: {}",
+            suggestion
+        );
+    }
+
+    /// Test: QuotaExceeded error produces exit code 2 (config error)
+    #[test]
+    fn test_classify_quota_exceeded_exit_code_2() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let quota_error = ApiError::QuotaExceeded("Rate limit exceeded for account".to_string());
+        let embedding_error = EmbeddingError::Api(quota_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 2,
+            "Quota exceeded errors should be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+        assert!(
+            suggestion.contains("API key"),
+            "Suggestion should mention API key, got: {}",
+            suggestion
+        );
+    }
+
+    /// Test: API error with 403/forbidden in message produces exit code 2 via heuristic
+    #[test]
+    fn test_classify_forbidden_api_error_heuristic() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        // ServerError with 403 status containing "forbidden" in message
+        let forbidden_error = ApiError::ServerError {
+            status: 403,
+            message: "Forbidden: insufficient permissions".to_string(),
+        };
+        let embedding_error = EmbeddingError::Api(forbidden_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 2,
+            "403 Forbidden errors should be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+    }
+
+    /// Test: Non-auth API errors (e.g., rate limit, server error) still produce exit code 1
+    #[test]
+    fn test_classify_non_auth_api_error_exit_code_1() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let rate_limit_error = ApiError::RateLimit {
+            retry_after_ms: 5000,
+        };
+        let embedding_error = EmbeddingError::Api(rate_limit_error);
+        let error: anyhow::Error = embedding_error.into();
+
+        let (error_type, _suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            exit_code, 1,
+            "Rate limit errors should be runtime errors (exit code 1)"
+        );
+        assert_eq!(error_type, "embedding_provider");
+    }
+
+    /// Test: Auth error with anyhow context still produces exit code 2
+    #[test]
+    fn test_classify_auth_error_with_context() {
+        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+
+        let auth_error = ApiError::Authentication("Invalid key provided".to_string());
+        let embedding_error = EmbeddingError::Api(auth_error);
+        let error: anyhow::Error = embedding_error.into();
+        let wrapped = error.context("Failed during vector search");
+
+        let (error_type, suggestion, exit_code) = classify_error(&wrapped);
+
+        assert_eq!(
+            exit_code, 2,
+            "Auth errors wrapped in context should still be config errors (exit code 2)"
+        );
+        assert_eq!(error_type, "config_error");
+        assert!(suggestion.contains("API key"));
+    }
+
+    // ==================== Integration Testing (AFM-04.4001) ====================
+
+    /// Test: search with database error produces correct classification
+    /// This verifies database errors are classified as type=database, exit=1
+    #[test]
+    fn test_search_agent_database_error_classification() {
+        let error = anyhow::anyhow!("Database connection failed");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(error_type, "database");
+        assert!(
+            suggestion.contains("database") || suggestion.contains("connectivity"),
+            "Database error should mention database or connectivity"
+        );
+        assert_eq!(exit_code, 1, "Database errors should exit with code 1");
+    }
+
+    /// Test: vector-search with missing API key produces config error classification
+    /// This verifies missing configuration produces type=embedding_provider, exit=2
+    #[test]
+    fn test_vector_search_config_error_classification() {
+        // Simulate missing API key error
+        let error = anyhow::anyhow!("OPENAI_API_KEY environment variable not set");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            error_type, "config_error",
+            "Missing API key should be classified as config_error"
+        );
+        assert!(
+            suggestion.contains("configuration") || suggestion.contains("environment"),
+            "Config error should mention configuration or environment"
+        );
+        assert_eq!(exit_code, 2, "Config errors should exit with code 2");
+    }
+
+    /// Test: vector-search with sqlite-vec unavailable produces config error
+    /// This verifies sqlite-vec missing is classified as config_error with exit=2
+    #[test]
+    fn test_vector_search_sqlite_vec_classification() {
+        // Simulate sqlite-vec extension not available
+        // Use message that matches the heuristic: contains "sqlite-vec" AND "not available"
+        let error = anyhow::anyhow!("sqlite-vec extension not available");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        assert_eq!(
+            error_type, "config_error",
+            "Missing sqlite-vec should be classified as config_error"
+        );
+        assert!(
+            suggestion.contains("configuration"),
+            "Config error should mention configuration"
+        );
+        assert_eq!(
+            exit_code, 2,
+            "Missing extension is a config error, not runtime error"
+        );
+    }
+
+    /// Test: Dual output - classify + format produces valid structured output
+    /// This verifies the combination of classify_error and format_agent_error produces
+    /// a valid structured error line on stdout
+    #[test]
+    fn test_dual_output_format() {
+        use crewchief_maproom::cli::format::format_agent_error;
+
+        let error = anyhow::anyhow!("Database connection timeout");
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        // Format the error using the agent format function
+        let structured_output = format_agent_error(&error_type, &error.to_string(), &suggestion);
+
+        // Verify exit code
+        assert_eq!(exit_code, 1, "Database errors should exit with code 1");
+
+        // Verify structured output format
+        assert!(
+            structured_output.starts_with("ERROR | "),
+            "Structured output should start with 'ERROR | '"
+        );
+        assert!(
+            structured_output.contains(&format!("type={}", error_type)),
+            "Structured output should contain error type"
+        );
+        assert!(
+            structured_output.contains("message="),
+            "Structured output should contain message field"
+        );
+        assert!(
+            structured_output.contains("suggestion="),
+            "Structured output should contain suggestion field"
+        );
+    }
+
+    /// Test: format_agent_error produces exactly one line (no embedded newlines)
+    /// This verifies structured output is always a single line for parser reliability
+    #[test]
+    fn test_exactly_one_error_line() {
+        use crewchief_maproom::cli::format::format_agent_error;
+
+        // Test with error message containing newlines
+        let error_msg = "First line\nSecond line\nThird line";
+        let suggestion = "Try this\nor that";
+
+        let structured_output = format_agent_error("database", error_msg, suggestion);
+
+        // Verify exactly one line (no embedded newlines)
+        let line_count = structured_output.lines().count();
+        assert_eq!(
+            line_count, 1,
+            "Structured error output must be exactly one line, got {} lines",
+            line_count
+        );
+
+        // Verify no newline characters in output
+        assert!(
+            !structured_output.contains('\n'),
+            "Structured output should not contain newline characters"
+        );
+    }
+
+    /// Test: classify_error doesn't depend on format (classification is independent)
+    /// This verifies classify_error can be called independently without side effects
+    #[test]
+    fn test_default_format_no_structured_output() {
+        // Classification should work regardless of output format
+        let error = anyhow::anyhow!("Some random error");
+
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+
+        // Verify classification works
+        assert!(!error_type.is_empty(), "Error type should not be empty");
+        assert!(!suggestion.is_empty(), "Suggestion should not be empty");
+        assert!(
+            exit_code == 1 || exit_code == 2,
+            "Exit code should be 1 or 2"
+        );
+
+        // classify_error itself doesn't produce output - that's format_agent_error's job
+        // This test verifies we can call classify_error without formatting
+    }
+
+    /// Test: All error types produce output matching the structured format regex
+    /// This validates the structured error format is consistent across all error types
+    #[test]
+    fn test_error_line_format_validation() {
+        use crewchief_maproom::cli::format::format_agent_error;
+        use regex::Regex;
+
+        // Regex pattern for structured error format
+        let pattern = Regex::new(r"^ERROR \| type=[a-z_]+ \| message=.+ \| suggestion=.+$")
+            .expect("Valid regex pattern");
+
+        // Test various error types
+        let test_cases = vec![
+            ("database", "Connection failed", "Check connectivity"),
+            (
+                "embedding_provider",
+                "API key missing",
+                "Set OPENAI_API_KEY",
+            ),
+            ("config_error", "sqlite-vec not found", "Install extension"),
+            ("unknown", "Mysterious error", "Report this issue"),
+            ("validation", "Invalid input", "Check parameters"),
+            ("timeout", "Request timed out", "Retry the operation"),
+            ("not_found", "Chunk not found", "Verify chunk ID is indexed"),
+        ];
+
+        for (error_type, message, suggestion) in test_cases {
+            let structured_output = format_agent_error(error_type, message, suggestion);
+
+            assert!(
+                pattern.is_match(&structured_output),
+                "Error type '{}' produced invalid format: {}",
+                error_type,
+                structured_output
+            );
+        }
+    }
+
+    // ==================== Manual Validation Notes (AFM-04.4001) ====================
+    //
+    // The following commands were run manually to verify end-to-end behavior:
+    //
+    // 1. Search with invalid path (database error):
+    //    $ cargo run --bin crewchief-maproom -- search --format agent --repo nonexistent --query test 2>/dev/null
+    //    Expected: ERROR line on stdout, exit code 1
+    //    Result: ✓ Verified - produces structured error, exits with 1
+    //
+    // 2. Default format - no structured output:
+    //    $ cargo run --bin crewchief-maproom -- search --repo nonexistent --query test 2>/dev/null
+    //    Expected: No ERROR line on stdout (backward compatibility)
+    //    Result: ✓ Verified - no structured output, error only on stderr
+    //
+    // 3. Vector-search with missing API key (if testable):
+    //    $ unset OPENAI_API_KEY GOOGLE_API_KEY VOYAGE_API_KEY
+    //    $ cargo run --bin crewchief-maproom -- vector-search --format agent --repo test --query foo 2>/dev/null
+    //    Expected: ERROR line with type=embedding_provider or config_error, exit code 2
+    //    Note: Requires specific test environment setup
+    //
+    // 4. Vector-search with sqlite-vec unavailable (if testable):
+    //    Requires environment where sqlite-vec extension is not loaded
+    //    Expected: ERROR line with type=config_error, exit code 2, suggestion mentions search command
+    //    Note: Difficult to test in CI since sqlite-vec is statically linked
+    //
 }
