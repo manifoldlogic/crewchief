@@ -2,6 +2,7 @@ use crewchief_maproom::indexer::parser::extract_chunks;
 use std::fs;
 
 #[test]
+#[ignore = "Requires /workspace/README.md (devcontainer-specific path)"]
 fn test_extract_links_from_readme() {
     let source = fs::read_to_string("/workspace/README.md").expect("Failed to read README.md");
 
@@ -38,6 +39,7 @@ fn test_extract_links_from_readme() {
 }
 
 #[test]
+#[ignore = "Requires /workspace/CLAUDE.md (devcontainer-specific path)"]
 fn test_extract_links_from_claude_md() {
     let source = fs::read_to_string("/workspace/CLAUDE.md").expect("Failed to read CLAUDE.md");
 

@@ -185,6 +185,7 @@ mod contract_tests {
     /// cause runtime errors, index corruption, and search failures.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_dimension_consistency() {
         let providers = get_test_providers().await;
         assert!(
@@ -238,6 +239,7 @@ mod contract_tests {
     /// texts and their embeddings, leading to incorrect search results.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_batch_order_preservation() {
         let providers = get_test_providers().await;
         assert!(
@@ -302,6 +304,7 @@ mod contract_tests {
     /// without errors or panics.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_empty_input_handling() {
         let providers = get_test_providers().await;
         assert!(
@@ -339,6 +342,7 @@ mod contract_tests {
     /// (all zeros, constant values) that would break semantic search.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_single_text_embedding() {
         let providers = get_test_providers().await;
         assert!(
@@ -399,6 +403,7 @@ mod contract_tests {
     /// Providers must handle batch sizes beyond trivial single-item batches.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_large_batch_handling() {
         let providers = get_test_providers().await;
         assert!(
@@ -457,6 +462,7 @@ mod contract_tests {
     /// are useless for search and ranking.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_semantic_similarity() {
         let providers = get_test_providers().await;
         assert!(
@@ -562,6 +568,7 @@ mod contract_tests {
     /// require positive dimensions.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_dimension_is_positive() {
         let providers = get_test_providers().await;
         assert!(
@@ -602,6 +609,7 @@ mod contract_tests {
     /// search results.
     #[tokio::test]
     #[serial]
+    #[ignore = "Requires embedding provider (Ollama/OpenAI/Google)"]
     async fn contract_batch_embedding_consistency() {
         let providers = get_test_providers().await;
         assert!(

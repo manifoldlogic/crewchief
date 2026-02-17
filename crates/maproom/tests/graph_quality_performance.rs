@@ -155,6 +155,7 @@ LIMIT ?3
 "#;
 
 #[test]
+#[ignore = "Requires real ~/.maproom/maproom.db with indexed data"]
 fn test_quality_weighted_performance_validation() {
     // Connect to real database
     let db_path = dirs::home_dir()

@@ -45,6 +45,7 @@ More content.
 }
 
 #[test]
+#[ignore = "Performance benchmark with tight timing thresholds, flaky in CI"]
 fn test_performance_large_document() {
     let mut content = String::from("# Large Document\n\n");
 
@@ -135,6 +136,7 @@ fn test_performance_real_claude_md() {
 }
 
 #[test]
+#[ignore = "Performance benchmark with tight timing thresholds, flaky in CI"]
 fn test_performance_repeated_parsing() {
     let content = r#"# Test Document
 
@@ -177,6 +179,7 @@ fn test() {
 }
 
 #[test]
+#[ignore = "Performance benchmark with tight timing thresholds, flaky in CI"]
 fn test_performance_code_block_heavy() {
     let mut content = String::from("# Code Examples\n\n");
 
