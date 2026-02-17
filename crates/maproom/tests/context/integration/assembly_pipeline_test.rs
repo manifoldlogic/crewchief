@@ -39,7 +39,7 @@ fn is_skip_error(e: &anyhow::Error) -> bool {
 /// Test fixture for comprehensive pipeline testing.
 struct PipelineTestFixture {
     _temp_dir: TempDir,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: set during fixture setup; retained for consistency with database state
     worktree_path: String,
     main_chunk_id: i64,
     helper_chunk_id: i64,

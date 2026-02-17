@@ -37,7 +37,7 @@ fn get_fixture_path() -> PathBuf {
 
 /// Test fixture that indexes the sample repository.
 struct RealDataFixture {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: set during fixture setup; retained for consistency with database state
     worktree_path: String,
     lib_run_chunk_id: i64,
     utils_load_config_chunk_id: i64,

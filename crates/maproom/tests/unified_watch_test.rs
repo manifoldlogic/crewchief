@@ -22,17 +22,17 @@ use tempfile::TempDir;
 struct BranchSwitchEvent {
     #[serde(rename = "type")]
     event_type: String,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: deserialized from JSON but not asserted in current tests
     timestamp: String,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: deserialized from JSON but not asserted in current tests
     repo: String,
     old_branch: String,
     new_branch: String,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: deserialized from JSON but not asserted in current tests
     old_worktree_id: i64,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: deserialized from JSON but not asserted in current tests
     new_worktree_id: i64,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: deserialized from JSON but not asserted in current tests
     worktree_created: bool,
 }
 

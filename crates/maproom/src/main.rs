@@ -878,6 +878,7 @@ fn parse_throttle(throttle: &str) -> anyhow::Result<u64> {
 }
 
 /// Map context item role to an emoji for human-readable output.
+#[allow(dead_code)] // used by format_context_bundle; retained for future human-readable CLI output
 fn role_emoji(role: &str) -> &'static str {
     match role.to_lowercase().as_str() {
         "primary" => "📄",
@@ -897,6 +898,7 @@ fn role_emoji(role: &str) -> &'static str {
 ///
 /// Displays a header with budget/usage information followed by each context item
 /// with its role, file path, line range, reason (for non-primary items), and token count.
+#[allow(dead_code)] // retained for future human-readable CLI output (context command)
 fn format_context_bundle(bundle: &ContextBundle, chunk_id: i64, budget: usize) -> String {
     let mut output = String::new();
 

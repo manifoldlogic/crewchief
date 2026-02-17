@@ -9,7 +9,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { Client } from 'pg'
+
+// Removed: import type { Client } from 'pg' — pg is not used in this package
+type PgClient = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }
 
 // Mock dependencies before importing module under test
 vi.mock('../../src/utils/git.js', () => ({
@@ -28,7 +30,7 @@ import { getCurrentBranch } from '../../src/utils/git.js'
 function createMockClient(
   repoExists = true,
   worktreeExists: Record<string, boolean> = {}
-): Client {
+): PgClient {
   const mockQuery = vi.fn((query: string, params?: any[]) => {
     // Mock repo lookup
     if (query.includes('SELECT id FROM maproom.repos')) {
@@ -60,7 +62,7 @@ function createMockClient(
 const worktreeIdCache = new Map<string, number>()
 
 async function lookupWorktreeId(
-  client: Client,
+  client: PgClient,
   repo: string,
   worktreeName: string
 ): Promise<number> {
@@ -106,7 +108,7 @@ interface ResolutionMetadata {
 }
 
 async function resolveWorktreeId(
-  client: Client,
+  client: PgClient,
   repo: string,
   explicitWorktree: string | null | undefined
 ): Promise<{ id: number | null; metadata: ResolutionMetadata }> {

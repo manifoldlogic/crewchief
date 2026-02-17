@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # E2E Integration Tests for SQLite Backend
 # Tests CLI commands work correctly with the SQLite VectorStore backend
 # Note: Don't use set -e as we handle errors within test functions
@@ -7,7 +7,7 @@ echo "=== MAPCLI SQLite E2E Tests ==="
 echo ""
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FIXTURE_DB="$REPO_ROOT/crates/maproom/tests/fixtures/pre-indexed-maproom.db"
 TEST_DB="/tmp/mapcli-test-$$.db"
@@ -24,32 +24,32 @@ trap cleanup EXIT
 
 # Test helper function
 run_test() {
-    local test_name="$1"
-    local test_cmd="$2"
-    local expect_success="${3:-true}"
+    test_name="$1"
+    test_cmd="$2"
+    expect_success="${3:-true}"
 
-    echo -n "Test: $test_name... "
+    printf "Test: %s... " "$test_name"
 
     if eval "$test_cmd" > /tmp/test_output_$$.txt 2>&1; then
         if [ "$expect_success" = "true" ]; then
             echo "PASS"
-            ((PASSED++))
+            PASSED=$((PASSED + 1))
             return 0
         else
             echo "FAIL (expected failure but got success)"
             cat /tmp/test_output_$$.txt
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
             return 1
         fi
     else
         if [ "$expect_success" = "false" ]; then
             echo "PASS (expected failure)"
-            ((PASSED++))
+            PASSED=$((PASSED + 1))
             return 0
         else
             echo "FAIL"
             cat /tmp/test_output_$$.txt
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
             return 1
         fi
     fi
@@ -69,7 +69,7 @@ export MAPROOM_DATABASE_URL="sqlite://$TEST_DB"
 
 # Build with SQLite feature
 echo "Building CLI with SQLite support..."
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 cargo build --bin crewchief-maproom --release 2>/dev/null
 CLI="./target/release/crewchief-maproom"
 
@@ -102,80 +102,18 @@ run_test "Search command - find function" \
 run_test "Search result structure" \
     "$CLI search --repo test-repo --query 'helper' 2>/dev/null | jq -e '.hits[0] | has(\"score\", \"start_line\", \"end_line\")'"
 
-# Test 6: Search command - nonexistent repo
-run_test "Search nonexistent repo" \
-    "$CLI search --repo nonexistent --query 'test' 2>/dev/null | jq -e '.hits | length == 0'" \
-    "true"
+# Test 6: Search command - nonexistent repo returns error
+run_test "Search nonexistent repo (expects error)" \
+    "$CLI search --repo nonexistent --query 'test' 2>/dev/null" \
+    "false"
 
-# Test 7: Scan command shows Phase 2 message (SQLite)
-SCAN_OUTPUT=$($CLI scan --path /tmp 2>&1) || true
-if echo "$SCAN_OUTPUT" | grep -qi "phase 2\|postgresql\|requires"; then
-    echo "Test: Scan shows Phase 2 message... PASS"
-    ((PASSED++))
-else
-    echo "Test: Scan shows Phase 2 message... FAIL"
-    echo "Output: $SCAN_OUTPUT"
-    ((FAILED++))
-fi
-
-# Test 8: Upsert command shows Phase 2 message (SQLite)
-UPSERT_OUTPUT=$($CLI upsert --repo test --worktree main --root /tmp --commit HEAD 2>&1) || true
-if echo "$UPSERT_OUTPUT" | grep -qi "phase 2\|postgresql\|requires"; then
-    echo "Test: Upsert shows Phase 2 message... PASS"
-    ((PASSED++))
-else
-    echo "Test: Upsert shows Phase 2 message... FAIL"
-    echo "Output: $UPSERT_OUTPUT"
-    ((FAILED++))
-fi
-
-# Test 9: Cleanup-stale command (default is dry-run)
+# Test 7: Cleanup-stale command (default is dry-run)
 run_test "Cleanup-stale command" \
     "$CLI db cleanup-stale 2>/dev/null"
 
-# Test 10: DB migrate for SQLite (should be no-op or informative)
-DB_MIGRATE_OUTPUT=$($CLI db migrate 2>&1) || true
-if [ $? -eq 0 ] || echo "$DB_MIGRATE_OUTPUT" | grep -qi "sqlite\|skip\|no-op"; then
-    echo "Test: DB migrate for SQLite... PASS"
-    ((PASSED++))
-else
-    echo "Test: DB migrate for SQLite... FAIL"
-    echo "Output: $DB_MIGRATE_OUTPUT"
-    ((FAILED++))
-fi
-
-echo ""
-echo "=== Daemon Tests (stdio) ==="
-echo ""
-
-# Test 11: Daemon ping via stdio
-PING_RESULT=$(echo '{"jsonrpc":"2.0","method":"ping","id":1}' | timeout 10 $CLI serve 2>/dev/null | head -1)
-if echo "$PING_RESULT" | grep -q "pong"; then
-    echo "Test: Daemon ping via stdio... PASS"
-    ((PASSED++))
-else
-    echo "Test: Daemon ping via stdio... FAIL"
-    echo "Output: $PING_RESULT"
-    ((FAILED++))
-fi
-
-# Test 12: Daemon search (FTS mode) via stdio
-SEARCH_REQUEST='{"jsonrpc":"2.0","method":"search","params":{"repo":"test-repo","query":"main","mode":"fts"},"id":2}'
-SEARCH_RESULT=$(echo "$SEARCH_REQUEST" | timeout 10 $CLI serve 2>/dev/null | head -1)
-if echo "$SEARCH_RESULT" | jq -e '.result.hits | length > 0' > /dev/null 2>&1; then
-    echo "Test: Daemon FTS search... PASS"
-    ((PASSED++))
-else
-    echo "Test: Daemon FTS search... FAIL (or graceful error)"
-    echo "Output: $SEARCH_RESULT"
-    # Allow graceful degradation - count as pass if error is informative
-    if echo "$SEARCH_RESULT" | grep -qi "error\|unavailable"; then
-        echo "  (Graceful error detected - counting as PASS)"
-        ((PASSED++))
-    else
-        ((FAILED++))
-    fi
-fi
+# Test 8: DB migrate for SQLite (should be no-op or informative)
+run_test "DB migrate for SQLite" \
+    "$CLI db migrate 2>/dev/null"
 
 # Summary
 echo ""

@@ -12,71 +12,70 @@ workflows/
 ├── release-vscode-maproom.yml # Individual: vscode-maproom to marketplaces
 ├── reusable-rust-build.yml  # Shared Rust binary builds
 ├── reusable-typescript-build.yml # Shared TypeScript builds
-└── test.yml                 # CI tests (SQLite-first)
+└── test.yml                 # CI tests (SQLite-only)
 ```
 
-## CI Testing Philosophy: SQLite-First
+## CI Testing Philosophy: SQLite-Only
 
-**Default Backend:** SQLite - zero configuration, no external services required
-**Integration Backend:** PostgreSQL - for team sharing and production validation
+**Backend:** SQLite — zero configuration, no external services required. PostgreSQL was intentionally removed.
 
 ### Test Job Organization
 
-| Job | Backend | Dependencies | Purpose |
-|-----|---------|--------------|---------|
-| `test-sqlite-e2e` | SQLite | None | CLI end-to-end tests |
-| `test-mcp-sqlite` | SQLite | None | TypeScript MCP server tests |
-| `test-rust-sqlite` | SQLite | None | Rust library tests (in-memory) |
-| `test-postgres` | PostgreSQL | Service container | TypeScript integration tests |
-| `test-rust-postgres` | PostgreSQL | None | Rust compilation validation |
+| Job | Trigger | Purpose |
+|-----|---------|---------|
+| `changes` | Always | Detect which paths changed (~5s) |
+| `test-rust` | Rust code changes | Rust `maproom` crate tests (in-memory SQLite) |
+| `test-typescript` | TypeScript code changes | Unit tests for cli, vscode-maproom, daemon-client |
+| `test-sqlite-e2e` | Rust or E2E test changes | CLI end-to-end tests with SQLite backend |
+| `test-performance-regression` | Rust code changes | Performance budget validation (<20ms overhead, <10KB response) |
+
+**Removed jobs:**
+- `test-mcp-sqlite` - MCP is being deprecated; tests moved out of CI
+- `test-daemon-integration` - Daemon requires embedding provider (Ollama) not available in CI. Run locally with `pnpm test:integration`.
+
+### Three-Tier Test Classification
+
+| Tier | Description | CI Behavior | Mechanism |
+|------|-------------|-------------|-----------|
+| Unit | No external deps, fast, deterministic | Always runs in default CI job | No skip annotation needed |
+| Integration | Requires binary, database, or daemon | Separate CI job or `vitest.integration.config.ts` | `#[ignore = "reason"]` (Rust) or separate vitest config (TypeScript) |
+| External | Requires Ollama, GCP, OpenAI, etc. | Never runs in CI | `#[ignore = "Requires <service>"]` or `skipIf` with reason |
+
+**Rust:** Use `#[ignore = "Requires X"]` for integration/external tests. Run ignored tests locally with `cargo test -- --ignored`.
+
+**TypeScript:** Use a separate `vitest.integration.config.ts` to isolate tests that need a running daemon or binary. Run with `pnpm test:integration`.
 
 ### When to Add Tests
 
-**Add SQLite tests (default):**
-- Testing new CLI commands
-- Testing MCP server features
-- Unit testing Rust functions
-- Most development and feature work
-
-**Add PostgreSQL tests:**
-- Testing concurrent access patterns
-- Validating PostgreSQL-specific features (recursive CTEs, parallel queries)
-- Team sharing / multi-user scenarios
-- Production deployment validation
+- Testing new CLI commands → add to `packages/cli/tests/`
+- Unit testing Rust functions → add to `crates/maproom/`
+- Tests requiring daemon binary → add to `vitest.integration.config.ts`, run locally with `pnpm test:integration`
+- Performance budgets → add to `crates/maproom/tests/performance_regression_test.rs`
 
 ### Adding New Test Jobs
 
-For SQLite tests (recommended):
+Follow the existing pattern in `test.yml`:
+
 ```yaml
 my-new-test:
-  name: My Feature Test (SQLite)
-  runs-on: ubuntu-latest
+  name: My Feature Test
+  needs: changes
+  if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
+  runs-on: blacksmith-4vcpu-ubuntu-2404
   steps:
-    # ... test steps
+    - uses: actions/checkout@v4
+    # ... setup and test steps
     - name: Job Summary
       if: always()
       run: |
         echo "## 🗄️ My Feature Test" >> $GITHUB_STEP_SUMMARY
-        echo "**Backend:** SQLite (primary)" >> $GITHUB_STEP_SUMMARY
+        echo "**Backend:** SQLite" >> $GITHUB_STEP_SUMMARY
 ```
 
-For PostgreSQL tests (when needed):
-```yaml
-my-postgres-test:
-  name: My Feature Test (PostgreSQL Integration)
-  runs-on: ubuntu-latest
-  services:
-    postgres-test:
-      image: pgvector/pgvector:pg16
-      # ... service config
-  steps:
-    # ... test steps
-    - name: Job Summary
-      if: always()
-      run: |
-        echo "## 🐘 My Feature Test" >> $GITHUB_STEP_SUMMARY
-        echo "**Backend:** PostgreSQL (integration)" >> $GITHUB_STEP_SUMMARY
-```
+Key points:
+- Gate on the `changes` job to skip when irrelevant code hasn't changed
+- Use `blacksmith-4vcpu-ubuntu-2404` runners (not `ubuntu-latest`)
+- Add a Job Summary step for visibility in GitHub Actions UI
 
 ## Workflows
 

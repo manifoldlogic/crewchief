@@ -7,13 +7,9 @@
 //! - Handles JSX parent/child relationships
 //! - Assembles complete context bundles within budget
 
-#![allow(unused_imports)]
-
 use crewchief_maproom::context::{
     detectors::{ComponentDetector, HookDetector, JsxRelationshipDetector},
-    strategies::ReactAssemblyStrategy,
     types::ExpandOptions,
-    ContextAssembler,
 };
 
 #[cfg(test)]
@@ -426,43 +422,3 @@ mod expand_options_tests {
     }
 }
 
-// Database integration tests (require database connection)
-#[cfg(test)]
-mod integration_tests {
-    #[tokio::test]
-    #[ignore] // Requires database setup
-    async fn test_react_strategy_basic() {
-        // This test would:
-        // 1. Set up a test database
-        // 2. Insert sample React component chunks
-        // 3. Create ReactAssemblyStrategy
-        // 4. Call assemble() with React component
-        // 5. Verify bundle contains expected items
-        //
-        // Implementation requires database fixtures
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_react_strategy_with_hooks() {
-        // Test that hooks are included when requested
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_react_strategy_with_routes() {
-        // Test that routes are included when requested
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_react_strategy_jsx_relationships() {
-        // Test that JSX parent/child relationships are handled
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_react_strategy_budget_enforcement() {
-        // Test that the strategy respects token budgets
-    }
-}

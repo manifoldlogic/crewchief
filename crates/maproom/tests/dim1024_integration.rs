@@ -224,20 +224,20 @@ async fn test_migration_10_idempotent() {
     runner.migrate().unwrap();
     let version_first = runner.current_version().unwrap();
 
-    // Verify we're at version 10
-    assert_eq!(
-        version_first, 10,
-        "Should be at migration version 10 after first run"
+    // Verify we're at least at version 10 (migration 10 adds vec_code_1024)
+    assert!(
+        version_first >= 10,
+        "Should be at migration version >= 10 after first run, got {version_first}"
     );
 
     // Run migrations again (should be idempotent)
     runner.migrate().unwrap();
     let version_second = runner.current_version().unwrap();
 
-    // Verify version is still 10 and no errors occurred
+    // Verify version is unchanged after second run (idempotent)
     assert_eq!(
-        version_second, 10,
-        "Should still be at version 10 after second run"
+        version_second, version_first,
+        "Should still be at version {version_first} after second run"
     );
 
     // Verify vec_code_1024 table exists (only created once)

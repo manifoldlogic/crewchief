@@ -27,13 +27,32 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { DaemonClient } from '../src/client'
 import * as path from 'path'
 import * as os from 'os'
+import * as fs from 'fs'
 
 const DATABASE_URL =
   process.env.TEST_MAPROOM_DATABASE_URL ||
-  'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
+  `sqlite://${os.homedir()}/.maproom/maproom.db`
 
-// Determine binary path based on platform
+/**
+ * Get the path to the maproom binary.
+ * Checks in order:
+ * 1. MAPROOM_BINARY_PATH environment variable
+ * 2. Workspace target/release (monorepo structure)
+ * 3. Bundled binary in packages/cli/bin/<platform>/
+ */
 function getBinaryPath(): string {
+  if (process.env.MAPROOM_BINARY_PATH) {
+    return process.env.MAPROOM_BINARY_PATH
+  }
+
+  // Check workspace root for CI (monorepo structure)
+  const workspaceRoot = path.resolve(__dirname, '../../../..')
+  const ciPath = path.join(workspaceRoot, 'target/release/crewchief-maproom')
+  if (fs.existsSync(ciPath)) {
+    return ciPath
+  }
+
+  // Fall back to bundled binary in packages/cli/bin/<platform>/
   const platform = os.platform()
   const arch = os.arch()
 
@@ -50,7 +69,7 @@ function getBinaryPath(): string {
     throw new Error(`Unsupported platform: ${platform}-${arch}`)
   }
 
-  const binaryPath = path.join(
+  return path.join(
     __dirname,
     '..',
     '..',
@@ -59,15 +78,15 @@ function getBinaryPath(): string {
     platformDir,
     'crewchief-maproom'
   )
-
-  return binaryPath
 }
 
-describe('Performance Tests', () => {
+const binaryPath = getBinaryPath()
+const binaryExists = fs.existsSync(binaryPath)
+
+describe.skipIf(!binaryExists)('Performance Tests', () => {
   let daemon: DaemonClient
 
   beforeAll(() => {
-    const binaryPath = getBinaryPath()
     daemon = new DaemonClient({
       binaryPath,
       env: {
@@ -162,7 +181,7 @@ describe('Performance Tests', () => {
   })
 
   describe('Memory Leak Detection', () => {
-    // Skip memory leak test in container environment - too slow (>2min for 1000 requests)
+    // TODO: Enable when CI has --expose-gc support. Too slow in container (>2min for 1000 requests).
     // Run manually with: node --expose-gc vitest run performance.test.ts
     it.skip('no memory leaks over 1000 requests', async () => {
       // Warmup to ensure daemon running

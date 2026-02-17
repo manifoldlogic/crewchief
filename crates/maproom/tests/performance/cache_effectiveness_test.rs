@@ -72,7 +72,7 @@ struct MockCache {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Justification: fields populated during cache insertion; struct used as HashMap value in MockCache
 struct CacheEntry {
     key: String,
     value: String,
@@ -134,7 +134,7 @@ impl MockCache {
         self.entries.remove(key);
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: standard cache API method available for future test scenarios
     fn clear(&mut self) {
         self.entries.clear();
         self.hits = 0;

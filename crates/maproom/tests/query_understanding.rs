@@ -3,7 +3,7 @@
 //! Tests that QueryUnderstanding metadata is properly assembled and attached
 //! to search responses, including tokens, mode, filters, and timing breakdown.
 
-#![allow(unused_imports)]
+#![allow(unused_imports)] // Justification: imports used across test helper functions and #[ignore] test bodies
 
 use crewchief_maproom::search::results::{
     FinalSearchResults, QueryFilters, QueryProcessingDetails, QueryUnderstanding, SearchMetadata,

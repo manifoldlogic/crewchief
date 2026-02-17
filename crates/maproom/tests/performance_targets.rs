@@ -352,7 +352,7 @@ mod tests {
     // Integration test that validates all performance targets
     // This test is ignored by default and requires MAPROOM_DATABASE_URL
     #[test]
-    #[ignore]
+    #[ignore = "Requires MAPROOM_DATABASE_URL"]
     fn test_validate_all_performance_targets() {
         println!("\n=== Performance Target Validation Test ===\n");
         println!("This test validates all 5 performance targets from PERF_OPT_PLAN.md");
