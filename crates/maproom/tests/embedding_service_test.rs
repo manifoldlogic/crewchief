@@ -50,6 +50,7 @@ async fn test_service_from_config(
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_embed_simple_code_chunk() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -64,6 +65,7 @@ async fn test_embed_simple_code_chunk() {
 }
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_embed_complex_code_chunk() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -87,6 +89,7 @@ class EmbeddingService {
 }
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_embed_documentation_chunk() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -111,6 +114,7 @@ async fn test_embed_documentation_chunk() {
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_batch_processing_100_chunks() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -128,6 +132,7 @@ async fn test_batch_processing_100_chunks() {
 }
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_large_batch_chunking() {
     let mut config = test_config();
     config.batch_size = 10; // Small batch size for testing
@@ -141,6 +146,7 @@ async fn test_large_batch_chunking() {
 }
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_empty_batch() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -250,6 +256,7 @@ fn test_cost_tracking_precision() {
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_cache_operations() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -267,6 +274,7 @@ async fn test_cache_operations() {
 }
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_cache_metrics_tracking() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
@@ -278,6 +286,7 @@ async fn test_cache_metrics_tracking() {
 }
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_cache_cleanup_expired() {
     let mut config = test_config();
     config.cache.ttl_seconds = 0; // Expire immediately
@@ -299,6 +308,7 @@ async fn test_cache_cleanup_expired() {
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "Requires embedding provider (Ollama/OpenAI)"]
 async fn test_embedding_dimension_validation() {
     let config = test_config();
     let service = test_service_from_config(config).await.unwrap();
