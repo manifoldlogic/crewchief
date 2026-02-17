@@ -162,7 +162,7 @@ describe('Performance Tests', () => {
   })
 
   describe('Memory Leak Detection', () => {
-    // Skip memory leak test in container environment - too slow (>2min for 1000 requests)
+    // TODO: Enable when CI has --expose-gc support. Too slow in container (>2min for 1000 requests).
     // Run manually with: node --expose-gc vitest run performance.test.ts
     it.skip('no memory leaks over 1000 requests', async () => {
       // Warmup to ensure daemon running

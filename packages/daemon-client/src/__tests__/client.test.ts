@@ -21,12 +21,13 @@ vi.mock('node:child_process', () => ({
 
 /**
  * Note: These tests have known async/mock timing issues in CI environments.
+ * They are excluded from the default vitest config and only run via test:integration.
  * Core functionality is tested by errors.test.ts, rpc.test.ts, and lifecycle.test.ts.
  * Full client integration is tested by tests/performance.test.ts (requires running daemon).
  *
- * Skip in CI - these tests are flaky due to mock process timing.
+ * TODO: Fix async mock timing to make these reliably runnable in CI
  */
-describe.skipIf(process.env.CI === 'true')('DaemonClient', () => {
+describe('DaemonClient', () => {
   let mockProcess: Partial<ChildProcess> & EventEmitter
   let mockStdin: Writable
   let mockStdout: Readable

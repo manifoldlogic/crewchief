@@ -269,8 +269,7 @@ describe('competition-runner', () => {
       expect(result.participants).toHaveLength(3)
     })
 
-    // Skip: parallel execution test relies on claude-agent-sdk which has
-    // environment-specific node spawning requirements that are difficult to mock
+    // TODO: Enable when claude-agent-sdk mock supports parallel node spawning
     it.skip('should support parallel execution', async () => {
       const config: CompetitionConfig = {
         task: TASK_FIND_WORKTREE_CREATION,

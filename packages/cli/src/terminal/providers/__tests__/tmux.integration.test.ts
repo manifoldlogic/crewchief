@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { TmuxProvider } from '../tmux'
 
-// Check tmux availability using POSIX-compatible detection
+// Requires tmux to be installed — runtime detection, not a CI-only skip
 const tmuxCheck = spawnSync('command', ['-v', 'tmux'], { shell: true })
 const tmuxAvailable = tmuxCheck.status === 0
 

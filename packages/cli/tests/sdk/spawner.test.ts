@@ -13,10 +13,10 @@ import { updateSDKConfig, resetSDKConfig } from '../../src/sdk/config.js'
 import { spawnAgent } from '../../src/sdk/spawner.js'
 import type { ToolUseEvent, AgentResult } from '../../src/sdk/types.js'
 
-// Skip tests in CI - they require Claude Code with valid API credentials
-const isCI = process.env.CI === 'true'
+// Requires Claude Code with valid API credentials — excluded from default vitest config.
+// Run via: pnpm test:integration
 
-describe.skipIf(isCI)('SDK Agent Spawner', () => {
+describe('SDK Agent Spawner', () => {
   let testWorktree: string
 
   beforeEach(async () => {

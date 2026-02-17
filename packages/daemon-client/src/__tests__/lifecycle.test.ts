@@ -171,19 +171,9 @@ describe('DaemonLifecycle', () => {
       expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM')
     })
 
-    // TODO: These 3 tests have complex timing issues with mocked processes and async event emission
-    // Skipping for now - basic stop() functionality is covered by "should send SIGTERM for graceful shutdown"
-    it.skip('should send SIGKILL after timeout if process does not exit', async () => {
-      // Covered by integration tests
-    })
-
-    it.skip('should resolve immediately if process already exited', async () => {
-      // Covered by integration tests
-    })
-
-    it.skip('should clean up resources (streams and listeners)', async () => {
-      // Covered by integration tests
-    })
+    // Removed 3 empty stubs (SIGKILL timeout, already-exited, cleanup) — TESTCI.2004
+    // Basic stop() covered by "should send SIGTERM for graceful shutdown" above.
+    // Advanced stop() scenarios covered by integration tests.
   })
 
   describe('shouldRestart', () => {
