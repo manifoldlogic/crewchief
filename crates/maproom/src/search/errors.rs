@@ -533,7 +533,7 @@ impl SearchErrorDetails {
         if let Some(p) = provider {
             context.insert("provider".to_string(), p.to_string());
         }
-        context.insert("error".to_string(), error_str.clone());
+        context.insert("provider_error".to_string(), error_str.clone());
 
         // Provider-specific suggestions based on error patterns
         let suggestions = if let Some(p) = provider {
