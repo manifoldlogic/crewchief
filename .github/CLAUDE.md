@@ -26,12 +26,12 @@ workflows/
 | `changes` | Always | Detect which paths changed (~5s) |
 | `test-rust` | Rust code changes | Rust `maproom` crate tests (in-memory SQLite) |
 | `test-typescript` | TypeScript code changes | Unit tests for cli, vscode-maproom, daemon-client |
-| `test-daemon-integration` | daemon-client or Rust changes | Integration tests requiring a running daemon binary |
 | `test-sqlite-e2e` | Rust or E2E test changes | CLI end-to-end tests with SQLite backend |
-| `test-mcp-sqlite` | MCP or Rust changes | MCP server SQLite backend test |
 | `test-performance-regression` | Rust code changes | Performance budget validation (<20ms overhead, <10KB response) |
 
-**Note:** `maproom-mcp` is intentionally excluded from `test-typescript`. MCP has its own dedicated job (`test-mcp-sqlite`) that runs `pnpm test:sqlite` against a pre-indexed SQLite fixture. The general TypeScript job tests cli, vscode-maproom, and daemon-client only.
+**Removed jobs:**
+- `test-mcp-sqlite` - MCP is being deprecated; tests moved out of CI
+- `test-daemon-integration` - Daemon requires embedding provider (Ollama) not available in CI. Run locally with `pnpm test:integration`.
 
 ### Three-Tier Test Classification
 
@@ -48,9 +48,8 @@ workflows/
 ### When to Add Tests
 
 - Testing new CLI commands → add to `packages/cli/tests/`
-- Testing MCP server features → add to `packages/maproom-mcp/tests/`
 - Unit testing Rust functions → add to `crates/maproom/`
-- Tests requiring daemon binary → add to integration config, runs in `test-daemon-integration`
+- Tests requiring daemon binary → add to `vitest.integration.config.ts`, run locally with `pnpm test:integration`
 - Performance budgets → add to `crates/maproom/tests/performance_regression_test.rs`
 
 ### Adding New Test Jobs

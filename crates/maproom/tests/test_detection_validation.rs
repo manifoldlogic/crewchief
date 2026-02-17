@@ -169,6 +169,7 @@ fn get_database_path() -> anyhow::Result<PathBuf> {
 
 /// Validate test detection accuracy on real data
 #[test]
+#[ignore = "Requires real ~/.maproom/maproom.db with indexed data"]
 fn validate_test_detection_accuracy() -> anyhow::Result<()> {
     // Load samples from database
     let samples = load_sample_chunks()?;
