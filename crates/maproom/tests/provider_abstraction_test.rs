@@ -678,7 +678,7 @@ async fn test_error_handling_empty_embeddings_response() {
 /// the provider must detect this and return an appropriate error.
 ///
 /// **Contract Requirement**: Providers MUST validate that returned embeddings
-/// match the expected dimension and return `EmbeddingError::Api(InvalidResponse)`
+/// match the expected dimension and return `EmbeddingError::DimensionMismatch`
 /// if there's a mismatch. This upholds the critical trait guarantee that
 /// `embed()` output length equals `dimension()`.
 #[tokio::test]
@@ -709,17 +709,13 @@ async fn test_error_handling_dimension_mismatch() {
     );
 
     match result.unwrap_err() {
-        EmbeddingError::Api(ApiError::InvalidResponse(msg)) => {
-            // Error message should mention dimension or length mismatch
-            let msg_lower = msg.to_lowercase();
-            assert!(
-                msg_lower.contains("dimension") || msg_lower.contains("length"),
-                "Error should mention dimension/length mismatch, got: {}",
-                msg
-            );
+        EmbeddingError::DimensionMismatch(err) => {
+            // Verify the error captures the dimension details
+            assert_eq!(err.expected, 768, "Expected dimension should be 768");
+            assert_eq!(err.actual, 512, "Actual dimension should be 512");
         }
         other => panic!(
-            "Expected InvalidResponse error for dimension mismatch, got: {:?}",
+            "Expected DimensionMismatch error for dimension mismatch, got: {:?}",
             other
         ),
     }

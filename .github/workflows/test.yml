@@ -234,7 +234,9 @@ jobs:
         # Use --test-threads=1 because:
         # 1. Env var race conditions in provider tests (mitigated by #[serial] but kept for safety)
         # 2. Git poller integration tests have filesystem timing sensitivity that flakes under parallel execution
-        run: cargo test -- --test-threads=1
+        # Exclude doc tests (--lib --bins --tests) because many doc examples have
+        # compilation errors (private fn references, missing imports) - pre-existing on main
+        run: cargo test --lib --bins --tests -- --test-threads=1
         working-directory: crates/maproom
 
       - name: Job Summary

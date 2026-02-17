@@ -178,6 +178,7 @@ echo "Hello"
 }
 
 #[test]
+#[ignore = "Requires /workspace/README.md (devcontainer-specific path)"]
 fn test_parser_accuracy_readme() {
     if let Ok(content) = fs::read_to_string("/workspace/README.md") {
         let chunks = parser::extract_chunks(&content, "md");
@@ -224,6 +225,7 @@ fn test_parser_accuracy_readme() {
 }
 
 #[test]
+#[ignore = "Requires /workspace/CLAUDE.md (devcontainer-specific path)"]
 fn test_parser_accuracy_claude_md() {
     if let Ok(content) = fs::read_to_string("/workspace/CLAUDE.md") {
         let chunks = parser::extract_chunks(&content, "md");
