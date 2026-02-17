@@ -100,7 +100,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/maproom -> target"
+          workspaces: ". -> target"
           key: sqlite-e2e
 
       - name: Install jq
@@ -171,7 +171,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/maproom -> target"
+          workspaces: ". -> target"
           key: mcp-sqlite
 
       - name: Ensure SQLite fixture exists
@@ -223,7 +223,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/maproom -> target"
+          workspaces: ". -> target"
           key: sqlite
 
       - name: Check compilation
@@ -272,7 +272,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/maproom -> target"
+          workspaces: ". -> target"
           key: performance-regression
 
       - name: Run performance regression tests
@@ -328,7 +328,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/maproom -> target"
+          workspaces: ". -> target"
           key: daemon-integration
 
       - name: Build Rust binary (release)
@@ -368,7 +368,7 @@ jobs:
         run: pnpm test:integration
         env:
           CI: true
-          MAPROOM_BINARY_PATH: ${{ github.workspace }}/crates/maproom/target/release/crewchief-maproom
+          MAPROOM_BINARY_PATH: ${{ github.workspace }}/target/release/crewchief-maproom
 
       - name: Job Summary
         if: always()
