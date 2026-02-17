@@ -280,6 +280,12 @@ cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callee
 cargo run --bin crewchief-maproom -- context --chunk-id 12345 --callers --callees --format json
 ```
 
+## Agent Integration
+
+For guidance on building agent integrations (MCP servers, IDE extensions, prompt engineering):
+
+- **[Agent Usage Guide](docs/agent-usage.md)** - Recommended workflows, search strategies, k-value recommendations, error handling playbook, and index hygiene guidance. Based on empirical data from controlled agent benchmarks.
+
 ## Exit Codes (Agent Format)
 
 When using `--format agent`, commands follow a consistent exit code contract:

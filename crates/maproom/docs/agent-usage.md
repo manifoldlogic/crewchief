@@ -59,7 +59,7 @@ crewchief-maproom search \
 
 Example output:
 
-```
+```text
 SEARCH query="authentication" | hits=10 | total_estimate=25 | mode=fts
 src/auth/login.ts:42 | func handleLogin | 12.35 | Handles user login with credential validation
 src/auth/session.ts:10 | func createSession | 9.88 | Creates a new session after authentication
@@ -94,12 +94,12 @@ crewchief-maproom context \
 
 Example output:
 
-```
+```text
 CONTEXT chunk_id=12345 | tokens=750/6000 | items=4 | truncated=no
 primary | src/auth/login.ts:42-68 | 450 | Target function | export async function handleLogin(req, res) {   const { username, password } = req.body;   const user = await authenticate(username, password);
-caller | src/routes/api.ts:100-120 | 120 | Calls handleLogin | -
-caller | src/routes/web.ts:55-70 | 90 | Calls handleLogin | -
-callee | src/auth/verify.ts:10-30 | 90 | Called by handleLogin | -
+caller | src/routes/api.ts:100-120 | 120 | Calls handleLogin
+caller | src/routes/web.ts:55-70 | 90 | Calls handleLogin
+callee | src/auth/verify.ts:10-30 | 90 | Called by handleLogin
 ```
 
 **When to use `--callers` / `--callees`:** Relationship queries ("what calls
@@ -112,7 +112,9 @@ and concept queries ("what is the auth flow?"). Agents often went straight from
 search to Read for these query types (report-maproom-cli.md, section 4).
 
 **Budget recommendation:** Allocate 3-8 context calls. Use `--budget` to
-control token consumption per call (default: 6000 tokens).
+control token consumption per call (default: 6000 tokens). For advanced
+context assembly integration, see
+[context_assembly_api.md](context_assembly_api.md).
 
 ### Phase 3: Read + Grep (deepen)
 
@@ -179,9 +181,10 @@ requires an embedding provider to be configured.
 - After FTS returns zero results for a concept
 
 **Provider configuration:** Vector search requires an embedding provider. See
-[configuration_guide.md](configuration_guide.md) for setup. Without a
-configured provider, vector search will return a structured error with exit
-code 2 (config error -- do not retry).
+[configuration_guide.md](configuration_guide.md) for setup and
+[CLAUDE.md](../CLAUDE.md) for environment variables (`MAPROOM_EMBEDDING_PROVIDER`,
+`OPENAI_API_KEY`, etc.). Without a configured provider, vector search will
+return a structured error with exit code 2 (config error -- do not retry).
 
 ```bash
 crewchief-maproom search \
@@ -225,7 +228,7 @@ LLM token budgets. Two output types exist:
 
 **Search output** (from `search` and `vector-search` commands):
 
-```
+```text
 SEARCH query="<query>" | hits=N | total_estimate=M | mode=<fts|vector>
 <file_relpath>:<start_line> | <kind> [<symbol>] | <score> | <preview>
 ```
@@ -242,7 +245,7 @@ Each result line contains four segments separated by ` | `:
 
 **Context output** (from `context` command):
 
-```
+```text
 CONTEXT chunk_id=N | tokens=T/B | items=I | truncated=yes|no
 <role> | <file_relpath>:<start>-<end> | <tokens> | <reason> | <preview>
 <role> | <file_relpath>:<start>-<end> | <tokens> | <reason>
@@ -260,7 +263,7 @@ FTS and vector search commands.
 
 Every search response begins with a metadata header line:
 
-```
+```text
 SEARCH query="authentication" | hits=10 | total_estimate=25 | mode=fts
 ```
 
@@ -298,7 +301,7 @@ options:
 When `--format agent` is active, errors are written to stdout as a single
 structured line:
 
-```
+```text
 ERROR | type=<error_type> | message=<msg> | suggestion=<action>
 ```
 
@@ -320,7 +323,7 @@ fixed taxonomy.
 
 **Decision tree for agents:**
 
-```
+```text
 Exit code 0 -> Process results normally
 Exit code 1 -> Read the error type:
   - database/timeout: Retry once
@@ -333,7 +336,7 @@ Exit code 2 -> Do not retry. This is a configuration problem:
 
 **Example: vector search with missing provider**
 
-```
+```text
 ERROR | type=embedding_provider | message=Failed to create embedding service | suggestion=Set OPENAI_API_KEY or configure MAPROOM_EMBEDDING_PROVIDER
 ```
 
@@ -341,7 +344,7 @@ Exit code: 2. The agent should fall back to FTS rather than retrying.
 
 **Example: database connection failure**
 
-```
+```text
 ERROR | type=database | message=Failed to connect to database at ~/.maproom/maproom.db | suggestion=Check database connection settings
 ```
 
@@ -396,7 +399,7 @@ documentation.
 
 Recommended patterns for common codebases:
 
-```
+```gitignore
 # Translation / localization files
 i18n/**
 locales/**
