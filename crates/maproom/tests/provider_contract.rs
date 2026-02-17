@@ -58,6 +58,7 @@
 
 use crewchief_maproom::embedding::factory::create_provider_from_env;
 use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use serial_test::serial;
 use std::sync::Arc;
 
 /// Helper function to create test providers based on environment configuration.
@@ -183,6 +184,7 @@ mod contract_tests {
     /// components all depend on consistent embedding dimensions. Dimension mismatches
     /// cause runtime errors, index corruption, and search failures.
     #[tokio::test]
+    #[serial]
     async fn contract_dimension_consistency() {
         let providers = get_test_providers().await;
         assert!(
@@ -235,6 +237,7 @@ mod contract_tests {
     /// texts and output embeddings. Order violations corrupt the mapping between
     /// texts and their embeddings, leading to incorrect search results.
     #[tokio::test]
+    #[serial]
     async fn contract_batch_order_preservation() {
         let providers = get_test_providers().await;
         assert!(
@@ -298,6 +301,7 @@ mod contract_tests {
     /// (e.g., filtering, chunking). Providers must handle this edge case gracefully
     /// without errors or panics.
     #[tokio::test]
+    #[serial]
     async fn contract_empty_input_handling() {
         let providers = get_test_providers().await;
         assert!(
@@ -334,6 +338,7 @@ mod contract_tests {
     /// **Why This Matters**: Ensures providers don't return degenerate embeddings
     /// (all zeros, constant values) that would break semantic search.
     #[tokio::test]
+    #[serial]
     async fn contract_single_text_embedding() {
         let providers = get_test_providers().await;
         assert!(
@@ -393,6 +398,7 @@ mod contract_tests {
     /// **Why This Matters**: Real-world usage involves batching for efficiency.
     /// Providers must handle batch sizes beyond trivial single-item batches.
     #[tokio::test]
+    #[serial]
     async fn contract_large_batch_handling() {
         let providers = get_test_providers().await;
         assert!(
@@ -450,6 +456,7 @@ mod contract_tests {
     /// useful for semantic search. Embeddings that don't preserve semantic similarity
     /// are useless for search and ranking.
     #[tokio::test]
+    #[serial]
     async fn contract_semantic_similarity() {
         let providers = get_test_providers().await;
         assert!(
@@ -511,6 +518,7 @@ mod contract_tests {
     /// database column selection. Name mismatches break monitoring and multi-provider
     /// database operations.
     #[tokio::test]
+    #[serial]
     async fn contract_name_matches_factory() {
         // Test each provider independently (not using get_test_providers helper)
         let test_cases = vec![
@@ -553,6 +561,7 @@ mod contract_tests {
     /// spaces. Database schemas, array allocations, and vector operations all
     /// require positive dimensions.
     #[tokio::test]
+    #[serial]
     async fn contract_dimension_is_positive() {
         let providers = get_test_providers().await;
         assert!(
@@ -592,6 +601,7 @@ mod contract_tests {
     /// embeddings break caching, make debugging impossible, and produce inconsistent
     /// search results.
     #[tokio::test]
+    #[serial]
     async fn contract_batch_embedding_consistency() {
         let providers = get_test_providers().await;
         assert!(
@@ -637,6 +647,7 @@ mod contract_tests {
     /// scenarios (network failures, invalid credentials) require specific environment
     /// setup and are tested separately in integration tests.
     #[tokio::test]
+    #[serial]
     async fn contract_error_handling_structure() {
         // This test verifies that the provider trait returns Result types
         // and that errors can be propagated. Actual error scenarios require
@@ -696,6 +707,7 @@ mod contract_tests {
     ///
     /// This test documents the timeout contract requirement.
     #[tokio::test]
+    #[serial]
     #[ignore = "Timeout testing requires special setup (see test documentation)"]
     async fn contract_timeout_behavior() {
         // This test is marked #[ignore] because timeout testing requires either:
@@ -729,6 +741,7 @@ mod property_tests {
     // that dimension consistency holds regardless of batch size.
     proptest! {
         #[test]
+        #[serial]
         fn prop_batch_size_consistency(texts in prop::collection::vec("\\PC+", 1..20)) {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let providers = runtime.block_on(get_test_providers());
@@ -775,6 +788,7 @@ mod property_tests {
     // This verifies that providers don't return degenerate embeddings.
     proptest! {
         #[test]
+        #[serial]
         fn prop_embeddings_non_zero(text in "\\PC{10,100}") {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let providers = runtime.block_on(get_test_providers());
@@ -815,6 +829,7 @@ mod property_tests {
     // numerical instability in downstream operations.
     proptest! {
         #[test]
+        #[serial]
         fn prop_embedding_magnitude_bounded(text in "\\PC{10,100}") {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let providers = runtime.block_on(get_test_providers());

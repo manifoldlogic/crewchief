@@ -143,7 +143,7 @@ fn default_query_corpus() -> Vec<String> {
 
 /// Results from a single query execution.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Justification: fields populated during load test execution; struct used for collection/counting
 struct QueryResult {
     query: String,
     latency_ms: f64,

@@ -68,7 +68,7 @@ impl TempGitRepo {
         std::fs::remove_file(self.dir.path().join(name)).unwrap();
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: test helper utility available for test scenarios requiring file renames
     pub fn rename_file(&self, old: &str, new: &str) {
         std::fs::rename(self.dir.path().join(old), self.dir.path().join(new)).unwrap();
     }
@@ -81,7 +81,7 @@ impl TempGitRepo {
         let _ = std::fs::remove_file(self.dir.path().join(".git/index.lock"));
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: test helper utility, alternative to stage() with different API surface
     pub fn stage_file(&self, name: &str) {
         Command::new("git")
             .args(["add", name])

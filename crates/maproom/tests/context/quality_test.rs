@@ -36,7 +36,7 @@ fn is_skip_error(e: &anyhow::Error) -> bool {
 /// Test fixture with known, verifiable relationships.
 struct QualityTestFixture {
     _temp_dir: TempDir,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Justification: set during fixture setup; retained for consistency with database state
     worktree_path: String,
     primary_chunk_id: i64,
     direct_callee_id: i64,

@@ -6,7 +6,7 @@
 //! - p95: 135.8ms
 //! - p99: 211.3ms
 
-#![allow(unused_imports)]
+#![allow(unused_imports)] // Justification: imports used by #[ignore] performance regression test functions
 
 use crewchief_maproom::search::results::{
     QueryFilters, QueryProcessingDetails, QueryUnderstanding, SearchMetadata, SearchOptions,

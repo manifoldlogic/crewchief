@@ -231,7 +231,9 @@ jobs:
         working-directory: crates/maproom
 
       - name: Run tests
-        # Use --test-threads=1 due to env var race conditions in config tests
+        # Use --test-threads=1 because:
+        # 1. Env var race conditions in provider tests (mitigated by #[serial] but kept for safety)
+        # 2. Git poller integration tests have filesystem timing sensitivity that flakes under parallel execution
         run: cargo test -- --test-threads=1
         working-directory: crates/maproom
 

@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports)] // Justification: imports used by #[ignore] test functions that are conditionally compiled
 #![allow(dead_code)]
 
 use crewchief_maproom::indexer::parser;

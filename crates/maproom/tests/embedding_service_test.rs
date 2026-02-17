@@ -44,11 +44,6 @@ async fn test_service_from_config(
     Ok(EmbeddingService::from_env().await?)
 }
 
-/// Create a test vector of the correct dimension.
-#[allow(dead_code)]
-fn test_vector() -> Vec<f32> {
-    vec![0.1; 1536]
-}
 
 // ============================================================================
 // EMBEDDING GENERATION TESTS
@@ -193,23 +188,6 @@ fn test_retry_config_validation() {
     assert_eq!(config.delay_for_attempt(6), 10000);
 }
 
-#[tokio::test]
-#[ignore] // Ignored: cost_metrics() method removed from EmbeddingService API
-async fn test_api_failure_handling() {
-    // This test is disabled because cost tracking has been removed from the
-    // EmbeddingService public API
-}
-
-// ============================================================================
-// COST TRACKING TESTS
-// ============================================================================
-
-#[tokio::test]
-#[ignore] // Ignored: cost_metrics() method removed from EmbeddingService API
-async fn test_cost_metrics_initialization() {
-    // This test is disabled because cost tracking has been removed from the
-    // EmbeddingService public API
-}
 
 #[test]
 fn test_cost_calculation_accuracy() {

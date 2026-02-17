@@ -6,7 +6,7 @@
 //! - Assertion utilities for search results
 
 #![allow(dead_code)]
-#![allow(unused_imports)]
+#![allow(unused_imports)] // Justification: shared test helper module, imports consumed by different test files
 #![allow(unused_variables)]
 
 use anyhow::Result;
