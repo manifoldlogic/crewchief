@@ -1257,7 +1257,7 @@ fn parse_batch(language: &str, samples: Vec<(&str, &str)>) -> LanguageMetrics {
     for (_filename, source) in samples {
         let start = Instant::now();
         let chunks = parser::extract_chunks(source, language);
-        let duration = start.elapsed().as_millis() as u64;
+        let duration = start.elapsed().as_millis().max(1) as u64;
 
         metrics.record_parse(chunks.len(), duration);
     }
