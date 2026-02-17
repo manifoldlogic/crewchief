@@ -5,6 +5,8 @@ This document distills findings from 24 controlled agent runs on a 500k-LOC
 TypeScript/React codebase into actionable guidance for agent plugin developers
 and prompt engineers.
 
+This guide covers the CLI surface as of the AFM epic (AFM-01 through AFM-07).
+
 All CLI examples use `--format agent` output and follow the exit-code contract
 described in [CLAUDE.md](../CLAUDE.md).
 
@@ -16,16 +18,17 @@ Use this decision table to choose the right search mode, result count, and
 whether to supplement with Grep.
 
 | Query Type | Search Mode | k-value | Grep? | Example |
-|---|---|---|---|---|
+|:---|:---|:---|:---|:---|
 | Identifier lookup | FTS | 10 | No | `"handleLogin"` |
 | Concept exploration | FTS or Vector | 10-15 | No | `"authentication flow"` |
 | Exhaustive enumeration | FTS | 20-30 | Yes (1 call) | `"all UserProfile renderers"` |
 | Absence proof | FTS then Grep | 10 | Yes | `"is there TTL caching?"` |
+| Hybrid re-ranking | Hybrid | 10-15 | No | Combined FTS+Vector score |
 
 **Key numbers at a glance:**
 
 | Metric | Maproom | Baseline (Grep/Glob/Read) |
-|---|---|---|
+|:---|:---|:---|
 | Total score (15 rounds) | **162/180** | 152/180 |
 | Avg tool calls | **37.9** | 54.8 |
 | Avg wall time | **182s** | 235s |
@@ -156,7 +159,7 @@ mode for agent workflows.
 - Any query involving known vocabulary from the codebase
 
 **Why FTS dominates:** Code queries involve specific identifiers and technical
-terms -- exactly what BM25 excels at. The semantic similarity advantage of
+terms -- exactly what BM25 (the same ranking algorithm used by Elasticsearch and Lucene) excels at. The semantic similarity advantage of
 vector search is less pronounced in code (where naming is precise) than in
 natural language (where synonymy is common) (report-maproom-cli.md, section 2).
 
@@ -199,6 +202,23 @@ crewchief-maproom search \
 provider misconfiguration. FTS alone was sufficient to win the benchmark
 (report-competition-summary.md, Vector-Only Experiment). Vector search is a
 useful supplement but not load-bearing.
+
+### Hybrid Search
+
+Hybrid mode (`--mode hybrid`) combines FTS and vector scores using Reciprocal
+Rank Fusion (RRF). It is useful when neither FTS nor vector search alone
+produces sufficient coverage -- for example, when a query mixes known
+identifiers with conceptual terms. Hybrid mode requires an embedding provider
+to be configured (same as vector search).
+
+```bash
+crewchief-maproom search \
+  --query "authentication session handling" \
+  --repo myrepo \
+  --mode hybrid \
+  --k 15 \
+  --format agent
+```
 
 ### When to Supplement with Grep
 
@@ -279,7 +299,7 @@ The `total_estimate` field helps agents decide whether to increase k or
 supplement with Grep:
 
 | Scenario | Interpretation | Action |
-|---|---|---|
+|:---|:---|:---|
 | `hits=10, total_estimate=10` | All matches returned | Proceed to Phase 2 |
 | `hits=10, total_estimate=25` | More results available | Increase k if needed |
 | `hits=10, total_estimate=200+` | Many matches, broad query | Refine query terms |
@@ -309,17 +329,19 @@ Pipe characters in the message and suggestion fields are replaced with dashes.
 Newlines are replaced with spaces. The error type is a controlled value from a
 fixed taxonomy.
 
+All `--format agent` output, including ERROR lines, is written to stdout.
+
 ### Error Types and Recovery Actions
 
 | Error Type | Exit Code | Retryable | Recovery Action |
-|---|---|---|---|
+|:---|:---:|:---:|:---|
 | `config_error` | 2 | No | Report to user. Missing environment variable or invalid configuration. |
 | `embedding_provider` | 2 | No | Provider misconfigured. Check API keys and provider settings. Fall back to FTS. |
 | `database` | 1 | Yes | Database connection or corruption. Retry once, then report. |
 | `not_found` | 1 | No | Chunk or repository not found. Verify chunk ID or repo name. |
 | `validation` | 1 | No | Invalid input (empty query, bad parameters). Fix input and retry. |
 | `timeout` | 1 | Yes | Search timed out. Retry with a simpler query or smaller k. |
-| `unknown` | 1 | Maybe | Unclassified error. Check logs for details. |
+| `unknown` | 1 | Maybe | Unclassified error. Check logs for details. For daemon log inspection, see the Daemon Mode section in CLAUDE.md. |
 
 **Decision tree for agents:**
 
@@ -353,7 +375,7 @@ Exit code: 1. The agent may retry once.
 ### Exit Codes
 
 | Exit Code | Meaning | Agent Action |
-|---|---|---|
+|---:|:---|:---|
 | 0 | Success (results may be empty) | Process results |
 | 1 | Runtime error (transient) | Retry once or report |
 | 2 | Configuration error (persistent) | Do not retry; fall back or report to user |
@@ -381,7 +403,7 @@ chunks to ~8k chunks. Measured effects on the same 9 queries
 (report-competition-summary.md, i18n Cleanup Impact):
 
 | Metric | Before Cleanup | After Cleanup | Change |
-|---|---|---|---|
+|:---|:---|:---|:---|
 | Score (9 rounds) | 91/108 | 95/108 | **+4 points** |
 | Coverage | 23/27 | 25/27 | +2 |
 | Avg tool calls | 38.2 | 32.1 | **-16%** |
@@ -390,6 +412,8 @@ chunks to ~8k chunks. Measured effects on the same 9 queries
 A single `.maproomignore` pattern improved every measured dimension. Index
 hygiene is the highest-leverage optimization available
 (report-maproom-plugin.md, section 8).
+
+> **Note:** `.maproomignore` must be at the repository root; subdirectory files are silently ignored.
 
 ### Common Ignore Patterns
 
@@ -457,7 +481,7 @@ competition reference reports.
 ### Overall Results
 
 | Metric | Maproom | Explore (Baseline) | Delta |
-|---|---|---|---|
+|:---|:---|:---|:---|
 | Total score | **162/180** | 152/180 | +10 |
 | Rounds won | **8** | 2 | -- |
 | Rounds tied | 5 | 5 | -- |
@@ -469,7 +493,7 @@ Source: report-competition-summary.md, Combined V2+V3.
 ### Dimension Breakdown
 
 | Dimension | Maproom | Explore | Notes |
-|---|---|---|---|
+|:---|:---|:---|:---|
 | Speed | 37/45 | 34/45 | Maproom faster on average |
 | Coverage | 42/45 | **45/45** | Explore achieved perfect coverage |
 | Accuracy | **45/45** | 44/45 | Maproom slightly more accurate |
@@ -482,7 +506,7 @@ Maproom's 10-point lead is almost entirely explained by the Efficiency dimension
 ### Search Behavior
 
 | Metric | Value | Source |
-|---|---|---|
+|:---|:---|:---|
 | FTS usage share | ~88% | report-maproom-plugin.md, section 1 |
 | Searches in perfect runs | 2-4 | report-maproom-plugin.md, section 2 |
 | Searches in worst run | 13 | report-maproom-plugin.md, section 2 |
@@ -492,7 +516,7 @@ Maproom's 10-point lead is almost entirely explained by the Efficiency dimension
 ### Index Hygiene Impact
 
 | Metric | Before (59k chunks) | After (8k chunks) | Change |
-|---|---|---|---|
+|:---|:---|:---|:---|
 | Score (9 rounds) | 91/108 | 95/108 | +4 |
 | Coverage | 23/27 | 25/27 | +2 |
 | Avg tool calls | 38.2 | 32.1 | -16% |

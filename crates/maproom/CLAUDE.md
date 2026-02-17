@@ -2,6 +2,8 @@
 
 Working with the Rust indexer at `/crates/maproom`.
 
+> For agent integration guidance, see [Agent Integration](#agent-integration) and [docs/agent-usage.md](docs/agent-usage.md).
+
 ## Directory Structure
 
 ```
