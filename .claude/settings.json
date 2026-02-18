@@ -18,6 +18,14 @@
             "command": "/workspace/.devcontainer/scripts/maproom-sync start || true"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/workspace/_SPECS/scripts/specs-autocommit start 2>/dev/null || true"
+          }
+        ]
       }
     ],
     "Notification": [
@@ -35,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '{\"systemMessage\": \"💬 %s\"}' \"$(TZ='America/Denver' date '+%Y-%m-%d %H:%M:%S %Z')\""
+            "command": "printf '{\"systemMessage\": \"\ud83d\udcac %s\"}' \"$(TZ='America/Denver' date '+%Y-%m-%d %H:%M:%S %Z')\""
           }
         ]
       }
