@@ -298,7 +298,7 @@ async fn test_cleanup_no_stale_worktrees() -> Result<()> {
         "No stale worktrees should be found for valid paths"
     );
 
-    // In the CLI, this would result in exit code 2
+    // In the CLI, this returns Ok(()) → exit code 0 (no stale worktrees is success)
     Ok(())
 }
 

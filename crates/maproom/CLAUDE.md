@@ -288,9 +288,9 @@ For guidance on building agent integrations (MCP servers, IDE extensions, prompt
 
 - **[Agent Usage Guide](docs/agent-usage.md)** - Recommended workflows, search strategies, k-value recommendations, error handling playbook, and index hygiene guidance. Based on empirical data from controlled agent benchmarks.
 
-## Exit Codes (Agent Format)
+## Exit Codes
 
-When using `--format agent`, commands follow a consistent exit code contract:
+All commands follow a consistent exit code contract:
 
 - **0**: Success (with or without results)
 - **1**: Runtime error (transient failures, database errors, network issues)
@@ -301,7 +301,7 @@ This contract enables agents to make programmatic decisions:
 - Exit 1: Report error or retry
 - Exit 2: Fall back to alternative approach (e.g., use FTS instead of vector search)
 
-**Note**: Default format (`--format json`) exit codes may differ. The 0/1/2 contract applies specifically to `--format agent`.
+Note: clap also uses exit code 2 for CLI parse errors (invalid flags, missing arguments).
 
 ## Context Command
 
