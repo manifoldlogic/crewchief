@@ -5,15 +5,6 @@ All commands execute in ZSH. Use POSIX-compatible syntax. Never use bash-only sy
 Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, portable syntax.
 ######## IMPORTANT! SHELL TARGET: ZSH ######## IMPORTANT! SHELL TARGET: ZSH ########
 
-Guidance for Claude Code when working with this repository.
-
-## Project Overview
-
-CrewChief is a CLI tool combining:
-
-- **Git worktree management** - Create, list, and manage git worktrees
-- **Semantic code search (Maproom)** - Index and search code using SQLite and tree-sitter
-
 ## Key Concepts
 
 **Two CLIs**: `crewchief` (TypeScript) for worktree/agent management, `crewchief-maproom` (Rust) for indexing/search/daemon.
@@ -22,37 +13,27 @@ CrewChief is a CLI tool combining:
 
 **Release order**: CLI → maproom-mcp → vscode-maproom (CLI contains Rust binaries others depend on). See `release-config.json`.
 
-**Type sync**: TypeScript types in `packages/daemon-client/src/client.ts` must match Rust structs in `crates/maproom/src/daemon/types.rs`. Rust is source of truth.
+**Type sync**: Rust is source of truth. See `.claude/docs/type-sync-workflow.md`.
 
 **Runtime deps**: Git required (file watching uses `git status`). sqlite-vec is statically linked (vector search degrades gracefully if missing).
 
-## Quick Start
+## Component Index
 
-```bash
-pnpm install && pnpm build   # Install and build
-pnpm test                    # Run tests
-pnpm lint && pnpm format     # Code quality
-```
+| Path | What | CLAUDE.md |
+|------|------|-----------|
+| `packages/cli/` | TypeScript CLI | `packages/cli/CLAUDE.md` |
+| `packages/daemon-client/` | Daemon RPC client | `packages/daemon-client/CLAUDE.md` |
+| `packages/maproom-mcp/` | MCP server | `packages/maproom-mcp/CLAUDE.md` |
+| `packages/vscode-maproom/` | VSCode extension | `packages/vscode-maproom/CLAUDE.md` |
+| `crates/maproom/` | Rust indexer | `crates/maproom/CLAUDE.md` |
+| `crates/maproom/migrations/` | Database migrations | `crates/maproom/migrations/CLAUDE.md` |
+| `.crewchief/` | Project workflow | `.crewchief/CLAUDE.md` |
+| `.github/` | CI/CD | `.github/CLAUDE.md` |
+| `.devcontainer/` | Dev container | `.devcontainer/CLAUDE.md` |
+| `docs/` | Documentation | `docs/CLAUDE.md` |
+| `packages/cli/src/search-optimization/` | Search tuning | `packages/cli/src/search-optimization/CLAUDE.md` |
 
-## Component Documentation
-
-Each component has its own CLAUDE.md with detailed guidance:
-
-- **`/packages/cli/CLAUDE.md`** - TypeScript CLI
-- **`/packages/daemon-client/CLAUDE.md`** - Daemon client, type sync
-- **`/packages/maproom-mcp/CLAUDE.md`** - MCP server
-- **`/packages/vscode-maproom/CLAUDE.md`** - VSCode extension
-- **`/crates/maproom/CLAUDE.md`** - Rust indexer
-- **`.crewchief/CLAUDE.md`** - Project workflow and tickets
-- **`.github/CLAUDE.md`** - CI/CD workflows
-
-**Read the component's CLAUDE.md before working in it.**
-
-## Development Practices
-
-**Database**: SQLite at `~/.maproom/maproom.db` (override: `MAPROOM_DATABASE_URL`).
-
-**New libraries**: Check if alternatives exist in codebase first. Be pragmatic. For major decisions, present top choices with reasoning during planning.
+Key docs: `docs/architecture/MAPROOM_ARCHITECTURE.md`, `crates/maproom/docs/agent-usage.md`, `docs/troubleshooting/common-errors.md`
 
 ## Git Workflow
 
@@ -67,27 +48,22 @@ This prevents divergent branches when CI pushes between your changes.
 
 ## LSP Tools
 
-Prefer the LSP tool over Grep/Glob for semantic code navigation in Rust files:
+Prefer LSP over Grep/Glob for semantic code navigation in Rust files:
 
-- **Refactoring**: Use `LSP findReferences` instead of Grep — returns only real usages, no false positives from comments or strings
-- **Trait/interface work**: Use `LSP goToImplementation` to find all trait impls — Grep cannot do this reliably
-- **Type inspection**: Use `LSP hover` to check resolved types and docs without reading surrounding code
-- **File overview**: Use `LSP documentSymbol` to list all symbols in a file instead of skimming manually
-- **Definition lookup**: Use `LSP goToDefinition` for precise navigation to where a symbol is defined
+- **Refactoring**: `LSP findReferences` — real usages only, no false positives from comments/strings
+- **Trait/interface work**: `LSP goToImplementation` — find all trait impls
+- **Type inspection**: `LSP hover` — resolved types and docs
+- **File overview**: `LSP documentSymbol` — all symbols in a file
+- **Definition lookup**: `LSP goToDefinition` — precise navigation
 
-LSP requires file + line + column. Typical flow: use Grep to locate a symbol, then use LSP for semantic queries about it.
+Typical flow: Grep to locate a symbol, then LSP for semantic queries.
 
-**Known limitations**: `incomingCalls` and `outgoingCalls` do not return data with rust-analyzer. Use `findReferences` as the alternative for finding callers.
+**Known limitation**: `incomingCalls`/`outgoingCalls` don't return data with rust-analyzer. Use `findReferences` instead.
 
 ## Safety Rules
 
 **File operations must stay within current worktree.**
 
-Never modify:
-
-- System directories (`/usr/`, `/etc//`)
-- Home files outside worktree (`~/.bashrc`, `~/.gitconfig`)
-- Other repositories or worktrees
-- `.git` directory
+Never modify: system directories (`/usr/`, `/etc/`), home files outside worktree, other repositories/worktrees, `.git` directory.
 
 If external modification seems needed: STOP, explain, wait for approval.

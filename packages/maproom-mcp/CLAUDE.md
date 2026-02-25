@@ -1,144 +1,33 @@
-# CLAUDE.md - Maproom MCP
+# Maproom MCP
 
-Working with the MCP server at `/packages/maproom-mcp`.
-
-## Overview
-
-Single-purpose MCP server for semantic code search. Runs via stdio, expects SQLite database to exist.
-
-```bash
-# Usage (via MCP client)
-npx @crewchief/maproom-mcp
-```
-
-## Architecture
-
-```
-MCP Client (VS Code / Cursor / Claude Code)
-    ↓ spawns process, stdio (JSON-RPC)
-CLI Entry Point (cli.cjs) - ~50 lines
-    ↓ auto-detects database, imports MCP server
-MCP Server (index.ts)
-    ↓ spawns daemon on first request
-Rust Daemon (crewchief-maproom serve)
-    ↓ queries
-SQLite Database
-```
-
-## Database Connection
-
-Two-tier auto-detection:
-
-1. **Explicit**: `MAPROOM_DATABASE_URL` environment variable (must be `sqlite://...`)
-2. **Default**: `~/.maproom/maproom.db`
-
-```bash
-# Override example
-MAPROOM_DATABASE_URL=sqlite:///path/to/custom.db npx @crewchief/maproom-mcp
-```
-
-## Directory Structure
-
-```
-├── bin/cli.cjs              # CLI entry point (~50 lines)
-├── src/
-│   ├── index.ts             # MCP server
-│   ├── daemon.ts            # Rust binary wrapper
-│   └── tools/               # MCP tool handlers
-└── tests/                   # Connection tests
-```
-
-## Development
-
-```bash
-# Build
-pnpm build
-
-# Test
-pnpm test
-```
+Single-purpose MCP server for semantic code search via stdio.
 
 ## MCP Tools
 
-- `search` - Semantic search (FTS/vector/hybrid)
-- `open` - Get code with line ranges
-- `context` - Context assembly via daemon (imports, callers, tests, React components)
-- `status` - Index stats
-- `scan` - Full repo indexing (via daemon)
-- `upsert` - Update specific files
-- `explain` - Symbol documentation
+- `search` — Semantic search (FTS/vector/hybrid)
+- `open` — Get code with line ranges
+- `context` — Context assembly via daemon (imports, callers, tests, React components)
+- `status` — Index stats
+- `scan` — Full repo indexing (via daemon)
+- `upsert` — Update specific files
+- `explain` — Symbol documentation
 
-## Context Tool
+## Pitfalls
 
-Retrieves contextually relevant code around a specific code chunk. Uses the Rust daemon for assembly.
+- **CJS entry point**: `bin/cli.cjs` is the CLI entry (~50 lines), not the main source. Source is `src/index.ts`.
+- **Daemon binary path**: Wraps `../../packages/cli/bin/<platform>/crewchief-maproom` — binary must exist
+- **ESM modules** with Zod for MCP validation
 
-### Usage
+## Troubleshooting
 
-```typescript
-const result = await server.callTool('context', {
-  chunk_id: '12345',
-  budget_tokens: 6000,  // default: 6000, range: 1000-20000
-  expand: {
-    callers: true,      // functions that call this chunk
-    callees: true,      // functions called by this chunk
-    tests: true,        // related test files
-    docs: false,        // documentation chunks
-    config: false,      // configuration files
-    max_depth: 2,       // relationship traversal depth (1-10)
-    routes: false,      // route handlers
-    hooks: true,        // React hooks
-    jsx_parents: true,  // parent React components
-    jsx_children: true, // child React components
-  },
-})
-```
-
-### Response Format
-
-```typescript
-{
-  items: ContextItem[],    // Array of context chunks
-  total_tokens: number,    // Tokens used
-  budget_tokens: number,   // Budget from request
-  budget_remaining: number,// Remaining budget
-  truncated: boolean,      // True if budget exceeded
-  metadata: {
-    chunk_id: number,
-    expand_options: object,
-  }
-}
-```
-
-### Troubleshooting
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `DAEMON_START_FAILED` | Daemon binary not found | Ensure crewchief-maproom is installed |
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `DAEMON_START_FAILED` | Binary not found | Ensure crewchief-maproom built (`cd packages/cli && pnpm build:rust`) |
 | `CHUNK_NOT_FOUND` | Invalid chunk_id | Use search tool to find valid chunk IDs |
-| `CONTEXT_TIMEOUT` | Request took too long | Reduce budget_tokens or check database |
+| `CONTEXT_TIMEOUT` | Request too slow | Reduce budget_tokens or check database |
 | `INVALID_PARAMS` | Bad parameters | Check chunk_id is positive integer |
 
-## Rust Daemon
+## Docs
 
-Wraps `../../packages/cli/bin/<platform>/crewchief-maproom`:
-- Spawned as subprocess by MCP server
-- JSON-RPC over stdin/stdout
-- Handles all database operations
-- 20-50x faster than process-per-request
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MAPROOM_DATABASE_URL` | SQLite database URL (sqlite://...) | `~/.maproom/maproom.db` |
-| `MAPROOM_EMBEDDING_PROVIDER` | `openai`, `google`, or `ollama` | Auto-detected |
-| `OPENAI_API_KEY` | OpenAI API key (if using openai) | Required for openai |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials (if using google) | Required for google |
-
-## Key Points
-
-- **Single purpose**: Run MCP server only (no setup/scan/watch commands)
-- **Database required**: SQLite database must exist at configured path
-- **ESM modules**
-- **Zod** for MCP validation
-- **Pino** for logging
+- Agent integration: `crates/maproom/docs/agent-usage.md`
+- MCP tool reference: `docs/api/mcp-tools.md`

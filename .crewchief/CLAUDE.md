@@ -1,50 +1,8 @@
-# CLAUDE.md - .crewchief Directory
+# .crewchief Directory
 
-Working with the crewchief workspace at `.crewchief/`.
+SDD (Structured Driven Development) project management workspace.
 
-## Directory Structure
-
-```
-.crewchief/
-├── projects/          # Active projects (planning + tickets)
-├── archive/           # Completed projects
-├── reports/           # Point-in-time analysis outputs (dated)
-├── research/          # Exploratory technical research
-└── scratchpad/        # Temporary working space
-```
-
-## Project Structure
-
-```
-projects/{SLUG}_{name}/
-├── README.md
-├── planning/
-│   ├── analysis.md
-│   ├── architecture.md
-│   ├── plan.md
-│   └── quality-strategy.md
-└── tickets/
-    └── {SLUG}-1001_description.md
-```
-
-## Naming Conventions
-
-- **Projects**: `{SLUG}_{descriptive-name}` (e.g., `DKRHUB_docker-hub-publishing`)
-- **Tickets**: `{SLUG}-{NUMBER}_{description}.md` (e.g., `DKRHUB-1001_setup.md`)
-- **Planning docs**: Standard names (`analysis.md`, `architecture.md`, `plan.md`, `quality-strategy.md`)
-
-## Workstream Commands
-
-Use the workstream plugin for project management:
-
-- `/workstream:project-create [description]` - Create project with planning docs
-- `/workstream:project-review [SLUG]` - Review project (and tickets if they exist)
-- `/workstream:project-update [SLUG]` - Update project based on review findings
-- `/workstream:project-tickets [SLUG]` - Generate tickets from plan
-- `/workstream:project-work [SLUG]` - Execute all tickets for a project
-- `/workstream:ticket [TICKET_ID]` - Complete a single ticket
-- `/workstream:status [SLUG]` - Check project/ticket status
-- `/workstream:archive [SLUG]` - Archive completed projects
+**SDD root**: `/workspace/repos/crewchief/crewchief/.crewchief/`
 
 ## Ticket Workflow
 
@@ -53,15 +11,27 @@ Use the workstream plugin for project management:
 3. `verify-ticket` checks acceptance criteria
 4. `commit-ticket` creates commit
 
-## Key Locations
+## Commands
 
-- **research/** - Exploratory technical research (pre-project)
-- **reports/** - Dated analysis outputs
-- **scratchpad/** - Temporary notes and experiments
+Use `/sdd:*` commands for project management:
 
-## Archive
+- `/sdd:plan-ticket` — Create project with planning docs
+- `/sdd:review` — Review project readiness
+- `/sdd:create-tasks` — Generate tasks from plan
+- `/sdd:do-task` — Execute a single task
+- `/sdd:do-all-tasks` — Execute all tasks
+- `/sdd:status` — Check status
+- `/sdd:archive` — Archive completed projects
 
-Move completed projects to `archive/projects/` when:
-- All tickets complete
-- Knowledge synthesized to `/docs/`
-- No future work planned
+## Scope Guidance
+
+- **projects/** — Active projects with planning docs and tickets
+- **archive/** — Completed work (all tickets verified, knowledge in `/docs/`)
+- **reports/** — Dated point-in-time analysis outputs
+- **research/** — Exploratory pre-project investigation
+- **initiatives/** — Multi-project discovery work
+- **scratchpad/** — Temporary notes (cleaned periodically)
+
+## Archive Criteria
+
+Projects archived when: all tickets verified, no future work planned, knowledge synthesized to `/docs/`.
