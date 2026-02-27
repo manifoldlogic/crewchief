@@ -65,7 +65,8 @@ const WARMUP_ITERATIONS = 10
 const DB_URL = process.env.DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres:5432/maproom'
 
 // Binary path
-const BINARY_PATH = process.env.CREWCHIEF_MAPROOM_BIN ||
+const BINARY_PATH = process.env.MAPROOM_BIN ||
+  process.env.CREWCHIEF_MAPROOM_BIN ||
   path.resolve(__dirname, '../../cli/bin/linux-arm64/maproom')
 
 interface SearchHit {
