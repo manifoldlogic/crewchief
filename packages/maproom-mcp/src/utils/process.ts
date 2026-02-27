@@ -85,6 +85,7 @@ export function findMaproomBinary(): string | null {
   if (process.env.MAPROOM_BIN) {
     const binPath = process.env.MAPROOM_BIN
     if (fs.existsSync(binPath)) {
+      console.debug(`[maproom] binary resolved via MAPROOM_BIN: ${binPath}`)
       return binPath
     }
   }
@@ -97,6 +98,7 @@ export function findMaproomBinary(): string | null {
     )
     const binPath = process.env.CREWCHIEF_MAPROOM_BIN
     if (fs.existsSync(binPath)) {
+      console.debug(`[maproom] binary resolved via CREWCHIEF_MAPROOM_BIN (deprecated): ${binPath}`)
       return binPath
     }
   }
@@ -115,6 +117,7 @@ export function findMaproomBinary(): string | null {
     const packagedPath = path.join(packageRoot, 'bin', `${process.platform}-${process.arch}`, execName)
 
     if (fs.existsSync(packagedPath)) {
+      console.debug(`[maproom] binary resolved via packaged binary: ${packagedPath}`)
       return packagedPath
     }
   } catch (error) {
@@ -131,7 +134,9 @@ export function findMaproomBinary(): string | null {
 
     for (const devPath of devPaths) {
       if (fs.existsSync(devPath)) {
-        return path.resolve(devPath)
+        const resolvedDevPath = path.resolve(devPath)
+        console.debug(`[maproom] binary resolved via dev build path: ${resolvedDevPath}`)
+        return resolvedDevPath
       }
     }
   } catch (error) {
