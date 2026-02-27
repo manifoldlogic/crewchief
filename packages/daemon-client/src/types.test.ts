@@ -135,7 +135,7 @@ describe('Type synchronization with Rust', () => {
       context: { message: 'timeout' },
       suggestions: [
         'Check database connectivity',
-        'Restart the maproom daemon: crewchief-maproom serve',
+        'Restart the maproom daemon: maproom serve',
       ],
     }
 

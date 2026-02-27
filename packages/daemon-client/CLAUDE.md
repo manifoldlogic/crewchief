@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Internal TypeScript library providing JSON-RPC 2.0 communication with the `crewchief-maproom` Rust daemon. **Not published to npm** — shared dependency used by maproom-mcp and vscode-maproom.
+Internal TypeScript library providing JSON-RPC 2.0 communication with the `maproom` Rust daemon. **Not published to npm** — shared dependency used by maproom-mcp and vscode-maproom.
 
 ## Type Synchronization
 

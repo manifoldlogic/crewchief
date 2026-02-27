@@ -5,7 +5,7 @@
  * wrapper → filtering/sorting/pagination. They catch integration issues that unit tests
  * might miss, such as type mismatches or unexpected data formats.
  *
- * IMPORTANT: These tests require a running crewchief-maproom daemon.
+ * IMPORTANT: These tests require a running maproom daemon.
  * They will gracefully skip if the daemon connection fails.
  */
 

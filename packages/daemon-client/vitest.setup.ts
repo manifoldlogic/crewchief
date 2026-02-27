@@ -10,7 +10,7 @@ import { execSync } from 'node:child_process'
 export async function setup() {
   // Kill any existing daemon processes
   try {
-    execSync('pkill -f "crewchief-maproom serve"', { stdio: 'ignore' })
+    execSync('pkill -f "maproom serve"', { stdio: 'ignore' })
     // Wait for processes to terminate
     await new Promise((resolve) => setTimeout(resolve, 1000))
   } catch {

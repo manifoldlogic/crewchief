@@ -28,7 +28,7 @@ export async function createConnection(
   config: Partial<ConnectionConfig> = {}
 ): Promise<Connection> {
   const mode = config.mode ?? detectConnectionMode()
-  const binaryPath = config.binaryPath ?? 'crewchief-maproom'
+  const binaryPath = config.binaryPath ?? 'maproom'
 
   switch (mode) {
     case ConnectionMode.Socket:
@@ -95,7 +95,7 @@ async function createSocketConnection(
 async function createStdioConnection(
   config: Partial<ConnectionConfig>
 ): Promise<Connection> {
-  const binaryPath = config.binaryPath ?? 'crewchief-maproom'
+  const binaryPath = config.binaryPath ?? 'maproom'
   const conn = new StdioConnection(binaryPath)
   await conn.connect()
   return conn

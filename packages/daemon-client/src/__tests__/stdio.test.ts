@@ -8,18 +8,18 @@ import { DaemonCommunicationError, DaemonStartupError } from '../errors.js'
 
 describe('StdioConnection', () => {
   it('should create instance with binary path', () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
     expect(conn).toBeDefined()
     expect(conn.isConnected()).toBe(false)
   })
 
   it('should report not connected initially', () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
     expect(conn.isConnected()).toBe(false)
   })
 
   it('should reject requests when not connected', async () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
 
     await expect(conn.sendRequest('ping')).rejects.toThrow(
       DaemonCommunicationError
@@ -27,7 +27,7 @@ describe('StdioConnection', () => {
   })
 
   it('should register error handlers', () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
     const handler = vi.fn()
 
     conn.on('error', handler)
@@ -36,7 +36,7 @@ describe('StdioConnection', () => {
   })
 
   it('should register close handlers', () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
     const handler = vi.fn()
 
     conn.on('close', handler)
@@ -50,7 +50,7 @@ describe('StdioConnection', () => {
 
 describe('StdioConnection - Connection Interface', () => {
   it('should implement all Connection interface methods', () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
 
     // Check all required methods exist
     expect(typeof conn.sendRequest).toBe('function')
@@ -60,7 +60,7 @@ describe('StdioConnection - Connection Interface', () => {
   })
 
   it('should handle multiple close calls gracefully', async () => {
-    const conn = new StdioConnection('crewchief-maproom')
+    const conn = new StdioConnection('maproom')
 
     // First close should work
     await expect(conn.close()).resolves.not.toThrow()

@@ -168,7 +168,7 @@ export interface DaemonClientConfig extends Partial<ConnectionConfig> {
 }
 
 /**
- * Daemon client for communicating with crewchief-maproom daemon
+ * Daemon client for communicating with maproom daemon
  *
  * Automatically selects the best connection mode (socket or stdio) based on
  * platform and configuration. Supports both explicit mode selection and
