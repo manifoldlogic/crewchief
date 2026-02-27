@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["code-search", "embeddings", "semantic-search", "sqlite", "tree-sitter"]
 categories = ["command-line-utilities", "development-tools", "text-processing"]
 rust-version = "1.85"
-exclude = ["tests/", "benches/", "docs/", "examples/", ".github/", ".crewchief/"]
+exclude = ["tests/", "benches/", "docs/", "!docs/cli-help-after.md", "examples/", ".github/", ".crewchief/"]
 
 [dependencies]
 anyhow = "1.0.100"
