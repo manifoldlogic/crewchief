@@ -146,7 +146,7 @@ export async function handleContextTool(
     // Convert daemon errors to MCP-friendly errors
     if (error instanceof DaemonStartError) {
       throw new ProcessError(
-        `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure crewchief-maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
+        `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
         'DAEMON_START_FAILED'
       )
     }
@@ -239,7 +239,7 @@ export function formatContextError(error: unknown): any {
                 error.code === 'CHUNK_NOT_FOUND'
                   ? 'Use the search tool to find valid chunks and get their chunk_id values.'
                   : error.code === 'FILE_NOT_FOUND'
-                    ? 'Try re-indexing with `crewchief-maproom scan` if files have been moved or deleted.'
+                    ? 'Try re-indexing with `maproom scan` if files have been moved or deleted.'
                     : error.code === 'INVALID_PARAMS'
                       ? 'Check chunk_id format (must be positive integer) and budget_tokens range (1000-20000).'
                       : 'Check your parameters and try again.',
@@ -264,7 +264,7 @@ export function formatContextError(error: unknown): any {
               message: error.message,
               hint:
                 error.code === 'DAEMON_START_FAILED'
-                  ? 'Check that the crewchief-maproom binary is installed and database is accessible.'
+                  ? 'Check that the maproom binary is installed and database is accessible.'
                   : error.code === 'CONTEXT_TIMEOUT'
                     ? 'The request timed out. Try reducing budget_tokens or checking database performance.'
                     : 'Context assembly failed. Check logs for details.',

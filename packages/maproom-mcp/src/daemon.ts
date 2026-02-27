@@ -50,7 +50,7 @@ export function getDaemonClient(): DaemonClient {
     const binaryPath = findMaproomBinary()
     if (!binaryPath) {
       throw new Error(
-        'Maproom binary not found. Please ensure crewchief-maproom is installed or built.'
+        'Maproom binary not found. Please ensure maproom is installed or built.'
       )
     }
 
@@ -63,7 +63,7 @@ export function getDaemonClient(): DaemonClient {
         throw new Error(
           `SQLite database not found: ${dbConfig.path}\n\n` +
             `To create an index:\n` +
-            `  crewchief-maproom scan --path /your/repo\n\n` +
+            `  maproom scan --path /your/repo\n\n` +
             `Or specify a different database:\n` +
             `  export MAPROOM_DATABASE_URL=sqlite:///path/to/your.db`
         )

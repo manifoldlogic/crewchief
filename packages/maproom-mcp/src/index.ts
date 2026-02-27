@@ -342,11 +342,11 @@ async function handleStatus(params: any): Promise<any> {
       let nextStep: string | undefined
 
       if (repos.length === 0) {
-        hint = 'No repositories indexed yet.\n\nTo get started:\n1. Run `crewchief-maproom scan` to index a repository\n2. Then use search to find your code'
-        nextStep = 'Run crewchief-maproom scan to index your first repository'
+        hint = 'No repositories indexed yet.\n\nTo get started:\n1. Run `maproom scan` to index a repository\n2. Then use search to find your code'
+        nextStep = 'Run maproom scan to index your first repository'
       } else if (totalFiles === 0) {
-        hint = 'Repository found but no files indexed.\n\nTo fix:\n1. Run `crewchief-maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
-        nextStep = 'Run crewchief-maproom scan to index files'
+        hint = 'Repository found but no files indexed.\n\nTo fix:\n1. Run `maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+        nextStep = 'Run maproom scan to index files'
       } else {
         hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
       }
@@ -461,11 +461,11 @@ async function handleStatus(params: any): Promise<any> {
     let nextStep: string | undefined
 
     if (Object.keys(repos).length === 0) {
-      hint = '⚠️ No repositories indexed yet.\n\nTo get started:\n1. Run `crewchief-maproom scan` to index a repository\n2. Then use search to find your code'
-      nextStep = 'Run crewchief-maproom scan to index your first repository'
+      hint = '⚠️ No repositories indexed yet.\n\nTo get started:\n1. Run `maproom scan` to index a repository\n2. Then use search to find your code'
+      nextStep = 'Run maproom scan to index your first repository'
     } else if (totalFiles === 0) {
-      hint = '⚠️ Repository found but no files indexed.\n\nTo fix:\n1. Run `crewchief-maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
-      nextStep = 'Run crewchief-maproom scan to index files'
+      hint = '⚠️ Repository found but no files indexed.\n\nTo fix:\n1. Run `maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+      nextStep = 'Run maproom scan to index files'
     } else {
       hint = `✓ Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
     }
@@ -843,15 +843,15 @@ export async function handleSearch(params: any): Promise<any> {
         ? 'Did you mean repo:"crewchief"?'
         : availableRepos.length > 0
           ? `Available repos: ${availableRepos.join(', ')}`
-          : 'No repos indexed yet. Run `crewchief-maproom scan` to index files.'
+          : 'No repos indexed yet. Run `maproom scan` to index files.'
 
       return {
         hits: [],
         error: 'Repository not found',
-        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. Run \`crewchief-maproom scan\` to index this repository\n3. Then search again`,
+        hint: `Repository '${repo}' is not indexed.\n\nTo fix this:\n1. Run status tool to see available repos\n2. Run \`maproom scan\` to index this repository\n3. Then search again`,
         availableRepos,
         suggestion,
-        nextStep: 'Run `crewchief-maproom scan` to index this repository before searching'
+        nextStep: 'Run `maproom scan` to index this repository before searching'
       }
     }
     const repoId = repoRows[0].id
@@ -866,7 +866,7 @@ export async function handleSearch(params: any): Promise<any> {
     if (resolutionMetadata.fallback && resolutionMetadata.detected_branch) {
       hint = `Current branch '${resolutionMetadata.detected_branch}' is not indexed.\n\n` +
         `To search your current code:\n` +
-        `1. Run: crewchief-maproom scan --repo "${repo}" --worktree "${resolutionMetadata.detected_branch}"\n\n` +
+        `1. Run: maproom scan --repo "${repo}" --worktree "${resolutionMetadata.detected_branch}"\n\n` +
         `Searching '${resolutionMetadata.worktree}' worktree instead.`
     } else if (resolutionMetadata.mode === 'all' && resolutionMetadata.fallback) {
       hint = `Failed to detect current branch (not in git repository or detached HEAD).\n\n` +
@@ -1059,8 +1059,8 @@ export async function handleSearch(params: any): Promise<any> {
       // Build comprehensive hint - preserve fallback hint if present, otherwise use standard hint
       if (!hint) {
         result.hint = worktreeInfo
-          ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - run \`crewchief-maproom scan\` to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
-          : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Run \`crewchief-maproom scan\` to index it first`
+          ? `No results in worktree '${worktree}'.\n\nPossible reasons:\n1. Files not indexed yet - run \`maproom scan\` to index the repository\n2. Search terms too specific - try simpler terms\n3. Wrong worktree - check status tool`
+          : `No results found for "${query}".\n\n${statusHint}\n\nSearch tips:\n• Use 1-3 word queries\n• Try conceptual terms: "authentication", "database", "error handling"\n• Separate words with spaces, not underscores\n• Start broad, then refine\n\nIf repository is not indexed: Run \`maproom scan\` to index it first`
       }
       
       if (suggestions.length > 0) {

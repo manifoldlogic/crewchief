@@ -155,7 +155,7 @@ export interface StatusResult {
 }
 
 /**
- * Daemon client for communicating with crewchief-maproom daemon
+ * Daemon client for communicating with maproom daemon
  */
 export class DaemonClient {
   private daemonProcess?: DaemonProcessDef;
