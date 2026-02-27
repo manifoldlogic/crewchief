@@ -101,6 +101,7 @@ export function findMaproomBinary(): string | null {
       console.debug(`[maproom] binary resolved via CREWCHIEF_MAPROOM_BIN (deprecated): ${binPath}`)
       return binPath
     }
+    // env var set but path not found — fall through to next resolution strategy
   }
 
   // Strategy 2: Platform-specific packaged binary
