@@ -331,6 +331,9 @@ cargo test -- --nocapture
 ```
 
 **Integration Tests:**
+
+> **Note:** Integration test commands require a repository checkout (`git clone`). They are not available when installed via `cargo install maproom` because integration tests are not included in the published crate.
+
 ```bash
 # Run all integration tests
 cargo test --test '*'
@@ -365,6 +368,8 @@ Prerequisites:
 - GCP project with Vertex AI API enabled
 - Service account with `roles/aiplatform.user` IAM role
 - Service account JSON key file
+
+> **Note:** Integration test commands require a repository checkout (`git clone`). They are not available when installed via `cargo install maproom` because integration tests are not included in the published crate.
 
 ```bash
 # Set up environment
