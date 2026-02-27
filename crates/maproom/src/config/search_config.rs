@@ -588,6 +588,7 @@ pub enum FusionMethod {
 
 impl FusionMethod {
     /// Parse fusion method from string.
+    #[allow(clippy::should_implement_trait)] // Returns anyhow::Result with domain-specific error, not std FromStr
     pub fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "rrf" => Ok(Self::RRF),
@@ -981,7 +982,7 @@ impl BufferConfig {
 ///     calls: 1.0
 ///   fusion_weight_override: 0.15  # Optional
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GraphImportanceConfig {
     /// Enable quality-weighted scoring.
     ///
@@ -1002,16 +1003,6 @@ pub struct GraphImportanceConfig {
     pub fusion_weight_override: Option<f32>,
 }
 
-impl Default for GraphImportanceConfig {
-    fn default() -> Self {
-        Self {
-            enable_quality_scoring: false,
-            edge_quality_weights: EdgeQualityWeights::default(),
-            fusion_weight_override: None,
-        }
-    }
-}
-
 impl GraphImportanceConfig {
     /// Validate graph importance configuration.
     pub fn validate(&self) -> Result<()> {
@@ -1020,7 +1011,7 @@ impl GraphImportanceConfig {
 
         // Validate fusion weight override if present
         if let Some(weight) = self.fusion_weight_override {
-            if weight < 0.0 || weight > 1.0 {
+            if !(0.0..=1.0).contains(&weight) {
                 return Err(SearchConfigError::ValidationError(
                     "fusion_weight_override must be between 0.0 and 1.0".to_string(),
                 )

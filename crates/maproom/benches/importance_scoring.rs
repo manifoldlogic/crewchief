@@ -2,11 +2,9 @@
 //!
 //! Target: Scoring should complete within 10ms for 1000 chunks.
 
-use maproom::context::graph::EdgeType;
-use maproom::context::importance::{
-    ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig,
-};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use maproom::context::graph::EdgeType;
+use maproom::context::importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 
 fn create_benchmark_chunk(id: i64, relpath: &str) -> ChunkMetadata {
     ChunkMetadata {

@@ -123,14 +123,12 @@ fn test_search_with_include_confidence_true_returns_confidence() {
         .iter()
         .enumerate()
         .map(|(index, fused)| {
-            let confidence = Some(
-                maproom::search::confidence::compute_result_confidence(
-                    fused,
-                    &fused_results,
-                    index,
-                    fused.exact_match_multiplier,
-                ),
-            );
+            let confidence = Some(maproom::search::confidence::compute_result_confidence(
+                fused,
+                &fused_results,
+                index,
+                fused.exact_match_multiplier,
+            ));
 
             let mut result = create_chunk_result(
                 fused.chunk_id,
@@ -244,14 +242,12 @@ fn test_confidence_fields_have_correct_values() {
         .iter()
         .enumerate()
         .map(|(index, fused)| {
-            let confidence = Some(
-                maproom::search::confidence::compute_result_confidence(
-                    fused,
-                    &fused_results,
-                    index,
-                    fused.exact_match_multiplier,
-                ),
-            );
+            let confidence = Some(maproom::search::confidence::compute_result_confidence(
+                fused,
+                &fused_results,
+                index,
+                fused.exact_match_multiplier,
+            ));
 
             let mut result = create_chunk_result(
                 fused.chunk_id,
@@ -351,14 +347,12 @@ fn test_score_gap_calculation_across_multiple_results() {
         .iter()
         .enumerate()
         .map(|(index, fused)| {
-            let confidence = Some(
-                maproom::search::confidence::compute_result_confidence(
-                    fused,
-                    &fused_results,
-                    index,
-                    fused.exact_match_multiplier,
-                ),
-            );
+            let confidence = Some(maproom::search::confidence::compute_result_confidence(
+                fused,
+                &fused_results,
+                index,
+                fused.exact_match_multiplier,
+            ));
 
             let mut result = create_chunk_result(
                 fused.chunk_id,
@@ -752,14 +746,12 @@ fn test_daemon_end_to_end_confidence_pipeline() {
         .iter()
         .enumerate()
         .map(|(index, fused)| {
-            let confidence = Some(
-                maproom::search::confidence::compute_result_confidence(
-                    fused,
-                    &fused_results,
-                    index,
-                    fused.exact_match_multiplier,
-                ),
-            );
+            let confidence = Some(maproom::search::confidence::compute_result_confidence(
+                fused,
+                &fused_results,
+                index,
+                fused.exact_match_multiplier,
+            ));
 
             let mut result = create_chunk_result(
                 fused.chunk_id,

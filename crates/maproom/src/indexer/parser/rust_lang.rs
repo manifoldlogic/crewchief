@@ -456,11 +456,7 @@ fn extract_rust_constant(source: &str, node: Node, chunks: &mut Vec<SymbolChunk>
         .map(|s| s.to_string());
 
     // Build signature
-    let signature = if let Some(ty) = type_annotation {
-        Some(format!(": {}", ty))
-    } else {
-        None
-    };
+    let signature = type_annotation.map(|ty| format!(": {}", ty));
 
     // Extract doc comment
     let docstring = extract_rust_doc_comment(source, node);
@@ -564,6 +560,7 @@ fn extract_rust_function_modifiers(_source: &str, node: Node) -> Vec<&'static st
     modifiers
 }
 
+#[allow(clippy::too_many_arguments)] // Each parameter maps to a distinct Rust syntax element
 fn build_rust_function_signature(
     visibility: Option<&str>,
     is_async: bool,

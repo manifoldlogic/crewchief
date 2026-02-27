@@ -300,6 +300,7 @@ pub trait StoreChunks: Send + Sync {
 // StoreSearch - FTS, vector, and hybrid search
 // =============================================================================
 
+#[allow(clippy::too_many_arguments)] // Trait methods mirror database query parameters; changing signatures would break all implementors
 #[async_trait]
 pub trait StoreSearch: Send + Sync {
     /// Full-text search for chunks, resolving repo/worktree by name.

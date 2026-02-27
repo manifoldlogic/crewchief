@@ -143,8 +143,11 @@ impl CodeTruncator {
 
         // Start with signature and docstring
         let mut kept_lines = Vec::new();
-        for i in 0..=docstring_end.min(lines.len().saturating_sub(1)) {
-            kept_lines.push(lines[i]);
+        for line in lines
+            .iter()
+            .take(docstring_end.min(lines.len().saturating_sub(1)) + 1)
+        {
+            kept_lines.push(*line);
         }
 
         let marker = "\n    // ... [truncated] ...\n";

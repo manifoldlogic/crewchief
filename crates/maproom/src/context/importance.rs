@@ -205,7 +205,7 @@ impl ImportanceScorer {
         score = self.apply_heuristic_weights(score, chunk);
 
         // Clamp to reasonable range (prevent negative or infinite scores)
-        score.max(0.0).min(100.0)
+        score.clamp(0.0, 100.0)
     }
 
     /// Apply relationship type weight multiplier.

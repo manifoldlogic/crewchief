@@ -382,8 +382,7 @@ async fn test_query_processor_code_mode_detection() -> Result<(), Box<dyn std::e
         assert!(
             matches!(
                 processed.mode,
-                maproom::search::SearchMode::Code
-                    | maproom::search::SearchMode::Auto
+                maproom::search::SearchMode::Code | maproom::search::SearchMode::Auto
             ),
             "Query '{}' should be detected as Code mode, got {:?}",
             query,
@@ -416,8 +415,7 @@ async fn test_query_processor_text_mode_detection() -> Result<(), Box<dyn std::e
         assert!(
             matches!(
                 processed.mode,
-                maproom::search::SearchMode::Text
-                    | maproom::search::SearchMode::Auto
+                maproom::search::SearchMode::Text | maproom::search::SearchMode::Auto
             ),
             "Query '{}' should be detected as Text mode, got {:?}",
             query,

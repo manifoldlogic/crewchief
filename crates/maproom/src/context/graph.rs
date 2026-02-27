@@ -176,13 +176,13 @@ pub async fn find_related_chunks(
     let mut all_results = Vec::new();
 
     // Determine which relationship types to query based on edge_types filter
-    let query_callers = edge_types.as_ref().map_or(true, |types| {
-        types.iter().any(|t| matches!(t, EdgeType::CalledBy))
-    });
-    let query_callees = edge_types.as_ref().map_or(true, |types| {
-        types.iter().any(|t| matches!(t, EdgeType::Calls))
-    });
-    let query_imports = edge_types.as_ref().map_or(true, |types| {
+    let query_callers = edge_types
+        .as_ref()
+        .is_none_or(|types| types.iter().any(|t| matches!(t, EdgeType::CalledBy)));
+    let query_callees = edge_types
+        .as_ref()
+        .is_none_or(|types| types.iter().any(|t| matches!(t, EdgeType::Calls)));
+    let query_imports = edge_types.as_ref().is_none_or(|types| {
         types
             .iter()
             .any(|t| matches!(t, EdgeType::Imports | EdgeType::Exports))
@@ -244,12 +244,12 @@ pub async fn find_related_chunks_directional(
 
     if forward {
         // Forward direction: find what this chunk references (callees, outgoing imports)
-        let query_callees = edge_types.as_ref().map_or(true, |types| {
-            types.iter().any(|t| matches!(t, EdgeType::Calls))
-        });
-        let query_imports = edge_types.as_ref().map_or(true, |types| {
-            types.iter().any(|t| matches!(t, EdgeType::Imports))
-        });
+        let query_callees = edge_types
+            .as_ref()
+            .is_none_or(|types| types.iter().any(|t| matches!(t, EdgeType::Calls)));
+        let query_imports = edge_types
+            .as_ref()
+            .is_none_or(|types| types.iter().any(|t| matches!(t, EdgeType::Imports)));
 
         if query_callees {
             let callees = store.find_callees(chunk_id, depth).await?;
@@ -263,12 +263,12 @@ pub async fn find_related_chunks_directional(
         }
     } else {
         // Backward direction: find what references this chunk (callers, incoming imports)
-        let query_callers = edge_types.as_ref().map_or(true, |types| {
-            types.iter().any(|t| matches!(t, EdgeType::CalledBy))
-        });
-        let query_imports = edge_types.as_ref().map_or(true, |types| {
-            types.iter().any(|t| matches!(t, EdgeType::Exports))
-        });
+        let query_callers = edge_types
+            .as_ref()
+            .is_none_or(|types| types.iter().any(|t| matches!(t, EdgeType::CalledBy)));
+        let query_imports = edge_types
+            .as_ref()
+            .is_none_or(|types| types.iter().any(|t| matches!(t, EdgeType::Exports)));
 
         if query_callers {
             let callers = store.find_callers(chunk_id, depth).await?;

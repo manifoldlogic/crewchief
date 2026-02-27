@@ -294,6 +294,7 @@ impl ContentFormatter {
     ///
     /// assert!(item.tokens <= 50);
     /// ```
+    #[allow(clippy::too_many_arguments)] // Public API; parameters represent distinct formatting concerns
     pub fn format_with_truncation(
         &self,
         relpath: &str,

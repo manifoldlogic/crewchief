@@ -403,6 +403,7 @@ impl SearchPipeline {
     /// - File path, symbol name, kind
     /// - Line ranges
     /// - Preview text
+    #[allow(clippy::too_many_arguments)] // Pipeline metrics need individual tracking for diagnostics
     #[instrument(skip(self, processed, fused_results))]
     async fn assemble_results(
         &self,
@@ -602,6 +603,7 @@ impl SearchPipeline {
     }
 
     /// Build search metadata from pipeline execution details.
+    #[allow(clippy::too_many_arguments)] // Pipeline metrics need individual tracking for diagnostics
     fn build_metadata(
         &self,
         processed: &ProcessedQuery,

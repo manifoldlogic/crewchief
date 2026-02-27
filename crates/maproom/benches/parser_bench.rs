@@ -1,9 +1,9 @@
-use maproom::indexer::parser;
 /// MD_ENHANCE-4002: Parser Benchmarks
 ///
 /// Criterion benchmarks for markdown parser performance testing.
 /// These benchmarks provide detailed performance metrics and regression detection.
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use maproom::indexer::parser;
 use std::fs;
 
 fn bench_small_document(c: &mut Criterion) {

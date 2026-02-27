@@ -11,9 +11,7 @@
 //! Note: Most tests use mocked OpenAI client for deterministic results.
 //! Set OPENAI_API_KEY for real API integration tests.
 
-use maproom::embedding::{
-    CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig,
-};
+use maproom::embedding::{CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig};
 
 /// Create a test configuration with small cache for testing.
 fn test_config() -> EmbeddingConfig {
@@ -43,7 +41,6 @@ async fn test_service_from_config(
     // For tests, we use from_env() which auto-configures the provider and cache
     Ok(EmbeddingService::from_env().await?)
 }
-
 
 // ============================================================================
 // EMBEDDING GENERATION TESTS
@@ -193,7 +190,6 @@ fn test_retry_config_validation() {
     // Should cap at max_delay_ms
     assert_eq!(config.delay_for_attempt(6), 10000);
 }
-
 
 #[test]
 fn test_cost_calculation_accuracy() {

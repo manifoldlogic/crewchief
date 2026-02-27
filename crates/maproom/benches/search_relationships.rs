@@ -136,12 +136,9 @@ fn relationship_expansion_overhead(c: &mut Criterion) {
             runtime.block_on(async {
                 // Perform search with relationship expansion
                 // This uses find_top_related_chunks to traverse the graph
-                let result = maproom::search::find_top_related_chunks(
-                    &store,
-                    black_box(1),
-                    black_box(5),
-                )
-                .await;
+                let result =
+                    maproom::search::find_top_related_chunks(&store, black_box(1), black_box(5))
+                        .await;
                 black_box(result)
             })
         })

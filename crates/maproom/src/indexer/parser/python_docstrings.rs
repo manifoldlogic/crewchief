@@ -29,16 +29,14 @@ fn detect_docstring_format(docstring: &str) -> DocstringFormat {
         // NumPy uses underlines (--- or ===) under section headers
         if !line.is_empty()
             && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '='))
-        {
-            if line.eq_ignore_ascii_case("parameters")
+            && (line.eq_ignore_ascii_case("parameters")
                 || line.eq_ignore_ascii_case("returns")
                 || line.eq_ignore_ascii_case("raises")
                 || line.eq_ignore_ascii_case("yields")
                 || line.eq_ignore_ascii_case("notes")
-                || line.eq_ignore_ascii_case("attributes")
-            {
-                return DocstringFormat::NumPy;
-            }
+                || line.eq_ignore_ascii_case("attributes"))
+        {
+            return DocstringFormat::NumPy;
         }
     }
 
@@ -195,17 +193,15 @@ fn parse_numpy_docstring(docstring: &str) -> String {
             // Check if next line is an underline
             if !line.is_empty()
                 && (next_line.chars().all(|c| c == '-') || next_line.chars().all(|c| c == '='))
-            {
-                if line.eq_ignore_ascii_case("parameters")
+                && (line.eq_ignore_ascii_case("parameters")
                     || line.eq_ignore_ascii_case("returns")
                     || line.eq_ignore_ascii_case("raises")
                     || line.eq_ignore_ascii_case("yields")
                     || line.eq_ignore_ascii_case("notes")
                     || line.eq_ignore_ascii_case("examples")
-                    || line.eq_ignore_ascii_case("attributes")
-                {
-                    break;
-                }
+                    || line.eq_ignore_ascii_case("attributes"))
+            {
+                break;
             }
         }
 
@@ -254,12 +250,12 @@ fn parse_numpy_docstring(docstring: &str) -> String {
 
                     // Handle parameter lines (format: "param_name : type" followed by description)
                     if !trimmed.is_empty() {
-                        if current_section.eq_ignore_ascii_case("parameters")
-                            || current_section.eq_ignore_ascii_case("attributes")
+                        if (current_section.eq_ignore_ascii_case("parameters")
+                            || current_section.eq_ignore_ascii_case("attributes"))
+                            && !content_line.starts_with("    ")
+                            && trimmed.contains(" : ")
                         {
-                            if !content_line.starts_with("    ") && trimmed.contains(" : ") {
-                                result.push_str("- ");
-                            }
+                            result.push_str("- ");
                         }
                         result.push_str(trimmed);
                         result.push('\n');

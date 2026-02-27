@@ -587,8 +587,8 @@ impl Clone for TestFile {
 /// Note: This measures parsing + pipeline overhead, not database performance.
 /// Database benchmarks require a live database environment.
 fn bench_parallel_processing(c: &mut Criterion) {
-    use maproom::indexer::parser::extract_chunks;
     use crossbeam::channel;
+    use maproom::indexer::parser::extract_chunks;
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;

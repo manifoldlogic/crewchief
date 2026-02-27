@@ -761,8 +761,8 @@ fn extract_java_doc_comment(source: &str, node: Node) -> Option<String> {
                     .iter()
                     .map(|line| {
                         let trimmed = line.trim_start();
-                        if trimmed.starts_with('*') {
-                            trimmed[1..].trim_start().to_string()
+                        if let Some(stripped) = trimmed.strip_prefix('*') {
+                            stripped.trim_start().to_string()
                         } else {
                             trimmed.to_string()
                         }

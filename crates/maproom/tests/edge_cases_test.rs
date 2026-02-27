@@ -22,9 +22,7 @@
 //! 14. Preview truncation edge cases
 
 use maproom::search::executor_types::SearchSource;
-use maproom::search::results::{
-    ChunkSearchResult, ConfidenceSignals, RelatedChunkResult,
-};
+use maproom::search::results::{ChunkSearchResult, ConfidenceSignals, RelatedChunkResult};
 use std::collections::HashMap;
 
 // ============================================================================

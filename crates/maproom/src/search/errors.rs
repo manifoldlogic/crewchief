@@ -145,10 +145,8 @@ impl SearchErrorDetails {
                         stage: PipelineStage::SearchExecution,
                         context: HashMap::from([("error".to_string(), error_str.clone())]),
                         suggestions: vec![
-                            "Check that the repository is indexed: maproom status"
-                                .to_string(),
-                            "Run a scan to index the repository: maproom scan"
-                                .to_string(),
+                            "Check that the repository is indexed: maproom status".to_string(),
+                            "Run a scan to index the repository: maproom scan".to_string(),
                         ],
                     }
                 } else {

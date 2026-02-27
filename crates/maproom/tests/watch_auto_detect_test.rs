@@ -177,10 +177,7 @@ fn build_maproom_binary() -> Result<std::path::PathBuf> {
     // The binary is in workspace target dir, not crate-specific target dir
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
-    let binary_path = workspace_root
-        .join("target")
-        .join("debug")
-        .join("maproom");
+    let binary_path = workspace_root.join("target").join("debug").join("maproom");
 
     if !binary_path.exists() {
         anyhow::bail!("Binary not found at: {}", binary_path.display());

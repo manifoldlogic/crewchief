@@ -45,10 +45,10 @@
 //! - nomic-embed-text model pulled
 //! - Tests marked `#[ignore]` - run manually when Ollama available
 
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use maproom::embedding::config::ParallelConfig;
 use maproom::embedding::ollama::OllamaProvider;
 use maproom::embedding::provider::EmbeddingProvider;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 /// Generate realistic test texts for benchmarking

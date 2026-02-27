@@ -9,9 +9,7 @@
 //! - Exponential backoff calculation
 //! - Queue statistics
 
-use maproom::incremental::{
-    ChangeType, FileHasher, Priority, Trigger, UpdateQueue, UpdateTask,
-};
+use maproom::incremental::{ChangeType, FileHasher, Priority, Trigger, UpdateQueue, UpdateTask};
 use std::path::PathBuf;
 use std::time::Duration;
 

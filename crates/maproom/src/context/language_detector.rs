@@ -50,6 +50,7 @@ impl Language {
     }
 
     /// Parse a language from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Self directly (infallible), not Result; different from FromStr
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "typescript" | "ts" => Language::TypeScript,
@@ -208,13 +209,12 @@ impl LanguageDetector {
 
         // C++ patterns (check early to avoid false positives)
         // Look for C++ specific keywords that indicate C++ vs C
-        if content.contains("#include") {
-            if content.contains("class ")
+        if content.contains("#include")
+            && (content.contains("class ")
                 || content.contains("namespace ")
-                || content.contains("template<")
-            {
-                return Language::Cpp;
-            }
+                || content.contains("template<"))
+        {
+            return Language::Cpp;
         }
 
         // Ruby patterns (check before Python to avoid false positives)

@@ -143,6 +143,15 @@ pub struct SearchCache {
     expirations: Arc<AtomicU64>,
 }
 
+impl Default for SearchCache {
+    /// Create a new SearchCache with default capacity and TTL.
+    ///
+    /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
+    fn default() -> Self {
+        Self::new(DEFAULT_CACHE_SIZE)
+    }
+}
+
 impl SearchCache {
     /// Create a new SearchCache with specified capacity and TTL.
     ///
@@ -191,13 +200,6 @@ impl SearchCache {
     /// ```
     pub fn new(capacity: usize) -> Self {
         Self::with_ttl(capacity, DEFAULT_TTL_SECONDS)
-    }
-
-    /// Create a new SearchCache with default capacity and TTL.
-    ///
-    /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
-    pub fn default() -> Self {
-        Self::new(DEFAULT_CACHE_SIZE)
     }
 
     /// Get a cached result by key.

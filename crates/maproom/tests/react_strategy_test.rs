@@ -421,4 +421,3 @@ mod expand_options_tests {
         assert!(options.jsx_children);
     }
 }
-

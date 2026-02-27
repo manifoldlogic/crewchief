@@ -339,12 +339,9 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
             }
         }
         "status" => {
-            let params: StatusParams = match serde_json::from_value(
-                request.params.clone().unwrap_or(serde_json::Value::Null),
-            ) {
-                Ok(p) => p,
-                Err(_) => StatusParams::default(),
-            };
+            let params: StatusParams =
+                serde_json::from_value(request.params.clone().unwrap_or(serde_json::Value::Null))
+                    .unwrap_or_default();
 
             match execute_status(state, params).await {
                 Ok(result) => JsonRpcResponse::success(id, serde_json::to_value(result).unwrap()),

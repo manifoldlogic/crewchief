@@ -4,9 +4,7 @@
 //! factors and produces expected results in realistic scenarios.
 
 use maproom::context::graph::EdgeType;
-use maproom::context::importance::{
-    ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig,
-};
+use maproom::context::importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 
 #[test]
 fn test_integration_basic_scoring() {

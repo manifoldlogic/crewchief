@@ -5,9 +5,9 @@
 
 mod helpers;
 
+use helpers::temp_git_repo::TempGitRepo;
 use maproom::incremental::events::FileEvent;
 use maproom::incremental::git_poller::{GitPoller, GitPollerConfig, GitPollerError};
-use helpers::temp_git_repo::TempGitRepo;
 use std::time::Duration;
 use tokio::time::timeout;
 

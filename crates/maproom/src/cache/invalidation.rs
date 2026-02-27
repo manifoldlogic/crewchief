@@ -209,6 +209,7 @@ pub enum CacheLayer {
 
 impl CacheLayer {
     /// Parse a cache layer from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result; different semantics from FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "l1" | "query" | "l1_query" => Some(Self::L1Query),

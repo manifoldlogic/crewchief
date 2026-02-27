@@ -34,9 +34,7 @@ use maproom::cli::format::{
     format_agent_error, format_context_agent, format_hits_agent, format_hits_json_search,
     format_hits_json_vector, sanitize_newlines, OutputFormat, SearchMetadata,
 };
-use maproom::context::{
-    AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
-};
+use maproom::context::{AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions};
 use maproom::db::StoreCleanup;
 use maproom::db::StoreCore;
 use maproom::db::StoreEmbeddings;
@@ -966,7 +964,7 @@ fn format_context_bundle(bundle: &ContextBundle, chunk_id: i64, budget: usize) -
 fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     // Get the repository name from remote origin in owner/repo format
     let repo_name = Command::new("git")
-        .args(&[
+        .args([
             "-C",
             path.to_str().unwrap_or("."),
             "remote",
@@ -1000,7 +998,7 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
 
     // Get the current branch name
     let branch_name = Command::new("git")
-        .args(&[
+        .args([
             "-C",
             path.to_str().unwrap_or("."),
             "rev-parse",
@@ -1022,7 +1020,7 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
 
     // Get the current commit hash
     let commit_hash = Command::new("git")
-        .args(&["-C", path.to_str().unwrap_or("."), "rev-parse", "HEAD"])
+        .args(["-C", path.to_str().unwrap_or("."), "rev-parse", "HEAD"])
         .output()
         .ok()
         .and_then(|output| {
@@ -2101,7 +2099,10 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     println!("{}", "=".repeat(60));
-                    println!("\nTo rollback: cargo run --bin maproom -- migrate rollback --backup {}", result.backup_table);
+                    println!(
+                        "\nTo rollback: cargo run --bin maproom -- migrate rollback --backup {}",
+                        result.backup_table
+                    );
                 }
 
                 MigrateCommand::Rollback { backup } => {

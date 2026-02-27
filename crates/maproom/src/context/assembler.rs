@@ -526,7 +526,7 @@ impl ContextAssembler for ParallelContextAssembler {
         let (metadata_result, relationships) =
             tokio::join!(self.get_chunk_metadata(chunk_id), async {
                 if options.callers || options.callees || options.tests {
-                    load_relationships_parallel(&*self.store, chunk_id, options.max_depth).await
+                    load_relationships_parallel(&self.store, chunk_id, options.max_depth).await
                 } else {
                     (Vec::new(), Vec::new(), Vec::new())
                 }

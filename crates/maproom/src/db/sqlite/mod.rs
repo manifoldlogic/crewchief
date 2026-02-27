@@ -60,8 +60,8 @@ impl SqliteStore {
     }
 
     pub async fn connect_with_config(path: &str, config: &SqliteConfig) -> anyhow::Result<Self> {
-        let path = if path.starts_with("sqlite://") {
-            &path[9..]
+        let path = if let Some(stripped) = path.strip_prefix("sqlite://") {
+            stripped
         } else {
             path
         };
@@ -83,8 +83,11 @@ impl SqliteStore {
 
         // Register extension globally for all new connections
         unsafe {
-            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_vec_init as *const (),
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<
+                *const (),
+                unsafe extern "C" fn(),
+            >(
+                sqlite3_vec_init as *const ()
             )));
         }
 
@@ -267,12 +270,12 @@ fn is_busy_error(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         cause
             .downcast_ref::<rusqlite::Error>()
-            .and_then(|rusqlite_err| match rusqlite_err {
-                rusqlite::Error::SqliteFailure(err, _) => Some(matches!(
+            .map(|rusqlite_err| match rusqlite_err {
+                rusqlite::Error::SqliteFailure(err, _) => matches!(
                     err.code,
                     rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
-                )),
-                _ => Some(false),
+                ),
+                _ => false,
             })
             .unwrap_or(false)
     })
@@ -880,18 +883,16 @@ impl StoreChunks for SqliteStore {
                        AND f.relpath = ?3 AND c.symbol_name = ?4
                      ORDER BY c.id DESC LIMIT 1"
                 }
+            } else if worktree_id.is_some() {
+                "SELECT c.id FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
+                 ORDER BY c.id DESC LIMIT 1"
             } else {
-                if worktree_id.is_some() {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                } else {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                }
+                "SELECT c.id FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE f.repo_id = ?1 AND c.symbol_name = ?4
+                 ORDER BY c.id DESC LIMIT 1"
             };
 
             let id: Option<i64> = if let Some(path) = relpath_ref {
@@ -904,14 +905,12 @@ impl StoreChunks for SqliteStore {
                     conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
                         .optional()?
                 }
+            } else if let Some(wid) = worktree_id {
+                conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
+                    .optional()?
             } else {
-                if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
-                        .optional()?
-                } else {
-                    conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
-                        .optional()?
-                }
+                conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
+                    .optional()?
             };
 
             Ok(id)
