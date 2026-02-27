@@ -15,14 +15,14 @@ Single-purpose MCP server for semantic code search via stdio.
 ## Pitfalls
 
 - **CJS entry point**: `bin/cli.cjs` is the CLI entry (~50 lines), not the main source. Source is `src/index.ts`.
-- **Daemon binary path**: Wraps `../../packages/cli/bin/<platform>/crewchief-maproom` — binary must exist
+- **Daemon binary path**: Wraps `../../packages/cli/bin/<platform>/maproom` — binary must exist
 - **ESM modules** with Zod for MCP validation
 
 ## Troubleshooting
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `DAEMON_START_FAILED` | Binary not found | Ensure crewchief-maproom built (`cd packages/cli && pnpm build:rust`) |
+| `DAEMON_START_FAILED` | Binary not found | Ensure maproom built (`cd packages/cli && pnpm build:rust`) |
 | `CHUNK_NOT_FOUND` | Invalid chunk_id | Use search tool to find valid chunk IDs |
 | `CONTEXT_TIMEOUT` | Request too slow | Reduce budget_tokens or check database |
 | `INVALID_PARAMS` | Bad parameters | Check chunk_id is positive integer |

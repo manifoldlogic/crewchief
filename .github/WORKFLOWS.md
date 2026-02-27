@@ -145,7 +145,7 @@ $ gh run list --workflow=test.yml --limit 3
 **Inputs**:
 - `package_name` (required): Artifact prefix (e.g., `"cli"`, `"maproom-mcp"`)
 - `crate_path` (optional): Path to Rust crate (default: `"crates/maproom"`)
-- `binary_name` (optional): Binary to build (default: `"crewchief-maproom"`)
+- `binary_name` (optional): Binary to build (default: `"maproom"`)
 - `platforms` (optional): JSON array of platforms (default: all 4)
 
 **Outputs**:
@@ -172,7 +172,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-build.yml
     with:
       package_name: cli
-      binary_name: crewchief-maproom
+      binary_name: maproom
       crate_path: crates/maproom
 ```
 
@@ -371,7 +371,7 @@ jobs:
 - **Required**: `package_name` (string)
 - **Optional**:
   - `crate_path` (default: `"crates/maproom"`)
-  - `binary_name` (default: `"crewchief-maproom"`)
+  - `binary_name` (default: `"maproom"`)
   - `platforms` (default: all 4 platforms)
 
 **TypeScript Build Workflow**:
@@ -415,10 +415,10 @@ gh run download $RUN_ID
 
 # Verify structure
 ls -la test-cli-*/
-# Expected: test-cli-linux-x64/crewchief-maproom, etc.
+# Expected: test-cli-linux-x64/maproom, etc.
 
 # Verify binaries
-file test-cli-*/crewchief-maproom
+file test-cli-*/maproom
 # Expected: "executable" and "stripped" for each platform
 ```
 
@@ -552,7 +552,7 @@ RUN_ID=$(gh run list --workflow=test-reusable-rust.yml --limit 1 --json database
 gh run download $RUN_ID
 
 # Verify Windows binary
-file test-cli-win32-x64/crewchief-maproom.exe
+file test-cli-win32-x64/maproom.exe
 # Expected: PE32+ executable (Windows)
 ```
 
