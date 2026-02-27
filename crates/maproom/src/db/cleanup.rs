@@ -79,8 +79,8 @@ impl<'a> StaleWorktreeDetector<'a> {
     ///
     /// # Example
     /// ```no_run
-    /// use crewchief_maproom::db::cleanup::StaleWorktreeDetector;
-    /// use crewchief_maproom::db;
+    /// use maproom::db::cleanup::StaleWorktreeDetector;
+    /// use maproom::db;
     ///
     /// # async fn example() -> anyhow::Result<()> {
     /// let store = db::connect().await?;
@@ -257,8 +257,8 @@ impl<'a> WorktreeCleaner<'a> {
     ///
     /// # Example
     /// ```no_run
-    /// use crewchief_maproom::db::cleanup::{WorktreeCleaner, StaleWorktreeDetector};
-    /// use crewchief_maproom::db;
+    /// use maproom::db::cleanup::{WorktreeCleaner, StaleWorktreeDetector};
+    /// use maproom::db;
     ///
     /// # async fn example() -> anyhow::Result<()> {
     /// let store = db::connect().await?;

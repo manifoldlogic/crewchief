@@ -1881,7 +1881,7 @@ class MyClass {
             .with_test_writer()
             .with_env_filter(
                 tracing_subscriber::EnvFilter::from_default_env().add_directive(
-                    "crewchief_maproom::indexer::parser::csharp=debug"
+                    "maproom::indexer::parser::csharp=debug"
                         .parse()
                         .unwrap(),
                 ),

@@ -6,12 +6,12 @@
 //! IDXCLEAN-3003: CLI Integration Tests
 
 use anyhow::Result;
-use crewchief_maproom::db::cleanup::{StaleWorktreeDetector, WorktreeCleaner};
-use crewchief_maproom::db::sqlite::SqliteStore;
-use crewchief_maproom::db::StoreChunks;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::db::StoreMigration;
-use crewchief_maproom::db::{ChunkRecord, FileRecord};
+use maproom::db::cleanup::{StaleWorktreeDetector, WorktreeCleaner};
+use maproom::db::sqlite::SqliteStore;
+use maproom::db::StoreChunks;
+use maproom::db::StoreCore;
+use maproom::db::StoreMigration;
+use maproom::db::{ChunkRecord, FileRecord};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
 

@@ -25,7 +25,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::memory::StringInterner;
+//! use maproom::memory::StringInterner;
 //! use std::sync::Arc;
 //!
 //! let interner = StringInterner::new();
@@ -123,7 +123,7 @@ impl StringInterner {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::StringInterner;
+    /// use maproom::memory::StringInterner;
     ///
     /// let interner = StringInterner::new();
     /// let s1 = interner.intern("hello");

@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use crewchief_maproom::incremental::git_state::GitState;
+//! use maproom::incremental::git_state::GitState;
 //! use std::path::Path;
 //!
 //! let output = "M  src/main.rs\n?? new_file.rs\n";

@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 /// MD_ENHANCE-4002: Parser Benchmarks
 ///
 /// Criterion benchmarks for markdown parser performance testing.

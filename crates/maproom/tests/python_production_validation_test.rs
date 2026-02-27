@@ -21,7 +21,7 @@
 //! 3. Representative test data that covers Django models, views, serializers, forms
 //! 4. Performance measurements comparing Python vs TypeScript parsing
 
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::fs;
 use std::time::Instant;
 

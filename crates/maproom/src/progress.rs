@@ -43,7 +43,7 @@ impl ProgressTracker {
     ///
     /// # Examples
     /// ```
-    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    /// use maproom::progress::{ProgressTracker, OutputMode};
     ///
     /// let tracker = ProgressTracker::new(OutputMode::Minimal);
     /// ```
@@ -271,7 +271,7 @@ impl ProgressTracker {
     ///
     /// # Example
     /// ```
-    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    /// use maproom::progress::{ProgressTracker, OutputMode};
     ///
     /// let tracker = ProgressTracker::new(OutputMode::Minimal);
     /// tracker.update_files(42);
@@ -288,7 +288,7 @@ impl ProgressTracker {
     ///
     /// # Example
     /// ```
-    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    /// use maproom::progress::{ProgressTracker, OutputMode};
     ///
     /// let tracker = ProgressTracker::new(OutputMode::Minimal);
     /// tracker.update_chunks(100);
@@ -305,7 +305,7 @@ impl ProgressTracker {
     ///
     /// # Example
     /// ```
-    /// use crewchief_maproom::progress::{ProgressTracker, OutputMode};
+    /// use maproom::progress::{ProgressTracker, OutputMode};
     ///
     /// let json_tracker = ProgressTracker::new(OutputMode::Json);
     /// assert!(json_tracker.is_json_mode());

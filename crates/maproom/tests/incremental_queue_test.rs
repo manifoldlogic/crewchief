@@ -9,7 +9,7 @@
 //! - Exponential backoff calculation
 //! - Queue statistics
 
-use crewchief_maproom::incremental::{
+use maproom::incremental::{
     ChangeType, FileHasher, Priority, Trigger, UpdateQueue, UpdateTask,
 };
 use std::path::PathBuf;

@@ -177,8 +177,8 @@ pub fn format_hits_json_vector(
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::cli::format::format_context_agent;
-/// use crewchief_maproom::context::types::{ContextBundle, ContextItem, LineRange};
+/// use maproom::cli::format::format_context_agent;
+/// use maproom::context::types::{ContextBundle, ContextItem, LineRange};
 ///
 /// let bundle = ContextBundle {
 ///     items: vec![

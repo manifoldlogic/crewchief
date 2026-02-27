@@ -30,9 +30,9 @@
 //! - Valid service account JSON key file
 //! - Tests marked `#[ignore]` - run manually when credentials available
 
-use crewchief_maproom::embedding::config::ParallelConfig;
-use crewchief_maproom::embedding::google::GoogleProvider;
-use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use maproom::embedding::config::ParallelConfig;
+use maproom::embedding::google::GoogleProvider;
+use maproom::embedding::provider::EmbeddingProvider;
 use std::env;
 use std::path::PathBuf;
 use std::time::Instant;

@@ -7,12 +7,12 @@
 //! - Edge cases and error handling
 
 mod sqlite_tests {
-    use crewchief_maproom::db::sqlite::SqliteStore;
-    use crewchief_maproom::db::StoreChunks;
-    use crewchief_maproom::db::StoreCore;
-    use crewchief_maproom::db::StoreMigration;
-    use crewchief_maproom::db::StoreSearch;
-    use crewchief_maproom::db::{ChunkRecord, FileRecord};
+    use maproom::db::sqlite::SqliteStore;
+    use maproom::db::StoreChunks;
+    use maproom::db::StoreCore;
+    use maproom::db::StoreMigration;
+    use maproom::db::StoreSearch;
+    use maproom::db::{ChunkRecord, FileRecord};
 
     /// Helper to create an in-memory store with schema
     async fn setup_store() -> SqliteStore {

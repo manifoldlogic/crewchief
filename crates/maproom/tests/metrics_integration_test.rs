@@ -3,7 +3,7 @@
 //! These tests verify that metrics are correctly recorded and exposed
 //! through the Prometheus endpoint.
 
-use crewchief_maproom::metrics::{get_metrics, metrics_handler};
+use maproom::metrics::{get_metrics, metrics_handler};
 use std::time::Duration;
 
 #[test]

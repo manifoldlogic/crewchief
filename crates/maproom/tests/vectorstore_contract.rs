@@ -14,8 +14,8 @@
 #![cfg(any())]
 
 mod sqlite_contract_tests {
-    use crewchief_maproom::db::sqlite::SqliteStore;
-    use crewchief_maproom::db::{ChunkRecord, FileRecord, UpdateStats, VectorStore};
+    use maproom::db::sqlite::SqliteStore;
+    use maproom::db::{ChunkRecord, FileRecord, UpdateStats, VectorStore};
 
     /// Helper to create an in-memory store with schema
     async fn setup_store() -> SqliteStore {

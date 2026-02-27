@@ -2,8 +2,8 @@
 //!
 //! Target: Scoring should complete within 10ms for 1000 chunks.
 
-use crewchief_maproom::context::graph::EdgeType;
-use crewchief_maproom::context::importance::{
+use maproom::context::graph::EdgeType;
+use maproom::context::importance::{
     ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig,
 };
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};

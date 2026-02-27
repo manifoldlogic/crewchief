@@ -115,7 +115,7 @@ impl EmbeddingConfig {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use crewchief_maproom::embedding::config::{EmbeddingConfig, Provider};
+    /// use maproom::embedding::config::{EmbeddingConfig, Provider};
     ///
     /// // Factory-detected Ollama without env vars
     /// let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama))?;
@@ -502,7 +502,7 @@ impl ParallelConfig {
     /// # Examples
     ///
     /// ```rust
-    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    /// use maproom::embedding::config::ParallelConfig;
     ///
     /// let config = ParallelConfig::google_defaults();
     /// assert!(config.enabled);

@@ -7,7 +7,7 @@
 //! - Calculate precision (≥85%) and recall (≥80%)
 //! - Document false positives and false negatives
 
-use crewchief_maproom::context::heuristics::HeuristicScorer;
+use maproom::context::heuristics::HeuristicScorer;
 use rusqlite::Connection;
 use std::path::PathBuf;
 

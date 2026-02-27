@@ -140,7 +140,7 @@ async fn get_database_size() -> Option<u64> {
 /// Format status as human-readable text
 pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
     if status.repos.is_empty() {
-        return "No repositories indexed yet.\n\nRun 'crewchief-maproom scan' to index a repository.".to_string();
+        return "No repositories indexed yet.\n\nRun 'maproom scan' to index a repository.".to_string();
     }
 
     let mut output = String::new();

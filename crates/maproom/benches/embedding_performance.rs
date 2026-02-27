@@ -65,8 +65,8 @@
 //!
 //! See LOCAL_ANALYSIS.md for performance targets and embedding strategy.
 
-use crewchief_maproom::embedding::config::{CacheConfig, EmbeddingConfig, Provider, RetryConfig};
-use crewchief_maproom::embedding::service::EmbeddingService;
+use maproom::embedding::config::{CacheConfig, EmbeddingConfig, Provider, RetryConfig};
+use maproom::embedding::service::EmbeddingService;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 

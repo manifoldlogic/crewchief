@@ -33,7 +33,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::memory::{quantize_embedding, dequantize_embedding};
+//! use maproom::memory::{quantize_embedding, dequantize_embedding};
 //!
 //! // Original embedding (f32)
 //! let original = vec![0.5, -0.3, 0.8, 0.0];
@@ -74,7 +74,7 @@ const DEQUANTIZATION_SCALE: f32 = 1.0 / 127.0;
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::memory::quantize_embedding;
+/// use maproom::memory::quantize_embedding;
 ///
 /// let embedding = vec![0.5, -0.3, 0.8];
 /// let quantized = quantize_embedding(&embedding);
@@ -119,7 +119,7 @@ pub fn quantize_embedding(embedding: &[f32]) -> Vec<i8> {
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::memory::{quantize_embedding, dequantize_embedding};
+/// use maproom::memory::{quantize_embedding, dequantize_embedding};
 ///
 /// let original = vec![0.5, -0.3, 0.8];
 /// let quantized = quantize_embedding(&original);
@@ -158,7 +158,7 @@ pub fn dequantize_embedding(quantized: &[i8]) -> Vec<f32> {
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::memory::{quantize_embedding, cosine_similarity_quantized};
+/// use maproom::memory::{quantize_embedding, cosine_similarity_quantized};
 ///
 /// let a = vec![0.5, -0.3, 0.8];
 /// let b = vec![0.4, -0.2, 0.9];
@@ -207,7 +207,7 @@ pub fn cosine_similarity_quantized(a: &[i8], b: &[i8]) -> f32 {
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::memory::quantization_memory_savings;
+/// use maproom::memory::quantization_memory_savings;
 ///
 /// let embedding_dim = 1536;
 /// let num_vectors = 100_000;
@@ -235,7 +235,7 @@ pub fn quantization_memory_savings(f32_bytes: usize, i8_bytes: usize) -> f64 {
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::memory::{quantize_embedding, dequantize_embedding, quantization_error};
+/// use maproom::memory::{quantize_embedding, dequantize_embedding, quantization_error};
 ///
 /// let original = vec![0.5, -0.3, 0.8, 0.1];
 /// let quantized = quantize_embedding(&original);

@@ -6,7 +6,7 @@
 //! require a git repository. The git polling approach eliminates "too many
 //! open files" errors on large repositories.
 
-use crewchief_maproom::incremental::{FileEvent, FileWatcher, WatcherConfig};
+use maproom::incremental::{FileEvent, FileWatcher, WatcherConfig};
 use std::fs;
 use std::time::Duration;
 use tempfile::TempDir;

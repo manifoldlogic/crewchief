@@ -1,4 +1,4 @@
-//! CLI argument parsing tests for crewchief-maproom binary.
+//! CLI argument parsing tests for maproom binary.
 //!
 //! These tests verify that CLI arguments are parsed correctly, particularly
 //! for the --provider flag which validates embedding provider names.
@@ -10,7 +10,7 @@ use clap::Parser;
 /// This mirrors the main CLI structure but only includes the fields
 /// necessary for testing provider validation.
 #[derive(Parser, Debug)]
-#[command(name = "crewchief-maproom-test")]
+#[command(name = "maproom-test")]
 struct TestCli {
     #[command(subcommand)]
     command: TestCommands,

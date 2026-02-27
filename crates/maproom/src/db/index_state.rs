@@ -8,7 +8,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::db::{self, UpdateStats};
+//! use maproom::db::{self, UpdateStats};
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let store = db::connect().await?;
@@ -67,7 +67,7 @@ pub struct UpdateStats {
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::db;
+/// # use maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
 /// # let store = db::connect().await?;
 /// let tree_sha = db::get_last_indexed_tree(&store, 1).await?;
@@ -119,7 +119,7 @@ pub async fn get_last_indexed_tree(store: &SqliteStore, worktree_id: i64) -> Res
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::db::{self, UpdateStats};
+/// # use maproom::db::{self, UpdateStats};
 /// # async fn example() -> anyhow::Result<()> {
 /// # let store = db::connect().await?;
 /// let stats = UpdateStats {

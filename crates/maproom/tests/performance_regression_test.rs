@@ -49,9 +49,9 @@
 //! These tests use an in-memory SQLite database with realistic test data.
 //! No external dependencies required (runs in CI without setup).
 
-use crewchief_maproom::db::SqliteStore;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::search::find_top_related_chunks;
+use maproom::db::SqliteStore;
+use maproom::db::StoreCore;
+use maproom::search::find_top_related_chunks;
 use std::time::{Duration, Instant};
 use tempfile::NamedTempFile;
 

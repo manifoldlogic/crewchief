@@ -8,8 +8,8 @@
 //! - TTL and expiration behavior
 //! - Thread-safety under concurrent load
 
-use crewchief_maproom::embedding::cache::{CacheMetrics, EmbeddingCache, Vector};
-use crewchief_maproom::embedding::config::CacheConfig;
+use maproom::embedding::cache::{CacheMetrics, EmbeddingCache, Vector};
+use maproom::embedding::config::CacheConfig;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 

@@ -3,7 +3,7 @@
 //! Note: FileWatcher now requires a git repository due to git polling.
 //! All tests create git repositories for worktrees.
 
-use crewchief_maproom::incremental::{EventType, MultiWatcher, WatcherConfig};
+use maproom::incremental::{EventType, MultiWatcher, WatcherConfig};
 use std::collections::HashMap;
 use std::time::Duration;
 use tempfile::TempDir;

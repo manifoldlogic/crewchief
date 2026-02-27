@@ -3,7 +3,7 @@
 //! Note: FileWatcher now requires a git repository due to git polling.
 //! Tests that use FileWatcher/WorktreeWatcher directly must create git repos.
 
-use crewchief_maproom::incremental::{
+use maproom::incremental::{
     EventType, MultiWatcher, WatcherConfig, WatcherStatus, WorktreeWatcher,
 };
 use std::time::Duration;

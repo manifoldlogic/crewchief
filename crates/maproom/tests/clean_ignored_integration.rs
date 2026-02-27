@@ -9,12 +9,12 @@
 //! MRMIGNR-2001: clean-ignored command integration tests
 
 use anyhow::Result;
-use crewchief_maproom::cli::clean_ignored::clean_ignored;
-use crewchief_maproom::db::sqlite::SqliteStore;
-use crewchief_maproom::db::StoreChunks;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::db::StoreMigration;
-use crewchief_maproom::db::{ChunkRecord, FileRecord};
+use maproom::cli::clean_ignored::clean_ignored;
+use maproom::db::sqlite::SqliteStore;
+use maproom::db::StoreChunks;
+use maproom::db::StoreCore;
+use maproom::db::StoreMigration;
+use maproom::db::{ChunkRecord, FileRecord};
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;

@@ -96,7 +96,7 @@ impl LanguageDetector {
     /// # Examples
     ///
     /// ```
-    /// use crewchief_maproom::context::language_detector::{Language, LanguageDetector};
+    /// use maproom::context::language_detector::{Language, LanguageDetector};
     ///
     /// let detector = LanguageDetector::new();
     ///

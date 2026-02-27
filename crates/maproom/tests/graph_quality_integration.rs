@@ -15,9 +15,9 @@
 mod common;
 
 use common::TestDb;
-use crewchief_maproom::db::StoreChunks;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::db::{ChunkRecord, FileRecord};
+use maproom::db::StoreChunks;
+use maproom::db::StoreCore;
+use maproom::db::{ChunkRecord, FileRecord};
 
 /// Helper to create a file record for a given path
 fn make_file(db: &TestDb, relpath: &str) -> FileRecord {
@@ -186,7 +186,7 @@ async fn test_production_and_test_file_creation() {
 
 #[tokio::test]
 async fn test_search_config_feature_flags() {
-    use crewchief_maproom::config::SearchConfig;
+    use maproom::config::SearchConfig;
 
     // Default config has quality scoring disabled
     let default_config = SearchConfig::default();

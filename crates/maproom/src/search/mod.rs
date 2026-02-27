@@ -26,8 +26,8 @@
 //! ## Basic Query Processing
 //!
 //! ```no_run
-//! use crewchief_maproom::search::{QueryProcessor, SearchMode};
-//! use crewchief_maproom::embedding::EmbeddingService;
+//! use maproom::search::{QueryProcessor, SearchMode};
+//! use maproom::embedding::EmbeddingService;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
@@ -55,9 +55,9 @@
 //! ## Parallel Search Execution
 //!
 //! ```no_run
-//! use crewchief_maproom::search::{QueryProcessor, SearchExecutors};
-//! use crewchief_maproom::embedding::EmbeddingService;
-//! use crewchief_maproom::db;
+//! use maproom::search::{QueryProcessor, SearchExecutors};
+//! use maproom::embedding::EmbeddingService;
+//! use maproom::db;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
@@ -89,8 +89,8 @@
 //! ## Custom Components
 //!
 //! ```no_run
-//! use crewchief_maproom::search::{QueryProcessor, Tokenizer, QueryExpander};
-//! use crewchief_maproom::embedding::EmbeddingService;
+//! use maproom::search::{QueryProcessor, Tokenizer, QueryExpander};
+//! use maproom::embedding::EmbeddingService;
 //! use std::sync::Arc;
 //! use std::collections::{HashMap, HashSet};
 //!
@@ -122,8 +122,8 @@
 //! ## Search Mode Detection
 //!
 //! ```no_run
-//! use crewchief_maproom::search::{QueryProcessor, SearchMode};
-//! use crewchief_maproom::embedding::EmbeddingService;
+//! use maproom::search::{QueryProcessor, SearchMode};
+//! use maproom::embedding::EmbeddingService;
 //! use std::sync::Arc;
 //!
 //! let embedder = Arc::new(EmbeddingService::from_env().unwrap());

@@ -17,8 +17,8 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::search::memory::MemoryMonitor;
-//! use crewchief_maproom::search::SearchCache;
+//! use maproom::search::memory::MemoryMonitor;
+//! use maproom::search::SearchCache;
 //! use std::sync::Arc;
 //!
 //! let cache = Arc::new(SearchCache::new(1000));

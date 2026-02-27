@@ -54,7 +54,7 @@ use tempfile;
 /// - Graph edges with different types and densities
 fn populate_test_data(
     runtime: &tokio::runtime::Runtime,
-    store: &crewchief_maproom::db::SqliteStore,
+    store: &maproom::db::SqliteStore,
     _edges_per_chunk: usize,
 ) {
     runtime.block_on(async {
@@ -93,7 +93,7 @@ fn baseline_search_latency(c: &mut Criterion) {
     let db_path = temp_file.path().to_str().unwrap();
 
     let store = runtime
-        .block_on(async { crewchief_maproom::db::SqliteStore::connect(db_path).await })
+        .block_on(async { maproom::db::SqliteStore::connect(db_path).await })
         .expect("Failed to create store");
 
     // Populate the actual store with minimal test data
@@ -125,7 +125,7 @@ fn relationship_expansion_overhead(c: &mut Criterion) {
     let db_path = temp_file.path().to_str().unwrap();
 
     let store = runtime
-        .block_on(async { crewchief_maproom::db::SqliteStore::connect(db_path).await })
+        .block_on(async { maproom::db::SqliteStore::connect(db_path).await })
         .expect("Failed to create store");
 
     // Add some edges for relationship traversal
@@ -136,7 +136,7 @@ fn relationship_expansion_overhead(c: &mut Criterion) {
             runtime.block_on(async {
                 // Perform search with relationship expansion
                 // This uses find_top_related_chunks to traverse the graph
-                let result = crewchief_maproom::search::find_top_related_chunks(
+                let result = maproom::search::find_top_related_chunks(
                     &store,
                     black_box(1),
                     black_box(5),
@@ -168,7 +168,7 @@ fn graph_traversal_scaling(c: &mut Criterion) {
         let db_path = temp_file.path().to_str().unwrap();
 
         let store = runtime
-            .block_on(async { crewchief_maproom::db::SqliteStore::connect(db_path).await })
+            .block_on(async { maproom::db::SqliteStore::connect(db_path).await })
             .expect("Failed to create store");
 
         // Populate edges for this specific test
@@ -181,7 +181,7 @@ fn graph_traversal_scaling(c: &mut Criterion) {
                 b.iter(|| {
                     runtime.block_on(async {
                         // Traverse graph from a central chunk
-                        let result = crewchief_maproom::search::find_top_related_chunks(
+                        let result = maproom::search::find_top_related_chunks(
                             &store,
                             black_box(1), // Use first chunk
                             black_box(5), // Request top 5 related chunks
@@ -212,7 +212,7 @@ fn concurrent_relationship_expansion(c: &mut Criterion) {
     let db_path = temp_file.path().to_str().unwrap();
 
     let store = runtime
-        .block_on(async { crewchief_maproom::db::SqliteStore::connect(db_path).await })
+        .block_on(async { maproom::db::SqliteStore::connect(db_path).await })
         .expect("Failed to create store");
 
     populate_test_data(&runtime, &store, 50); // Moderate edge density
@@ -222,9 +222,9 @@ fn concurrent_relationship_expansion(c: &mut Criterion) {
             runtime.block_on(async {
                 // Simulate expanding relationships for top 3 search results in parallel
                 let results = futures::future::join_all(vec![
-                    crewchief_maproom::search::find_top_related_chunks(&store, black_box(1), 5),
-                    crewchief_maproom::search::find_top_related_chunks(&store, black_box(1), 5),
-                    crewchief_maproom::search::find_top_related_chunks(&store, black_box(1), 5),
+                    maproom::search::find_top_related_chunks(&store, black_box(1), 5),
+                    maproom::search::find_top_related_chunks(&store, black_box(1), 5),
+                    maproom::search::find_top_related_chunks(&store, black_box(1), 5),
                 ])
                 .await;
                 black_box(results)

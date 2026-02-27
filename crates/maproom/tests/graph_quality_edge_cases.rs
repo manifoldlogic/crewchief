@@ -6,7 +6,7 @@
 //! - Config defaults
 //! - File path pattern detection
 
-use crewchief_maproom::config::{EdgeQualityWeights, SearchConfig};
+use maproom::config::{EdgeQualityWeights, SearchConfig};
 
 // ============================================================================
 // Edge Case: Extreme Weight Configurations

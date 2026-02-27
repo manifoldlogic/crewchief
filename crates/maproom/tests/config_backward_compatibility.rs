@@ -3,7 +3,7 @@
 //! These tests ensure that configuration changes do not break existing deployments.
 //! Validates that old configs without feature flags still work correctly.
 
-use crewchief_maproom::config::{FeatureFlags, SearchConfig};
+use maproom::config::{FeatureFlags, SearchConfig};
 use std::env;
 
 #[test]

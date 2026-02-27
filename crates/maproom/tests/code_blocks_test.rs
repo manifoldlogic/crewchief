@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 
 /// MD_ENHANCE-3001: Code Block Processing Tests
 ///

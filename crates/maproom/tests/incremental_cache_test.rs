@@ -7,7 +7,7 @@
 //! - Multiple entries
 //! - Iterator functionality
 
-use crewchief_maproom::incremental::{FileHasher, HashCache};
+use maproom::incremental::{FileHasher, HashCache};
 use std::path::PathBuf;
 
 #[test]

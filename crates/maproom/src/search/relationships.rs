@@ -142,7 +142,7 @@ pub async fn find_top_related_chunks(
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::search::relationships::compute_edge_weight;
+/// use maproom::search::relationships::compute_edge_weight;
 ///
 /// assert_eq!(compute_edge_weight("extends", "class"), 1.1);
 /// assert_eq!(compute_edge_weight("implements", "interface"), 1.1);
@@ -173,7 +173,7 @@ fn compute_edge_weight(edge_type: &str, target_kind: &str) -> f32 {
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::search::relationships::extract_parent_dir;
+/// use maproom::search::relationships::extract_parent_dir;
 ///
 /// assert_eq!(extract_parent_dir("src/module/file.rs"), "src/module");
 /// assert_eq!(extract_parent_dir("file.rs"), "");
@@ -201,7 +201,7 @@ fn extract_parent_dir(path: &str) -> String {
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::search::relationships::truncate_preview;
+/// use maproom::search::relationships::truncate_preview;
 ///
 /// assert_eq!(truncate_preview("short", 100), "short");
 /// assert_eq!(truncate_preview("a".repeat(150).as_str(), 100), format!("{}...", "a".repeat(100)));

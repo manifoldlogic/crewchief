@@ -5,10 +5,10 @@
 //! These tests validate deduplication behavior in multi-worktree scenarios
 //! where the same code appears across different branches.
 
-use crewchief_maproom::db::SearchHit;
-use crewchief_maproom::search::dedup::{deduplicate, ChunkIdentity, DeduplicationConfig};
-use crewchief_maproom::search::executor_types::SearchSource;
-use crewchief_maproom::search::results::ChunkSearchResult;
+use maproom::db::SearchHit;
+use maproom::search::dedup::{deduplicate, ChunkIdentity, DeduplicationConfig};
+use maproom::search::executor_types::SearchSource;
+use maproom::search::results::ChunkSearchResult;
 use std::collections::HashMap;
 
 // ============================================================================

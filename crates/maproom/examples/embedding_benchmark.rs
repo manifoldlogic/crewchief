@@ -6,10 +6,10 @@
 //!
 //! Run with: cargo run --release --example embedding_benchmark
 
-use crewchief_maproom::embedding::cache::EmbeddingCache;
-use crewchief_maproom::embedding::config::{CacheConfig, ParallelConfig};
-use crewchief_maproom::embedding::ollama::OllamaProvider;
-use crewchief_maproom::embedding::service::EmbeddingService;
+use maproom::embedding::cache::EmbeddingCache;
+use maproom::embedding::config::{CacheConfig, ParallelConfig};
+use maproom::embedding::ollama::OllamaProvider;
+use maproom::embedding::service::EmbeddingService;
 use std::sync::Arc;
 use std::time::Instant;
 

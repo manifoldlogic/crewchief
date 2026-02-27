@@ -61,8 +61,8 @@ impl QueryProcessor {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::search::QueryProcessor;
-    /// use crewchief_maproom::embedding::EmbeddingService;
+    /// use maproom::search::QueryProcessor;
+    /// use maproom::embedding::EmbeddingService;
     /// use std::sync::Arc;
     ///
     /// #[tokio::main]
@@ -132,8 +132,8 @@ impl QueryProcessor {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::search::{QueryProcessor, SearchMode};
-    /// use crewchief_maproom::embedding::EmbeddingService;
+    /// use maproom::search::{QueryProcessor, SearchMode};
+    /// use maproom::embedding::EmbeddingService;
     /// use std::sync::Arc;
     ///
     /// let embedder = Arc::new(EmbeddingService::from_env().unwrap());

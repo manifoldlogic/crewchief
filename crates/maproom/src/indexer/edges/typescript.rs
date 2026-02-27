@@ -31,8 +31,8 @@ use super::{ChunkWithId, Edge, EdgeType};
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::indexer::edges::typescript::extract_calls;
-/// use crewchief_maproom::indexer::edges::ChunkWithId;
+/// use maproom::indexer::edges::typescript::extract_calls;
+/// use maproom::indexer::edges::ChunkWithId;
 ///
 /// let source = "function foo() { return 42; }\nfunction bar() { foo(); }";
 /// let chunks = vec![

@@ -20,9 +20,9 @@
 //! cargo bench --bench dedup_bench -- deduplicate
 //! ```
 
-use crewchief_maproom::search::dedup::{deduplicate, DeduplicationConfig};
-use crewchief_maproom::search::executor_types::SearchSource;
-use crewchief_maproom::search::results::ChunkSearchResult;
+use maproom::search::dedup::{deduplicate, DeduplicationConfig};
+use maproom::search::executor_types::SearchSource;
+use maproom::search::results::ChunkSearchResult;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::HashMap;
 

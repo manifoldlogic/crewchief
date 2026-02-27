@@ -11,10 +11,10 @@
 //! - Quality metrics (no duplicates, correct relevance, completeness)
 
 use anyhow::Result;
-use crewchief_maproom::context::{
+use maproom::context::{
     BasicContextAssembler, ContextAssembler, ExpandOptions,
 };
-use crewchief_maproom::db::{
+use maproom::db::{
     create_pool, get_or_create_commit, get_or_create_repo, get_or_create_worktree,
     insert_chunk, upsert_file,
 };

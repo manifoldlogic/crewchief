@@ -13,7 +13,7 @@
 //! Run with: cargo test --test git_integration
 
 use anyhow::Result;
-use crewchief_maproom::git::{get_current_branch, get_git_tree_sha, git_diff_tree, FileStatus};
+use maproom::git::{get_current_branch, get_git_tree_sha, git_diff_tree, FileStatus};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

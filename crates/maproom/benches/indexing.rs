@@ -425,7 +425,7 @@ fn generate_test_dataset(count: usize) -> Vec<TestFile> {
 
 /// Benchmark parsing a single file
 fn bench_parse_single_file(c: &mut Criterion) {
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use maproom::indexer::parser::extract_chunks;
 
     let mut group = c.benchmark_group("parse_single_file");
 
@@ -452,7 +452,7 @@ fn bench_parse_single_file(c: &mut Criterion) {
 
 /// Benchmark parsing throughput for different dataset sizes
 fn bench_parse_throughput(c: &mut Criterion) {
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use maproom::indexer::parser::extract_chunks;
 
     let mut group = c.benchmark_group("parse_throughput");
     group.measurement_time(Duration::from_secs(10));
@@ -491,7 +491,7 @@ fn bench_parse_throughput(c: &mut Criterion) {
 
 /// Benchmark files per minute throughput
 fn bench_files_per_minute(c: &mut Criterion) {
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use maproom::indexer::parser::extract_chunks;
 
     let mut group = c.benchmark_group("files_per_minute");
     group.measurement_time(Duration::from_secs(15));
@@ -528,7 +528,7 @@ fn bench_files_per_minute(c: &mut Criterion) {
 
 /// Benchmark language-specific parsing
 fn bench_by_language(c: &mut Criterion) {
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use maproom::indexer::parser::extract_chunks;
 
     let mut group = c.benchmark_group("parse_by_language");
 
@@ -587,7 +587,7 @@ impl Clone for TestFile {
 /// Note: This measures parsing + pipeline overhead, not database performance.
 /// Database benchmarks require a live database environment.
 fn bench_parallel_processing(c: &mut Criterion) {
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use maproom::indexer::parser::extract_chunks;
     use crossbeam::channel;
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicUsize, Ordering};

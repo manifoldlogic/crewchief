@@ -5,10 +5,10 @@
 //! These tests validate that confidence signals are correctly computed and
 //! included in search results when include_confidence=true.
 
-use crewchief_maproom::search::executor_types::SearchSource;
-use crewchief_maproom::search::fusion::FusedResult;
-use crewchief_maproom::search::results::{ChunkSearchResult, ConfidenceSignals};
-use crewchief_maproom::search::SearchOptions;
+use maproom::search::executor_types::SearchSource;
+use maproom::search::fusion::FusedResult;
+use maproom::search::results::{ChunkSearchResult, ConfidenceSignals};
+use maproom::search::SearchOptions;
 use std::collections::HashMap;
 
 // ============================================================================
@@ -124,7 +124,7 @@ fn test_search_with_include_confidence_true_returns_confidence() {
         .enumerate()
         .map(|(index, fused)| {
             let confidence = Some(
-                crewchief_maproom::search::confidence::compute_result_confidence(
+                maproom::search::confidence::compute_result_confidence(
                     fused,
                     &fused_results,
                     index,
@@ -245,7 +245,7 @@ fn test_confidence_fields_have_correct_values() {
         .enumerate()
         .map(|(index, fused)| {
             let confidence = Some(
-                crewchief_maproom::search::confidence::compute_result_confidence(
+                maproom::search::confidence::compute_result_confidence(
                     fused,
                     &fused_results,
                     index,
@@ -352,7 +352,7 @@ fn test_score_gap_calculation_across_multiple_results() {
         .enumerate()
         .map(|(index, fused)| {
             let confidence = Some(
-                crewchief_maproom::search::confidence::compute_result_confidence(
+                maproom::search::confidence::compute_result_confidence(
                     fused,
                     &fused_results,
                     index,
@@ -412,7 +412,7 @@ fn test_exact_match_threshold_detection() {
 
     for (multiplier, expected_exact) in test_cases {
         let fused = create_fused_result(1, 0.95, 2, multiplier);
-        let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+        let confidence = maproom::search::confidence::compute_result_confidence(
             &fused,
             &vec![fused.clone()],
             0,
@@ -437,7 +437,7 @@ fn test_daemon_fts_mode_source_count_is_1() {
     let fused = create_daemon_mode_fused_result(1, 0.95, "fts", Some(3.0));
     let all_fused = vec![fused.clone()];
 
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused,
         &all_fused,
         0,
@@ -464,7 +464,7 @@ fn test_daemon_vector_mode_source_count_is_1() {
     let fused = create_daemon_mode_fused_result(1, 0.85, "vector", None);
     let all_fused = vec![fused.clone()];
 
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused,
         &all_fused,
         0,
@@ -491,7 +491,7 @@ fn test_daemon_hybrid_mode_source_count_is_2() {
     let fused = create_daemon_mode_fused_result(1, 0.90, "hybrid", Some(1.0));
     let all_fused = vec![fused.clone()];
 
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused,
         &all_fused,
         0,
@@ -650,7 +650,7 @@ fn test_empty_result_set_does_not_crash() {
 
     // Computing with index 0 on empty list: score_gap should be 0.0
     // (index + 1 < 0 is false, so falls to else branch)
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused,
         &empty_results,
         0,
@@ -677,7 +677,7 @@ fn test_single_result_score_gap_is_zero() {
     let fused = create_fused_result(1, 0.95, 2, None);
     let all_fused = vec![fused.clone()];
 
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused,
         &all_fused,
         0,
@@ -698,7 +698,7 @@ fn test_identical_scores_score_gap_is_zero() {
         create_fused_result(2, 0.85, 2, None),
     ];
 
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused_results[0],
         &fused_results,
         0,
@@ -717,7 +717,7 @@ fn test_no_exact_mult_means_not_exact_match() {
     let fused = create_fused_result(1, 0.95, 2, None);
     let all_fused = vec![fused.clone()];
 
-    let confidence = crewchief_maproom::search::confidence::compute_result_confidence(
+    let confidence = maproom::search::confidence::compute_result_confidence(
         &fused, &all_fused, 0, None, // Explicitly None
     );
 
@@ -753,7 +753,7 @@ fn test_daemon_end_to_end_confidence_pipeline() {
         .enumerate()
         .map(|(index, fused)| {
             let confidence = Some(
-                crewchief_maproom::search::confidence::compute_result_confidence(
+                maproom::search::confidence::compute_result_confidence(
                     fused,
                     &fused_results,
                     index,

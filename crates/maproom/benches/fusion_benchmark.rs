@@ -11,8 +11,8 @@
 //! cargo bench --bench fusion_benchmark
 //! ```
 
-use crewchief_maproom::search::executor_types::{RankedResult, RankedResults, SearchSource};
-use crewchief_maproom::search::fusion::{
+use maproom::search::executor_types::{RankedResult, RankedResults, SearchSource};
+use maproom::search::fusion::{
     BasicWeightedFusion, FusionWeights, RRFFusion, ScoreFusion,
 };
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};

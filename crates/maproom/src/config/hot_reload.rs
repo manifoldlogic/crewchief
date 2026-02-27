@@ -42,7 +42,7 @@ pub enum HotReloadError {
 /// # Examples
 ///
 /// ```no_run
-/// use crewchief_maproom::config::{SearchConfig, ConfigReloader};
+/// use maproom::config::{SearchConfig, ConfigReloader};
 /// use std::sync::Arc;
 /// use tokio::sync::RwLock;
 ///

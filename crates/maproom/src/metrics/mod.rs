@@ -25,7 +25,7 @@
 //! # Usage
 //!
 //! ```no_run
-//! use crewchief_maproom::metrics::{SearchMetrics, get_metrics};
+//! use maproom::metrics::{SearchMetrics, get_metrics};
 //! use std::time::Instant;
 //!
 //! #[tokio::main]

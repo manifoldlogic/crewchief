@@ -1,6 +1,6 @@
 //! Integration tests for language detection.
 
-use crewchief_maproom::context::language_detector::{Language, LanguageDetector};
+use maproom::context::language_detector::{Language, LanguageDetector};
 
 #[test]
 fn test_detect_rust_files() {

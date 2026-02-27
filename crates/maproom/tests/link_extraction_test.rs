@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser::extract_chunks;
+use maproom::indexer::parser::extract_chunks;
 
 #[test]
 fn test_external_links() {

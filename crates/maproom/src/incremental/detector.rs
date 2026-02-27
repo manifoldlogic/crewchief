@@ -45,8 +45,8 @@ pub enum ChangeType {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use crewchief_maproom::db::create_pool;
-/// use crewchief_maproom::incremental::ChangeDetector;
+/// use maproom::db::create_pool;
+/// use maproom::incremental::ChangeDetector;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -130,8 +130,8 @@ impl ChangeDetector {
     ///
     /// ```no_run
     /// # use std::path::Path;
-    /// # use crewchief_maproom::db::create_pool;
-    /// # use crewchief_maproom::incremental::{ChangeDetector, ChangeType};
+    /// # use maproom::db::create_pool;
+    /// # use maproom::incremental::{ChangeDetector, ChangeType};
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;
@@ -241,8 +241,8 @@ impl ChangeDetector {
     ///
     /// ```no_run
     /// # use std::path::Path;
-    /// # use crewchief_maproom::db::create_pool;
-    /// # use crewchief_maproom::incremental::{ChangeDetector, ChangeType};
+    /// # use maproom::db::create_pool;
+    /// # use maproom::incremental::{ChangeDetector, ChangeType};
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;
@@ -287,8 +287,8 @@ impl ChangeDetector {
     ///
     /// ```no_run
     /// # use std::path::Path;
-    /// # use crewchief_maproom::db::create_pool;
-    /// # use crewchief_maproom::incremental::{ChangeDetector, FileHasher};
+    /// # use maproom::db::create_pool;
+    /// # use maproom::incremental::{ChangeDetector, FileHasher};
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;
@@ -351,8 +351,8 @@ impl ChangeDetector {
     ///
     /// ```no_run
     /// # use std::path::PathBuf;
-    /// # use crewchief_maproom::db::create_pool;
-    /// # use crewchief_maproom::incremental::ChangeDetector;
+    /// # use maproom::db::create_pool;
+    /// # use maproom::incremental::ChangeDetector;
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;

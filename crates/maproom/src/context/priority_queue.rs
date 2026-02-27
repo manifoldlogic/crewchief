@@ -74,7 +74,7 @@ impl<T> PriorityItem<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityItem, Category};
+    /// use maproom::context::priority_queue::{PriorityItem, Category};
     ///
     /// let item = PriorityItem::new(0.9, Category::Primary, 0, "chunk_data");
     /// assert_eq!(item.priority(), 0.9);
@@ -153,7 +153,7 @@ impl<T> Eq for PriorityItem<T> {}
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+/// use maproom::context::priority_queue::{PriorityQueue, Category};
 ///
 /// let mut queue = PriorityQueue::new();
 ///
@@ -181,7 +181,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::PriorityQueue;
+    /// use maproom::context::priority_queue::PriorityQueue;
     ///
     /// let queue: PriorityQueue<String> = PriorityQueue::new();
     /// assert_eq!(queue.len(), 0);
@@ -199,7 +199,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::PriorityQueue;
+    /// use maproom::context::priority_queue::PriorityQueue;
     ///
     /// let queue: PriorityQueue<String> = PriorityQueue::with_capacity(100);
     /// assert_eq!(queue.len(), 0);
@@ -218,7 +218,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+    /// use maproom::context::priority_queue::{PriorityQueue, Category};
     ///
     /// let mut queue = PriorityQueue::new();
     /// queue.push(0.9, Category::Primary, "chunk1");
@@ -242,7 +242,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+    /// use maproom::context::priority_queue::{PriorityQueue, Category};
     ///
     /// let mut queue = PriorityQueue::new();
     /// queue.push(0.5, Category::Caller, "low");
@@ -263,7 +263,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+    /// use maproom::context::priority_queue::{PriorityQueue, Category};
     ///
     /// let mut queue = PriorityQueue::new();
     /// queue.push(0.9, Category::Primary, "data");
@@ -281,7 +281,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+    /// use maproom::context::priority_queue::{PriorityQueue, Category};
     ///
     /// let mut queue = PriorityQueue::new();
     /// assert_eq!(queue.len(), 0);
@@ -298,7 +298,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::PriorityQueue;
+    /// use maproom::context::priority_queue::PriorityQueue;
     ///
     /// let queue: PriorityQueue<String> = PriorityQueue::new();
     /// assert!(queue.is_empty());
@@ -312,7 +312,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+    /// use maproom::context::priority_queue::{PriorityQueue, Category};
     ///
     /// let mut queue = PriorityQueue::new();
     /// queue.push(0.9, Category::Primary, "data");
@@ -333,7 +333,7 @@ impl<T> PriorityQueue<T> {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::priority_queue::{PriorityQueue, Category};
+    /// use maproom::context::priority_queue::{PriorityQueue, Category};
     ///
     /// let mut queue = PriorityQueue::new();
     /// queue.push(0.5, Category::Caller, "low");

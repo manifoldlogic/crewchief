@@ -14,7 +14,7 @@ use super::types::LineRange;
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::context::{FileLoader, LineRange};
+/// use maproom::context::{FileLoader, LineRange};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -39,7 +39,7 @@ impl FileLoader {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::FileLoader;
+    /// use maproom::context::FileLoader;
     ///
     /// let loader = FileLoader::new("/workspace/my-project");
     /// ```
@@ -61,7 +61,7 @@ impl FileLoader {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::context::FileLoader;
+    /// use maproom::context::FileLoader;
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
@@ -93,7 +93,7 @@ impl FileLoader {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::context::{FileLoader, LineRange};
+    /// use maproom::context::{FileLoader, LineRange};
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
@@ -117,7 +117,7 @@ impl FileLoader {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::{FileLoader, LineRange};
+    /// use maproom::context::{FileLoader, LineRange};
     ///
     /// let text = "line 1\nline 2\nline 3\nline 4\nline 5";
     /// let range = LineRange::new(2, 4);
@@ -148,7 +148,7 @@ impl FileLoader {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::context::FileLoader;
+    /// use maproom::context::FileLoader;
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
@@ -169,7 +169,7 @@ impl FileLoader {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::FileLoader;
+    /// use maproom::context::FileLoader;
     ///
     /// let loader = FileLoader::new("/workspace");
     /// let full_path = loader.full_path("src/main.rs");

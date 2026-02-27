@@ -32,7 +32,7 @@ impl FileHasher {
     /// # Examples
     /// ```no_run
     /// use std::path::Path;
-    /// use crewchief_maproom::incremental::FileHasher;
+    /// use maproom::incremental::FileHasher;
     ///
     /// let hash = FileHasher::hash_file(Path::new("src/main.rs")).unwrap();
     /// println!("Hash: {}", hash);

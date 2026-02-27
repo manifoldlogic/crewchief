@@ -37,8 +37,8 @@ const BASE_BACKOFF_SECS: u64 = 1;
 ///
 /// ```no_run
 /// use std::path::PathBuf;
-/// use crewchief_maproom::incremental::{UpdateQueue, UpdateTask, Trigger, ChangeType};
-/// use crewchief_maproom::incremental::hash::FileHasher;
+/// use maproom::incremental::{UpdateQueue, UpdateTask, Trigger, ChangeType};
+/// use maproom::incremental::hash::FileHasher;
 ///
 /// let mut queue = UpdateQueue::new();
 ///

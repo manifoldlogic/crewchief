@@ -40,7 +40,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::memory::BufferPool;
+//! use maproom::memory::BufferPool;
 //! use std::fs::File;
 //! use std::io::Read;
 //!
@@ -86,7 +86,7 @@ use std::sync::{Arc, Mutex};
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::memory::BufferPool;
+/// use maproom::memory::BufferPool;
 /// use std::sync::Arc;
 /// use std::thread;
 ///
@@ -136,7 +136,7 @@ impl BufferPool {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::BufferPool;
+    /// use maproom::memory::BufferPool;
     ///
     /// // 64KB buffers, max 10 in pool
     /// let pool = BufferPool::new(64 * 1024, 10);
@@ -160,7 +160,7 @@ impl BufferPool {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::BufferPool;
+    /// use maproom::memory::BufferPool;
     ///
     /// let pool = BufferPool::new(1024, 5);
     /// let mut buffer = pool.acquire();

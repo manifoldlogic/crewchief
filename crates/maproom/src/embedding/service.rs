@@ -42,10 +42,10 @@ impl EmbeddingService {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::service::EmbeddingService;
-    /// use crewchief_maproom::embedding::factory::create_provider_from_env;
-    /// use crewchief_maproom::embedding::cache::EmbeddingCache;
-    /// use crewchief_maproom::embedding::config::CacheConfig;
+    /// use maproom::embedding::service::EmbeddingService;
+    /// use maproom::embedding::factory::create_provider_from_env;
+    /// use maproom::embedding::cache::EmbeddingCache;
+    /// use maproom::embedding::config::CacheConfig;
     /// use std::sync::Arc;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,7 +74,7 @@ impl EmbeddingService {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::service::EmbeddingService;
+    /// use maproom::embedding::service::EmbeddingService;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// // Auto-detect provider (prefers Ollama, falls back to MAPROOM_EMBEDDING_PROVIDER)

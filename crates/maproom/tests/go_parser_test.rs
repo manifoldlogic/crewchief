@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 
 #[test]
 fn test_go_function_parsing() {

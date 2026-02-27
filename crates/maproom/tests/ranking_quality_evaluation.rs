@@ -365,8 +365,8 @@ fn test_print_evaluation_template() {
     println!("## Methodology");
     println!("");
     println!("For each query:");
-    println!("1. Run: `MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH=false cargo run --bin crewchief-maproom -- search --repo crewchief --query \"<query>\" --debug`");
-    println!("2. Run: `MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH=true cargo run --bin crewchief-maproom -- search --repo crewchief --query \"<query>\" --debug`");
+    println!("1. Run: `MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH=false cargo run --bin maproom -- search --repo crewchief --query \"<query>\" --debug`");
+    println!("2. Run: `MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH=true cargo run --bin maproom -- search --repo crewchief --query \"<query>\" --debug`");
     println!("3. Compare top 3 results");
     println!("4. Assess: Did architecturally important code move up (IMPROVED), stay same (SAME), or move down (DEGRADED)?");
     println!("");

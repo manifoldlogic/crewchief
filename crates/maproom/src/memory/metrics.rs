@@ -26,7 +26,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::memory::get_memory_metrics;
+//! use maproom::memory::get_memory_metrics;
 //!
 //! let metrics = get_memory_metrics();
 //!
@@ -115,7 +115,7 @@ impl MemoryMetrics {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::get_memory_metrics;
+    /// use maproom::memory::get_memory_metrics;
     ///
     /// let metrics = get_memory_metrics();
     /// metrics.record_allocation("indexer", 4096);
@@ -164,7 +164,7 @@ impl MemoryMetrics {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::get_memory_metrics;
+    /// use maproom::memory::get_memory_metrics;
     ///
     /// let metrics = get_memory_metrics();
     /// metrics.record_deallocation("indexer", 4096);

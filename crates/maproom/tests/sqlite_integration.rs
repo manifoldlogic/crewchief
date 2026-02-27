@@ -15,13 +15,13 @@
 // ============================================================================
 
 mod filter_integration_tests {
-    use crewchief_maproom::db::sqlite::SqliteStore;
-    use crewchief_maproom::db::StoreChunks;
-    use crewchief_maproom::db::StoreCore;
-    use crewchief_maproom::db::StoreEmbeddings;
-    use crewchief_maproom::db::StoreMigration;
-    use crewchief_maproom::db::StoreSearch;
-    use crewchief_maproom::db::{ChunkRecord, FileRecord};
+    use maproom::db::sqlite::SqliteStore;
+    use maproom::db::StoreChunks;
+    use maproom::db::StoreCore;
+    use maproom::db::StoreEmbeddings;
+    use maproom::db::StoreMigration;
+    use maproom::db::StoreSearch;
+    use maproom::db::{ChunkRecord, FileRecord};
     use std::collections::HashSet;
 
     /// Helper to create an in-memory store with schema
@@ -1147,9 +1147,9 @@ mod filter_integration_tests {
 
 #[cfg(any())]
 mod legacy_integration_tests {
-    use crewchief_maproom::db::sqlite::hybrid::{HybridWeights, SemanticRanking};
-    use crewchief_maproom::db::sqlite::SqliteStore;
-    use crewchief_maproom::db::{ChunkRecord, FileRecord, VectorStore};
+    use maproom::db::sqlite::hybrid::{HybridWeights, SemanticRanking};
+    use maproom::db::sqlite::SqliteStore;
+    use maproom::db::{ChunkRecord, FileRecord, VectorStore};
     use tempfile::tempdir;
 
     // ... legacy tests preserved for reference but not compiled ...

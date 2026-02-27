@@ -31,7 +31,7 @@ impl HashCache {
     ///
     /// # Examples
     /// ```
-    /// use crewchief_maproom::incremental::HashCache;
+    /// use maproom::incremental::HashCache;
     ///
     /// let cache = HashCache::new();
     /// ```
@@ -50,7 +50,7 @@ impl HashCache {
     ///
     /// # Examples
     /// ```
-    /// use crewchief_maproom::incremental::HashCache;
+    /// use maproom::incremental::HashCache;
     ///
     /// let cache = HashCache::with_capacity(1000);
     /// ```
@@ -72,7 +72,7 @@ impl HashCache {
     /// # Examples
     /// ```
     /// use std::path::Path;
-    /// use crewchief_maproom::incremental::HashCache;
+    /// use maproom::incremental::HashCache;
     ///
     /// let cache = HashCache::new();
     /// let hash = cache.get(Path::new("src/main.rs"));
@@ -91,7 +91,7 @@ impl HashCache {
     /// # Examples
     /// ```
     /// use std::path::PathBuf;
-    /// use crewchief_maproom::incremental::{HashCache, FileHasher};
+    /// use maproom::incremental::{HashCache, FileHasher};
     ///
     /// let mut cache = HashCache::new();
     /// let path = PathBuf::from("src/main.rs");
@@ -131,7 +131,7 @@ impl HashCache {
     ///
     /// # Examples
     /// ```
-    /// use crewchief_maproom::incremental::HashCache;
+    /// use maproom::incremental::HashCache;
     ///
     /// let mut cache = HashCache::new();
     /// cache.clear();

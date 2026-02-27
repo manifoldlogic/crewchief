@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::fs;
 use std::time::Duration;

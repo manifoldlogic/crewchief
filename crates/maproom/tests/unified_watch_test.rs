@@ -483,17 +483,17 @@ fn git_command(repo_path: &Path, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// Build the crewchief-maproom binary.
+/// Build the maproom binary.
 fn build_maproom_binary() -> Result<PathBuf> {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
 
     let status = Command::new("cargo")
-        .args(["build", "--bin", "crewchief-maproom"])
+        .args(["build", "--bin", "maproom"])
         .current_dir(manifest_dir)
         .status()?;
 
     if !status.success() {
-        anyhow::bail!("Failed to build crewchief-maproom binary");
+        anyhow::bail!("Failed to build maproom binary");
     }
 
     // Binary is in workspace target dir
@@ -501,7 +501,7 @@ fn build_maproom_binary() -> Result<PathBuf> {
     let binary_path = workspace_root
         .join("target")
         .join("debug")
-        .join("crewchief-maproom");
+        .join("maproom");
 
     if !binary_path.exists() {
         anyhow::bail!("Binary not found at: {}", binary_path.display());

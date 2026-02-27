@@ -6,9 +6,9 @@
 //! - Parse errors don't fail the scan
 //! - Edge data is accurate and queryable
 
-use crewchief_maproom::db::SqliteStore;
-use crewchief_maproom::db::StoreMigration;
-use crewchief_maproom::indexer::scan_worktree;
+use maproom::db::SqliteStore;
+use maproom::db::StoreMigration;
+use maproom::indexer::scan_worktree;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -209,7 +209,7 @@ async fn test_scan_creates_edges_complex() {
 
 #[tokio::test]
 async fn test_incremental_update_recomputes_edges() {
-    use crewchief_maproom::incremental::edge_updater::EdgeUpdater;
+    use maproom::incremental::edge_updater::EdgeUpdater;
     use std::fs;
     use tempfile::TempDir;
 

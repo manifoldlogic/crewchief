@@ -16,7 +16,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! use crewchief_maproom::embedding::factory::create_provider_from_env;
+//! use maproom::embedding::factory::create_provider_from_env;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -135,7 +135,7 @@ use crate::embedding::provider::EmbeddingProvider;
 ///
 /// ## Zero-config with Ollama auto-detection
 /// ```no_run
-/// # use crewchief_maproom::embedding::factory::create_provider_from_env;
+/// # use maproom::embedding::factory::create_provider_from_env;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // Automatically detects Ollama at localhost:11434
 /// let provider = create_provider_from_env().await?;
@@ -146,7 +146,7 @@ use crate::embedding::provider::EmbeddingProvider;
 ///
 /// ## Explicit OpenAI configuration
 /// ```no_run
-/// # use crewchief_maproom::embedding::factory::create_provider_from_env;
+/// # use maproom::embedding::factory::create_provider_from_env;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // Set environment: MAPROOM_EMBEDDING_PROVIDER=openai
 /// //                  OPENAI_API_KEY=sk-...
@@ -382,7 +382,7 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
 /// # Examples
 ///
 /// ```no_run
-/// # use crewchief_maproom::embedding::factory::validate_service_account_json;
+/// # use maproom::embedding::factory::validate_service_account_json;
 /// # use std::path::PathBuf;
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let path = PathBuf::from("/path/to/service-account.json");

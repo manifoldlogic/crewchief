@@ -122,7 +122,7 @@ fn test_watch_detached_head_state() -> Result<()> {
     // When in detached HEAD state, git rev-parse --abbrev-ref HEAD returns "HEAD"
     // The watch command should handle this gracefully
 
-    // This is tested via the crewchief_maproom::git::get_current_branch function
+    // This is tested via the maproom::git::get_current_branch function
     // which returns "HEAD" in detached state (tested in git.rs unit tests)
 
     // For this integration test, we just verify the function exists and is used
@@ -141,7 +141,7 @@ fn test_watch_detached_head_state() -> Result<()> {
 
 /// Get current branch name using git command directly.
 ///
-/// This mimics what crewchief_maproom::git::get_current_branch does,
+/// This mimics what maproom::git::get_current_branch does,
 /// allowing us to verify the implementation without circular dependencies.
 fn get_current_branch_via_git(repo_path: &str) -> Result<String> {
     let output = Command::new("git")
@@ -159,18 +159,18 @@ fn get_current_branch_via_git(repo_path: &str) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
-/// Build the crewchief-maproom binary and return its path.
+/// Build the maproom binary and return its path.
 ///
 /// Uses cargo build to compile the binary for testing.
 fn build_maproom_binary() -> Result<std::path::PathBuf> {
     // Build the binary
     let status = Command::new("cargo")
-        .args(["build", "--bin", "crewchief-maproom"])
+        .args(["build", "--bin", "maproom"])
         .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))
         .status()?;
 
     if !status.success() {
-        anyhow::bail!("Failed to build crewchief-maproom binary");
+        anyhow::bail!("Failed to build maproom binary");
     }
 
     // Return path to built binary
@@ -180,7 +180,7 @@ fn build_maproom_binary() -> Result<std::path::PathBuf> {
     let binary_path = workspace_root
         .join("target")
         .join("debug")
-        .join("crewchief-maproom");
+        .join("maproom");
 
     if !binary_path.exists() {
         anyhow::bail!("Binary not found at: {}", binary_path.display());

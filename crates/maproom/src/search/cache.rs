@@ -35,8 +35,8 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::search::cache::{SearchCache, CacheKey};
-//! use crewchief_maproom::search::FinalSearchResults;
+//! use maproom::search::cache::{SearchCache, CacheKey};
+//! use maproom::search::FinalSearchResults;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -154,7 +154,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::SearchCache;
+    /// use maproom::search::cache::SearchCache;
     ///
     /// let cache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
     /// ```
@@ -185,7 +185,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::SearchCache;
+    /// use maproom::search::cache::SearchCache;
     ///
     /// let cache = SearchCache::new(1000);
     /// ```
@@ -212,7 +212,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::search::cache::{SearchCache, CacheKey};
+    /// use maproom::search::cache::{SearchCache, CacheKey};
     ///
     /// let cache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
@@ -259,8 +259,8 @@ impl SearchCache {
     /// # Example
     ///
     /// ```ignore
-    /// use crewchief_maproom::search::cache::{SearchCache, CacheKey};
-    /// use crewchief_maproom::search::FinalSearchResults;
+    /// use maproom::search::cache::{SearchCache, CacheKey};
+    /// use maproom::search::FinalSearchResults;
     ///
     /// let cache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
@@ -289,7 +289,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::SearchCache;
+    /// use maproom::search::cache::SearchCache;
     ///
     /// let cache = SearchCache::new(1000);
     /// let stats = cache.stats();
@@ -460,7 +460,7 @@ impl CacheKey {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::CacheKey;
+    /// use maproom::search::cache::CacheKey;
     ///
     /// let key1 = CacheKey::new("authenticate", 1, None, 10);
     /// let key2 = CacheKey::new("  AUTHENTICATE  ", 1, None, 10);

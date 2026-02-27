@@ -6,7 +6,7 @@
 //! - Performance within acceptable bounds
 //! - Coverage of diverse C idioms and patterns
 
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::time::Instant;
 
 /// Test cJSON parser - single-file JSON library

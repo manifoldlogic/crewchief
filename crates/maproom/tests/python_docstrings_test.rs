@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 
 /// Test Google-style docstring parsing with Args and Returns sections
 #[test]

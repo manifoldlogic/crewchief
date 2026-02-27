@@ -9,12 +9,12 @@
 //! MRMIGNR-1005: Integration tests for .maproomignore behavior
 
 use anyhow::Result;
-use crewchief_maproom::db::sqlite::SqliteStore;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::db::StoreMigration;
-use crewchief_maproom::incremental::events::FileEvent;
-use crewchief_maproom::incremental::watcher::{FileWatcher, WatcherConfig};
-use crewchief_maproom::indexer::scan_worktree;
+use maproom::db::sqlite::SqliteStore;
+use maproom::db::StoreCore;
+use maproom::db::StoreMigration;
+use maproom::incremental::events::FileEvent;
+use maproom::incremental::watcher::{FileWatcher, WatcherConfig};
+use maproom::indexer::scan_worktree;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
@@ -352,7 +352,7 @@ async fn test_invalid_patterns_fail_startup() -> Result<()> {
     // if we were to use it explicitly. Since watch uses git polling, it's more lenient.
     // However, we can verify that attempting to load patterns fails:
 
-    use crewchief_maproom::incremental::ignore::load_ignore_patterns;
+    use maproom::incremental::ignore::load_ignore_patterns;
     let load_result = load_ignore_patterns(repo_path);
 
     assert!(

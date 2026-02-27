@@ -41,8 +41,8 @@ use tracing::{debug, instrument};
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::search::fusion::{RRFFusion, FusionWeights, ScoreFusion};
-/// use crewchief_maproom::search::executor_types::{RankedResults, RankedResult, SearchSource};
+/// use maproom::search::fusion::{RRFFusion, FusionWeights, ScoreFusion};
+/// use maproom::search::executor_types::{RankedResults, RankedResult, SearchSource};
 ///
 /// // Create RRF fusion with default k=60
 /// let fusion = RRFFusion::default();
@@ -92,7 +92,7 @@ impl RRFFusion {
     /// # Examples
     ///
     /// ```
-    /// use crewchief_maproom::search::fusion::RRFFusion;
+    /// use maproom::search::fusion::RRFFusion;
     ///
     /// let fusion = RRFFusion::new(60.0);
     /// ```

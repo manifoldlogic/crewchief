@@ -20,20 +20,20 @@
 //!
 //! ```bash
 //! # Run all provider abstraction tests (uses mocks)
-//! cargo test -p crewchief-maproom provider_abstraction
+//! cargo test -p maproom provider_abstraction
 //!
 //! # Run with real providers (requires Ollama running)
-//! cargo test -p crewchief-maproom provider_abstraction -- --ignored --test-threads=1
+//! cargo test -p maproom provider_abstraction -- --ignored --test-threads=1
 //! ```
 
-use crewchief_maproom::embedding::client::OpenAIClient;
-use crewchief_maproom::embedding::config::{
+use maproom::embedding::client::OpenAIClient;
+use maproom::embedding::config::{
     CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig,
 };
-use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
-use crewchief_maproom::embedding::factory::create_provider_from_env;
-use crewchief_maproom::embedding::ollama::OllamaProvider;
-use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use maproom::embedding::error::{ApiError, EmbeddingError};
+use maproom::embedding::factory::create_provider_from_env;
+use maproom::embedding::ollama::OllamaProvider;
+use maproom::embedding::provider::EmbeddingProvider;
 use serde_json::json;
 use serial_test::serial;
 use wiremock::matchers::{method, path};

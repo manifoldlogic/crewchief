@@ -45,7 +45,7 @@ pub trait StoreCore: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// fn choose_search_mode(store: &dyn Store) -> &'static str {
     ///     if store.has_vector_extension() {
@@ -71,7 +71,7 @@ pub trait StoreCore: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// async fn setup_repo(store: &dyn Store) -> anyhow::Result<i64> {
     ///     let repo_id = store
@@ -183,7 +183,7 @@ pub trait StoreChunks: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::{ChunkRecord, Store};
+    /// use maproom::db::{ChunkRecord, Store};
     ///
     /// async fn index_chunk(store: &dyn Store, file_id: i64, worktree_id: i64) -> anyhow::Result<i64> {
     ///     let chunk = ChunkRecord {
@@ -244,7 +244,7 @@ pub trait StoreChunks: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// async fn show_context(store: &dyn Store, chunk_id: i64) -> anyhow::Result<()> {
     ///     if let Some(ctx) = store.get_chunk_context(chunk_id, 2).await? {
@@ -327,7 +327,7 @@ pub trait StoreSearch: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// async fn find_functions(store: &dyn Store) -> anyhow::Result<()> {
     ///     let (hits, total_count) = store.search_chunks_fts(
@@ -420,7 +420,7 @@ pub trait StoreSearch: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::{HybridWeights, Store};
+    /// use maproom::db::{HybridWeights, Store};
     ///
     /// async fn hybrid_search(
     ///     store: &dyn Store,
@@ -496,7 +496,7 @@ pub trait StoreGraph: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// async fn who_calls(store: &dyn Store, chunk_id: i64) -> anyhow::Result<()> {
     ///     let callers = store.find_callers(chunk_id, Some(2)).await?;
@@ -552,7 +552,7 @@ pub trait StoreGraph: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::{ImportDirection, Store};
+    /// use maproom::db::{ImportDirection, Store};
     ///
     /// async fn list_dependencies(store: &dyn Store, chunk_id: i64) -> anyhow::Result<()> {
     ///     let outgoing = store.get_direct_edges(chunk_id, ImportDirection::Outgoing).await?;
@@ -634,7 +634,7 @@ pub trait StoreEmbeddings: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// async fn store_embedding(
     ///     store: &dyn Store,
@@ -695,7 +695,7 @@ pub trait StoreEmbeddings: Send + Sync {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::db::Store;
+    /// use maproom::db::Store;
     ///
     /// async fn embedding_pipeline(store: &dyn Store) -> anyhow::Result<()> {
     ///     let chunks = store.fetch_chunks_needing_embeddings(true, Some(500)).await?;

@@ -600,8 +600,8 @@ impl EmbeddingPipeline {
     ///
     /// # Example
     /// ```no_run
-    /// # use crewchief_maproom::embedding::pipeline::{EmbeddingPipeline, PipelineConfig};
-    /// # use crewchief_maproom::embedding::service::EmbeddingService;
+    /// # use maproom::embedding::pipeline::{EmbeddingPipeline, PipelineConfig};
+    /// # use maproom::embedding::service::EmbeddingService;
     /// # async fn example() -> anyhow::Result<()> {
     /// # let service = EmbeddingService::from_env().await?;
     /// # let pipeline = EmbeddingPipeline::new(service, PipelineConfig::default());

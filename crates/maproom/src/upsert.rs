@@ -311,9 +311,9 @@ pub struct ParsedChunk {
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::upsert::{ParsedChunk, upsert_chunk_with_worktree};
-/// # use crewchief_maproom::metrics::CacheMetrics;
-/// # use crewchief_maproom::db;
+/// # use maproom::upsert::{ParsedChunk, upsert_chunk_with_worktree};
+/// # use maproom::metrics::CacheMetrics;
+/// # use maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
 /// let store = db::connect().await?;
 /// let metrics = CacheMetrics::new();

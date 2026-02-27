@@ -8,7 +8,7 @@
 //! cargo test --test ollama_test
 //! ```
 
-use crewchief_maproom::embedding::{
+use maproom::embedding::{
     CacheConfig, EmbeddingCache, EmbeddingConfig, EmbeddingService, OllamaProvider, ParallelConfig,
     Provider, RetryConfig,
 };

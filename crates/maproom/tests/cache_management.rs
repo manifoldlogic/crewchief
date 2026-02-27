@@ -8,15 +8,15 @@
 //! - No stale data served
 //! - Cache effectiveness monitoring
 
-use crewchief_maproom::cache::{
+use maproom::cache::{
     CacheConfig, CacheInvalidator, CacheLayer, CacheSystem, CacheWarmer, EvictionPolicy,
     EvictionStrategy, LayerConfig, MaintenanceConfig, WarmingStrategy,
 };
-use crewchief_maproom::context::types::ContextBundle;
-use crewchief_maproom::search::results::{
+use maproom::context::types::ContextBundle;
+use maproom::search::results::{
     FinalSearchResults, QueryProcessingDetails, SearchMetadata, SearchTiming,
 };
-use crewchief_maproom::search::types::SearchMode;
+use maproom::search::types::SearchMode;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -138,7 +138,7 @@ async fn test_ttl_based_eviction() {
     let strategy = EvictionStrategy::new(EvictionPolicy::Ttl(Duration::from_secs(1)));
 
     // Create an entry and wait for it to expire
-    let entry = crewchief_maproom::cache::CacheEntry::new("test_value");
+    let entry = maproom::cache::CacheEntry::new("test_value");
 
     // Should not be expired immediately
     assert!(!strategy.should_evict_by_ttl(&entry, Duration::from_secs(1)));
@@ -170,7 +170,7 @@ async fn test_size_based_eviction() {
 #[tokio::test]
 async fn test_access_count_eviction() {
     let strategy = EvictionStrategy::new(EvictionPolicy::AccessCount(5));
-    let mut entry = crewchief_maproom::cache::CacheEntry::new("test");
+    let mut entry = maproom::cache::CacheEntry::new("test");
 
     // New entry with 0 accesses should be evicted
     assert!(strategy.should_evict_by_access(&entry, 5));
@@ -435,7 +435,7 @@ async fn test_cache_memory_tracking() {
 
 #[tokio::test]
 async fn test_eviction_stats_tracking() {
-    use crewchief_maproom::cache::EvictionStats;
+    use maproom::cache::EvictionStats;
 
     let mut stats = EvictionStats::new();
 

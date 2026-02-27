@@ -35,7 +35,7 @@ use std::path::{Component, Path, PathBuf};
 ///
 /// ```
 /// use std::path::Path;
-/// use crewchief_maproom::incremental::normalize_to_relpath;
+/// use maproom::incremental::normalize_to_relpath;
 ///
 /// let repo_root = Path::new("/workspace");
 /// let absolute_path = Path::new("/workspace/packages/cli/src/main.ts");
@@ -46,7 +46,7 @@ use std::path::{Component, Path, PathBuf};
 ///
 /// ```
 /// use std::path::Path;
-/// use crewchief_maproom::incremental::normalize_to_relpath;
+/// use maproom::incremental::normalize_to_relpath;
 ///
 /// let repo_root = Path::new("/workspace");
 /// let outside_path = Path::new("/etc/passwd");

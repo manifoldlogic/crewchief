@@ -43,7 +43,7 @@ pub struct TruncationResult {
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::truncation::{CodeTruncator, TruncationStrategy};
+/// use maproom::context::truncation::{CodeTruncator, TruncationStrategy};
 ///
 /// let truncator = CodeTruncator::new();
 /// let code = "fn long_function() {\n".to_string() + &"    // line\n".repeat(100) + "}";
@@ -78,7 +78,7 @@ impl CodeTruncator {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::truncation::{CodeTruncator, TruncationStrategy};
+    /// use maproom::context::truncation::{CodeTruncator, TruncationStrategy};
     ///
     /// let truncator = CodeTruncator::new();
     /// let code = "fn test() { println!(\"hello\"); }";

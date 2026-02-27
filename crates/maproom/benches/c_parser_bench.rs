@@ -3,7 +3,7 @@
 //! Criterion benchmarks for C parser performance testing across different file sizes.
 //! These benchmarks provide baseline metrics for parser scalability.
 
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 /// Generate realistic C source code of approximately the specified size

@@ -7,7 +7,7 @@
 //! - >90% test inclusion rate when tests exist
 //! - Proper weight application across different file types
 
-use crewchief_maproom::context::{
+use maproom::context::{
     ChunkMetadata, EdgeType, FileType, HeuristicScorer, HeuristicsConfig, ImportanceScorer,
     Relationship, ScoringConfig,
 };
