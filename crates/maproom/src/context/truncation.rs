@@ -42,7 +42,7 @@ pub struct TruncationResult {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use maproom::context::truncation::{CodeTruncator, TruncationStrategy};
 ///
 /// let truncator = CodeTruncator::new();

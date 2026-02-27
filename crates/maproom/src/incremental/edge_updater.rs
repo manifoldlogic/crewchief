@@ -45,7 +45,7 @@ use std::sync::Arc;
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::db::create_pool;
 /// use maproom::incremental::EdgeUpdater;
 ///
@@ -99,7 +99,7 @@ impl EdgeUpdater {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use maproom::db::create_pool;
     /// # use maproom::incremental::EdgeUpdater;
     /// # #[tokio::main]

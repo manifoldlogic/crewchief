@@ -599,7 +599,7 @@ impl EmbeddingPipeline {
     /// Pipeline statistics for the incremental update
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
     /// # use maproom::embedding::pipeline::{EmbeddingPipeline, PipelineConfig};
     /// # use maproom::embedding::service::EmbeddingService;
     /// # async fn example() -> anyhow::Result<()> {

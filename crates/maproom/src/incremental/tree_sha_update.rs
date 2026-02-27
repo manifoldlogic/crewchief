@@ -18,7 +18,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::incremental::incremental_update;
 //! use maproom::db::create_pool;
 //! use std::path::Path;

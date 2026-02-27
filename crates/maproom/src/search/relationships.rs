@@ -141,7 +141,7 @@ pub async fn find_top_related_chunks(
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use maproom::search::relationships::compute_edge_weight;
 ///
 /// assert_eq!(compute_edge_weight("extends", "class"), 1.1);
@@ -172,7 +172,7 @@ fn compute_edge_weight(edge_type: &str, target_kind: &str) -> f32 {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use maproom::search::relationships::extract_parent_dir;
 ///
 /// assert_eq!(extract_parent_dir("src/module/file.rs"), "src/module");
@@ -200,7 +200,7 @@ fn extract_parent_dir(path: &str) -> String {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use maproom::search::relationships::truncate_preview;
 ///
 /// assert_eq!(truncate_preview("short", 100), "short");

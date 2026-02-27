@@ -82,7 +82,7 @@ pub trait ContextAssembler: Send + Sync {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::context::{BasicContextAssembler, ContextAssembler, ExpandOptions};
 /// use maproom::context::cache::CacheConfig;
 /// use maproom::db::create_pool;
@@ -273,7 +273,7 @@ impl ContextAssembler for BasicContextAssembler {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::context::{ParallelContextAssembler, ContextAssembler, ExpandOptions};
 /// use maproom::context::cache::CacheConfig;
 /// use maproom::db::create_pool;

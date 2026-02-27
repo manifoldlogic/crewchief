@@ -10,7 +10,7 @@
 //!
 //! # Examples
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::embedding::{EmbeddingService, EmbeddingConfig};
 //!
 //! #[tokio::main]

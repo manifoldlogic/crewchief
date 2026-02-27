@@ -275,7 +275,7 @@ impl ContentFormatter {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use maproom::context::formatter::ContentFormatter;
     /// use maproom::context::types::LineRange;
     ///

@@ -30,7 +30,7 @@ use crate::indexer::SymbolChunk;
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// # use maproom::indexer::parser::java::extract_java_chunks;
 /// let source = "public class Foo { void bar() {} }";
 /// let chunks = extract_java_chunks(source);

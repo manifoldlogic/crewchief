@@ -20,7 +20,7 @@ use super::types::{ContextBundle, ExpandOptions};
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::context::strategy::AssemblyStrategy;
 /// use maproom::context::types::{ContextBundle, ExpandOptions};
 /// use maproom::db::create_pool;

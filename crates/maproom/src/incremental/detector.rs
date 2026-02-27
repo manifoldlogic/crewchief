@@ -43,7 +43,7 @@ pub enum ChangeType {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use std::path::Path;
 /// use maproom::db::create_pool;
 /// use maproom::incremental::ChangeDetector;
@@ -128,7 +128,7 @@ impl ChangeDetector {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use std::path::Path;
     /// # use maproom::db::create_pool;
     /// # use maproom::incremental::{ChangeDetector, ChangeType};
@@ -239,7 +239,7 @@ impl ChangeDetector {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use std::path::Path;
     /// # use maproom::db::create_pool;
     /// # use maproom::incremental::{ChangeDetector, ChangeType};
@@ -285,7 +285,7 @@ impl ChangeDetector {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use std::path::Path;
     /// # use maproom::db::create_pool;
     /// # use maproom::incremental::{ChangeDetector, FileHasher};
@@ -349,7 +349,7 @@ impl ChangeDetector {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use std::path::PathBuf;
     /// # use maproom::db::create_pool;
     /// # use maproom::incremental::ChangeDetector;

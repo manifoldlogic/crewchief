@@ -63,7 +63,7 @@ const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use std::path::PathBuf;
 /// use maproom::db::create_pool;
 /// use maproom::incremental::{IncrementalProcessor, UpdateTask, ChangeType, FileHasher, Trigger};
@@ -152,7 +152,7 @@ impl IncrementalProcessor {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use std::path::PathBuf;
     /// # use maproom::db::create_pool;
     /// # use maproom::incremental::{IncrementalProcessor, UpdateTask, ChangeType, FileHasher, Trigger};

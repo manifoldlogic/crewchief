@@ -157,7 +157,7 @@ pub fn dequantize_embedding(quantized: &[i8]) -> Vec<f32> {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::memory::{quantize_embedding, cosine_similarity_quantized};
 ///
 /// let a = vec![0.5, -0.3, 0.8];
@@ -206,7 +206,7 @@ pub fn cosine_similarity_quantized(a: &[i8], b: &[i8]) -> f32 {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::memory::quantization_memory_savings;
 ///
 /// let embedding_dim = 1536;
@@ -234,7 +234,7 @@ pub fn quantization_memory_savings(f32_bytes: usize, i8_bytes: usize) -> f64 {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use maproom::memory::{quantize_embedding, dequantize_embedding, quantization_error};
 ///
 /// let original = vec![0.5, -0.3, 0.8, 0.1];

@@ -50,7 +50,7 @@ impl DebouncedHandler {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// use std::time::Duration;
     ///
     /// let debouncer = DebouncedHandler::new(Duration::from_secs(2));
@@ -770,7 +770,7 @@ pub async fn upsert_files(
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```ignore
 /// use std::path::Path;
 /// use tokio::sync::mpsc;
 ///

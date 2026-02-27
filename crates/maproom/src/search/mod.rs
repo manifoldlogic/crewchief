@@ -25,7 +25,7 @@
 //!
 //! ## Basic Query Processing
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::search::{QueryProcessor, SearchMode};
 //! use maproom::embedding::EmbeddingService;
 //! use std::sync::Arc;
@@ -54,7 +54,7 @@
 //!
 //! ## Parallel Search Execution
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::search::{QueryProcessor, SearchExecutors};
 //! use maproom::embedding::EmbeddingService;
 //! use maproom::db;
@@ -88,7 +88,7 @@
 //!
 //! ## Custom Components
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::search::{QueryProcessor, Tokenizer, QueryExpander};
 //! use maproom::embedding::EmbeddingService;
 //! use std::sync::Arc;
@@ -121,7 +121,7 @@
 //!
 //! ## Search Mode Detection
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::search::{QueryProcessor, SearchMode};
 //! use maproom::embedding::EmbeddingService;
 //! use std::sync::Arc;

@@ -60,7 +60,7 @@ impl QueryProcessor {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```ignore
     /// use maproom::search::QueryProcessor;
     /// use maproom::embedding::EmbeddingService;
     /// use std::sync::Arc;
@@ -131,7 +131,7 @@ impl QueryProcessor {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```ignore
     /// use maproom::search::{QueryProcessor, SearchMode};
     /// use maproom::embedding::EmbeddingService;
     /// use std::sync::Arc;

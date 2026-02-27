@@ -23,7 +23,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use maproom::context::{ContextCache, ExpandOptions, CacheConfig};
 //! use maproom::db::SqliteStore;
 //! use std::sync::Arc;

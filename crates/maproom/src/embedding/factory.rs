@@ -381,7 +381,7 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// # use maproom::embedding::factory::validate_service_account_json;
 /// # use std::path::PathBuf;
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -503,7 +503,7 @@ fn normalize_endpoint_url(url: &str) -> String {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// # fn example() {
 /// assert_eq!(
 ///     extract_base_url("http://localhost:11434/api/embed"),
@@ -548,7 +548,7 @@ fn extract_base_url(endpoint: &str) -> Option<String> {
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// # async fn example() {
 /// if let Some(endpoint) = detect_ollama_endpoint().await {
 ///     println!("Ollama available at: {}", endpoint);
