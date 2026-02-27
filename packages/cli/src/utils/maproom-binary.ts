@@ -38,11 +38,14 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
   // 2. Check deprecated CREWCHIEF_MAPROOM_BIN environment variable (backward compat)
   // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
   const legacyEnvBin = process.env.CREWCHIEF_MAPROOM_BIN
-  if (legacyEnvBin && fs.existsSync(legacyEnvBin)) {
+  if (legacyEnvBin) {
     console.warn(
       'Warning: CREWCHIEF_MAPROOM_BIN is deprecated and will be removed in a future release. Use MAPROOM_BIN instead.',
     )
-    return { path: legacyEnvBin, source: 'env' }
+    if (fs.existsSync(legacyEnvBin)) {
+      return { path: legacyEnvBin, source: 'env' }
+    }
+    // env var set but path not found — fall through to next resolution strategy
   }
 
   // 3. Check config path

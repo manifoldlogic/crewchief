@@ -418,6 +418,12 @@ describe('findMaproomBinary', () => {
 
     const result = findMaproomBinary()
 
+    // Should still show deprecation warning even though path doesn't exist
+    expect(warnSpy).toHaveBeenCalled()
+    const warnMessage = warnSpy.mock.calls.flat().join(' ')
+    expect(warnMessage).toContain('CREWCHIEF_MAPROOM_BIN is deprecated')
+    expect(warnMessage).toContain('MAPROOM_BIN')
+
     // Should fall through to global
     expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
