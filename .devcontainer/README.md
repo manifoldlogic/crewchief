@@ -63,7 +63,7 @@ The container sets up these environment variables automatically:
 ```bash
 NODE_ENV=development
 PG_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crewchief
-CREWCHIEF_MAPROOM_BIN=/usr/local/bin/crewchief-maproom
+CREWCHIEF_MAPROOM_BIN=/usr/local/bin/maproom
 CLAUDE_CONFIG_DIR=/home/vscode/.claude
 CLAUDE_DANGEROUS_MODE=true
 ANTHROPIC_API_KEY=<set in host environment>
@@ -183,7 +183,7 @@ pnpm test:coverage
 ```bash
 cd crates/maproom
 cargo build --release
-sudo cp target/release/crewchief-maproom /usr/local/bin/
+sudo cp target/release/maproom /usr/local/bin/
 ```
 
 ## 🐛 Troubleshooting

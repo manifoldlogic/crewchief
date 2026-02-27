@@ -2,8 +2,8 @@ dist/
 target/
 
 # Rust binaries (built in CI, not checked into git)
-packages/*/bin/crewchief-maproom
-packages/*/bin/*/crewchief-maproom
+packages/*/bin/maproom
+packages/*/bin/*/maproom
 
 # .cursor/
 # .claude/

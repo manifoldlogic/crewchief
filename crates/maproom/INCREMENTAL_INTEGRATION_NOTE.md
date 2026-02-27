@@ -79,14 +79,14 @@ Updates use `ON CONFLICT DO UPDATE` for atomic upserts.
 
 ### Default Behavior (Incremental Mode)
 ```bash
-$ crewchief-maproom scan --path /workspace --repo crewchief --worktree main
+$ maproom scan --path /workspace --repo crewchief --worktree main
 ⚡ Incremental scan mode (use --force for full scan)
 ✓ No changes detected (tree SHA match), skipping scan
 ```
 
 ### Force Full Scan
 ```bash
-$ crewchief-maproom scan --force --path /workspace --repo crewchief --worktree main
+$ maproom scan --force --path /workspace --repo crewchief --worktree main
 🔄 Full scan mode (--force flag enabled)
 🔍 Scanning worktree: main @ 6e08dc40
 Progress: 100% complete (323/323 files)
@@ -95,7 +95,7 @@ Progress: 100% complete (323/323 files)
 
 ### First-Time Scan
 ```bash
-$ crewchief-maproom scan --path /workspace --repo crewchief --worktree main
+$ maproom scan --path /workspace --repo crewchief --worktree main
 ⚡ Incremental scan mode (use --force for full scan)
 🔍 Scanning worktree: main @ 6e08dc40
 Progress: 100% complete (323/323 files)

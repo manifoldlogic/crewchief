@@ -17,7 +17,7 @@ graph TB
 
     subgraph "Daemon Layer"
         DC[daemon-client<br/>TypeScript]
-        DM[crewchief-maproom serve<br/>Rust Daemon]
+        DM[maproom serve<br/>Rust Daemon]
     end
 
     subgraph "Storage"

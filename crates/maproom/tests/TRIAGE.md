@@ -108,7 +108,7 @@
 
 **Note:** All files with PostgreSQL dependencies were deleted. The codebase has completed the hard break from PostgreSQL. Functionality will be validated by Phase 2-5 implementation tickets.
 
-**Phase 1 Gate Achieved:** `cargo test -p crewchief-maproom --no-run` compiles successfully!
+**Phase 1 Gate Achieved:** `cargo test -p maproom --no-run` compiles successfully!
 
 ## Already SQLite-Compatible (No Changes Needed)
 
@@ -183,13 +183,13 @@ use crewchief_maproom::db::{ChunkRecord, FileRecord};
 After migration, tests should be run with:
 ```bash
 # Compile check (Phase 1 gate)
-cargo test -p crewchief-maproom --no-run
+cargo test -p maproom --no-run
 
 # Run all tests
-cargo test -p crewchief-maproom
+cargo test -p maproom
 
 # Run specific test file
-cargo test -p crewchief-maproom --test common
+cargo test -p maproom --test common
 ```
 
 ## Deferred Tests Summary

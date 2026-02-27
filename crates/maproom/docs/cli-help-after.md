@@ -6,12 +6,12 @@ ENVIRONMENT VARIABLES:
         Override path to the maproom binary. Takes precedence over all
         other resolution methods.
 
-        Example: export CREWCHIEF_MAPROOM_BIN="/path/to/crewchief-maproom"
+        Example: export CREWCHIEF_MAPROOM_BIN="/path/to/maproom"
 
         Resolution priority:
           1. CREWCHIEF_MAPROOM_BIN environment variable (highest)
           2. maproomBinaryPath in crewchief.config.js
-          3. Global installation (crewchief-maproom in PATH)
+          3. Global installation (maproom in PATH)
           4. Packaged binary (bundled with CLI)
 
     MAPROOM_DATABASE_URL
@@ -45,7 +45,7 @@ ENVIRONMENT VARIABLES:
 
     RUST_LOG
         Logging level: error, warn, info, debug, trace
-        Example: RUST_LOG=debug crewchief-maproom status
+        Example: RUST_LOG=debug maproom status
 
     OPENAI_API_KEY
         Required when using openai embedding provider.
@@ -59,18 +59,18 @@ ENVIRONMENT VARIABLES:
 BEFORE SEARCHING:
     Always check indexing status before performing searches:
 
-        $ crewchief-maproom status
+        $ maproom status
 
-    If repository not indexed: crewchief-maproom scan --path /path/to/repo
-    If embeddings missing:     crewchief-maproom generate-embeddings
-    For debug output:          RUST_LOG=debug crewchief-maproom status
+    If repository not indexed: maproom scan --path /path/to/repo
+    If embeddings missing:     maproom generate-embeddings
+    For debug output:          RUST_LOG=debug maproom status
 
 DEVELOPMENT SETUP:
     Build from source:
-        $ cargo build --release --bin crewchief-maproom
+        $ cargo build --release --bin maproom
 
     Configure path:
-        export CREWCHIEF_MAPROOM_BIN="./target/release/crewchief-maproom"
+        export CREWCHIEF_MAPROOM_BIN="./target/release/maproom"
 
     Or in .claude/settings.json:
         { "env": { "CREWCHIEF_MAPROOM_BIN": "./target/release/..." } }

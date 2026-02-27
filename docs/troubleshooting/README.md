@@ -36,14 +36,14 @@ If not: `ollama pull mxbai-embed-large`
 ```bash
 ls -la ~/.maproom/maproom.db
 ```
-If not: `crewchief-maproom scan /path/to/repo`
+If not: `maproom scan /path/to/repo`
 
 ### 4. Is anything indexed?
 Use the `status` MCP tool to check repos and chunk counts.
 
 ### 5. Enable debug logging
 ```bash
-RUST_LOG=debug crewchief-maproom serve
+RUST_LOG=debug maproom serve
 ```
 
 ## Common Quick Fixes
@@ -52,7 +52,7 @@ RUST_LOG=debug crewchief-maproom serve
 |---------|-----------|
 | Search returns nothing | Run `scan` first |
 | Ollama errors | `ollama serve && ollama pull mxbai-embed-large` |
-| Database locked | Wait or `pkill -f crewchief-maproom` |
+| Database locked | Wait or `pkill -f maproom` |
 | Stale results | `scan` to re-index |
 | Daemon won't start | Check `RUST_LOG=debug` output |
 

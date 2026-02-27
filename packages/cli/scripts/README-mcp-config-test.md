@@ -114,7 +114,7 @@ docker ps | grep maproom-mcp
 docker logs maproom-mcp
 
 # Test maproom binary directly
-/workspace/packages/cli/bin/linux-arm64/crewchief-maproom --help
+/workspace/packages/cli/bin/linux-arm64/maproom --help
 ```
 
 **Solution**: Ensure MCP servers are running and accessible.

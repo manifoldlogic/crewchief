@@ -15,10 +15,10 @@ This runbook provides operational procedures, troubleshooting guides, and refere
 systemctl status maproom
 
 # Verify all parsers functional
-echo 'function test() {}' | ./crewchief-maproom parse --language ts  # TypeScript
-echo 'def test(): pass' | ./crewchief-maproom parse --language py   # Python
-echo 'fn test() {}' | ./crewchief-maproom parse --language rs        # Rust
-echo 'func test() {}' | ./crewchief-maproom parse --language go      # Go
+echo 'function test() {}' | ./maproom parse --language ts  # TypeScript
+echo 'def test(): pass' | ./maproom parse --language py   # Python
+echo 'fn test() {}' | ./maproom parse --language rs        # Rust
+echo 'func test() {}' | ./maproom parse --language go      # Go
 
 # Check database connectivity
 psql -U maproom_user -d maproom_db -c "SELECT COUNT(*) FROM chunks;"
@@ -27,10 +27,10 @@ psql -U maproom_user -d maproom_db -c "SELECT COUNT(*) FROM chunks;"
 tail -100 /var/log/maproom/errors.log
 
 # Check memory usage
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Verify search working
-./crewchief-maproom search "function"
+./maproom search "function"
 ```
 
 ### Emergency Contacts
@@ -45,7 +45,7 @@ ps aux | grep crewchief-maproom
 - **Service Config**: `/etc/systemd/system/maproom.service`
 - **Application Config**: `/opt/maproom/config/maproom.toml`
 - **Logs**: `/var/log/maproom/`
-- **Binary**: `/opt/maproom/bin/crewchief-maproom`
+- **Binary**: `/opt/maproom/bin/maproom`
 - **Database Backups**: `/backups/maproom/` or S3
 
 ## System Architecture
@@ -120,10 +120,10 @@ sudo systemctl start maproom
 sudo journalctl -u maproom -f --since "1 minute ago"
 
 # Check process
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Test functionality
-./crewchief-maproom search "test"
+./maproom search "test"
 ```
 
 **Expected Startup Time**: 5-10 seconds
@@ -150,7 +150,7 @@ sudo systemctl restart maproom
 
 # Verify restart
 sudo systemctl status maproom
-./crewchief-maproom search "test"
+./maproom search "test"
 ```
 
 **Expected Downtime**: 10-15 seconds
@@ -283,7 +283,7 @@ LIMIT 20;
    sudo systemctl restart maproom
 
    # Test repository offline
-   ./crewchief-maproom scan --path /path/to/repo --dry-run
+   ./maproom scan --path /path/to/repo --dry-run
 
    # Check for encoding issues
    file -i /path/to/repo/**/*
@@ -292,7 +292,7 @@ LIMIT 20;
 3. **For Specific Language**:
    ```bash
    # Test parser with sample files
-   echo 'def test(): pass' | ./crewchief-maproom parse --language py --verbose
+   echo 'def test(): pass' | ./maproom parse --language py --verbose
 
    # Check parser tests
    cargo test --test python_parser_test
@@ -327,10 +327,10 @@ LIMIT 20;
 
 ```bash
 # Check current memory
-ps aux | grep crewchief-maproom | awk '{print $6}'
+ps aux | grep maproom | awk '{print $6}'
 
 # Monitor over time
-watch -n 10 'ps aux | grep crewchief-maproom'
+watch -n 10 'ps aux | grep maproom'
 
 # Check for memory leaks
 sudo journalctl -u maproom | grep -i "memory\|oom"
@@ -671,19 +671,19 @@ find /backups/maproom/ -name "*.dump" -mtime +30 -delete
 
 ```bash
 # 1. Backup current binary
-cp /opt/maproom/bin/crewchief-maproom /opt/maproom/bin/crewchief-maproom.backup
+cp /opt/maproom/bin/maproom /opt/maproom/bin/maproom.backup
 
 # 2. Deploy new binary
-scp ./target/release/crewchief-maproom prod-server:/opt/maproom/bin/
+scp ./target/release/maproom prod-server:/opt/maproom/bin/
 
 # 3. Verify binary
-/opt/maproom/bin/crewchief-maproom --version
+/opt/maproom/bin/maproom --version
 
 # 4. Restart service
 sudo systemctl restart maproom
 
 # 5. Verify functionality
-/opt/maproom/bin/crewchief-maproom search "test"
+/opt/maproom/bin/maproom search "test"
 
 # 6. Monitor for issues
 sudo journalctl -u maproom -f

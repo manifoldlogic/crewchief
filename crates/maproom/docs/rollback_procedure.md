@@ -39,14 +39,14 @@ Consider rollback if:
 systemctl stop maproom
 
 # Restore previous binary from backup
-cp /opt/maproom/bin/crewchief-maproom.backup /opt/maproom/bin/crewchief-maproom
+cp /opt/maproom/bin/maproom.backup /opt/maproom/bin/maproom
 
 # Or download previous release
-wget https://releases/maproom/v1.x.x/crewchief-maproom -O /opt/maproom/bin/crewchief-maproom
-chmod +x /opt/maproom/bin/crewchief-maproom
+wget https://releases/maproom/v1.x.x/maproom -O /opt/maproom/bin/maproom
+chmod +x /opt/maproom/bin/maproom
 
 # Verify binary version
-/opt/maproom/bin/crewchief-maproom --version
+/opt/maproom/bin/maproom --version
 
 # Start maproom service
 systemctl start maproom
@@ -60,7 +60,7 @@ systemctl status maproom
 
 # Verify TypeScript/JavaScript parsing still works
 echo 'function test() { return 42; }' | \
-  /opt/maproom/bin/crewchief-maproom parse --language ts
+  /opt/maproom/bin/maproom parse --language ts
 
 # Check database connectivity
 psql -U maproom_user -d maproom_db -c "SELECT COUNT(*) FROM chunks;"
@@ -96,14 +96,14 @@ Investigation in progress. ETA for re-deployment: [timeframe]
 
 ```bash
 # 1. Identify previous working version
-ls -lh /opt/maproom/bin/crewchief-maproom*
+ls -lh /opt/maproom/bin/maproom*
 
 # 2. Stop service (graceful shutdown)
 systemctl stop maproom
 
 # 3. Replace binary
-mv /opt/maproom/bin/crewchief-maproom /opt/maproom/bin/crewchief-maproom.failed
-cp /opt/maproom/bin/crewchief-maproom.backup /opt/maproom/bin/crewchief-maproom
+mv /opt/maproom/bin/maproom /opt/maproom/bin/maproom.failed
+cp /opt/maproom/bin/maproom.backup /opt/maproom/bin/maproom
 
 # 4. Start service
 systemctl start maproom
@@ -146,7 +146,7 @@ LIMIT 5;
 
 ```bash
 # Test search via CLI
-/opt/maproom/bin/crewchief-maproom search "test function"
+/opt/maproom/bin/maproom search "test function"
 
 # Expected: Results from .ts/.js files only
 # No errors in output
@@ -160,7 +160,7 @@ tail -f /var/log/maproom/errors.log | grep -v "INFO"
 
 # Check resource usage
 top -bn1 | grep maproom
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Verify database connections
 psql -U maproom_user -d maproom_db -c "
@@ -250,13 +250,13 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
 
 ```bash
 # Identify current migration version
-./target/release/crewchief-maproom db status
+./target/release/maproom db status
 
 # Rollback to specific version (if tool supports it)
-./target/release/crewchief-maproom db rollback --to 0010
+./target/release/maproom db rollback --to 0010
 
 # Verify rollback
-./target/release/crewchief-maproom db status
+./target/release/maproom db status
 ```
 
 **Option 2: Restore from backup**
@@ -357,7 +357,7 @@ cargo build --release
 ./scripts/deploy_staging.sh
 
 # 2. Index sample data
-./target/release/crewchief-maproom scan --path /test/polyglot/repo
+./target/release/maproom scan --path /test/polyglot/repo
 
 # 3. Verify multi-language works
 cargo test --test large_scale_validation_test

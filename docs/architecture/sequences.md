@@ -17,7 +17,7 @@ sequenceDiagram
     MCP->>DC: search(params)
 
     alt Daemon not running
-        DC->>DM: spawn crewchief-maproom serve
+        DC->>DM: spawn maproom serve
         DM-->>DC: ready (JSON-RPC)
     end
 
@@ -98,7 +98,7 @@ sequenceDiagram
     DC->>DL: ensureRunning()
 
     alt Daemon not started
-        DL->>DM: spawn crewchief-maproom serve
+        DL->>DM: spawn maproom serve
         DM->>DB: Connect to SQLite<br/>(~/.maproom/maproom.db)
         DB-->>DM: Connection pool ready
         DM-->>DL: JSON-RPC ready line

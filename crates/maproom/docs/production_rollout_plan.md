@@ -83,14 +83,14 @@ Day 7: Final Validation & Documentation
 
 ```bash
 # 1. Deploy new binary
-scp ./target/release/crewchief-maproom prod-server:/opt/maproom/bin/
+scp ./target/release/maproom prod-server:/opt/maproom/bin/
 systemctl restart maproom
 
 # 2. Verify Python parser available
-./crewchief-maproom parse --language py < test_file.py
+./maproom parse --language py < test_file.py
 
 # 3. Index first Python repository
-./crewchief-maproom scan --path /repos/python/django-sample
+./maproom scan --path /repos/python/django-sample
 
 # 4. Monitor metrics
 # - Open Grafana dashboard
@@ -195,14 +195,14 @@ WHERE language = 'py'
 
 ```bash
 # 1. Verify current system health
-./crewchief-maproom db status
+./maproom db status
 psql -U maproom_user -d maproom_db -c "SELECT COUNT(*) FROM chunks WHERE language = 'py';"
 
 # 2. Deploy Rust parser (already in binary)
 # No new deployment needed - Rust integrated in same binary as Python
 
 # 3. Index first Rust repository
-./crewchief-maproom scan --path /repos/rust/tokio-sample
+./maproom scan --path /repos/rust/tokio-sample
 
 # 4. Gradual rollout
 # Hour 1: 1 Rust repo
@@ -281,11 +281,11 @@ ORDER BY day, language;
 
 ```bash
 # 1. Final system health check
-./crewchief-maproom search "test" # Verify search working
+./maproom search "test" # Verify search working
 psql -U maproom_user -d maproom_db -c "SELECT language, COUNT(*) FROM chunks GROUP BY language;"
 
 # 2. Index first Go repository
-./crewchief-maproom scan --path /repos/go/kubernetes-sample
+./maproom scan --path /repos/go/kubernetes-sample
 
 # 3. Gradual rollout
 # Hour 1: 1 Go repo
@@ -515,7 +515,7 @@ ORDER BY hour, language;
 # Document which repos to exclude
 
 # 2. Verify other languages unaffected
-./crewchief-maproom search "test function" # Should still work for other languages
+./maproom search "test function" # Should still work for other languages
 
 # 3. Investigate issues offline
 # 4. Re-deploy when fixed
@@ -613,13 +613,13 @@ LIMIT 20;
 **Investigation**:
 ```bash
 # Check process memory
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Monitor memory over time
-watch -n 60 'ps aux | grep crewchief-maproom | awk "{print \$6}"'
+watch -n 60 'ps aux | grep maproom | awk "{print \$6}"'
 
 # Check for memory leaks
-valgrind --leak-check=full ./crewchief-maproom scan --path /test/repo
+valgrind --leak-check=full ./maproom scan --path /test/repo
 ```
 
 **Resolution**:

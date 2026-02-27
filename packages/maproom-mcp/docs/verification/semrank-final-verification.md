@@ -152,7 +152,7 @@ FAIL tests/integration/search-quality.test.ts (33/53 failed)
 #### SEMRANK-3006: Regression Testing
 - ✅ Status: Task completed, Tests pass (11/11 claimed), Verified by previous agent
 - ❌ **ACTUAL STATUS**: Tests FAILING when run (11/11 failed due to missing test-corpus)
-- ❌ Error: "Test corpus not indexed. Run: crewchief-maproom scan ..."
+- ❌ Error: "Test corpus not indexed. Run: maproom scan ..."
 
 **Test Results**:
 ```
@@ -329,7 +329,7 @@ export async function cleanTestData(client: Client): Promise<void> {
 
 2. **Re-index Test Corpus**
    ```bash
-   /workspace/packages/cli/bin/linux-arm64/crewchief-maproom scan \
+   /workspace/packages/cli/bin/linux-arm64/maproom scan \
      --repo test-corpus \
      --worktree main \
      --path /tmp/semrank-test-corpus \

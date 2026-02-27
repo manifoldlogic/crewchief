@@ -83,7 +83,7 @@ If you were using the CLI commands (`setup`, `scan`, `watch`), follow these step
 npm install -g @crewchief/cli
 
 # Scan your repository (creates database at ~/.maproom/maproom.db)
-crewchief-maproom scan /path/to/your/repo
+maproom scan /path/to/your/repo
 ```
 
 ### Step 2: Configure MCP Client

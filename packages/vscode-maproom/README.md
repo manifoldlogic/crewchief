@@ -123,7 +123,7 @@ ollama serve
 The extension should auto-fix permissions, but if needed:
 
 ```bash
-chmod +x ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/bin/*/crewchief-maproom
+chmod +x ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/bin/*/maproom
 ```
 
 ### Extension seems stuck on "Starting..."

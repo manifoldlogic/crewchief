@@ -389,16 +389,16 @@ Additional recommended: syntax errors, visibility modifiers, language-specific c
 All commands must pass:
 
 ```bash
-cargo build -p crewchief-maproom                        # Compiles cleanly
-cargo test -p crewchief-maproom --test {LANG}_parser_test  # New tests pass (8+ tests)
-cargo test -p crewchief-maproom                          # No regressions
-cargo clippy -p crewchief-maproom                        # No warnings
-cargo fmt --check -p crewchief-maproom                   # No formatting issues
-cargo test -p crewchief-maproom detect_language           # Extension detection works
-cargo test -p crewchief-maproom -- language_detector      # Enum methods work
+cargo build -p maproom                        # Compiles cleanly
+cargo test -p maproom --test {LANG}_parser_test  # New tests pass (8+ tests)
+cargo test -p maproom                          # No regressions
+cargo clippy -p maproom                        # No warnings
+cargo fmt --check -p maproom                   # No formatting issues
+cargo test -p maproom detect_language           # Extension detection works
+cargo test -p maproom -- language_detector      # Enum methods work
 ```
 
-Manual verification: `cargo run --bin crewchief-maproom -- scan --path /path/to/{LANG}-repo --repo test --worktree main` -- files detected and chunks produced.
+Manual verification: `cargo run --bin maproom -- scan --path /path/to/{LANG}-repo --repo test --worktree main` -- files detected and chunks produced.
 
 ---
 

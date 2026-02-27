@@ -34,7 +34,7 @@ Maproom consists of six major subsystems:
                          │ spawns & manages
                          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Rust Core (crewchief-maproom)                    │
+│                    Rust Core (maproom)                    │
 │                                                                       │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐            │
 │  │   Indexing   │   │    Search    │   │   Context    │            │
@@ -752,7 +752,7 @@ AI Assistant (Claude/Cursor)
             ▼
 ┌────────────────────────┐
 │  Rust Binary           │
-│  crewchief-maproom     │
+│  maproom     │
 │  - Indexing            │
 │  - Search              │
 │  - Context assembly    │
@@ -857,7 +857,7 @@ User runs: mcp__maproom__scan({ repo: "myapp", path: "/workspace" })
 
 1. MCP Server receives JSON-RPC request
 2. Provider detection runs (finds Google Vertex AI)
-3. Spawn crewchief-maproom with args:
+3. Spawn maproom with args:
    scan --repo myapp --path /workspace --provider google
 4. Rust binary:
    a. Discovers files (904 files found)

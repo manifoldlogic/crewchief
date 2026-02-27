@@ -166,7 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Extension activation**: `onStartupFinished` for minimal startup impact
 - **Docker Compose file**: Located at `config/docker-compose.yml`
-- **Binary location**: `bin/<platform>/crewchief-maproom`
+- **Binary location**: `bin/<platform>/maproom`
 - **Database**: PostgreSQL 16 with pgvector on port 5433
 - **Embedding service**: Ollama on port 11434
 - **Test coverage**: 71% overall (96% config, 94% UI, 81% process, 100% utils)

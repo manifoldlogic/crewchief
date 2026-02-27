@@ -1,7 +1,7 @@
 {
   "name": "@crewchief/daemon-client",
   "version": "0.1.0",
-  "description": "TypeScript client library for communicating with the crewchief-maproom daemon via JSON-RPC",
+  "description": "TypeScript client library for communicating with the maproom daemon via JSON-RPC",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

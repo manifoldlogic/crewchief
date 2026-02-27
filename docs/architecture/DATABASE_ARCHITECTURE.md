@@ -227,7 +227,7 @@ Both Rust binary and Node.js CLI use intelligent fallback to automatically detec
 **Devcontainer** (auto-detection works automatically):
 ```bash
 # No MAPROOM_DATABASE_URL needed - auto-detects maproom-postgres
-cargo run --bin crewchief-maproom -- scan /workspace
+cargo run --bin maproom -- scan /workspace
 
 # Or set explicitly
 export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
@@ -248,7 +248,7 @@ environment:
 # Using component override
 export MAPROOM_DB_HOST="my-custom-postgres"
 export MAPROOM_DB_PORT="5432"
-cargo run --bin crewchief-maproom -- scan /workspace
+cargo run --bin maproom -- scan /workspace
 ```
 
 ## Starting the Database
@@ -416,13 +416,13 @@ psql $MAPROOM_DATABASE_URL -c "SELECT version, filename FROM maproom.schema_migr
 1. Wait for the other process to finish:
    ```bash
    # Check for running maproom processes
-   ps aux | grep crewchief-maproom
+   ps aux | grep maproom
    ```
 
 2. If a process is stuck, kill it:
    ```bash
    # Find and kill stuck process
-   pkill -f crewchief-maproom
+   pkill -f maproom
    ```
 
 3. Ensure only one indexing process runs at a time.
@@ -546,7 +546,7 @@ crewchief maproom scan
 **Solutions**:
 1. Run migrations:
    ```bash
-   cargo run --bin crewchief-maproom -- db migrate
+   cargo run --bin maproom -- db migrate
    ```
 
 2. Check if tables exist:
@@ -556,7 +556,7 @@ crewchief maproom scan
 
 3. Re-index if needed:
    ```bash
-   cargo run --bin crewchief-maproom -- scan /workspace
+   cargo run --bin maproom -- scan /workspace
    ```
 
 ### Port Conflicts
@@ -621,7 +621,7 @@ docker compose down -v  # Removes volumes
 docker compose up -d
 
 # Wait for initialization, then re-index
-cargo run --bin crewchief-maproom -- scan /workspace
+cargo run --bin maproom -- scan /workspace
 ```
 
 ### Monitor Size

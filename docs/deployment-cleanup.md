@@ -6,7 +6,7 @@ This guide covers the deployment procedures, rollback plans, and monitoring setu
 
 Before deploying to any environment, verify:
 
-- [ ] All unit tests passing (`cargo test -p crewchief-maproom`)
+- [ ] All unit tests passing (`cargo test -p maproom`)
 - [ ] All integration tests passing (`cleanup_detection_test.rs`, `cleanup_deletion_test.rs`, `cleanup_cli_test.rs`)
 - [ ] Staging validation complete (IDXCLEAN-3004)
 - [ ] Database backup procedure verified and tested
@@ -22,12 +22,12 @@ Before deploying to any environment, verify:
 
 1. **Build the binary:**
    ```bash
-   cargo build --release --bin crewchief-maproom
+   cargo build --release --bin maproom
    ```
 
 2. **Run dry-run to preview:**
    ```bash
-   ./target/release/crewchief-maproom db cleanup-stale --verbose
+   ./target/release/maproom db cleanup-stale --verbose
    ```
 
 3. **Review output:**
@@ -37,7 +37,7 @@ Before deploying to any environment, verify:
 
 4. **Execute cleanup:**
    ```bash
-   ./target/release/crewchief-maproom db cleanup-stale --confirm --verbose
+   ./target/release/maproom db cleanup-stale --confirm --verbose
    ```
 
 5. **Verify results:**
@@ -58,7 +58,7 @@ Before deploying to any environment, verify:
 
 3. **Run dry-run on staging:**
    ```bash
-   crewchief-maproom db cleanup-stale --verbose > dry-run-results.txt
+   maproom db cleanup-stale --verbose > dry-run-results.txt
    ```
 
 4. **Review dry-run results with team:**
@@ -68,7 +68,7 @@ Before deploying to any environment, verify:
 
 5. **Execute cleanup:**
    ```bash
-   crewchief-maproom db cleanup-stale --confirm --verbose 2>&1 | tee cleanup-execution.log
+   maproom db cleanup-stale --confirm --verbose 2>&1 | tee cleanup-execution.log
    ```
 
 6. **Post-execution verification:**
@@ -97,7 +97,7 @@ Before deploying to any environment, verify:
 
 2. **Run dry-run on production:**
    ```bash
-   crewchief-maproom db cleanup-stale --verbose > prod-dry-run.txt
+   maproom db cleanup-stale --verbose > prod-dry-run.txt
    ```
 
 3. **Get explicit team approval:**
@@ -108,7 +108,7 @@ Before deploying to any environment, verify:
 4. **Execute during low-traffic window:**
    ```bash
    # Morning or after-hours preferred
-   crewchief-maproom db cleanup-stale --confirm --verbose 2>&1 | tee prod-cleanup.log
+   maproom db cleanup-stale --confirm --verbose 2>&1 | tee prod-cleanup.log
    ```
 
 5. **Immediate verification:**
@@ -130,7 +130,7 @@ When available:
 1. **Enable in staging:**
    ```bash
    export MAPROOM_AUTO_CLEANUP=true
-   crewchief-maproom watch
+   maproom watch
    ```
 
 2. **Monitor behavior:**
@@ -163,10 +163,10 @@ unset MAPROOM_AUTO_CLEANUP
 **Restart watch to apply:**
 ```bash
 # Stop existing watch
-pkill -f "crewchief-maproom watch"
+pkill -f "maproom watch"
 
 # Start without auto-cleanup
-crewchief-maproom watch
+maproom watch
 ```
 
 ### Data Recovery
@@ -194,7 +194,7 @@ If data was incorrectly deleted:
 
 4. **Re-index affected repositories (if backup unavailable):**
    ```bash
-   crewchief-maproom scan --path /path/to/repo --repo myrepo --worktree main
+   maproom scan --path /path/to/repo --repo myrepo --worktree main
    ```
 
 ## Configuration Reference
@@ -269,7 +269,7 @@ For issues with stale worktree cleanup:
    - [Incident Response](incident-response-cleanup.md)
 
 2. **Review logs:**
-   - `RUST_LOG=debug crewchief-maproom db cleanup-stale --verbose`
+   - `RUST_LOG=debug maproom db cleanup-stale --verbose`
 
 3. **Escalate if needed:**
    - See incident response playbook for escalation paths

@@ -102,18 +102,18 @@ LIMIT 10;
 
 ```bash
 # Deploy to staging environment
-cargo build --release --bin crewchief-maproom
-./target/release/crewchief-maproom db migrate
+cargo build --release --bin maproom
+./target/release/maproom db migrate
 
 # Run validation tests
 cargo test --test large_scale_validation_test
 cargo test --test search_quality_validation_test
 
 # Index sample multi-language repository
-./target/release/crewchief-maproom scan --path /path/to/mixed/repo
+./target/release/maproom scan --path /path/to/mixed/repo
 
 # Verify search works across all languages
-./target/release/crewchief-maproom search "authentication"
+./target/release/maproom search "authentication"
 ```
 
 ## Migration Procedure
@@ -122,7 +122,7 @@ cargo test --test search_quality_validation_test
 
 ```bash
 # Check current migration status
-./target/release/crewchief-maproom db status
+./target/release/maproom db status
 
 # Expected output:
 # Applied migrations: 11/11
@@ -134,24 +134,24 @@ cargo test --test search_quality_validation_test
 
 ```bash
 # Apply pending migrations
-./target/release/crewchief-maproom db migrate
+./target/release/maproom db migrate
 
 # Verify success
-./target/release/crewchief-maproom db status
+./target/release/maproom db status
 ```
 
 ### Step 2: Deploy New Binary
 
 ```bash
 # Build production binary
-cargo build --release --bin crewchief-maproom
+cargo build --release --bin maproom
 
 # Run basic smoke tests
-./target/release/crewchief-maproom --version
-./target/release/crewchief-maproom db status
+./target/release/maproom --version
+./target/release/maproom db status
 
 # Deploy binary to production servers
-scp ./target/release/crewchief-maproom prod-server:/opt/maproom/bin/
+scp ./target/release/maproom prod-server:/opt/maproom/bin/
 
 # Restart maproom service (zero-downtime with load balancer)
 systemctl restart maproom
@@ -161,13 +161,13 @@ systemctl restart maproom
 
 ```bash
 # Test Python parsing
-echo 'def hello(): pass' | ./target/release/crewchief-maproom parse --language py
+echo 'def hello(): pass' | ./target/release/maproom parse --language py
 
 # Test Rust parsing
-echo 'fn main() {}' | ./target/release/crewchief-maproom parse --language rs
+echo 'fn main() {}' | ./target/release/maproom parse --language rs
 
 # Test Go parsing
-echo 'package main\nfunc main() {}' | ./target/release/crewchief-maproom parse --language go
+echo 'package main\nfunc main() {}' | ./target/release/maproom parse --language go
 
 # Expected: Successful chunk extraction for all languages
 ```
@@ -176,7 +176,7 @@ echo 'package main\nfunc main() {}' | ./target/release/crewchief-maproom parse -
 
 ```bash
 # Index a repository with multiple languages
-./target/release/crewchief-maproom scan --path /path/to/polyglot/repo
+./target/release/maproom scan --path /path/to/polyglot/repo
 
 # Monitor indexing progress
 tail -f /var/log/maproom/indexing.log
@@ -194,15 +194,15 @@ ORDER BY count DESC;
 
 ```bash
 # Test cross-language search
-./target/release/crewchief-maproom search "authentication handler"
+./target/release/maproom search "authentication handler"
 
 # Verify results include all languages
 # Expected: Results from .ts, .py, .rs, .go files
 
 # Test language-specific symbols
-./target/release/crewchief-maproom search "async fn"  # Rust
-./target/release/crewchief-maproom search "def __init__"  # Python
-./target/release/crewchief-maproom search "func (r *Receiver)"  # Go
+./target/release/maproom search "async fn"  # Rust
+./target/release/maproom search "def __init__"  # Python
+./target/release/maproom search "func (r *Receiver)"  # Go
 ```
 
 ### Step 6: Post-Migration Validation
@@ -298,7 +298,7 @@ cargo test --test rust_parser_test
 cargo test --test go_parser_test
 
 # Test specific file
-./target/release/crewchief-maproom parse --file /path/to/failing/file.py
+./target/release/maproom parse --file /path/to/failing/file.py
 ```
 
 **Resolution**:

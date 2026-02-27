@@ -390,7 +390,7 @@ SELECT
 
 ```bash
 # 1. Stop all Maproom processes
-pkill -f crewchief-maproom
+pkill -f maproom
 
 # 2. Restore from backup
 pg_restore -h localhost -U postgres -d crewchief /tmp/crewchief-backup-20251029.sql

@@ -74,7 +74,7 @@ cd /workspace/crates/maproom
 cargo build --release
 
 # Verify binary runs
-/workspace/target/release/crewchief-maproom --version
+/workspace/target/release/maproom --version
 ```
 
 **Success Criteria:**
@@ -135,7 +135,7 @@ cd /workspace/crates/maproom
 cargo build --release
 
 # Verify binary in correct location
-ls -lh /workspace/target/release/crewchief-maproom
+ls -lh /workspace/target/release/maproom
 
 # If using Docker/MCP server, rebuild container
 cd /workspace/packages/maproom-mcp

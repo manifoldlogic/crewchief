@@ -225,7 +225,7 @@ Specify a custom path to the maproom binary:
 // crewchief.config.js
 export default {
   repository: {
-    maproomBinaryPath: './target/release/crewchief-maproom'
+    maproomBinaryPath: './target/release/maproom'
   }
 }
 ```
@@ -279,7 +279,7 @@ crewchief maproom:scan --generate-embeddings=false
 crewchief maproom:scan --embedding-batch-size=100
 
 # Generate embeddings manually later
-crewchief-maproom generate-embeddings
+maproom generate-embeddings
 ```
 
 ### Performance Tuning

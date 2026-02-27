@@ -94,7 +94,7 @@ If maproom binary is not found:
 pnpm install -g @crewchief/cli
 
 # Or run cleanup manually
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 ```
 
 If branch deletion fails (not fully merged):
@@ -370,7 +370,7 @@ Specify a custom path to the maproom binary for local development or custom inst
 // crewchief.config.js
 export default {
   repository: {
-    maproomBinaryPath: './target/release/crewchief-maproom',
+    maproomBinaryPath: './target/release/maproom',
   },
 }
 ```
@@ -390,7 +390,7 @@ export default {
 export default {
   repository: {
     // Relative path from repository root
-    maproomBinaryPath: './target/release/crewchief-maproom',
+    maproomBinaryPath: './target/release/maproom',
   },
 }
 ```
@@ -401,7 +401,7 @@ export default {
 export default {
   repository: {
     // Absolute path to shared binary
-    maproomBinaryPath: '/shared/builds/crewchief-maproom',
+    maproomBinaryPath: '/shared/builds/maproom',
   },
 }
 ```
@@ -411,7 +411,7 @@ export default {
 ```javascript
 export default {
   repository: {
-    maproomBinaryPath: '/opt/crewchief/bin/crewchief-maproom',
+    maproomBinaryPath: '/opt/crewchief/bin/maproom',
   },
 }
 ```
@@ -1008,7 +1008,7 @@ This will check for:
 
 #### Binary Compatibility Issues
 
-**Symptom:** `crewchief-maproom binary not found` or `command not found`
+**Symptom:** `maproom binary not found` or `command not found`
 
 **Solutions:**
 

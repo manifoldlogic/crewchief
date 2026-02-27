@@ -369,7 +369,7 @@ cargo test --test upsert_worktree -- --ignored --nocapture
 
 ```
 ❯ cargo test --test git_integration
-   Compiling crewchief-maproom v0.1.0 (/workspace/crates/maproom)
+   Compiling maproom v0.1.0 (/workspace/crates/maproom)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 13.82s
      Running tests/git_integration.rs
 

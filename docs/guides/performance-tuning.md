@@ -228,7 +228,7 @@ Typical: 200-500MB depending on:
 
 **Monitor:**
 ```bash
-watch -n 1 'ps -o pid,rss,comm -p $(pgrep -f crewchief-maproom)'
+watch -n 1 'ps -o pid,rss,comm -p $(pgrep -f maproom)'
 ```
 
 ### Ollama Memory
@@ -276,7 +276,7 @@ Response includes:
 ```bash
 # Defaults work well
 ollama serve
-crewchief-maproom scan /path/to/repo
+maproom scan /path/to/repo
 ```
 
 ### CI/CD (Fast, Limited Resources)

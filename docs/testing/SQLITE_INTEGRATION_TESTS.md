@@ -19,7 +19,7 @@ The SQLite backend enables zero-configuration semantic search without requiring 
 
 1. **Build the CLI with SQLite feature**:
    ```bash
-   cargo build --features sqlite --bin crewchief-maproom --release
+   cargo build --features sqlite --bin maproom --release
    ```
 
 2. **Ensure test fixture exists**:
@@ -117,7 +117,7 @@ test-sqlite-e2e:
 export MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
 
 # Search for code
-cargo run --features sqlite --bin crewchief-maproom -- \
+cargo run --features sqlite --bin maproom -- \
   search --repo test-repo --query "function"
 ```
 
@@ -125,10 +125,10 @@ cargo run --features sqlite --bin crewchief-maproom -- \
 
 ```bash
 # JSON output
-cargo run --features sqlite --bin crewchief-maproom -- status --json
+cargo run --features sqlite --bin maproom -- status --json
 
 # Text output
-cargo run --features sqlite --bin crewchief-maproom -- status
+cargo run --features sqlite --bin maproom -- status
 ```
 
 ### Test Daemon (stdio)
@@ -136,7 +136,7 @@ cargo run --features sqlite --bin crewchief-maproom -- status
 ```bash
 # Send JSON-RPC request via stdin
 echo '{"jsonrpc":"2.0","method":"ping","id":1}' | \
-  cargo run --features sqlite --bin crewchief-maproom -- serve
+  cargo run --features sqlite --bin maproom -- serve
 ```
 
 ## Troubleshooting
@@ -156,7 +156,7 @@ Install jq for your platform (see Prerequisites above).
 
 1. Verify the database has data:
    ```bash
-   cargo run --features sqlite --bin crewchief-maproom -- status --json
+   cargo run --features sqlite --bin maproom -- status --json
    ```
 
 2. Check the query matches indexed content. The fixture contains functions named "main", "helper_function", and struct "Config".

@@ -70,7 +70,7 @@ cd packages/cli
 pnpm build:rust
 
 # Or build manually from project root
-cargo build --release --bin crewchief-maproom
+cargo build --release --bin maproom
 ```
 
 ### Method 1: Configuration File (Recommended)
@@ -81,7 +81,7 @@ When developing maproom, configure CrewChief to use your local build:
 // crewchief.config.local.js
 export default {
   repository: {
-    maproomBinaryPath: './target/release/crewchief-maproom'
+    maproomBinaryPath: './target/release/maproom'
   }
 }
 ```
@@ -108,7 +108,7 @@ The `maproomBinaryPath` supports both absolute and relative paths:
 // crewchief.config.local.js
 export default {
   repository: {
-    maproomBinaryPath: '/Users/username/crewchief/target/release/crewchief-maproom'
+    maproomBinaryPath: '/Users/username/crewchief/target/release/maproom'
   }
 }
 ```
@@ -119,7 +119,7 @@ Resolve relative to the config file location for most commands:
 // crewchief.config.local.js (at project root)
 export default {
   repository: {
-    maproomBinaryPath: './target/release/crewchief-maproom'
+    maproomBinaryPath: './target/release/maproom'
   }
 }
 ```
@@ -141,10 +141,10 @@ CrewChief searches for the maproom binary in this order:
 
 ```bash
 # Set the path to your local binary
-export CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/crewchief-maproom"
+export CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/maproom"
 
 # Or use absolute path
-export CREWCHIEF_MAPROOM_BIN="/path/to/crewchief/packages/cli/bin/darwin-arm64/crewchief-maproom"
+export CREWCHIEF_MAPROOM_BIN="/path/to/crewchief/packages/cli/bin/darwin-arm64/maproom"
 
 # Now run commands normally
 crewchief maproom:scan
@@ -155,18 +155,18 @@ crewchief maproom:watch
 
 ```bash
 # Specify the binary path inline (from project root)
-CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/crewchief-maproom" crewchief maproom:scan
+CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/maproom" crewchief maproom:scan
 
 # Or with absolute path
-CREWCHIEF_MAPROOM_BIN="$(pwd)/packages/cli/bin/darwin-arm64/crewchief-maproom" crewchief maproom:scan
+CREWCHIEF_MAPROOM_BIN="$(pwd)/packages/cli/bin/darwin-arm64/maproom" crewchief maproom:scan
 ```
 
 ### Method 4: Direct Binary Execution
 
 ```bash
 # Run the Rust binary directly
-./packages/cli/bin/darwin-arm64/crewchief-maproom scan --help
-./packages/cli/bin/darwin-arm64/crewchief-maproom scan --repo myrepo --worktree main
+./packages/cli/bin/darwin-arm64/maproom scan --help
+./packages/cli/bin/darwin-arm64/maproom scan --repo myrepo --worktree main
 ```
 
 ## Using Both Local TypeScript and Rust Code Together
@@ -179,10 +179,10 @@ cd packages/cli
 pnpm build:all  # Builds both TypeScript and Rust
 
 # 2. Run with local TypeScript code and local Rust binary
-CREWCHIEF_MAPROOM_BIN="./bin/darwin-arm64/crewchief-maproom" node dist/cli/index.js maproom:scan
+CREWCHIEF_MAPROOM_BIN="./bin/darwin-arm64/maproom" node dist/cli/index.js maproom:scan
 
 # Or use tsx for TypeScript (no build needed) with local Rust binary
-CREWCHIEF_MAPROOM_BIN="./bin/darwin-arm64/crewchief-maproom" tsx src/cli/index.ts maproom:scan
+CREWCHIEF_MAPROOM_BIN="./bin/darwin-arm64/maproom" tsx src/cli/index.ts maproom:scan
 ```
 
 ### Development Workflow Example
@@ -193,10 +193,10 @@ cd packages/cli
 pnpm build --watch
 
 # Terminal 2: Rebuild Rust on changes
-cargo watch -x "build --release --bin crewchief-maproom"
+cargo watch -x "build --release --bin maproom"
 
 # Terminal 3: Run commands with local code
-export CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/crewchief-maproom"
+export CREWCHIEF_MAPROOM_BIN="./packages/cli/bin/darwin-arm64/maproom"
 node packages/cli/dist/cli/index.js maproom:scan
 ```
 
@@ -214,11 +214,11 @@ The Rust binaries are organized by platform. Replace `darwin-arm64` with your pl
 
 ### Binary Not Found
 
-If you get "crewchief-maproom not found" errors:
+If you get "maproom not found" errors:
 
 1. Check the binary exists:
    ```bash
-   ls -la packages/cli/bin/*/crewchief-maproom
+   ls -la packages/cli/bin/*/maproom
    ```
 
 2. Rebuild the Rust binary:
@@ -229,7 +229,7 @@ If you get "crewchief-maproom not found" errors:
 
 3. Use absolute path:
    ```bash
-   CREWCHIEF_MAPROOM_BIN="$(pwd)/packages/cli/bin/darwin-arm64/crewchief-maproom" node dist/cli/index.js maproom:scan
+   CREWCHIEF_MAPROOM_BIN="$(pwd)/packages/cli/bin/darwin-arm64/maproom" node dist/cli/index.js maproom:scan
    ```
 
 ### TypeScript Changes Not Reflected
@@ -262,7 +262,7 @@ cd packages/cli
 pnpm build:all
 
 # Test maproom scan with local code
-CREWCHIEF_MAPROOM_BIN="./bin/darwin-arm64/crewchief-maproom" node dist/cli/index.js maproom:scan
+CREWCHIEF_MAPROOM_BIN="./bin/darwin-arm64/maproom" node dist/cli/index.js maproom:scan
 
 # Test agent commands with local code  
 node dist/cli/index.js agent list
@@ -289,7 +289,7 @@ Add to `.vscode/launch.json` for debugging:
   "program": "${workspaceFolder}/packages/cli/dist/cli/index.js",
   "args": ["maproom:scan"],
   "env": {
-    "CREWCHIEF_MAPROOM_BIN": "${workspaceFolder}/packages/cli/bin/darwin-arm64/crewchief-maproom",
+    "CREWCHIEF_MAPROOM_BIN": "${workspaceFolder}/packages/cli/bin/darwin-arm64/maproom",
     "MAPROOM_DATABASE_URL": "postgresql://localhost:5432/crewchief"
   },
   "cwd": "${workspaceFolder}",

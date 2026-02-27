@@ -29,11 +29,11 @@ The extension requires platform-specific binaries in `bin/`:
 
 ```
 bin/
-├── darwin-arm64/crewchief-maproom
-├── darwin-x64/crewchief-maproom
-├── linux-arm64/crewchief-maproom
-├── linux-x64/crewchief-maproom
-└── win32-x64/crewchief-maproom.exe
+├── darwin-arm64/maproom
+├── darwin-x64/maproom
+├── linux-arm64/maproom
+├── linux-x64/maproom
+└── win32-x64/maproom.exe
 ```
 
 ### Currently Available Platforms
@@ -56,7 +56,7 @@ bin/
 - Source maps (`dist/**/*.js.map`)
 - Documentation (`README.md`, `CHANGELOG.md`, `TROUBLESHOOTING.md`)
 - Configuration (`config/docker-compose.yml`)
-- Platform binaries (`bin/**/crewchief-maproom`)
+- Platform binaries (`bin/**/maproom`)
 - Package metadata (`package.json`)
 
 ### Excluded Files
@@ -139,7 +139,7 @@ vsce publish major  # 0.1.0 -> 1.0.0
 
 ### Binary Not Found
 
-If prepare:binaries fails, check that binaries exist in `/packages/cli/bin/{platform}/crewchief-maproom`
+If prepare:binaries fails, check that binaries exist in `/packages/cli/bin/{platform}/maproom`
 
 ### Permission Errors
 

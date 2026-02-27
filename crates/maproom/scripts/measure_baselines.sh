@@ -380,7 +380,7 @@ For accurate throughput measurement, run the following test when API access is a
 
 \`\`\`bash
 # Measure embedding generation for 1000-chunk batch
-cargo run --release --bin crewchief-maproom -- benchmark embedding-throughput \\
+cargo run --release --bin maproom -- benchmark embedding-throughput \\
   --batch-size 1000 \\
   --provider openai \\
   --output benchmarks/embedding_throughput.json

@@ -127,13 +127,13 @@ echo ""
 echo "Step 3: Indexing corpus files..."
 
 # Check if daemon binary exists
-DAEMON_BIN="$WORKSPACE_DIR/packages/cli/bin/linux-x64/crewchief-maproom"
+DAEMON_BIN="$WORKSPACE_DIR/packages/cli/bin/linux-x64/maproom"
 if [ ! -x "$DAEMON_BIN" ]; then
   # Try darwin-arm64 if running on Mac
-  DAEMON_BIN="$WORKSPACE_DIR/packages/cli/bin/darwin-arm64/crewchief-maproom"
+  DAEMON_BIN="$WORKSPACE_DIR/packages/cli/bin/darwin-arm64/maproom"
 fi
 if [ ! -x "$DAEMON_BIN" ]; then
-  echo "WARNING: crewchief-maproom binary not found"
+  echo "WARNING: maproom binary not found"
   echo "Attempting to use cargo run..."
 
   # Use cargo to run the indexer
@@ -162,7 +162,7 @@ if [ ! -x "$DAEMON_BIN" ]; then
   "
 
   # Run indexer with scan command
-  MAPROOM_DATABASE_URL="$DB_URL" cargo run --bin crewchief-maproom -- scan "$CORPUS_ROOT" \
+  MAPROOM_DATABASE_URL="$DB_URL" cargo run --bin maproom -- scan "$CORPUS_ROOT" \
     --repo "$TEST_REPO_NAME" \
     --worktree "$TEST_WORKTREE_NAME" \
     ${SKIP_EMBEDDINGS:+--skip-embeddings} 2>&1 | head -50 || true

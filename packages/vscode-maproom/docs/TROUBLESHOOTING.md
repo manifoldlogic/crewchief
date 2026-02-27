@@ -230,10 +230,10 @@ ls -la ~/.vscode/extensions/crewchief.vscode-maproom-*/bin/
    echo $EXT_DIR
 
    # Make binary executable
-   chmod +x "$EXT_DIR/bin/"*/crewchief-maproom
+   chmod +x "$EXT_DIR/bin/"*/maproom
 
    # Verify permissions
-   ls -la "$EXT_DIR/bin/"*/crewchief-maproom
+   ls -la "$EXT_DIR/bin/"*/maproom
    # Should show: -rwxr-xr-x (executable)
    ```
 
@@ -251,7 +251,7 @@ ls -la ~/.vscode/extensions/crewchief.vscode-maproom-*/bin/
    sudo setenforce 0
 
    # Or add SELinux exception
-   chcon -t bin_t "$EXT_DIR/bin/"*/crewchief-maproom
+   chcon -t bin_t "$EXT_DIR/bin/"*/maproom
    ```
 
 ---
@@ -672,7 +672,7 @@ ls -la ~/.vscode/extensions/crewchief.vscode-maproom-*/bin/
 
 ### macOS
 
-#### "crewchief-maproom cannot be opened because the developer cannot be verified"
+#### "maproom cannot be opened because the developer cannot be verified"
 
 **Cause:** macOS Gatekeeper blocking unsigned binary.
 
@@ -684,7 +684,7 @@ ls -la ~/.vscode/extensions/crewchief.vscode-maproom-*/bin/
    EXT_DIR=$(ls -d ~/.vscode/extensions/crewchief.vscode-maproom-* | head -1)
 
    # Remove quarantine attribute
-   xattr -d com.apple.quarantine "$EXT_DIR/bin/"*/crewchief-maproom
+   xattr -d com.apple.quarantine "$EXT_DIR/bin/"*/maproom
 
    # Reload VSCode
    ```
