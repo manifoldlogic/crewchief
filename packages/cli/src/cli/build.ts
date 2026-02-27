@@ -100,7 +100,7 @@ async function buildRustBinaries(projectRoot: string, verbose: boolean): Promise
   const targets = [
     {
       crate: 'maproom',
-      binary: 'crewchief-maproom',
+      binary: 'maproom',
       destinations: ['packages/cli/bin', 'packages/maproom-mcp/bin'],
     },
   ]

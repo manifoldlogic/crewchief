@@ -439,7 +439,7 @@ export class PreFlightValidator {
         currentDir = join(currentDir, '..', '..')
       }
 
-      const maproomBinary = join(currentDir, 'packages', 'cli', 'bin', 'crewchief-maproom')
+      const maproomBinary = join(currentDir, 'packages', 'cli', 'bin', 'maproom')
 
       const args = ['status', '--repo', repo, '--worktree', worktree, '--json']
 
