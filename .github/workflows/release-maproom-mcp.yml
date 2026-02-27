@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-build.yml
     with:
       package_name: maproom-mcp
-      binary_name: crewchief-maproom
+      binary_name: maproom
       crate_path: crates/maproom
 
   # Job 2: Build TypeScript (reusable)
@@ -104,7 +104,7 @@ jobs:
 
           # Verify all 4 platforms present
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            if [ ! -f "packages/maproom-mcp/bin/$platform/crewchief-maproom" ]; then
+            if [ ! -f "packages/maproom-mcp/bin/$platform/maproom" ]; then
               echo "ERROR: Missing binary for $platform"
               exit 1
             fi
@@ -113,7 +113,7 @@ jobs:
 
       - name: Set executable permissions
         run: |
-          find packages/maproom-mcp/bin -name "crewchief-maproom" -exec chmod +x {} \;
+          find packages/maproom-mcp/bin -name "maproom" -exec chmod +x {} \;
 
       - name: Verify binary sizes
         run: |
@@ -124,7 +124,7 @@ jobs:
           MAX_SIZE=104857600    # 100MB
 
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            BINARY="packages/maproom-mcp/bin/$platform/crewchief-maproom"
+            BINARY="packages/maproom-mcp/bin/$platform/maproom"
             SIZE=$(stat -c%s "$BINARY")
 
             if [ "$SIZE" -lt "$MIN_SIZE" ]; then
@@ -171,16 +171,16 @@ jobs:
       - name: Verify package
         run: |
           cd packages/maproom-mcp
-          TARBALL=$(ls crewchief-maproom-mcp-*.tgz | head -1)
+          TARBALL=$(ls maproom-mcp-*.tgz | head -1)
           echo "Package created: $TARBALL"
           tar -tzf "$TARBALL" | head -20
 
           # Verify all 4 binaries in tarball
           echo "Verifying binaries in tarball..."
-          tar -tzf "$TARBALL" | grep "package/bin/linux-x64/crewchief-maproom"
-          tar -tzf "$TARBALL" | grep "package/bin/linux-arm64/crewchief-maproom"
-          tar -tzf "$TARBALL" | grep "package/bin/darwin-x64/crewchief-maproom"
-          tar -tzf "$TARBALL" | grep "package/bin/darwin-arm64/crewchief-maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/linux-x64/maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/linux-arm64/maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/darwin-x64/maproom"
+          tar -tzf "$TARBALL" | grep "package/bin/darwin-arm64/maproom"
           echo "✓ All binaries present in tarball"
 
       - name: Publish to npm

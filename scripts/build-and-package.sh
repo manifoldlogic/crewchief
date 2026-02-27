@@ -58,11 +58,11 @@ build_and_package() {
 }
 
 # Build maproom for CLI package
-build_and_package "maproom" "crewchief-maproom" "packages/cli/bin"
+build_and_package "maproom" "maproom" "packages/cli/bin"
 
 # Build maproom for MCP package (if it exists)
 if [ -d "packages/maproom-mcp" ]; then
-    build_and_package "maproom" "crewchief-maproom" "packages/maproom-mcp/bin"
+    build_and_package "maproom" "maproom" "packages/maproom-mcp/bin"
 fi
 
 
@@ -87,17 +87,17 @@ create_platform_link() {
 }
 
 # Create symlinks for CLI package
-create_platform_link "crewchief-maproom" "packages/cli"
+create_platform_link "maproom" "packages/cli"
 
 # Create symlinks for MCP package
 if [ -d "packages/maproom-mcp" ]; then
-    create_platform_link "crewchief-maproom" "packages/maproom-mcp"
+    create_platform_link "maproom" "packages/maproom-mcp"
 fi
 
 echo -e "${GREEN}✨ Build and packaging complete!${NC}"
 echo ""
 echo "Binary locations:"
-echo "  packages/cli/bin/${PLATFORM}/crewchief-maproom"
+echo "  packages/cli/bin/${PLATFORM}/maproom"
 if [ -d "packages/maproom-mcp" ]; then
-    echo "  packages/maproom-mcp/bin/${PLATFORM}/crewchief-maproom"
+    echo "  packages/maproom-mcp/bin/${PLATFORM}/maproom"
 fi

@@ -7,7 +7,7 @@ set -e
 # Configuration
 REPO_PATH="${1:-/workspace}"
 RESULTS_FILE="/workspace/.crewchief/projects/MULTICN_multi-agent-concurrency/planning/performance-baseline.json"
-MAPROOM_BIN="/workspace/target/release/crewchief-maproom"
+MAPROOM_BIN="/workspace/target/release/maproom"
 TEMP_DB=$(mktemp -d)/baseline.db
 export MAPROOM_DATABASE_URL="sqlite:///${TEMP_DB}"
 
@@ -25,7 +25,7 @@ echo ""
 # Check if binary exists
 if [ ! -f "$MAPROOM_BIN" ]; then
     echo -e "${YELLOW}Building maproom binary...${NC}"
-    cargo build --release -p crewchief-maproom
+    cargo build --release -p maproom
 fi
 
 # Initialize database

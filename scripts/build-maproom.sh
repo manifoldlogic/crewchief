@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build crewchief-maproom for current platform
+# Build maproom for current platform
 cargo build --release --manifest-path crates/maproom/Cargo.toml
 
 # Optionally cross-compile for other platforms

@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 
 class DaemonTester:
-    def __init__(self, daemon_path: str = "./target/debug/crewchief-maproom"):
+    def __init__(self, daemon_path: str = "./target/debug/maproom"):
         self.daemon_path = daemon_path
         self.process: Optional[subprocess.Popen] = None
         self.test_count = 0
@@ -310,7 +310,7 @@ def main():
     
     # Check if build is needed
     import os
-    daemon_path = "./target/debug/crewchief-maproom"
+    daemon_path = "./target/debug/maproom"
     if not os.path.exists(daemon_path):
         print("⚠️  Daemon binary not found. Building...")
         result = subprocess.run(["cargo", "build"], capture_output=True)

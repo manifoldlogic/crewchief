@@ -15,10 +15,10 @@ on:
         default: 'crates/maproom'
 
       binary_name:
-        description: 'Binary name to build (e.g., crewchief-maproom)'
+        description: 'Binary name to build (e.g., maproom)'
         required: false
         type: string
-        default: 'crewchief-maproom'
+        default: 'maproom'
 
       platforms:
         description: 'JSON array of platforms to build (e.g., ["linux-x64", "darwin-arm64"])'
