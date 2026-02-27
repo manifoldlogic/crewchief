@@ -136,6 +136,25 @@ $ gh run list --workflow=test.yml --limit 3
 
 ---
 
+### msrv.yml
+
+**Purpose**: Verify the `maproom` crate compiles with Rust 1.85, the minimum supported Rust version (MSRV) declared in `crates/maproom/Cargo.toml`.
+
+**Triggers**:
+- `push` to `main` branch
+- `pull_request`
+- **Path filters**: Only runs when these files change:
+  - Rust crate: `crates/maproom/**`, `Cargo.toml`, `Cargo.lock`
+
+**Runner**: `blacksmith-4vcpu-ubuntu-2404`
+
+**Key Features**:
+- **Pinned toolchain**: Uses `dtolnay/rust-toolchain@1.85` — not `stable`
+- **Build only**: Runs `cargo build -p maproom`; does not run tests (dev-dependencies may require a newer toolchain)
+- **Rust cache**: `Swatinem/rust-cache@v2` with `shared-key: msrv` for faster builds
+
+---
+
 ### reusable-rust-build.yml
 
 **Purpose**: Reusable workflow for building Rust binaries across all platforms
