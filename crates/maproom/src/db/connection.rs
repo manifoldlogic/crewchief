@@ -49,7 +49,7 @@ fn expand_tilde(path: &str) -> Result<String> {
 /// # Examples
 ///
 /// ```no_run
-/// use crewchief_maproom::db::connection::get_database_url;
+/// use maproom::db::connection::get_database_url;
 ///
 /// let url = get_database_url().expect("Failed to get database URL");
 /// println!("Connecting to: {}", url);

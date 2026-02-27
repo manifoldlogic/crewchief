@@ -213,7 +213,7 @@ describe('reconcileChanges', () => {
 
       // Verify upsert was called with correct arguments
       expect(spawnMock).toHaveBeenCalledWith(
-        expect.stringContaining('crewchief-maproom'),
+        expect.stringContaining('maproom'),
         expect.arrayContaining([
           'upsert',
           '--commit', 'new456',

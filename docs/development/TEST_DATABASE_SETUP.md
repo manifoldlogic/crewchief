@@ -387,11 +387,11 @@ jobs:
       - name: Initialize test database schema
         run: |
           # Build Rust binary with migration runner
-          cargo build --release --bin crewchief-maproom
+          cargo build --release --bin maproom
 
           # Run migrations (applies all migrations from crates/maproom/migrations/)
           MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5434/maproom_test \
-            ./target/release/crewchief-maproom db migrate
+            ./target/release/maproom db migrate
 
       - name: Run tests
         env:

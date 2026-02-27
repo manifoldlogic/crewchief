@@ -26,8 +26,8 @@ use std::collections::HashMap;
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::indexer::edges::common::find_enclosing_chunk;
-/// use crewchief_maproom::indexer::edges::ChunkWithId;
+/// use maproom::indexer::edges::common::find_enclosing_chunk;
+/// use maproom::indexer::edges::ChunkWithId;
 ///
 /// let chunks = vec![
 ///     ChunkWithId {
@@ -75,8 +75,8 @@ pub fn find_enclosing_chunk(chunks: &[ChunkWithId], line: i32) -> Option<&ChunkW
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::indexer::edges::common::build_symbol_table;
-/// use crewchief_maproom::indexer::edges::ChunkWithId;
+/// use maproom::indexer::edges::common::build_symbol_table;
+/// use maproom::indexer::edges::ChunkWithId;
 ///
 /// let chunks = vec![
 ///     ChunkWithId {

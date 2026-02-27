@@ -21,7 +21,7 @@ pub enum SqliteConfigError {
 }
 
 /// SQLite configuration with nested pool, pragma, and retry settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SqliteConfig {
     pub pool: PoolConfig,
     pub pragmas: PragmaConfig,
@@ -65,16 +65,6 @@ pub struct RetryConfig {
     pub max_delay_ms: u64,
     /// Use exponential backoff (true) or constant delay (false)
     pub exponential: bool,
-}
-
-impl Default for SqliteConfig {
-    fn default() -> Self {
-        Self {
-            pool: PoolConfig::default(),
-            pragmas: PragmaConfig::default(),
-            retry: RetryConfig::default(),
-        }
-    }
 }
 
 impl Default for PoolConfig {

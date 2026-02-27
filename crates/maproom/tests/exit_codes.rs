@@ -1,6 +1,6 @@
 //! Integration tests for the exit code contract.
 //!
-//! AFM-06.2002: These tests spawn the `crewchief-maproom` binary and assert
+//! AFM-06.2002: These tests spawn the `maproom` binary and assert
 //! exit codes match the documented contract:
 //!
 //!   0 - Success (with or without results)
@@ -12,7 +12,7 @@
 
 use std::process::Command;
 
-/// Get the path to the compiled `crewchief-maproom` binary.
+/// Get the path to the compiled `maproom` binary.
 ///
 /// Uses `std::env::current_exe()` to navigate from the test binary location
 /// to the main binary in the same target directory. Works for both
@@ -23,7 +23,7 @@ fn binary_path() -> std::path::PathBuf {
     path.pop();
     // Remove "deps/" directory
     path.pop();
-    path.push("crewchief-maproom");
+    path.push("maproom");
     assert!(
         path.exists(),
         "Binary not found at: {}. Run `cargo build` first.",

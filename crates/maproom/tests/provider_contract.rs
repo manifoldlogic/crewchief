@@ -56,8 +56,8 @@
 
 #![cfg(test)]
 
-use crewchief_maproom::embedding::factory::create_provider_from_env;
-use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use maproom::embedding::factory::create_provider_from_env;
+use maproom::embedding::provider::EmbeddingProvider;
 use serial_test::serial;
 use std::sync::Arc;
 

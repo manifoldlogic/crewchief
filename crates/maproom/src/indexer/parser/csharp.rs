@@ -1880,11 +1880,8 @@ class MyClass {
         let _ = tracing_subscriber::fmt()
             .with_test_writer()
             .with_env_filter(
-                tracing_subscriber::EnvFilter::from_default_env().add_directive(
-                    "crewchief_maproom::indexer::parser::csharp=debug"
-                        .parse()
-                        .unwrap(),
-                ),
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive("maproom::indexer::parser::csharp=debug".parse().unwrap()),
             )
             .try_init();
 

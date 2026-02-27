@@ -202,11 +202,11 @@ async fn test_rate_limit_error_serialization() {
 #### 5.2 Manual Testing with Daemon
 ```bash
 # Start daemon
-cargo run --bin crewchief-maproom -- serve
+cargo run --bin maproom -- serve
 
 # Send RPC request that triggers the error
 echo '{"jsonrpc":"2.0","method":"search","params":{"query":"test","repo":"nonexistent"},"id":1}' | \
-  cargo run --bin crewchief-maproom -- serve
+  cargo run --bin maproom -- serve
 
 # Verify response includes error_type, stage, context, suggestions
 ```
@@ -333,7 +333,7 @@ fn test_rate_limit_error() {
 #### 6. Verify Tests Pass
 ```bash
 # Rust unit tests
-cargo test -p crewchief-maproom test_rate_limit_error
+cargo test -p maproom test_rate_limit_error
 
 # TypeScript type sync tests
 cd packages/daemon-client
@@ -411,13 +411,13 @@ const tsErrorTypes: ErrorType[] = [..., 'new_error_type']
 ### Unit Testing
 ```bash
 # Test specific error conversion
-cargo test -p crewchief-maproom test_rate_limit_error
+cargo test -p maproom test_rate_limit_error
 
 # Test all error types have suggestions
-cargo test -p crewchief-maproom test_all_error_types_have_suggestions
+cargo test -p maproom test_all_error_types_have_suggestions
 
 # Test context whitelist enforcement
-cargo test -p crewchief-maproom test_context_whitelist_enforced
+cargo test -p maproom test_context_whitelist_enforced
 ```
 
 ### Type Sync Testing
@@ -429,7 +429,7 @@ pnpm test types.test.ts
 ### Integration Testing
 ```bash
 # Start daemon in one terminal
-cargo run --bin crewchief-maproom -- serve
+cargo run --bin maproom -- serve
 
 # Send RPC requests in another terminal
 echo '{"jsonrpc":"2.0","method":"search","params":{"query":"test","repo":"nonexistent"},"id":1}' | \
@@ -453,7 +453,7 @@ echo '{"jsonrpc":"2.0","method":"search","params":{"query":"test","repo":"nonexi
 
 **Fix:**
 ```bash
-cargo build --release --bin crewchief-maproom
+cargo build --release --bin maproom
 # Restart daemon to use new binary
 ```
 

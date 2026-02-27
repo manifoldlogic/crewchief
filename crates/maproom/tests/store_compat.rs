@@ -11,7 +11,7 @@
 #![cfg(any())]
 
 use anyhow::Result;
-use crewchief_maproom::db::{
+use maproom::db::{
     postgres::PostgresStore, sqlite::SqliteStore, ChunkRecord, FileRecord, VectorStore,
 };
 use rand::Rng;

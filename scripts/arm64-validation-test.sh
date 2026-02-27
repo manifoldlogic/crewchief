@@ -44,7 +44,7 @@ echo ""
 # Maproom binary
 echo "4. Maproom Rust Binary Test:"
 echo "   - Image size: $(docker images config-maproom-mcp --format '{{.Size}}')"
-echo "   - Binary size: $(docker run --rm --entrypoint /bin/sh config-maproom-mcp -c 'ls -lh /usr/local/bin/crewchief-maproom' | awk '{print $5}')"
+echo "   - Binary size: $(docker run --rm --entrypoint /bin/sh config-maproom-mcp -c 'ls -lh /usr/local/bin/maproom' | awk '{print $5}')"
 echo "   - Version: $(docker run --rm config-maproom-mcp --version)"
 echo "   - Available commands:"
 docker run --rm config-maproom-mcp --help | grep "Commands:" -A 20 | grep "^  " | head -8

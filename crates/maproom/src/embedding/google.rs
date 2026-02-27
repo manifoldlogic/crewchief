@@ -53,8 +53,8 @@
 //! ## Basic Usage
 //!
 //! ```no_run
-//! use crewchief_maproom::embedding::google::GoogleProvider;
-//! use crewchief_maproom::embedding::provider::EmbeddingProvider;
+//! use maproom::embedding::google::GoogleProvider;
+//! use maproom::embedding::provider::EmbeddingProvider;
 //! use std::path::PathBuf;
 //!
 //! #[tokio::main]
@@ -78,9 +78,9 @@
 //! ## Parallel Processing with Programmatic Configuration
 //!
 //! ```no_run
-//! use crewchief_maproom::embedding::google::GoogleProvider;
-//! use crewchief_maproom::embedding::config::ParallelConfig;
-//! use crewchief_maproom::embedding::provider::EmbeddingProvider;
+//! use maproom::embedding::google::GoogleProvider;
+//! use maproom::embedding::config::ParallelConfig;
+//! use maproom::embedding::provider::EmbeddingProvider;
 //! use std::path::PathBuf;
 //!
 //! #[tokio::main]
@@ -112,8 +112,8 @@
 //! ## Environment-Based Configuration
 //!
 //! ```no_run
-//! use crewchief_maproom::embedding::google::GoogleProvider;
-//! use crewchief_maproom::embedding::provider::EmbeddingProvider;
+//! use maproom::embedding::google::GoogleProvider;
+//! use maproom::embedding::provider::EmbeddingProvider;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -294,8 +294,8 @@ impl GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::google::GoogleProvider;
-    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    /// use maproom::embedding::google::GoogleProvider;
+    /// use maproom::embedding::config::ParallelConfig;
     /// use std::path::PathBuf;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -376,7 +376,7 @@ impl GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::google::GoogleProvider;
+    /// use maproom::embedding::google::GoogleProvider;
     /// use std::path::PathBuf;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -427,7 +427,7 @@ impl GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::google::GoogleProvider;
+    /// use maproom::embedding::google::GoogleProvider;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// // Requires GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_PROJECT_ID env vars
@@ -492,8 +492,8 @@ impl GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::google::GoogleProvider;
-    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    /// use maproom::embedding::google::GoogleProvider;
+    /// use maproom::embedding::config::ParallelConfig;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// // First run: gcloud auth application-default login
@@ -558,7 +558,7 @@ impl GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::google::{GoogleProvider, TaskType};
+    /// # use maproom::embedding::google::{GoogleProvider, TaskType};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut provider = GoogleProvider::from_env().await?;
     /// provider.with_task_type(TaskType::RetrievalQuery);
@@ -964,8 +964,8 @@ impl EmbeddingProvider for GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::google::GoogleProvider;
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::google::GoogleProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = GoogleProvider::from_env().await?;
     /// let embedding = provider.embed("Hello, world!".to_string()).await?;
@@ -1004,8 +1004,8 @@ impl EmbeddingProvider for GoogleProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::google::GoogleProvider;
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::google::GoogleProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = GoogleProvider::from_env().await?;
     /// let texts = vec!["First".to_string(), "Second".to_string()];

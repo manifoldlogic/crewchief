@@ -25,10 +25,10 @@
 //! cargo bench --bench memory_optimization_bench -- pool
 //! ```
 
-use crewchief_maproom::memory::{
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use maproom::memory::{
     dequantize_embedding, get_memory_metrics, quantize_embedding, BufferPool, StringInterner,
 };
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::sync::Arc;
 
 /// Benchmark string interning performance

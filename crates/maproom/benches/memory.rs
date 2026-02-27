@@ -211,7 +211,7 @@ fn bench_indexing_memory(c: &mut Criterion) {
 
 /// Benchmark memory usage during search operations
 fn bench_search_memory(c: &mut Criterion) {
-    use crewchief_maproom::indexer::parser::extract_chunks;
+    use maproom::indexer::parser::extract_chunks;
 
     let mut group = c.benchmark_group("search_memory");
     group.measurement_time(Duration::from_secs(10));

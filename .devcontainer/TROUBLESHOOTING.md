@@ -138,7 +138,7 @@ sudo /usr/local/bin/init-claude-firewall.sh
 ```bash
 # For Maproom
 PG_DATABASE_URL="postgresql://postgres:postgres@postgres:5432/crewchief" \
-crewchief-maproom db
+maproom db
 ```
 
 ## Performance Issues

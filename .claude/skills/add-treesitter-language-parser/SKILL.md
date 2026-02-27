@@ -149,7 +149,7 @@ For languages with multiple extensions (e.g., C has `.c` and `.h`), add all rele
 Run the build to ensure compilation succeeds:
 
 ```bash
-cargo build -p crewchief-maproom
+cargo build -p maproom
 ```
 
 Verify the language is recognized:

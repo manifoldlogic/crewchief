@@ -146,10 +146,10 @@ You can optionally re-embed your entire codebase with the new model for improved
 
 ```bash
 # Option 1: Re-scan entire repository (generates new embeddings)
-crewchief-maproom scan --path /path/to/your/repo --repo myrepo --worktree main
+maproom scan --path /path/to/your/repo --repo myrepo --worktree main
 
 # Option 2: Force regenerate embeddings for existing chunks
-crewchief-maproom generate-embeddings --repo myrepo --force
+maproom generate-embeddings --repo myrepo --force
 ```
 
 ### VSCode Extension

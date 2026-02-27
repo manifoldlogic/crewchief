@@ -32,7 +32,7 @@ echo "- Checking Node.js..."
 docker run --rm --platform linux/amd64 "$IMAGE" node --version
 
 echo "- Checking Rust binary..."
-docker run --rm --platform linux/amd64 "$IMAGE" crewchief-maproom --version
+docker run --rm --platform linux/amd64 "$IMAGE" maproom --version
 
 echo "- Checking npm dependencies..."
 docker run --rm --platform linux/amd64 "$IMAGE" ls /app/node_modules | wc -l
@@ -53,7 +53,7 @@ echo "- Checking Node.js..."
 docker run --rm --platform linux/arm64 "$IMAGE" node --version
 
 echo "- Checking Rust binary..."
-docker run --rm --platform linux/arm64 "$IMAGE" crewchief-maproom --version
+docker run --rm --platform linux/arm64 "$IMAGE" maproom --version
 
 echo "- Checking npm dependencies..."
 docker run --rm --platform linux/arm64 "$IMAGE" ls /app/node_modules | wc -l

@@ -36,7 +36,7 @@
 //! ## Load Configuration
 //!
 //! ```no_run
-//! use crewchief_maproom::config::SearchConfig;
+//! use maproom::config::SearchConfig;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -53,7 +53,7 @@
 //! ## Access Configuration with Thread Safety
 //!
 //! ```no_run
-//! use crewchief_maproom::config::SearchConfig;
+//! use maproom::config::SearchConfig;
 //! use std::sync::Arc;
 //! use tokio::sync::RwLock;
 //!
@@ -74,7 +74,7 @@
 //! ## Hot Reload
 //!
 //! ```no_run
-//! use crewchief_maproom::config::{SearchConfig, ConfigReloader};
+//! use maproom::config::{SearchConfig, ConfigReloader};
 //! use std::sync::Arc;
 //! use tokio::sync::RwLock;
 //!

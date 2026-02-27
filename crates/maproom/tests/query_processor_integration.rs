@@ -6,7 +6,7 @@
 //! NOTE: Full end-to-end tests with embedding generation will be added after
 //! HYBRID_SEARCH-1001 (Embedding Service Setup) is complete with proper mock support.
 
-use crewchief_maproom::search::{QueryExpander, Tokenizer};
+use maproom::search::{QueryExpander, Tokenizer};
 use std::collections::HashMap;
 
 #[test]
@@ -327,8 +327,8 @@ fn test_synchronized_expansion() {
 // Full QueryProcessor Integration Tests with Embedding Generation
 //
 
-use crewchief_maproom::embedding::EmbeddingService;
-use crewchief_maproom::search::QueryProcessor;
+use maproom::embedding::EmbeddingService;
+use maproom::search::QueryProcessor;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -382,8 +382,7 @@ async fn test_query_processor_code_mode_detection() -> Result<(), Box<dyn std::e
         assert!(
             matches!(
                 processed.mode,
-                crewchief_maproom::search::SearchMode::Code
-                    | crewchief_maproom::search::SearchMode::Auto
+                maproom::search::SearchMode::Code | maproom::search::SearchMode::Auto
             ),
             "Query '{}' should be detected as Code mode, got {:?}",
             query,
@@ -416,8 +415,7 @@ async fn test_query_processor_text_mode_detection() -> Result<(), Box<dyn std::e
         assert!(
             matches!(
                 processed.mode,
-                crewchief_maproom::search::SearchMode::Text
-                    | crewchief_maproom::search::SearchMode::Auto
+                maproom::search::SearchMode::Text | maproom::search::SearchMode::Auto
             ),
             "Query '{}' should be detected as Text mode, got {:?}",
             query,

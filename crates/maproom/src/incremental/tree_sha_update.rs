@@ -18,9 +18,9 @@
 //!
 //! # Example
 //!
-//! ```no_run
-//! use crewchief_maproom::incremental::incremental_update;
-//! use crewchief_maproom::db::create_pool;
+//! ```ignore
+//! use maproom::incremental::incremental_update;
+//! use maproom::db::create_pool;
 //! use std::path::Path;
 //!
 //! # async fn example() -> anyhow::Result<()> {
@@ -112,8 +112,8 @@ impl Default for UpdateStats {
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::incremental::remove_worktree_from_chunks;
-/// # use crewchief_maproom::db;
+/// # use maproom::incremental::remove_worktree_from_chunks;
+/// # use maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
 /// let client = db::connect().await?;
 /// let affected = remove_worktree_from_chunks(&client, 1, "src/deleted.rs").await?;
@@ -212,8 +212,8 @@ pub async fn remove_worktree_from_chunks(
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::incremental::incremental_update;
-/// # use crewchief_maproom::db;
+/// # use maproom::incremental::incremental_update;
+/// # use maproom::db;
 /// # use std::path::Path;
 /// # async fn example() -> anyhow::Result<()> {
 /// let client = db::connect().await?;

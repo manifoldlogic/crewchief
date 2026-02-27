@@ -32,8 +32,8 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::cache::{CacheSystem, CacheConfig};
-//! use crewchief_maproom::cache::maintenance::{CacheMaintenance, MaintenanceConfig};
+//! use maproom::cache::{CacheSystem, CacheConfig};
+//! use maproom::cache::maintenance::{CacheMaintenance, MaintenanceConfig};
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]

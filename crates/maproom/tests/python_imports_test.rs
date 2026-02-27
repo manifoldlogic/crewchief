@@ -1,10 +1,8 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use serde_json::Value;
 
 // Helper function to extract imports from metadata
-fn extract_imports_from_chunks(
-    chunks: &[crewchief_maproom::indexer::SymbolChunk],
-) -> Option<&Value> {
+fn extract_imports_from_chunks(chunks: &[maproom::indexer::SymbolChunk]) -> Option<&Value> {
     chunks
         .iter()
         .find(|c| c.kind == "imports")

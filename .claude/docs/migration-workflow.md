@@ -23,8 +23,8 @@ Migration {
 2. Find the `migrations()` function and add a new `Migration` at the end of the vec
 3. Use the next sequential version number
 4. Write SQLite-compatible SQL in the `up` field
-5. Run `cargo build -p crewchief-maproom` to verify
-6. Test: `cargo test -p crewchief-maproom`
+5. Run `cargo build -p maproom` to verify
+6. Test: `cargo test -p maproom`
 
 ## SQLite Pitfalls (Not PostgreSQL!)
 
@@ -52,9 +52,9 @@ Migration {
 ## Verification
 
 ```bash
-cargo build -p crewchief-maproom              # Compiles migration SQL
-cargo test -p crewchief-maproom -- migrate     # Run migration tests
-cargo run --bin crewchief-maproom -- db migrate # Apply to real database
+cargo build -p maproom              # Compiles migration SQL
+cargo test -p maproom -- migrate     # Run migration tests
+cargo run --bin maproom -- db migrate # Apply to real database
 ```
 
 See also: `docs/architecture/DATABASE_ARCHITECTURE.md`

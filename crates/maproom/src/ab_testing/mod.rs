@@ -14,7 +14,7 @@
 //! # Example Usage
 //!
 //! ```rust,ignore
-//! use crewchief_maproom::ab_testing::*;
+//! use maproom::ab_testing::*;
 //! use uuid::Uuid;
 //!
 //! // Create experiment

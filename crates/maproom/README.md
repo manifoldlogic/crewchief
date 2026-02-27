@@ -1,4 +1,4 @@
-# CrewChief Maproom
+# Maproom
 
 Semantic code search powered by embeddings and SQLite.
 
@@ -21,12 +21,12 @@ ollama pull nomic-embed-text
 
 ### 2. Index Your Repository
 ```bash
-crewchief maproom scan --generate-embeddings
+maproom scan --generate-embeddings
 ```
 
 ### 3. Search Your Code
 ```bash
-crewchief maproom search "authentication middleware"
+maproom search "authentication middleware"
 ```
 
 **That's it!** No API keys, no configuration, no costs.
@@ -67,7 +67,7 @@ See [Provider Comparison](docs/providers/comparison.md) for detailed breakdown.
 ```bash
 export OPENAI_API_KEY="sk-proj-..."
 export MAPROOM_EMBEDDING_PROVIDER=openai
-crewchief maproom scan --generate-embeddings
+maproom scan --generate-embeddings
 ```
 
 See [OpenAI Setup Guide](docs/providers/openai-setup.md)
@@ -84,7 +84,7 @@ See [OpenAI Setup Guide](docs/providers/openai-setup.md)
 export GOOGLE_PROJECT_ID="your-project"
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
 export MAPROOM_EMBEDDING_PROVIDER=google
-crewchief maproom scan --generate-embeddings
+maproom scan --generate-embeddings
 ```
 
 See [Google Setup Guide](docs/providers/google-vertex-ai-setup.md)
@@ -174,19 +174,37 @@ See [Migration Guide](docs/guides/provider-migration.md) for details.
 
 ---
 
-## Installation & Setup
+## Installation
 
-### Database Setup
+### Via cargo (recommended)
+
+```bash
+cargo install maproom
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/manifoldlogic/crewchief.git
+cd crewchief
+cargo build --release -p maproom
+```
+
+The binary will be at `target/release/maproom`.
+
+---
+
+## Database Setup
 
 Maproom uses SQLite by default. The database is automatically created at `~/.maproom/maproom.db`.
 
 ```bash
 # Initialize database (auto-creates if needed)
-cargo run -p crewchief-maproom -- db migrate
+maproom db migrate
 
 # Or specify a custom location
 export MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
-cargo run -p crewchief-maproom -- db migrate
+maproom db migrate
 ```
 
 ## Usage
@@ -194,7 +212,7 @@ cargo run -p crewchief-maproom -- db migrate
 ### Indexing Code
 
 ```bash
-cargo run -p crewchief-maproom -- scan \
+maproom scan \
   --repo crewchief \
   --worktree radar \
   --path /path/to/worktree \
@@ -207,22 +225,22 @@ After indexing, generate vector embeddings for semantic search:
 
 ```bash
 # Generate embeddings for all chunks (incremental mode - only NULL embeddings)
-cargo run -p crewchief-maproom -- generate-embeddings
+maproom generate-embeddings
 
 # Test with a small sample first
-cargo run -p crewchief-maproom -- generate-embeddings --sample 100
+maproom generate-embeddings --sample 100
 
 # Dry run to see what would happen without writing to database
-cargo run -p crewchief-maproom -- generate-embeddings --dry-run --sample 100
+maproom generate-embeddings --dry-run --sample 100
 
 # Force regeneration of all embeddings
-cargo run -p crewchief-maproom -- generate-embeddings --force
+maproom generate-embeddings --force
 
 # Limit cost to prevent overspending
-cargo run -p crewchief-maproom -- generate-embeddings --max-cost 5.0
+maproom generate-embeddings --max-cost 5.0
 
 # Custom batch size and delay
-cargo run -p crewchief-maproom -- generate-embeddings --batch-size 50 --batch-delay 200
+maproom generate-embeddings --batch-size 50 --batch-delay 200
 ```
 
 **Options:**
@@ -238,7 +256,7 @@ cargo run -p crewchief-maproom -- generate-embeddings --batch-size 50 --batch-de
 
 ```bash
 # Full-text search
-cargo run -p crewchief-maproom -- search \
+maproom search \
   --repo crewchief \
   --worktree radar \
   --query "authentication" \
@@ -313,6 +331,9 @@ cargo test -- --nocapture
 ```
 
 **Integration Tests:**
+
+> **Note:** Integration test commands require a repository checkout (`git clone`). They are not available when installed via `cargo install maproom` because integration tests are not included in the published crate.
+
 ```bash
 # Run all integration tests
 cargo test --test '*'
@@ -347,6 +368,8 @@ Prerequisites:
 - GCP project with Vertex AI API enabled
 - Service account with `roles/aiplatform.user` IAM role
 - Service account JSON key file
+
+> **Note:** Integration test commands require a repository checkout (`git clone`). They are not available when installed via `cargo install maproom` because integration tests are not included in the published crate.
 
 ```bash
 # Set up environment

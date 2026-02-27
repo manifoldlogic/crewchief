@@ -1,5 +1,5 @@
 /**
- * @maproom/daemon-client - TypeScript client for crewchief-maproom daemon
+ * @maproom/daemon-client - TypeScript client for maproom daemon
  *
  * Provides a high-level interface for communicating with the maproom daemon
  * via JSON-RPC 2.0 over stdio.
@@ -9,7 +9,7 @@
  * import { DaemonClient } from '@maproom/daemon-client'
  *
  * const client = new DaemonClient({
- *   binaryPath: '/path/to/crewchief-maproom',
+ *   binaryPath: '/path/to/maproom',
  *   env: {
  *     MAPROOM_DATABASE_URL: 'postgresql://...',
  *     OPENAI_API_KEY: 'sk-...',

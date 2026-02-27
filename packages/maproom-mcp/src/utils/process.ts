@@ -77,21 +77,36 @@ export async function streamToString(stream: Readable): Promise<string> {
 }
 
 /**
- * Find the crewchief-maproom binary using multiple fallback strategies
+ * Find the maproom binary using multiple fallback strategies
  * @returns Path to binary if found, null otherwise
  */
 export function findMaproomBinary(): string | null {
-  // Strategy 1: Environment variable override
-  if (process.env.CREWCHIEF_MAPROOM_BIN) {
-    const binPath = process.env.CREWCHIEF_MAPROOM_BIN
+  // Strategy 1a: MAPROOM_BIN environment variable (preferred)
+  if (process.env.MAPROOM_BIN) {
+    const binPath = process.env.MAPROOM_BIN
     if (fs.existsSync(binPath)) {
+      console.debug(`[maproom] binary resolved via MAPROOM_BIN: ${binPath}`)
       return binPath
     }
   }
 
+  // Strategy 1b: CREWCHIEF_MAPROOM_BIN environment variable (deprecated fallback)
+  // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+  if (process.env.CREWCHIEF_MAPROOM_BIN) {
+    console.warn(
+      'Warning: CREWCHIEF_MAPROOM_BIN is deprecated and will be removed in a future release. Use MAPROOM_BIN instead.',
+    )
+    const binPath = process.env.CREWCHIEF_MAPROOM_BIN
+    if (fs.existsSync(binPath)) {
+      console.debug(`[maproom] binary resolved via CREWCHIEF_MAPROOM_BIN (deprecated): ${binPath}`)
+      return binPath
+    }
+    // env var set but path not found — fall through to next resolution strategy
+  }
+
   // Strategy 2: Platform-specific packaged binary
   try {
-    const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+    const execName = process.platform === 'win32' ? 'maproom.exe' : 'maproom'
 
     // Try to find __dirname equivalent in ESM
     const currentFileUrl = import.meta.url
@@ -103,6 +118,7 @@ export function findMaproomBinary(): string | null {
     const packagedPath = path.join(packageRoot, 'bin', `${process.platform}-${process.arch}`, execName)
 
     if (fs.existsSync(packagedPath)) {
+      console.debug(`[maproom] binary resolved via packaged binary: ${packagedPath}`)
       return packagedPath
     }
   } catch (error) {
@@ -112,14 +128,16 @@ export function findMaproomBinary(): string | null {
   // Strategy 3: Development build path (relative to workspace root)
   try {
     const devPaths = [
-      './target/release/crewchief-maproom',
-      './crates/maproom/target/release/crewchief-maproom',
-      '../../../crates/maproom/target/release/crewchief-maproom',
+      './target/release/maproom',
+      './crates/maproom/target/release/maproom',
+      '../../../crates/maproom/target/release/maproom',
     ]
 
     for (const devPath of devPaths) {
       if (fs.existsSync(devPath)) {
-        return path.resolve(devPath)
+        const resolvedDevPath = path.resolve(devPath)
+        console.debug(`[maproom] binary resolved via dev build path: ${resolvedDevPath}`)
+        return resolvedDevPath
       }
     }
   } catch (error) {
@@ -146,7 +164,9 @@ export function getBinarycandidates(): Array<{ cmd: string; description: string 
 
   // Try system PATH binaries
   candidates.push(
-    { cmd: 'crewchief-maproom', description: 'System PATH binary' },
+    { cmd: 'maproom', description: 'System PATH binary' },
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+    { cmd: 'crewchief-maproom', description: 'System PATH binary (legacy)' },
     { cmd: 'crewchief', description: 'CrewChief CLI wrapper' }
   )
 
@@ -316,9 +336,13 @@ export async function trySpawnWithCandidates(
   for (const candidate of candidateBinaries) {
     try {
       // Determine if we need to add 'maproom' subcommand
-      const fullArgs = candidate.cmd.includes('crewchief-maproom')
-        ? args
-        : ['maproom', ...args]
+      // Direct binaries (maproom or crewchief-maproom) get args passed directly.
+      // The crewchief CLI wrapper needs 'maproom' prepended as a subcommand.
+      const isDirectBinary =
+        candidate.cmd.endsWith('maproom') ||
+        candidate.cmd.endsWith('maproom.exe') ||
+        candidate.cmd.includes('crewchief-maproom')
+      const fullArgs = isDirectBinary ? args : ['maproom', ...args]
 
       const result = await spawnProcess(candidate.cmd, fullArgs, options)
       return result
@@ -333,7 +357,7 @@ export async function trySpawnWithCandidates(
   // All candidates failed
   const errorDetails = errors.map((e) => `  - ${e.cmd}: ${e.error}`).join('\n')
   throw new ProcessError(
-    `Failed to execute command with all candidates:\n${errorDetails}\n\nTroubleshooting:\n1. Build the binary: cargo build --release --bin crewchief-maproom\n2. Set CREWCHIEF_MAPROOM_BIN environment variable\n3. Add binary to system PATH`,
+    `Failed to execute command with all candidates:\n${errorDetails}\n\nTroubleshooting:\n1. Build the binary: cargo build --release --bin maproom\n2. Set MAPROOM_BIN environment variable\n3. Add binary to system PATH`,
     'ALL_CANDIDATES_FAILED',
     undefined,
     errorDetails

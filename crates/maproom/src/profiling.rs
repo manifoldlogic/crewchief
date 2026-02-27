@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use crewchief_maproom::profiling::profile_scope;
+//! use maproom::profiling::profile_scope;
 //!
 //! fn some_operation() {
 //!     profile_scope!("some_operation");

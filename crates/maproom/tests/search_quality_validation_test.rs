@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 
 /// Quality metrics for symbol extraction
 #[derive(Debug, Clone)]

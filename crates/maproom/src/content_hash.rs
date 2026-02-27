@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256};
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::content_hash::compute_blob_sha;
+/// use maproom::content_hash::compute_blob_sha;
 ///
 /// let content = "function foo() { return 1; }";
 /// let sha = compute_blob_sha(content);

@@ -6,7 +6,7 @@
 //! - Error handling
 //! - Consistency between file and byte hashing
 
-use crewchief_maproom::incremental::{ContentHash, FileHasher};
+use maproom::incremental::{ContentHash, FileHasher};
 use std::io::Write;
 use std::time::Instant;
 use tempfile::{NamedTempFile, TempDir};

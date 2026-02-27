@@ -39,7 +39,7 @@ This runbook provides step-by-step procedures for diagnosing and resolving commo
 
 ```bash
 # Check process status
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Check metrics endpoint
 curl http://localhost:9090/metrics | grep maproom_search
@@ -477,10 +477,10 @@ histogram_quantile(0.95, rate(maproom_search_fusion_time_seconds_bucket[5m])) by
 #### Step 1: Check Process Status
 ```bash
 # Check if process is running
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Check systemd status (if using systemd)
-systemctl status crewchief-maproom
+systemctl status maproom
 ```
 
 #### Step 2: Check Logs
@@ -511,7 +511,7 @@ ping <service-host>
 **Actions**:
 1. **Restart service**:
    ```bash
-   systemctl restart crewchief-maproom
+   systemctl restart maproom
    ```
 
 2. **Check for core dumps**:
@@ -668,7 +668,7 @@ grep "returned 0 results" logs/search.log | tail -n 50
 
 2. **Trigger reindex**:
    ```bash
-   crewchief-maproom index --repo <repo-id> --force
+   maproom index --repo <repo-id> --force
    ```
 
 3. **Verify index completion**:
@@ -695,7 +695,7 @@ grep "returned 0 results" logs/search.log | tail -n 50
 
 2. **Regenerate missing embeddings**:
    ```bash
-   crewchief-maproom generate-embeddings --backfill
+   maproom generate-embeddings --backfill
    ```
 
 ### Prevention
@@ -798,13 +798,13 @@ LIMIT 10;
 **Diagnosis**:
 ```bash
 # Check process memory
-ps aux | grep crewchief-maproom | awk '{print $6}'
+ps aux | grep maproom | awk '{print $6}'
 
 # Check system memory
 free -h
 
 # Check for memory leaks (if running locally)
-valgrind --leak-check=full ./target/release/crewchief-maproom
+valgrind --leak-check=full ./target/release/maproom
 ```
 
 **Resolution**:
@@ -819,12 +819,12 @@ valgrind --leak-check=full ./target/release/crewchief-maproom
 3. **Profile memory usage**:
    ```bash
    # Use heaptrack or similar
-   heaptrack ./target/release/crewchief-maproom
+   heaptrack ./target/release/maproom
    ```
 
 4. **Restart service** (temporary fix):
    ```bash
-   systemctl restart crewchief-maproom
+   systemctl restart maproom
    ```
 
 ### Prevention

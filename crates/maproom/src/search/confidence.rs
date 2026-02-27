@@ -39,8 +39,8 @@ use crate::search::results::ConfidenceSignals;
 /// # Examples
 ///
 /// ```no_run
-/// use crewchief_maproom::search::confidence::compute_result_confidence;
-/// use crewchief_maproom::search::fusion::FusedResult;
+/// use maproom::search::confidence::compute_result_confidence;
+/// use maproom::search::fusion::FusedResult;
 /// use std::collections::HashMap;
 ///
 /// let results = vec![

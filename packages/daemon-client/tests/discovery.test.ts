@@ -5,7 +5,7 @@
  * race conditions when multiple clients start simultaneously.
  *
  * Requirements:
- * - crewchief-maproom binary must be built (set MAPROOM_BINARY_PATH or build in target/release)
+ * - maproom binary must be built (set MAPROOM_BINARY_PATH or build in target/release)
  * - Tests spawn actual daemon processes
  *
  * Run with: pnpm test:integration
@@ -39,7 +39,7 @@ function getBinaryPath(): string {
 
   // Check workspace root for CI (monorepo structure)
   const workspaceRoot = path.resolve(__dirname, '../../../..')
-  const ciPath = path.join(workspaceRoot, 'target/release/crewchief-maproom')
+  const ciPath = path.join(workspaceRoot, 'target/release/maproom')
   if (fs.existsSync(ciPath)) {
     return ciPath
   }
@@ -73,7 +73,7 @@ describe('connectOrSpawn', () => {
     // Kill any test daemons using specific socket path
     try {
       const { stdout } = await execAsync(
-        `ps aux | grep 'crewchief-maproom.*serve.*${config.socketPath}' | grep -v grep | awk '{print $2}'`
+        `ps aux | grep 'maproom.*serve.*${config.socketPath}' | grep -v grep | awk '{print $2}'`
       )
       const pids = stdout
         .trim()
@@ -106,7 +106,7 @@ describe('connectOrSpawn', () => {
 
     // Verify daemon process exists for this specific socket
     const { stdout } = await execAsync(
-      `ps aux | grep 'crewchief-maproom.*serve.*${config.socketPath}' | grep -v grep`
+      `ps aux | grep 'maproom.*serve.*${config.socketPath}' | grep -v grep`
     )
     expect(stdout).toContain('serve')
 
@@ -125,7 +125,7 @@ describe('connectOrSpawn', () => {
 
     // Verify only one daemon process for this specific socket
     const { stdout } = await execAsync(
-      `ps aux | grep 'crewchief-maproom.*serve.*${config.socketPath}' | grep -v grep`
+      `ps aux | grep 'maproom.*serve.*${config.socketPath}' | grep -v grep`
     )
     const lines = stdout.trim().split('\n').filter((l) => l.length > 0)
     expect(lines.length).toBe(1)
@@ -149,7 +149,7 @@ describe('connectOrSpawn', () => {
 
     // Verify only one daemon spawned for this specific socket
     const { stdout } = await execAsync(
-      `ps aux | grep 'crewchief-maproom.*serve.*${config.socketPath}' | grep -v grep`
+      `ps aux | grep 'maproom.*serve.*${config.socketPath}' | grep -v grep`
     )
     const lines = stdout.trim().split('\n').filter((l) => l.length > 0)
     expect(lines.length).toBe(1)
@@ -190,7 +190,7 @@ describe('connectOrSpawn', () => {
 
     // Get all daemon PIDs for this specific socket
     const { stdout } = await execAsync(
-      `ps aux | grep 'crewchief-maproom.*serve.*${config.socketPath}' | grep -v grep | awk '{print $2}'`
+      `ps aux | grep 'maproom.*serve.*${config.socketPath}' | grep -v grep | awk '{print $2}'`
     )
     const pids = stdout
       .trim()

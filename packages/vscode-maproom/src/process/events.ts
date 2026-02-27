@@ -1,7 +1,7 @@
 /**
  * Type definitions for NDJSON events emitted by the Rust binary
  *
- * The crewchief-maproom binary outputs structured NDJSON (newline-delimited JSON)
+ * The maproom binary outputs structured NDJSON (newline-delimited JSON)
  * events on stdout for progress tracking, error reporting, and status updates.
  *
  * Format versioning:

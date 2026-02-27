@@ -225,26 +225,24 @@ Examples:
                   lowerMsg.includes('not found')
                 ) {
                   logger.warn('Maproom binary not found - database cleanup skipped')
-                  logger.info('Install maproom or run: crewchief-maproom db cleanup-stale --confirm')
+                  logger.info('Install maproom or run: maproom db cleanup-stale --confirm')
                 } else if (
                   lowerMsg.includes('database is locked') ||
                   lowerMsg.includes('sqlite_busy') ||
                   lowerMsg.includes('locked')
                 ) {
                   logger.warn('Maproom database is locked - cleanup skipped')
-                  logger.info(
-                    'Wait for other operations to complete, then run: crewchief-maproom db cleanup-stale --confirm',
-                  )
+                  logger.info('Wait for other operations to complete, then run: maproom db cleanup-stale --confirm')
                 } else if (
                   lowerMsg.includes('permission denied') ||
                   lowerMsg.includes('eacces') ||
                   lowerMsg.includes('permission')
                 ) {
                   logger.warn('Permission denied accessing maproom database')
-                  logger.info('Check file permissions, then run: crewchief-maproom db cleanup-stale --confirm')
+                  logger.info('Check file permissions, then run: maproom db cleanup-stale --confirm')
                 } else {
                   logger.warn('Could not clean maproom records:', errorMsg)
-                  logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+                  logger.info('Run manually: maproom db cleanup-stale --confirm')
                 }
               }
             }
@@ -337,26 +335,24 @@ Examples:
                   lowerMsg.includes('not found')
                 ) {
                   logger.warn('Maproom binary not found - database cleanup skipped')
-                  logger.info('Install maproom or run: crewchief-maproom db cleanup-stale --confirm')
+                  logger.info('Install maproom or run: maproom db cleanup-stale --confirm')
                 } else if (
                   lowerMsg.includes('database is locked') ||
                   lowerMsg.includes('sqlite_busy') ||
                   lowerMsg.includes('locked')
                 ) {
                   logger.warn('Maproom database is locked - cleanup skipped')
-                  logger.info(
-                    'Wait for other operations to complete, then run: crewchief-maproom db cleanup-stale --confirm',
-                  )
+                  logger.info('Wait for other operations to complete, then run: maproom db cleanup-stale --confirm')
                 } else if (
                   lowerMsg.includes('permission denied') ||
                   lowerMsg.includes('eacces') ||
                   lowerMsg.includes('permission')
                 ) {
                   logger.warn('Permission denied accessing maproom database')
-                  logger.info('Check file permissions, then run: crewchief-maproom db cleanup-stale --confirm')
+                  logger.info('Check file permissions, then run: maproom db cleanup-stale --confirm')
                 } else {
                   logger.warn('Could not clean maproom records:', errorMsg)
-                  logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+                  logger.info('Run manually: maproom db cleanup-stale --confirm')
                 }
               }
             }
@@ -399,26 +395,24 @@ Examples:
                 lowerMsg.includes('not found')
               ) {
                 logger.warn('Maproom binary not found - database cleanup skipped')
-                logger.info('Install maproom or run: crewchief-maproom db cleanup-stale --confirm')
+                logger.info('Install maproom or run: maproom db cleanup-stale --confirm')
               } else if (
                 lowerMsg.includes('database is locked') ||
                 lowerMsg.includes('sqlite_busy') ||
                 lowerMsg.includes('locked')
               ) {
                 logger.warn('Maproom database is locked - cleanup skipped')
-                logger.info(
-                  'Wait for other operations to complete, then run: crewchief-maproom db cleanup-stale --confirm',
-                )
+                logger.info('Wait for other operations to complete, then run: maproom db cleanup-stale --confirm')
               } else if (
                 lowerMsg.includes('permission denied') ||
                 lowerMsg.includes('eacces') ||
                 lowerMsg.includes('permission')
               ) {
                 logger.warn('Permission denied accessing maproom database')
-                logger.info('Check file permissions, then run: crewchief-maproom db cleanup-stale --confirm')
+                logger.info('Check file permissions, then run: maproom db cleanup-stale --confirm')
               } else {
                 logger.warn('Could not clean maproom records:', errorMsg)
-                logger.info('Run manually: crewchief-maproom db cleanup-stale --confirm')
+                logger.info('Run manually: maproom db cleanup-stale --confirm')
               }
             }
           }

@@ -89,14 +89,14 @@ export function getDatabaseUnavailableMessage(config: DatabaseConfig): string {
   return (
     `SQLite database not found at: ${config.path}\n\n` +
     `To create an index, run:\n` +
-    `  crewchief-maproom scan /path/to/your/repo\n\n` +
+    `  maproom scan /path/to/your/repo\n\n` +
     `The index will be created at ~/.maproom/maproom.db by default.\n` +
     `Or change the database path in Settings > Maproom > Database`
   )
 }
 
 /**
- * Status response from crewchief-maproom status command
+ * Status response from maproom status command
  */
 interface StatusResponse {
   repos: Array<{
@@ -135,7 +135,7 @@ function getBinaryExtension(): string {
 /**
  * Check if a specific repository is indexed in the database
  *
- * Runs `crewchief-maproom status --repo <repoName> --json` and checks
+ * Runs `maproom status --repo <repoName> --json` and checks
  * if the repo exists with at least one worktree containing chunks.
  *
  * @param extensionRoot - Extension root directory (for finding binary)
@@ -149,7 +149,7 @@ export async function checkRepoIndexed(
   repoName: string
 ): Promise<boolean> {
   const platform = getPlatform()
-  const binaryName = `crewchief-maproom${getBinaryExtension()}`
+  const binaryName = `maproom${getBinaryExtension()}`
   const binaryPath = join(extensionRoot, 'bin', platform, binaryName)
 
   // Check if binary exists

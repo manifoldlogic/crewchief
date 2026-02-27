@@ -26,7 +26,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::memory::get_memory_metrics;
+//! use maproom::memory::get_memory_metrics;
 //!
 //! let metrics = get_memory_metrics();
 //!
@@ -115,7 +115,7 @@ impl MemoryMetrics {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::get_memory_metrics;
+    /// use maproom::memory::get_memory_metrics;
     ///
     /// let metrics = get_memory_metrics();
     /// metrics.record_allocation("indexer", 4096);
@@ -144,9 +144,7 @@ impl MemoryMetrics {
 
         // Update component metrics
         let mut components = self.component_allocations.write().unwrap();
-        let entry = components
-            .entry(component.to_string())
-            .or_insert_with(ComponentMetrics::default);
+        let entry = components.entry(component.to_string()).or_default();
 
         entry.allocations += 1;
         entry.current_bytes += bytes;
@@ -164,7 +162,7 @@ impl MemoryMetrics {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::memory::get_memory_metrics;
+    /// use maproom::memory::get_memory_metrics;
     ///
     /// let metrics = get_memory_metrics();
     /// metrics.record_deallocation("indexer", 4096);

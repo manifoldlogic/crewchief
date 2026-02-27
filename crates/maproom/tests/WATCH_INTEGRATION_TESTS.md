@@ -64,7 +64,7 @@ Contains 5 comprehensive integration tests:
    cd /workspace/crates/maproom
    # Migrations should be applied automatically by tests
    # But you can verify manually:
-   cargo run --bin crewchief-maproom -- db migrate
+   cargo run --bin maproom -- db migrate
    ```
 
 ### Environment Variables
@@ -209,7 +209,7 @@ docker-compose ps
 **Solution**: Run migrations
 ```bash
 cd /workspace/crates/maproom
-cargo run --bin crewchief-maproom -- db migrate
+cargo run --bin maproom -- db migrate
 ```
 
 ### Tests Timeout or Hang

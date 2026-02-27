@@ -16,24 +16,41 @@ export interface BinaryResolutionResult {
 
 /**
  * Find the maproom binary using the following precedence order:
- * 1. CREWCHIEF_MAPROOM_BIN environment variable
- * 2. configPath from configuration file
- * 3. Global installation (on PATH)
- * 4. Packaged binary (platform-specific)
+ * 1. MAPROOM_BIN environment variable
+ * 2. CREWCHIEF_MAPROOM_BIN environment variable (deprecated fallback)
+ * 3. configPath from configuration file
+ * 4. Global installation (on PATH)
+ * 5. Packaged binary (platform-specific)
  *
  * @param options - Binary resolution options
  * @returns Resolution result with path and source
  */
 export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolutionResult {
-  const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+  const newExecName = process.platform === 'win32' ? 'maproom.exe' : 'maproom'
+  const legacyExecName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
 
-  // 1. Check environment variable first
-  const envBin = process.env.CREWCHIEF_MAPROOM_BIN
-  if (envBin && fs.existsSync(envBin)) {
-    return { path: envBin, source: 'env' }
+  // 1. Check MAPROOM_BIN environment variable first
+  const maproomBinEnv = process.env.MAPROOM_BIN
+  if (maproomBinEnv && fs.existsSync(maproomBinEnv)) {
+    logger.debug(`maproom binary resolved via MAPROOM_BIN: ${maproomBinEnv}`)
+    return { path: maproomBinEnv, source: 'env' }
   }
 
-  // 2. Check config path
+  // 2. Check deprecated CREWCHIEF_MAPROOM_BIN environment variable (backward compat)
+  // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+  const legacyEnvBin = process.env.CREWCHIEF_MAPROOM_BIN
+  if (legacyEnvBin) {
+    console.warn(
+      'Warning: CREWCHIEF_MAPROOM_BIN is deprecated and will be removed in a future release. Use MAPROOM_BIN instead.',
+    )
+    if (fs.existsSync(legacyEnvBin)) {
+      logger.debug(`maproom binary resolved via CREWCHIEF_MAPROOM_BIN (deprecated): ${legacyEnvBin}`)
+      return { path: legacyEnvBin, source: 'env' }
+    }
+    // env var set but path not found — fall through to next resolution strategy
+  }
+
+  // 3. Check config path
   if (options?.configPath) {
     let resolvedConfigPath = options.configPath
 
@@ -44,41 +61,74 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
     }
 
     if (fs.existsSync(resolvedConfigPath)) {
+      logger.debug(`maproom binary resolved via config path: ${resolvedConfigPath}`)
       return { path: resolvedConfigPath, source: 'config' }
     } else {
       logger.warn(`Configured maproom binary path not found: ${resolvedConfigPath}`)
     }
   }
 
-  // 3. Check global installation
-  const which = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
-  if (which.status === 0) {
+  // 4. Check global installation — try 'maproom' first, then 'crewchief-maproom' as fallback
+  const whichNew = spawnSync('bash', ['-lc', 'command -v maproom'])
+  if (whichNew.status === 0) {
+    logger.debug('maproom binary resolved via system PATH: maproom')
+    return { path: 'maproom', source: 'global' }
+  }
+
+  // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+  const whichLegacy = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
+  if (whichLegacy.status === 0) {
+    logger.debug('maproom binary resolved via system PATH (legacy): crewchief-maproom')
     return { path: 'crewchief-maproom', source: 'global' }
   }
 
-  // 4. Check packaged binary locations
+  // 5. Check packaged binary locations
   const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
   const platform = `${process.platform}-${arch}`
 
   try {
     const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-    // Try platform-specific directory first
-    const platformPath = path.join(__dirname, '..', 'bin', platform, execName)
+    // Try platform-specific directory first — new name, then legacy fallback
+    const platformPath = path.join(__dirname, '..', 'bin', platform, newExecName)
     if (fs.existsSync(platformPath)) {
+      logger.debug(`maproom binary resolved via packaged binary: ${platformPath}`)
       return { path: platformPath, source: 'packaged' }
     }
 
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+    const legacyPlatformPath = path.join(__dirname, '..', 'bin', platform, legacyExecName)
+    if (fs.existsSync(legacyPlatformPath)) {
+      logger.debug(`maproom binary resolved via packaged binary (legacy): ${legacyPlatformPath}`)
+      return { path: legacyPlatformPath, source: 'packaged' }
+    }
+
     // Try bin root (backwards compatibility)
-    const binRootPath = path.join(__dirname, '..', 'bin', execName)
+    const binRootPath = path.join(__dirname, '..', 'bin', newExecName)
     if (fs.existsSync(binRootPath)) {
+      logger.debug(`maproom binary resolved via packaged binary: ${binRootPath}`)
       return { path: binRootPath, source: 'packaged' }
     }
 
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+    const legacyBinRootPath = path.join(__dirname, '..', 'bin', legacyExecName)
+    if (fs.existsSync(legacyBinRootPath)) {
+      logger.debug(`maproom binary resolved via packaged binary (legacy): ${legacyBinRootPath}`)
+      return { path: legacyBinRootPath, source: 'packaged' }
+    }
+
     // Try sibling maproom-mcp package (monorepo dev convenience)
-    const mcpPath = path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', platform, execName)
+    const mcpPath = path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', platform, newExecName)
     if (fs.existsSync(mcpPath)) {
+      logger.debug(`maproom binary resolved via packaged binary: ${mcpPath}`)
       return { path: mcpPath, source: 'packaged' }
+    }
+
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
+    const legacyMcpPath = path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', platform, legacyExecName)
+    if (fs.existsSync(legacyMcpPath)) {
+      logger.debug(`maproom binary resolved via packaged binary (legacy): ${legacyMcpPath}`)
+      return { path: legacyMcpPath, source: 'packaged' }
     }
   } catch {
     // Ignore errors during packaged binary resolution

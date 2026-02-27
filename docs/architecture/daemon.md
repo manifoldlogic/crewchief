@@ -1,6 +1,6 @@
 # Daemon Architecture
 
-The Maproom daemon (`crewchief-maproom serve`) provides persistent database connections and search execution, offering 20-50x performance improvement over process-per-request patterns.
+The Maproom daemon (`maproom serve`) provides persistent database connections and search execution, offering 20-50x performance improvement over process-per-request patterns.
 
 ## Overview
 
@@ -71,7 +71,7 @@ The daemon communicates via JSON-RPC 2.0 over stdin/stdout:
 
 ```typescript
 // DaemonLifecycle.start()
-const daemon = spawn('crewchief-maproom', ['serve'], {
+const daemon = spawn('maproom', ['serve'], {
   stdio: ['pipe', 'pipe', 'pipe'],
   env: { ...process.env, RUST_LOG: 'info' }
 });
@@ -215,7 +215,7 @@ MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
 
 ```typescript
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
   requestTimeout: 30000,      // 30s per request
   startupTimeout: 10000,      // 10s for daemon to start
   maxRestartAttempts: 5,      // Before circuit opens
@@ -228,7 +228,7 @@ const client = new DaemonClient({
 ### Enable Trace Logging
 
 ```bash
-RUST_LOG=trace crewchief-maproom serve
+RUST_LOG=trace maproom serve
 ```
 
 ### Check Daemon Status
@@ -238,7 +238,7 @@ RUST_LOG=trace crewchief-maproom serve
 curl -X POST ... '{"method": "ping"}'
 
 # Direct process check
-pgrep -f "crewchief-maproom serve"
+pgrep -f "maproom serve"
 ```
 
 ### Common Issues

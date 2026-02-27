@@ -42,7 +42,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::memory::{
+//! use maproom::memory::{
 //!     StringInterner, quantize_embedding, BufferPool, get_memory_metrics
 //! };
 //! use std::sync::Arc;

@@ -17,10 +17,10 @@ Stale worktrees cause **duplicate search results** because Maproom returns match
 
 ```bash
 # Preview what will be deleted (safe - no changes made)
-crewchief-maproom db cleanup-stale
+maproom db cleanup-stale
 
 # Actually delete stale worktrees
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 ```
 
 ## Step-by-Step Workflow
@@ -30,7 +30,7 @@ crewchief-maproom db cleanup-stale --confirm
 Always start with a dry-run to see what will be deleted:
 
 ```bash
-crewchief-maproom db cleanup-stale --verbose
+maproom db cleanup-stale --verbose
 ```
 
 Example output:
@@ -73,7 +73,7 @@ ls -la /home/user/projects/myrepo-feature-branch
 Once you've reviewed and are satisfied, run with `--confirm`:
 
 ```bash
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 ```
 
 Example output:
@@ -96,7 +96,7 @@ Found 3 stale worktrees
 After cleanup, run a search to verify improved results:
 
 ```bash
-crewchief-maproom search --query "your search term" --repo myrepo
+maproom search --query "your search term" --repo myrepo
 ```
 
 You should see fewer duplicate results from deleted worktrees.
@@ -115,16 +115,16 @@ You should see fewer duplicate results from deleted worktrees.
 
 ```bash
 # Dry-run (default, safe)
-crewchief-maproom db cleanup-stale
+maproom db cleanup-stale
 
 # Confirm deletion
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 
 # Verbose output (shows each worktree)
-crewchief-maproom db cleanup-stale --verbose
+maproom db cleanup-stale --verbose
 
 # Combine flags
-crewchief-maproom db cleanup-stale --confirm --verbose
+maproom db cleanup-stale --confirm --verbose
 ```
 
 ### Building from Source
@@ -133,13 +133,13 @@ If running from the codebase:
 
 ```bash
 # Dry-run
-cargo run --bin crewchief-maproom -- db cleanup-stale
+cargo run --bin maproom -- db cleanup-stale
 
 # Confirm
-cargo run --bin crewchief-maproom -- db cleanup-stale --confirm
+cargo run --bin maproom -- db cleanup-stale --confirm
 
 # Verbose
-cargo run --bin crewchief-maproom -- db cleanup-stale --verbose
+cargo run --bin maproom -- db cleanup-stale --verbose
 ```
 
 ## Safety Features
@@ -207,12 +207,12 @@ To restore deleted worktree data:
 
 1. **Re-index the worktree**:
    ```bash
-   crewchief-maproom scan --path /path/to/worktree --repo myrepo --worktree main
+   maproom scan --path /path/to/worktree --repo myrepo --worktree main
    ```
 
 2. **Generate embeddings** (if using semantic search):
    ```bash
-   crewchief-maproom generate-embeddings --repo myrepo
+   maproom generate-embeddings --repo myrepo
    ```
 
 ### Backup Recommendations

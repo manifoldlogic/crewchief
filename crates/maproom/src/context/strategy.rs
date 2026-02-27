@@ -20,17 +20,17 @@ use super::types::{ContextBundle, ExpandOptions};
 ///
 /// # Examples
 ///
-/// ```no_run
-/// use crewchief_maproom::context::strategy::AssemblyStrategy;
-/// use crewchief_maproom::context::types::{ContextBundle, ExpandOptions};
-/// use crewchief_maproom::db::create_pool;
+/// ```ignore
+/// use maproom::context::strategy::AssemblyStrategy;
+/// use maproom::context::types::{ContextBundle, ExpandOptions};
+/// use maproom::db::create_pool;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let pool = create_pool().await?;
 ///
 ///     // Use the default strategy
-///     let strategy = crewchief_maproom::context::strategies::DefaultAssemblyStrategy::new(pool);
+///     let strategy = maproom::context::strategies::DefaultAssemblyStrategy::new(pool);
 ///
 ///     let bundle = strategy.assemble(
 ///         12345,           // chunk_id

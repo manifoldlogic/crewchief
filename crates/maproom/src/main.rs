@@ -30,20 +30,18 @@ macro_rules! handle_agent_error {
     };
 }
 
-use crewchief_maproom::cli::format::{
+use maproom::cli::format::{
     format_agent_error, format_context_agent, format_hits_agent, format_hits_json_search,
     format_hits_json_vector, sanitize_newlines, OutputFormat, SearchMetadata,
 };
-use crewchief_maproom::context::{
-    AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions,
-};
-use crewchief_maproom::db::StoreCleanup;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::db::StoreEmbeddings;
-use crewchief_maproom::db::StoreIndexState;
-use crewchief_maproom::db::StoreSearch;
-use crewchief_maproom::progress::{OutputMode, ProgressTracker};
-use crewchief_maproom::{daemon, db, indexer};
+use maproom::context::{AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions};
+use maproom::db::StoreCleanup;
+use maproom::db::StoreCore;
+use maproom::db::StoreEmbeddings;
+use maproom::db::StoreIndexState;
+use maproom::db::StoreSearch;
+use maproom::progress::{OutputMode, ProgressTracker};
+use maproom::{daemon, db, indexer};
 
 /// Exit code for runtime errors (transient, may retry).
 /// Documented in: docs/cli-help-after.md, CLAUDE.md
@@ -162,9 +160,9 @@ async fn handle_branch_switch(
     worktree_id: &Arc<RwLock<i64>>,
     debouncer: &indexer::DebouncedHandler,
 ) -> anyhow::Result<()> {
-    use crewchief_maproom::git::get_current_branch;
-    use crewchief_maproom::incremental::incremental_update;
-    use crewchief_maproom::indexer::BranchSwitchEvent;
+    use maproom::git::get_current_branch;
+    use maproom::incremental::incremental_update;
+    use maproom::indexer::BranchSwitchEvent;
 
     // 0. Check debounce (skip if rapid switch)
     if !debouncer.should_handle() {
@@ -252,7 +250,7 @@ async fn handle_branch_switch(
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "crewchief-maproom",
+    name = "maproom",
     version,
     about = "Maproom indexer & CLI",
     after_help = include_str!("../docs/cli-help-after.md")
@@ -273,7 +271,7 @@ enum Commands {
     /// Cache management commands
     Cache {
         #[command(subcommand)]
-        command: crewchief_maproom::cli::CacheCommand,
+        command: maproom::cli::CacheCommand,
     },
 
     /// Retrieve context bundle for a chunk
@@ -759,8 +757,8 @@ async fn auto_generate_embeddings(
     batch_size: usize,
     provider: Option<String>,
     json_mode: bool,
-) -> anyhow::Result<crewchief_maproom::embedding::PipelineStats> {
-    use crewchief_maproom::embedding::{EmbeddingPipeline, EmbeddingService, PipelineConfig};
+) -> anyhow::Result<maproom::embedding::PipelineStats> {
+    use maproom::embedding::{EmbeddingPipeline, EmbeddingService, PipelineConfig};
 
     tracing::info!("Starting auto-embedding generation");
     if !json_mode {
@@ -807,7 +805,7 @@ async fn auto_generate_embeddings(
     };
 
     // Connect to database
-    let store = crewchief_maproom::db::connect().await?;
+    let store = maproom::db::connect().await?;
 
     // Count chunks needing embeddings
     let chunk_count = store.get_chunks_needing_embeddings_count().await?;
@@ -816,7 +814,7 @@ async fn auto_generate_embeddings(
         if !json_mode {
             println!("   ✓ All chunks already have embeddings");
         }
-        return Ok(crewchief_maproom::embedding::PipelineStats::default());
+        return Ok(maproom::embedding::PipelineStats::default());
     }
 
     if !json_mode {
@@ -825,11 +823,11 @@ async fn auto_generate_embeddings(
 
     // Create progress tracker with appropriate output mode
     let output_mode = if json_mode {
-        crewchief_maproom::progress::OutputMode::Json
+        maproom::progress::OutputMode::Json
     } else {
-        crewchief_maproom::progress::OutputMode::Minimal
+        maproom::progress::OutputMode::Minimal
     };
-    let progress = crewchief_maproom::progress::ProgressTracker::new(output_mode);
+    let progress = maproom::progress::ProgressTracker::new(output_mode);
     progress.set_totals(0, Some(chunk_count as usize));
 
     // Run pipeline with progress callback
@@ -966,7 +964,7 @@ fn format_context_bundle(bundle: &ContextBundle, chunk_id: i64, budget: usize) -
 fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     // Get the repository name from remote origin in owner/repo format
     let repo_name = Command::new("git")
-        .args(&[
+        .args([
             "-C",
             path.to_str().unwrap_or("."),
             "remote",
@@ -1000,7 +998,7 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
 
     // Get the current branch name
     let branch_name = Command::new("git")
-        .args(&[
+        .args([
             "-C",
             path.to_str().unwrap_or("."),
             "rev-parse",
@@ -1022,7 +1020,7 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
 
     // Get the current commit hash
     let commit_hash = Command::new("git")
-        .args(&["-C", path.to_str().unwrap_or("."), "rev-parse", "HEAD"])
+        .args(["-C", path.to_str().unwrap_or("."), "rev-parse", "HEAD"])
         .output()
         .ok()
         .and_then(|output| {
@@ -1224,7 +1222,7 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
 
             // Get git tree SHA using existing function from git.rs
-            let tree_sha = match crewchief_maproom::git::get_git_tree_sha(&path) {
+            let tree_sha = match maproom::git::get_git_tree_sha(&path) {
                 Ok(sha) => {
                     tracing::info!("Current tree SHA: {}", sha);
                     Some(sha)
@@ -1343,7 +1341,7 @@ async fn main() -> anyhow::Result<()> {
                             );
                         } else {
                             println!("\n⚠️  Warning: Embedding generation failed: {}", e);
-                            println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
+                            println!("   You can generate embeddings later with: maproom generate-embeddings");
                         }
                     }
                 }
@@ -1369,7 +1367,7 @@ async fn main() -> anyhow::Result<()> {
                     0
                 };
 
-                let scan_stats = crewchief_maproom::db::UpdateStats {
+                let scan_stats = maproom::db::UpdateStats {
                     files_processed,
                     chunks_processed,
                     embeddings_generated,
@@ -1466,7 +1464,7 @@ async fn main() -> anyhow::Result<()> {
                         // Don't fail the entire upsert if embeddings fail
                         tracing::warn!("Embedding generation failed: {}", e);
                         println!("\n⚠️  Warning: Embedding generation failed: {}", e);
-                        println!("   You can generate embeddings later with: crewchief-maproom generate-embeddings");
+                        println!("   You can generate embeddings later with: maproom generate-embeddings");
                     }
                 }
             }
@@ -1487,7 +1485,7 @@ async fn main() -> anyhow::Result<()> {
             let repo = repo.unwrap_or(repo_name);
 
             // Auto-detect current branch using get_current_branch()
-            let detected_branch = crewchief_maproom::git::get_current_branch(&path)?;
+            let detected_branch = maproom::git::get_current_branch(&path)?;
 
             // Handle deprecation warning if --worktree flag is provided
             let worktree = if let Some(_wt) = worktree {
@@ -1530,11 +1528,11 @@ async fn main() -> anyhow::Result<()> {
             let current_branch: Arc<RwLock<String>> = Arc::new(RwLock::new(worktree.clone()));
 
             // Create debouncer for branch switch events (2-second window)
-            use crewchief_maproom::indexer::DebouncedHandler;
+            use maproom::indexer::DebouncedHandler;
             let branch_debouncer = DebouncedHandler::new(std::time::Duration::from_secs(2));
 
             // Create and start the file watcher
-            use crewchief_maproom::incremental::{MultiWatcher, WatcherConfig};
+            use maproom::incremental::{MultiWatcher, WatcherConfig};
 
             let debounce_ms = parse_throttle(&throttle)?;
             let config = WatcherConfig {
@@ -1550,7 +1548,7 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             // Set up HEAD file watcher to detect branch switches
-            use crewchief_maproom::indexer::setup_head_watcher;
+            use maproom::indexer::setup_head_watcher;
             let git_head = watch_path.join(".git/HEAD");
             let (head_tx, mut head_rx) = tokio::sync::mpsc::channel(10);
             // Store watcher handle to prevent premature drop (watcher stops if dropped)
@@ -1566,7 +1564,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Handle events
-            use crewchief_maproom::incremental::incremental_update;
+            use maproom::incremental::incremental_update;
             use tokio::signal;
 
             loop {
@@ -1581,7 +1579,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                     // Handle file events
                     Some(event) = event_rx.recv() => {
-                        use crewchief_maproom::incremental::EventType;
+                        use maproom::incremental::EventType;
 
                         let event_type = match event.event_type {
                             EventType::Modified => "modified",
@@ -1751,7 +1749,7 @@ async fn main() -> anyhow::Result<()> {
             preview_length,
             format,
         } => {
-            use crewchief_maproom::embedding::EmbeddingService;
+            use maproom::embedding::EmbeddingService;
 
             // MRIMP-5: Implicit preview enable for agent format (parameter preprocessing)
             // Agent format always needs preview data; default length is 120 chars (token-optimized).
@@ -1933,7 +1931,7 @@ async fn main() -> anyhow::Result<()> {
             json,
             verbose,
         } => {
-            use crewchief_maproom::status;
+            use maproom::status;
 
             // Validate worktree filter requires repo filter
             if worktree.is_some() && repo.is_none() {
@@ -1958,7 +1956,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::EncodingProgress { repo, json } => {
-            use crewchief_maproom::encoding_progress;
+            use maproom::encoding_progress;
 
             tracing::debug!("encoding-progress: connecting to database...");
             let store = db::connect().await?;
@@ -1986,7 +1984,7 @@ async fn main() -> anyhow::Result<()> {
             max_cost,
             force,
         } => {
-            use crewchief_maproom::embedding::{
+            use maproom::embedding::{
                 CostEstimator, EmbeddingPipeline, EmbeddingService, PipelineConfig,
             };
 
@@ -2069,7 +2067,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Migrate { command } => {
-            use crewchief_maproom::migrate::{verify_migration, MarkdownMigrator};
+            use maproom::migrate::{verify_migration, MarkdownMigrator};
 
             let store = db::connect().await?;
 
@@ -2101,7 +2099,10 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     println!("{}", "=".repeat(60));
-                    println!("\nTo rollback: cargo run --bin crewchief-maproom -- migrate rollback --backup {}", result.backup_table);
+                    println!(
+                        "\nTo rollback: cargo run --bin maproom -- migrate rollback --backup {}",
+                        result.backup_table
+                    );
                 }
 
                 MigrateCommand::Rollback { backup } => {
@@ -2155,7 +2156,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             if socket {
                 // Socket mode (experimental)
-                use crewchief_maproom::daemon::server::{
+                use maproom::daemon::server::{
                     run_with_signal_handling, ServerConfig, SocketServer,
                 };
 
@@ -2192,7 +2193,7 @@ async fn main() -> anyhow::Result<()> {
             worktree,
             dry_run,
         } => {
-            use crewchief_maproom::cli::clean_ignored;
+            use maproom::cli::clean_ignored;
             let store = db::connect().await?;
             clean_ignored::clean_ignored(&store, &repo, &worktree, dry_run).await?;
         }
@@ -2369,9 +2370,9 @@ fn handle_agent_error(
 /// assert_eq!(exit_code, 2);
 /// ```
 fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
-    use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
-    use crewchief_maproom::search::errors::SearchErrorDetails;
-    use crewchief_maproom::search::pipeline::PipelineError;
+    use maproom::embedding::error::{ApiError, EmbeddingError};
+    use maproom::search::errors::SearchErrorDetails;
+    use maproom::search::pipeline::PipelineError;
 
     // Priority 1: Try to downcast to PipelineError (structured search errors)
     if let Some(pipeline_error) = error.downcast_ref::<PipelineError>() {
@@ -2379,7 +2380,7 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
 
         // Map ErrorType to string and exit code
         let (error_type_str, exit_code) = match details.error_type {
-            crewchief_maproom::search::errors::ErrorType::EmbeddingProvider => {
+            maproom::search::errors::ErrorType::EmbeddingProvider => {
                 // Check if it's a config error (exit 2) or runtime error (exit 1)
                 if details.context.contains_key("provider")
                     && details.suggestions.iter().any(|s| {
@@ -2393,11 +2394,11 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
                     ("embedding_provider", 1)
                 }
             }
-            crewchief_maproom::search::errors::ErrorType::Database => ("database", 1),
-            crewchief_maproom::search::errors::ErrorType::Validation => ("validation", 1),
-            crewchief_maproom::search::errors::ErrorType::Timeout => ("timeout", 1),
-            crewchief_maproom::search::errors::ErrorType::NotFound => ("not_found", 1),
-            crewchief_maproom::search::errors::ErrorType::Unknown => ("unknown", 1),
+            maproom::search::errors::ErrorType::Database => ("database", 1),
+            maproom::search::errors::ErrorType::Validation => ("validation", 1),
+            maproom::search::errors::ErrorType::Timeout => ("timeout", 1),
+            maproom::search::errors::ErrorType::NotFound => ("not_found", 1),
+            maproom::search::errors::ErrorType::Unknown => ("unknown", 1),
         };
 
         // Combine suggestions into a single string
@@ -2861,7 +2862,7 @@ mod tests {
 
     #[test]
     fn test_format_context_bundle_basic() {
-        use crewchief_maproom::context::{ContextBundle, ContextItem, LineRange};
+        use maproom::context::{ContextBundle, ContextItem, LineRange};
 
         let mut bundle = ContextBundle::new();
         bundle.add_item(ContextItem {
@@ -2886,7 +2887,7 @@ mod tests {
 
     #[test]
     fn test_format_context_bundle_empty() {
-        use crewchief_maproom::context::ContextBundle;
+        use maproom::context::ContextBundle;
 
         let bundle = ContextBundle::new();
         let output = super::format_context_bundle(&bundle, 99999, 6000);
@@ -2898,7 +2899,7 @@ mod tests {
 
     #[test]
     fn test_format_context_bundle_truncated() {
-        use crewchief_maproom::context::{ContextBundle, ContextItem, LineRange};
+        use maproom::context::{ContextBundle, ContextItem, LineRange};
 
         let mut bundle = ContextBundle::new();
         bundle.truncated = true;
@@ -2918,7 +2919,7 @@ mod tests {
 
     #[test]
     fn test_format_context_bundle_with_related_items() {
-        use crewchief_maproom::context::{ContextBundle, ContextItem, LineRange};
+        use maproom::context::{ContextBundle, ContextItem, LineRange};
 
         let mut bundle = ContextBundle::new();
         bundle.add_item(ContextItem {
@@ -3686,7 +3687,7 @@ mod tests {
     /// Test classification of embedding config error (missing API key) -> exit code 2
     #[test]
     fn test_classify_embedding_config_error() {
-        use crewchief_maproom::embedding::error::{ConfigError, EmbeddingError};
+        use maproom::embedding::error::{ConfigError, EmbeddingError};
 
         let config_error = ConfigError::MissingConfig("OPENAI_API_KEY".to_string());
         let embedding_error = EmbeddingError::Config(config_error);
@@ -3701,7 +3702,7 @@ mod tests {
     /// Test classification of embedding API error (timeout) -> exit code 1
     #[test]
     fn test_classify_embedding_api_error() {
-        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+        use maproom::embedding::error::{ApiError, EmbeddingError};
 
         let api_error = ApiError::RateLimit {
             retry_after_ms: 5000,
@@ -3791,7 +3792,7 @@ mod tests {
     /// Test classification of error wrapped in anyhow context
     #[test]
     fn test_classify_error_with_anyhow_context() {
-        use crewchief_maproom::embedding::error::{ConfigError, EmbeddingError};
+        use maproom::embedding::error::{ConfigError, EmbeddingError};
 
         let config_error = ConfigError::EnvVarNotFound("GOOGLE_API_KEY".to_string());
         let embedding_error = EmbeddingError::Config(config_error);
@@ -3823,7 +3824,7 @@ mod tests {
     /// Test: 401 Authentication error produces exit code 2 (config error)
     #[test]
     fn test_classify_auth_error_exit_code_2() {
-        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+        use maproom::embedding::error::{ApiError, EmbeddingError};
 
         let auth_error = ApiError::Authentication("Invalid API key".to_string());
         let embedding_error = EmbeddingError::Api(auth_error);
@@ -3846,7 +3847,7 @@ mod tests {
     /// Test: QuotaExceeded error produces exit code 2 (config error)
     #[test]
     fn test_classify_quota_exceeded_exit_code_2() {
-        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+        use maproom::embedding::error::{ApiError, EmbeddingError};
 
         let quota_error = ApiError::QuotaExceeded("Rate limit exceeded for account".to_string());
         let embedding_error = EmbeddingError::Api(quota_error);
@@ -3869,7 +3870,7 @@ mod tests {
     /// Test: API error with 403/forbidden in message produces exit code 2 via heuristic
     #[test]
     fn test_classify_forbidden_api_error_heuristic() {
-        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+        use maproom::embedding::error::{ApiError, EmbeddingError};
 
         // ServerError with 403 status containing "forbidden" in message
         let forbidden_error = ApiError::ServerError {
@@ -3891,7 +3892,7 @@ mod tests {
     /// Test: Non-auth API errors (e.g., rate limit, server error) still produce exit code 1
     #[test]
     fn test_classify_non_auth_api_error_exit_code_1() {
-        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+        use maproom::embedding::error::{ApiError, EmbeddingError};
 
         let rate_limit_error = ApiError::RateLimit {
             retry_after_ms: 5000,
@@ -3911,7 +3912,7 @@ mod tests {
     /// Test: Auth error with anyhow context still produces exit code 2
     #[test]
     fn test_classify_auth_error_with_context() {
-        use crewchief_maproom::embedding::error::{ApiError, EmbeddingError};
+        use maproom::embedding::error::{ApiError, EmbeddingError};
 
         let auth_error = ApiError::Authentication("Invalid key provided".to_string());
         let embedding_error = EmbeddingError::Api(auth_error);
@@ -3995,7 +3996,7 @@ mod tests {
     /// a valid structured error line on stdout
     #[test]
     fn test_dual_output_format() {
-        use crewchief_maproom::cli::format::format_agent_error;
+        use maproom::cli::format::format_agent_error;
 
         let error = anyhow::anyhow!("Database connection timeout");
         let (error_type, suggestion, exit_code) = classify_error(&error);
@@ -4029,7 +4030,7 @@ mod tests {
     /// This verifies structured output is always a single line for parser reliability
     #[test]
     fn test_exactly_one_error_line() {
-        use crewchief_maproom::cli::format::format_agent_error;
+        use maproom::cli::format::format_agent_error;
 
         // Test with error message containing newlines
         let error_msg = "First line\nSecond line\nThird line";
@@ -4077,7 +4078,7 @@ mod tests {
     /// This validates the structured error format is consistent across all error types
     #[test]
     fn test_error_line_format_validation() {
-        use crewchief_maproom::cli::format::format_agent_error;
+        use maproom::cli::format::format_agent_error;
         use regex::Regex;
 
         // Regex pattern for structured error format
@@ -4116,18 +4117,18 @@ mod tests {
     // The following commands were run manually to verify end-to-end behavior:
     //
     // 1. Search with invalid path (database error):
-    //    $ cargo run --bin crewchief-maproom -- search --format agent --repo nonexistent --query test 2>/dev/null
+    //    $ cargo run --bin maproom -- search --format agent --repo nonexistent --query test 2>/dev/null
     //    Expected: ERROR line on stdout, exit code 1
     //    Result: ✓ Verified - produces structured error, exits with 1
     //
     // 2. Default format - no structured output:
-    //    $ cargo run --bin crewchief-maproom -- search --repo nonexistent --query test 2>/dev/null
+    //    $ cargo run --bin maproom -- search --repo nonexistent --query test 2>/dev/null
     //    Expected: No ERROR line on stdout (backward compatibility)
     //    Result: ✓ Verified - no structured output, error only on stderr
     //
     // 3. Vector-search with missing API key (if testable):
     //    $ unset OPENAI_API_KEY GOOGLE_API_KEY VOYAGE_API_KEY
-    //    $ cargo run --bin crewchief-maproom -- vector-search --format agent --repo test --query foo 2>/dev/null
+    //    $ cargo run --bin maproom -- vector-search --format agent --repo test --query foo 2>/dev/null
     //    Expected: ERROR line with type=embedding_provider or config_error, exit code 2
     //    Note: Requires specific test environment setup
     //

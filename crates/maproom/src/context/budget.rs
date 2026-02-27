@@ -65,7 +65,7 @@ pub struct UsageStats {
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::budget::TokenBudgetManager;
+/// use maproom::context::budget::TokenBudgetManager;
 ///
 /// let mut manager = TokenBudgetManager::new(8000);
 ///
@@ -95,7 +95,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let manager = TokenBudgetManager::new(8000);
     /// assert_eq!(manager.remaining(), 8000);
@@ -119,7 +119,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let mut manager = TokenBudgetManager::new(1000);
     ///
@@ -158,7 +158,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let mut manager = TokenBudgetManager::new(1000);
     ///
@@ -186,7 +186,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let manager = TokenBudgetManager::new(10000);
     /// let allocation = manager.allocate();
@@ -212,7 +212,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let mut manager = TokenBudgetManager::new(1000);
     /// assert_eq!(manager.remaining(), 1000);
@@ -229,7 +229,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let manager = TokenBudgetManager::new(8000);
     /// assert_eq!(manager.budget(), 8000);
@@ -243,7 +243,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let mut manager = TokenBudgetManager::new(1000);
     /// assert_eq!(manager.used(), 0);
@@ -263,7 +263,7 @@ impl TokenBudgetManager {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::budget::TokenBudgetManager;
+    /// use maproom::context::budget::TokenBudgetManager;
     ///
     /// let mut manager = TokenBudgetManager::new(1000);
     /// manager.reserve("primary", 400);
@@ -295,7 +295,7 @@ impl TokenBudgetManager {
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::budget::SharedBudgetManager;
+/// use maproom::context::budget::SharedBudgetManager;
 /// use std::sync::Arc;
 ///
 /// #[tokio::main]

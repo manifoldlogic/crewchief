@@ -411,21 +411,21 @@ export async function showNoSqliteGuidance(): Promise<boolean> {
 
   const action = await vscode.window.showWarningMessage(
     'No Maproom index found. Create one to enable code search.',
-    { modal: false, detail: 'Run crewchief-maproom scan in your terminal to index a repository.' },
+    { modal: false, detail: 'Run maproom scan in your terminal to index a repository.' },
     'Copy Scan Command',
     'Open Terminal',
     'Choose Existing File'
   )
 
   if (action === 'Copy Scan Command') {
-    const command = `crewchief-maproom scan ${workspacePath}`
+    const command = `maproom scan ${workspacePath}`
     await vscode.env.clipboard.writeText(command)
     vscode.window.showInformationMessage('Scan command copied to clipboard')
     return true
   } else if (action === 'Open Terminal') {
     const terminal = vscode.window.createTerminal('Maproom Setup')
     terminal.show()
-    terminal.sendText(`# Run: crewchief-maproom scan ${workspacePath}`, false)
+    terminal.sendText(`# Run: maproom scan ${workspacePath}`, false)
     return true
   } else if (action === 'Choose Existing File') {
     return await promptForSqlitePath()

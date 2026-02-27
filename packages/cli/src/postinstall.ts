@@ -14,7 +14,7 @@ function ensureExecutable(p: string) {
 function main() {
   const __filename = fileURLToPath(import.meta.url)
   const __dirname = path.dirname(__filename)
-  const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+  const execName = process.platform === 'win32' ? 'maproom.exe' : 'maproom'
   const outDir = path.join(__dirname, '..', 'bin', `${process.platform}-${process.arch}`)
   const outPath = path.join(outDir, execName)
 
@@ -47,7 +47,7 @@ function main() {
 
   // Try cargo build as a fallback
   try {
-    const res = spawnSync('cargo', ['build', '--release', '-p', 'crewchief-maproom'], {
+    const res = spawnSync('cargo', ['build', '--release', '-p', 'maproom'], {
       cwd: path.join(__dirname, '..', '..', '..'),
       stdio: 'inherit',
     })

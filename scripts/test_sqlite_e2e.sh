@@ -123,17 +123,17 @@ export RUST_LOG="${RUST_LOG:-warn}"
 
 # Build the binary (release mode for speed)
 echo ""
-echo -e "${YELLOW}Building crewchief-maproom...${NC}"
+echo -e "${YELLOW}Building maproom...${NC}"
 cd "$PROJECT_ROOT"
-cargo build --bin crewchief-maproom --release 2>/dev/null || cargo build --bin crewchief-maproom
+cargo build --bin maproom --release 2>/dev/null || cargo build --bin maproom
 
-MAPROOM="$PROJECT_ROOT/target/release/crewchief-maproom"
+MAPROOM="$PROJECT_ROOT/target/release/maproom"
 if [ ! -f "$MAPROOM" ]; then
-    MAPROOM="$PROJECT_ROOT/target/debug/crewchief-maproom"
+    MAPROOM="$PROJECT_ROOT/target/debug/maproom"
 fi
 
 if [ ! -f "$MAPROOM" ]; then
-    echo -e "${RED}Error: crewchief-maproom binary not found${NC}"
+    echo -e "${RED}Error: maproom binary not found${NC}"
     exit 1
 fi
 

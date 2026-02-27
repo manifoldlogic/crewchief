@@ -12,15 +12,15 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-use crewchief_maproom::db::sqlite::SqliteStore;
-use crewchief_maproom::db::StoreChunks;
-use crewchief_maproom::db::StoreCore;
-use crewchief_maproom::db::StoreMigration;
-use crewchief_maproom::db::StoreSearch;
-use crewchief_maproom::db::{ChunkRecord, FileRecord};
+use maproom::db::sqlite::SqliteStore;
+use maproom::db::StoreChunks;
+use maproom::db::StoreCore;
+use maproom::db::StoreMigration;
+use maproom::db::StoreSearch;
+use maproom::db::{ChunkRecord, FileRecord};
 
 // Re-export for test convenience
-pub use crewchief_maproom::db::sqlite::SqliteStore as TestStore;
+pub use maproom::db::sqlite::SqliteStore as TestStore;
 
 /// Create an in-memory SQLite store for testing.
 ///
@@ -230,7 +230,7 @@ impl Drop for TestConfig {
 
 /// Assertion utilities for search results.
 pub mod assertions {
-    use crewchief_maproom::search::ChunkSearchResult;
+    use maproom::search::ChunkSearchResult;
 
     /// Assert that search results contain expected content.
     pub fn assert_contains_result(results: &[ChunkSearchResult], expected_content: &str) {

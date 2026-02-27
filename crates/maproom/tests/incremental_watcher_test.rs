@@ -6,7 +6,7 @@
 //! - Watcher configuration
 //! - Git polling integration
 
-use crewchief_maproom::incremental::{FileEvent, FileWatcher, IgnorePatternMatcher, WatcherConfig};
+use maproom::incremental::{FileEvent, FileWatcher, IgnorePatternMatcher, WatcherConfig};
 use std::path::PathBuf;
 use tempfile::TempDir;
 

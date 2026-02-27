@@ -1,6 +1,6 @@
 # @maproom/daemon-client
 
-TypeScript client library for communicating with the `crewchief-maproom` daemon via JSON-RPC 2.0.
+TypeScript client library for communicating with the `maproom` daemon via JSON-RPC 2.0.
 
 ## Features
 
@@ -39,7 +39,7 @@ import { DaemonClient } from '@maproom/daemon-client'
 
 // Create client
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
   env: {
     MAPROOM_DATABASE_URL: 'postgresql://localhost/maproom',
   },
@@ -68,7 +68,7 @@ await client.stop()
 
 ### From Process Spawning to Daemon
 
-If you're migrating from spawning the `crewchief-maproom` binary for each request, the daemon client provides dramatic performance improvements with minimal code changes.
+If you're migrating from spawning the `maproom` binary for each request, the daemon client provides dramatic performance improvements with minimal code changes.
 
 #### Before (Process Spawning)
 
@@ -139,7 +139,7 @@ function getBinaryPath(): string {
     'cli',
     'bin',
     platformDir,
-    'crewchief-maproom'
+    'maproom'
   )
 }
 
@@ -197,7 +197,7 @@ new DaemonClient(config: DaemonConfig)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `binaryPath` | `string` | *required* | Path to `crewchief-maproom` binary |
+| `binaryPath` | `string` | *required* | Path to `maproom` binary |
 | `env` | `object` | `{}` | Environment variables for daemon (e.g., `MAPROOM_DATABASE_URL`) |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 | `startTimeout` | `number` | `5000` | Daemon startup timeout in milliseconds |
@@ -210,7 +210,7 @@ new DaemonClient(config: DaemonConfig)
 
 ```typescript
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
   env: {
     MAPROOM_DATABASE_URL: 'postgresql://localhost/maproom',
     RUST_LOG: 'info',
@@ -724,15 +724,15 @@ For detailed performance testing methodology, see [DAEMIGR-3901 Performance Test
 1. **Verify Binary Checksum**
    ```bash
    # Before deployment, verify binary integrity
-   sha256sum packages/cli/bin/linux-x64/crewchief-maproom
+   sha256sum packages/cli/bin/linux-x64/maproom
    # Compare against known-good checksum
    ```
 
 2. **Restrict Binary Permissions**
    ```bash
    # Binary should be owned by root, executable by all
-   sudo chown root:root /usr/local/bin/crewchief-maproom
-   sudo chmod 755 /usr/local/bin/crewchief-maproom
+   sudo chown root:root /usr/local/bin/maproom
+   sudo chmod 755 /usr/local/bin/maproom
    ```
 
 3. **Validate Binary Before Use** (in application)
@@ -747,7 +747,7 @@ For detailed performance testing methodology, see [DAEMIGR-3901 Performance Test
    }
 
    // Validate before creating client
-   const binaryPath = '/path/to/crewchief-maproom'
+   const binaryPath = '/path/to/maproom'
    const expectedHash = 'abc123...' // From secure source
 
    if (await validateBinary(binaryPath, expectedHash)) {
@@ -780,13 +780,13 @@ For detailed performance testing methodology, see [DAEMIGR-3901 Performance Test
 1. **Daemon Crash Detected**
    ```bash
    # Check daemon logs
-   journalctl -u my-app -n 100 | grep crewchief-maproom
+   journalctl -u my-app -n 100 | grep maproom
 
    # Check database connectivity
    psql $MAPROOM_DATABASE_URL -c "SELECT 1"
 
    # Test binary manually
-   echo '{"jsonrpc":"2.0","method":"ping","id":1}' | /path/to/crewchief-maproom serve
+   echo '{"jsonrpc":"2.0","method":"ping","id":1}' | /path/to/maproom serve
    ```
 
 2. **Circuit Breaker Triggered**
@@ -802,7 +802,7 @@ For detailed performance testing methodology, see [DAEMIGR-3901 Performance Test
    kill -USR2 <daemon-pid>
 
    # Monitor memory over time
-   watch -n 5 'ps aux | grep crewchief-maproom'
+   watch -n 5 'ps aux | grep maproom'
    ```
 
 4. **Security Incident (Credential Leak)**
@@ -907,7 +907,7 @@ For detailed security analysis, see [Security Review](../../.crewchief/projects/
             │   JSON-RPC over stdin/stdout
             │            │            │
 ┌───────────▼────────────▼────────────▼─────────────────────────┐
-│ crewchief-maproom serve (Rust daemon process)                 │
+│ maproom serve (Rust daemon process)                 │
 │                                                               │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │  JSON-RPC 2.0 Event Loop                             │   │
@@ -940,7 +940,7 @@ For detailed security analysis, see [Security Review](../../.crewchief/projects/
 
 ### Lifecycle Management
 
-1. **Daemon Start**: Client spawns `crewchief-maproom serve` subprocess
+1. **Daemon Start**: Client spawns `maproom serve` subprocess
 2. **Health Check**: Sends ping request to verify daemon is ready
 3. **Request Handling**: Routes search/ping requests via JSON-RPC
 4. **Auto-Restart**: Monitors process exit, restarts with exponential backoff
@@ -973,25 +973,25 @@ import { DaemonClient, ConnectionMode } from '@maproom/daemon-client'
 
 // Force socket mode
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
   mode: ConnectionMode.Socket,
 })
 
 // Force stdio mode
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
   mode: ConnectionMode.Stdio,
 })
 
 // Auto-detect (default)
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
   mode: ConnectionMode.Auto,
 })
 
 // Or simply omit mode to use platform default
 const client = new DaemonClient({
-  binaryPath: '/path/to/crewchief-maproom',
+  binaryPath: '/path/to/maproom',
 })
 ```
 
@@ -1044,7 +1044,7 @@ All connection modes provide the same functionality. The only differences are pe
 2. **Permission denied**
    ```
    Check: Is binary executable? (ls -l /path/to/binary)
-   Solution: chmod +x /path/to/crewchief-maproom
+   Solution: chmod +x /path/to/maproom
    ```
 
 3. **Database connection failure**
@@ -1056,7 +1056,7 @@ All connection modes provide the same functionality. The only differences are pe
 
 4. **Missing dependencies** (Linux)
    ```
-   Check: ldd /path/to/crewchief-maproom
+   Check: ldd /path/to/maproom
    Solution: Install missing shared libraries (libssl, libpq, etc)
    ```
 
@@ -1113,7 +1113,7 @@ const client = new DaemonClient({
 
 2. **Monitor process memory**
    ```bash
-   watch -n 5 'ps aux | grep crewchief-maproom'
+   watch -n 5 'ps aux | grep maproom'
    ```
 
 3. **Run with heap profiling** (if available)
@@ -1144,7 +1144,7 @@ const client = new DaemonClient({
 
 2. **Test manually**
    ```bash
-   MAPROOM_DATABASE_URL=postgresql://... /path/to/crewchief-maproom serve
+   MAPROOM_DATABASE_URL=postgresql://... /path/to/maproom serve
    ```
 
 3. **Check database connectivity**
@@ -1208,7 +1208,7 @@ const client = new DaemonClient({
 
 3. **Test daemon manually**
    ```bash
-   echo '{"jsonrpc":"2.0","method":"ping","id":1}' | crewchief-maproom serve
+   echo '{"jsonrpc":"2.0","method":"ping","id":1}' | maproom serve
    ```
 
 4. **Verify database schema**

@@ -1,6 +1,6 @@
-use crewchief_maproom::db::sqlite::SqliteStore;
-use crewchief_maproom::db::{ChunkRecord, FileRecord, VectorStore};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use maproom::db::sqlite::SqliteStore;
+use maproom::db::{ChunkRecord, FileRecord, VectorStore};
 use tempfile::NamedTempFile;
 use tokio::runtime::Runtime;
 

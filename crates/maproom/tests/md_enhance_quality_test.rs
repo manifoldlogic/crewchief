@@ -2,7 +2,7 @@
 ///
 /// Standalone quality tests that validate parser accuracy, hierarchy tracking,
 /// and code block detection without dependencies on other integration tests.
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::collections::HashMap;
 use std::fs;
 

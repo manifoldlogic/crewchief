@@ -4,7 +4,7 @@
 //! This test creates a file with 10,000 blank lines followed by 100 functions,
 //! forcing each doc comment extraction to walk back through thousands of lines.
 
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::time::Instant;
 
 /// Generate pathological C source: many blank lines followed by symbols

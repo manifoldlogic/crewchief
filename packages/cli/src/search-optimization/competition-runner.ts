@@ -137,7 +137,7 @@ Current value: ${sanitizeDbUrl(dbUrl)}
 ❌ Pre-flight validation failed: Base branch 'main' not indexed
 
 Fix: Run scan on base branch first
-$ crewchief-maproom scan --repo crewchief --worktree main --root /workspace
+$ maproom scan --repo crewchief --worktree main --root /workspace
 
 This is a one-time setup step. Subsequent scans will be fast.
     `.trim(),

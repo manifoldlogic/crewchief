@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::fs;
 
 /// Test parsing Google-style docstrings from a complete fixture file

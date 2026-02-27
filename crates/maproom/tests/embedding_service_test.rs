@@ -11,13 +11,11 @@
 //! Note: Most tests use mocked OpenAI client for deterministic results.
 //! Set OPENAI_API_KEY for real API integration tests.
 
-use crewchief_maproom::embedding::{
-    CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig,
-};
+use maproom::embedding::{CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig};
 
 /// Create a test configuration with small cache for testing.
 fn test_config() -> EmbeddingConfig {
-    use crewchief_maproom::embedding::ParallelConfig;
+    use maproom::embedding::ParallelConfig;
     EmbeddingConfig {
         provider: Provider::OpenAI,
         model: "text-embedding-3-small".to_string(),
@@ -43,7 +41,6 @@ async fn test_service_from_config(
     // For tests, we use from_env() which auto-configures the provider and cache
     Ok(EmbeddingService::from_env().await?)
 }
-
 
 // ============================================================================
 // EMBEDDING GENERATION TESTS
@@ -194,10 +191,9 @@ fn test_retry_config_validation() {
     assert_eq!(config.delay_for_attempt(6), 10000);
 }
 
-
 #[test]
 fn test_cost_calculation_accuracy() {
-    use crewchief_maproom::embedding::client::CostMetrics;
+    use maproom::embedding::client::CostMetrics;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     let metrics = CostMetrics {
@@ -227,7 +223,7 @@ fn test_cost_calculation_accuracy() {
 
 #[test]
 fn test_cost_tracking_precision() {
-    use crewchief_maproom::embedding::client::CostMetrics;
+    use maproom::embedding::client::CostMetrics;
     use std::sync::atomic::AtomicU64;
 
     let metrics = CostMetrics {
@@ -447,7 +443,7 @@ async fn test_real_api_retry_logic() {
 
 #[test]
 fn test_budget_warning_thresholds() {
-    use crewchief_maproom::embedding::cost_tracker::CostTracker;
+    use maproom::embedding::cost_tracker::CostTracker;
 
     let tracker = CostTracker::default_pricing(); // $0.00002/1K tokens
 
@@ -490,7 +486,7 @@ fn test_budget_warning_thresholds() {
 
 #[test]
 fn test_budget_ceiling_enforcement() {
-    use crewchief_maproom::embedding::cost_tracker::CostTracker;
+    use maproom::embedding::cost_tracker::CostTracker;
 
     let tracker = CostTracker::default_pricing();
     let max_cost = 1.0; // $1.00 ceiling

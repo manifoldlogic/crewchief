@@ -28,10 +28,10 @@ echo "Test database: $DB_PATH"
 echo ""
 echo "Building maproom binary..."
 cd /workspace/crates/maproom
-cargo build --bin crewchief-maproom --quiet
-MAPROOM_BIN="/workspace/target/debug/crewchief-maproom"
+cargo build --bin maproom --quiet
+MAPROOM_BIN="/workspace/target/debug/maproom"
 if [ ! -f "$MAPROOM_BIN" ]; then
-    echo -e "${RED}✗ Failed to build crewchief-maproom binary${NC}"
+    echo -e "${RED}✗ Failed to build maproom binary${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓${NC} Binary built: $MAPROOM_BIN"

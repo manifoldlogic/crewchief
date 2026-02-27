@@ -35,8 +35,8 @@
 //! # Example
 //!
 //! ```no_run
-//! use crewchief_maproom::search::cache::{SearchCache, CacheKey};
-//! use crewchief_maproom::search::FinalSearchResults;
+//! use maproom::search::cache::{SearchCache, CacheKey};
+//! use maproom::search::FinalSearchResults;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -143,6 +143,15 @@ pub struct SearchCache {
     expirations: Arc<AtomicU64>,
 }
 
+impl Default for SearchCache {
+    /// Create a new SearchCache with default capacity and TTL.
+    ///
+    /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
+    fn default() -> Self {
+        Self::new(DEFAULT_CACHE_SIZE)
+    }
+}
+
 impl SearchCache {
     /// Create a new SearchCache with specified capacity and TTL.
     ///
@@ -154,7 +163,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::SearchCache;
+    /// use maproom::search::cache::SearchCache;
     ///
     /// let cache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
     /// ```
@@ -185,19 +194,12 @@ impl SearchCache {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::SearchCache;
+    /// use maproom::search::cache::SearchCache;
     ///
     /// let cache = SearchCache::new(1000);
     /// ```
     pub fn new(capacity: usize) -> Self {
         Self::with_ttl(capacity, DEFAULT_TTL_SECONDS)
-    }
-
-    /// Create a new SearchCache with default capacity and TTL.
-    ///
-    /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
-    pub fn default() -> Self {
-        Self::new(DEFAULT_CACHE_SIZE)
     }
 
     /// Get a cached result by key.
@@ -212,7 +214,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```no_run
-    /// use crewchief_maproom::search::cache::{SearchCache, CacheKey};
+    /// use maproom::search::cache::{SearchCache, CacheKey};
     ///
     /// let cache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
@@ -259,8 +261,8 @@ impl SearchCache {
     /// # Example
     ///
     /// ```ignore
-    /// use crewchief_maproom::search::cache::{SearchCache, CacheKey};
-    /// use crewchief_maproom::search::FinalSearchResults;
+    /// use maproom::search::cache::{SearchCache, CacheKey};
+    /// use maproom::search::FinalSearchResults;
     ///
     /// let cache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
@@ -289,7 +291,7 @@ impl SearchCache {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::SearchCache;
+    /// use maproom::search::cache::SearchCache;
     ///
     /// let cache = SearchCache::new(1000);
     /// let stats = cache.stats();
@@ -460,7 +462,7 @@ impl CacheKey {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::search::cache::CacheKey;
+    /// use maproom::search::cache::CacheKey;
     ///
     /// let key1 = CacheKey::new("authenticate", 1, None, 10);
     /// let key2 = CacheKey::new("  AUTHENTICATE  ", 1, None, 10);

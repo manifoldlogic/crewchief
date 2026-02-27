@@ -23,9 +23,9 @@
 //!
 //! # Example
 //!
-//! ```no_run
-//! use crewchief_maproom::context::{ContextCache, ExpandOptions, CacheConfig};
-//! use crewchief_maproom::db::SqliteStore;
+//! ```ignore
+//! use maproom::context::{ContextCache, ExpandOptions, CacheConfig};
+//! use maproom::db::SqliteStore;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
@@ -109,7 +109,7 @@ impl CacheKey {
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::{ExpandOptions, hash_options};
+/// use maproom::context::{ExpandOptions, hash_options};
 ///
 /// let options1 = ExpandOptions::with_common();
 /// let options2 = ExpandOptions::with_common();

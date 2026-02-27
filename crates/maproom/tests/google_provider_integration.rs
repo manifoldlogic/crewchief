@@ -18,8 +18,8 @@
 //! All tests are marked with #[ignore] to prevent accidental execution in CI
 //! without proper credentials and quota management.
 
-use crewchief_maproom::embedding::google::{GoogleProvider, TaskType};
-use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use maproom::embedding::google::{GoogleProvider, TaskType};
+use maproom::embedding::provider::EmbeddingProvider;
 use std::env;
 use std::path::PathBuf;
 

@@ -3,7 +3,7 @@
 //! These tests validate end-to-end embedding generation with real API calls.
 //! Set OPENAI_API_KEY environment variable to run these tests.
 
-use crewchief_maproom::embedding::{
+use maproom::embedding::{
     cache::EmbeddingCache, CacheConfig, EmbeddingConfig, EmbeddingService, Provider, RetryConfig,
 };
 
@@ -11,7 +11,7 @@ use crewchief_maproom::embedding::{
 ///
 /// This uses environment variables if available, or returns None if no API key is set.
 fn test_config() -> Option<EmbeddingConfig> {
-    use crewchief_maproom::embedding::ParallelConfig;
+    use maproom::embedding::ParallelConfig;
     let api_key = std::env::var("OPENAI_API_KEY").ok()?;
 
     Some(EmbeddingConfig {

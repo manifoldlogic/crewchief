@@ -38,13 +38,13 @@ async function runMaproomForward(args: string[]) {
 
   if (!result.path) {
     console.error(
-      'crewchief-maproom not found. Options:\n' +
+      'maproom binary not found. Options:\n' +
         '1. Install globally: npm install -g @crewchief/cli\n' +
-        '2. Set CREWCHIEF_MAPROOM_BIN environment variable\n' +
+        '2. Set MAPROOM_BIN environment variable\n' +
         '3. Add maproomBinaryPath to crewchief.config.js\n\n' +
         'Resolution attempts:\n' +
         '- Environment: ' +
-        (process.env.CREWCHIEF_MAPROOM_BIN || 'not set') +
+        (process.env.MAPROOM_BIN || process.env.CREWCHIEF_MAPROOM_BIN || 'not set') +
         '\n' +
         '- Config: ' +
         (configPath || 'not configured') +

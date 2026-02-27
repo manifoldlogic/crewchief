@@ -74,7 +74,7 @@ Health Status: healthy
 ```
 Image: config-maproom-mcp
 Size: 122MB
-Binary: crewchief-maproom 0.1.0
+Binary: maproom 0.1.0
 Binary Size: 10MB
 ```
 

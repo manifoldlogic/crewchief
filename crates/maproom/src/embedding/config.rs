@@ -5,10 +5,11 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 /// Embedding provider type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Provider {
     /// OpenAI embedding API
+    #[default]
     OpenAI,
     /// Cohere embedding API
     Cohere,
@@ -18,12 +19,6 @@ pub enum Provider {
     Google,
     /// Local embedding model
     Local,
-}
-
-impl Default for Provider {
-    fn default() -> Self {
-        Self::OpenAI
-    }
 }
 
 impl std::str::FromStr for Provider {
@@ -110,12 +105,12 @@ impl EmbeddingConfig {
     /// # Arguments
     ///
     /// * `provider_override` - Optional provider to use if not specified in environment.
-    ///                        Applied before env var loading, so env vars take precedence.
+    ///   Applied before env var loading, so env vars take precedence.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use crewchief_maproom::embedding::config::{EmbeddingConfig, Provider};
+    /// use maproom::embedding::config::{EmbeddingConfig, Provider};
     ///
     /// // Factory-detected Ollama without env vars
     /// let config = EmbeddingConfig::from_env_with_provider(Some(Provider::Ollama))?;
@@ -502,7 +497,7 @@ impl ParallelConfig {
     /// # Examples
     ///
     /// ```rust
-    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    /// use maproom::embedding::config::ParallelConfig;
     ///
     /// let config = ParallelConfig::google_defaults();
     /// assert!(config.enabled);

@@ -22,10 +22,10 @@ The stale worktree cleanup feature removes database entries for git worktrees th
 
 ```bash
 # Preview stale worktrees (safe - no changes)
-crewchief-maproom db cleanup-stale --verbose
+maproom db cleanup-stale --verbose
 
 # Execute cleanup
-crewchief-maproom db cleanup-stale --confirm --verbose
+maproom db cleanup-stale --confirm --verbose
 ```
 
 ### Scheduling with Cron
@@ -40,7 +40,7 @@ crontab -e
 Add a weekly cleanup job:
 ```cron
 # Run stale worktree cleanup every Sunday at 2 AM
-0 2 * * 0 /path/to/crewchief-maproom db cleanup-stale --confirm >> /var/log/maproom-cleanup.log 2>&1
+0 2 * * 0 /path/to/maproom db cleanup-stale --confirm >> /var/log/maproom-cleanup.log 2>&1
 ```
 
 For production systems, use a wrapper script:
@@ -50,7 +50,7 @@ For production systems, use a wrapper script:
 # /usr/local/bin/maproom-cleanup.sh
 
 LOG_FILE="/var/log/maproom/cleanup-$(date +%Y%m%d).log"
-MAPROOM_BIN="/path/to/crewchief-maproom"
+MAPROOM_BIN="/path/to/maproom"
 
 echo "=== Cleanup started: $(date) ===" >> "$LOG_FILE"
 
@@ -81,7 +81,7 @@ echo "=== Cleanup finished: $(date) ===" >> "$LOG_FILE"
 
 Example in shell scripts:
 ```bash
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 case $? in
     0) echo "Cleanup completed successfully" ;;
     1) echo "ERROR: Cleanup failed" ; exit 1 ;;
@@ -102,7 +102,7 @@ esac
 Set via environment variable:
 ```bash
 export MAPROOM_DATABASE_URL="sqlite:///path/to/custom.db"
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 ```
 
 ### Multi-User Environments
@@ -121,13 +121,13 @@ Control verbosity with `RUST_LOG`:
 
 ```bash
 # Info level (default)
-RUST_LOG=info crewchief-maproom db cleanup-stale --verbose
+RUST_LOG=info maproom db cleanup-stale --verbose
 
 # Debug level (more details)
-RUST_LOG=debug crewchief-maproom db cleanup-stale --verbose
+RUST_LOG=debug maproom db cleanup-stale --verbose
 
 # Trace level (maximum detail)
-RUST_LOG=trace crewchief-maproom db cleanup-stale --verbose
+RUST_LOG=trace maproom db cleanup-stale --verbose
 ```
 
 ### Expected Log Output
@@ -191,17 +191,17 @@ For production databases:
 cp ~/.maproom/maproom.db ~/.maproom/maproom.db.$(date +%Y%m%d)
 
 # Run cleanup
-crewchief-maproom db cleanup-stale --confirm
+maproom db cleanup-stale --confirm
 
 # Verify
-crewchief-maproom status --repo myrepo
+maproom status --repo myrepo
 ```
 
 ### Audit Trail
 
 Maintain cleanup logs for audit purposes:
 ```bash
-crewchief-maproom db cleanup-stale --confirm --verbose 2>&1 | tee -a /var/log/maproom/audit.log
+maproom db cleanup-stale --confirm --verbose 2>&1 | tee -a /var/log/maproom/audit.log
 ```
 
 ## Future: Watch Integration
@@ -212,7 +212,7 @@ When watch integration is reimplemented, the following features will be availabl
 
 ```bash
 export MAPROOM_AUTO_CLEANUP=true
-crewchief-maproom watch
+maproom watch
 ```
 
 Behavior:
@@ -255,7 +255,7 @@ This documentation will be updated when watch integration is available.
 
 ### Getting Help
 
-1. Check logs: `RUST_LOG=debug crewchief-maproom db cleanup-stale --verbose`
+1. Check logs: `RUST_LOG=debug maproom db cleanup-stale --verbose`
 2. Verify database: `sqlite3 ~/.maproom/maproom.db ".schema"`
 3. Check documentation: `/docs/user-guide-cleanup.md`
 

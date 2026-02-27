@@ -77,8 +77,8 @@ impl CacheMaintenance {
     /// This should be spawned as a background task:
     /// ```no_run
     /// use std::sync::Arc;
-    /// use crewchief_maproom::cache::{CacheSystem, CacheConfig};
-    /// use crewchief_maproom::cache::maintenance::CacheMaintenance;
+    /// use maproom::cache::{CacheSystem, CacheConfig};
+    /// use maproom::cache::maintenance::CacheMaintenance;
     ///
     /// #[tokio::main]
     /// async fn main() {

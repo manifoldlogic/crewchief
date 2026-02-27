@@ -21,10 +21,8 @@
 //! 13. Edge weight computation edge cases
 //! 14. Preview truncation edge cases
 
-use crewchief_maproom::search::executor_types::SearchSource;
-use crewchief_maproom::search::results::{
-    ChunkSearchResult, ConfidenceSignals, RelatedChunkResult,
-};
+use maproom::search::executor_types::SearchSource;
+use maproom::search::results::{ChunkSearchResult, ConfidenceSignals, RelatedChunkResult};
 use std::collections::HashMap;
 
 // ============================================================================

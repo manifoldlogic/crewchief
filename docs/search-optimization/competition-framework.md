@@ -83,7 +83,7 @@ The competition runner now operates in three distinct phases:
 #### Base Branch Indexed
 - **What**: Verifies base branch has chunks in database
 - **How**: Runs `maproom status --repo <repo> --worktree <branch>`
-- **Failure**: "Base branch not indexed - run: crewchief-maproom scan..."
+- **Failure**: "Base branch not indexed - run: maproom scan..."
 
 #### Worktree Scanned
 - **What**: Ensures variant worktree has chunks indexed
@@ -230,7 +230,7 @@ $ pnpm tsx scripts/run-genetic-optimizer-ultra.ts
 **Fix:**
 Run scan on base branch first (one-time setup):
 ```bash
-crewchief-maproom scan --repo crewchief --worktree main --root /workspace
+maproom scan --repo crewchief --worktree main --root /workspace
 ```
 
 This takes 30-60 seconds initially. Subsequent variant scans will be fast (5-15s) due to embedding reuse.
@@ -250,7 +250,7 @@ This takes 30-60 seconds initially. Subsequent variant scans will be fast (5-15s
 
 2. Verify binary is in PATH:
    ```bash
-   which crewchief-maproom
+   which maproom
    ```
 
 3. Check database permissions:

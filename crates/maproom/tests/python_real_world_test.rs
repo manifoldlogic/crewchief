@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::fs;
 
 /// Test Django models.py parsing with real-world patterns

@@ -35,7 +35,7 @@ describe('Search Confidence Integration Tests', () => {
 
     if (!existsSync(dbPath)) {
       console.warn(`Warning: Test database not found at ${dbPath} - skipping integration tests`)
-      console.warn('   To run these tests, ensure the database is indexed with: crewchief-maproom scan')
+      console.warn('   To run these tests, ensure the database is indexed with: maproom scan')
       return
     }
 

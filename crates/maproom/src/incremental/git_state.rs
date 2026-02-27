@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use crewchief_maproom::incremental::git_state::GitState;
+//! use maproom::incremental::git_state::GitState;
 //! use std::path::Path;
 //!
 //! let output = "M  src/main.rs\n?? new_file.rs\n";
@@ -60,21 +60,12 @@ pub enum FileStatus {
 ///
 /// GitState tracks file statuses parsed from `git status --porcelain` output
 /// and supports diffing against another state to detect changes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GitState {
     /// Map of relative path to file status.
     files: HashMap<PathBuf, FileStatus>,
     /// When this state was captured.
     captured_at: Option<Instant>,
-}
-
-impl Default for GitState {
-    fn default() -> Self {
-        Self {
-            files: HashMap::new(),
-            captured_at: None,
-        }
-    }
 }
 
 impl GitState {

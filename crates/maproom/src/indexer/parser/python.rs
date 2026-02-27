@@ -196,12 +196,10 @@ fn extract_python_function(
         } else {
             "method"
         }
+    } else if is_async {
+        "async_func"
     } else {
-        if is_async {
-            "async_func"
-        } else {
-            "func"
-        }
+        "func"
     };
 
     // Build metadata object

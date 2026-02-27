@@ -7,9 +7,9 @@
 //!
 //! Success criteria: ≥85% precision for same-file calls (Phase 1)
 
-use crewchief_maproom::db::SqliteStore;
-use crewchief_maproom::db::StoreMigration;
-use crewchief_maproom::indexer::scan_worktree;
+use maproom::db::SqliteStore;
+use maproom::db::StoreMigration;
+use maproom::indexer::scan_worktree;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};

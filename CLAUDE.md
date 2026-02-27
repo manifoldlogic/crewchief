@@ -7,7 +7,7 @@ Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, port
 
 ## Key Concepts
 
-**Two CLIs**: `crewchief` (TypeScript) for worktree/agent management, `crewchief-maproom` (Rust) for indexing/search/daemon.
+**Two CLIs**: `crewchief` (TypeScript) for worktree/agent management, `maproom` (Rust) for indexing/search/daemon.
 
 **"Worktree" overloading**: Git worktrees are filesystem checkouts. Maproom worktrees are database records tracking indexed branches (1:1 with branches, not git worktrees).
 

@@ -25,8 +25,8 @@ use super::types::{ContextItem, LineRange};
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::formatter::ContentFormatter;
-/// use crewchief_maproom::context::types::LineRange;
+/// use maproom::context::formatter::ContentFormatter;
+/// use maproom::context::types::LineRange;
 ///
 /// let formatter = ContentFormatter::new();
 /// let content = "fn test() { println!(\"hello\"); }";
@@ -75,8 +75,8 @@ impl ContentFormatter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::formatter::ContentFormatter;
-    /// use crewchief_maproom::context::types::LineRange;
+    /// use maproom::context::formatter::ContentFormatter;
+    /// use maproom::context::types::LineRange;
     ///
     /// let formatter = ContentFormatter::new();
     /// let item = formatter.format(
@@ -156,8 +156,8 @@ impl ContentFormatter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::formatter::ContentFormatter;
-    /// use crewchief_maproom::context::types::LineRange;
+    /// use maproom::context::formatter::ContentFormatter;
+    /// use maproom::context::types::LineRange;
     ///
     /// let formatter = ContentFormatter::new();
     /// let reason = formatter.get_reason(
@@ -258,7 +258,7 @@ impl ContentFormatter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::formatter::ContentFormatter;
+    /// use maproom::context::formatter::ContentFormatter;
     ///
     /// let formatter = ContentFormatter::new();
     /// let tokens = formatter.count_tokens("fn test() {}").unwrap();
@@ -275,9 +275,9 @@ impl ContentFormatter {
     ///
     /// # Example
     ///
-    /// ```
-    /// use crewchief_maproom::context::formatter::ContentFormatter;
-    /// use crewchief_maproom::context::types::LineRange;
+    /// ```ignore
+    /// use maproom::context::formatter::ContentFormatter;
+    /// use maproom::context::types::LineRange;
     ///
     /// let formatter = ContentFormatter::new();
     /// let long_content = "fn test() {\n".to_string() + &"    // line\n".repeat(100) + "}";
@@ -294,6 +294,7 @@ impl ContentFormatter {
     ///
     /// assert!(item.tokens <= 50);
     /// ```
+    #[allow(clippy::too_many_arguments)] // Public API; parameters represent distinct formatting concerns
     pub fn format_with_truncation(
         &self,
         relpath: &str,

@@ -140,7 +140,8 @@ async fn get_database_size() -> Option<u64> {
 /// Format status as human-readable text
 pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
     if status.repos.is_empty() {
-        return "No repositories indexed yet.\n\nRun 'crewchief-maproom scan' to index a repository.".to_string();
+        return "No repositories indexed yet.\n\nRun 'maproom scan' to index a repository."
+            .to_string();
     }
 
     let mut output = String::new();
@@ -224,14 +225,12 @@ pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
 fn format_number(n: i64) -> String {
     let s = n.to_string();
     let mut result = String::new();
-    let mut count = 0;
 
-    for c in s.chars().rev() {
+    for (count, c) in s.chars().rev().enumerate() {
         if count > 0 && count % 3 == 0 {
             result.insert(0, ',');
         }
         result.insert(0, c);
-        count += 1;
     }
 
     result

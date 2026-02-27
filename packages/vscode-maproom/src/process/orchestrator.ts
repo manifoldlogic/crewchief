@@ -1,5 +1,5 @@
 /**
- * Process orchestrator for crewchief-maproom watch process
+ * Process orchestrator for maproom watch process
  *
  * Manages the lifecycle of a single unified watch process that handles:
  * - File change monitoring and indexing
@@ -117,7 +117,7 @@ export class ProcessOrchestrator extends EventEmitter {
     // Detect platform and construct binary path
     try {
       const platform = detectPlatform()
-      const binaryName = `crewchief-maproom${getBinaryExtension()}`
+      const binaryName = `maproom${getBinaryExtension()}`
       this.binaryPath = path.join(config.extensionRoot, 'bin', platform, binaryName)
 
       this.log(`Process orchestrator initialized`)
@@ -317,7 +317,7 @@ export class ProcessOrchestrator extends EventEmitter {
   private async buildEnvironment(): Promise<NodeJS.ProcessEnv> {
     const { secretsManager, provider, databaseUrl } = this.config
 
-    // Build DATABASE_URL for crewchief-maproom binary
+    // Build DATABASE_URL for maproom binary
     // Note: Old binaries use DATABASE_URL, new binaries use MAPROOM_DATABASE_URL
     // We set both for compatibility
     const resolvedDatabaseUrl = databaseUrl || 'sqlite://~/.maproom/maproom.db'

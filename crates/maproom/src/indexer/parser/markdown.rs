@@ -207,8 +207,7 @@ fn extract_code_block(
                     if let Ok(text) = child.utf8_text(source.as_bytes()) {
                         // Extract just the language name (first word) from info_string
                         // This handles cases like "typescript {1-3}" or "rust copy"
-                        let lang_text =
-                            text.trim().split_whitespace().next().unwrap_or(text.trim());
+                        let lang_text = text.split_whitespace().next().unwrap_or(text.trim());
                         language = Some(lang_text.to_string());
                     }
                 }
@@ -355,7 +354,7 @@ fn extract_markdown_links(source: &str, chunks: &mut Vec<SymbolChunk>) {
     let link_pattern = Regex::new(r"(?m)(!?)\[([^\]]*)\]\(([^)]+)\)").unwrap();
 
     for cap in link_pattern.captures_iter(source) {
-        let is_image = cap.get(1).map_or(false, |m| m.as_str() == "!");
+        let is_image = cap.get(1).is_some_and(|m| m.as_str() == "!");
         let link_text = cap.get(2).map_or("", |m| m.as_str());
         let target = cap.get(3).map_or("", |m| m.as_str());
 

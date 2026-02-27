@@ -6,14 +6,14 @@
 //! - Coexistence of multiple embedding dimensions (768, 1024, 1536)
 //! - Migration #10 idempotency
 
-use crewchief_maproom::db::sqlite::hybrid::HybridWeights;
-use crewchief_maproom::db::sqlite::SqliteStore;
-use crewchief_maproom::db::traits::StoreChunks;
-use crewchief_maproom::db::traits::StoreCore;
-use crewchief_maproom::db::traits::StoreMigration;
-use crewchief_maproom::db::traits::StoreSearch;
-use crewchief_maproom::db::StoreEmbeddings;
-use crewchief_maproom::db::{ChunkRecord, FileRecord};
+use maproom::db::sqlite::hybrid::HybridWeights;
+use maproom::db::sqlite::SqliteStore;
+use maproom::db::traits::StoreChunks;
+use maproom::db::traits::StoreCore;
+use maproom::db::traits::StoreMigration;
+use maproom::db::traits::StoreSearch;
+use maproom::db::StoreEmbeddings;
+use maproom::db::{ChunkRecord, FileRecord};
 use rusqlite::Connection;
 
 // Reference the sqlite-vec extension init function from the main crate
@@ -213,7 +213,7 @@ async fn test_e2e_1024_dim_workflow() {
 #[tokio::test]
 async fn test_migration_10_idempotent() {
     // Verify Migration #10 (add_vec_code_1024) can be run multiple times safely
-    use crewchief_maproom::db::sqlite::migrations::MigrationRunner;
+    use maproom::db::sqlite::migrations::MigrationRunner;
 
     // Create a test connection with sqlite-vec extension loaded
     let mut conn = setup_test_connection();

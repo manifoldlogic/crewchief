@@ -28,9 +28,9 @@
 //! - nomic-embed-text model pulled
 //! - Tests marked `#[ignore]` - run manually when Ollama available
 
-use crewchief_maproom::embedding::config::ParallelConfig;
-use crewchief_maproom::embedding::ollama::OllamaProvider;
-use crewchief_maproom::embedding::provider::EmbeddingProvider;
+use maproom::embedding::config::ParallelConfig;
+use maproom::embedding::ollama::OllamaProvider;
+use maproom::embedding::provider::EmbeddingProvider;
 
 /// Helper: Generate test texts with identifiable content
 fn generate_test_texts(n: usize) -> Vec<String> {

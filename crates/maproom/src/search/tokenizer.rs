@@ -47,7 +47,7 @@ impl Tokenizer {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::search::Tokenizer;
+    /// use maproom::search::Tokenizer;
     ///
     /// let tokenizer = Tokenizer::new();
     /// let tokens = tokenizer.tokenize("authenticate user");

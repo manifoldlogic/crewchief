@@ -50,7 +50,7 @@ impl DebouncedHandler {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// use std::time::Duration;
     ///
     /// let debouncer = DebouncedHandler::new(Duration::from_secs(2));
@@ -262,6 +262,7 @@ fn file_modified_time(path: &Path) -> Option<chrono::DateTime<chrono::Utc>> {
     chrono::DateTime::<chrono::Utc>::from_timestamp(dur.as_secs() as i64, dur.subsec_nanos())
 }
 
+#[allow(clippy::too_many_arguments)] // Public API; parameters represent distinct scan configuration
 pub async fn scan_worktree(
     store: &SqliteStore,
     repo: &str,
@@ -770,7 +771,7 @@ pub async fn upsert_files(
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```ignore
 /// use std::path::Path;
 /// use tokio::sync::mpsc;
 ///

@@ -27,7 +27,7 @@ fi
 # Build the binary
 echo "Building maproom binary..."
 cargo build --release
-MAPROOM_BIN="./target/release/crewchief-maproom"
+MAPROOM_BIN="./target/release/maproom"
 
 if [[ ! -f "$MAPROOM_BIN" ]]; then
     echo "ERROR: Binary not found at $MAPROOM_BIN"

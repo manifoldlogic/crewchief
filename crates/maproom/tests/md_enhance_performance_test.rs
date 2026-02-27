@@ -2,7 +2,7 @@
 ///
 /// Standalone performance tests that validate parsing performance
 /// without dependencies on other integration tests.
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 use std::fs;
 use std::time::Instant;
 

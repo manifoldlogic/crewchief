@@ -719,7 +719,7 @@ feature_flags:
 - [Maproom Architecture Documentation](../.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md)
 - [Fusion Strategies Guide](../src/search/fusion/README.md)
 - [Performance Tuning Guide](../docs/performance_tuning.md)
-- [API Reference](https://docs.rs/crewchief-maproom)
+- [API Reference](https://docs.rs/maproom)
 
 ## Support
 

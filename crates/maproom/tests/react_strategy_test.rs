@@ -7,7 +7,7 @@
 //! - Handles JSX parent/child relationships
 //! - Assembles complete context bundles within budget
 
-use crewchief_maproom::context::{
+use maproom::context::{
     detectors::{ComponentDetector, HookDetector, JsxRelationshipDetector},
     types::ExpandOptions,
 };
@@ -421,4 +421,3 @@ mod expand_options_tests {
         assert!(options.jsx_children);
     }
 }
-

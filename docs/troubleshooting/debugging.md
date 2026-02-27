@@ -8,16 +8,16 @@ Tools and techniques for diagnosing Maproom issues.
 
 ```bash
 # Info level (default)
-RUST_LOG=info crewchief-maproom serve
+RUST_LOG=info maproom serve
 
 # Debug level (verbose)
-RUST_LOG=debug crewchief-maproom serve
+RUST_LOG=debug maproom serve
 
 # Trace level (very verbose)
-RUST_LOG=trace crewchief-maproom serve
+RUST_LOG=trace maproom serve
 
 # Module-specific logging
-RUST_LOG=crewchief_maproom::search=debug crewchief-maproom serve
+RUST_LOG=crewchief_maproom::search=debug maproom serve
 ```
 
 ### MCP Server
@@ -141,10 +141,10 @@ sqlite3 ~/.maproom/maproom.db "PRAGMA wal_checkpoint(TRUNCATE)"
 
 ```bash
 # Find daemon processes
-pgrep -f "crewchief-maproom"
+pgrep -f "maproom"
 
 # Full process info
-ps aux | grep crewchief-maproom
+ps aux | grep maproom
 
 # Check file handles
 lsof ~/.maproom/maproom.db
@@ -154,10 +154,10 @@ lsof ~/.maproom/maproom.db
 
 ```bash
 # Graceful kill
-pkill -TERM -f "crewchief-maproom serve"
+pkill -TERM -f "maproom serve"
 
 # Force kill if needed
-pkill -9 -f "crewchief-maproom serve"
+pkill -9 -f "maproom serve"
 ```
 
 ## Network Debugging
@@ -205,13 +205,13 @@ WARN search: no embeddings found, falling back to FTS
 
 ```bash
 # Search errors only
-RUST_LOG=error crewchief-maproom serve 2>&1 | grep -i error
+RUST_LOG=error maproom serve 2>&1 | grep -i error
 
 # Embedding related
-RUST_LOG=debug crewchief-maproom serve 2>&1 | grep embedding
+RUST_LOG=debug maproom serve 2>&1 | grep embedding
 
 # Search queries
-RUST_LOG=info crewchief-maproom serve 2>&1 | grep "search:"
+RUST_LOG=info maproom serve 2>&1 | grep "search:"
 ```
 
 ## Performance Profiling
@@ -220,7 +220,7 @@ RUST_LOG=info crewchief-maproom serve 2>&1 | grep "search:"
 
 ```bash
 # Time a scan
-time crewchief-maproom scan /path/to/repo
+time maproom scan /path/to/repo
 
 # Time a search (via daemon)
 time curl -X POST ... '{"method":"search",...}'
@@ -230,7 +230,7 @@ time curl -X POST ... '{"method":"search",...}'
 
 ```bash
 # Monitor memory
-watch -n 1 'ps -o pid,rss,comm -p $(pgrep -f crewchief-maproom)'
+watch -n 1 'ps -o pid,rss,comm -p $(pgrep -f maproom)'
 
 # Check system memory
 free -h
@@ -242,33 +242,33 @@ free -h
 
 ```bash
 # Kill all processes
-pkill -f crewchief-maproom
+pkill -f maproom
 
 # Checkpoint WAL
 sqlite3 ~/.maproom/maproom.db "PRAGMA wal_checkpoint(TRUNCATE)"
 
 # Restart clean
-crewchief-maproom serve
+maproom serve
 ```
 
 ### Hard Reset (Fresh Start)
 
 ```bash
 # Stop everything
-pkill -f crewchief-maproom
+pkill -f maproom
 
 # Remove database
 rm ~/.maproom/maproom.db*
 
 # Re-index
-crewchief-maproom scan /path/to/repo
+maproom scan /path/to/repo
 ```
 
 ### Selective Re-index
 
 ```bash
 # Re-index specific files
-crewchief-maproom upsert \
+maproom upsert \
   --paths "src/auth/*.ts" \
   --commit HEAD \
   --repo myproject \
@@ -282,7 +282,7 @@ When reporting bugs, include:
 
 1. **Environment info:**
    ```bash
-   crewchief-maproom --version
+   maproom --version
    ollama --version
    sqlite3 --version
    uname -a
@@ -290,7 +290,7 @@ When reporting bugs, include:
 
 2. **Debug logs:**
    ```bash
-   RUST_LOG=debug crewchief-maproom serve 2>&1 | tee debug.log
+   RUST_LOG=debug maproom serve 2>&1 | tee debug.log
    ```
 
 3. **Database state:**

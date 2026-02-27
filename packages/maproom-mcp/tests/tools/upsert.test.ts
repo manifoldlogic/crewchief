@@ -293,7 +293,7 @@ describe('Binary Discovery', () => {
 
   it('should include system PATH candidates', () => {
     const candidates = getBinarycandidates()
-    const hasSysPath = candidates.some((c) => c.cmd === 'crewchief-maproom' || c.cmd === 'crewchief')
+    const hasSysPath = candidates.some((c) => c.cmd === 'maproom' || c.cmd === 'crewchief')
     expect(hasSysPath).toBe(true)
   })
 })
@@ -339,7 +339,7 @@ describe('Process Error Handling', () => {
 describe('Upsert Tool - Error Messages', () => {
   it('should provide clear error for BINARY_NOT_FOUND', () => {
     const error = new ProcessError(
-      'crewchief-maproom binary not found',
+      'maproom binary not found',
       'BINARY_NOT_FOUND'
     )
     expect(error.message).toContain('binary not found')

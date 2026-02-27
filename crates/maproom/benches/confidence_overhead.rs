@@ -9,10 +9,10 @@
 //! cargo bench --bench confidence_overhead
 //! ```
 
-use crewchief_maproom::search::confidence::compute_result_confidence;
-use crewchief_maproom::search::executor_types::SearchSource;
-use crewchief_maproom::search::fusion::FusedResult;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use maproom::search::confidence::compute_result_confidence;
+use maproom::search::executor_types::SearchSource;
+use maproom::search::fusion::FusedResult;
 use std::collections::HashMap;
 
 /// Generate realistic FusedResult for benchmarking.

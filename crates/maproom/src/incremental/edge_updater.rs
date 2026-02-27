@@ -45,9 +45,9 @@ use std::sync::Arc;
 ///
 /// # Example
 ///
-/// ```no_run
-/// use crewchief_maproom::db::create_pool;
-/// use crewchief_maproom::incremental::EdgeUpdater;
+/// ```ignore
+/// use maproom::db::create_pool;
+/// use maproom::incremental::EdgeUpdater;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -99,9 +99,9 @@ impl EdgeUpdater {
     ///
     /// # Example
     ///
-    /// ```no_run
-    /// # use crewchief_maproom::db::create_pool;
-    /// # use crewchief_maproom::incremental::EdgeUpdater;
+    /// ```ignore
+    /// # use maproom::db::create_pool;
+    /// # use maproom::incremental::EdgeUpdater;
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;

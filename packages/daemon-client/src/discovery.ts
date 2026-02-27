@@ -17,7 +17,7 @@ import { DaemonStartupError, DaemonLockError } from './errors.js'
  * Configuration for daemon discovery and spawning
  */
 export interface DiscoveryConfig {
-  /** Path to crewchief-maproom binary */
+  /** Path to maproom binary */
   binaryPath: string
   /** Unix socket path for communication */
   socketPath: string
@@ -35,7 +35,7 @@ export interface DiscoveryConfig {
 export function getDefaultConfig(): DiscoveryConfig {
   const uid = process.getuid?.() ?? 0
   return {
-    binaryPath: 'crewchief-maproom', // Assume in PATH
+    binaryPath: 'maproom', // Assume in PATH
     socketPath: `/tmp/maproom-${uid}.sock`,
     lockPath: `/tmp/maproom-${uid}.lock`,
     startupTimeout: 10000, // 10 seconds

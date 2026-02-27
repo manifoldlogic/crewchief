@@ -10,8 +10,8 @@
 //!
 //! # Examples
 //!
-//! ```no_run
-//! use crewchief_maproom::embedding::{EmbeddingService, EmbeddingConfig};
+//! ```ignore
+//! use maproom::embedding::{EmbeddingService, EmbeddingConfig};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {

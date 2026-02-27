@@ -88,8 +88,8 @@ fn error_details_from_anyhow(error: &anyhow::Error) -> SearchErrorDetails {
             stage: PipelineStage::SearchExecution,
             context: HashMap::from([("error".to_string(), error_str.clone())]),
             suggestions: vec![
-                "Check that the repository is indexed: crewchief-maproom status".to_string(),
-                "Run a scan to index the repository: crewchief-maproom scan".to_string(),
+                "Check that the repository is indexed: maproom status".to_string(),
+                "Run a scan to index the repository: maproom scan".to_string(),
             ],
         };
     }
@@ -103,7 +103,7 @@ fn error_details_from_anyhow(error: &anyhow::Error) -> SearchErrorDetails {
                 context: HashMap::from([("error".to_string(), error_str.clone())]),
                 suggestions: vec![
                     "Check database connectivity".to_string(),
-                    "Restart the maproom daemon: crewchief-maproom serve".to_string(),
+                    "Restart the maproom daemon: maproom serve".to_string(),
                 ],
             };
         } else {
@@ -113,7 +113,7 @@ fn error_details_from_anyhow(error: &anyhow::Error) -> SearchErrorDetails {
                 context: HashMap::from([("error".to_string(), error_str.clone())]),
                 suggestions: vec![
                     "Check database connectivity and permissions".to_string(),
-                    "Verify repository is indexed: crewchief-maproom status".to_string(),
+                    "Verify repository is indexed: maproom status".to_string(),
                 ],
             };
         }
@@ -339,12 +339,9 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
             }
         }
         "status" => {
-            let params: StatusParams = match serde_json::from_value(
-                request.params.clone().unwrap_or(serde_json::Value::Null),
-            ) {
-                Ok(p) => p,
-                Err(_) => StatusParams::default(),
-            };
+            let params: StatusParams =
+                serde_json::from_value(request.params.clone().unwrap_or(serde_json::Value::Null))
+                    .unwrap_or_default();
 
             match execute_status(state, params).await {
                 Ok(result) => JsonRpcResponse::success(id, serde_json::to_value(result).unwrap()),

@@ -857,7 +857,7 @@ describe('Setup Wizard', () => {
         const result = await showNoSqliteGuidance()
 
         expect(result).toBe(true)
-        expect(lastClipboardText).toBe('crewchief-maproom scan /my/workspace')
+        expect(lastClipboardText).toBe('maproom scan /my/workspace')
         expect(lastInfoMessage).toContain('copied to clipboard')
       })
 
@@ -868,7 +868,7 @@ describe('Setup Wizard', () => {
         const result = await showNoSqliteGuidance()
 
         expect(result).toBe(true)
-        expect(lastClipboardText).toBe('crewchief-maproom scan /path/to/your/repo')
+        expect(lastClipboardText).toBe('maproom scan /path/to/your/repo')
       })
 
       it('should open terminal when selected', async () => {
@@ -880,7 +880,7 @@ describe('Setup Wizard', () => {
         expect(result).toBe(true)
         expect(createdTerminals).toHaveLength(1)
         expect(createdTerminals[0].name).toBe('Maproom Setup')
-        expect(createdTerminals[0].text).toContain('crewchief-maproom scan')
+        expect(createdTerminals[0].text).toContain('maproom scan')
       })
 
       it('should prompt for file when "Choose Existing File" selected', async () => {

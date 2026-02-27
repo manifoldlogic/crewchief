@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-build.yml
     with:
       package_name: vscode-extension
-      binary_name: crewchief-maproom
+      binary_name: maproom
       crate_path: crates/maproom
 
   # Job 2: Build TypeScript using proven reusable workflow
@@ -93,7 +93,7 @@ jobs:
         run: |
           echo "Checking Rust binaries..."
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            BINARY="packages/vscode-maproom/bin/$platform/crewchief-maproom"
+            BINARY="packages/vscode-maproom/bin/$platform/maproom"
             if [ ! -f "$BINARY" ]; then
               echo "ERROR: Missing binary for $platform"
               exit 1

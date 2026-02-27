@@ -17,9 +17,9 @@
 //! # Example
 //!
 //! ```ignore
-//! use crewchief_maproom::search::warming::CacheWarmer;
-//! use crewchief_maproom::search::SearchCache;
-//! use crewchief_maproom::search::SearchPipeline;
+//! use maproom::search::warming::CacheWarmer;
+//! use maproom::search::SearchCache;
+//! use maproom::search::SearchPipeline;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]

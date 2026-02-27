@@ -1,4 +1,4 @@
-use crewchief_maproom::indexer::parser;
+use maproom::indexer::parser;
 
 #[test]
 fn test_ruby_class_with_methods() {

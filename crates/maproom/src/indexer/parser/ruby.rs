@@ -282,10 +282,8 @@ fn extract_ruby_doc_comment(source: &str, node: Node) -> Option<String> {
             // Strip "# " or "#" prefix
             let comment = if let Some(stripped) = line.strip_prefix("# ") {
                 stripped
-            } else if let Some(stripped) = line.strip_prefix('#') {
-                stripped
             } else {
-                ""
+                line.strip_prefix('#').unwrap_or_default()
             };
             doc_lines.insert(0, comment);
         } else if !line.is_empty() {

@@ -62,7 +62,7 @@ pub struct EvaluationMetrics {
 ///
 /// # Example
 /// ```
-/// use crewchief_maproom::evaluation::{RankedResult, calculate_precision_at_k};
+/// use maproom::evaluation::{RankedResult, calculate_precision_at_k};
 ///
 /// let results = vec![
 ///     RankedResult { id: 1, relevant: true, relevance_grade: 3 },
@@ -101,7 +101,7 @@ pub fn calculate_precision_at_k(results: &[RankedResult], k: usize) -> f64 {
 ///
 /// # Example
 /// ```
-/// use crewchief_maproom::evaluation::{RankedResult, calculate_recall_at_k};
+/// use maproom::evaluation::{RankedResult, calculate_recall_at_k};
 ///
 /// let results = vec![
 ///     RankedResult { id: 1, relevant: true, relevance_grade: 3 },
@@ -142,7 +142,7 @@ pub fn calculate_recall_at_k(results: &[RankedResult], k: usize, total_relevant:
 ///
 /// # Example
 /// ```
-/// use crewchief_maproom::evaluation::{RankedResult, calculate_ndcg_at_k};
+/// use maproom::evaluation::{RankedResult, calculate_ndcg_at_k};
 ///
 /// let results = vec![
 ///     RankedResult { id: 1, relevant: true, relevance_grade: 3 }, // Highly relevant
@@ -208,7 +208,7 @@ pub fn calculate_ndcg_at_k(results: &[RankedResult], k: usize) -> f64 {
 ///
 /// # Example
 /// ```
-/// use crewchief_maproom::evaluation::{RankedResult, calculate_mrr};
+/// use maproom::evaluation::{RankedResult, calculate_mrr};
 ///
 /// let results = vec![
 ///     RankedResult { id: 1, relevant: false, relevance_grade: 0 },
@@ -242,7 +242,7 @@ pub fn calculate_mrr(results: &[RankedResult]) -> f64 {
 ///
 /// # Example
 /// ```
-/// use crewchief_maproom::evaluation::{RankedResult, calculate_all_metrics};
+/// use maproom::evaluation::{RankedResult, calculate_all_metrics};
 ///
 /// let results = vec![
 ///     RankedResult { id: 1, relevant: true, relevance_grade: 3 },

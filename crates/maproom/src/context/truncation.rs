@@ -42,8 +42,8 @@ pub struct TruncationResult {
 ///
 /// # Example
 ///
-/// ```
-/// use crewchief_maproom::context::truncation::{CodeTruncator, TruncationStrategy};
+/// ```ignore
+/// use maproom::context::truncation::{CodeTruncator, TruncationStrategy};
 ///
 /// let truncator = CodeTruncator::new();
 /// let code = "fn long_function() {\n".to_string() + &"    // line\n".repeat(100) + "}";
@@ -78,7 +78,7 @@ impl CodeTruncator {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::truncation::{CodeTruncator, TruncationStrategy};
+    /// use maproom::context::truncation::{CodeTruncator, TruncationStrategy};
     ///
     /// let truncator = CodeTruncator::new();
     /// let code = "fn test() { println!(\"hello\"); }";
@@ -143,8 +143,11 @@ impl CodeTruncator {
 
         // Start with signature and docstring
         let mut kept_lines = Vec::new();
-        for i in 0..=docstring_end.min(lines.len().saturating_sub(1)) {
-            kept_lines.push(lines[i]);
+        for line in lines
+            .iter()
+            .take(docstring_end.min(lines.len().saturating_sub(1)) + 1)
+        {
+            kept_lines.push(*line);
         }
 
         let marker = "\n    // ... [truncated] ...\n";

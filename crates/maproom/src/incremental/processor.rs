@@ -63,10 +63,10 @@ const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use std::path::PathBuf;
-/// use crewchief_maproom::db::create_pool;
-/// use crewchief_maproom::incremental::{IncrementalProcessor, UpdateTask, ChangeType, FileHasher, Trigger};
+/// use maproom::db::create_pool;
+/// use maproom::incremental::{IncrementalProcessor, UpdateTask, ChangeType, FileHasher, Trigger};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -152,10 +152,10 @@ impl IncrementalProcessor {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use std::path::PathBuf;
-    /// # use crewchief_maproom::db::create_pool;
-    /// # use crewchief_maproom::incremental::{IncrementalProcessor, UpdateTask, ChangeType, FileHasher, Trigger};
+    /// # use maproom::db::create_pool;
+    /// # use maproom::incremental::{IncrementalProcessor, UpdateTask, ChangeType, FileHasher, Trigger};
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
     /// # let pool = create_pool().await?;

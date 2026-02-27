@@ -22,7 +22,7 @@ Agents use this: exit 0 → process results, exit 1 → report/retry, exit 2 →
 
 ## Binary Output
 
-Built to `../../packages/cli/bin/<platform>/crewchief-maproom`:
+Built to `../../packages/cli/bin/<platform>/maproom`:
 - Platforms: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64
 
 ## Pitfalls

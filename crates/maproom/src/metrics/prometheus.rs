@@ -19,7 +19,7 @@ use tracing::{error, info};
 ///
 /// # Example
 /// ```no_run
-/// use crewchief_maproom::metrics::init_metrics_server;
+/// use maproom::metrics::init_metrics_server;
 ///
 /// #[tokio::main]
 /// async fn main() {

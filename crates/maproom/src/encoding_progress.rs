@@ -2521,7 +2521,7 @@ mod integration_tests {
 /// These tests validate that progress queries complete in <500ms even with 100K chunks,
 /// confirming the "typical repository" performance assumption from the design plan.
 ///
-/// Run with: cargo test --release -p crewchief-maproom -- --ignored --nocapture benchmark_large_repository
+/// Run with: cargo test --release -p maproom -- --ignored --nocapture benchmark_large_repository
 #[cfg(test)]
 mod benchmark_tests {
     use super::*;
@@ -2652,7 +2652,7 @@ mod benchmark_tests {
     /// Performance benchmark: validates encoding progress queries complete in <500ms
     /// with 100K chunks distributed across 10 repos.
     ///
-    /// Run with: cargo test --release -p crewchief-maproom -- --ignored --nocapture benchmark_large_repository
+    /// Run with: cargo test --release -p maproom -- --ignored --nocapture benchmark_large_repository
     #[tokio::test]
     #[ignore]
     async fn benchmark_large_repository() {

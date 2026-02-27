@@ -3,10 +3,8 @@
 //! These tests verify that the scoring system correctly combines multiple
 //! factors and produces expected results in realistic scenarios.
 
-use crewchief_maproom::context::graph::EdgeType;
-use crewchief_maproom::context::importance::{
-    ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig,
-};
+use maproom::context::graph::EdgeType;
+use maproom::context::importance::{ChunkMetadata, ImportanceScorer, Relationship, ScoringConfig};
 
 #[test]
 fn test_integration_basic_scoring() {

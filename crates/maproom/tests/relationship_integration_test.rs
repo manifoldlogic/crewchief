@@ -5,11 +5,9 @@
 //! These tests validate that related chunks are correctly discovered and
 //! included in search results when include_related=true.
 
-use crewchief_maproom::search::executor_types::SearchSource;
-use crewchief_maproom::search::results::{
-    ChunkSearchResult, ConfidenceSignals, RelatedChunkResult,
-};
-use crewchief_maproom::search::SearchOptions;
+use maproom::search::executor_types::SearchSource;
+use maproom::search::results::{ChunkSearchResult, ConfidenceSignals, RelatedChunkResult};
+use maproom::search::SearchOptions;
 use std::collections::HashMap;
 
 // ============================================================================

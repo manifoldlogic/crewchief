@@ -28,8 +28,8 @@ This document describes the methodology for measuring baseline search quality me
 - **Indexed**: SEMRANK-1004 (2025-11-19)
 
 ### Search Binary
-- **Binary**: `/workspace/packages/cli/bin/linux-arm64/crewchief-maproom`
-- **Version**: crewchief-maproom 0.1.0
+- **Binary**: `/workspace/packages/cli/bin/linux-arm64/maproom`
+- **Version**: maproom 0.1.0
 - **Search Mode**: FTS only (full-text search via PostgreSQL `ts_rank_cd`)
 
 ### Hardware/Environment
@@ -215,7 +215,7 @@ To reproduce these baseline measurements:
 ```bash
 # 1. Ensure test corpus is indexed
 cd /tmp/semrank-test-corpus
-/workspace/packages/cli/bin/linux-arm64/crewchief-maproom scan \
+/workspace/packages/cli/bin/linux-arm64/maproom scan \
   --repo test-corpus \
   --worktree main \
   --path /tmp/semrank-test-corpus \

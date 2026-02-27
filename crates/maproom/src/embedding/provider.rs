@@ -16,8 +16,8 @@
 //! # Examples
 //!
 //! ```no_run
-//! use crewchief_maproom::embedding::provider::{EmbeddingProvider, Vector};
-//! use crewchief_maproom::embedding::error::EmbeddingError;
+//! use maproom::embedding::provider::{EmbeddingProvider, Vector};
+//! use maproom::embedding::error::EmbeddingError;
 //! use async_trait::async_trait;
 //!
 //! // Define a custom provider
@@ -129,7 +129,7 @@ pub trait EmbeddingProvider: Send + Sync {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # async fn example(provider: Box<dyn EmbeddingProvider>) -> Result<(), Box<dyn std::error::Error>> {
     /// let embedding = provider.embed("Hello, world!".to_string()).await?;
     /// assert_eq!(embedding.len(), provider.dimension());
@@ -178,7 +178,7 @@ pub trait EmbeddingProvider: Send + Sync {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # async fn example(provider: Box<dyn EmbeddingProvider>) -> Result<(), Box<dyn std::error::Error>> {
     /// let texts = vec!["First".to_string(), "Second".to_string()];
     /// let embeddings = provider.embed_batch(texts.clone()).await?;
@@ -208,7 +208,7 @@ pub trait EmbeddingProvider: Send + Sync {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # fn example(provider: Box<dyn EmbeddingProvider>) {
     /// match provider.dimension() {
     ///     768 => println!("Using 768-dim model (Ollama/Google)"),
@@ -238,7 +238,7 @@ pub trait EmbeddingProvider: Send + Sync {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # fn example(provider: Box<dyn EmbeddingProvider>) {
     /// println!("Using provider: {}", provider.provider_name());
     /// # }
@@ -260,7 +260,7 @@ pub trait EmbeddingProvider: Send + Sync {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # fn example(provider: Box<dyn EmbeddingProvider>) {
     /// if let Some(metrics) = provider.metrics() {
     ///     println!("Total requests: {}", metrics.total_requests);
@@ -282,7 +282,7 @@ pub trait EmbeddingProvider: Send + Sync {
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::embedding::provider::ProviderMetrics;
+/// use maproom::embedding::provider::ProviderMetrics;
 ///
 /// let metrics = ProviderMetrics {
 ///     total_requests: 1000,
@@ -333,7 +333,7 @@ impl ProviderMetrics {
     /// # Examples
     ///
     /// ```
-    /// use crewchief_maproom::embedding::provider::ProviderMetrics;
+    /// use maproom::embedding::provider::ProviderMetrics;
     ///
     /// let metrics = ProviderMetrics {
     ///     total_requests: 100,
@@ -360,7 +360,7 @@ impl ProviderMetrics {
     /// # Examples
     ///
     /// ```
-    /// use crewchief_maproom::embedding::provider::ProviderMetrics;
+    /// use maproom::embedding::provider::ProviderMetrics;
     ///
     /// let metrics = ProviderMetrics {
     ///     total_requests: 100,
@@ -386,7 +386,7 @@ impl ProviderMetrics {
     /// # Examples
     ///
     /// ```
-    /// use crewchief_maproom::embedding::provider::ProviderMetrics;
+    /// use maproom::embedding::provider::ProviderMetrics;
     ///
     /// let metrics = ProviderMetrics {
     ///     total_requests: 1000,

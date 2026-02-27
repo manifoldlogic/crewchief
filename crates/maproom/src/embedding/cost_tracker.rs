@@ -162,6 +162,12 @@ pub struct CostEstimator {
     price_per_1k_tokens: f64,
 }
 
+impl Default for CostEstimator {
+    fn default() -> Self {
+        Self::new(200.0, 0.00002)
+    }
+}
+
 impl CostEstimator {
     /// Create a new cost estimator.
     ///
@@ -174,11 +180,6 @@ impl CostEstimator {
             avg_tokens_per_chunk,
             price_per_1k_tokens,
         }
-    }
-
-    /// Create a cost estimator with default values.
-    pub fn default() -> Self {
-        Self::new(200.0, 0.00002)
     }
 
     /// Estimate cost for embedding N chunks.

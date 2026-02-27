@@ -178,6 +178,12 @@ pub struct ABTestLogger {
     _phantom: std::marker::PhantomData<()>,
 }
 
+impl Default for ABTestLogger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ABTestLogger {
     /// Create a new logger with default settings (batch_size=100, flush every 10s)
     pub fn new() -> Self {

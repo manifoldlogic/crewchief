@@ -23,7 +23,7 @@ docker run --rm --entrypoint node maproom-test:local --version
 
 echo ""
 echo "Step 4: Verifying Rust binary..."
-docker run --rm --entrypoint crewchief-maproom maproom-test:local --version
+docker run --rm --entrypoint maproom maproom-test:local --version
 
 echo ""
 echo "Step 5: Checking npm dependencies..."
@@ -78,13 +78,13 @@ docker run --rm \
   --network maproom-test-network \
   --entrypoint which \
   maproom-test:local \
-  crewchief-maproom
+  maproom
 
 echo ""
 echo "Step 14: Testing Rust binary execution..."
 docker run --rm \
   --network maproom-test-network \
-  --entrypoint crewchief-maproom \
+  --entrypoint maproom \
   maproom-test:local \
   --version
 

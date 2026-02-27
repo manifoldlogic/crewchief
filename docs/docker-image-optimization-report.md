@@ -22,7 +22,7 @@ Successfully optimized the Maproom Docker image from **145MB to 122MB**, achievi
 ```
 97.2MB - debian:bookworm-slim base
 15.8MB - Runtime dependencies (apt packages)
-16.0MB - crewchief-maproom binary
+16.0MB - maproom binary
 8.9KB  - User creation
 0B     - Directory setup
 0B     - Metadata layers
@@ -32,7 +32,7 @@ Successfully optimized the Maproom Docker image from **145MB to 122MB**, achievi
 ```
 97.2MB - debian:bookworm-slim base
 14.8MB - Runtime dependencies (combined layer)
-10.5MB - crewchief-maproom binary (LTO + strip)
+10.5MB - maproom binary (LTO + strip)
 0B     - User/directory setup (merged layer)
 0B     - Metadata layers
 ```
@@ -119,7 +119,7 @@ RUN cargo build --release ...
 
 All required features confirmed working in optimized image:
 
-- ✅ Binary version: `crewchief-maproom 0.1.0`
+- ✅ Binary version: `maproom 0.1.0`
 - ✅ All commands available: db, cache, scan, upsert, watch, search, generate-embeddings, migrate
 - ✅ Help system functional
 - ✅ Embedding feature: included

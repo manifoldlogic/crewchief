@@ -5,11 +5,11 @@
 
 #![allow(unused_imports)] // Justification: imports used across test helper functions and #[ignore] test bodies
 
-use crewchief_maproom::search::results::{
+use maproom::search::results::{
     FinalSearchResults, QueryFilters, QueryProcessingDetails, QueryUnderstanding, SearchMetadata,
     SearchOptions, SearchTiming, TimingBreakdown,
 };
-use crewchief_maproom::search::types::SearchMode;
+use maproom::search::types::SearchMode;
 use std::collections::HashMap;
 
 /// Helper to create test search results with understanding metadata

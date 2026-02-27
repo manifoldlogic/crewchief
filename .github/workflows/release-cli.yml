@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-build.yml
     with:
       package_name: cli
-      binary_name: crewchief-maproom
+      binary_name: maproom
       crate_path: crates/maproom
 
   # Job 2: Build TypeScript (reusable)
@@ -95,7 +95,7 @@ jobs:
 
           # Verify all 4 platforms present
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            if [ ! -f "packages/cli/bin/$platform/crewchief-maproom" ]; then
+            if [ ! -f "packages/cli/bin/$platform/maproom" ]; then
               echo "ERROR: Missing binary for $platform"
               exit 1
             fi
@@ -104,7 +104,7 @@ jobs:
 
       - name: Set executable permissions
         run: |
-          find packages/cli/bin -name "crewchief-maproom" -exec chmod +x {} \;
+          find packages/cli/bin -name "maproom" -exec chmod +x {} \;
 
       - name: Verify TypeScript dist
         run: |

@@ -54,8 +54,9 @@ const WARMUP_ITERATIONS = 10;
 // Database connection
 const DB_URL = process.env.DATABASE_URL || 'postgresql://maproom:maproom@maproom-postgres:5432/maproom';
 // Binary path
-const BINARY_PATH = process.env.CREWCHIEF_MAPROOM_BIN ||
-    path.resolve(__dirname, '../../cli/bin/linux-arm64/crewchief-maproom');
+const BINARY_PATH = process.env.MAPROOM_BIN ||
+    process.env.CREWCHIEF_MAPROOM_BIN ||
+    path.resolve(__dirname, '../../cli/bin/linux-arm64/maproom');
 /**
  * Calculate percentile from sorted array
  */
@@ -223,9 +224,9 @@ async function main() {
     // Verify binary exists
     const binaryCheck = spawnSync(BINARY_PATH, ['--version'], { encoding: 'utf8' });
     if (binaryCheck.error || binaryCheck.status !== 0) {
-        console.error('ERROR: crewchief-maproom binary not found or not executable');
+        console.error('ERROR: maproom binary not found or not executable');
         console.error(`Path: ${BINARY_PATH}`);
-        console.error('Build it with: cargo build --release --bin crewchief-maproom');
+        console.error('Build it with: cargo build --release --bin maproom');
         process.exit(1);
     }
     console.log(`Binary version: ${binaryCheck.stdout.trim()}\n`);

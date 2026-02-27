@@ -68,7 +68,7 @@ curl http://localhost:11434/api/embed -d '{"model":"mxbai-embed-large","input":[
 nvidia-smi  # If using GPU
 
 # Reduce batch size via environment
-MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE=25 crewchief-maproom scan
+MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE=25 maproom scan
 ```
 
 ---
@@ -96,8 +96,8 @@ lsof ~/.maproom/maproom.db
 # SQLite has 5000ms busy timeout configured
 
 # 3. If stuck, check for zombie processes
-pgrep -f crewchief-maproom
-pkill -f "crewchief-maproom serve"  # Kill stuck daemon
+pgrep -f maproom
+pkill -f "maproom serve"  # Kill stuck daemon
 ```
 
 ### Error: Database file not found
@@ -115,7 +115,7 @@ ls -la ~/.maproom/
 mkdir -p ~/.maproom
 
 # 3. Run initial scan to create database
-crewchief-maproom scan /path/to/repo
+maproom scan /path/to/repo
 ```
 
 ### Error: sqlite-vec extension not loaded
@@ -161,7 +161,7 @@ cargo build --release --features sqlite
 # Look at available_repos in response
 
 # 2. Scan the repository
-crewchief-maproom scan /path/to/repo
+maproom scan /path/to/repo
 
 # 3. Verify repo name matches git remote
 git remote -v
@@ -207,10 +207,10 @@ sqlite3 ~/.maproom/maproom.db "SELECT COUNT(*) FROM code_embeddings"
 **Solutions:**
 ```bash
 # 1. Re-index changed files
-crewchief-maproom upsert --paths "src/changed.ts" --commit HEAD
+maproom upsert --paths "src/changed.ts" --commit HEAD
 
 # 2. Full re-scan if many changes
-crewchief-maproom scan /path/to/repo
+maproom scan /path/to/repo
 
 # 3. Check file timestamps vs index
 sqlite3 ~/.maproom/maproom.db "SELECT path, indexed_at FROM files ORDER BY indexed_at DESC LIMIT 10"
@@ -235,14 +235,14 @@ sqlite3 ~/.maproom/maproom.db "SELECT path, indexed_at FROM files ORDER BY index
 **Solutions:**
 ```bash
 # 1. Check daemon logs
-RUST_LOG=debug crewchief-maproom serve
+RUST_LOG=debug maproom serve
 
 # 2. Test database integrity
 sqlite3 ~/.maproom/maproom.db "PRAGMA integrity_check"
 
 # 3. Reset database if corrupted
 rm ~/.maproom/maproom.db
-crewchief-maproom scan /path/to/repo
+maproom scan /path/to/repo
 ```
 
 ### Error: Request timeout
@@ -265,7 +265,7 @@ crewchief-maproom scan /path/to/repo
 iostat -x 1 5
 
 # 3. Kill and restart daemon
-pkill -f "crewchief-maproom serve"
+pkill -f "maproom serve"
 ```
 
 ---
@@ -303,6 +303,6 @@ When something doesn't work:
 2. **Check database:** `ls -la ~/.maproom/maproom.db`
 3. **Check index:** Use `status` MCP tool
 4. **Enable debug:** `RUST_LOG=debug`
-5. **Kill stuck processes:** `pkill -f crewchief-maproom`
+5. **Kill stuck processes:** `pkill -f maproom`
 
 See [Debugging Guide](debugging.md) for detailed diagnostic procedures.

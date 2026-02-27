@@ -50,7 +50,7 @@ use serde::Serialize;
 /// # Examples
 ///
 /// ```no_run
-/// use crewchief_maproom::db;
+/// use maproom::db;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {

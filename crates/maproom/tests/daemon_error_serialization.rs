@@ -3,13 +3,13 @@
 //! These tests verify that PipelineError is correctly converted to SearchErrorDetails
 //! and serialized in JSON-RPC error responses according to the JSON-RPC 2.0 spec.
 
-use crewchief_maproom::daemon::types::JsonRpcResponse;
-use crewchief_maproom::embedding::error::{ApiError, ConfigError, EmbeddingError};
-use crewchief_maproom::search::errors::{ErrorType, PipelineStage, SearchErrorDetails};
-use crewchief_maproom::search::executors::ExecutorError;
-use crewchief_maproom::search::fts::FTSError;
-use crewchief_maproom::search::pipeline::PipelineError;
-use crewchief_maproom::search::query_processor::QueryProcessorError;
+use maproom::daemon::types::JsonRpcResponse;
+use maproom::embedding::error::{ApiError, ConfigError, EmbeddingError};
+use maproom::search::errors::{ErrorType, PipelineStage, SearchErrorDetails};
+use maproom::search::executors::ExecutorError;
+use maproom::search::fts::FTSError;
+use maproom::search::pipeline::PipelineError;
+use maproom::search::query_processor::QueryProcessorError;
 
 /// Test that SearchErrorDetails serializes correctly to JSON
 #[test]

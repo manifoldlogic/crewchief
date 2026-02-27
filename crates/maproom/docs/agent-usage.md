@@ -1,6 +1,6 @@
 # Agent Usage Guide
 
-How to use `crewchief-maproom` effectively from an LLM agent.
+How to use `maproom` effectively from an LLM agent.
 This document distills findings from 24 controlled agent runs on a 500k-LOC
 TypeScript/React codebase into actionable guidance for agent plugin developers
 and prompt engineers.
@@ -49,11 +49,11 @@ space, deepen understanding, then read source code. The three phases are
 
 ### Phase 1: Search (2-4 calls)
 
-Use `crewchief-maproom search` to locate relevant code chunks by keyword or
+Use `maproom search` to locate relevant code chunks by keyword or
 concept. This is the entry point for every query.
 
 ```bash
-crewchief-maproom search \
+maproom search \
   --query "authentication" \
   --repo myrepo \
   --mode fts \
@@ -84,12 +84,12 @@ transitions (report-maproom-plugin.md, section 2).
 
 ### Phase 2: Context (3-8 calls)
 
-Once you have chunk IDs from search results, use `crewchief-maproom context` to
+Once you have chunk IDs from search results, use `maproom context` to
 explore the call graph around each chunk. This reveals callers, callees, tests,
 and related code without reading full files.
 
 ```bash
-crewchief-maproom context \
+maproom context \
   --chunk-id 12345 \
   --callers --callees \
   --format agent
@@ -164,7 +164,7 @@ vector search is less pronounced in code (where naming is precise) than in
 natural language (where synonymy is common) (report-maproom-cli.md, section 2).
 
 ```bash
-crewchief-maproom search \
+maproom search \
   --query "handleLogin" \
   --repo myrepo \
   --mode fts \
@@ -190,7 +190,7 @@ requires an embedding provider to be configured.
 return a structured error with exit code 2 (config error -- do not retry).
 
 ```bash
-crewchief-maproom search \
+maproom search \
   --query "authentication flow" \
   --repo myrepo \
   --mode vector \
@@ -212,7 +212,7 @@ identifiers with conceptual terms. Hybrid mode requires an embedding provider
 to be configured (same as vector search).
 
 ```bash
-crewchief-maproom search \
+maproom search \
   --query "authentication session handling" \
   --repo myrepo \
   --mode hybrid \
@@ -459,10 +459,10 @@ removal of already-indexed chunks:
 
 ```bash
 # Preview what will be removed
-crewchief-maproom clean-ignored --repo myrepo --worktree main --dry-run
+maproom clean-ignored --repo myrepo --worktree main --dry-run
 
 # Remove matching chunks
-crewchief-maproom clean-ignored --repo myrepo --worktree main
+maproom clean-ignored --repo myrepo --worktree main
 ```
 
 This is faster than a full rescan and avoids re-indexing unchanged files. See

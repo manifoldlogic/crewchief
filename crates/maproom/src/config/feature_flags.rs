@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// # Examples
 ///
 /// ```
-/// use crewchief_maproom::config::FeatureFlags;
+/// use maproom::config::FeatureFlags;
 ///
 /// let flags = FeatureFlags::default();
 /// assert!(flags.enable_vector_search);

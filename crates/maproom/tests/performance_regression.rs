@@ -8,11 +8,11 @@
 
 #![allow(unused_imports)] // Justification: imports used by #[ignore] performance regression test functions
 
-use crewchief_maproom::search::results::{
+use maproom::search::results::{
     QueryFilters, QueryProcessingDetails, QueryUnderstanding, SearchMetadata, SearchOptions,
     SearchTiming, TimingBreakdown,
 };
-use crewchief_maproom::search::types::SearchMode;
+use maproom::search::types::SearchMode;
 use std::collections::HashMap;
 use std::time::Instant;
 

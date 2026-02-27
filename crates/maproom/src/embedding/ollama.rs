@@ -16,8 +16,8 @@
 //! # Examples
 //!
 //! ```no_run
-//! use crewchief_maproom::embedding::ollama::OllamaProvider;
-//! use crewchief_maproom::embedding::provider::EmbeddingProvider;
+//! use maproom::embedding::ollama::OllamaProvider;
+//! use maproom::embedding::provider::EmbeddingProvider;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -133,7 +133,7 @@ impl OllamaProvider {
     /// # Returns
     ///
     /// Sanitized text with problematic characters replaced
-    #[allow(clippy::manual_string_replace)]
+    #[allow(clippy::manual_string_new)]
     fn sanitize_for_nomic(text: &str) -> String {
         // Replace characters that cause nomic-embed-text tokenization crashes
         // Note: We use individual replace() calls instead of replace(['x', 'y'], "z")
@@ -145,17 +145,10 @@ impl OllamaProvider {
             .replace('←', "<-")
             .replace('↔', "<->")
             // Box-drawing characters (directory trees)
-            .replace('├', "+")
-            .replace('└', "+")
+            .replace(['├', '└'], "+")
             .replace('│', " ")
             .replace('─', "-")
-            .replace('┌', "+")
-            .replace('┐', "+")
-            .replace('┘', "+")
-            .replace('┤', "+")
-            .replace('┬', "+")
-            .replace('┴', "+")
-            .replace('┼', "+")
+            .replace(['┌', '┐', '┘', '┤', '┬', '┴', '┼'], "+")
     }
 
     /// Create a new OllamaProvider with specified endpoint, model, and dimension.
@@ -174,7 +167,7 @@ impl OllamaProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::ollama::OllamaProvider;
+    /// use maproom::embedding::ollama::OllamaProvider;
     ///
     /// // nomic-embed-text (768 dimensions)
     /// let provider = OllamaProvider::new(
@@ -212,8 +205,8 @@ impl OllamaProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::ollama::OllamaProvider;
-    /// use crewchief_maproom::embedding::config::ParallelConfig;
+    /// use maproom::embedding::ollama::OllamaProvider;
+    /// use maproom::embedding::config::ParallelConfig;
     ///
     /// let config = ParallelConfig {
     ///     enabled: true,
@@ -258,7 +251,7 @@ impl OllamaProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::embedding::ollama::OllamaProvider;
+    /// use maproom::embedding::ollama::OllamaProvider;
     ///
     /// let provider = OllamaProvider::default_config()?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -641,8 +634,8 @@ impl EmbeddingProvider for OllamaProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::ollama::OllamaProvider;
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::ollama::OllamaProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = OllamaProvider::default_config()?;
     /// let embedding = provider.embed("Hello, world!".to_string()).await?;
@@ -675,8 +668,8 @@ impl EmbeddingProvider for OllamaProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// # use crewchief_maproom::embedding::ollama::OllamaProvider;
-    /// # use crewchief_maproom::embedding::provider::EmbeddingProvider;
+    /// # use maproom::embedding::ollama::OllamaProvider;
+    /// # use maproom::embedding::provider::EmbeddingProvider;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = OllamaProvider::default_config()?;
     /// let texts = vec!["First".to_string(), "Second".to_string()];

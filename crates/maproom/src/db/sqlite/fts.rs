@@ -41,7 +41,7 @@ static SPECIAL_CHAR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[^\p{L}\p{N}_
 ///
 /// # Examples
 /// ```
-/// # use crewchief_maproom::db::sqlite::fts::sanitize_fts_term;
+/// # use maproom::db::sqlite::fts::sanitize_fts_term;
 /// assert_eq!(sanitize_fts_term("package.json").trim(), "package json");
 /// assert_eq!(sanitize_fts_term("src/main.rs").trim(), "src main rs");
 /// assert_eq!(sanitize_fts_term("array[0]").trim(), "array 0");

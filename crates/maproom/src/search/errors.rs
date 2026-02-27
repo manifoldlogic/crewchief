@@ -18,8 +18,8 @@
 //! # Usage
 //!
 //! ```no_run
-//! use crewchief_maproom::search::errors::SearchErrorDetails;
-//! use crewchief_maproom::search::PipelineError;
+//! use maproom::search::errors::SearchErrorDetails;
+//! use maproom::search::PipelineError;
 //!
 //! fn handle_search_error(error: &PipelineError) {
 //!     let details = SearchErrorDetails::from_pipeline_error(error);
@@ -145,10 +145,8 @@ impl SearchErrorDetails {
                         stage: PipelineStage::SearchExecution,
                         context: HashMap::from([("error".to_string(), error_str.clone())]),
                         suggestions: vec![
-                            "Check that the repository is indexed: crewchief-maproom status"
-                                .to_string(),
-                            "Run a scan to index the repository: crewchief-maproom scan"
-                                .to_string(),
+                            "Check that the repository is indexed: maproom status".to_string(),
+                            "Run a scan to index the repository: maproom scan".to_string(),
                         ],
                     }
                 } else {
@@ -159,7 +157,7 @@ impl SearchErrorDetails {
                         context: HashMap::from([("error".to_string(), error_str)]),
                         suggestions: vec![
                             "Check database connectivity and permissions".to_string(),
-                            "Verify repository is indexed: crewchief-maproom status".to_string(),
+                            "Verify repository is indexed: maproom status".to_string(),
                         ],
                     }
                 }
@@ -200,7 +198,7 @@ impl SearchErrorDetails {
                         context: HashMap::from([("message".to_string(), error_str)]),
                         suggestions: vec![
                             "The search index may be stale or corrupted".to_string(),
-                            "Try re-scanning the repository: crewchief-maproom scan".to_string(),
+                            "Try re-scanning the repository: maproom scan".to_string(),
                         ],
                     }
                 } else {
@@ -640,20 +638,20 @@ impl SearchErrorDetails {
         {
             vec![
                 "Check repository name and path".to_string(),
-                "Run 'crewchief-maproom status' to list indexed repositories".to_string(),
-                "Index repository: 'crewchief-maproom scan <path>'".to_string(),
+                "Run 'maproom status' to list indexed repositories".to_string(),
+                "Index repository: 'maproom scan <path>'".to_string(),
             ]
         } else if error_lower.contains("connection") || error_lower.contains("timeout") {
             vec![
                 "Check database file exists: ~/.maproom/maproom.db".to_string(),
                 "Verify database is not locked by another process".to_string(),
-                "Restart daemon: crewchief-maproom serve".to_string(),
+                "Restart daemon: maproom serve".to_string(),
             ]
         } else if error_lower.contains("corrupt") || error_lower.contains("malformed") {
             vec![
                 "Backup database: cp ~/.maproom/maproom.db ~/.maproom/maproom.db.backup"
                     .to_string(),
-                "Rebuild index: crewchief-maproom scan --rebuild".to_string(),
+                "Rebuild index: maproom scan --rebuild".to_string(),
                 "Check disk space".to_string(),
             ]
         } else {
@@ -1013,7 +1011,7 @@ mod tests {
         assert!(details
             .suggestions
             .iter()
-            .any(|s| s.contains("crewchief-maproom status")));
+            .any(|s| s.contains("maproom status")));
         assert!(details.suggestions.iter().any(|s| s.contains("scan")));
     }
 

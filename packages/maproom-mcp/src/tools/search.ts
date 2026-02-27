@@ -2,7 +2,7 @@
  * Search Tool - Semantic code search via Rust binary subprocess
  *
  * Provides MCP tool interface for semantic code search by spawning the
- * crewchief-maproom Rust binary and parsing its JSON output.
+ * maproom Rust binary and parsing its JSON output.
  *
  * Architecture: Calls Rust binary to avoid duplicating FTS SQL logic in TypeScript.
  * This ensures single source of truth - Phase 2 enhancements only need Rust updates.
@@ -340,7 +340,7 @@ export async function handleSearchTool(
     // Convert daemon errors to MCP-friendly errors
     if (error instanceof DaemonStartError) {
       throw new ProcessError(
-        `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure crewchief-maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
+        `Failed to start maproom daemon: ${error.message}\n\nTroubleshooting:\n1. Ensure maproom binary is installed\n2. Check MAPROOM_DATABASE_URL environment variable\n3. Verify database is running and accessible`,
         "DAEMON_START_FAILED",
       );
     }
@@ -568,7 +568,7 @@ export function formatSearchError(error: unknown): any {
               message: error.message,
               hint:
                 error.code === "BINARY_NOT_FOUND"
-                  ? "Install the crewchief-maproom Rust binary or set CREWCHIEF_MAPROOM_BIN environment variable."
+                  ? "Install the maproom Rust binary or set MAPROOM_BIN environment variable."
                   : error.code === "EXECUTION_FAILED"
                     ? "The Rust binary failed to execute. Check that it is properly installed and has execute permissions."
                     : "Search execution failed. Check logs for details.",

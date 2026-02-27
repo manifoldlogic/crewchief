@@ -12,7 +12,7 @@
 //! # Usage
 //!
 //! ```no_run
-//! use crewchief_maproom::indexer::edges::{extract_edges, ChunkWithId};
+//! use maproom::indexer::edges::{extract_edges, ChunkWithId};
 //!
 //! let source = "function foo() { bar(); }";
 //! let chunks = vec![
@@ -83,7 +83,7 @@ pub struct ChunkWithId {
 /// # Example
 ///
 /// ```no_run
-/// use crewchief_maproom::indexer::edges::{extract_edges, ChunkWithId};
+/// use maproom::indexer::edges::{extract_edges, ChunkWithId};
 ///
 /// let source = "function foo() { bar(); }";
 /// let chunks = vec![

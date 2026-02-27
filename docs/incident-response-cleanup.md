@@ -34,7 +34,7 @@ When an incident is detected:
 1. **STOP all cleanup operations:**
    ```bash
    export MAPROOM_AUTO_CLEANUP=false
-   pkill -f "crewchief-maproom.*cleanup"
+   pkill -f "maproom.*cleanup"
    ```
 
 2. **Identify deleted records:**
@@ -74,7 +74,7 @@ When an incident is detected:
 
 1. **Check error logs:**
    ```bash
-   RUST_LOG=debug crewchief-maproom db cleanup-stale --verbose 2>&1
+   RUST_LOG=debug maproom db cleanup-stale --verbose 2>&1
    ```
 
 2. **Verify database connectivity:**
@@ -101,7 +101,7 @@ When an incident is detected:
 
 4. **Test in dry-run mode:**
    ```bash
-   crewchief-maproom db cleanup-stale --verbose
+   maproom db cleanup-stale --verbose
    # If dry-run works, issue is with deletion logic
    # If dry-run fails, issue is with detection
    ```
@@ -124,7 +124,7 @@ When an incident is detected:
 
 1. **Measure execution time:**
    ```bash
-   time crewchief-maproom db cleanup-stale --verbose
+   time maproom db cleanup-stale --verbose
    ```
 
 2. **Check database size:**
@@ -137,7 +137,7 @@ When an incident is detected:
 3. **Monitor memory:**
    ```bash
    # Run cleanup with memory monitoring
-   /usr/bin/time -v crewchief-maproom db cleanup-stale --verbose
+   /usr/bin/time -v maproom db cleanup-stale --verbose
    ```
 
 **Resolution Steps:**
@@ -154,7 +154,7 @@ When an incident is detected:
 
 ```bash
 # 1. Stop any maproom processes
-pkill -f crewchief-maproom
+pkill -f maproom
 
 # 2. Locate backup
 ls -la ~/.maproom/maproom.db.backup.*
@@ -163,7 +163,7 @@ ls -la ~/.maproom/maproom.db.backup.*
 cp ~/.maproom/maproom.db.backup.20251127 ~/.maproom/maproom.db
 
 # 4. Verify restore
-crewchief-maproom status --repo myrepo
+maproom status --repo myrepo
 
 # 5. Re-run cleanup with correct configuration (if needed)
 ```
@@ -177,13 +177,13 @@ crewchief-maproom status --repo myrepo
 grep "Deleted:" cleanup-execution.log
 
 # 2. Re-index each affected worktree
-crewchief-maproom scan --path /path/to/worktree --repo myrepo --worktree branch-name
+maproom scan --path /path/to/worktree --repo myrepo --worktree branch-name
 
 # 3. Regenerate embeddings (if using semantic search)
-crewchief-maproom generate-embeddings --repo myrepo
+maproom generate-embeddings --repo myrepo
 
 # 4. Verify recovery
-crewchief-maproom search --query "test" --repo myrepo
+maproom search --query "test" --repo myrepo
 ```
 
 ### Option 3: Incremental Upsert
@@ -192,7 +192,7 @@ crewchief-maproom search --query "test" --repo myrepo
 
 ```bash
 # Re-index changed files only
-crewchief-maproom upsert \
+maproom upsert \
   --paths /path/to/file1.rs /path/to/file2.rs \
   --repo myrepo \
   --worktree main \

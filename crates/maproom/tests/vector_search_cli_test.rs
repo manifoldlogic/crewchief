@@ -21,7 +21,7 @@ mod vector_search_cli_tests {
     /// Test that vector-search command exists and shows help
     #[test]
     fn test_vector_search_help() {
-        let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
+        let mut cmd = Command::cargo_bin("maproom").unwrap();
         cmd.arg("vector-search").arg("--help");
 
         cmd.assert()
@@ -37,7 +37,7 @@ mod vector_search_cli_tests {
     #[test]
     #[ignore] // Requires database setup
     fn test_vector_search_returns_json() {
-        let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
+        let mut cmd = Command::cargo_bin("maproom").unwrap();
         cmd.arg("vector-search")
             .arg("--repo")
             .arg("test-repo")
@@ -68,7 +68,7 @@ mod vector_search_cli_tests {
     #[test]
     #[ignore] // Requires database setup
     fn test_vector_search_with_parameters() {
-        let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
+        let mut cmd = Command::cargo_bin("maproom").unwrap();
         cmd.arg("vector-search")
             .arg("--repo")
             .arg("test-repo")
@@ -104,7 +104,7 @@ mod vector_search_cli_tests {
     #[test]
     #[ignore] // Requires database setup
     fn test_vector_search_worktree_filter() {
-        let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
+        let mut cmd = Command::cargo_bin("maproom").unwrap();
         cmd.arg("vector-search")
             .arg("--repo")
             .arg("test-repo")
@@ -120,7 +120,7 @@ mod vector_search_cli_tests {
     #[test]
     #[ignore] // Requires database setup
     fn test_vector_search_missing_repo_error() {
-        let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
+        let mut cmd = Command::cargo_bin("maproom").unwrap();
         cmd.arg("vector-search")
             .arg("--repo")
             .arg("nonexistent-repo")
@@ -136,7 +136,7 @@ mod vector_search_cli_tests {
     #[test]
     #[ignore] // Requires database setup and seeded data
     fn test_vector_search_hit_schema() {
-        let mut cmd = Command::cargo_bin("crewchief-maproom").unwrap();
+        let mut cmd = Command::cargo_bin("maproom").unwrap();
         cmd.arg("vector-search")
             .arg("--repo")
             .arg("test-repo")

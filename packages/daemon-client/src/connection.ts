@@ -25,7 +25,7 @@ export interface ConnectionConfig {
   mode: ConnectionMode
   /** Path to Unix socket (for socket mode) */
   socketPath?: string
-  /** Path to crewchief-maproom binary (for stdio/socket spawn) */
+  /** Path to maproom binary (for stdio/socket spawn) */
   binaryPath?: string
   /** Maximum time to wait for daemon startup (ms) */
   startupTimeout?: number

@@ -1,9 +1,17 @@
 [package]
-name = "crewchief-maproom"
+name = "maproom"
 version = "0.1.0"
 edition = "2021"
-description = "Maproom indexer and CLI for CrewChief"
+description = "Semantic code search powered by embeddings and SQLite"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/manifoldlogic/crewchief"
+homepage = "https://github.com/manifoldlogic/crewchief/tree/main/crates/maproom"
+documentation = "https://docs.rs/maproom"
+readme = "README.md"
+keywords = ["code-search", "embeddings", "semantic-search", "sqlite", "tree-sitter"]
+categories = ["command-line-utilities", "development-tools", "text-processing"]
+rust-version = "1.85"
+exclude = ["tests/", "benches/", "docs/", "!docs/cli-help-after.md", "examples/", ".github/", ".crewchief/"]
 
 [dependencies]
 anyhow = "1.0.100"
@@ -104,11 +112,11 @@ users = "0.11"  # UID lookup for socket path
 cc = "1.0"
 
 [[bin]]
-name = "crewchief-maproom"
+name = "maproom"
 path = "src/main.rs"
 
 [lib]
-name = "crewchief_maproom"
+name = "maproom"
 path = "src/lib.rs"
 
 [package.metadata.sqlx]

@@ -10,7 +10,7 @@ function ensureExecutable(p: string) {
 
 function main() {
   // If packaged binary already exists, do nothing
-  const execName = process.platform === 'win32' ? 'crewchief-maproom.exe' : 'crewchief-maproom'
+  const execName = process.platform === 'win32' ? 'maproom.exe' : 'maproom'
   const outDir = path.join(__dirname, '..', 'bin', `${process.platform}-${process.arch}`)
   const outPath = path.join(outDir, execName)
   if (fs.existsSync(outPath)) {
@@ -20,7 +20,7 @@ function main() {
 
   // Try to build locally if Rust is available
   try {
-    const res = spawnSync('cargo', ['build', '--release', '-p', 'crewchief-maproom'], {
+    const res = spawnSync('cargo', ['build', '--release', '-p', 'maproom'], {
       cwd: path.join(__dirname, '..', '..', '..'),
       stdio: 'inherit'
     })

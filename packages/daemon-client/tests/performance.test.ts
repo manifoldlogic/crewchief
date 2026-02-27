@@ -47,7 +47,7 @@ function getBinaryPath(): string {
 
   // Check workspace root for CI (monorepo structure)
   const workspaceRoot = path.resolve(__dirname, '../../../..')
-  const ciPath = path.join(workspaceRoot, 'target/release/crewchief-maproom')
+  const ciPath = path.join(workspaceRoot, 'target/release/maproom')
   if (fs.existsSync(ciPath)) {
     return ciPath
   }
@@ -76,7 +76,7 @@ function getBinaryPath(): string {
     'cli',
     'bin',
     platformDir,
-    'crewchief-maproom'
+    'maproom'
   )
 }
 

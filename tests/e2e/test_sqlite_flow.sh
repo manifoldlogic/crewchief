@@ -70,8 +70,8 @@ export MAPROOM_DATABASE_URL="sqlite://$TEST_DB"
 # Build with SQLite feature
 echo "Building CLI with SQLite support..."
 cd "$REPO_ROOT" || exit 1
-cargo build --bin crewchief-maproom --release 2>/dev/null
-CLI="./target/release/crewchief-maproom"
+cargo build --bin maproom --release 2>/dev/null
+CLI="./target/release/maproom"
 
 if [ ! -f "$CLI" ]; then
     echo "ERROR: CLI binary not found at $CLI"

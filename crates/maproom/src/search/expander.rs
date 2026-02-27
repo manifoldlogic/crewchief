@@ -179,7 +179,7 @@ impl QueryExpander {
     /// # Examples
     ///
     /// ```no_run
-    /// use crewchief_maproom::search::QueryExpander;
+    /// use maproom::search::QueryExpander;
     ///
     /// let expander = QueryExpander::new();
     /// let expanded = expander.expand(&["auth".to_string(), "user".to_string()]);

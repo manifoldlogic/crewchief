@@ -21,7 +21,7 @@ static TOKENIZER: Lazy<CoreBPE> =
 /// # Example
 ///
 /// ```
-/// use crewchief_maproom::context::TokenCounter;
+/// use maproom::context::TokenCounter;
 ///
 /// let counter = TokenCounter::new();
 /// let code = "fn main() { println!(\"Hello, world!\"); }";
@@ -47,7 +47,7 @@ impl TokenCounter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::TokenCounter;
+    /// use maproom::context::TokenCounter;
     ///
     /// let counter = TokenCounter::new();
     /// assert_eq!(counter.count("hello").unwrap(), 1);
@@ -66,7 +66,7 @@ impl TokenCounter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::TokenCounter;
+    /// use maproom::context::TokenCounter;
     ///
     /// let counter = TokenCounter::new();
     /// let tokens = counter.count_with_fallback("hello world");
@@ -85,7 +85,7 @@ impl TokenCounter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::TokenCounter;
+    /// use maproom::context::TokenCounter;
     ///
     /// let counter = TokenCounter::new();
     /// assert_eq!(counter.estimate_tokens("hello"), 2); // 5 chars / 4 ≈ 2 tokens
@@ -105,7 +105,7 @@ impl TokenCounter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::TokenCounter;
+    /// use maproom::context::TokenCounter;
     ///
     /// let counter = TokenCounter::new();
     /// let segments = vec!["hello", "world", "!"];
@@ -128,7 +128,7 @@ impl TokenCounter {
     /// # Example
     ///
     /// ```
-    /// use crewchief_maproom::context::TokenCounter;
+    /// use maproom::context::TokenCounter;
     ///
     /// let counter = TokenCounter::new();
     /// let long_text = "word ".repeat(1000);

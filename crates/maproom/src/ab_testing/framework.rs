@@ -242,6 +242,12 @@ pub struct ExperimentManager {
     _phantom: std::marker::PhantomData<()>,
 }
 
+impl Default for ExperimentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExperimentManager {
     pub fn new() -> Self {
         Self {
@@ -296,6 +302,7 @@ impl ExperimentManager {
     /// Validate quality gates for an experiment
     ///
     /// Returns true if the experiment meets all quality gates and can be promoted
+    #[allow(clippy::too_many_arguments)] // Stubbed API; will be refactored when A/B testing is implemented
     pub async fn validate_quality_gates(
         &self,
         _experiment_id: Uuid,

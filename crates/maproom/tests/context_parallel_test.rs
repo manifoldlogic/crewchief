@@ -7,7 +7,7 @@
 //! - Gracefully handles errors in parallel contexts
 //! - Respects early termination on budget exhaustion
 
-use crewchief_maproom::context::budget::{SharedBudgetManager, TokenBudgetManager};
+use maproom::context::budget::{SharedBudgetManager, TokenBudgetManager};
 use tokio::task::JoinSet;
 
 #[tokio::test]

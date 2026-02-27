@@ -125,7 +125,7 @@ export async function ensureTestCorpusIndexed(client: Client): Promise<void> {
     console.log('📦 Test corpus not found, indexing /tmp/semrank-test-corpus...')
 
     // Use the Rust binary to index test corpus
-    const binaryPath = path.join(__dirname, '..', '..', '..', 'cli', 'bin', 'crewchief-maproom')
+    const binaryPath = path.join(__dirname, '..', '..', '..', 'cli', 'bin', 'maproom')
 
     try {
       execSync(

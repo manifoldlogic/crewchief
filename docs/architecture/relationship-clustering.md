@@ -596,12 +596,12 @@ let final_relevance = 0.7 * graph_relevance + 0.3 * embedding_similarity;
 
 2. Run unit tests:
    ```bash
-   cargo test -p crewchief-maproom relationships
+   cargo test -p maproom relationships
    ```
 
 3. Benchmark impact:
    ```bash
-   cargo bench -p crewchief-maproom search_relationships
+   cargo bench -p maproom search_relationships
    ```
 
 4. Update documentation if behavior changes significantly.
@@ -623,7 +623,7 @@ let final_relevance = 0.7 * graph_relevance + 0.3 * embedding_similarity;
 3. Update validation test in `packages/daemon-client/src/types.test.ts`
 4. Run tests:
    ```bash
-   cargo test -p crewchief-maproom && cd packages/daemon-client && pnpm test
+   cargo test -p maproom && cd packages/daemon-client && pnpm test
    ```
 5. CI fails if types diverge
 

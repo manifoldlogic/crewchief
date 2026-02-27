@@ -90,7 +90,7 @@ impl std::fmt::Display for DimensionMismatchError {
              2. Set dimension to match your model:\n\
                 export MAPROOM_EMBEDDING_DIMENSION={}\n\
              3. Skip embeddings if not needed:\n\
-                crewchief-maproom scan --generate-embeddings=false\n\n\
+                maproom scan --generate-embeddings=false\n\n\
              See troubleshooting guide: .crewchief/claude-code-plugins/plugins/maproom/skills/maproom-search/references/troubleshooting.md",
             self.expected,
             self.actual,

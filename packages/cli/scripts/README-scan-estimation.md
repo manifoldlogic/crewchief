@@ -122,13 +122,13 @@ From EMBCOPY project integration tests and genetic optimizer runs:
 2. **Scan incrementally** by directory:
 
    ```bash
-   crewchief-maproom scan --repo myrepo --worktree main --path /workspace/src
-   crewchief-maproom scan --repo myrepo --worktree main --path /workspace/tests
+   maproom scan --repo myrepo --worktree main --path /workspace/src
+   maproom scan --repo myrepo --worktree main --path /workspace/tests
    ```
 
 3. **Use watch mode** for continuous updates:
    ```bash
-   crewchief-maproom watch --repo myrepo --worktree main --path /workspace
+   maproom watch --repo myrepo --worktree main --path /workspace
    ```
 
 ### For Multiple Branches

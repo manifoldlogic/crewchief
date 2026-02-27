@@ -155,16 +155,16 @@ cargo test --test context_assembler_test
 ### Run Specific Test Categories
 ```bash
 # Assembly pipeline tests
-cargo test --package crewchief-maproom assembly_pipeline
+cargo test --package maproom assembly_pipeline
 
 # Edge cases
-cargo test --package crewchief-maproom edge_cases
+cargo test --package maproom edge_cases
 
 # Quality validation
-cargo test --package crewchief-maproom quality
+cargo test --package maproom quality
 
 # Real data tests
-cargo test --package crewchief-maproom real_data
+cargo test --package maproom real_data
 ```
 
 ## Test Patterns

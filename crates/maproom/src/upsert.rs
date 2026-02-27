@@ -66,6 +66,7 @@ pub async fn check_embedding_exists(store: &SqliteStore, blob_sha: &str) -> Resu
 /// # Returns
 ///
 /// The chunk ID of the inserted/updated chunk
+#[allow(clippy::too_many_arguments)] // Public API; each parameter maps to a distinct chunk field
 pub async fn upsert_chunk_with_cache(
     store: &SqliteStore,
     file_id: i64,
@@ -155,6 +156,7 @@ pub async fn upsert_chunk_with_cache(
 /// # Returns
 ///
 /// Vector of chunk IDs in the same order as input chunks
+#[allow(clippy::type_complexity)] // Tuple matches upsert_chunk_with_cache parameters; extracting a struct would break batch API symmetry
 pub async fn upsert_chunks_batch_with_cache(
     store: &SqliteStore,
     chunks: &[(
@@ -311,9 +313,9 @@ pub struct ParsedChunk {
 /// # Example
 ///
 /// ```no_run
-/// # use crewchief_maproom::upsert::{ParsedChunk, upsert_chunk_with_worktree};
-/// # use crewchief_maproom::metrics::CacheMetrics;
-/// # use crewchief_maproom::db;
+/// # use maproom::upsert::{ParsedChunk, upsert_chunk_with_worktree};
+/// # use maproom::metrics::CacheMetrics;
+/// # use maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
 /// let store = db::connect().await?;
 /// let metrics = CacheMetrics::new();

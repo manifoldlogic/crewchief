@@ -27,7 +27,7 @@ The implementation choice was to add the incremental scan logic at the CLI comma
 
 ### Option 1: Manual Validation (Recommended)
 Use manual testing with the actual CLI to verify the incremental scan feature works:
-- Run: `crewchief-maproom scan /path/to/repo`
+- Run: `maproom scan /path/to/repo`
 - Modify files and re-run
 - Use `--force` flag
 - Verify skip behavior via logs and timing
@@ -36,7 +36,7 @@ This is already planned in **INCRSCAN-2002: Manual Validation with Genetic Optim
 
 ### Option 2: CLI-Level Integration Tests
 Create tests that:
-- Execute the binary via `Command::new("crewchief-maproom")`
+- Execute the binary via `Command::new("maproom")`
 - Parse stdout/stderr for skip messages
 - Measure execution time
 - Query database directly for state

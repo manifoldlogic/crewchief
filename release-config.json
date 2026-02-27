@@ -32,8 +32,9 @@
   },
   "rustBinary": {
     "crate": "crates/maproom",
-    "name": "crewchief-maproom",
-    "platforms": ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"]
+    "name": "maproom",
+    "platforms": ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"],
+    "_win32_note": "win32-x64 is listed for planned support but not yet built by reusable-rust-build.yml (no Windows runner or MSVC target configured). Add Windows matrix entry to reusable-rust-build.yml when win32 builds are needed."
   },
   "validation": {
     "requireCleanWorkingTree": true,
