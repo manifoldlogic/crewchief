@@ -90,6 +90,7 @@ export function findMaproomBinary(): string | null {
   }
 
   // Strategy 1b: CREWCHIEF_MAPROOM_BIN environment variable (deprecated fallback)
+  // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
   if (process.env.CREWCHIEF_MAPROOM_BIN) {
     console.warn(
       'CREWCHIEF_MAPROOM_BIN is deprecated. Use MAPROOM_BIN instead.'
@@ -158,6 +159,7 @@ export function getBinarycandidates(): Array<{ cmd: string; description: string 
   // Try system PATH binaries
   candidates.push(
     { cmd: 'maproom', description: 'System PATH binary' },
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
     { cmd: 'crewchief-maproom', description: 'System PATH binary (legacy)' },
     { cmd: 'crewchief', description: 'CrewChief CLI wrapper' }
   )

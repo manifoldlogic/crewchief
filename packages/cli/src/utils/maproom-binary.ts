@@ -36,6 +36,7 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
   }
 
   // 2. Check deprecated CREWCHIEF_MAPROOM_BIN environment variable (backward compat)
+  // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
   const legacyEnvBin = process.env.CREWCHIEF_MAPROOM_BIN
   if (legacyEnvBin && fs.existsSync(legacyEnvBin)) {
     console.warn(
@@ -67,6 +68,7 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
     return { path: 'maproom', source: 'global' }
   }
 
+  // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
   const whichLegacy = spawnSync('bash', ['-lc', 'command -v crewchief-maproom'])
   if (whichLegacy.status === 0) {
     return { path: 'crewchief-maproom', source: 'global' }
@@ -85,6 +87,7 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
       return { path: platformPath, source: 'packaged' }
     }
 
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
     const legacyPlatformPath = path.join(__dirname, '..', 'bin', platform, legacyExecName)
     if (fs.existsSync(legacyPlatformPath)) {
       return { path: legacyPlatformPath, source: 'packaged' }
@@ -96,6 +99,7 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
       return { path: binRootPath, source: 'packaged' }
     }
 
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
     const legacyBinRootPath = path.join(__dirname, '..', 'bin', legacyExecName)
     if (fs.existsSync(legacyBinRootPath)) {
       return { path: legacyBinRootPath, source: 'packaged' }
@@ -107,6 +111,7 @@ export function findMaproomBinary(options?: MaproomBinaryOptions): BinaryResolut
       return { path: mcpPath, source: 'packaged' }
     }
 
+    // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
     const legacyMcpPath = path.join(__dirname, '..', '..', 'maproom-mcp', 'bin', platform, legacyExecName)
     if (fs.existsSync(legacyMcpPath)) {
       return { path: legacyMcpPath, source: 'packaged' }
